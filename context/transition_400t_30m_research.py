@@ -68,6 +68,10 @@ def isolated_config(cfg):
     stop_caps = dict(getattr(cfg, "max_stop_ticks", {}) or {})
     stop_caps[INSTRUMENT] = RESEARCH_STOP_TICKS
     lane.max_stop_ticks = stop_caps
+    # The preserved Transition population predates/does not include the global
+    # confluence-grade selector. Keep hard account/risk gates, but do not
+    # post-select this frozen population by that unrelated strategy-quality gate.
+    lane.min_confluence_grade = ""
     lane.max_daily_loss = DAILY_LOSS_LIMIT
     lane.max_drawdown_percent = MAX_DRAWDOWN_PERCENT
     lane.max_trades_per_day = min(
@@ -109,7 +113,12 @@ def _trade_setup(state, candidate) -> TradeSetup:
 
 
 def open_research_position(
-    *, state, cfg, daily_state: DailyState, market_price: float | None = None
+    *,
+    state,
+    cfg,
+    daily_state: DailyState,
+    market_price: float | None = None,
+    entry_slippage_ticks: float = ENTRY_SLIPPAGE_TICKS,
 ) -> ResearchOpenResult:
     """Canonical candidate -> real RiskEngine -> real PaperBroker IOC open."""
     candidate = canonical_candidate(state, cfg, daily_state)
@@ -134,7 +143,7 @@ def open_research_position(
 
     broker = PaperBroker(
         starting_balance=float(daily_state.account_balance or STARTING_BALANCE),
-        slippage_ticks=ENTRY_SLIPPAGE_TICKS,
+        slippage_ticks=float(entry_slippage_ticks),
         pessimistic_both_hit=True,
         breakeven_at_1r=False,
         runner_mode=False,
@@ -168,7 +177,10 @@ def open_research_position(
 
 
 def resolve_six_available_5m_bars(
-    broker: PaperBroker, bars: list[dict[str, Any]]
+    broker: PaperBroker,
+    bars: list[dict[str, Any]],
+    *,
+    exit_slippage_ticks: float = EXIT_SLIPPAGE_TICKS,
 ) -> ResearchResolution:
     """Resolve stop-first, otherwise time-close on the sixth available 5m bar."""
     if broker.get_position() is None:
@@ -200,7 +212,7 @@ def resolve_six_available_5m_bars(
         raise RuntimeError("Transition research position disappeared before timed exit")
     tick = tick_size(pos.instrument)
     close = float(bars[RESEARCH_HOLD_BARS - 1]["close"])
-    exit_price = close - EXIT_SLIPPAGE_TICKS * tick if pos.direction == "LONG" else close + EXIT_SLIPPAGE_TICKS * tick
+    exit_price = close - float(exit_slippage_ticks) * tick if pos.direction == "LONG" else close + float(exit_slippage_ticks) * tick
     gross_sign = exit_price - pos.entry_price if pos.direction == "LONG" else pos.entry_price - exit_price
     result = "WIN" if gross_sign > 0 else ("LOSS" if gross_sign < 0 else "BREAKEVEN")
     fill = broker.force_resolve(result, exit_price)

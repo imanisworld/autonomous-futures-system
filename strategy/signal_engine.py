@@ -2731,7 +2731,7 @@ class DecisionEngine:
         an economic exit.
         """
         signal = detect_transition_geometry(
-            state, list(getattr(state, "bar_history_15m", []) or [])
+            state, list(getattr(state, "transition_bar_history_5m", []) or [])
         )
         if signal is None:
             return None

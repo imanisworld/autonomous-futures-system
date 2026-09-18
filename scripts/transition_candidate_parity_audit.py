@@ -101,7 +101,7 @@ def build_report(*, corpus: Path, saved_path: Path) -> dict:
                 ]
                 if current in saved_set:
                     conditions_at_saved[str(state.market_condition)] += 1
-                    state.bar_history_15m = list(recent)
+                    state.transition_bar_history_5m = list(recent)
                     decision = decision_engine.evaluate(
                         state,
                         DailyState(

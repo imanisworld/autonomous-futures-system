@@ -1,0 +1,114 @@
+{
+  "candidate_file": "/Users/djb.a.e/MAINVSCODE/autonomous-futures-system/scripts/edge_decomposition_audit_results_candidates.jsonl.gz",
+  "candidate_sha256": "af184fd061500f1cf56f9b00ef00cc7c3404f21954a8fb145374015a41d0cffe",
+  "contract": {
+    "daily_loss_limit": 400.0,
+    "external_broker_route": false,
+    "max_drawdown_percent": 0.2,
+    "max_trades_per_day": 3,
+    "runtime_activation": false,
+    "starting_balance": 8000.0
+  },
+  "lanes": {
+    "transition_mnq": {
+      "corpus": "/Users/djb.a.e/MAINVSCODE/autonomous-futures-system/data/replay_polygon_5m",
+      "counts": {
+        "ENTRY_EXACT": 976,
+        "ENTRY_PARITY_WITHIN_1T": 976,
+        "FILLED": 843,
+        "LOSS": 414,
+        "RISK_REJECTED": 54,
+        "SKIP_OPEN_POSITION": 79,
+        "WIN": 429
+      },
+      "economic": {
+        "breakeven": 0,
+        "drawdown_halted": false,
+        "ending_balance": 11337.36,
+        "h1": 2863.92,
+        "h2": 473.44,
+        "losses": 414,
+        "max_drawdown_dollars": 2262.74,
+        "max_drawdown_pct": 0.198363,
+        "net": 3337.36,
+        "peak_balance": 11455.32,
+        "profit_factor": 1.100975,
+        "resolved_fills": 843,
+        "wins": 429
+      },
+      "eligible_candidates": 976,
+      "entry_mismatch_sample": [],
+      "lane": "transition_mnq",
+      "risk_failures": {
+        "daily_trade_limit": 51,
+        "max_daily_loss": 3
+      }
+    },
+    "transition_mnq_audit": {
+      "corpus": "/Users/djb.a.e/MAINVSCODE/autonomous-futures-system/data/replay_corpus_v1_5m",
+      "counts": {
+        "ENTRY_EXACT": 77,
+        "ENTRY_FEED_DRIFT_1T": 5,
+        "ENTRY_PARITY_WITHIN_1T": 82,
+        "FILLED": 73,
+        "LOSS": 38,
+        "RISK_REJECTED": 5,
+        "SKIP_OPEN_POSITION": 4,
+        "WIN": 35
+      },
+      "economic": {
+        "breakeven": 0,
+        "drawdown_halted": false,
+        "ending_balance": 8576.46,
+        "h1": 76.72,
+        "h2": 499.74,
+        "losses": 38,
+        "max_drawdown_dollars": 824.86,
+        "max_drawdown_pct": 0.10023,
+        "net": 576.46,
+        "peak_balance": 8981.42,
+        "profit_factor": 1.152111,
+        "resolved_fills": 73,
+        "wins": 35
+      },
+      "eligible_candidates": 82,
+      "entry_mismatch_sample": [
+        {
+          "bar_ts": "2026-05-25T14:50:00+00:00",
+          "canonical_entry": 29927.0,
+          "delta": 0.25,
+          "preserved_entry": 29926.75
+        },
+        {
+          "bar_ts": "2026-06-05T18:50:00+00:00",
+          "canonical_entry": 29152.0,
+          "delta": 0.25,
+          "preserved_entry": 29151.75
+        },
+        {
+          "bar_ts": "2026-06-16T18:40:00+00:00",
+          "canonical_entry": 30463.5,
+          "delta": -0.25,
+          "preserved_entry": 30463.75
+        },
+        {
+          "bar_ts": "2026-06-26T20:05:00+00:00",
+          "canonical_entry": 29304.25,
+          "delta": 0.25,
+          "preserved_entry": 29304.0
+        },
+        {
+          "bar_ts": "2026-07-08T15:35:00+00:00",
+          "canonical_entry": 29107.5,
+          "delta": 0.25,
+          "preserved_entry": 29107.25
+        }
+      ],
+      "lane": "transition_mnq_audit",
+      "risk_failures": {
+        "daily_trade_limit": 4,
+        "max_daily_loss": 1
+      }
+    }
+  }
+}

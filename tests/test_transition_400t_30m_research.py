@@ -57,7 +57,7 @@ def _transition_state_and_bars(fresh_market_state):
     state.ohlc.low = 19489.0
     state.ohlc.close = 19496.0
     state.ohlc.timeframe = "15m"
-    state.bar_history_15m = list(bars)
+    state.transition_bar_history_5m = list(bars)
     return state, bars
 
 
@@ -106,13 +106,15 @@ def test_research_strategy_is_default_off():
 
 
 def test_isolated_config_does_not_mutate_global_config():
-    cfg = _research_test_config()
+    cfg = dataclasses.replace(_research_test_config(), min_confluence_grade="B")
     original_stop = dict(cfg.max_stop_ticks)
     lane = isolated_config(cfg)
 
     assert lane is not cfg
     assert cfg.max_stop_ticks == original_stop
     assert lane.max_stop_ticks["MNQ"] == 400.0
+    assert lane.min_confluence_grade == ""
+    assert cfg.min_confluence_grade != ""
     assert lane.max_daily_loss == DAILY_LOSS_LIMIT == 400.0
     assert lane.max_drawdown_percent == MAX_DRAWDOWN_PERCENT == 0.20
     assert lane.enabled_concepts == [RESEARCH_STRATEGY]

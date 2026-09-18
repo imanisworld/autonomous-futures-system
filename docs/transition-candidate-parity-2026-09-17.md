@@ -83,3 +83,137 @@ Terminal blocker distribution:
 Therefore the next blocker is not one market-condition flag. Reproducing the historical population through full DecisionEngine would require multiple strategy-specific policy exceptions or a separately defined decision contract.
 
 No such carve-out is authorized by this audit. The isolated executor remains a research bridge only, and PR #659 must not be treated as #644-qualified or DEMO-eligible.
+
+
+## Isolated decision-contract result
+
+The preserved Transition population was then run through a single explicit strategy-scoped research contract rather than piecemeal DecisionEngine exemptions.
+
+The contract keeps hard account/risk controls and removes only the inherited global `min_confluence_grade` selector, which was not part of the preserved Transition population. It remains default-off, paper-only, and has no runtime or external-broker route.
+
+Exact Stage-B comparison:
+
+### Full population
+- eligible: 976
+- entry parity: 976/976 exact
+- resolved fills: 843
+- wins/losses: 429 / 414
+- net: +$3,337.36
+- PF: 1.100975
+- H1: +$2,863.92
+- H2: +$473.44
+- max drawdown: $2,262.74 (19.84%)
+- drawdown halt: no
+- hard-risk rejections: 51 daily-trade-limit, 3 max-daily-loss
+
+This exactly reproduces the previously frozen $8k ledger result.
+
+### Audit population
+- eligible: 82
+- exact entry parity: 77
+- one-tick cross-feed entry drift: 5
+- drift greater than one tick: 0
+- resolved fills: 73
+- wins/losses: 35 / 38
+- net: +$576.46
+- PF: 1.152111
+- H1: +$76.72
+- H2: +$499.74
+- max drawdown: $824.86 (10.02%)
+- drawdown halt: no
+
+The prior frozen audit-ledger benchmark was +$575.96 / PF 1.151959. Using the current Polygon/raw-close canonical entry on the five ±1-tick feed differences changes net by only +$0.50 and leaves the 73-fill count unchanged.
+
+Reproducer:
+`python3 scripts/transition_isolated_contract_audit.py`
+
+Pinned output:
+`scripts/transition_isolated_contract_audit_results.json`
+
+This resolves the five one-tick entry discrepancies. It does not establish DEMO eligibility. Slippage stress, timed-exit replay parity, calendar/session identity, and #644 qualification remain outstanding.
+
+
+## Adverse-slippage stress — promotion blocker
+
+The isolated decision contract was rerun with the strategy, population, $8k ledger, stop, holding horizon, daily limits, and drawdown rule frozen. Only adverse slippage changed.
+
+Stress definition follows the repo qualification convention: **N adverse ticks on entry and exit separately**.
+
+### 1 tick each side — baseline
+Full population:
+- 843 resolved fills
+- +$3,337.36
+- PF 1.100975
+- H1 +$2,863.92
+- H2 +$473.44
+- max drawdown 19.84%
+- no drawdown halt
+
+Audit population:
+- 73 resolved fills
+- +$576.46
+- PF 1.152111
+- H1 +$76.72
+- H2 +$499.74
+- max drawdown 10.02%
+- no drawdown halt
+
+### 2 ticks each side
+Full population:
+- 572 resolved fills before risk halt
+- +$774.94
+- PF 1.035412
+- H1 +$889.22
+- **H2 -$114.28**
+- **max drawdown 20.45%**
+- **20% drawdown halt triggered**
+
+Audit population:
+- 73 resolved fills
+- +$503.46
+- PF 1.131496
+- H1 +$40.72
+- H2 +$462.74
+- max drawdown 10.12%
+- no drawdown halt
+
+### 3 ticks each side
+Full population:
+- 563 resolved fills before risk halt
+- +$496.76
+- PF 1.022983
+- H1 +$483.12
+- H2 +$13.64
+- **max drawdown 20.24%**
+- **20% drawdown halt triggered**
+
+Audit population:
+- 73 resolved fills
+- +$430.46
+- PF 1.111267
+- H1 +$4.72
+- H2 +$425.74
+- max drawdown 10.22%
+- no drawdown halt
+
+Pinned evidence:
+`scripts/transition_isolated_contract_slippage_stress_results.json`
+
+### Ruling
+
+**WAIT — FAILS REQUIRED SLIPPAGE ROBUSTNESS**
+
+The full multi-month population is the binding population. It fails the required stress because:
+- 2-tick stress makes H2 negative and breaches the 20% drawdown stop;
+- 3-tick stress also breaches the 20% drawdown stop.
+
+The positive smaller audit population does not override the full-population failure.
+
+Do not:
+- tune intermediate stop values;
+- increase the ledger merely to make the drawdown percentage pass;
+- loosen the 20% drawdown rule;
+- weaken the slippage stress;
+- add DEMO/runtime activation.
+
+Timed-exit ReplayEngine parity and C14 calendar work remain valid infrastructure questions, but they are **not required next for this Transition variant** because the variant already fails a binding promotion gate.

@@ -792,7 +792,6 @@ def process_alert(
                 bar_hist.recent(state.instrument, 6, for_date=for_date)
             )
             recent_bars = bar_hist.recent(state.instrument, 8, for_date=for_date)
-            state.bar_history_15m = list(recent_bars)
             structural_bars = bar_hist.recent(state.instrument, 64, for_date=for_date)
             if getattr(cfg, "htf_direction_mode", "off") == "prioritize":
                 _resolve_pending_opportunities(

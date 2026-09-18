@@ -1,0 +1,367 @@
+{
+  "pass_rule": {
+    "both_halves_positive": true,
+    "no_20pct_drawdown_halt": true,
+    "required_full_population": "transition_mnq"
+  },
+  "reasons": [
+    "2-tick full population: H2 negative and 20% drawdown halt",
+    "3-tick full population: 20% drawdown halt"
+  ],
+  "results": {
+    "1": {
+      "contract": {
+        "daily_loss_limit": 400.0,
+        "external_broker_route": false,
+        "max_drawdown_percent": 0.2,
+        "max_trades_per_day": 3,
+        "runtime_activation": false,
+        "slippage_ticks_each_side": 1.0,
+        "starting_balance": 8000.0
+      },
+      "lanes": {
+        "transition_mnq": {
+          "corpus": "/Users/djb.a.e/MAINVSCODE/autonomous-futures-system/data/replay_polygon_5m",
+          "counts": {
+            "ENTRY_EXACT": 976,
+            "ENTRY_PARITY_WITHIN_1T": 976,
+            "FILLED": 843,
+            "LOSS": 414,
+            "RISK_REJECTED": 54,
+            "SKIP_OPEN_POSITION": 79,
+            "WIN": 429
+          },
+          "economic": {
+            "breakeven": 0,
+            "drawdown_halted": false,
+            "ending_balance": 11337.36,
+            "h1": 2863.92,
+            "h2": 473.44,
+            "losses": 414,
+            "max_drawdown_dollars": 2262.74,
+            "max_drawdown_pct": 0.198363,
+            "net": 3337.36,
+            "peak_balance": 11455.32,
+            "profit_factor": 1.100975,
+            "resolved_fills": 843,
+            "wins": 429
+          },
+          "eligible_candidates": 976,
+          "entry_mismatch_sample": [],
+          "lane": "transition_mnq",
+          "risk_failures": {
+            "daily_trade_limit": 51,
+            "max_daily_loss": 3
+          }
+        },
+        "transition_mnq_audit": {
+          "corpus": "/Users/djb.a.e/MAINVSCODE/autonomous-futures-system/data/replay_corpus_v1_5m",
+          "counts": {
+            "ENTRY_EXACT": 77,
+            "ENTRY_FEED_DRIFT_1T": 5,
+            "ENTRY_PARITY_WITHIN_1T": 82,
+            "FILLED": 73,
+            "LOSS": 38,
+            "RISK_REJECTED": 5,
+            "SKIP_OPEN_POSITION": 4,
+            "WIN": 35
+          },
+          "economic": {
+            "breakeven": 0,
+            "drawdown_halted": false,
+            "ending_balance": 8576.46,
+            "h1": 76.72,
+            "h2": 499.74,
+            "losses": 38,
+            "max_drawdown_dollars": 824.86,
+            "max_drawdown_pct": 0.10023,
+            "net": 576.46,
+            "peak_balance": 8981.42,
+            "profit_factor": 1.152111,
+            "resolved_fills": 73,
+            "wins": 35
+          },
+          "eligible_candidates": 82,
+          "entry_mismatch_sample": [
+            {
+              "bar_ts": "2026-05-25T14:50:00+00:00",
+              "canonical_entry": 29927.0,
+              "delta": 0.25,
+              "preserved_entry": 29926.75
+            },
+            {
+              "bar_ts": "2026-06-05T18:50:00+00:00",
+              "canonical_entry": 29152.0,
+              "delta": 0.25,
+              "preserved_entry": 29151.75
+            },
+            {
+              "bar_ts": "2026-06-16T18:40:00+00:00",
+              "canonical_entry": 30463.5,
+              "delta": -0.25,
+              "preserved_entry": 30463.75
+            },
+            {
+              "bar_ts": "2026-06-26T20:05:00+00:00",
+              "canonical_entry": 29304.25,
+              "delta": 0.25,
+              "preserved_entry": 29304.0
+            },
+            {
+              "bar_ts": "2026-07-08T15:35:00+00:00",
+              "canonical_entry": 29107.5,
+              "delta": 0.25,
+              "preserved_entry": 29107.25
+            }
+          ],
+          "lane": "transition_mnq_audit",
+          "risk_failures": {
+            "daily_trade_limit": 4,
+            "max_daily_loss": 1
+          }
+        }
+      },
+      "sha256": "27399e88d84f927e1c68962ae4b003ed2e087a1ca1787ae6fb4dd25215c30dd8"
+    },
+    "2": {
+      "contract": {
+        "daily_loss_limit": 400.0,
+        "external_broker_route": false,
+        "max_drawdown_percent": 0.2,
+        "max_trades_per_day": 3,
+        "runtime_activation": false,
+        "slippage_ticks_each_side": 2.0,
+        "starting_balance": 8000.0
+      },
+      "lanes": {
+        "transition_mnq": {
+          "corpus": "/Users/djb.a.e/MAINVSCODE/autonomous-futures-system/data/replay_polygon_5m",
+          "counts": {
+            "DRAWDOWN_HALT": 1,
+            "ENTRY_EXACT": 976,
+            "ENTRY_PARITY_WITHIN_1T": 976,
+            "FILLED": 572,
+            "LOSS": 287,
+            "RISK_REJECTED": 37,
+            "SKIP_DRAWDOWN_HALTED": 312,
+            "SKIP_OPEN_POSITION": 55,
+            "WIN": 285
+          },
+          "economic": {
+            "breakeven": 0,
+            "drawdown_halted": true,
+            "ending_balance": 8774.94,
+            "h1": 889.22,
+            "h2": -114.28,
+            "losses": 287,
+            "max_drawdown_dollars": 2255.1,
+            "max_drawdown_pct": 0.204451,
+            "net": 774.94,
+            "peak_balance": 11030.04,
+            "profit_factor": 1.035412,
+            "resolved_fills": 572,
+            "wins": 285
+          },
+          "eligible_candidates": 976,
+          "entry_mismatch_sample": [],
+          "lane": "transition_mnq",
+          "risk_failures": {
+            "daily_trade_limit": 35,
+            "max_daily_loss": 2
+          }
+        },
+        "transition_mnq_audit": {
+          "corpus": "/Users/djb.a.e/MAINVSCODE/autonomous-futures-system/data/replay_corpus_v1_5m",
+          "counts": {
+            "ENTRY_EXACT": 77,
+            "ENTRY_FEED_DRIFT_1T": 5,
+            "ENTRY_PARITY_WITHIN_1T": 82,
+            "FILLED": 73,
+            "LOSS": 40,
+            "RISK_REJECTED": 5,
+            "SKIP_OPEN_POSITION": 4,
+            "WIN": 33
+          },
+          "economic": {
+            "breakeven": 0,
+            "drawdown_halted": false,
+            "ending_balance": 8503.46,
+            "h1": 40.72,
+            "h2": 462.74,
+            "losses": 40,
+            "max_drawdown_dollars": 831.86,
+            "max_drawdown_pct": 0.10123,
+            "net": 503.46,
+            "peak_balance": 8910.42,
+            "profit_factor": 1.131496,
+            "resolved_fills": 73,
+            "wins": 33
+          },
+          "eligible_candidates": 82,
+          "entry_mismatch_sample": [
+            {
+              "bar_ts": "2026-05-25T14:50:00+00:00",
+              "canonical_entry": 29927.0,
+              "delta": 0.25,
+              "preserved_entry": 29926.75
+            },
+            {
+              "bar_ts": "2026-06-05T18:50:00+00:00",
+              "canonical_entry": 29152.0,
+              "delta": 0.25,
+              "preserved_entry": 29151.75
+            },
+            {
+              "bar_ts": "2026-06-16T18:40:00+00:00",
+              "canonical_entry": 30463.5,
+              "delta": -0.25,
+              "preserved_entry": 30463.75
+            },
+            {
+              "bar_ts": "2026-06-26T20:05:00+00:00",
+              "canonical_entry": 29304.25,
+              "delta": 0.25,
+              "preserved_entry": 29304.0
+            },
+            {
+              "bar_ts": "2026-07-08T15:35:00+00:00",
+              "canonical_entry": 29107.5,
+              "delta": 0.25,
+              "preserved_entry": 29107.25
+            }
+          ],
+          "lane": "transition_mnq_audit",
+          "risk_failures": {
+            "daily_trade_limit": 4,
+            "max_daily_loss": 1
+          }
+        }
+      },
+      "sha256": "6e5e22e57143fe833cf717d2fa358fb68c0e5276e0c50d4c143821de68411738"
+    },
+    "3": {
+      "contract": {
+        "daily_loss_limit": 400.0,
+        "external_broker_route": false,
+        "max_drawdown_percent": 0.2,
+        "max_trades_per_day": 3,
+        "runtime_activation": false,
+        "slippage_ticks_each_side": 3.0,
+        "starting_balance": 8000.0
+      },
+      "lanes": {
+        "transition_mnq": {
+          "corpus": "/Users/djb.a.e/MAINVSCODE/autonomous-futures-system/data/replay_polygon_5m",
+          "counts": {
+            "DRAWDOWN_HALT": 1,
+            "ENTRY_EXACT": 976,
+            "ENTRY_PARITY_WITHIN_1T": 976,
+            "FILLED": 563,
+            "LOSS": 285,
+            "RISK_REJECTED": 35,
+            "SKIP_DRAWDOWN_HALTED": 324,
+            "SKIP_OPEN_POSITION": 54,
+            "WIN": 278
+          },
+          "economic": {
+            "breakeven": 0,
+            "drawdown_halted": true,
+            "ending_balance": 8496.76,
+            "h1": 483.12,
+            "h2": 13.64,
+            "losses": 285,
+            "max_drawdown_dollars": 2156.28,
+            "max_drawdown_pct": 0.20241,
+            "net": 496.76,
+            "peak_balance": 10653.04,
+            "profit_factor": 1.022983,
+            "resolved_fills": 563,
+            "wins": 278
+          },
+          "eligible_candidates": 976,
+          "entry_mismatch_sample": [],
+          "lane": "transition_mnq",
+          "risk_failures": {
+            "daily_trade_limit": 33,
+            "max_daily_loss": 2
+          }
+        },
+        "transition_mnq_audit": {
+          "corpus": "/Users/djb.a.e/MAINVSCODE/autonomous-futures-system/data/replay_corpus_v1_5m",
+          "counts": {
+            "ENTRY_EXACT": 77,
+            "ENTRY_FEED_DRIFT_1T": 5,
+            "ENTRY_PARITY_WITHIN_1T": 82,
+            "FILLED": 73,
+            "LOSS": 40,
+            "RISK_REJECTED": 5,
+            "SKIP_OPEN_POSITION": 4,
+            "WIN": 33
+          },
+          "economic": {
+            "breakeven": 0,
+            "drawdown_halted": false,
+            "ending_balance": 8430.46,
+            "h1": 4.72,
+            "h2": 425.74,
+            "losses": 40,
+            "max_drawdown_dollars": 838.86,
+            "max_drawdown_pct": 0.10223,
+            "net": 430.46,
+            "peak_balance": 8839.42,
+            "profit_factor": 1.111267,
+            "resolved_fills": 73,
+            "wins": 33
+          },
+          "eligible_candidates": 82,
+          "entry_mismatch_sample": [
+            {
+              "bar_ts": "2026-05-25T14:50:00+00:00",
+              "canonical_entry": 29927.0,
+              "delta": 0.25,
+              "preserved_entry": 29926.75
+            },
+            {
+              "bar_ts": "2026-06-05T18:50:00+00:00",
+              "canonical_entry": 29152.0,
+              "delta": 0.25,
+              "preserved_entry": 29151.75
+            },
+            {
+              "bar_ts": "2026-06-16T18:40:00+00:00",
+              "canonical_entry": 30463.5,
+              "delta": -0.25,
+              "preserved_entry": 30463.75
+            },
+            {
+              "bar_ts": "2026-06-26T20:05:00+00:00",
+              "canonical_entry": 29304.25,
+              "delta": 0.25,
+              "preserved_entry": 29304.0
+            },
+            {
+              "bar_ts": "2026-07-08T15:35:00+00:00",
+              "canonical_entry": 29107.5,
+              "delta": 0.25,
+              "preserved_entry": 29107.25
+            }
+          ],
+          "lane": "transition_mnq_audit",
+          "risk_failures": {
+            "daily_trade_limit": 4,
+            "max_daily_loss": 1
+          }
+        }
+      },
+      "sha256": "40c250b2c739c792f4767cc389c5441e9061bbcb483a6d9a63a57c69dfad1670"
+    }
+  },
+  "slippage_definition": "adverse ticks applied on entry and exit separately",
+  "status": "FINAL_RESEARCH_STRESS",
+  "stress_ticks_each_side": [
+    1,
+    2,
+    3
+  ],
+  "verdict": "WAIT_FAILS_SLIPPAGE_ROBUSTNESS"
+}
