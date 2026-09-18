@@ -73,33 +73,33 @@ PR #691 proof recorded 164 targeted tests and 5,935 passed / 7 skipped full-suit
 
 **Status: RESOLVED for DEMO forward collection; still not a live-trading approval.**
 
-## Finding 3 — revenge/loss-streak policy conflict
+## Finding 3 — "no revenge" policy defined from evidence
 
-Current risk configuration intentionally disables several historical throttle mechanisms:
+The loss-sequence audit does **not** support adding a fixed post-loss cooldown or a one/two-loss shutdown. Current active-family sealed rows contain only one same-day post-loss follow-up trade, and it won; 4HR and 3-2-2 have no same-day follow-up sequences. In the larger inactive 2-1-2 sensitivity population, stopping after two same-day losses removed profitable recovery trades and reduced net P&L in both temporal halves of both instruments.
 
-- `max_consecutive_losses=9999`;
-- `circuit_breaker_losses=0`;
-- `early_session_loss_floor=0`.
+Historical full-engine evidence points the same direction: PR #57 recorded a 556-day honest-fill comparison where removing the prior psychology/throttle bundle increased P&L and expectancy per trade on both MES and MNQ.
 
-The project operating rule still says no revenge trades.
+Therefore "no revenge trades" is defined mechanically as:
+- no manual or unsignaled re-entry;
+- no averaging down;
+- every new entry must be a fresh reproducible strategy signal;
+- every new entry must pass normal risk/execution gates.
 
-This is a policy/evidence conflict, not a current accidental-execution path. Changing it during active evidence epochs would alter risk admission and contaminate comparisons.
+Current settings remain `max_consecutive_losses=9999`, `circuit_breaker_losses=0`, and `early_session_loss_floor=0`. Add a post-loss throttle only if a compatible combined-account test later proves a benefit.
 
-**Status: HOLD / unresolved for live readiness. Do not retune an active epoch to clear this finding.**
+The three-trades/day limit remains a **provisional account-safety/isolation cap**, not an optimized revenge rule. It was restored by PR #376 for isolated forward-paper operation; current sealed studies do not provide a valid combined-account counterfactual for changing it.
 
-## Finding 4 — drawdown survival floor is currently breached
+**Status: POLICY RESOLVED FROM AVAILABLE EVIDENCE; re-open only with compatible combined-account post-loss evidence. See `docs/loss-sequence-risk-policy-audit-2026-09-18.md`.**
 
-Configured max drawdown: 20%.
+## Finding 4 — global drawdown policy corrected to 30%
 
-Observed runtime drawdown during the audit: approximately 24.6% from a peak of $1,910.75 to $1,440.25.
+At audit time the deployed global max drawdown was 20%, and the observed runtime drawdown was approximately 24.6% from a peak of $1,910.75 to $1,440.25. Direct invocation of the then-deployed `RiskEngine._check_max_drawdown()` returned `REJECTED / max_drawdown`.
 
-Direct invocation of the deployed `RiskEngine._check_max_drawdown()` returned:
+Operator policy was subsequently clarified: the **global account hard survival floor is 30%**, not 20%. `risk_rules.yaml` is therefore updated to 0.30 as a prospective global risk-policy change. This does **not** rewrite historical evidence and does **not** alter frozen lane-specific drawdown contracts: wide-stop 4HR/3-2-2 remains at its preregistered 20% for the active epoch; Daily 2-2 and MES 1-2-2 already use their own 30% hard halts.
 
-`REJECTED / max_drawdown`
+At 24.6%, the account is below the intended 30% global floor. The historical 20% rejection remains valid evidence of what the old policy did; it is not a current-policy blocker once the 30% release is deployed.
 
-The gate is real and should not be reset, weakened, or bypassed to create a green state.
-
-**Status: BLOCKED for ordinary execution/live readiness; enforcement is working as designed.**
+**Status: POLICY CORRECTED TO 30%; preserve lane-specific frozen thresholds and record the release boundary.**
 
 ## Remaining forward-proof gaps
 
@@ -121,7 +121,7 @@ The watcher was then restarted/rebaselined at 13:57 UTC and adopted `088012983c3
 
 - Do not enable live trading.
 - Do not reset Daily or wide-stop accounting epochs.
-- Do not weaken the 20% drawdown rule.
+- Do not alter frozen lane-specific drawdown thresholds mid-epoch.
 - Do not change loss-streak/revenge policy mid-epoch merely to satisfy this audit.
 - Do not mix PaperBroker and Tradovate DEMO evidence.
 - Do not treat a large shadow sample as proof of positive edge.

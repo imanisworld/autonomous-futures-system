@@ -138,7 +138,7 @@ def test_validate_config_rejects_invalid_strategy_status_value(config):
 
 
 def test_shipped_risk_rules_enables_gate_and_demotes_vwap_hold():
-    """Retired MNQ orb_breakout posture (risk_rules 1.2.1): the gate stays on,
+    """Retired MNQ orb_breakout posture retained in risk_rules 1.2.2: the gate stays on,
     vwap_hold remains explicitly demoted, and orb_breakout is now SHADOW_ONLY
     after its evidence retirement. orb_reclaim remains absent and inherits the
     fail-closed default."""
@@ -170,7 +170,7 @@ def test_shipped_risk_rules_loads_via_load_config():
 # so MNQ candidates journal as blocked WITH an explicit reason (the vwap_hold
 # pattern) instead of silently vanishing (the instrument-disable pattern).
 
-# Retired MNQ orb_breakout posture (risk_rules 1.2.1): the shipped map remains
+# Retired MNQ orb_breakout posture retained in risk_rules 1.2.2: the shipped map remains
 # EXACTLY these three explicit governance records. All three are SHADOW_ONLY;
 # orb_breakout is additionally instrument-disabled on MNQ. Every other strategy
 # is absent and therefore inherits default_status=SHADOW_ONLY.

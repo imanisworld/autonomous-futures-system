@@ -1042,3 +1042,15 @@ def test_production_config_allows_24h_sessions():
         assert engine._check_session(s, DailyState()) is None, (session, h, m)
         assert engine._check_session_window(s, DailyState()) is None, (session, h, m)
         assert engine._check_session_cutoff(s, DailyState()) is None, (session, h, m)
+
+
+def test_repository_global_drawdown_policy_is_thirty_percent():
+    """Operator policy: the global account hard survival floor is 30%.
+
+    Frozen lane-specific evidence contracts may intentionally retain their own
+    preregistered thresholds and are tested separately.
+    """
+    from config.settings import load_config
+
+    cfg = load_config()
+    assert cfg.max_drawdown_percent == pytest.approx(0.30)

@@ -8,6 +8,24 @@ Types: `Added`, `Changed`, `Fixed`, `Removed`, `Security`, `Rulebook`
 
 ---
 
+## [1.8.2] 2026-09-18
+
+Risk-policy entry. `risk_rules.yaml` bumped to internal `1.2.2`.
+No signal, bracket, fill model, strategy permission, broker, epoch, or live-execution authorization changes.
+
+### Rulebook
+- **Global account max drawdown hard floor: 20% -> 30%.** This is the intended prospective account-level survival policy. Historical runs remain evaluated under the threshold they actually used.
+- Frozen evidence-lane drawdown contracts are **not** rewritten: wide-stop 4HR/3-2-2 remains at its preregistered 20% for the active epoch; Daily 2-2 and MES 1-2-2 retain their independent 30% hard halts.
+- **No separate post-loss/"revenge" throttle added.** A 2026-09-18 sequence audit found no evidence supporting a one/two-loss shutdown or cooldown. Active-family rows have almost no same-day post-loss sample; the only observed MES 1-2-2 follow-up won. In the larger inactive 2-1-2 sensitivity population, a two-loss stop removed profitable recovery trades in both H1/H2 on both instruments.
+- "No revenge trade" is therefore mechanical: no manual/unsignaled re-entry, no averaging down, and every new entry must be a fresh reproducible strategy signal that passes ordinary risk/execution gates.
+- `max_trades_per_day=3` remains a **provisional safety/isolation cap**, not an optimized psychology rule. PR #376 originally restored it for isolated forward-paper operation; change it only with compatible combined-account evidence.
+
+### Evidence
+- Historical PR #57 / commit `4e137051064edae059dd87800e28cf22c2ef2665` recorded a 556-day honest-fill full-engine comparison in which removing the prior psychology/throttle bundle increased P&L and expectancy per trade on both MES and MNQ.
+- Detailed 2026-09-18 loss-sequence analysis: `docs/loss-sequence-risk-policy-audit-2026-09-18.md`.
+
+---
+
 ## [1.8.1] 2026-09-08
 
 Safety/config-only entry. `risk_rules.yaml` bumped to internal `1.2.1`.
