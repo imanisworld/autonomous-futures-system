@@ -161,6 +161,38 @@ def test_manifest_rejects_unknown_source():
         raise AssertionError("unknown source must fail closed")
 
 
+def test_manifest_rejects_row_rule_sha_mismatch():
+    record = json.loads(quote_record_json(_retain()))
+    record["rule_sha256"] = "0" * 64
+    payload = (json.dumps(record, sort_keys=True) + "\n").encode()
+    try:
+        build_quote_manifest(
+            {"quotes/day.jsonl": payload},
+            rule=_rule(),
+            rule_sha256=_rule_sha(),
+        )
+    except ValueError as exc:
+        assert "rule_sha256" in str(exc)
+    else:
+        raise AssertionError("row with mismatched rule SHA must fail closed")
+
+
+def test_manifest_rejects_schema_drift():
+    record = json.loads(quote_record_json(_retain()))
+    del record["quote_ts"]
+    payload = (json.dumps(record, sort_keys=True) + "\n").encode()
+    try:
+        build_quote_manifest(
+            {"quotes/day.jsonl": payload},
+            rule=_rule(),
+            rule_sha256=_rule_sha(),
+        )
+    except ValueError as exc:
+        assert "schema mismatch" in str(exc)
+    else:
+        raise AssertionError("row schema drift must fail closed")
+
+
 def test_rule_rejects_unknown_allowed_source():
     raw = json.loads(RULE_PATH.read_text())
     raw["allowed_sources"] = ["invented:source"]
