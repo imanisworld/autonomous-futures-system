@@ -113,6 +113,27 @@ class ScanStorage:
                 "CREATE INDEX IF NOT EXISTS idx_options_shadow_journal_scan "
                 "ON options_shadow_journal (scan_id, ticker, timestamp)"
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS options_selector_evidence (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT NOT NULL,
+                    ticker TEXT NOT NULL,
+                    direction TEXT NOT NULL,
+                    decision_ts TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    reason_code TEXT NOT NULL,
+                    selector_rule_sha256 TEXT NOT NULL,
+                    selector_input_sha256 TEXT NOT NULL,
+                    evidence_sha256 TEXT NOT NULL,
+                    evidence_json TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_options_selector_evidence_decision "
+                "ON options_selector_evidence (ticker, decision_ts, id)"
+            )
             # Episodes whose first actionable ACTIVE entry was refused
             # ENTRY_LATE. Once here, the episode can never become ACTIVE; a
             # new mechanical trigger (different trigger level or episode
@@ -203,6 +224,62 @@ class ScanStorage:
                 ),
             )
             return int(cursor.lastrowid)
+
+    def record_selector_evidence(
+        self,
+        evidence: dict[str, Any],
+        *,
+        timestamp: datetime | None = None,
+    ) -> int:
+        """Persist one append-only prospective selector evidence envelope."""
+
+        stamp = (timestamp or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat()
+        status = str(evidence.get("status") or "DATA_BLOCKED")
+        reason_code = str(evidence.get("reason_code") or "")
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO options_selector_evidence (
+                    timestamp, ticker, direction, decision_ts, status, reason_code,
+                    selector_rule_sha256, selector_input_sha256, evidence_sha256,
+                    evidence_json
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    stamp,
+                    str(evidence.get("ticker") or "").upper(),
+                    str(evidence.get("production_direction") or ""),
+                    str(evidence.get("decision_ts") or ""),
+                    status,
+                    reason_code,
+                    str(evidence.get("selector_rule_sha256") or ""),
+                    str(evidence.get("selector_input_sha256") or ""),
+                    str(evidence.get("evidence_sha256") or ""),
+                    json.dumps(evidence, sort_keys=True, separators=(",", ":"), default=str),
+                ),
+            )
+            return int(cursor.lastrowid)
+
+    def latest_selector_evidence(self, limit: int = 25) -> list[dict[str, Any]]:
+        bounded = max(1, min(int(limit), 500))
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, timestamp, evidence_json
+                FROM options_selector_evidence
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (bounded,),
+            ).fetchall()
+        out: list[dict[str, Any]] = []
+        for row in rows:
+            evidence = json.loads(row["evidence_json"] or "{}")
+            evidence["_storage_id"] = int(row["id"])
+            evidence["_stored_at"] = str(row["timestamp"])
+            out.append(evidence)
+        return out
 
     def recent_alert_exists(
         self,

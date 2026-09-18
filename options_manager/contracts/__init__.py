@@ -18,10 +18,32 @@ from .base import (
     ContractConstraintsStatus,
 )
 from .contract_validator import evaluate_contract_constraints
+from .selector import (
+    ContractSelectionInput,
+    ContractSelectionResult,
+    OptionChainRow,
+    SelectorRule,
+    select_contract,
+    select_contract_from_serialized_input,
+    selection_input_from_json,
+    selection_input_json,
+    selection_result_json,
+    selector_rule_from_mapping,
+)
 
 __all__ = [
     "ContractConstraintsInputs",
     "ContractConstraintsResult",
     "ContractConstraintsStatus",
     "evaluate_contract_constraints",
+    "ContractSelectionInput",
+    "ContractSelectionResult",
+    "OptionChainRow",
+    "SelectorRule",
+    "select_contract",
+    "select_contract_from_serialized_input",
+    "selection_input_from_json",
+    "selection_input_json",
+    "selection_result_json",
+    "selector_rule_from_mapping",
 ]
