@@ -100,7 +100,11 @@ async def receive_packet(request: Request) -> JSONResponse:
         )
 
     if _is_canonical_payload(raw_input):
-        quote_rule, quote_rule_sha256 = _load_quote_retention_rule()
+        try:
+            quote_rule, quote_rule_sha256 = _load_quote_retention_rule()
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+            logger.error("options_manager: quote retention rule unavailable: %r", exc)
+            quote_rule, quote_rule_sha256 = None, None
         result = check_advisory_decision_intake(
             raw_input,
             require_portfolio_risk=True,
