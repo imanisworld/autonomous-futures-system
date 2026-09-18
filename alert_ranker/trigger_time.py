@@ -17,7 +17,7 @@ breakout 30-minute candle to finish and then applying the SIP-delay buffer.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal, Sequence
 
 from strategy.strat_classifier import (
@@ -210,14 +210,25 @@ def resolve_trigger(
     lower_timeframe_bars: Sequence[Bar],
     *,
     lower_timeframe: Timeframe,
+    watch_start: datetime | None = None,
+    watch_until: datetime | None = None,
 ) -> TriggerResolution:
-    """Resolve the first boundary break without inventing intrabar ordering."""
+    """Resolve the first boundary break without inventing intrabar ordering.
+
+    watch_start/watch_until may re-anchor the logical next canonical bar across
+    a regular-session gap. Intraday callers can omit them.
+    """
+
+    start = armed.armed_at if watch_start is None else watch_start.astimezone(timezone.utc)
+    end = armed.watch_until if watch_until is None else watch_until.astimezone(timezone.utc)
+    if end <= start:
+        raise ValueError("watch_until must be after watch_start")
 
     watched = sorted(
         (
             bar
             for bar in lower_timeframe_bars
-            if armed.armed_at <= bar.start_utc < armed.watch_until
+            if start <= bar.start_utc < end
         ),
         key=lambda bar: bar.start_utc,
     )
