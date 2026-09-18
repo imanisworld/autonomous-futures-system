@@ -5,9 +5,11 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+from alert_ranker.paper_v1 import choose_contract
 from options_manager.quotes.replay import executable_quote_projection, quote_record_from_json_line
 from options_manager.quotes.retention import QuoteRetentionInput, quote_record_json, retain_quote, retention_rule_from_mapping
 
@@ -27,17 +29,35 @@ def test_replay_and_forward_use_identical_serialized_projection():
     frozen = _payload()
     replay = executable_quote_projection(frozen)
     forward = executable_quote_projection(frozen)
-    assert replay == forward == {
-        "contract_id": "SPY261120C00550000",
-        "decision_ts": "2026-09-18T14:01:00+00:00",
-        "quote_ts": "2026-09-18T14:00:00+00:00",
-        "source": "fixture:option_chain_snapshot",
-        "status": "OK",
-        "reason_code": "quote_retained",
-        "bid": 4.8,
-        "ask": 5.0,
-        "executable": True,
-    }
+    assert replay == forward
+    assert replay["contract_id"] == "SPY261120C00550000"
+    assert replay["quote_ts"] == "2026-09-18T14:00:00+00:00"
+    assert replay["source"] == "fixture:option_chain_snapshot"
+    assert replay["status"] == "OK"
+    assert replay["reason_code"] == "quote_retained"
+    assert replay["bid"] == 4.8
+    assert replay["ask"] == 5.0
+    assert replay["executable"] is True
+
+
+def test_replay_and_forward_match_through_actual_contract_selector():
+    frozen = _payload()
+
+    def select(payload: bytes):
+        projected = executable_quote_projection(payload)
+        contract = SimpleNamespace(**projected)
+        return choose_contract([contract], option_type="CALL", underlying_price=551.0)
+
+    replay = select(frozen)
+    forward = select(frozen)
+    assert replay == forward
+    assert replay.valid
+    assert replay.contract is not None
+    assert replay.contract.symbol == "SPY261120C00550000"
+    assert replay.contract.bid == 4.8
+    assert replay.contract.ask == 5.0
+    assert replay.contract.quote_timestamp == "2026-09-18T14:00:00+00:00"
+    assert replay.contract.quote_source == "fixture:option_chain_snapshot"
 
 
 @pytest.mark.parametrize("overrides,expected_status", [
@@ -54,6 +74,13 @@ def test_non_ok_frozen_records_fail_closed_identically(overrides, expected_statu
     assert replay["executable"] is False
     assert replay["bid"] is None
     assert replay["ask"] is None
+
+    # The actual paper selector must also refuse the non-executable projection.
+    decision = choose_contract(
+        [SimpleNamespace(**replay)], option_type="CALL", underlying_price=551.0
+    )
+    assert decision.status == "DATA_INVALID"
+    assert "missing_or_invalid_bid_ask" in decision.reason
 
 
 def test_adapter_rejects_schema_drift_instead_of_reconstructing():
