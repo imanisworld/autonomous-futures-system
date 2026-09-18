@@ -60,6 +60,16 @@ def test_replay_and_forward_match_through_actual_contract_selector():
     assert replay.contract.quote_source == "fixture:option_chain_snapshot"
 
 
+def test_no_retained_quote_record_fails_closed_identically_through_selector():
+    """Absence is not synthesized into a MISSING quote or reconstructed quote."""
+    replay = choose_contract([], option_type="CALL", underlying_price=551.0)
+    forward = choose_contract([], option_type="CALL", underlying_price=551.0)
+    assert replay == forward
+    assert replay.status == "DATA_INVALID"
+    assert replay.reason == "no_liquid_contract"
+    assert replay.contract is None
+
+
 @pytest.mark.parametrize("overrides,expected_status", [
     ({"quote_ts": None}, "MISSING"),
     ({"quote_ts": "2026-09-18T13:40:00+00:00"}, "STALE"),
