@@ -50,3 +50,45 @@ Focused regression set:
 - `tests/test_release_integrity.py`.
 
 Result before deployment: **32 passed**.
+
+## VPS deployment proof
+
+Merged fix: PR #674, commit `0c447a082e54b5ca6e0929beb63c407d8ffb803b`.
+
+The exact merged server gate was dry-run from `/tmp` before installation against the live curated release `c538e2bc429d52c7d960c1d937d5e27ff4361896`.
+
+Clean-path result:
+- release manifest + durable pins matched;
+- `ops.release_integrity` passed;
+- 19 current `main` differences were reported as informational merged-but-unshipped items;
+- exit code 0;
+- no red Discord alert path was invoked.
+
+Alarm-path simulation used a temporary `.env` containing a deliberately wrong `EXPECTED_LIVE_COMMIT` and no webhook:
+- gate emitted `ALARM release-drift: pinned commit mismatch`;
+- exit code 1.
+
+`--seed` simulation:
+- explicitly refused;
+- exit code 64.
+
+Installed path:
+`/root/bin/afs-drift-gate.sh`
+
+Timestamped backup of the previous box-only script:
+`/root/bin/afs-drift-gate.sh.pre-curated-20260918T121347Z`
+
+Installed/source SHA-256:
+`94b592d703ead7249382fbe3ab69339849fc1f5e59dbe2bd0da774ebb65167c2`
+
+Post-install manual run:
+- `OK release-integrity: c538e2bc429d matches manifest and durable pins`;
+- `INFO main-ahead: 19 merged-but-unshipped runtime item(s)`;
+- exit code 0.
+
+Cron remains unchanged:
+`5 11 * * * /root/bin/afs-drift-gate.sh >/dev/null 2>&1`
+
+No futures-bot, watcher, broker, or scanner restart was required.
+
+The historical red-alert lines remain in `/root/afs-drift-gate.log` as provenance. They do not indicate a current release-integrity failure.
