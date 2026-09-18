@@ -129,6 +129,18 @@ def test_strike_rank_is_applied_only_within_selected_expiration():
     assert result.contract_id == "BETTER"
 
 
+def test_expiration_must_be_canonical_iso_date():
+    result = _select([_row(expiration="11/20/2026")])
+    assert result.status == "NO_CONTRACT"
+    assert result.candidates_excluded_by_reason["invalid_expiration"] == 1
+
+
+def test_supplied_dte_must_match_expiration_and_decision_date():
+    result = _select([_row(expiration="2026-11-20", dte=62)])
+    assert result.status == "NO_CONTRACT"
+    assert result.candidates_excluded_by_reason["dte_expiration_mismatch"] == 1
+
+
 def test_below_minimum_dte_is_rejected():
     result = _select([_row(dte=7)])
     assert result.status == "NO_CONTRACT"
