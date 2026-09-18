@@ -255,4 +255,12 @@ def test_live_and_replay_decision_output_match_on_golden_ny_bar(tmp_path: Path, 
     replay_decision = DecisionEngine(config=config).evaluate(replay, DailyState())
 
     assert replay.vwap.reclaimed is live.vwap.reclaimed is True
-    assert replay_decision.to_dict() == live_decision.to_dict()
+
+    # DecisionOutput.ts is the evaluator's audit-generation timestamp, not a
+    # market/strategy fact; two sequential evaluations differ by microseconds.
+    # Compare every stable decision/candidate field instead.
+    live_dict = live_decision.to_dict()
+    replay_dict = replay_decision.to_dict()
+    live_dict.pop("ts", None)
+    replay_dict.pop("ts", None)
+    assert replay_dict == live_dict
