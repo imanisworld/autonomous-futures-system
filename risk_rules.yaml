@@ -1,13 +1,13 @@
 # ============================================================
 # RISK RULES — Autonomous Futures Paper-Trading System
-# Version: 1.0.0
+# Version: 1.2.2
 # ============================================================
 # These values are authoritative. All risk engine checks
 # reference this file at runtime. Do not edit without
 # incrementing the version and updating CHANGELOG.md.
 # ============================================================
 
-version: "1.2.1"
+version: "1.2.2"
 
 # ─── Trading Mode ────────────────────────────────────────────
 trading_mode:
@@ -78,17 +78,23 @@ daily_limits:
   # To restore the human throttles, revert this block (values preserved in git).
   # 2026-07-28: capped at 3 for the isolated MNQ orb_breakout inverse
   # forward-paper lane specifically (see strategy_permission_gate below) —
-  # NOT a reversal of the 2026-06-17 throttle-removal decision above. Restore
-  # to 9999 when this isolated lane concludes.
-  max_trades_per_day: 3             # was 9999 (unlimited) for the isolated lane; originally 3
-  max_consecutive_losses: 9999     # was 4 — tilt halt off (validator requires >=1)
+  # NOT a reversal of the 2026-06-17 throttle-removal decision above.
+  # 2026-09-18 loss-sequence audit: current sealed active-family studies do not
+  # provide a valid combined-account counterfactual for changing this cap, so 3
+  # remains the provisional account-safety ceiling until that evidence exists.
+  max_trades_per_day: 3             # provisional safety cap; not an evidence-derived revenge throttle
+  # No separate consecutive-loss lock is supported by current evidence. In the
+  # active-family sealed rows, 4HR and 3-2-2 never had a second same-day trade;
+  # MES 1-2-2 had one post-loss second trade and it won. In inactive 2-1-2
+  # sensitivity, a 2-loss stop removed profitable recovery trades in both H1/H2.
+  max_consecutive_losses: 9999      # deliberately off; every entry still needs a fresh valid signal
   max_daily_loss: 150              # KEPT — base daily loss cap; scales × trade contracts (1c $150, 2c $300 …) so the balance-keyed ladder isn't halted by one normal loss. Hard survival floor is max_drawdown_percent.
   daily_profit_protect_threshold: 0 # off (was already 0)
-  max_drawdown_percent: 0.20       # KEPT — survival floor (stop if 20% from peak)
+  max_drawdown_percent: 0.30       # hard global account survival floor (stop if 30% from peak)
   circuit_breaker_losses: 0        # was 2 — circuit breaker OFF
   circuit_breaker_pause_minutes: 30
   conservative_mode: true          # Conservative: MES 1c while validating signals
-  bonus_trades_after_max: 0         # was 2 — moot now max is unlimited
+  bonus_trades_after_max: 0         # no bonus slots beyond the current 3-trade provisional cap
   bonus_min_confluence_grade: "A"
   news_blackout_mode: "off"         # was release_window — news-avoidance OFF (algo, not human)
   news_blackout_max_trades: 1           # (unused in release_window mode)
@@ -131,10 +137,12 @@ daily_limits:
     - "2026-12-04"
     - "2026-12-09 14:00"  # FOMC
     - "2026-12-10"
-  # Early-session loss floor: if realized P&L drops below this within the first
-  # N minutes of a session, block new entries for the rest of that session.
-  # Prevents revenge trading in the opening window.
-  early_session_loss_floor: 0          # RIPPED 2026-06-17 (was -75) — revenge-trade floor OFF (algo, not human). 0 = disabled.
+  # Early-session loss floor remains disabled. "No revenge trade" is defined
+  # mechanically as no manual/unsignaled re-entry and no averaging down: a new
+  # entry must be a fresh reproducible strategy signal that passes normal risk.
+  # Add a post-loss floor/cooldown only if combined-account testing proves it
+  # improves expectancy/drawdown; the 2026-09-18 sequence audit did not.
+  early_session_loss_floor: 0          # disabled; no evidence-supported post-loss floor
   early_session_minutes: 30            # window length in minutes from session open
   # Win-streak bonus contracts: after N consecutive wins, allow +1 contract on
   # the next A/A+ setup only. Resets on any loss.
