@@ -1,0 +1,115 @@
+{
+  "lanes": {
+    "transition_mnq": {
+      "all_candidates_diagnostic": {
+        "attempts": 976,
+        "fills": 976,
+        "h1": 2765.76,
+        "h2": 1262.76,
+        "losses": 481,
+        "max_drawdown": 2073.16,
+        "n": 976,
+        "net": 4028.52,
+        "no_fill_reasons": {},
+        "no_fills": 0,
+        "pf": 1.107757,
+        "stop_losses": 78,
+        "wins": 495,
+        "worst": -202.48
+      },
+      "eligible_candidates": 976,
+      "note": "realized stop loss varies slightly with plan-to-market IOC entry delta; the report's worst trade is binding rather than a hard-coded $200 assumption",
+      "plan_to_decision_close_delta_ticks": {
+        "max": 0.0,
+        "min": 0.0,
+        "nonzero": 0
+      },
+      "planned_stop_risk_dollars": 200.0,
+      "planned_stop_ticks": 400.0,
+      "sequential_max1_max3day": {
+        "attempts": 846,
+        "fills": 846,
+        "h1": 2895.96,
+        "h2": 270.96,
+        "losses": 416,
+        "max_drawdown": 2465.22,
+        "n": 846,
+        "net": 3166.92,
+        "no_fill_reasons": {},
+        "no_fills": 0,
+        "pf": 1.095099,
+        "stop_losses": 73,
+        "wins": 430,
+        "worst": -202.48
+      },
+      "skipped": {
+        "DAILY_TRADE_LIMIT": 51,
+        "POSITION_ALREADY_OPEN": 79
+      }
+    },
+    "transition_mnq_audit": {
+      "all_candidates_diagnostic": {
+        "attempts": 82,
+        "fills": 82,
+        "h1": 498.82,
+        "h2": 325.32,
+        "losses": 41,
+        "max_drawdown": 880.8,
+        "n": 82,
+        "net": 824.14,
+        "no_fill_reasons": {},
+        "no_fills": 0,
+        "pf": 1.207923,
+        "stop_losses": 11,
+        "wins": 41,
+        "worst": -202.98
+      },
+      "eligible_candidates": 82,
+      "note": "realized stop loss varies slightly with plan-to-market IOC entry delta; the report's worst trade is binding rather than a hard-coded $200 assumption",
+      "plan_to_decision_close_delta_ticks": {
+        "max": 1.0,
+        "min": -1.0,
+        "nonzero": 5
+      },
+      "planned_stop_risk_dollars": 200.0,
+      "planned_stop_ticks": 400.0,
+      "sequential_max1_max3day": {
+        "attempts": 74,
+        "fills": 74,
+        "h1": 402.74,
+        "h2": 294.74,
+        "losses": 38,
+        "max_drawdown": 825.36,
+        "n": 74,
+        "net": 697.48,
+        "no_fill_reasons": {},
+        "no_fills": 0,
+        "pf": 1.18402,
+        "stop_losses": 11,
+        "wins": 36,
+        "worst": -202.98
+      },
+      "skipped": {
+        "DAILY_TRADE_LIMIT": 4,
+        "POSITION_ALREADY_OPEN": 4
+      }
+    }
+  },
+  "model": {
+    "commission_round_trip": 1.48,
+    "entry": "real PaperBroker ioc_limit at decision-close market, planned-entry anchored limit",
+    "entry_slippage_ticks": 1.0,
+    "exit": "30m max hold or protective stop, whichever occurs first",
+    "exit_slippage_ticks": 1.0,
+    "global_max_stop_ticks_unchanged": 120,
+    "instrument": "MNQ",
+    "ioc_tolerance_ticks": 32.0,
+    "max_open_positions": 1,
+    "max_trades_per_day": 3,
+    "pessimistic_structural_bracket_validity": true,
+    "session": "new_york",
+    "stop_ticks_from_planned_entry": 400.0
+  },
+  "repair_candidate_survives_basic_stability": true,
+  "verdict": "PROMISING BUT UNPROVEN"
+}

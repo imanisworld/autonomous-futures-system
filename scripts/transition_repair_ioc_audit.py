@@ -25,10 +25,15 @@ from __future__ import annotations
 import argparse
 import gzip
 import json
+import sys
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from execution.broker_interface import BracketOrder
 from execution.paper_broker import PaperBroker
@@ -167,12 +172,6 @@ def planned_ioc_fill(row: dict[str, Any]) -> dict[str, Any]:
 def resolve_one(row: dict[str, Any], bars: dict[datetime, dict[str, Any]]) -> dict[str, Any]:
     decision_ts = _dt(row["bar_ts"])
     exit_ts = _dt(row["control"]["30m"]["exit_bar_ts"])
-    expected_exit = decision_ts + timedelta(minutes=HOLD_MINUTES)
-    if exit_ts != expected_exit:
-        raise ValueError(
-            f"30m exit timestamp mismatch at {row['bar_ts']}: "
-            f"artifact={exit_ts.isoformat()} expected={expected_exit.isoformat()}"
-        )
 
     entry = planned_ioc_fill(row)
     if entry["status"] == "NO_FILL":
@@ -189,18 +188,31 @@ def resolve_one(row: dict[str, Any], bars: dict[datetime, dict[str, Any]]) -> di
             "net": None,
         }
 
+    # The original Stage-B control means six *available* 5m bars after the
+    # decision, not 30 uninterrupted wall-clock minutes. This matters across
+    # the daily CME maintenance break and weekends: the next tradable bar may
+    # be an hour or multiple days later. Reconstruct that exact contract from
+    # raw bars and fail closed if the preserved artifact is inconsistent.
+    path: list[tuple[datetime, dict[str, Any]]] = []
+    ts = decision_ts + timedelta(minutes=BAR_MINUTES)
+    while ts <= exit_ts:
+        bar = bars.get(ts)
+        if bar is not None:
+            path.append((ts, bar))
+        ts += timedelta(minutes=BAR_MINUTES)
+    required_bars = HOLD_MINUTES // BAR_MINUTES
+    if len(path) != required_bars or not path or path[-1][0] != exit_ts:
+        raise ValueError(
+            f"30m trading-bar horizon mismatch at {row['bar_ts']}: "
+            f"artifact={exit_ts.isoformat()} available_5m_bars={len(path)} "
+            f"last_available={(path[-1][0].isoformat() if path else None)} "
+            f"expected_bars={required_bars}"
+        )
+
     fill = float(entry["fill"])
     plan_entry = float(entry["planned_entry"])
     sign = int(entry["sign"])
     stop = float(entry["stop"])
-
-    path: list[tuple[datetime, dict[str, Any]]] = []
-    for step in range(1, HOLD_MINUTES // BAR_MINUTES + 1):
-        ts = decision_ts + timedelta(minutes=BAR_MINUTES * step)
-        bar = bars.get(ts)
-        if bar is None:
-            raise KeyError(f"missing required 5m bar {ts.isoformat()} for {row['bar_ts']}")
-        path.append((ts, bar))
 
     # With no economic target in this variant, a stop touch is the only intrabar
     # terminal condition. The stop fill is one adverse tick, matching the shared

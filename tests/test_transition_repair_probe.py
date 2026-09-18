@@ -120,5 +120,40 @@ def test_missing_raw_bar_fails_closed_after_fill():
     bars = _bars()
     missing = audit._dt("2026-05-04T15:20:00+00:00")
     bars.pop(missing)
-    with pytest.raises(KeyError, match="missing required 5m bar"):
+    with pytest.raises(ValueError, match="trading-bar horizon mismatch"):
         audit.resolve_one(_row(), bars)
+
+def test_30m_horizon_counts_available_bars_across_maintenance_gap():
+    decision = audit._dt("2024-11-25T21:55:00+00:00")
+    row = _row()
+    row["bar_ts"] = decision.isoformat()
+    row["control"]["30m"]["exit_bar_ts"] = "2024-11-25T23:25:00+00:00"
+    bars = {}
+    for step in range(6):
+        ts = audit._dt("2024-11-25T23:00:00+00:00") + timedelta(minutes=5 * step)
+        bars[ts] = {"open": 200.0, "high": 211.0, "low": 190.0, "close": 210.0}
+    result = audit.resolve_one(row, bars)
+    assert result["exit_reason"] == "TIME_30M"
+    assert audit._dt(result["exit_ts"]) == audit._dt("2024-11-25T23:25:00+00:00")
+
+
+def test_30m_horizon_counts_available_bars_across_weekend_gap():
+    decision = audit._dt("2025-06-06T20:55:00+00:00")
+    row = _row()
+    row["bar_ts"] = decision.isoformat()
+    row["control"]["30m"]["exit_bar_ts"] = "2025-06-08T22:25:00+00:00"
+    bars = {}
+    for step in range(6):
+        ts = audit._dt("2025-06-08T22:00:00+00:00") + timedelta(minutes=5 * step)
+        bars[ts] = {"open": 200.0, "high": 211.0, "low": 190.0, "close": 210.0}
+    result = audit.resolve_one(row, bars)
+    assert result["exit_reason"] == "TIME_30M"
+    assert audit._dt(result["exit_ts"]) == audit._dt("2025-06-08T22:25:00+00:00")
+
+
+def test_30m_horizon_fails_closed_if_artifact_is_not_six_available_bars():
+    row = _row()
+    row["control"]["30m"]["exit_bar_ts"] = "2026-05-04T15:40:00+00:00"
+    bars = _bars()
+    with pytest.raises(ValueError, match="trading-bar horizon mismatch"):
+        audit.resolve_one(row, bars)
