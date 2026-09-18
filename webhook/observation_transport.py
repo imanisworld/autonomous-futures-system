@@ -22,6 +22,7 @@ from typing import Optional
 from config.futures_contracts import contract_root
 from context.bar_history import BarHistory
 from context.five_min_feed import is_five_min, normalize_minutes, record_five_min
+from context.one_min_feed import is_one_min, one_min_enabled, record_one_min
 from execution import cross_instrument_observation as cio
 from webhook.payload import AlertPayload
 from webhook.state_builder import build_market_state
@@ -126,6 +127,20 @@ def observe_collection_only_alert(
         )
 
     tf_minutes = normalize_minutes(clean.timeframe)
+    if one_min_enabled() and is_one_min(clean.timeframe):
+        try:
+            record_one_min(clean, log_dir, for_date=for_date)
+            return _result(
+                clean, root, lane="1m_feed", timeframe_minutes=1, bar_recorded=True,
+                transport_ok=True, pine_advisory_ignored=ignored,
+            )
+        except Exception as exc:  # 1m health is separate; never overwrite 15m status
+            logger.warning("1m observation feed failed for %s: %s", payload.ticker, exc, exc_info=True)
+            return _result(
+                clean, root, lane="1m_feed", timeframe_minutes=1, bar_recorded=False,
+                transport_ok=False, error=str(exc), pine_advisory_ignored=ignored,
+            )
+
     if is_five_min(clean.timeframe):
         try:
             record_five_min(clean, log_dir, for_date=for_date)

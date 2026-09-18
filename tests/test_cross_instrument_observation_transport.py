@@ -327,7 +327,55 @@ def test_m2k_five_minute_bars_land_under_the_m2k_root(tmp_path, config, armed, e
     assert not (tmp_path / "tf5m" / "bars_M_2026-09-15.jsonl").exists()
 
 
-# ── 7. observe_bar / resolution semantics ────────────────────────────────────
+# ── 7. 1-minute lane: collection-only, isolated, execution-inert ───────────
+
+@pytest.mark.parametrize(
+    "ticker,root,price",
+    [
+        ("M2K1!", "M2K", 2300.0),
+        ("MGC1!", "MGC", 2400.0),
+        ("MCL1!", "MCL", 65.0),
+        ("MBT1!", "MBT", 65000.0),
+    ],
+)
+def test_collection_only_one_minute_bars_land_in_tf1m_only(
+    monkeypatch, tmp_path, config, armed, engines_forbidden, ticker, root, price
+):
+    monkeypatch.setenv("ONE_MIN_TRIGGER_ENABLED", "true")
+    out = observe_collection_only_alert(
+        _payload(ticker, tf="1", o=price, h=price * 1.001, l=price * 0.999, c=price),
+        config=config,
+        log_dir=str(tmp_path),
+        for_date=DAY,
+    )
+    assert out["decision"] == "OBSERVATION_ONLY"
+    assert out["execution_reachable"] is False
+    assert out["observation"]["lane"] == "1m_feed"
+    assert out["observation"]["timeframe_minutes"] == 1
+    assert out["observation"]["bar_recorded"] is True
+    assert (tmp_path / "tf1m" / f"bars_{root}_2026-09-15.jsonl").exists()
+    assert not list(tmp_path.glob("journal_*.jsonl"))
+    assert not (tmp_path / cio.EVIDENCE_FILENAME).exists()
+
+
+def test_collection_only_one_minute_lane_stays_off_with_flag_disabled(
+    monkeypatch, tmp_path, config, armed, engines_forbidden
+):
+    monkeypatch.delenv("ONE_MIN_TRIGGER_ENABLED", raising=False)
+    out = observe_collection_only_alert(
+        _payload("M2K1!", tf="1"),
+        config=config,
+        log_dir=str(tmp_path),
+        for_date=DAY,
+    )
+    assert out["decision"] == "OBSERVATION_ONLY"
+    assert out["execution_reachable"] is False
+    assert out["observation"]["lane"] == "unsupported_timeframe"
+    assert out["observation"]["bar_recorded"] is False
+    assert not (tmp_path / "tf1m").exists()
+
+
+# ── 8. observe_bar / resolution semantics ────────────────────────────────────
 
 def _state(instrument="M2K", ts=None, o=100.0, h=101.0, l=99.0, c=100.5):
     return build_state(_payload(f"{instrument}1!", ts or _ts(14, 30), o=o, h=h, l=l, c=c))
