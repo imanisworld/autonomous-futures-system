@@ -202,3 +202,9 @@ def test_rule_rejects_unknown_allowed_source():
         assert "unsupported quote source" in str(exc)
     else:
         raise AssertionError("unknown rule source must fail closed")
+
+
+def test_public_option_chain_source_is_frozen_and_accepted():
+    record = _retain(source="public:/userapigateway/marketdata/{accountId}/option-chain")
+    assert record.status == "OK"
+    assert record.source == "public:/userapigateway/marketdata/{accountId}/option-chain"
