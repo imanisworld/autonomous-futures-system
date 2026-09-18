@@ -20,7 +20,7 @@
 
 ### PR #676 — selector serialized replay/forward parity
 
-Status: open, ready for review; latest head `0072b8d52f333f8633c28a4c1b4d536ff12d24cc`.
+Status: open, ready for review; latest head `0072b8d52f333f8633c28a4c1b4d536ff12d24cc`; exact-head CI `35347751616` passed.
 
 Adds a canonical byte-stable selector-input envelope, strict schema parsing, one select-from-serialized-input path, replay/forward golden parity on identical bytes, no-hindsight through that path, and fail-closed malformed identity/schema cases.
 
@@ -28,7 +28,7 @@ This advances Item 1 but **does not yet prove the real forward producer emits th
 
 ### PR #678 — premium-stop risk + no-averaging core
 
-Status: open, ready for review; latest reviewed head `b96c2a64f3c47611579c7a846f2a1338d4b7139d` had green CI before the latest documentation/comment-only clarification cycle.
+Status: open, ready for review; latest head `b96c2a64f3c47611579c7a846f2a1338d4b7139d`; exact-head CI `35347581518` passed.
 
 Adds a named planned-risk formula from planned entry premium and premium stop, rejects invalid/non-finite stop/risk inputs, removes clamp-to-zero behavior, and rejects same-underlying + same-direction canonical open positions or supplied open orders.
 
@@ -36,7 +36,7 @@ The aggregate-risk budget remains **unset by default**. No `$1,000` runtime defa
 
 ### PR #679 — fill event realism
 
-Status: open, ready for review; latest head `f8b8d10f86529b476efefb8f205feb59ab8c5133`.
+Status: open, ready for review; latest head `f8b8d10f86529b476efefb8f205feb59ab8c5133`; exact-head CI `35347806060` passed.
 
 Adds pessimistic same-bar stop-first resolution, CALL/PUT gap-through-stop classification, first-available executable retained-quote selection, explicit `NO_FILL`, malformed-retained-data blocking, and malformed bar/stop-target geometry checks.
 
@@ -44,11 +44,11 @@ This advances Item 2B but does **not** choose unapproved fee/slippage policy val
 
 ### PR #682 — market-hours Public timestamp probe
 
-Status: open draft; latest head `5b1b1b3bf5e4ff3e91fee39bcbb46cfe1e39e864`.
+Status: open draft; latest head `4ea9a38eca4d08ecc48608eb649d4205b5d1e068`; exact-head CI is still running (`35348093921`).
 
 Adds a read-only probe using the existing Public market-data client. It reports actual bid/ask executable timestamp coverage and freshness for the configured scanner watchlist, uses the frozen quote-age rule and selector DTE bands, requires the frozen Public source identity, prints no credentials/account ID, writes nothing, and calls no trading/account endpoints.
 
-Its strongest possible result is **PROVEN_FOR_CAPTURE** for that capture only. It explicitly does not claim historical coverage, future provider guarantees, DEMO eligibility, or strategy validity.
+Its strongest possible result is **PROVEN_FOR_CAPTURE** for that capture only. It validates and hashes the exact frozen quote-retention and selector rule bytes used by the probe and reports those SHA-256 values. It explicitly does not claim historical coverage, future provider guarantees, DEMO eligibility, or strategy validity.
 
 ## Still not proven
 
