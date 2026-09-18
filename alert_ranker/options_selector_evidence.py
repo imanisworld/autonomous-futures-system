@@ -1,14 +1,13 @@
 """Prospective decision-time options selector evidence.
 
 This module is evidence-only. It does not fetch market data, select a contract
-for execution, submit an order, or change scanner policy. It receives the exact
-already-fetched production inputs, serializes the canonical selector input, and
-builds a byte-stable evidence envelope for later replay.
+for execution, submit an order, or change scanner policy. It receives the exact already-fetched production inputs and builds a byte-stable
+production-selector evidence envelope for later replay.
 
-The current scanner still owns expiration selection separately. The envelope
-therefore preserves both:
-- the exact expiration list and production-chosen expiration; and
-- canonical selector bytes for the chain that production actually evaluated.
+The current scanner owns expiration and contract selection. The envelope
+preserves the exact expiration candidates, production-chosen expiration,
+underlying provenance and evaluated chain bytes needed to replay that decision.
+The canonical/reference selector is deliberately not a runtime dependency.
 
 That is sufficient to replay the current production decision without inventing
 historical Greeks, open interest, quote timestamps, or underlying provenance.
@@ -19,7 +18,6 @@ from __future__ import annotations
 from datetime import datetime
 import hashlib
 import json
-from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from alert_ranker.market_data import OptionChain, OptionContractQuote
@@ -28,7 +26,6 @@ from alert_ranker.options_production_selector_replay import (
     production_selector_code_sha256,
     replay_production_selector,
 )
-ROOT = Path(__file__).resolve().parents[1]
 EVIDENCE_VERSION = 3
 
 
@@ -36,10 +33,6 @@ def _canonical_json_bytes(value: Mapping[str, Any]) -> bytes:
     return (json.dumps(value, sort_keys=True, separators=(",", ":"), default=str) + "\n").encode(
         "utf-8"
     )
-
-
-def _selector_rule_sha256(rule_path: Path = SELECTOR_RULE_PATH) -> str:
-    return hashlib.sha256(rule_path.read_bytes()).hexdigest()
 
 
 def _quote_supplement(quote: OptionContractQuote, expiration: str) -> dict[str, Any]:
