@@ -24,15 +24,8 @@ QuoteStatus = Literal["OK", "MISSING", "STALE", "FUTURE", "INVALID", "WIDE_SPREA
 
 
 class QuoteSource(str, Enum):
-    """Frozen source routes already represented by this repository.
-
-    These are identifiers, not network clients. Adding a new real provider
-    requires an explicit rule/version change rather than accepting free text.
-    """
-
-    # Test-only source. Real provider sources must be added only when the
-    # provider+endpoint identity is mechanically known at ingestion time.
     FIXTURE_OPTION_CHAIN = "fixture:option_chain_snapshot"
+    PUBLIC_OPTION_CHAIN = "public:/userapigateway/marketdata/{accountId}/option-chain"
 
 
 @dataclass(frozen=True)
@@ -87,31 +80,22 @@ class QuoteRecord:
 
 
 def retention_rule_from_mapping(raw: Mapping[str, object]) -> QuoteRetentionRule:
-    required = (
-        "rule_id",
-        "max_quote_age_seconds",
-        "max_spread_percent",
-        "allowed_sources",
-    )
+    required = ("rule_id", "max_quote_age_seconds", "max_spread_percent", "allowed_sources")
     missing = [key for key in required if key not in raw]
     if missing:
         raise ValueError(f"missing retention rule fields: {','.join(sorted(missing))}")
-
     rule_id = raw["rule_id"]
     if not isinstance(rule_id, str) or not rule_id.strip():
         raise ValueError("rule_id must be a non-empty string")
-
     age = raw["max_quote_age_seconds"]
     if isinstance(age, bool) or not isinstance(age, int) or age <= 0:
         raise ValueError("max_quote_age_seconds must be a positive integer")
-
     spread = raw["max_spread_percent"]
     if isinstance(spread, bool) or not isinstance(spread, (int, float)):
         raise ValueError("max_spread_percent must be numeric")
     spread = float(spread)
     if not math.isfinite(spread) or spread <= 0:
         raise ValueError("max_spread_percent must be finite and > 0")
-
     sources = raw["allowed_sources"]
     if not isinstance(sources, list) or not sources:
         raise ValueError("allowed_sources must be a non-empty list")
@@ -125,19 +109,15 @@ def retention_rule_from_mapping(raw: Mapping[str, object]) -> QuoteRetentionRule
             raise ValueError(f"unsupported quote source: {source!r}") from exc
     if len(set(parsed_sources)) != len(parsed_sources):
         raise ValueError("allowed_sources must not contain duplicates")
-
-    return QuoteRetentionRule(
-        rule_id=rule_id.strip(),
-        max_quote_age_seconds=age,
-        max_spread_percent=spread,
-        allowed_sources=tuple(parsed_sources),
-    )
+    return QuoteRetentionRule(rule_id=rule_id.strip(), max_quote_age_seconds=age, max_spread_percent=spread, allowed_sources=tuple(parsed_sources))
 
 
 def quote_record_json(record: QuoteRecord) -> str:
-    """Canonical byte-stable JSONL representation."""
-
     return json.dumps(asdict(record), sort_keys=True, separators=(",", ":")) + "\n"
+
+
+def quote_manifest_json(manifest: Mapping[str, object]) -> str:
+    return json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n"
 
 
 def _parse_ts(value: Optional[str]) -> datetime:
@@ -150,19 +130,11 @@ def _parse_ts(value: Optional[str]) -> datetime:
 
 
 def _finite(value: object) -> bool:
-    return (
-        not isinstance(value, bool)
-        and isinstance(value, (int, float))
-        and math.isfinite(float(value))
-    )
+    return not isinstance(value, bool) and isinstance(value, (int, float)) and math.isfinite(float(value))
 
 
 def _valid_sha256(value: object) -> bool:
-    return (
-        isinstance(value, str)
-        and len(value) == 64
-        and all(ch in "0123456789abcdefABCDEF" for ch in value)
-    )
+    return isinstance(value, str) and len(value) == 64 and all(ch in "0123456789abcdefABCDEF" for ch in value)
 
 
 def _spread_percent(bid: float, ask: float) -> float:
@@ -170,148 +142,60 @@ def _spread_percent(bid: float, ask: float) -> float:
     return ((ask - bid) / midpoint) * 100.0
 
 
-def retain_quote(
-    quote: QuoteRetentionInput,
-    *,
-    rule: QuoteRetentionRule,
-    rule_sha256: str,
-) -> QuoteRecord:
-    """Classify and retain one decision-time option quote without fabrication."""
-
+def retain_quote(quote: QuoteRetentionInput, *, rule: QuoteRetentionRule, rule_sha256: str) -> QuoteRecord:
     if not _valid_sha256(rule_sha256):
         raise ValueError("rule_sha256 must be a 64-character hexadecimal SHA-256")
     rule_sha256 = rule_sha256.lower()
-
-    required_values = {
-        "contract_id": quote.contract_id,
-        "underlying": quote.underlying,
-        "expiration": quote.expiration,
-        "strike": quote.strike,
-        "right": quote.right,
-        "bid": quote.bid,
-        "ask": quote.ask,
-        "quote_ts": quote.quote_ts,
-        "decision_ts": quote.decision_ts,
-        "source": quote.source,
-        "volume": quote.volume,
-        "open_interest": quote.open_interest,
-        "delta": quote.delta,
-        "iv": quote.iv,
-    }
-    missing_fields = tuple(
-        sorted(
-            key
-            for key, value in required_values.items()
-            if value is None or (isinstance(value, str) and not value.strip())
-        )
-    )
-
-    base = dict(
-        rule_id=rule.rule_id,
-        rule_sha256=rule_sha256,
-        contract_id=quote.contract_id,
-        underlying=quote.underlying,
-        expiration=quote.expiration,
-        strike=quote.strike,
-        right=quote.right,
-        bid=quote.bid,
-        ask=quote.ask,
-        quote_ts=quote.quote_ts,
-        decision_ts=quote.decision_ts,
-        source=quote.source,
-        volume=quote.volume,
-        open_interest=quote.open_interest,
-        delta=quote.delta,
-        iv=quote.iv,
-        spread_percent=None,
-        quote_age_seconds=None,
-        missing_fields=missing_fields,
-    )
-
+    required_values = {"contract_id": quote.contract_id, "underlying": quote.underlying, "expiration": quote.expiration, "strike": quote.strike, "right": quote.right, "bid": quote.bid, "ask": quote.ask, "quote_ts": quote.quote_ts, "decision_ts": quote.decision_ts, "source": quote.source, "volume": quote.volume, "open_interest": quote.open_interest, "delta": quote.delta, "iv": quote.iv}
+    missing_fields = tuple(sorted(key for key, value in required_values.items() if value is None or (isinstance(value, str) and not value.strip())))
+    base = dict(rule_id=rule.rule_id, rule_sha256=rule_sha256, contract_id=quote.contract_id, underlying=quote.underlying, expiration=quote.expiration, strike=quote.strike, right=quote.right, bid=quote.bid, ask=quote.ask, quote_ts=quote.quote_ts, decision_ts=quote.decision_ts, source=quote.source, volume=quote.volume, open_interest=quote.open_interest, delta=quote.delta, iv=quote.iv, spread_percent=None, quote_age_seconds=None, missing_fields=missing_fields)
     if missing_fields:
         return QuoteRecord(status="MISSING", reason_code="required_field_missing", **base)
-
     try:
         source = QuoteSource(str(quote.source))
     except ValueError:
         return QuoteRecord(status="INVALID", reason_code="source_not_allowed", **base)
     if source not in rule.allowed_sources:
         return QuoteRecord(status="INVALID", reason_code="source_not_allowed", **base)
-
     if quote.right not in ("CALL", "PUT"):
         return QuoteRecord(status="INVALID", reason_code="right_invalid", **base)
-
-    numerics = {
-        "strike": quote.strike,
-        "bid": quote.bid,
-        "ask": quote.ask,
-        "delta": quote.delta,
-        "iv": quote.iv,
-    }
+    numerics = {"strike": quote.strike, "bid": quote.bid, "ask": quote.ask, "delta": quote.delta, "iv": quote.iv}
     if not all(_finite(value) for value in numerics.values()):
         return QuoteRecord(status="INVALID", reason_code="numeric_field_invalid", **base)
-
-    if (
-        isinstance(quote.volume, bool)
-        or not isinstance(quote.volume, int)
-        or quote.volume < 0
-        or isinstance(quote.open_interest, bool)
-        or not isinstance(quote.open_interest, int)
-        or quote.open_interest < 0
-    ):
+    if isinstance(quote.volume, bool) or not isinstance(quote.volume, int) or quote.volume < 0 or isinstance(quote.open_interest, bool) or not isinstance(quote.open_interest, int) or quote.open_interest < 0:
         return QuoteRecord(status="INVALID", reason_code="liquidity_field_invalid", **base)
-
-    strike = float(quote.strike)
-    bid = float(quote.bid)
-    ask = float(quote.ask)
-    iv = float(quote.iv)
+    strike, bid, ask, iv = float(quote.strike), float(quote.bid), float(quote.ask), float(quote.iv)
     if strike <= 0 or bid <= 0 or ask < bid or iv <= 0:
         return QuoteRecord(status="INVALID", reason_code="quote_values_invalid", **base)
-
     try:
-        quote_dt = _parse_ts(quote.quote_ts)
-        decision_dt = _parse_ts(quote.decision_ts)
+        quote_dt, decision_dt = _parse_ts(quote.quote_ts), _parse_ts(quote.decision_ts)
     except ValueError:
         return QuoteRecord(status="INVALID", reason_code="timestamp_invalid", **base)
-
     age = (decision_dt - quote_dt).total_seconds()
     spread = _spread_percent(bid, ask)
-    base["quote_age_seconds"] = age
-    base["spread_percent"] = spread
-
+    base["quote_age_seconds"], base["spread_percent"] = age, spread
     if age < 0:
         return QuoteRecord(status="FUTURE", reason_code="quote_after_decision", **base)
     if age > rule.max_quote_age_seconds:
         return QuoteRecord(status="STALE", reason_code="quote_stale", **base)
     if spread > rule.max_spread_percent:
         return QuoteRecord(status="WIDE_SPREAD", reason_code="spread_too_wide", **base)
-
     return QuoteRecord(status="OK", reason_code="quote_retained", **base)
 
 
-def build_quote_manifest(
-    files: Mapping[str, bytes],
-    *,
-    rule: QuoteRetentionRule,
-    rule_sha256: str,
-) -> dict[str, object]:
-    """Build a reproducible manifest over canonical quote JSONL byte payloads."""
-
+def build_quote_manifest(files: Mapping[str, bytes], *, rule: QuoteRetentionRule, rule_sha256: str) -> dict[str, object]:
     if not _valid_sha256(rule_sha256):
         raise ValueError("rule_sha256 must be a 64-character hexadecimal SHA-256")
     if not files:
         raise ValueError("at least one quote dataset file is required")
-
     entries: list[dict[str, object]] = []
     all_sources: set[str] = set()
-
     for path in sorted(files):
         if not path or path.startswith("/") or ".." in path.split("/"):
             raise ValueError(f"manifest path must be relative and traversal-free: {path!r}")
         payload = files[path]
         if not isinstance(payload, bytes):
             raise ValueError("manifest payloads must be bytes")
-
         rows = [line for line in payload.splitlines() if line.strip()]
         required_record_fields = set(QuoteRecord.__dataclass_fields__)
         for raw_line in rows:
@@ -321,30 +205,16 @@ def build_quote_manifest(
                 raise ValueError(f"{path} contains invalid JSONL") from exc
             if not isinstance(row, dict):
                 raise ValueError(f"{path} contains a non-object JSONL row")
-
             missing_record_fields = sorted(required_record_fields - set(row))
             extra_record_fields = sorted(set(row) - required_record_fields)
             if missing_record_fields or extra_record_fields:
-                raise ValueError(
-                    f"{path} row schema mismatch: "
-                    f"missing={missing_record_fields}, extra={extra_record_fields}"
-                )
-
+                raise ValueError(f"{path} row schema mismatch: missing={missing_record_fields}, extra={extra_record_fields}")
             if row.get("rule_id") != rule.rule_id:
                 raise ValueError(f"{path} row rule_id does not match manifest rule")
             if str(row.get("rule_sha256", "")).lower() != rule_sha256.lower():
                 raise ValueError(f"{path} row rule_sha256 does not match manifest rule")
-
-            if row.get("status") not in {
-                "OK",
-                "MISSING",
-                "STALE",
-                "FUTURE",
-                "INVALID",
-                "WIDE_SPREAD",
-            }:
+            if row.get("status") not in {"OK", "MISSING", "STALE", "FUTURE", "INVALID", "WIDE_SPREAD"}:
                 raise ValueError(f"{path} contains invalid quote status {row.get('status')!r}")
-
             source = row.get("source")
             try:
                 parsed_source = QuoteSource(source)
@@ -353,21 +223,38 @@ def build_quote_manifest(
             if parsed_source not in rule.allowed_sources:
                 raise ValueError(f"{path} contains source not allowed by rule: {source!r}")
             all_sources.add(parsed_source.value)
+        entries.append({"path": path, "sha256": hashlib.sha256(payload).hexdigest(), "row_count": len(rows)})
+    return {"manifest_version": 1, "rule_id": rule.rule_id, "rule_sha256": rule_sha256.lower(), "max_quote_age_seconds": rule.max_quote_age_seconds, "max_spread_percent": rule.max_spread_percent, "sources": sorted(all_sources), "files": entries}
 
-        entries.append(
-            {
-                "path": path,
-                "sha256": hashlib.sha256(payload).hexdigest(),
-                "row_count": len(rows),
-            }
-        )
 
-    return {
-        "manifest_version": 1,
-        "rule_id": rule.rule_id,
-        "rule_sha256": rule_sha256.lower(),
-        "max_quote_age_seconds": rule.max_quote_age_seconds,
-        "max_spread_percent": rule.max_spread_percent,
-        "sources": sorted(all_sources),
-        "files": entries,
-    }
+def verify_quote_manifest_files(manifest: Mapping[str, object], files: Mapping[str, bytes]) -> None:
+    """Fail closed unless supplied dataset bytes exactly match the frozen manifest."""
+    entries = manifest.get("files")
+    if not isinstance(entries, list) or not entries:
+        raise ValueError("manifest files must be a non-empty list")
+    expected_paths: set[str] = set()
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise ValueError("manifest file entry must be an object")
+        path, claimed_sha, claimed_rows = entry.get("path"), entry.get("sha256"), entry.get("row_count")
+        if not isinstance(path, str) or not path or path.startswith("/") or ".." in path.split("/"):
+            raise ValueError("manifest file path is invalid")
+        if path in expected_paths:
+            raise ValueError(f"duplicate manifest path: {path}")
+        expected_paths.add(path)
+        if not _valid_sha256(claimed_sha):
+            raise ValueError(f"manifest sha256 is invalid for {path}")
+        if isinstance(claimed_rows, bool) or not isinstance(claimed_rows, int) or claimed_rows < 0:
+            raise ValueError(f"manifest row_count is invalid for {path}")
+        payload = files.get(path)
+        if not isinstance(payload, bytes):
+            raise ValueError(f"manifest dataset file missing: {path}")
+        actual_sha = hashlib.sha256(payload).hexdigest()
+        if actual_sha != claimed_sha.lower():
+            raise ValueError(f"manifest dataset sha256 mismatch: {path}")
+        actual_rows = sum(1 for line in payload.splitlines() if line.strip())
+        if actual_rows != claimed_rows:
+            raise ValueError(f"manifest dataset row_count mismatch: {path}")
+    extra = sorted(set(files) - expected_paths)
+    if extra:
+        raise ValueError(f"unmanifested dataset files supplied: {','.join(extra)}")

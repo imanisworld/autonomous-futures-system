@@ -70,6 +70,7 @@ class ContractChoice:
     theta: float | None = None
     implied_volatility: float | None = None
     quote_timestamp: str | None = None
+    quote_source: str | None = None
     warning: str = ""
 
 
@@ -166,6 +167,7 @@ def _quality(contract: Any) -> tuple[ContractChoice | None, str]:
     theta = _num(getattr(contract, "theta", None))
     iv = _num(getattr(contract, "implied_volatility", None))
     quote_timestamp = getattr(contract, "quote_timestamp", None)
+    quote_source = getattr(contract, "source", None)
 
     if not symbol or option_type not in {"CALL", "PUT"} or strike is None or strike <= 0:
         return None, "missing_contract_identity"
@@ -200,6 +202,7 @@ def _quality(contract: Any) -> tuple[ContractChoice | None, str]:
             theta=theta,
             implied_volatility=iv,
             quote_timestamp=str(quote_timestamp) if quote_timestamp else None,
+            quote_source=str(quote_source) if quote_source else None,
             warning=warning,
         ),
         "",
@@ -305,6 +308,7 @@ def build_v1_contract_fields(
             "theta": contract.theta,
             "implied_volatility": contract.implied_volatility,
             "option_quote_timestamp": contract.quote_timestamp,
+            "option_quote_source": contract.quote_source,
             "premium_stop": premium_stop,
             "premium_stop_adverse_percent": PREMIUM_STOP_ADVERSE_PERCENT,
             "planned_risk_dollars": planned_risk,
