@@ -1,9 +1,10 @@
 # Options Backtest → DEMO gate — shared-infrastructure acceptance spec (2026-09-18)
 
-**Status: SPEC ONLY. Implementation is HELD until after 2026-09-30 under the standing directive
-(no new strategy / gate / runtime / config behavior before 09-30 without an explicit operator waiver).**
-Operator ruling 09-18: the four infrastructure items below are runtime/config behavior, not offline research
-— do not build or deploy them yet. This document gives the builder an exact, fail-closed target for 09-30.
+**Status: IMPLEMENTATION WAIVER GRANTED 2026-09-18.**
+The operator explicitly waived the 09-30 implementation hold for the four shared infrastructure items below.
+The waiver authorizes implementation and review now; it does **not** authorize deployment, restart, paper/DEMO
+activation, broker submission, or LIVE trading. Each item still has to satisfy this fail-closed acceptance spec
+and independent review before any later activation decision.
 
 ## 1. Baseline (preserved, do not modify)
 
