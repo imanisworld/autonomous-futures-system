@@ -1,0 +1,349 @@
+{
+  "audit_id": "OPTIONS_STRAT_TRIGGER_GEOMETRY_AUDIT",
+  "audit_version": "geometry-v0.1",
+  "claims_not_made": [
+    "strategy profitability",
+    "option profitability",
+    "family promotion",
+    "unresolved stop equivalence",
+    "real-time trigger observability"
+  ],
+  "from_date": "2026-09-09",
+  "rows": null,
+  "snapshot_id": "OPTIONS_TRIGGER_BAR_SNAPSHOT",
+  "snapshot_manifest_sha256": "8d9cd8a4674827abc11bf60805d53ca812c738bb28417b672a10e3f98790dc1b",
+  "snapshot_version": "trigger-bars-v0.1",
+  "source_rules": {
+    "2_2_2_run_context": "https://thestrat.ai/docs/2-2-2-continuation/",
+    "continuation_architecture": "https://thestrat.ai/docs/trading-continuation/",
+    "direct_3_2": "https://thestrat.ai/docs/3-2/",
+    "reversal_geometry": "https://thestrat.ai/docs/types-of-reversals/"
+  },
+  "summary": {
+    "families": {
+      "OTHER:strat_122": {
+        "canonical_outcomes": {},
+        "canonical_r_below_1_n": 0,
+        "canonical_r_median": null,
+        "canonical_r_n": 0,
+        "canonical_r_zero_n": 0,
+        "canonical_stop_defined_n": 0,
+        "canonical_stop_matches_generic_n": 0,
+        "canonical_target_defined_n": 0,
+        "canonical_target_invalid_side_n": 0,
+        "floor_outcomes_with_canonical_stop": {},
+        "floor_relation": {
+          "CANONICAL_UNRESOLVED": 73
+        },
+        "generic_far_side_stop_risk_pct_median": null,
+        "geometry_status": {
+          "UNRESOLVED": 73
+        },
+        "later_became_outside_n": 13,
+        "n": 73,
+        "nearest_outcomes_with_canonical_stop": {},
+        "nearest_relation": {
+          "CANONICAL_UNRESOLVED": 73
+        }
+      },
+      "STRAT_212_CONTINUATION": {
+        "canonical_outcomes": {},
+        "canonical_r_below_1_n": 0,
+        "canonical_r_median": null,
+        "canonical_r_n": 0,
+        "canonical_r_zero_n": 0,
+        "canonical_stop_defined_n": 64,
+        "canonical_stop_matches_generic_n": 64,
+        "canonical_target_defined_n": 0,
+        "canonical_target_invalid_side_n": 0,
+        "floor_outcomes_with_canonical_stop": {
+          "AMBIGUOUS": 1,
+          "STOP_FIRST": 17,
+          "TARGET_FIRST": 9,
+          "UNRESOLVED_AT_CLOSE": 14
+        },
+        "floor_relation": {
+          "CANONICAL_UNRESOLVED": 64
+        },
+        "generic_far_side_stop_risk_pct_median": null,
+        "geometry_status": {
+          "STOP_ONLY": 64
+        },
+        "later_became_outside_n": 5,
+        "n": 64,
+        "nearest_outcomes_with_canonical_stop": {
+          "AMBIGUOUS": 1,
+          "STOP_FIRST": 12,
+          "TARGET_FIRST": 44,
+          "UNRESOLVED_AT_CLOSE": 1
+        },
+        "nearest_relation": {
+          "CANONICAL_UNRESOLVED": 64
+        }
+      },
+      "STRAT_212_REVERSAL": {
+        "canonical_outcomes": {
+          "INVALID_GEOMETRY": 3,
+          "STOP_FIRST": 20,
+          "TARGET_FIRST": 61,
+          "UNRESOLVED_AT_CLOSE": 5
+        },
+        "canonical_r_below_1_n": 75,
+        "canonical_r_median": 0.3333,
+        "canonical_r_n": 89,
+        "canonical_r_zero_n": 3,
+        "canonical_stop_defined_n": 89,
+        "canonical_stop_matches_generic_n": 89,
+        "canonical_target_defined_n": 89,
+        "canonical_target_invalid_side_n": 3,
+        "floor_outcomes_with_canonical_stop": {
+          "STOP_FIRST": 31,
+          "TARGET_FIRST": 23,
+          "UNRESOLVED_AT_CLOSE": 21
+        },
+        "floor_relation": {
+          "BEFORE_CANONICAL": 5,
+          "BEYOND_CANONICAL": 62,
+          "GENERIC_INVALID": 14,
+          "MATCH": 8
+        },
+        "generic_far_side_stop_risk_pct_median": null,
+        "geometry_status": {
+          "DEFINED": 89
+        },
+        "later_became_outside_n": 8,
+        "n": 89,
+        "nearest_outcomes_with_canonical_stop": {
+          "STOP_FIRST": 17,
+          "TARGET_FIRST": 67,
+          "UNRESOLVED_AT_CLOSE": 4
+        },
+        "nearest_relation": {
+          "BEFORE_CANONICAL": 25,
+          "BEYOND_CANONICAL": 3,
+          "GENERIC_INVALID": 1,
+          "MATCH": 60
+        }
+      },
+      "STRAT_222_REVERSAL": {
+        "canonical_outcomes": {},
+        "canonical_r_below_1_n": 0,
+        "canonical_r_median": null,
+        "canonical_r_n": 0,
+        "canonical_r_zero_n": 0,
+        "canonical_stop_defined_n": 0,
+        "canonical_stop_matches_generic_n": 0,
+        "canonical_target_defined_n": 198,
+        "canonical_target_invalid_side_n": 0,
+        "floor_outcomes_with_canonical_stop": {},
+        "floor_relation": {
+          "BEFORE_CANONICAL": 17,
+          "BEYOND_CANONICAL": 119,
+          "GENERIC_INVALID": 30,
+          "MATCH": 32
+        },
+        "generic_far_side_stop_risk_pct_median": null,
+        "geometry_status": {
+          "TARGET_ONLY": 198
+        },
+        "later_became_outside_n": 22,
+        "n": 198,
+        "nearest_outcomes_with_canonical_stop": {},
+        "nearest_relation": {
+          "BEFORE_CANONICAL": 74,
+          "GENERIC_INVALID": 1,
+          "MATCH": 123
+        }
+      },
+      "STRAT_312:CONTINUATION": {
+        "canonical_outcomes": {},
+        "canonical_r_below_1_n": 0,
+        "canonical_r_median": null,
+        "canonical_r_n": 0,
+        "canonical_r_zero_n": 0,
+        "canonical_stop_defined_n": 7,
+        "canonical_stop_matches_generic_n": 7,
+        "canonical_target_defined_n": 0,
+        "canonical_target_invalid_side_n": 0,
+        "floor_outcomes_with_canonical_stop": {
+          "STOP_FIRST": 4,
+          "TARGET_FIRST": 1
+        },
+        "floor_relation": {
+          "CANONICAL_UNRESOLVED": 7
+        },
+        "generic_far_side_stop_risk_pct_median": null,
+        "geometry_status": {
+          "STOP_ONLY": 7
+        },
+        "later_became_outside_n": 0,
+        "n": 7,
+        "nearest_outcomes_with_canonical_stop": {
+          "STOP_FIRST": 3,
+          "TARGET_FIRST": 3
+        },
+        "nearest_relation": {
+          "CANONICAL_UNRESOLVED": 7
+        }
+      },
+      "STRAT_312:REVERSAL": {
+        "canonical_outcomes": {
+          "STOP_FIRST": 4,
+          "TARGET_FIRST": 9,
+          "UNRESOLVED_AT_CLOSE": 2
+        },
+        "canonical_r_below_1_n": 10,
+        "canonical_r_median": 0.7128,
+        "canonical_r_n": 15,
+        "canonical_r_zero_n": 0,
+        "canonical_stop_defined_n": 15,
+        "canonical_stop_matches_generic_n": 15,
+        "canonical_target_defined_n": 15,
+        "canonical_target_invalid_side_n": 0,
+        "floor_outcomes_with_canonical_stop": {
+          "STOP_FIRST": 5,
+          "TARGET_FIRST": 5,
+          "UNRESOLVED_AT_CLOSE": 2
+        },
+        "floor_relation": {
+          "BEFORE_CANONICAL": 2,
+          "BEYOND_CANONICAL": 9,
+          "GENERIC_INVALID": 3,
+          "MATCH": 1
+        },
+        "generic_far_side_stop_risk_pct_median": null,
+        "geometry_status": {
+          "DEFINED": 15
+        },
+        "later_became_outside_n": 1,
+        "n": 15,
+        "nearest_outcomes_with_canonical_stop": {
+          "STOP_FIRST": 2,
+          "TARGET_FIRST": 10,
+          "UNRESOLVED_AT_CLOSE": 1
+        },
+        "nearest_relation": {
+          "BEFORE_CANONICAL": 5,
+          "GENERIC_INVALID": 2,
+          "MATCH": 8
+        }
+      },
+      "STRAT_322_REVERSAL": {
+        "canonical_outcomes": {},
+        "canonical_r_below_1_n": 0,
+        "canonical_r_median": null,
+        "canonical_r_n": 0,
+        "canonical_r_zero_n": 0,
+        "canonical_stop_defined_n": 0,
+        "canonical_stop_matches_generic_n": 0,
+        "canonical_target_defined_n": 30,
+        "canonical_target_invalid_side_n": 0,
+        "floor_outcomes_with_canonical_stop": {},
+        "floor_relation": {
+          "BEFORE_CANONICAL": 5,
+          "BEYOND_CANONICAL": 12,
+          "GENERIC_INVALID": 7,
+          "MATCH": 6
+        },
+        "generic_far_side_stop_risk_pct_median": null,
+        "geometry_status": {
+          "TARGET_ONLY": 30
+        },
+        "later_became_outside_n": 1,
+        "n": 30,
+        "nearest_outcomes_with_canonical_stop": {},
+        "nearest_relation": {
+          "BEFORE_CANONICAL": 16,
+          "MATCH": 14
+        }
+      },
+      "STRAT_32_CONTINUATION": {
+        "canonical_outcomes": {},
+        "canonical_r_below_1_n": 0,
+        "canonical_r_median": null,
+        "canonical_r_n": 0,
+        "canonical_r_zero_n": 0,
+        "canonical_stop_defined_n": 0,
+        "canonical_stop_matches_generic_n": 0,
+        "canonical_target_defined_n": 0,
+        "canonical_target_invalid_side_n": 0,
+        "floor_outcomes_with_canonical_stop": {},
+        "floor_relation": {
+          "CANONICAL_UNRESOLVED": 70
+        },
+        "generic_far_side_stop_risk_pct_median": 0.5102,
+        "geometry_status": {
+          "NO_OWN_MAGNITUDE": 70
+        },
+        "later_became_outside_n": 3,
+        "n": 70,
+        "nearest_outcomes_with_canonical_stop": {},
+        "nearest_relation": {
+          "CANONICAL_UNRESOLVED": 70
+        }
+      },
+      "STRAT_32_REVERSAL": {
+        "canonical_outcomes": {},
+        "canonical_r_below_1_n": 0,
+        "canonical_r_median": null,
+        "canonical_r_n": 0,
+        "canonical_r_zero_n": 0,
+        "canonical_stop_defined_n": 0,
+        "canonical_stop_matches_generic_n": 0,
+        "canonical_target_defined_n": 0,
+        "canonical_target_invalid_side_n": 0,
+        "floor_outcomes_with_canonical_stop": {},
+        "floor_relation": {
+          "CANONICAL_UNRESOLVED": 14
+        },
+        "generic_far_side_stop_risk_pct_median": 0.3674,
+        "geometry_status": {
+          "NO_OWN_MAGNITUDE": 14
+        },
+        "later_became_outside_n": 1,
+        "n": 14,
+        "nearest_outcomes_with_canonical_stop": {},
+        "nearest_relation": {
+          "CANONICAL_UNRESOLVED": 14
+        }
+      }
+    },
+    "floor_target_relation_on_source_defined": {
+      "BEFORE_CANONICAL": 29,
+      "BEYOND_CANONICAL": 202,
+      "GENERIC_INVALID": 54,
+      "MATCH": 47
+    },
+    "nearest_target_relation_on_source_defined": {
+      "BEFORE_CANONICAL": 120,
+      "BEYOND_CANONICAL": 3,
+      "GENERIC_INVALID": 4,
+      "MATCH": 205
+    },
+    "source_defined_target_rows": 332,
+    "triggered_rows": 560
+  },
+  "symbols": [
+    "AAPL",
+    "MSFT",
+    "NVDA",
+    "TSLA",
+    "SPY",
+    "QQQ",
+    "AMZN",
+    "GOOGL",
+    "PLTR",
+    "INTC",
+    "IWM",
+    "TLT",
+    "JPM",
+    "BAC",
+    "COIN",
+    "XOM",
+    "MRK",
+    "WMT",
+    "NFLX",
+    "GE"
+  ],
+  "to_date": "2026-09-15"
+}
