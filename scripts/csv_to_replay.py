@@ -417,6 +417,43 @@ def vwap_day_range(day_ranges: list[tuple[int, int]], bar_idx: int) -> tuple[int
     return None
 
 
+def previous_week_extremes(
+    bars: list[dict], instrument: str
+) -> list[tuple[float | None, float | None]]:
+    """Previous completed trading-week high/low for every bar.
+
+    Live carries Pine weekly high[1]/low[1] into KeyLevels and the confluence
+    scorer. Canonical replay previously had no copy at all, so identical live
+    and replay market facts could receive different confluence scores.
+
+    Group bars by the Monday of their CME trade-date week (Sunday reopen belongs
+    to Monday), then expose ONLY the immediately preceding week. Using the full
+    prior-week group is causal: by definition that week is complete before any
+    bar in the current week. Missing source bars can still contaminate an
+    extreme; corpus gap/provenance checks remain responsible for that data-
+    quality question rather than silently inventing a price.
+    """
+    weekly: dict[date, tuple[float, float]] = {}
+    week_for_bar: list[date] = []
+    for bar in bars:
+        trading_day = cme_trading_day(bar["ts"], instrument)
+        week_start = trading_day - timedelta(days=trading_day.weekday())
+        week_for_bar.append(week_start)
+        high = float(bar["high"])
+        low = float(bar["low"])
+        current = weekly.get(week_start)
+        if current is None:
+            weekly[week_start] = (high, low)
+        else:
+            weekly[week_start] = (max(current[0], high), min(current[1], low))
+
+    out: list[tuple[float | None, float | None]] = []
+    for week_start in week_for_bar:
+        prev = weekly.get(week_start - timedelta(days=7))
+        out.append(prev if prev is not None else (None, None))
+    return out
+
+
 _INSTRUMENT_MAP = {
     "MNQ": "MNQ",
     "MES": "MES",
@@ -504,6 +541,14 @@ def convert(
             "ema200": first_value(row, "EMA 200", "EMA200", "ema_200"),
             "hod": first_value(row, "HOD", "Hod", "hod"),
             "lod": first_value(row, "LOD", "Lod", "lod"),
+            # Prefer Pine-native weekly values when the export carries them;
+            # otherwise the causal bar-derived copy below fills the same fields.
+            "prev_week_high_raw": first_value(
+                row, "Prev Week High", "Previous Week High", "PWH", "prev_week_high"
+            ),
+            "prev_week_low_raw": first_value(
+                row, "Prev Week Low", "Previous Week Low", "PWL", "prev_week_low"
+            ),
             "supply_top": first_value(row, "Supply Top", "supply_top"),
             "supply_bottom": first_value(row, "Supply Bottom", "supply_bottom"),
             "demand_top": first_value(row, "Demand Top", "demand_top"),
@@ -543,6 +588,7 @@ def convert(
     all_volume_synthetic = [b["volume_synthetic"] for b in bars]
     recon_atr14_s = atr14_series(all_highs, all_lows, all_closes)
     recon_vol_sma20_s = sma_series(all_volumes, 20)
+    previous_week_s = previous_week_extremes(bars, instrument)
 
     # Build candle records
     candles: list[dict] = []
@@ -616,6 +662,13 @@ def convert(
         prev2_type = bar_type_str(prev2_bar["bt1"], prev2_bar["bt2"], prev2_bar["bt3"]) if prev2_bar else None
 
         pdh, pdl, pdc = get_prev_day_stats(i)
+        derived_pwh, derived_pwl = previous_week_s[i]
+        pwh = _opt_float(bar.get("prev_week_high_raw"))
+        pwl = _opt_float(bar.get("prev_week_low_raw"))
+        if pwh is None:
+            pwh = derived_pwh
+        if pwl is None:
+            pwl = derived_pwl
         price_vs_pdh = "above" if bar["close"] > pdh else ("below" if bar["close"] < pdh else "at")
         price_vs_pdl = "above" if bar["close"] > pdl else ("below" if bar["close"] < pdl else "at")
 
@@ -682,6 +735,8 @@ def convert(
             "ema_200": _opt_float(bar.get("ema200")),
             "hod": _opt_float(bar.get("hod")),
             "lod": _opt_float(bar.get("lod")),
+            "prev_week_high": pwh,
+            "prev_week_low": pwl,
             # Supply/demand zones — feed state.sd (were absent → sd None in replay,
             # so the demand/supply context never reached the engine on historical data).
             "supply_top": _opt_float(bar.get("supply_top")),
