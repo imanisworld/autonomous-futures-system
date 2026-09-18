@@ -20,7 +20,12 @@ from pathlib import Path
 from typing import Iterable
 
 from alert_ranker.config import load_config
-from alert_ranker.market_data import OptionChain, OptionContractQuote, PublicMarketDataClient
+from alert_ranker.market_data import (
+    PUBLIC_OPTION_CHAIN_SOURCE,
+    OptionChain,
+    OptionContractQuote,
+    PublicMarketDataClient,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 QUOTE_RULE_PATH = ROOT / "options_manager" / "quotes" / "quote_retention_rule_v1.json"
@@ -103,7 +108,7 @@ def summarize_chain_timestamps(
         for contract in contracts
         if contract.bid is not None
         and contract.ask is not None
-        and contract.bid >= 0
+        and contract.bid > 0
         and contract.ask >= contract.bid
     ]
 
@@ -232,6 +237,7 @@ async def _run(tickers: list[str]) -> tuple[dict[str, object], int]:
         and summary.all_executable_timestamps_fresh
         and summary.future_executable_timestamp_count == 0
         and summary.invalid_executable_timestamp_count == 0
+        and summary.source_values == (PUBLIC_OPTION_CHAIN_SOURCE,)
         for summary in summaries
     )
     report = {
