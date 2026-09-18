@@ -75,10 +75,20 @@ def bucket_start(ts: datetime, minutes: int) -> datetime:
     return datetime.fromtimestamp(key * sec, tz=UTC)
 
 
-def strict_aggregate(bars15: list[dict], minutes: int) -> list[dict]:
-    """Only emit clock buckets containing every expected 15m bar."""
-    expected = EXPECTED_15M[minutes]
+def strict_aggregate(
+    bars15: list[dict], minutes: int, asof: datetime | None = None
+) -> list[dict]:
+    """Same OHLC aggregation as live, but exclude only the still-forming clock bucket.
+
+    CME futures have scheduled maintenance closures, so a legitimately completed
+    4H clock bucket can contain fewer than 16 traded 15m bars.  Completion is a
+    time boundary, not a full-row-count requirement.
+    """
+    if not bars15:
+        return []
     sec = minutes * 60
+    if asof is None:
+        asof = max(b["ts"] for b in bars15) + timedelta(minutes=15)
     groups: dict[int, list[dict]] = defaultdict(list)
     for b in bars15:
         groups[int(b["ts"].timestamp()) // sec].append(b)
@@ -86,8 +96,7 @@ def strict_aggregate(bars15: list[dict], minutes: int) -> list[dict]:
     for key in sorted(groups):
         arr = sorted(groups[key], key=lambda x: x["ts"])
         start = datetime.fromtimestamp(key * sec, tz=UTC)
-        wanted = [start + timedelta(minutes=15 * i) for i in range(expected)]
-        if len(arr) != expected or [b["ts"] for b in arr] != wanted:
+        if start + timedelta(minutes=minutes) > asof:
             continue
         out.append({
             "ts": start,
@@ -95,7 +104,7 @@ def strict_aggregate(bars15: list[dict], minutes: int) -> list[dict]:
             "high": max(b["high"] for b in arr),
             "low": min(b["low"] for b in arr),
             "close": arr[-1]["close"],
-            "_count": expected,
+            "_count": len(arr),
         })
     return out
 

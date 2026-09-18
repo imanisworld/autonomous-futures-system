@@ -32,16 +32,20 @@ def test_strict_aggregate_requires_full_clock_bucket():
     assert out[0]["close"] == 104
 
 
-def test_strict_aggregate_rejects_missing_middle_bar_even_with_four_rows():
+def test_strict_aggregate_allows_market_gap_once_clock_bucket_completed():
     t0 = datetime(2026, 1, 2, 12, 0, tzinfo=UTC)
     bars = [
         bar(t0),
         bar(t0 + timedelta(minutes=15)),
-        bar(t0 + timedelta(minutes=45)),
+        # 12:30 absent (market/data gap); 12:00 clock bucket still completes at 13:00.
+        bar(t0 + timedelta(minutes=45), c=102.0),
         bar(t0 + timedelta(minutes=60)),
     ]
     out = m.strict_aggregate(bars, 60)
-    assert len(out) == 0
+    assert len(out) == 1
+    assert out[0]["ts"] == t0
+    assert out[0]["_count"] == 3
+    assert out[0]["close"] == 102.0
 
 
 def test_reaction_same_bar_break_beats_rejection_threshold():
