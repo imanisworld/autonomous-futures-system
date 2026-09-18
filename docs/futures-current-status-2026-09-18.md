@@ -172,36 +172,49 @@ But:
 
 The small combination 2+ recent 4H inside bars + 4H 2→2 continuation was strong but only n=5. Classification: **WAIT — too small**.
 
-### Supply / demand target geometry
+### Supply / demand target geometry — superseded by independent zone audit
 
-For the 29 4H 2→2-continuation-context trades:
+The earlier 4HR sample suggested that targets inside an opposing LC_ZONE looked
+better than targets beyond it. That result is now **historical diagnostic only**.
 
-Target inside the nearest opposing 1H/4H supply/demand zone:
-- n=14;
-- 78.6% wins;
-- +$1,971.78;
-- +$140.84/trade;
-- positive H1/H2;
-- +$1,954.78 at 3 ticks.
+A preregistered independent LC_ZONE audit on the mature MNQ/MES 15m corpus found:
 
-Target beyond the opposing zone:
-- n=6;
-- 50% wins;
-- −$247.38;
-- H1 negative;
-- H2 negative;
-- −$256.38 at 3 ticks.
+- current live nearest-zone identity differs from strict completed-HTF semantics
+  by up to **9.39%**;
+- zone qualification itself is unstable because historical impulses are
+  re-evaluated against a later rolling MTR: about **21–24%** of detected zone
+  identities appeared retroactively after their formation window, and about
+  **9–14%** of expected-alive identity rows were absent from qualification
+  without a break;
+- 2 existing 4HR target-geometry rows used a 1H zone before its defining
+  impulse 1H candle completed;
+- one of those rows changes from `BEYOND_ZONE` to `BEFORE_ZONE` under
+  strict completed-HTF semantics.
 
-First-touch rejection itself was not useful:
-- reject/close-back n=6, approximately flat.
+The corrected reaction-quality test used completed HTF formation and
+persistent-at-formation zone identity. On 3,643 real formations and 2,698
+paired first touches:
+- actual clean 0.5-MTR rejection: **86.43%**;
+- matched controls: **90.51%**;
+- uplift **−4.08 pp**, 95% CI **[−5.67, −2.41] pp**;
+- MNQ −3.90 pp;
+- MES −4.25 pp;
+- 1H −3.36 pp;
+- 4H −6.83 pp;
+- supply approximately flat (−0.21 pp);
+- demand materially worse (−8.53 pp).
 
-Interpretation:
-- opposing supply/demand is better treated as a **target/destination context** than an automatic reversal trigger;
-- continuation can legitimately trade into the zone;
-- extending beyond the zone is the weak geometry in this sample;
-- this remains diagnostic because the inside-zone continuation cell is only n=14.
+Preregistered statistical classification: **NO EVIDENCE OF ZONE QUALITY**. Reviewer ruling: **REACTION-AREA QUALITY INCONCLUSIVE / CONTROL MATCH FAILURE** because the nearest-neighbor placebo pool had poor common support on the preregistered width/distance features. The negative comparison is retained but is not treated as proof that LC_ZONE is worse than a properly matched placebo.
 
-Next controlled offline test should keep the same candidates/entry/stop/fill model and compare the canonical target to a target clipped to the opposing zone. Do not retune multiple thresholds at once.
+The independent timing/identity failures above do not depend on the placebo design and are sufficient to block target-rule use.
+
+Therefore:
+- do **not** use the old 4HR inside/beyond-zone table to authorize target clipping;
+- do **not** promote LC_ZONE v1 into a gate or target rule;
+- do **not** run the planned canonical-target vs zone-clipped-target A/B under
+  the current detector;
+- any alternative zone definition is a new preregistered study, not a rescue
+  of this result.
 
 ## What we are collecting now
 
@@ -246,8 +259,8 @@ For 4HR:
 - prospective 1m armed-trigger evidence;
 - actual trigger detachment versus prior 5m-close timing;
 - forward fills under the causal trigger model;
-- enough n to judge the 4H continuation / compression / zone-geometry cells;
-- target-clipping A/B before proposing any target-rule change.
+- enough n to judge the 4H continuation / compression cells;
+- no current LC_ZONE target A/B: the v1 detector failed independent quality validation.
 
 For 3-2-2:
 - exact intrabar/pre-armed trigger A/B analogous to 4HR;
@@ -305,11 +318,11 @@ High confidence:
 Medium confidence / promising:
 - MNQ 4HR itself;
 - 4H 2→2 continuation context;
-- repeated recent 4H compression as context;
-- target-inside-opposing-zone geometry.
+- repeated recent 4H compression as context.
 
 Low confidence / unresolved:
-- 4HR target clipping as an actual rule;
+- any supply/demand target rule under LC_ZONE v1;
+- whether a separately preregistered replacement zone construct would behave better;
 - failed-2 / reversal discrimination at zones;
 - 3-2-2 under true intrabar triggering;
 - Miyagi;
@@ -330,9 +343,9 @@ Do not:
 
 ## Safe next work order
 
-1. **4HR target-geometry controlled A/B** — same frozen population; canonical target vs zone-clipped target only.
-2. **4HR prospective 1m evidence** — verify trigger touch timing, stop anchor, dedupe, and paper-only behavior on natural signals.
-3. **3-2-2 timing audit** — determine whether its documented “first live break” is suffering the same completed-5m latency and run an analogous pre-armed A/B.
+1. **4HR prospective 1m evidence** — verify trigger touch timing, stop anchor, dedupe, and paper-only behavior on natural signals.
+2. **3-2-2 timing audit** — determine whether its documented “first live break” is suffering the same completed-5m latency and run an analogous pre-armed A/B.
+3. **LC_ZONE v1 is HOLD** — do not tune or rescue the failed quality audit. Reopen zone design only under a new preregistration.
 4. **Only then** decide whether 1m should gain paper-fill authority for any strategy.
 5. Continue passive evidence collection; do not expand instruments or execution scope.
 
