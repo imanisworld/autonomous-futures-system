@@ -1,0 +1,200 @@
+{
+ "tool": "slp2-v1.5",
+ "mode": "full (outcomes sealed)",
+ "replay_log_dir": "/tmp/p_oos_mes_20260918/replay_a/MES",
+ "corpus_root": "/tmp/p_oos_mes_20260918/corpus_root",
+ "corpus_manifest_sha256": {},
+ "journal_files": {
+  "journal_2026-07-24.jsonl": "3f26e5f917471c7b0feab36b1ffafc0c0fd13c4b74bc41f68974adf66c263d1e",
+  "journal_2026-07-26.jsonl": "17ec002354f4f8fd1fe2c6191bb641bce6d527a7b2a740f60c976902d1327e7b",
+  "journal_2026-07-27.jsonl": "e4f9b14014efa50698d9d88234fc4ae8163611e46c4690f01bc4915b3105ce0c",
+  "journal_2026-07-28.jsonl": "615aa30ed433db02782272aeb7e0f44b27c949e30db0d7051805b2983ce09443",
+  "journal_2026-07-29.jsonl": "6aeacd91b8df33f4393e3f0e2c7817553c20ec423438f41e21f135e786e041b7",
+  "journal_2026-07-30.jsonl": "ccb18e8158da25bbd2d0e166c62e9e546897be45c86a743821e5fa0a277cccd1",
+  "journal_2026-07-31.jsonl": "185ff10c85dd965b2d6d77c2000a9349c4e3d8378a054ba78ddc4ebe2a227824",
+  "journal_2026-08-02.jsonl": "1b71eb9043db67af1aa1ebefd47c02603d724595157a3b30fd2006edc4f1c0d4",
+  "journal_2026-08-03.jsonl": "8b9e32d24319e47fc0c46080c734af9d7f75825078ee2eb74bb936a5ae66f6e7",
+  "journal_2026-08-04.jsonl": "37562e68f083ff5fdca35ec5f5e91fe4ec353d51c5a17a92820bd236a58f94c3",
+  "journal_2026-08-05.jsonl": "aa1da077fb4e011747ceab3c3e448663b9bf6892525d65e9ee59ed656f374eb7",
+  "journal_2026-08-06.jsonl": "96fbf6b915dfa5e2c67d61df6197e85096a51c4d95e8ff6debfd8aa96a604965",
+  "journal_2026-08-07.jsonl": "613bb3a022166010c3a2c1b905f2b153ea0ec95d0754906c7acf7978816527b7",
+  "journal_2026-08-09.jsonl": "ca5643990d61bda3b213dcd9ed7a3ed0dae5d152ca51c6c8d5206a7ee31346f1",
+  "journal_2026-08-10.jsonl": "fc4e092bd695ae801effc261d0a0215f8075b0daa76eec29a94556b08b44c8de",
+  "journal_2026-08-11.jsonl": "3d8e32daf430f67414a9a16466d74ac8ca3b0697be2f4a567237c22a7c0e8a9c",
+  "journal_2026-08-12.jsonl": "000030b93c56efa09215d9dfeff1d1eaaa7a61c1a6d3aa6431adab2ab63228ac",
+  "journal_2026-08-13.jsonl": "b5e60c244d8d8e4a8b36bb846bb0361a93a2ab8c8a0be5e592cb8419b47db6c8",
+  "journal_2026-08-14.jsonl": "da36f812ebd7352bf00485ed53d84e35f4da5fbd4009ca68402b8420e148da6c",
+  "journal_2026-08-16.jsonl": "c2b8487a881cc5db9410f5d685c3286514144eb0f128c238c91c0867c72f2b4c",
+  "journal_2026-08-17.jsonl": "79b8a493f6bc931ea4a18a64a92fae3e7a5892ac042690a74138cd971d8e89ef",
+  "journal_2026-08-18.jsonl": "11877180c6f9e636923f7ccf95c65885edf39b4532080b94e1fea320d199013e",
+  "journal_2026-08-19.jsonl": "9e9048e6a152192bf07fc421fca1975c83870079fd983fd0345cb099dc592095",
+  "journal_2026-08-20.jsonl": "a42f6627e3fa07a374304f0565dec4795a910fac5a1f8cca9af22931b30474f5",
+  "journal_2026-08-21.jsonl": "d5afbabac8956bce2fcf3147aaacbb147edcacfa1d13848e9faaa04a6d4fee09",
+  "journal_2026-08-23.jsonl": "79c35122eae3fe5c92607f53dc8f6bb319f890e6b15270ff163bb0c373ebc154",
+  "journal_2026-08-24.jsonl": "d42d27e6325070e4bbd25b1657fa69d3380d72d4f13071df25a1dea4069c6f7f",
+  "journal_2026-08-25.jsonl": "5f8867b422761bf203935241be264b1dda0b3128d64d8a425902e6336fcbbd39",
+  "journal_2026-08-26.jsonl": "6a2c42cf812df5782828a35871e6432d467233f0e5118d0c0085983a69401f9f",
+  "journal_2026-08-27.jsonl": "df6b3de8ce868bec61eab11e408fbf7c35d95882da85b5fbcdfc2944956848c4",
+  "journal_2026-08-28.jsonl": "739192a16a2a9297e0bb7c142e28744d151a94e63daf282d87f9861bde4df171",
+  "journal_2026-08-30.jsonl": "a88aebf27408f44d8042d7014992f2d07c1e2dd8267c992addfe8d1bd42dbbc1",
+  "journal_2026-08-31.jsonl": "6d27cd0d4ecb52b344587027666b1bf347ffddd705a70cf8c55cf2987bc6424f",
+  "journal_2026-09-01.jsonl": "144398c44f5596f5f4387b5b5739b41eca568f60831f120985f24718e3307368",
+  "journal_2026-09-02.jsonl": "fef3108d08dcd7cdd57642eb69c1cc1e860350aa89b78b2ea15bdb8f1dc97795",
+  "journal_2026-09-03.jsonl": "656ef8fcec4924ff20cac700e92eefa23de4c8ae7dbce025dfd364cbd72c21a5",
+  "journal_2026-09-04.jsonl": "9d51339b7f68053969852dca9940771703690285072567a43acf590a2cb04c65",
+  "journal_2026-09-06.jsonl": "8afae46eef490bb80bc7f461542a28a8801c194c6f3213e6947dcab1c789aecb",
+  "journal_2026-09-07.jsonl": "0bd402328236f3ece98104b911bcf16cbeb12483f70423a8d9a9e52dec64df20",
+  "journal_2026-09-08.jsonl": "d978590cc55264c7f1a085b056de0ff1e1a213f285d5cccfae73d48b0273c197"
+ },
+ "candidates_file": {
+  "path": "/tmp/p_oos_mes_20260918/r5/MES/candidates.jsonl",
+  "sha256": "10ffb5abc68b877b208ebf4baf463f39a26710b511ace60697ee3dacde9cb65f",
+  "rows": 3080
+ },
+ "outcomes_sealed_file": {
+  "path": "/tmp/p_oos_mes_20260918/r5/MES/outcomes.sealed.jsonl",
+  "sha256": "00c5b46086d6f167f719671013c728d93fc1821e73f26890750081ea56b80143",
+  "rows": 3080,
+  "status": "SEALED \u2014 do not open before the P1 feature table is frozen and hashed"
+ },
+ "end_ts_exclusive": null,
+ "integrity": {
+  "decision_rows": 3003,
+  "evaluated_bars_by_instrument": {
+   "MES": 3003
+  },
+  "corpus_bars_by_instrument": {
+   "MES": 3003
+  },
+  "bars_in_corpus_not_evaluated_by_replay": {
+   "MES": 0
+  },
+  "candidate_rows_seen": 3080,
+  "unique_candidate_keys": 3080,
+  "exact_duplicate_keys_collapsed": {},
+  "conflicting_duplicate_keys": {},
+  "families_blocked": [],
+  "census_by_family_by_instrument": {
+   "ema_pullback_trend": {
+    "MES": 553
+   },
+   "impulse_first_pullback_observed": {
+    "MES": 431
+   },
+   "orb_false_break_fade": {
+    "MES": 133
+   },
+   "strat_122_observed": {
+    "MES": 102
+   },
+   "strat_122_pullback": {
+    "MES": 5
+   },
+   "strat_22_continuation_observed": {
+    "MES": 1007
+   },
+   "strat_22_reversal_observed": {
+    "MES": 504
+   },
+   "strat_312_observed": {
+    "MES": 51
+   },
+   "strat_322_reversal_observed": {
+    "MES": 58
+   },
+   "strat_4hr_retrigger_observed": {
+    "MES": 22
+   },
+   "transition_failed_breakdown_reclaim": {
+    "MES": 33
+   },
+   "trend_consolidation_break_observed": {
+    "MES": 181
+   }
+  },
+  "census_by_family_by_session": {
+   "ema_pullback_trend": {
+    "asian": 234,
+    "london": 154,
+    "new_york": 165
+   },
+   "impulse_first_pullback_observed": {
+    "asian": 155,
+    "london": 127,
+    "new_york": 149
+   },
+   "orb_false_break_fade": {
+    "london": 79,
+    "new_york": 54
+   },
+   "strat_122_observed": {
+    "london": 37,
+    "new_york": 20,
+    "asian": 45
+   },
+   "strat_122_pullback": {
+    "london": 1,
+    "asian": 1,
+    "new_york": 3
+   },
+   "strat_22_continuation_observed": {
+    "asian": 379,
+    "london": 270,
+    "new_york": 358
+   },
+   "strat_22_reversal_observed": {
+    "asian": 200,
+    "london": 130,
+    "new_york": 174
+   },
+   "strat_312_observed": {
+    "asian": 19,
+    "new_york": 13,
+    "london": 19
+   },
+   "strat_322_reversal_observed": {
+    "asian": 25,
+    "london": 16,
+    "new_york": 17
+   },
+   "strat_4hr_retrigger_observed": {
+    "new_york": 22
+   },
+   "transition_failed_breakdown_reclaim": {
+    "new_york": 11,
+    "london": 10,
+    "asian": 12
+   },
+   "trend_consolidation_break_observed": {
+    "asian": 64,
+    "london": 42,
+    "new_york": 75
+   }
+  },
+  "asian_orb_false_break_fade_rows": 0,
+  "forbidden_families_present": {},
+  "orb_availability": {
+   "MES": {
+    "ny_session_days": 33,
+    "ny_orb_not_available_days": [],
+    "london_session_days": 33,
+    "london_orb_not_available_days": []
+   }
+  },
+  "roll_ledger": {
+   "MES": null
+  },
+  "gap_ledger_cme_hours": {
+   "MES": null
+  },
+  "problems": [],
+  "status": "PASS",
+  "determinism": {
+   "rows_a": 3003,
+   "rows_b": 3003,
+   "rows_differ": 0,
+   "identical": true,
+   "examples": []
+  }
+ }
+}
