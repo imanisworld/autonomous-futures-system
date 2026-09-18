@@ -55,6 +55,7 @@ from scripts.csv_to_replay import (  # noqa: E402
     detect_session,
     direction_from_bar,
     htf_at,
+    previous_week_extremes,
     vwap_day_range,
 )
 from scripts.pine_market_condition import (  # noqa: E402
@@ -166,6 +167,7 @@ def derive_candles(
     daily_bars = resample_daily(raw, instrument)
 
     boundaries = detect_day_boundaries(raw, instrument)
+    previous_week_s = previous_week_extremes(raw, instrument)
     day_ranges: list[tuple[int, int]] = []
     for i, start in enumerate(boundaries):
         end = boundaries[i + 1] if i + 1 < len(boundaries) else len(raw)
@@ -308,6 +310,7 @@ def derive_candles(
         avg_vol = max(1, int(sum(vol_window) / len(vol_window)))
 
         pdh, pdl, pdc = prev_day_stats(i)
+        pwh, pwl = previous_week_s[i]
         htf_context = build_ftfc_context(
             htf_at(daily_bars, bar["ts"]),
             htf_at(four_hour_bars, bar["ts"]),
@@ -352,6 +355,7 @@ def derive_candles(
                               else ("below" if bar["close"] < vwap else "at")),
             "ema_9": ema9, "ema_21": ema21, "ema_55": ema55, "ema_200": ema200,
             "hod": hod, "lod": lod,
+            "prev_week_high": pwh, "prev_week_low": pwl,
             "supply_top": None, "supply_bottom": None,
             "demand_top": None, "demand_bottom": None,
             "orb_high": orb_high,
