@@ -43,6 +43,10 @@ PROOF_CRITICAL_RUNTIME_OVERRIDES = (
     "MOMENTUM_ENTRY_REANCHOR",
     "STRATEGY_FALLBACK_ENABLED",
     "FIVE_MIN_FEED_ENABLED",
+    # Isolated 1m armed-trigger evidence lane. Default OFF and broker-inert, but
+    # proof-critical because enabling it changes which inbound timeframe is
+    # accepted and what trigger evidence is recorded.
+    "ONE_MIN_TRIGGER_ENABLED",
     "SCHEDULE_MODE",
     "DEMO_EXECUTION_HOLD_SESSIONS",
     "PRIMARY_DECISION_TF",
