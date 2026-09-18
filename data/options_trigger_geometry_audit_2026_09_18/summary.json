@@ -9,8 +9,46 @@
     "real-time trigger observability"
   ],
   "from_date": "2026-09-09",
-  "frozen_212_reversal": null,
-  "frozen_observer_sha256": null,
+  "frozen_212_reversal": {
+    "all_expected_rows_matched": true,
+    "canonical_outcomes": {
+      "STOP_FIRST": 13,
+      "TARGET_CONSUMED_AT_ENTRY": 3,
+      "TARGET_FIRST": 60,
+      "UNRESOLVED_AT_CLOSE": 5
+    },
+    "canonical_r_below_1_n": 67,
+    "canonical_r_median": 0.3333,
+    "canonical_r_n": 81,
+    "canonical_stop_matches_generic_n": 81,
+    "expected_frozen_rows": 81,
+    "floor_outcomes": {
+      "STOP_FIRST": 26,
+      "TARGET_FIRST": 23,
+      "UNRESOLVED_AT_CLOSE": 21
+    },
+    "floor_relation": {
+      "BEFORE_CANONICAL": 5,
+      "BEYOND_CANONICAL": 57,
+      "GENERIC_INVALID": 11,
+      "MATCH": 8
+    },
+    "matched_rows": 81,
+    "nearest_outcomes": {
+      "STOP_FIRST": 10,
+      "TARGET_FIRST": 66,
+      "UNRESOLVED_AT_CLOSE": 4
+    },
+    "nearest_relation": {
+      "BEFORE_CANONICAL": 24,
+      "BEYOND_CANONICAL": 3,
+      "GENERIC_INVALID": 1,
+      "MATCH": 53
+    },
+    "target_consumed_at_entry_n": 3,
+    "wrong_side_target_n": 0
+  },
+  "frozen_observer_sha256": "edba1ab55e859357f38db843c48b9942e685c1b148db82e2cefafaca632df286",
   "rows": null,
   "snapshot_id": "OPTIONS_TRIGGER_BAR_SNAPSHOT",
   "snapshot_manifest_sha256": "8d9cd8a4674827abc11bf60805d53ca812c738bb28417b672a10e3f98790dc1b",
