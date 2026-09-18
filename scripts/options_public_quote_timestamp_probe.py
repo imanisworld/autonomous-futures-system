@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 from dataclasses import asdict, dataclass
+import hashlib
 from datetime import date, datetime, timezone
 import json
 from pathlib import Path
@@ -26,6 +27,9 @@ from alert_ranker.market_data import (
     OptionContractQuote,
     PublicMarketDataClient,
 )
+
+from options_manager.contracts import selector_rule_from_mapping
+from options_manager.quotes import retention_rule_from_mapping
 
 ROOT = Path(__file__).resolve().parents[1]
 QUOTE_RULE_PATH = ROOT / "options_manager" / "quotes" / "quote_retention_rule_v1.json"
@@ -160,13 +164,17 @@ def summarize_chain_timestamps(
     )
 
 
-def _load_rule_numbers() -> tuple[int, int, int]:
-    quote_rule = json.loads(QUOTE_RULE_PATH.read_text())
-    selector_rule = json.loads(SELECTOR_RULE_PATH.read_text())
+def _load_rule_numbers() -> tuple[int, int, int, str, str]:
+    quote_bytes = QUOTE_RULE_PATH.read_bytes()
+    selector_bytes = SELECTOR_RULE_PATH.read_bytes()
+    quote_rule = retention_rule_from_mapping(json.loads(quote_bytes.decode("utf-8")))
+    selector_rule = selector_rule_from_mapping(json.loads(selector_bytes.decode("utf-8")))
     return (
-        int(quote_rule["max_quote_age_seconds"]),
-        int(selector_rule["min_dte"]),
-        int(selector_rule["preferred_min_dte"]),
+        quote_rule.max_quote_age_seconds,
+        selector_rule.min_dte,
+        selector_rule.preferred_min_dte,
+        hashlib.sha256(quote_bytes).hexdigest(),
+        hashlib.sha256(selector_bytes).hexdigest(),
     )
 
 
@@ -183,7 +191,13 @@ async def _run(tickers: list[str]) -> tuple[dict[str, object], int]:
         )
 
     try:
-        max_age, min_dte, preferred_min_dte = _load_rule_numbers()
+        (
+            max_age,
+            min_dte,
+            preferred_min_dte,
+            quote_rule_sha256,
+            selector_rule_sha256,
+        ) = _load_rule_numbers()
     except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
         return (
             {
@@ -255,6 +269,8 @@ async def _run(tickers: list[str]) -> tuple[dict[str, object], int]:
         "scope": "current Public option-chain capture only",
         "provider": "public",
         "max_quote_age_seconds": max_age,
+        "quote_retention_rule_sha256": quote_rule_sha256,
+        "selector_rule_sha256": selector_rule_sha256,
         "tickers": [summary.ticker for summary in summaries],
         "summaries": [asdict(summary) for summary in summaries],
         "claims_not_made": [
