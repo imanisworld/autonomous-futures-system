@@ -18,7 +18,12 @@ import hashlib
 from datetime import date, datetime, timezone
 import json
 from pathlib import Path
+import sys
 from typing import Iterable
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from alert_ranker.config import load_config
 from alert_ranker.market_data import (
@@ -31,7 +36,6 @@ from alert_ranker.market_data import (
 from options_manager.contracts import selector_rule_from_mapping
 from options_manager.quotes import retention_rule_from_mapping
 
-ROOT = Path(__file__).resolve().parents[1]
 QUOTE_RULE_PATH = ROOT / "options_manager" / "quotes" / "quote_retention_rule_v1.json"
 SELECTOR_RULE_PATH = ROOT / "options_manager" / "contracts" / "selector_rule_v1.json"
 
