@@ -82,11 +82,19 @@ Default path: `logs/options_212r_prospective.jsonl`.
 
 The journal is append-only and independent of `options_scanner.sqlite`. It stores `ARMED` and terminal `RESOLUTION` records. Malformed existing journal rows fail closed instead of being skipped.
 
+## Independent review corrections
+
+Pre-merge review tightened three causal boundaries before this collector can be trusted prospectively:
+
+1. **Per-ticker observation time.** The ARMED timestamp now uses the time that ticker's Public source payload was actually received, not the collector run-start time. A slow 20-symbol pass therefore cannot claim a setup was observed before a trigger merely because the overall process started earlier.
+2. **RTH opening re-anchor.** The 09:30 ET watch bar can use only the immediately preceding NYSE session's final completed 30m bar as its precursor. Older/stale sessions fail closed. The history loader now reaches across the prior week so Monday/opening setups are not silently dropped.
+3. **Final selector-capture deadline.** The capture-lag gate is checked both before the option requests and again against the selector evidence's actual `captured_at` timestamp. A request that starts inside the window but finishes late is `DATA_BLOCKED`.
+
 ## Current RTH smoke
 
-A read-only dry run over the primary 20 at 2026-09-18T18:29:57Z reconstructed 14 212R reversals and 21 total terminal 212 setup resolutions from the session.
+The original read-only dry run at 2026-09-18T18:29:57Z reconstructed 14 212R reversals and 21 terminal 212 setup resolutions. After the causal-boundary review above, a second primary-20 run at approximately 18:37Z reconstructed 15 212R reversals and 24 terminal resolutions; the additional set included a TLT 09:30 ET opening trigger that the pre-review session-gap logic would have skipped.
 
-Because the collector had **not** existed before those triggers, all 14 reversal option captures were correctly blocked for lack of a proven pre-trigger arm. Zero current option chains were misrepresented as historical decision-time evidence.
+All **15/15** reversal option captures were blocked as `no_proven_pretrigger_arm`; zero current chains were accepted as historical decision-time evidence. The review run used a 60-second lag value only to exercise the mechanics. **It is not the operator's pre-registered production evidence policy.**
 
 That is the intended no-hindsight behavior.
 

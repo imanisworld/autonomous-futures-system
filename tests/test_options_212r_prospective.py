@@ -133,3 +133,37 @@ def test_capture_gate_requires_true_prearm_and_timely_detection():
     )
     assert late_capture.reason_code == "decision_time_capture_late"
     assert late_capture.eligible is False
+
+
+def test_opening_watch_reanchors_from_immediately_prior_session():
+    # Prior session closes with 2U -> inside 1. The next logical 30m watch bar
+    # is today's 09:30 ET open despite the overnight clock gap.
+    history = [
+        _bar("2026-09-17T18:30:00", 7, 10, 5, 8),
+        _bar("2026-09-17T19:00:00", 8, 11, 6, 10),
+        _bar("2026-09-17T19:30:00", 9, 10.5, 6.5, 9.5),
+    ]
+    lower = [_bar("2026-09-18T13:30:00", 9.4, 10.0, 6.4, 6.8)]
+    rows = observe_212_setups(
+        ticker="SPY", history_30m=history, session_5m=lower,
+        session=_session(), decision_ts=datetime(2026, 9, 18, 13, 36, tzinfo=UTC),
+    )
+    opening = [x for x in rows if x.watch_start == "2026-09-18T13:30:00+00:00"]
+    assert len(opening) == 1
+    assert opening[0].status == "TRIGGERED"
+    assert opening[0].family == "STRAT_212_REVERSAL"
+    assert opening[0].direction == "SHORT"
+
+
+def test_opening_watch_refuses_stale_nonprevious_session_precursor():
+    history = [
+        _bar("2026-09-16T18:30:00", 7, 10, 5, 8),
+        _bar("2026-09-16T19:00:00", 8, 11, 6, 10),
+        _bar("2026-09-16T19:30:00", 9, 10.5, 6.5, 9.5),
+    ]
+    lower = [_bar("2026-09-18T13:30:00", 9.4, 10.0, 6.4, 6.8)]
+    rows = observe_212_setups(
+        ticker="SPY", history_30m=history, session_5m=lower,
+        session=_session(), decision_ts=datetime(2026, 9, 18, 13, 36, tzinfo=UTC),
+    )
+    assert not [x for x in rows if x.watch_start == "2026-09-18T13:30:00+00:00"]

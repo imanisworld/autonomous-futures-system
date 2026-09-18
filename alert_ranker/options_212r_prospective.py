@@ -8,13 +8,13 @@ for the 212 reversal research lane.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 import hashlib
 import json
 from typing import Sequence
 
 from .causal_bars import Bar, MINUTE_5, MINUTE_30
-from .session_calendar import Session
+from .session_calendar import Session, nyse_session_for
 from .trigger_geometry import geometry_for_trigger
 from .trigger_time import arm_trigger_setup, resolve_trigger
 
@@ -128,6 +128,17 @@ def _source_r(direction: str, trigger: float, stop: float, target: float) -> tup
     return round(reward / risk, 6), consumed
 
 
+def _previous_session(day: date) -> Session | None:
+    """Return the immediately preceding NYSE session without guessing across gaps."""
+    cursor = day - timedelta(days=1)
+    for _ in range(14):
+        session = nyse_session_for(cursor)
+        if session is not None:
+            return session
+        cursor -= timedelta(days=1)
+    return None
+
+
 def observe_212_setups(
     *,
     ticker: str,
@@ -152,6 +163,12 @@ def observe_212_setups(
     history = sorted(history_30m, key=lambda bar: bar.start_utc)
     lower = sorted(session_5m, key=lambda bar: bar.start_utc)
     out: list[Prospective212Observation] = []
+    previous_session = _previous_session(session.date)
+    expected_open_predecessor = (
+        previous_session.close.astimezone(timezone.utc) - MINUTE_30.delta
+        if previous_session is not None
+        else None
+    )
 
     watch_start = open_utc
     while watch_start < min(point, close_utc):
@@ -160,7 +177,17 @@ def observe_212_setups(
             bar for bar in history
             if bar.start_utc + MINUTE_30.delta <= watch_start
         ]
-        if not completed or completed[-1].start_utc + MINUTE_30.delta != watch_start:
+        if not completed:
+            watch_start += MINUTE_30.delta
+            continue
+        latest_completed = completed[-1]
+        contiguous_intraday = latest_completed.start_utc + MINUTE_30.delta == watch_start
+        opening_reanchor = (
+            watch_start == open_utc
+            and expected_open_predecessor is not None
+            and latest_completed.start_utc == expected_open_predecessor
+        )
+        if not contiguous_intraday and not opening_reanchor:
             watch_start += MINUTE_30.delta
             continue
         armed = arm_trigger_setup(completed)
