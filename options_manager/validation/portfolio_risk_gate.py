@@ -76,9 +76,10 @@ def planned_risk_from_premium_stop(
     The only accepted formula is:
         (entry_fill - premium_stop) * multiplier * contracts
 
-    Entry fill is the executable ASK-side contract price supplied by the
-    canonical contract/quote path. Full premium, underlying stop distance, and
-    clamped negative values are not substitutes.
+    Entry fill is the canonical planned contract entry premium supplied by the
+    caller. Full-premium-at-risk, underlying stop distance, and clamped negative
+    values are not substitutes. A later executable-fill consumer may supply an
+    ASK-side fill, but this helper does not invent or fetch one.
     """
 
     numeric_values = (entry_fill, premium_stop)
