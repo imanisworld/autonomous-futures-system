@@ -124,3 +124,28 @@ This is evidence collection, not a deployment blocker.
 - Futures runtime stays on its curated release.
 - Options scanner now owns its separate curated `3b9770d…` release with the two justified provenance files.
 - The other 17 original differences are not current release gaps; one is deferred presentation-only and 16 are intentionally offline/inactive.
+
+## Service-aware drift monitoring
+
+Follow-up PR #680 (`01dbf710da2741966089b32fc99b061f79ad3fff`) makes the server drift gate aware of the separately pinned options-scanner release.
+
+The installed monitor now verifies:
+- primary futures release manifest + durable commit/fingerprint pins;
+- active `options-scanner` runtime cwd equals its systemd `WorkingDirectory` pin;
+- the options-scanner release manifest and `ops.release_integrity` pass.
+
+A service-specific release-integrity failure is a red alarm. Repository `main` comparison remains informational and is labeled `main-vs-primary-release` because active service releases may legitimately differ.
+
+Live dry run after installation:
+- futures `c538e2bc429d...` integrity PASS;
+- options scanner `3b9770d8fed4...` integrity PASS;
+- 19 main-vs-primary-release differences INFO only;
+- exit 0.
+
+Installed server-gate SHA-256:
+`cc4d9f5aeea8831d34182bca4305503841c64fc95447463529665f8f265d3b4f`
+
+Backup of the prior curated-release-only monitor:
+`/root/bin/afs-drift-gate.sh.pre-service-aware-20260918T125455Z`
+
+No futures or options service restart was required for this monitor update.
