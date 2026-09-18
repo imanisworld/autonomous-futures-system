@@ -12,6 +12,8 @@ Epoch record: `docs/options_v1_evidence_epoch.json`. **Cohort `V1-EPOCH-2` (`UNI
 
 The options scanner has its **own service-specific immutable release**, independent of the futures bot. Current options-scanner production release: **`58f1c50583d8bb747c0b221eabb75af376b10ecc`**. It is the minimized v3 selector-evidence release built from prior scanner base `3b9770d8fed4ad1825cc325bab536ffea618a94e`: production `paper_v1.py`, market-data policy, scanner config, risk rules, and webhook runtime remain byte-identical to that base, while append-only production-selector evidence/replay is enabled. Post-restart proof showed healthy advisory-only operation, Public read-only provider, `order_supported=false`, account endpoints forbidden, unchanged production SQLite path, preserved aggregate open planned risk, and no broker/order activity.
 
+Natural forward proof is now present. By **2026-09-18T18:51:54Z**, the production selector-evidence table contained four natural V1 captures (NVDA/XOM); all four were `CAPTURED`, all four used `selector_authority=OPTIONS_PAPER_V1`, and all four had `production_replay_parity=true` with production and retained-input replay selecting the same contract. This validates the deployed forward capture/replay path on natural scanner activity; it is not 212R strategy evidence.
+
 The futures bot is separately pinned and must not be conflated with the options-scanner release. Service-aware drift monitoring verifies each pinned release independently.
 
 Repository `main` now includes the full research/evidence chain through **#730**. #710/#712/#715 production-selector evidence/replay is deployed only through the curated scanner release above; unrelated `main` changes are not deployed to the scanner.

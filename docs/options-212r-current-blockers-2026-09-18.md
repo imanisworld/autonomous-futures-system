@@ -185,6 +185,10 @@ A future option test must state whether the source magnitude is T1, whether a ru
 
 The stress engine exists, but the numeric qualification policy still needs a frozen/pre-registered value set and aggregate pass threshold. The test fixtures' example percentages are not policy.
 
+### D. Prospective collector timing policy
+
+#730 is merged, but deployment intentionally has **no default** for `--max-capture-lag-seconds` and no timer cadence. Both values must be explicitly chosen and pre-registered before any service/timer is created. Test-fixture values are not policy.
+
 ## NEEDS MORE EVIDENCE
 
 - prospective 212R observations under corrected trigger timing;
@@ -216,12 +220,14 @@ The collector already:
 
 There is **no missing Phase-1 collector build** now.
 
-Before any deployment/scheduling of #730, two things remain explicit operator/policy gates:
+Before any deployment/scheduling of #730, explicit operator/policy gates remain:
 
 - choose and pre-register a numeric `max_capture_lag_seconds` value; the CLI intentionally has no default and prior 60-second review runs were mechanics-only, not policy;
-- separately authorize an observation-only deployment/schedule if desired.
+- choose and pre-register the collector timer cadence;
+- separately authorize an observation-only deployment/schedule if desired;
+- require both `capture_gate_eligible=true` and `option_evidence_usable=true` before treating a captured selector row as usable prospective evidence.
 
-Do not invent either value/action in code.
+Do not invent these values/actions in code.
 
 After an authorized collector begins accumulating real prospective rows, existing fill-realism and risk tooling can be used to calculate option-side evidence. Historical exact option replay remains blocked by missing causal historical Delta and contract-level OI.
 

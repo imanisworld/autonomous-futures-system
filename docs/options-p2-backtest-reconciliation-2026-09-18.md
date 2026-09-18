@@ -8,14 +8,15 @@ It does **not** modify the preserved #653 evidence package, does not activate DE
 
 ## Current baseline
 
-- current repository `main`: `331b8f05a44694de45c14bdf8fb1cd5addeb16e5`; selector replay code baseline is merged; trigger-time research #717 is also merged.
+- repository `main` at this reconciliation: `4816aa4890266fa57f9afcf07bea7d299ff8fc53`.
 - PR #706 merged: parameterized base-vs-adverse slippage stress runner.
 - PR #710 merged: append-only prospective decision-time selector evidence capture.
 - PR #712 merged: exact replay of the actual `OPTIONS_PAPER_V1` production selector from retained evidence.
-- #715 removes `options_manager`/canonical-selector imports from the active evidence capture path while retaining the same production replay proof.
-- Service-specific deployment candidate `5c14577c...` is prepared under #716; exact candidate regression: **31 passed**; it is not deployed.
-- #717 adds a pure trigger-time Strat observer and audit only; no runtime activation.
-- No selector-evidence v3 VPS deployment or production-service restart has been performed.
+- #715 removes `options_manager`/canonical-selector imports from the active evidence capture path while retaining production replay proof.
+- Curated selector-evidence release **`58f1c50583d8bb747c0b221eabb75af376b10ecc`** is active on `options-scanner`; production selector behavior is unchanged, runtime evidence is v3/minimal, and the scanner remains advisory/Public read-only.
+- #722 freezes the causal lower-timeframe trigger population; #724/#726 bind the frozen 81 to source-defined 212R geometry.
+- #733 proves the exact first price-forming Alpaca SIP trade strictly through the trigger for 81/81 frozen rows with nanosecond timestamps and exact 5m OHLC reconstruction.
+- #730 is merged as an observation-only prospective 212R trigger/selector-evidence collector. It is **not deployed or scheduled** and intentionally has no default capture-lag threshold.
 
 ## Market-hours proof captured 2026-09-18 15:24Z
 
@@ -103,11 +104,13 @@ The old #653 packet still says these fields are false because it predates the im
 
 Current Public market-hours evidence proves executable bid/ask timestamps and source identity for the SPY/AMZN capture.
 
-**Historical 212R dataset: DATA BLOCKED.**
+**Historical 212R dataset: PARTIALLY UNBLOCKED / still DATA BLOCKED for full selector replay.**
 
-Massive historical option bid/ask is available, but a complete historical selector row still lacks proven decision-time historical delta/open interest and exact underlying-price provenance for the frozen population. Do not synthesize those values and do not substitute current snapshots.
+#733 proves the exact causal underlying crossing-trade timestamp/price for 81/81 frozen decisions using SHA-bound Alpaca SIP trades, strict-through trigger semantics, and exact frozen 5m OHLC reproduction. That removes the old “unknown trigger clock/price” blocker.
 
-Therefore a full frozen historical `option_quotes_manifest.json` for all 81 212R decisions is not yet honest evidence.
+Massive historical option bid/ask is also available. What is still missing for a complete production-selector row is proven historical decision-time Delta, historical contract-level open interest, and a final replay packet proving that the causal trigger price is wired through the intended historical `context.price -> normalized price -> OPTIONS_PAPER_V1` path. Do not synthesize those values and do not substitute current snapshots.
+
+Therefore a full frozen historical production-selector/fill manifest for all 81 212R decisions is not yet honest evidence.
 
 ### Item 2B — executable-fill reconstruction
 
@@ -127,30 +130,29 @@ Premium-stop risk, no-averaging, aggregate-risk enforcement, provenance validati
 
 A future evidence packet still has to reference the exact frozen runtime budget artifact rather than merely setting booleans.
 
-## Trigger-time boundary added by #717
+## Trigger-time and geometry boundary — #717 through #733
 
-The old completed-bar/first-sight clock remains valid for evaluating what V1 observed, but it is not the final strategy-entry clock for Strat qualification. #717 separates completed precursor formation from the first causal lower-timeframe boundary break.
+The old completed-bar/first-sight clock remains valid for evaluating what V1 observed, but it is not the strategy-entry clock for 212R qualification.
 
-Before spending on or freezing a broader historical option-side quote dataset for Strat strategy testing:
+The corrected evidence chain is now frozen in stages:
 
-1. reconstruct armed setups from completed 30m precursors;
-2. resolve the first causal break from lower-timeframe bars;
-3. rebuild SPY/QQQ + HTF context as of that trigger;
-4. quantify family changes, latency, later-outside transitions and ambiguous same-lower-bar breaks;
-5. freeze those decision timestamps.
+1. #722 reproduces the exact frozen 81 at the causal first five-minute break with 81/81 family, direction, trigger and invalidation parity.
+2. #724/#726 bind source-defined 212R geometry to those same frozen rows: 81/81 stop parity, median source magnitude 0.3333R, 67/81 below 1R, and 3/81 source magnitude consumed at entry.
+3. #733 resolves the exact first price-forming SIP trade strictly through each trigger for 81/81 rows, preserving nanosecond timestamp and causal crossing price while reproducing the frozen 5m OHLC exactly.
 
-Only then should historical option-side acquisition be keyed to the strategy decision clock. This does not invalidate current-scanner prospective selector evidence; the two questions are separate.
+The old >=1R target floor is not source-equivalent 212R magnitude; it is a separate management hypothesis. The exact trigger clock/price is therefore proven at the underlying level, but historical option selection remains blocked on unavailable decision-time analytics and final selector price-path parity.
 
 ## What actually remains for 212R
 
 These are strategy/evidence problems, not missing shared infrastructure:
 
 - classification remains `WAIT`;
-- trigger-time strategy-entry clock is not yet frozen on the historical population;
-- no frozen 212R target formula;
-- no 212R replay/forward strategy formula parity;
-- historical option selector replay is blocked by missing decision-time analytics/provenance;
-- no required resolved option-fill population;
+- exact underlying trigger clock/price is proven, but historical option-selector replay still lacks decision-time Delta/OI and final `context.price -> normalized price -> OPTIONS_PAPER_V1` parity proof;
+- source-defined 212R magnitude is frozen, but final option target/runner management policy is not;
+- #730 prospective collector code is merged but not deployed; capture-lag threshold and timer cadence remain explicit policy decisions;
+- no real prospective `ARMED -> TRIGGERED -> option_evidence_usable` row has been collected under #730;
+- no required resolved option-fill population under corrected timing + geometry;
+- no pre-registered aggregate slippage-stress qualification policy/pass;
 - no positive after-cost option expectancy or net P&L proof;
 - no completed untouched multi-month / chronological validation;
 - prospective persistence has not met its pre-registered proof requirement;
