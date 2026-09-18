@@ -311,3 +311,27 @@ def test_same_direction_222_and_322_are_not_promoted_as_entries(bars, high, reas
     assert result.subtype == "CONTINUATION"
     assert result.direction is None
     assert result.reason_code == reason
+
+
+def test_watch_window_can_reanchor_across_regular_session_gap():
+    bars = [
+        _bar(0, 10, 0),
+        _bar(30, 11, 1),
+        _bar(60, 10.5, 1.5),
+    ]
+    armed = arm_trigger_setup(bars)
+    assert armed is not None
+
+    next_session_start = armed.armed_at + timedelta(hours=17, minutes=30)
+    next_session_end = next_session_start + MINUTE_30.delta
+    gap_bar = _fine(next_session_start, 0, 10.6, 2.0)
+    result = resolve_trigger(
+        armed,
+        [gap_bar],
+        lower_timeframe=MINUTE_5,
+        watch_start=next_session_start,
+        watch_until=next_session_end,
+    )
+    assert result.status == "TRIGGERED"
+    assert result.family == "STRAT_212_CONTINUATION"
+    assert result.trigger_bar_start == next_session_start
