@@ -52,7 +52,7 @@ After=network.target
 [Service]
 Type=oneshot
 WorkingDirectory=$REPO
-EnvironmentFile=$REPO/.env
+EnvironmentFile=/root/afs-shared/.env
 ExecStart=$VENV $REPO/scripts/feed_watchdog.py
 StandardOutput=journal
 StandardError=journal
