@@ -578,30 +578,21 @@ Verdict taxonomy:
 ---
 
 ### Transition failed-breakdown reclaim (MNQ/MES, shadow)
-**Verdict: BROKEN — no path under the documented bracket** (added 2026-09-07)
+**Verdict: WAIT — repaired baseline fails required robustness** (updated 2026-09-18)
 
-- RANGE_BOUND / CHOPPY / TRANSITION-conditioned long: a bar sweeps the recent
-  range low and closes back inside, the next bar holds the reclaim; entry at
-  the hold close, stop under the sweep low, fixed-R target. Evidence-only
-  shadow setup; never executable.
-- Prior audit (2026-07-08, May–Jul 2026 MNQ set): −$1,640 / PF 0.80 / WR 56%.
-- **Edge decomposition (2026-09-07, #483):** `BRACKET_DESTROYS_EDGE`. On the
-  full-corpus MNQ population (n=3,292, Polygon price basis) the long signal
-  has a small positive forward drift at every horizon (best t 1.86 at
-  60 min), but the fixed bracket converts it to **PF 0.80, −$10,768** with
-  resting fills, both halves negative, 3-tick PF 0.73. The re-anchored audit
-  sets reproduce the prior audit (MNQ −$1,306 / PF 0.82; MES −$1,327 /
-  PF 0.72). Structurally inadmissible as documented: 91% fail
-  `rr_below_minimum`, 83% grade WEAK/C, and it is RANGE-conditioned by
-  construction so it always fails `require_trending_condition`. The signal
-  (+2.7 pts mean at 60 min) is not strong enough to carry a 2R bracket even
-  if the geometry were re-derived from its own volatility.
-- Data note: the saved TradingView-derived candidate JSONs sit on a different
-  contract-roll price basis than the Polygon corpus (MNQ 0 / +292.75, MES
-  0 / +62.5); any future re-test must re-anchor per candidate via the
-  recorded `sweep_low`, as the audit did.
-- Next: none. Any bounded-bracket or volatility-scaled variant would be a new
-  strategy requiring new evidence.
+- The documented fixed-R bracket remains **BROKEN**; the 2026-09-07 `BRACKET_DESTROYS_EDGE` attribution still stands.
+- Operator-authorized alternate research froze one MNQ/New-York repair: decision-close IOC, 32-tick tolerance, 400-tick planned-entry stop, no economic target, exit after six available 5m bars, 1 contract, $1.48 commission, max 1 open / 3 fills per day.
+- The audit-harness defect was fixed: “30m” means six **available** 5m bars, so CME maintenance/weekend gaps do not count as trading bars. The rerun was deterministic.
+- Objective sweep/reclaim/hold geometry reproduces the preserved 3,292-candidate population **3,292/3,292 with zero extras**. The legacy `market_condition` label does not; current ReplayEngine labels the same timestamps mostly TRENDING/CONSOLIDATING, so that label is representation-dependent.
+- Isolated $8,000 research contract at 1 adverse tick each side:
+  - full population: 843 resolved fills, **+$3,337.36**, PF **1.100975**, H1 +$2,863.92, H2 +$473.44, max DD 19.84%;
+  - audit population: 73 resolved fills, **+$576.46**, PF **1.152111**, both halves positive.
+- Five audit entry discrepancies were exactly ±1 MNQ tick and traced to TradingView-derived planned entry vs Polygon raw-close differences; no drift exceeded one tick.
+- **Binding failure — required adverse-slippage stress does not survive on the full population:**
+  - 2 ticks each side: +$774.94 / PF 1.035, **H2 −$114.28**, max DD **20.45%**, 20% drawdown halt;
+  - 3 ticks each side: +$496.76 / PF 1.023, max DD **20.24%**, drawdown halt.
+- Classification: **WAIT — FAILS REQUIRED SLIPPAGE ROBUSTNESS**. Do not increase the hypothetical ledger, weaken the 20% drawdown stop, weaken stress, tune intermediate stops, or use the smaller positive audit set to override the full-population failure.
+- No runtime/demo/live activation is justified. PR #659 is archival research only. The existing shadow detector may continue passive collection; no new Transition backtest is the next dependency.
 
 ---
 

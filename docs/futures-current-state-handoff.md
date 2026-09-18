@@ -1,10 +1,35 @@
 # Futures — Current State Handoff
 
-_As of 2026-09-16 (evening, post-#595 activation). This is the single current futures handoff. Historical audit docs remain evidence records, but they do not override this file. Repository state is not proof of VPS/deployment state; verify the box separately before claiming anything is running._
+_As of 2026-09-18. This is the single current futures handoff. Historical audit docs remain evidence records, but they do not override this file. Repository state is not proof of VPS/deployment state; verify the box separately before claiming anything is running._
+
+## 2026-09-18 reconciliation
+
+**Repository main:** `6a9cb174b31561af313cd021ef3e54bfcddc1574` (#663).
+
+**Verified VPS release:** `/root/afs-releases/94eb7d388c02-20260917-173551`. The futures bot has been active since **2026-09-17 21:36:10 UTC** and the options scanner since **21:36:38 UTC**. This is a deliberately curated minimal-release lineage from common ancestor `3beffb7`; it is not expected to equal current `main`.
+
+Verified futures-bot runtime facts:
+- `LIVE_TRADING_ENABLED=false`;
+- `SCHEDULE_MODE=always_on_shadow`;
+- `WIDE_STOP_LEDGER_MODE=paper_sim`;
+- the separately guarded wide-stop **Tradovate DEMO** route is armed: `WIDE_STOP_LEDGER_EXECUTION_ROUTE=tradovate_demo` and `WIDE_STOP_DEMO_EXECUTION_ENABLED=true`, with matching proof pins;
+- `MES_122_PAPER_MODE=paper_sim`;
+- `CROSS_INSTRUMENT_OBSERVATION=cross_instrument_observation_v1`;
+- `ASIA_D_EMA_PAPER_MODE=paper_sim`.
+
+Therefore the box must not be summarized as globally paper-only: **live execution is disabled, but the isolated wide-stop DEMO route is armed.** Paper evidence and Tradovate DEMO evidence remain separate.
+
+**#644 is merged** as `455037c`: the Backtest -> DEMO qualification gate is now on `main`. It is an acceptance gate, not strategy proof.
+
+**Transition 400t/30m:** final classification **WAIT — FAILS REQUIRED SLIPPAGE ROBUSTNESS**. Baseline isolated evidence was positive, but the full population breached the 20% hypothetical-ledger drawdown stop under required 2-tick and 3-tick adverse entry+exit stress; the 2-tick second half was also negative. Do not rescue it by increasing the ledger, weakening drawdown/slippage, or tuning intermediate stops. PR #659 is archival research, not a deployment candidate.
+
+**#663 source-ticker provenance** is merged on `main` but is not in the verified VPS release. It adds MNQ/MES BarHistory `source_ticker` provenance only—no strategy, risk, broker, routing, or execution behavior. It should ride the next sanctioned minimal release; it does **not** justify a standalone restart.
+
+**Immediate action:** keep the current collection epochs intact. Do not deploy/restart solely for Transition, #644, or #663. Existing forward lanes continue under their frozen contracts. The next safe offline research gate is the preregistered structural-level P8 one-shot **MES out-of-sample holdout** from #645; do not retune the active 4HR/3-2-2/Daily/MES/Asia lanes mid-epoch.
 
 ## Verdict
 
-**PAPER ONLY / FORWARD EVIDENCE COLLECTION. NO LIVE OR EXTERNAL-BROKER EXECUTION IS APPROVED.**
+**LIVE DISABLED / FORWARD PAPER COLLECTION ACTIVE / GUARDED WIDE-STOP TRADOVATE DEMO ARMED. NO LIVE EXECUTION IS APPROVED.**
 
 Core rule: **No proof, no run.**
 
@@ -235,6 +260,14 @@ test). The cross-instrument roots are collection-only and cannot acquire a route
 Any route beyond these two is a separate proposal requiring a new audit.
 
 ## What remains least certain
+
+### 0. Highest-uncertainty items after the 2026-09-18 reconciliation
+
+- **Strategy edge, not machinery.** Collection/execution-safety infrastructure is better proven than profitability. Transition is now WAIT after failing required slippage robustness; MES 1-2-2 is still extremely thin; the active forward lanes still need prospective sample.
+- **Wide-stop DEMO evidence vs live safety.** Live trading is disabled, but a guarded Tradovate DEMO route is armed for the wide-stop family. DEMO evidence must remain separate from PaperBroker evidence and cannot be read as live readiness.
+- **Deployed-release provenance.** The VPS is on curated release `94eb7d3` while `main` is `6a9cb17`. That is pre-declared release divergence, not proof of drift. Future deployment must be built/reviewed as a release candidate from the deployed lineage, not by blindly pulling `main`.
+- **Contract/source identity.** #663 improves future MNQ/MES `source_ticker` provenance once deployed, but continuous symbols still do not prove dated-contract identity. Roll provenance remains an evidence limitation.
+- **Forward restart/gap behavior.** Daily multi-day persistence and data-gap contamination gates exist, but real restart/roll/feed incidents remain the least reproducible operational edge cases and must stay fail-closed.
 
 ### A. The three MNQ ledgers are not one proven $5k portfolio
 
