@@ -112,6 +112,7 @@ Identity: `OPTIONS_STRAT_TRIGGER_TIMING / trigger-v0.1`
 It currently:
 
 - arms 2-1-2, 3-1-2, 2-2-2 precursor, 3-2-2 precursor, 1-2-2 precursor, and 3-2;
+- fails closed on same-direction 2-2-2 as run context rather than a direct entry, and on same-direction 3-2-2 continuation until separate setup proof exists;
 - freezes the completed precursor's high/low before the watched 30m bar begins;
 - resolves the first high/low break from caller-supplied lower-timeframe bars;
 - refuses to invent ordering when both sides are crossed in one lower-timeframe bar;
