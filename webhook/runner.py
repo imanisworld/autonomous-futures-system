@@ -786,6 +786,7 @@ def process_alert(
                 close=state.ohlc.close,
                 volume=state.volume.current_bar if state.volume else None,
                 timeframe=state.ohlc.timeframe,
+                source_ticker=payload.ticker,
             )
             # Window regime: include this just-recorded bar in the lookback.
             state.window_direction = BarHistory.window_direction(
