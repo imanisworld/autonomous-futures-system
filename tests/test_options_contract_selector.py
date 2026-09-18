@@ -7,8 +7,12 @@ import json
 from pathlib import Path
 
 from options_manager.contracts.selector import (
+    ContractSelectionInput,
     OptionChainRow,
     select_contract,
+    select_contract_from_serialized_input,
+    selection_input_from_json,
+    selection_input_json,
     selection_result_json,
     selector_rule_from_mapping,
 )
@@ -234,3 +238,95 @@ def test_invalid_rule_booleans_do_not_coerce_to_numbers():
         assert "min_dte" in str(exc)
     else:
         raise AssertionError("boolean min_dte must be rejected")
+
+
+
+def _serialized_input(chain, **overrides):
+    values = dict(
+        rule_sha256=_rule_sha(),
+        decision_ts="2026-09-18T14:01:00+00:00",
+        underlying_price=550.0,
+        direction="CALL",
+        chain=tuple(chain),
+    )
+    values.update(overrides)
+    return selection_input_json(ContractSelectionInput(**values)).encode("utf-8")
+
+
+def test_selector_replay_forward_golden_parity_uses_identical_serialized_input_bytes():
+    payload = _serialized_input(
+        [
+            _row(contract_id="A", strike=550.0, delta=0.50),
+            _row(contract_id="B", strike=552.0, delta=0.52),
+        ]
+    )
+
+    replay = select_contract_from_serialized_input(rule=_rule(), payload=payload)
+    forward = select_contract_from_serialized_input(rule=_rule(), payload=payload)
+
+    assert replay == forward
+    assert replay.status == "SELECTED"
+    assert replay.contract_id == "A"
+    assert selection_result_json(replay).encode("utf-8") == selection_result_json(
+        forward
+    ).encode("utf-8")
+
+
+def test_serialized_selector_input_round_trip_is_byte_stable():
+    payload = _serialized_input([_row(contract_id="A")])
+    parsed = selection_input_from_json(payload)
+    assert selection_input_json(parsed).encode("utf-8") == payload
+
+
+def test_serialized_selector_input_preserves_no_hindsight_behavior():
+    payload = _serialized_input(
+        [
+            _row(contract_id="KNOWN", delta=0.58, strike=555.0),
+            _row(
+                contract_id="FUTURE",
+                delta=0.50,
+                strike=550.0,
+                quote_ts="2026-09-18T14:02:00+00:00",
+            ),
+        ]
+    )
+    result = select_contract_from_serialized_input(rule=_rule(), payload=payload)
+    assert result.contract_id == "KNOWN"
+    assert result.candidates_excluded_by_reason["future_quote"] == 1
+
+
+def test_serialized_selector_schema_drift_fails_closed():
+    raw = json.loads(_serialized_input([_row()]))
+    raw["unexpected"] = True
+    payload = (json.dumps(raw, sort_keys=True, separators=(",", ":")) + "\n").encode(
+        "utf-8"
+    )
+
+    result = select_contract_from_serialized_input(rule=_rule(), payload=payload)
+    assert result.status == "NO_CONTRACT"
+    assert result.reason_code == "serialized_input_invalid"
+
+
+def test_serialized_selector_chain_row_schema_drift_fails_closed():
+    raw = json.loads(_serialized_input([_row()]))
+    del raw["chain"][0]["quote_ts"]
+    payload = (json.dumps(raw, sort_keys=True, separators=(",", ":")) + "\n").encode(
+        "utf-8"
+    )
+
+    result = select_contract_from_serialized_input(rule=_rule(), payload=payload)
+    assert result.status == "NO_CONTRACT"
+    assert result.reason_code == "serialized_input_invalid"
+
+
+
+def test_serialized_non_string_contract_identity_fails_closed_without_sort_error():
+    raw = json.loads(_serialized_input([_row(contract_id="A"), _row(contract_id="B")]))
+    raw["chain"][0]["contract_id"] = True
+    payload = (json.dumps(raw, sort_keys=True, separators=(",", ":")) + "\n").encode(
+        "utf-8"
+    )
+    result = select_contract_from_serialized_input(rule=_rule(), payload=payload)
+    assert result.status == "SELECTED"
+    assert result.contract_id == "B"
+    assert result.candidates_excluded_by_reason["missing_identity"] == 1
