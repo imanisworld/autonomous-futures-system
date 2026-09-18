@@ -525,3 +525,49 @@ def test_simulate_round_trip_requires_explicit_config():
         simulate_round_trip(
             _packet(), _entry_snapshot(), _exit_snapshot(), _risk_result(), _quality_result()
         )
+
+
+
+@pytest.mark.parametrize("value", [-0.01, float("nan"), float("inf"), float("-inf")])
+def test_invalid_slippage_fails_closed(value):
+    result = simulate_round_trip(
+        _packet(),
+        _entry_snapshot(),
+        _exit_snapshot(),
+        _risk_result(),
+        _quality_result(),
+        _config(paper_sim_slippage_percent=value),
+    )
+    assert result.status == "REJECTED"
+    assert result.failed_stage == "fill_model"
+    assert "paper_sim_slippage_percent" in result.reason
+
+
+@pytest.mark.parametrize("value", [-0.01, float("nan"), float("inf"), float("-inf")])
+def test_invalid_per_contract_fee_fails_closed(value):
+    result = simulate_round_trip(
+        _packet(),
+        _entry_snapshot(),
+        _exit_snapshot(),
+        _risk_result(),
+        _quality_result(),
+        _config(paper_sim_per_contract_fee=value),
+    )
+    assert result.status == "REJECTED"
+    assert result.failed_stage == "fill_model"
+    assert "paper_sim_per_contract_fee" in result.reason
+
+
+@pytest.mark.parametrize("value", [0, -1, True, 1.5])
+def test_invalid_contract_multiplier_fails_closed(value):
+    result = simulate_round_trip(
+        _packet(),
+        _entry_snapshot(),
+        _exit_snapshot(),
+        _risk_result(),
+        _quality_result(),
+        _config(paper_sim_contract_multiplier=value),
+    )
+    assert result.status == "REJECTED"
+    assert result.failed_stage == "fill_model"
+    assert "paper_sim_contract_multiplier" in result.reason
