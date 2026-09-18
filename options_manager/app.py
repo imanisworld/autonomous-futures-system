@@ -37,7 +37,7 @@ SECRET_HEADER = "X-Options-Manager-Secret"
 GENERIC_INVALID_PACKET_DETAIL = "missing or malformed packet field"
 _CANONICAL_SECTION_KEYS = frozenset(("proof_packet", "contract_quality", "portfolio_risk"))
 
-_QUOTE_RULE_PATH = Path(__file__).resolve().parent / "quotes" / "quote_retention_rule_v1.json"
+_QUOTE_RULE_PATH = Path(__file__).resolve().parent / "quotes" / "quote_retention_rule_v2.json"
 
 
 def _load_quote_retention_rule():

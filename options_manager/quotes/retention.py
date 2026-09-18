@@ -26,6 +26,7 @@ QuoteStatus = Literal["OK", "MISSING", "STALE", "FUTURE", "INVALID", "WIDE_SPREA
 class QuoteSource(str, Enum):
     FIXTURE_OPTION_CHAIN = "fixture:option_chain_snapshot"
     PUBLIC_OPTION_CHAIN = "public:/userapigateway/marketdata/{accountId}/option-chain"
+    MASSIVE_OPTIONS_QUOTES = "massive:/v3/quotes/{optionsTicker}"
 
 
 @dataclass(frozen=True)

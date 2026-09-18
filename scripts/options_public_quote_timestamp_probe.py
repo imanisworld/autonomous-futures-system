@@ -36,7 +36,7 @@ from alert_ranker.market_data import (
 from options_manager.contracts import selector_rule_from_mapping
 from options_manager.quotes import retention_rule_from_mapping
 
-QUOTE_RULE_PATH = ROOT / "options_manager" / "quotes" / "quote_retention_rule_v1.json"
+QUOTE_RULE_PATH = ROOT / "options_manager" / "quotes" / "quote_retention_rule_v2.json"
 SELECTOR_RULE_PATH = ROOT / "options_manager" / "contracts" / "selector_rule_v1.json"
 
 
