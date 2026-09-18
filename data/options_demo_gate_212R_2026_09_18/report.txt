@@ -1,0 +1,68 @@
+OPTIONS BACKTEST -> DEMO QUALIFICATION: strat_212_reversal_30m_options
+  verdict: BLOCKED
+  demo evidence eligible: False
+  BLOCKERS:
+    - classification must be PROMISING BUT UNPROVEN or VALIDATED
+    - change_scope.strategy_or_parameter_only must be explicitly true
+    - change_scope.base_sha must be the pre-change commit
+    - change_scope base_sha...HEAD diff is empty
+    - change_scope has no changed pre-registered strategy path
+    - strategy_identity.target_formula_frozen must be explicitly true
+    - strategy_identity.replay_forward_formula_parity must be explicitly true
+    - contract_selection.mechanical_selection must be explicitly true
+    - contract_selection.expiration_rule_frozen must be explicitly true
+    - contract_selection.strike_rule_frozen must be explicitly true
+    - contract_selection.dte_rule_frozen must be explicitly true
+    - contract_selection.moneyness_or_delta_rule_frozen must be explicitly true
+    - contract_selection.quote_timestamp_aligned_to_decision must be explicitly true
+    - contract_selection.no_hindsight_contract_choice must be explicitly true
+    - contract_selection.same_selector_replay_and_forward must be explicitly true
+    - contract_selection.selection_rule_path is required
+    - contract_selection.selection_rule_sha256 is required
+    - data_integrity.option_quotes_dataset_frozen must be explicitly true
+    - data_integrity.quote_source_identified must be explicitly true
+    - data_integrity.bid_ask_available_at_decision must be explicitly true
+    - data_integrity.stale_quotes_fail_closed must be explicitly true
+    - data_integrity.missing_contract_rows_fail_closed must be explicitly true
+    - data_integrity.option_quotes_manifest_path is required
+    - data_integrity.option_quotes_manifest_sha256 is required
+    - fill_realism.fees_included must be explicitly true
+    - fill_realism.slippage_included must be explicitly true
+    - fill_realism.no_fill_modeled must be explicitly true
+    - fill_realism.gap_handling_modeled must be explicitly true
+    - fill_realism.same_bar_ambiguity_pessimistic must be explicitly true
+    - fill_realism.slippage_stress_pre_registered must be explicitly true
+    - fill_realism.slippage_stress_pass must be explicitly true
+    - fill_realism.max_quote_age_seconds must be finite and > 0
+    - risk_policy.planned_risk_uses_premium_stop must be explicitly true
+    - risk_policy.no_averaging_down must be explicitly true
+    - risk_policy.max_aggregate_open_risk_dollars must be explicitly configured
+    - validation.untouched_validation_window must be explicitly true
+    - validation.multiple_months_covered must be explicitly true
+    - validation.chronological_walk_forward_pass must be explicitly true
+    - validation.drawdown_limit_pre_registered must be explicitly true
+    - validation.concentration_limit_pre_registered must be explicitly true
+    - validation.aggregate_expectancy_after_costs_positive must be explicitly true
+    - validation.aggregate_net_pnl_after_costs_positive must be explicitly true
+    - validation cell 212R_30m_primary20_retro_2026-09-09..15_first_sight_ex_opening has insufficient resolved fills
+    - validation cell 212R_30m_primary20_retro_2026-09-09..15_first_sight_ex_opening missing finite expectancy
+    - validation cell 212R_30m_primary20_retro_2026-09-09..15_first_sight_ex_opening fails drawdown limit
+    - validation cell 212R_30m_primary20_retro_2026-09-09..15_first_sight_ex_opening fails concentration check
+    - validation cell 212R_30m_primary20_retro_2026-09-09..15_first_sight_ex_opening missing valid average spread
+    - golden_parity.fixture_set_frozen must be explicitly true
+    - golden_parity.underlying_candidate_parity must be explicitly true
+    - golden_parity.contract_selection_parity must be explicitly true
+    - golden_parity.risk_decision_parity must be explicitly true
+    - golden_parity.entry_fill_formula_parity must be explicitly true
+    - golden_parity.exit_fill_formula_parity must be explicitly true
+    - golden_parity.no_fill_case_covered must be explicitly true
+    - golden_parity.stale_quote_case_covered must be explicitly true
+    - golden_parity.missing_quote_case_covered must be explicitly true
+    - golden_parity.wide_spread_case_covered must be explicitly true
+    - golden_parity.premium_stop_case_covered must be explicitly true
+    - golden_parity.underlying_invalidation_case_covered must be explicitly true
+    - golden_parity.event_risk_case_covered must be explicitly true
+  independent review still required: yes
+  runtime/release reconciliation still required: yes
+  paper/DEMO activation authorized by this command: NO
+  live options trading authorized: NO

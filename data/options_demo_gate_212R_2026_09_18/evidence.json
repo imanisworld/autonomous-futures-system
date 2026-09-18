@@ -1,0 +1,151 @@
+{
+  "strategy": "strat_212_reversal_30m_options",
+  "classification": "WAIT",
+  "_classification_basis": "09-16 family validation + operator ruling: 212R = POSSIBLE SIGNAL / 'strongest follow-up candidate'. Retro primary-20 first-sight 1R 44.2% vs 32.3% (+11.9pp, n=77 ex-opening). Prospective 09-16/17: 35.0% vs 39.3% (-4.3pp, n=21, INSUFFICIENT). No option expectancy, P&L or contract evidence exists -> does not meet the PROMISING BUT UNPROVEN bar (positive expectancy so far). Honest classification = WAIT.",
+  "change_scope": {
+    "base_sha": "5633a59ca5cd3a2487b28e2caee598881bf5e857",
+    "_base_sha_basis": "No pre-change commit exists: there is NO 212R options strategy implementation on main (strat_212.py = continuation only; daily_strat.py returns NO_TRADE daily_212_reversal_not_in_v1). base_sha deliberately == HEAD so the gate reports 'no change to qualify'.",
+    "allowed_strategy_paths": [
+      "options_manager/strategies/strat_212_reversal.py"
+    ],
+    "strategy_or_parameter_only": false,
+    "risk_policy_unchanged": true,
+    "contract_selection_semantics_unchanged": true,
+    "fill_model_semantics_unchanged": true,
+    "broker_routing_unchanged": true,
+    "runtime_activation_unchanged": true,
+    "_unchanged_basis": "vacuously true: nothing has changed."
+  },
+  "strategy_identity": {
+    "underlying_entry_formula_frozen": true,
+    "underlying_invalidation_formula_frozen": true,
+    "_formula_basis": "alert_ranker/coverage_observer.py classify_window(): trigger = previous bar high (LONG) / low (SHORT), invalidation = opposite; family via strategy/strat_classifier.py _is_212_reversal (2D-1-2U / 2U-1-2D). Both files hashed in underlying_manifest.json at HEAD.",
+    "target_formula_frozen": false,
+    "_target_basis": "NO target exists. Observer horizon = session close; 1R/2R are hit-rate probes, not a target rule.",
+    "timeframe_formula_frozen": true,
+    "_timeframe_basis": "30m RTH bars, first-sight = bar close + ~17.9 min (audit-verified causal).",
+    "replay_forward_formula_parity": false,
+    "_parity_basis": "No 212R replay exists (options_manager/replay = strat_212 continuation only).",
+    "causal_data_only": true,
+    "lookahead_or_future_leak": false,
+    "_causal_basis": "FIRST-SIGHT columns only. Mechanical columns are EXCLUDED from this package: opening-bar mechanical 1R = 96% is a known gap artifact (audit 09-16)."
+  },
+  "contract_selection": {
+    "mechanical_selection": false,
+    "expiration_rule_frozen": false,
+    "strike_rule_frozen": false,
+    "dte_rule_frozen": false,
+    "moneyness_or_delta_rule_frozen": false,
+    "liquidity_rule_frozen": true,
+    "_liquidity_basis": "config.py: quality_max_spread_percent 20.0, quality_min_open_interest 500, risk_min_dte_days 14 (constraints enforced by contracts/contract_validator.py evaluate_contract_constraints).",
+    "quote_timestamp_aligned_to_decision": false,
+    "_timestamp_basis": "audit 09-16: 83/83 journal contracts have bid/ask/OI/vol/IV, 0 have a quote timestamp.",
+    "no_hindsight_contract_choice": false,
+    "same_selector_replay_and_forward": false,
+    "selection_rule_id": "NONE",
+    "_selector_basis": "No mechanical contract SELECTOR exists in the repo. evaluate_contract_constraints is a VALIDATOR (accept/reject a supplied contract); nothing chooses expiration/strike/delta. selection_rule_path/sha256 deliberately omitted."
+  },
+  "data_integrity": {
+    "underlying_dataset_frozen": true,
+    "underlying_manifest_path": "data/options_demo_gate_212R_2026_09_18/underlying_manifest.json",
+    "underlying_manifest_sha256": "aa5c6d03ac08e60248cfe1254dc698c5307b734f8f455fcb7da45d6f0f30ed6a",
+    "option_quotes_dataset_frozen": false,
+    "quote_source_identified": false,
+    "bid_ask_available_at_decision": false,
+    "stale_quotes_fail_closed": false,
+    "missing_contract_rows_fail_closed": false,
+    "_option_quotes_basis": "NO option quote dataset exists for 212R episodes (audit 09-16: contract feasibility UNKNOWN for 91% of opportunities; no chain retained unless a candidate reached contract stage; 212R never reaches contract stage). option_quotes_manifest_path/sha256 deliberately omitted."
+  },
+  "fill_realism": {
+    "entry_fill_basis": "ASK",
+    "exit_fill_basis": "BID",
+    "entry_uses_executable_quote": true,
+    "exit_uses_executable_quote": true,
+    "spread_included": true,
+    "_fill_basis": "Describes the ONLY fill model in the repo (options_manager/paper_sim.py, config defaults paper_sim_entry_fill=ASK / paper_sim_exit_fill=BID). ZERO 212R option fills have ever been simulated with it.",
+    "fees_included": false,
+    "slippage_included": false,
+    "_cost_basis": "config defaults: simulated fees 0.0, paper_sim_slippage_percent 0.0.",
+    "no_fill_modeled": false,
+    "gap_handling_modeled": false,
+    "same_bar_ambiguity_pessimistic": false,
+    "slippage_stress_pre_registered": false,
+    "slippage_stress_pass": false,
+    "_max_quote_age_basis": "max_quote_age_seconds deliberately omitted: no quote-staleness concept exists (0 quote timestamps)."
+  },
+  "risk_policy": {
+    "underlying_invalidation_required": true,
+    "numeric_premium_stop_required": true,
+    "_risk_basis": "plans/base.py: premium_stop is a required float; proof_adapter.py rejects a plan with premium_stop None; invalidation level required by plan.",
+    "planned_risk_uses_premium_stop": false,
+    "_planned_risk_basis": "not verified in code for this package; left false.",
+    "aggregate_open_risk_enforced": true,
+    "_aggregate_basis": "validation/portfolio_risk_gate.py evaluate_portfolio_risk: None budget -> blocking (fails closed).",
+    "no_averaging_down": false,
+    "_averaging_basis": "no explicit averaging-down guard found in options_manager; left false.",
+    "max_trade_risk_dollars": 300.0,
+    "_trade_risk_basis": "config.py risk_max_total_premium_dollars default 300.00.",
+    "max_aggregate_open_risk_dollars": null,
+    "_aggregate_budget_basis": "config.py default None (OPTIONS_MANAGER_MAX_AGGREGATE_OPEN_RISK_DOLLARS unset in repo defaults; box .env not read for this package)."
+  },
+  "validation": {
+    "untouched_validation_window": false,
+    "multiple_months_covered": false,
+    "_window_basis": "5 retrospective sessions (09-09..09-15) + 2 prospective (09-16/17). Not months. Retro window was used for discovery, so it is not untouched.",
+    "chronological_walk_forward_pass": false,
+    "_walk_forward_basis": "prospective 212R ex-opening first-sight 1R 35.0% vs baseline 39.3% (-4.3pp, n=21) = INSUFFICIENT PROSPECTIVE SAMPLE; excess did not persist in the 2 sessions observed.",
+    "sample_requirement_pre_registered": true,
+    "_sample_basis": "prospective_validation.py PERSISTING rule: >=30 prospective episodes, >=3 sessions, both directions, ex-opening first-sight diff >= +5pp (pre-registered 09-16 19:30Z). NOTE: this is an EPISODE rule, not a resolved-option-fill rule.",
+    "drawdown_limit_pre_registered": false,
+    "concentration_limit_pre_registered": false,
+    "aggregate_expectancy_after_costs_positive": false,
+    "aggregate_net_pnl_after_costs_positive": false,
+    "_expectancy_basis": "No option P&L exists. Underlying first-sight mean final R = +0.244 (n=77) is NOT an option expectancy and is NOT after costs.",
+    "required_resolved_fills_per_cell": 30,
+    "required_cell_dimensions": [
+      "setup_family",
+      "direction",
+      "clock_bucket",
+      "symbol"
+    ],
+    "cells": [
+      {
+        "cell_id": "212R_30m_primary20_retro_2026-09-09..15_first_sight_ex_opening",
+        "required": true,
+        "resolved_fills": 0,
+        "underlying_episodes": 77,
+        "underlying_first_sight_1R_pct": 44.2,
+        "underlying_baseline_first_sight_1R_pct": 32.3,
+        "underlying_first_sight_mean_final_R": 0.244,
+        "underlying_invalidation_first_pct": 28.6,
+        "expectancy_r_after_costs": null,
+        "drawdown_within_limit": false,
+        "concentration_pass": false,
+        "average_spread_percent": null,
+        "_cell_basis": "FAMILY_SUMMARY_EX_OPENING.csv row STRAT_212_REVERSAL. resolved_fills = 0 because no option contract was ever selected or filled for any 212R episode."
+      }
+    ]
+  },
+  "golden_parity": {
+    "fixture_set_frozen": false,
+    "underlying_candidate_parity": false,
+    "contract_selection_parity": false,
+    "risk_decision_parity": false,
+    "entry_fill_formula_parity": false,
+    "exit_fill_formula_parity": false,
+    "no_fill_case_covered": false,
+    "stale_quote_case_covered": false,
+    "missing_quote_case_covered": false,
+    "wide_spread_case_covered": false,
+    "premium_stop_case_covered": false,
+    "underlying_invalidation_case_covered": false,
+    "event_risk_case_covered": false,
+    "_parity_basis": "No 212R fixtures exist. options_manager/replay/fixtures.py covers strat_212 CONTINUATION only."
+  },
+  "provenance": {
+    "code_sha": "5633a59ca5cd3a2487b28e2caee598881bf5e857",
+    "options_policy_path": "options_manager/config.py",
+    "options_policy_sha256": "9ffbb8498dea0edd3c9909dc7abb7cb259839eb7be927c7a7097735e42e5546a",
+    "_policy_basis": "No standalone options policy file exists; policy = config.py dataclass defaults + OPTIONS_MANAGER_* env. Hashed at HEAD."
+  }
+}
