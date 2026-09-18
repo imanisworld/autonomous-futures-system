@@ -1,6 +1,6 @@
 # Options — Current State Handoff
 
-_As of 2026-09-17. This is the single current-state authority for the options lane._
+_As of 2026-09-18. This is the single current-state authority for the options lane._
 
 Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`; the read-only coverage evidence lane (observer, reducer, outcome study, after-close collector) is described in `docs/options-coverage-observer.md`.
 
@@ -10,11 +10,13 @@ Historical dated notes and old/closed PRs are provenance only. They do not overr
 
 Epoch record: `docs/options_v1_evidence_epoch.json`. **Cohort `V1-EPOCH-2` (`UNIVERSE_EXPANSION_6_TO_20`) started 2026-09-16T16:47:46Z** on the first clean RTH cycle after the watchlist grew from 6 to 20 symbols (deployed release `62546883`, scanner code identical to `899a524`; rules, risk, cadence and Signa authority unchanged). `V1-EPOCH-1` (six symbols, 2026-09-15T16:50:00Z to 2026-09-16T16:47:46Z) is retained inside the record. Rows before an epoch's start belong to the previous cohort, not to it. Rules in force: #570 late-entry guard, #571 Daily-lane timing + 1R target floor, #575 ENTRY_LATE episode block (counterfactual preservation). Any rule change starts a new cohort.
 
-Deployed baseline on the box since 2026-09-17T21:36Z: **`94eb7d388c02b744eed5a3d3d36b14fa724f1781`** (release dir `94eb7d388c02-20260917-173551`) = the live minimal futures release `11b3d91` plus #648 only. Scanner behaviour (entries, targets, guards, risk, contracts) is unchanged from `899a524`; #648 changes shadow-row accounting only. `main` carries the same options code at `8766049`.
+Deployed baseline on the box since 2026-09-17T21:36Z: **`94eb7d388c02b744eed5a3d3d36b14fa724f1781`** (release dir `94eb7d388c02-20260917-173551`) = the live minimal futures release `11b3d91` plus #648 only. Scanner behaviour (entries, targets, guards, risk, contracts) is unchanged from `899a524`; #648 changes shadow-row accounting only.
 
-Final CI for that baseline: **4,921 passed / 7 skipped / 2 warnings**.
+Current repository `main` is **`3b343b040be58847d06a6dc544543c516ec3bcda`** after #710/#712. Those two PRs add evidence capture/replay and do **not** change the frozen production contract-selection policy. They are not deployed on the VPS as of this handoff.
 
-Do not claim the VPS is on this SHA until box-side deployment and the market-hours smoke prove it.
+Final CI for the deployed baseline: **4,921 passed / 7 skipped / 2 warnings**. Targeted selector-evidence regression on merged current `main`: **26 passed**.
+
+Do not claim the VPS is on current `main` until a separate box-side deployment and market-hours smoke prove it.
 
 ## What is built
 
@@ -36,6 +38,27 @@ The current V1 path includes:
 Relevant merged work: #520, #526, #533, #536, #540, #541.
 
 No broker auto-entry/order execution was added by this work.
+
+## Backtest fidelity and selector authority — 2026-09-18
+
+The production contract selector authority is **`OPTIONS_PAPER_V1`** in `alert_ranker.paper_v1`. The newer canonical selector under `options_manager.contracts` is deterministic and useful for reference/research, but it is **not** production authority and must not be used as though it reproduces the scanner.
+
+#710 added append-only prospective decision-time selector evidence. #712 then added replay through the same pure `choose_expiration()` + `choose_contract()` functions used by production and made the evidence fail closed if retained-input replay diverges from the actual production choice.
+
+Evidence schema v2 now preserves:
+
+- exact serialized selector-input bytes + SHA-256;
+- exact production selector source SHA-256;
+- all expiration candidates + production-chosen expiration;
+- underlying price/source/timestamp provenance;
+- chain bid/ask plus side timestamps, volume, OI, delta, IV and source identity;
+- actual production selection;
+- exact production replay result + parity;
+- canonical/reference selector result, explicitly labeled non-authoritative.
+
+Post-merge proof on `main@3b343b0` used an isolated temp SQLite DB and a live SPY chain with no Discord send and no broker/order path: 282 chain rows were retained, all 282 carried bid/ask timestamps, OI, delta and IV, production selected `SPY261120C00775000`, retained-input production replay selected the same contract, and `production_replay_parity=true`. The reference canonical selector chose a different contract in the same capture, which is why its role is explicitly non-authoritative.
+
+This proves the **current forward capture/replay boundary for the observed capture**, not historical strategy results. Full historical 212R contract-selection replay remains **DATA BLOCKED** because the frozen historical population still lacks proven decision-time delta/open-interest and exact underlying-price provenance. Do not synthesize those fields or substitute current snapshots.
 
 ## Frozen `OPTIONS_PAPER_V1` trade policy
 
@@ -100,9 +123,12 @@ At minimum:
 - Signa/GEX state;
 - ambiguity/path metadata;
 - outcome and friction views;
-- policy id.
+- policy id;
+- selector evidence id/hash;
+- production selector source hash;
+- production replay result + parity when the row is part of the prospective replay-evidence population.
 
-Missing evidence is flagged; it is not invented.
+Missing evidence is flagged; it is not invented. A production-replay mismatch is `DATA_BLOCKED`, not a usable backtest row.
 
 ## Diagnostics we will use to isolate each strategy
 
