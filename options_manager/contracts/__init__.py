@@ -18,10 +18,22 @@ from .base import (
     ContractConstraintsStatus,
 )
 from .contract_validator import evaluate_contract_constraints
+from .selector import (
+    ContractSelectionResult,
+    OptionChainRow,
+    SelectorRule,
+    select_contract,
+    selector_rule_from_mapping,
+)
 
 __all__ = [
     "ContractConstraintsInputs",
     "ContractConstraintsResult",
     "ContractConstraintsStatus",
     "evaluate_contract_constraints",
+    "ContractSelectionResult",
+    "OptionChainRow",
+    "SelectorRule",
+    "select_contract",
+    "selector_rule_from_mapping",
 ]
