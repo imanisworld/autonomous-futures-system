@@ -128,14 +128,27 @@ Conclusion:
 
 Two hour-boundary candidates also proved that detecting the trigger at the later 5m close can select a 1H stop candle that was not yet complete at the actual trigger time. The pre-armed model fixes that timing boundary.
 
-### Other armed-trigger strategies may have the same timing approximation
+### Other armed-trigger strategies
 
-Still requires explicit parity work:
-- 60M 3-2-2 First Live;
+60M 3-2-2 First Live received its own frozen-population timing A/B on 2026-09-18.
+
+Result:
+- exact 34-candidate parity between the accepted research detector and canonical state machine;
+- completed-5m close was more than the 32-tick IOC tolerance adversely detached on **13/34 (38.24%)** candidates;
+- causal pre-armed First Live model at 3 adverse ticks: **33 fills / 33 resolved wins / 1 bracket-invalid no-fill, +$2,709.66**;
+- H1 **+$1,366.34** and H2 **+$1,343.32**;
+- LONG **+$1,754.34**, SHORT **+$955.32**;
+- zero same-trigger-bar both-stop-and-target ambiguities.
+
+Timing classification: **TIMING EDGE SURVIVES / PROMISING BUT UNPROVEN.**
+
+This does not remove the separate current-account blocker: the historical 3-2-2 population remains incompatible with the account's stop-width and R:R architecture, and n=34 is still thin.
+
+Still requiring explicit timing parity if reopened:
 - 12HR Miyagi;
 - generic 2-1-2 / 1-2-2 next-bar boundary triggers.
 
-These strategies should not automatically inherit the 4HR fix without their own A/B proof.
+No armed-trigger family inherits another family's timing result automatically.
 
 Close-confirmed strategies such as ORB/VWAP families must not be converted to touch-entry merely because 1m data now exists.
 
@@ -263,9 +276,10 @@ For 4HR:
 - no current LC_ZONE target A/B: the v1 detector failed independent quality validation.
 
 For 3-2-2:
-- exact intrabar/pre-armed trigger A/B analogous to 4HR;
-- more sample, including more losses;
-- confirmation that lower-latency triggering does not create a new population.
+- timing A/B is complete and survives 3-tick stress;
+- prospective First Live evidence under natural lower-latency observations;
+- more sample, including losses;
+- confirmation that a future lower-latency observer reproduces the same setup population rather than creating a new one.
 
 For Miyagi:
 - exact timing parity if it is ever considered beyond research;
@@ -289,7 +303,7 @@ What we can do well now:
 - slippage/commission stress;
 - chronological halves;
 - exact entry-model A/B for strategies whose trigger semantics are specified;
-- causal 1H/4H context and supply/demand attribution;
+- causal completed-HTF context studies; LC_ZONE v1 itself is now explicitly blocked from target-rule use by the independent zone audit;
 - frozen-manifest / hash-backed structural research.
 
 What still blocks blanket trust:
@@ -317,6 +331,7 @@ High confidence:
 
 Medium confidence / promising:
 - MNQ 4HR itself;
+- MNQ 60M 3-2-2 historical signal under corrected First Live timing;
 - 4H 2→2 continuation context;
 - repeated recent 4H compression as context.
 
@@ -324,7 +339,7 @@ Low confidence / unresolved:
 - any supply/demand target rule under LC_ZONE v1;
 - whether a separately preregistered replacement zone construct would behave better;
 - failed-2 / reversal discrimination at zones;
-- 3-2-2 under true intrabar triggering;
+- prospective 3-2-2 First Live behavior beyond the consumed n=34 historical set;
 - Miyagi;
 - cross-instrument edge transfer;
 - any live expectancy claim.
@@ -344,9 +359,9 @@ Do not:
 ## Safe next work order
 
 1. **4HR prospective 1m evidence** — verify trigger touch timing, stop anchor, dedupe, and paper-only behavior on natural signals.
-2. **3-2-2 timing audit** — determine whether its documented “first live break” is suffering the same completed-5m latency and run an analogous pre-armed A/B.
+2. **3-2-2 prospective timing evidence** — the offline First Live A/B is complete; the next proof is natural lower-latency observation. Any 1m 3-2-2 observer is a separate, observation-only build and is not authorized by this audit.
 3. **LC_ZONE v1 is HOLD** — do not tune or rescue the failed quality audit. Reopen zone design only under a new preregistration.
-4. **Only then** decide whether 1m should gain paper-fill authority for any strategy.
+4. **Miyagi timing parity only if reopened** — its current sample is too small to justify runtime work.
 5. Continue passive evidence collection; do not expand instruments or execution scope.
 
 ## Bottom line
@@ -358,7 +373,8 @@ The important change in confidence is not “we found a winning bot.” It is:
 - we can now distinguish setup logic from trigger timing;
 - we have a lower-latency evidence feed;
 - we caught and quantified a real historical-fill optimism defect;
-- the strongest MNQ 4HR signal still survives after that correction;
+- MNQ 4HR and 60M 3-2-2 both survive their own causal trigger-timing corrections;
+- neither corrected historical result overrides sample-size, forward-proof, or account-risk blockers;
 - and the system remains contained while we gather proof.
 
 **No proof, no run.**

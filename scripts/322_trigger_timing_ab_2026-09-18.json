@@ -1,0 +1,5567 @@
+{
+  "status": "AUDIT_ONLY",
+  "prereg_commit": "97c87fddbfb98404ab0d87a1d61148ba3c6ad2ba",
+  "population": {
+    "candidate_count": 34,
+    "first_date": "2024-08-02",
+    "last_date": "2026-06-11",
+    "direction_counts": {
+      "SHORT": 17,
+      "LONG": 17
+    },
+    "walk_forward_boundary": "2025-05-01",
+    "research_15m_tree_sha256": "a8ec026dafffb1be7cb5c4643706d99bcfce2271780d1073867908937bc93a21",
+    "audit_5m_tree_sha256": "7f09a7f82ee282e892f5db9b86be3130e6a5c1210d86828a56b9666bb06afd35"
+  },
+  "accounting": {
+    "commission_round_trip": 1.48,
+    "tick_size": 0.25,
+    "point_value": 2.0,
+    "ioc_tolerance_ticks": 32.0,
+    "slippage_ticks": [
+      1,
+      2,
+      3
+    ]
+  },
+  "detachment": {
+    "n": 34,
+    "median_adverse_ticks": 9.0,
+    "p90_adverse_ticks": 176.0,
+    "max_adverse_ticks": 444.0,
+    "count_over_32_ticks": 13,
+    "share_over_32_ticks": 0.3824,
+    "rows": [
+      {
+        "date": "2024-08-02",
+        "direction": "SHORT",
+        "trigger": 18541.75,
+        "decision_close": 18476.25,
+        "adverse_detachment_ticks": 262.0,
+        "absolute_detachment_ticks": 262.0
+      },
+      {
+        "date": "2024-08-14",
+        "direction": "SHORT",
+        "trigger": 19011.0,
+        "decision_close": 18985.5,
+        "adverse_detachment_ticks": 102.0,
+        "absolute_detachment_ticks": 102.0
+      },
+      {
+        "date": "2024-08-22",
+        "direction": "SHORT",
+        "trigger": 19944.5,
+        "decision_close": 19908.25,
+        "adverse_detachment_ticks": 145.0,
+        "absolute_detachment_ticks": 145.0
+      },
+      {
+        "date": "2024-08-30",
+        "direction": "SHORT",
+        "trigger": 19513.0,
+        "decision_close": 19469.0,
+        "adverse_detachment_ticks": 176.0,
+        "absolute_detachment_ticks": 176.0
+      },
+      {
+        "date": "2024-09-06",
+        "direction": "SHORT",
+        "trigger": 18741.5,
+        "decision_close": 18754.0,
+        "adverse_detachment_ticks": 0.0,
+        "absolute_detachment_ticks": 50.0
+      },
+      {
+        "date": "2024-09-11",
+        "direction": "SHORT",
+        "trigger": 18773.25,
+        "decision_close": 18800.0,
+        "adverse_detachment_ticks": 0.0,
+        "absolute_detachment_ticks": 107.0
+      },
+      {
+        "date": "2024-09-12",
+        "direction": "LONG",
+        "trigger": 19523.0,
+        "decision_close": 19546.25,
+        "adverse_detachment_ticks": 93.0,
+        "absolute_detachment_ticks": 93.0
+      },
+      {
+        "date": "2024-10-10",
+        "direction": "LONG",
+        "trigger": 20390.0,
+        "decision_close": 20385.5,
+        "adverse_detachment_ticks": 0.0,
+        "absolute_detachment_ticks": 18.0
+      },
+      {
+        "date": "2024-10-11",
+        "direction": "LONG",
+        "trigger": 20379.75,
+        "decision_close": 20361.5,
+        "adverse_detachment_ticks": 0.0,
+        "absolute_detachment_ticks": 73.0
+      },
+      {
+        "date": "2024-11-26",
+        "direction": "SHORT",
+        "trigger": 20924.25,
+        "decision_close": 20924.5,
+        "adverse_detachment_ticks": 0.0,
+        "absolute_detachment_ticks": 1.0
+      },
+      {
+        "date": "2024-12-23",
+        "direction": "SHORT",
+        "trigger": 21552.5,
+        "decision_close": 21514.75,
+        "adverse_detachment_ticks": 151.0,
+        "absolute_detachment_ticks": 151.0
+      },
+      {
+        "date": "2025-01-20",
+        "direction": "SHORT",
+        "trigger": 21658.5,
+        "decision_close": 21657.5,
+        "adverse_detachment_ticks": 4.0,
+        "absolute_detachment_ticks": 4.0
+      },
+      {
+        "date": "2025-02-07",
+        "direction": "SHORT",
+        "trigger": 21864.25,
+        "decision_close": 21753.25,
+        "adverse_detachment_ticks": 444.0,
+        "absolute_detachment_ticks": 444.0
+      },
+      {
+        "date": "2025-02-12",
+        "direction": "LONG",
+        "trigger": 21701.0,
+        "decision_close": 21718.5,
+        "adverse_detachment_ticks": 70.0,
+        "absolute_detachment_ticks": 70.0
+      },
+      {
+        "date": "2025-02-26",
+        "direction": "LONG",
+        "trigger": 21313.0,
+        "decision_close": 21303.0,
+        "adverse_detachment_ticks": 0.0,
+        "absolute_detachment_ticks": 40.0
+      },
+      {
+        "date": "2025-03-17",
+        "direction": "SHORT",
+        "trigger": 19892.0,
+        "decision_close": 19945.0,
+        "adverse_detachment_ticks": 0.0,
+        "absolute_detachment_ticks": 212.0
+      },
+      {
+        "date": "2025-03-21",
+        "direction": "LONG",
+        "trigger": 19752.5,
+        "decision_close": 19759.75,
+        "adverse_detachment_ticks": 29.0,
+        "absolute_detachment_ticks": 29.0
+      },
+      {
+        "date": "2025-05-01",
+        "direction": "LONG",
+        "trigger": 19998.0,
+        "decision_close": 19999.75,
+        "adverse_detachment_ticks": 7.0,
+        "absolute_detachment_ticks": 7.0
+      },
+      {
+        "date": "2025-06-04",
+        "direction": "SHORT",
+        "trigger": 21699.25,
+        "decision_close": 21694.5,
+        "adverse_detachment_ticks": 19.0,
+        "absolute_detachment_ticks": 19.0
+      },
+      {
+        "date": "2025-06-05",
+        "direction": "LONG",
+        "trigger": 21840.0,
+        "decision_close": 21831.5,
+        "adverse_detachment_ticks": 0.0,
+        "absolute_detachment_ticks": 34.0
+      },
+      {
+        "date": "2025-06-26",
+        "direction": "LONG",
+        "trigger": 22566.5,
+        "decision_close": 22564.0,
+        "adverse_detachment_ticks": 0.0,
+        "absolute_detachment_ticks": 10.0
+      },
+      {
+        "date": "2025-06-27",
+        "direction": "LONG",
+        "trigger": 22770.25,
+        "decision_close": 22793.75,
+        "adverse_detachment_ticks": 94.0,
+        "absolute_detachment_ticks": 94.0
+      },
+      {
+        "date": "2025-08-11",
+        "direction": "LONG",
+        "trigger": 23745.0,
+        "decision_close": 23726.25,
+        "adverse_detachment_ticks": 0.0,
+        "absolute_detachment_ticks": 75.0
+      },
+      {
+        "date": "2025-08-27",
+        "direction": "LONG",
+        "trigger": 23585.75,
+        "decision_close": 23598.75,
+        "adverse_detachment_ticks": 52.0,
+        "absolute_detachment_ticks": 52.0
+      },
+      {
+        "date": "2025-09-05",
+        "direction": "SHORT",
+        "trigger": 23821.5,
+        "decision_close": 23837.25,
+        "adverse_detachment_ticks": 0.0,
+        "absolute_detachment_ticks": 63.0
+      },
+      {
+        "date": "2025-09-18",
+        "direction": "LONG",
+        "trigger": 24713.5,
+        "decision_close": 24722.25,
+        "adverse_detachment_ticks": 35.0,
+        "absolute_detachment_ticks": 35.0
+      },
+      {
+        "date": "2025-09-30",
+        "direction": "LONG",
+        "trigger": 24837.0,
+        "decision_close": 24828.75,
+        "adverse_detachment_ticks": 0.0,
+        "absolute_detachment_ticks": 33.0
+      },
+      {
+        "date": "2025-10-10",
+        "direction": "SHORT",
+        "trigger": 25293.75,
+        "decision_close": 25194.0,
+        "adverse_detachment_ticks": 399.0,
+        "absolute_detachment_ticks": 399.0
+      },
+      {
+        "date": "2025-10-16",
+        "direction": "SHORT",
+        "trigger": 25026.0,
+        "decision_close": 25043.5,
+        "adverse_detachment_ticks": 0.0,
+        "absolute_detachment_ticks": 70.0
+      },
+      {
+        "date": "2026-03-06",
+        "direction": "LONG",
+        "trigger": 24742.5,
+        "decision_close": 24751.5,
+        "adverse_detachment_ticks": 36.0,
+        "absolute_detachment_ticks": 36.0
+      },
+      {
+        "date": "2026-04-01",
+        "direction": "LONG",
+        "trigger": 24194.5,
+        "decision_close": 24176.75,
+        "adverse_detachment_ticks": 0.0,
+        "absolute_detachment_ticks": 71.0
+      },
+      {
+        "date": "2026-05-12",
+        "direction": "SHORT",
+        "trigger": 29113.5,
+        "decision_close": 29110.75,
+        "adverse_detachment_ticks": 11.0,
+        "absolute_detachment_ticks": 11.0
+      },
+      {
+        "date": "2026-05-13",
+        "direction": "LONG",
+        "trigger": 29304.75,
+        "decision_close": 29310.25,
+        "adverse_detachment_ticks": 22.0,
+        "absolute_detachment_ticks": 22.0
+      },
+      {
+        "date": "2026-06-11",
+        "direction": "SHORT",
+        "trigger": 28927.75,
+        "decision_close": 28928.75,
+        "adverse_detachment_ticks": 0.0,
+        "absolute_detachment_ticks": 4.0
+      }
+    ]
+  },
+  "models": {
+    "plan": {
+      "1tick": {
+        "candidates": 34,
+        "skipped_position_open": 0,
+        "attempted": 34,
+        "filled": 33,
+        "fill_rate": 0.971,
+        "no_fill": 1,
+        "open": 0,
+        "eod_bar_missing": 0,
+        "exit_reasons": {
+          "TARGET_HIT": 31,
+          "DAY_ONLY_FLATTEN": 1,
+          "STOP_HIT": 1
+        },
+        "no_fill_reasons": {
+          "ENTRY_BRACKET_INVALID_AT_FILL": 1
+        },
+        "resolved": 33,
+        "wins": 32,
+        "win_rate": 0.97,
+        "net": 2532.66,
+        "expectancy": 76.75,
+        "profit_factor": 13.57,
+        "max_drawdown": 201.48,
+        "top5_concentration": 0.411,
+        "h1_net": 1383.34,
+        "h1_n": 17,
+        "h2_net": 1149.32,
+        "h2_n": 16,
+        "both_halves_positive": true,
+        "expectancy_per_candidate": 74.49,
+        "direction": {
+          "LONG": {
+            "n": 17,
+            "net": 1771.34,
+            "wins": 17,
+            "losses": 0
+          },
+          "SHORT": {
+            "n": 16,
+            "net": 761.32,
+            "wins": 15,
+            "losses": 1
+          }
+        },
+        "same_trigger_bar_resolutions": 0,
+        "same_trigger_bar_both_stop_target": 0
+      },
+      "2tick": {
+        "candidates": 34,
+        "skipped_position_open": 0,
+        "attempted": 34,
+        "filled": 33,
+        "fill_rate": 0.971,
+        "no_fill": 1,
+        "open": 0,
+        "eod_bar_missing": 0,
+        "exit_reasons": {
+          "TARGET_HIT": 31,
+          "DAY_ONLY_FLATTEN": 1,
+          "STOP_HIT": 1
+        },
+        "no_fill_reasons": {
+          "ENTRY_BRACKET_INVALID_AT_FILL": 1
+        },
+        "resolved": 33,
+        "wins": 32,
+        "win_rate": 0.97,
+        "net": 2515.66,
+        "expectancy": 76.23,
+        "profit_factor": 13.424,
+        "max_drawdown": 202.48,
+        "top5_concentration": 0.413,
+        "h1_net": 1374.84,
+        "h1_n": 17,
+        "h2_net": 1140.82,
+        "h2_n": 16,
+        "both_halves_positive": true,
+        "expectancy_per_candidate": 73.99,
+        "direction": {
+          "LONG": {
+            "n": 17,
+            "net": 1762.84,
+            "wins": 17,
+            "losses": 0
+          },
+          "SHORT": {
+            "n": 16,
+            "net": 752.82,
+            "wins": 15,
+            "losses": 1
+          }
+        },
+        "same_trigger_bar_resolutions": 0,
+        "same_trigger_bar_both_stop_target": 0
+      },
+      "3tick": {
+        "candidates": 34,
+        "skipped_position_open": 0,
+        "attempted": 34,
+        "filled": 33,
+        "fill_rate": 0.971,
+        "no_fill": 1,
+        "open": 0,
+        "eod_bar_missing": 0,
+        "exit_reasons": {
+          "TARGET_HIT": 31,
+          "DAY_ONLY_FLATTEN": 1,
+          "STOP_HIT": 1
+        },
+        "no_fill_reasons": {
+          "ENTRY_BRACKET_INVALID_AT_FILL": 1
+        },
+        "resolved": 33,
+        "wins": 32,
+        "win_rate": 0.97,
+        "net": 2498.66,
+        "expectancy": 75.72,
+        "profit_factor": 13.28,
+        "max_drawdown": 203.48,
+        "top5_concentration": 0.414,
+        "h1_net": 1366.34,
+        "h1_n": 17,
+        "h2_net": 1132.32,
+        "h2_n": 16,
+        "both_halves_positive": true,
+        "expectancy_per_candidate": 73.49,
+        "direction": {
+          "LONG": {
+            "n": 17,
+            "net": 1754.34,
+            "wins": 17,
+            "losses": 0
+          },
+          "SHORT": {
+            "n": 16,
+            "net": 744.32,
+            "wins": 15,
+            "losses": 1
+          }
+        },
+        "same_trigger_bar_resolutions": 0,
+        "same_trigger_bar_both_stop_target": 0
+      }
+    },
+    "ioc_close": {
+      "1tick": {
+        "candidates": 34,
+        "skipped_position_open": 0,
+        "attempted": 34,
+        "filled": 20,
+        "fill_rate": 0.588,
+        "no_fill": 14,
+        "open": 0,
+        "eod_bar_missing": 0,
+        "exit_reasons": {
+          "TARGET_HIT": 19,
+          "STOP_HIT": 1
+        },
+        "no_fill_reasons": {
+          "ENTRY_NOT_FILLED": 13,
+          "ENTRY_BRACKET_INVALID_AT_FILL": 1
+        },
+        "resolved": 20,
+        "wins": 19,
+        "win_rate": 0.95,
+        "net": 1859.4,
+        "expectancy": 92.97,
+        "profit_factor": 12.169,
+        "max_drawdown": 166.48,
+        "top5_concentration": 0.477,
+        "h1_net": 1068.68,
+        "h1_n": 9,
+        "h2_net": 790.72,
+        "h2_n": 11,
+        "both_halves_positive": true,
+        "expectancy_per_candidate": 54.69,
+        "direction": {
+          "LONG": {
+            "n": 11,
+            "net": 1122.22,
+            "wins": 11,
+            "losses": 0
+          },
+          "SHORT": {
+            "n": 9,
+            "net": 737.18,
+            "wins": 8,
+            "losses": 1
+          }
+        },
+        "same_trigger_bar_resolutions": 0,
+        "same_trigger_bar_both_stop_target": 0
+      },
+      "2tick": {
+        "candidates": 34,
+        "skipped_position_open": 0,
+        "attempted": 34,
+        "filled": 20,
+        "fill_rate": 0.588,
+        "no_fill": 14,
+        "open": 0,
+        "eod_bar_missing": 0,
+        "exit_reasons": {
+          "TARGET_HIT": 19,
+          "STOP_HIT": 1
+        },
+        "no_fill_reasons": {
+          "ENTRY_NOT_FILLED": 13,
+          "ENTRY_BRACKET_INVALID_AT_FILL": 1
+        },
+        "resolved": 20,
+        "wins": 19,
+        "win_rate": 0.95,
+        "net": 1848.9,
+        "expectancy": 92.45,
+        "profit_factor": 12.04,
+        "max_drawdown": 167.48,
+        "top5_concentration": 0.478,
+        "h1_net": 1064.18,
+        "h1_n": 9,
+        "h2_net": 784.72,
+        "h2_n": 11,
+        "both_halves_positive": true,
+        "expectancy_per_candidate": 54.38,
+        "direction": {
+          "LONG": {
+            "n": 11,
+            "net": 1116.72,
+            "wins": 11,
+            "losses": 0
+          },
+          "SHORT": {
+            "n": 9,
+            "net": 732.18,
+            "wins": 8,
+            "losses": 1
+          }
+        },
+        "same_trigger_bar_resolutions": 0,
+        "same_trigger_bar_both_stop_target": 0
+      },
+      "3tick": {
+        "candidates": 34,
+        "skipped_position_open": 0,
+        "attempted": 34,
+        "filled": 20,
+        "fill_rate": 0.588,
+        "no_fill": 14,
+        "open": 0,
+        "eod_bar_missing": 0,
+        "exit_reasons": {
+          "TARGET_HIT": 19,
+          "STOP_HIT": 1
+        },
+        "no_fill_reasons": {
+          "ENTRY_NOT_FILLED": 13,
+          "ENTRY_BRACKET_INVALID_AT_FILL": 1
+        },
+        "resolved": 20,
+        "wins": 19,
+        "win_rate": 0.95,
+        "net": 1838.4,
+        "expectancy": 91.92,
+        "profit_factor": 11.912,
+        "max_drawdown": 168.48,
+        "top5_concentration": 0.479,
+        "h1_net": 1059.68,
+        "h1_n": 9,
+        "h2_net": 778.72,
+        "h2_n": 11,
+        "both_halves_positive": true,
+        "expectancy_per_candidate": 54.07,
+        "direction": {
+          "LONG": {
+            "n": 11,
+            "net": 1111.22,
+            "wins": 11,
+            "losses": 0
+          },
+          "SHORT": {
+            "n": 9,
+            "net": 727.18,
+            "wins": 8,
+            "losses": 1
+          }
+        },
+        "same_trigger_bar_resolutions": 0,
+        "same_trigger_bar_both_stop_target": 0
+      }
+    },
+    "prearmed_touch": {
+      "1tick": {
+        "candidates": 34,
+        "skipped_position_open": 0,
+        "attempted": 34,
+        "filled": 33,
+        "fill_rate": 0.971,
+        "no_fill": 1,
+        "open": 0,
+        "eod_bar_missing": 0,
+        "exit_reasons": {
+          "TARGET_HIT": 32,
+          "DAY_ONLY_FLATTEN": 1
+        },
+        "no_fill_reasons": {
+          "ENTRY_BRACKET_INVALID_AT_FILL": 1
+        },
+        "resolved": 33,
+        "wins": 33,
+        "win_rate": 1.0,
+        "net": 2742.66,
+        "expectancy": 83.11,
+        "profit_factor": Infinity,
+        "max_drawdown": 0.0,
+        "top5_concentration": 0.41,
+        "h1_net": 1383.34,
+        "h1_n": 17,
+        "h2_net": 1359.32,
+        "h2_n": 16,
+        "both_halves_positive": true,
+        "expectancy_per_candidate": 80.67,
+        "direction": {
+          "LONG": {
+            "n": 17,
+            "net": 1771.34,
+            "wins": 17,
+            "losses": 0
+          },
+          "SHORT": {
+            "n": 16,
+            "net": 971.32,
+            "wins": 16,
+            "losses": 0
+          }
+        },
+        "same_trigger_bar_resolutions": 12,
+        "same_trigger_bar_both_stop_target": 0
+      },
+      "2tick": {
+        "candidates": 34,
+        "skipped_position_open": 0,
+        "attempted": 34,
+        "filled": 33,
+        "fill_rate": 0.971,
+        "no_fill": 1,
+        "open": 0,
+        "eod_bar_missing": 0,
+        "exit_reasons": {
+          "TARGET_HIT": 32,
+          "DAY_ONLY_FLATTEN": 1
+        },
+        "no_fill_reasons": {
+          "ENTRY_BRACKET_INVALID_AT_FILL": 1
+        },
+        "resolved": 33,
+        "wins": 33,
+        "win_rate": 1.0,
+        "net": 2726.16,
+        "expectancy": 82.61,
+        "profit_factor": Infinity,
+        "max_drawdown": 0.0,
+        "top5_concentration": 0.412,
+        "h1_net": 1374.84,
+        "h1_n": 17,
+        "h2_net": 1351.32,
+        "h2_n": 16,
+        "both_halves_positive": true,
+        "expectancy_per_candidate": 80.18,
+        "direction": {
+          "LONG": {
+            "n": 17,
+            "net": 1762.84,
+            "wins": 17,
+            "losses": 0
+          },
+          "SHORT": {
+            "n": 16,
+            "net": 963.32,
+            "wins": 16,
+            "losses": 0
+          }
+        },
+        "same_trigger_bar_resolutions": 12,
+        "same_trigger_bar_both_stop_target": 0
+      },
+      "3tick": {
+        "candidates": 34,
+        "skipped_position_open": 0,
+        "attempted": 34,
+        "filled": 33,
+        "fill_rate": 0.971,
+        "no_fill": 1,
+        "open": 0,
+        "eod_bar_missing": 0,
+        "exit_reasons": {
+          "TARGET_HIT": 32,
+          "DAY_ONLY_FLATTEN": 1
+        },
+        "no_fill_reasons": {
+          "ENTRY_BRACKET_INVALID_AT_FILL": 1
+        },
+        "resolved": 33,
+        "wins": 33,
+        "win_rate": 1.0,
+        "net": 2709.66,
+        "expectancy": 82.11,
+        "profit_factor": Infinity,
+        "max_drawdown": 0.0,
+        "top5_concentration": 0.413,
+        "h1_net": 1366.34,
+        "h1_n": 17,
+        "h2_net": 1343.32,
+        "h2_n": 16,
+        "both_halves_positive": true,
+        "expectancy_per_candidate": 79.7,
+        "direction": {
+          "LONG": {
+            "n": 17,
+            "net": 1754.34,
+            "wins": 17,
+            "losses": 0
+          },
+          "SHORT": {
+            "n": 16,
+            "net": 955.32,
+            "wins": 16,
+            "losses": 0
+          }
+        },
+        "same_trigger_bar_resolutions": 12,
+        "same_trigger_bar_both_stop_target": 0
+      }
+    }
+  },
+  "classification": "TIMING EDGE SURVIVES / PROMISING BUT UNPROVEN",
+  "ledger": {
+    "1tick": [
+      {
+        "date": "2024-08-02",
+        "direction": "SHORT",
+        "trigger": 18541.75,
+        "stop": 18761.25,
+        "target": 18508.0,
+        "trigger_bar_ts": "2024-08-02T14:05:00+00:00",
+        "trigger_bar_open": 18545.25,
+        "trigger_bar_high": 18549.25,
+        "trigger_bar_low": 18446.5,
+        "trigger_bar_close": 18476.25,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 18541.5,
+            "exit_price": 18508.0,
+            "exit_idx": 6209,
+            "exit_bar_ts": "2024-08-02T14:10:00+00:00",
+            "gross": 67.0,
+            "net": 65.52,
+            "bars_held": 1
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 6208,
+            "decision_close": 18476.25
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 18541.5,
+            "exit_price": 18508.0,
+            "exit_idx": 6208,
+            "exit_bar_ts": "2024-08-02T14:05:00+00:00",
+            "gross": 67.0,
+            "net": 65.52,
+            "bars_held": 1
+          }
+        }
+      },
+      {
+        "date": "2024-08-14",
+        "direction": "SHORT",
+        "trigger": 19011.0,
+        "stop": 19175.0,
+        "target": 19004.25,
+        "trigger_bar_ts": "2024-08-14T14:10:00+00:00",
+        "trigger_bar_open": 19022.75,
+        "trigger_bar_high": 19026.25,
+        "trigger_bar_low": 18965.75,
+        "trigger_bar_close": 18985.5,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19010.75,
+            "exit_price": 19004.25,
+            "exit_idx": 8418,
+            "exit_bar_ts": "2024-08-14T14:15:00+00:00",
+            "gross": 13.0,
+            "net": 11.52,
+            "bars_held": 1
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 8417,
+            "decision_close": 18985.5
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19010.75,
+            "exit_price": 19004.25,
+            "exit_idx": 8417,
+            "exit_bar_ts": "2024-08-14T14:10:00+00:00",
+            "gross": 13.0,
+            "net": 11.52,
+            "bars_held": 1
+          }
+        }
+      },
+      {
+        "date": "2024-08-22",
+        "direction": "SHORT",
+        "trigger": 19944.5,
+        "stop": 20025.75,
+        "target": 19938.0,
+        "trigger_bar_ts": "2024-08-22T14:05:00+00:00",
+        "trigger_bar_open": 19961.5,
+        "trigger_bar_high": 19972.25,
+        "trigger_bar_low": 19905.0,
+        "trigger_bar_close": 19908.25,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19944.25,
+            "exit_price": 19938.0,
+            "exit_idx": 10073,
+            "exit_bar_ts": "2024-08-22T14:10:00+00:00",
+            "gross": 12.5,
+            "net": 11.02,
+            "bars_held": 1
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 10072,
+            "decision_close": 19908.25
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19944.25,
+            "exit_price": 19938.0,
+            "exit_idx": 10072,
+            "exit_bar_ts": "2024-08-22T14:05:00+00:00",
+            "gross": 12.5,
+            "net": 11.02,
+            "bars_held": 1
+          }
+        }
+      },
+      {
+        "date": "2024-08-30",
+        "direction": "SHORT",
+        "trigger": 19513.0,
+        "stop": 19603.0,
+        "target": 19508.25,
+        "trigger_bar_ts": "2024-08-30T14:55:00+00:00",
+        "trigger_bar_open": 19540.0,
+        "trigger_bar_high": 19548.75,
+        "trigger_bar_low": 19466.5,
+        "trigger_bar_close": 19469.0,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19512.75,
+            "exit_price": 19508.25,
+            "exit_idx": 11739,
+            "exit_bar_ts": "2024-08-30T15:00:00+00:00",
+            "gross": 9.0,
+            "net": 7.52,
+            "bars_held": 1
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 11738,
+            "decision_close": 19469.0
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19512.75,
+            "exit_price": 19508.25,
+            "exit_idx": 11738,
+            "exit_bar_ts": "2024-08-30T14:55:00+00:00",
+            "gross": 9.0,
+            "net": 7.52,
+            "bars_held": 1
+          }
+        }
+      },
+      {
+        "date": "2024-09-06",
+        "direction": "SHORT",
+        "trigger": 18741.5,
+        "stop": 18972.5,
+        "target": 18723.0,
+        "trigger_bar_ts": "2024-09-06T14:00:00+00:00",
+        "trigger_bar_open": 18745.75,
+        "trigger_bar_high": 18768.0,
+        "trigger_bar_low": 18709.5,
+        "trigger_bar_close": 18754.0,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 18741.25,
+            "exit_price": 18723.0,
+            "exit_idx": 13061,
+            "exit_bar_ts": "2024-09-06T14:10:00+00:00",
+            "gross": 36.5,
+            "net": 35.02,
+            "bars_held": 2
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 18753.75,
+            "exit_price": 18723.0,
+            "exit_idx": 13061,
+            "exit_bar_ts": "2024-09-06T14:10:00+00:00",
+            "gross": 61.5,
+            "net": 60.02,
+            "bars_held": 2
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 18741.25,
+            "exit_price": 18723.0,
+            "exit_idx": 13059,
+            "exit_bar_ts": "2024-09-06T14:00:00+00:00",
+            "gross": 36.5,
+            "net": 35.02,
+            "bars_held": 1
+          }
+        }
+      },
+      {
+        "date": "2024-09-11",
+        "direction": "SHORT",
+        "trigger": 18773.25,
+        "stop": 18929.25,
+        "target": 18730.75,
+        "trigger_bar_ts": "2024-09-11T14:00:00+00:00",
+        "trigger_bar_open": 18792.0,
+        "trigger_bar_high": 18815.75,
+        "trigger_bar_low": 18741.5,
+        "trigger_bar_close": 18800.0,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 18773.0,
+            "exit_price": 18730.75,
+            "exit_idx": 13889,
+            "exit_bar_ts": "2024-09-11T14:10:00+00:00",
+            "gross": 84.5,
+            "net": 83.02,
+            "bars_held": 2
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 18799.75,
+            "exit_price": 18730.75,
+            "exit_idx": 13889,
+            "exit_bar_ts": "2024-09-11T14:10:00+00:00",
+            "gross": 138.0,
+            "net": 136.52,
+            "bars_held": 2
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 18773.0,
+            "exit_price": 18730.75,
+            "exit_idx": 13889,
+            "exit_bar_ts": "2024-09-11T14:10:00+00:00",
+            "gross": 84.5,
+            "net": 83.02,
+            "bars_held": 3
+          }
+        }
+      },
+      {
+        "date": "2024-09-12",
+        "direction": "LONG",
+        "trigger": 19523.0,
+        "stop": 19416.25,
+        "target": 19569.75,
+        "trigger_bar_ts": "2024-09-12T14:10:00+00:00",
+        "trigger_bar_open": 19482.0,
+        "trigger_bar_high": 19555.0,
+        "trigger_bar_low": 19475.0,
+        "trigger_bar_close": 19546.25,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19523.25,
+            "exit_price": 19569.75,
+            "exit_idx": 14166,
+            "exit_bar_ts": "2024-09-12T14:15:00+00:00",
+            "gross": 93.0,
+            "net": 91.52,
+            "bars_held": 1
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 14165,
+            "decision_close": 19546.25
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19523.25,
+            "exit_price": 19569.75,
+            "exit_idx": 14166,
+            "exit_bar_ts": "2024-09-12T14:15:00+00:00",
+            "gross": 93.0,
+            "net": 91.52,
+            "bars_held": 2
+          }
+        }
+      },
+      {
+        "date": "2024-10-10",
+        "direction": "LONG",
+        "trigger": 20390.0,
+        "stop": 20301.25,
+        "target": 20472.0,
+        "trigger_bar_ts": "2024-10-10T14:05:00+00:00",
+        "trigger_bar_open": 20374.75,
+        "trigger_bar_high": 20400.0,
+        "trigger_bar_low": 20356.0,
+        "trigger_bar_close": 20385.5,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 20390.25,
+            "exit_price": 20472.0,
+            "exit_idx": 19706,
+            "exit_bar_ts": "2024-10-10T15:55:00+00:00",
+            "gross": 163.5,
+            "net": 162.02,
+            "bars_held": 22
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 20385.75,
+            "exit_price": 20472.0,
+            "exit_idx": 19706,
+            "exit_bar_ts": "2024-10-10T15:55:00+00:00",
+            "gross": 172.5,
+            "net": 171.02,
+            "bars_held": 22
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 20390.25,
+            "exit_price": 20472.0,
+            "exit_idx": 19706,
+            "exit_bar_ts": "2024-10-10T15:55:00+00:00",
+            "gross": 163.5,
+            "net": 162.02,
+            "bars_held": 23
+          }
+        }
+      },
+      {
+        "date": "2024-10-11",
+        "direction": "LONG",
+        "trigger": 20379.75,
+        "stop": 20313.25,
+        "target": 20416.25,
+        "trigger_bar_ts": "2024-10-11T14:00:00+00:00",
+        "trigger_bar_open": 20359.25,
+        "trigger_bar_high": 20380.5,
+        "trigger_bar_low": 20323.5,
+        "trigger_bar_close": 20361.5,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 20380.0,
+            "exit_price": 20416.25,
+            "exit_idx": 19961,
+            "exit_bar_ts": "2024-10-11T14:10:00+00:00",
+            "gross": 72.5,
+            "net": 71.02,
+            "bars_held": 2
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 20361.75,
+            "exit_price": 20416.25,
+            "exit_idx": 19961,
+            "exit_bar_ts": "2024-10-11T14:10:00+00:00",
+            "gross": 109.0,
+            "net": 107.52,
+            "bars_held": 2
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 20380.0,
+            "exit_price": 20416.25,
+            "exit_idx": 19961,
+            "exit_bar_ts": "2024-10-11T14:10:00+00:00",
+            "gross": 72.5,
+            "net": 71.02,
+            "bars_held": 3
+          }
+        }
+      },
+      {
+        "date": "2024-11-26",
+        "direction": "SHORT",
+        "trigger": 20924.25,
+        "stop": 21025.0,
+        "target": 20920.0,
+        "trigger_bar_ts": "2024-11-26T15:15:00+00:00",
+        "trigger_bar_open": 20969.0,
+        "trigger_bar_high": 20970.0,
+        "trigger_bar_low": 20919.0,
+        "trigger_bar_close": 20924.5,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 20924.0,
+            "exit_price": 20920.0,
+            "exit_idx": 28795,
+            "exit_bar_ts": "2024-11-26T15:20:00+00:00",
+            "gross": 8.0,
+            "net": 6.52,
+            "bars_held": 1
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 20924.25,
+            "exit_price": 20920.0,
+            "exit_idx": 28795,
+            "exit_bar_ts": "2024-11-26T15:20:00+00:00",
+            "gross": 8.5,
+            "net": 7.02,
+            "bars_held": 1
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 20924.0,
+            "exit_price": 20920.0,
+            "exit_idx": 28794,
+            "exit_bar_ts": "2024-11-26T15:15:00+00:00",
+            "gross": 8.0,
+            "net": 6.52,
+            "bars_held": 1
+          }
+        }
+      },
+      {
+        "date": "2024-12-23",
+        "direction": "SHORT",
+        "trigger": 21552.5,
+        "stop": 21675.5,
+        "target": 21543.75,
+        "trigger_bar_ts": "2024-12-23T15:05:00+00:00",
+        "trigger_bar_open": 21586.5,
+        "trigger_bar_high": 21596.25,
+        "trigger_bar_low": 21513.25,
+        "trigger_bar_close": 21514.75,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21552.25,
+            "exit_price": 21543.75,
+            "exit_idx": 33942,
+            "exit_bar_ts": "2024-12-23T15:10:00+00:00",
+            "gross": 17.0,
+            "net": 15.52,
+            "bars_held": 1
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 33941,
+            "decision_close": 21514.75
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21552.25,
+            "exit_price": 21543.75,
+            "exit_idx": 33941,
+            "exit_bar_ts": "2024-12-23T15:05:00+00:00",
+            "gross": 17.0,
+            "net": 15.52,
+            "bars_held": 1
+          }
+        }
+      },
+      {
+        "date": "2025-01-20",
+        "direction": "SHORT",
+        "trigger": 21658.5,
+        "stop": 21780.0,
+        "target": 21538.0,
+        "trigger_bar_ts": "2025-01-20T15:40:00+00:00",
+        "trigger_bar_open": 21687.0,
+        "trigger_bar_high": 21697.0,
+        "trigger_bar_low": 21641.0,
+        "trigger_bar_close": 21657.5,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21658.25,
+            "exit_price": 21538.0,
+            "exit_idx": 38816,
+            "exit_bar_ts": "2025-01-21T00:50:00+00:00",
+            "gross": 240.5,
+            "net": 239.02,
+            "bars_held": 50
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21657.25,
+            "exit_price": 21538.0,
+            "exit_idx": 38816,
+            "exit_bar_ts": "2025-01-21T00:50:00+00:00",
+            "gross": 238.5,
+            "net": 237.02,
+            "bars_held": 50
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21658.25,
+            "exit_price": 21538.0,
+            "exit_idx": 38816,
+            "exit_bar_ts": "2025-01-21T00:50:00+00:00",
+            "gross": 240.5,
+            "net": 239.02,
+            "bars_held": 51
+          }
+        }
+      },
+      {
+        "date": "2025-02-07",
+        "direction": "SHORT",
+        "trigger": 21864.25,
+        "stop": 21967.75,
+        "target": 21790.0,
+        "trigger_bar_ts": "2025-02-07T15:00:00+00:00",
+        "trigger_bar_open": 21905.25,
+        "trigger_bar_high": 21905.5,
+        "trigger_bar_low": 21732.25,
+        "trigger_bar_close": 21753.25,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21864.0,
+            "exit_price": 21790.0,
+            "exit_idx": 42548,
+            "exit_bar_ts": "2025-02-07T15:05:00+00:00",
+            "gross": 148.0,
+            "net": 146.52,
+            "bars_held": 1
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 42547,
+            "decision_close": 21753.25
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21864.0,
+            "exit_price": 21790.0,
+            "exit_idx": 42547,
+            "exit_bar_ts": "2025-02-07T15:00:00+00:00",
+            "gross": 148.0,
+            "net": 146.52,
+            "bars_held": 1
+          }
+        }
+      },
+      {
+        "date": "2025-02-12",
+        "direction": "LONG",
+        "trigger": 21701.0,
+        "stop": 21510.0,
+        "target": 21848.5,
+        "trigger_bar_ts": "2025-02-12T15:20:00+00:00",
+        "trigger_bar_open": 21672.5,
+        "trigger_bar_high": 21739.0,
+        "trigger_bar_low": 21666.75,
+        "trigger_bar_close": 21718.5,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "DAY_ONLY_FLATTEN",
+            "fill_entry": 21701.25,
+            "exit_price": 21801.75,
+            "exit_idx": 43446,
+            "exit_bar_ts": "2025-02-12T20:55:00+00:00",
+            "gross": 201.0,
+            "net": 199.52,
+            "bars_held": 67
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 43379,
+            "decision_close": 21718.5
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "DAY_ONLY_FLATTEN",
+            "fill_entry": 21701.25,
+            "exit_price": 21801.75,
+            "exit_idx": 43446,
+            "exit_bar_ts": "2025-02-12T20:55:00+00:00",
+            "gross": 201.0,
+            "net": 199.52,
+            "bars_held": 68
+          }
+        }
+      },
+      {
+        "date": "2025-02-26",
+        "direction": "LONG",
+        "trigger": 21313.0,
+        "stop": 21188.5,
+        "target": 21332.5,
+        "trigger_bar_ts": "2025-02-26T15:00:00+00:00",
+        "trigger_bar_open": 21300.75,
+        "trigger_bar_high": 21321.0,
+        "trigger_bar_low": 21259.75,
+        "trigger_bar_close": 21303.0,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21313.25,
+            "exit_price": 21332.5,
+            "exit_idx": 46072,
+            "exit_bar_ts": "2025-02-26T15:10:00+00:00",
+            "gross": 38.5,
+            "net": 37.02,
+            "bars_held": 2
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21303.25,
+            "exit_price": 21332.5,
+            "exit_idx": 46072,
+            "exit_bar_ts": "2025-02-26T15:10:00+00:00",
+            "gross": 58.5,
+            "net": 57.02,
+            "bars_held": 2
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21313.25,
+            "exit_price": 21332.5,
+            "exit_idx": 46072,
+            "exit_bar_ts": "2025-02-26T15:10:00+00:00",
+            "gross": 38.5,
+            "net": 37.02,
+            "bars_held": 3
+          }
+        }
+      },
+      {
+        "date": "2025-03-17",
+        "direction": "SHORT",
+        "trigger": 19892.0,
+        "stop": 20057.75,
+        "target": 19867.0,
+        "trigger_bar_ts": "2025-03-17T14:35:00+00:00",
+        "trigger_bar_open": 19916.0,
+        "trigger_bar_high": 19950.25,
+        "trigger_bar_low": 19880.25,
+        "trigger_bar_close": 19945.0,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19891.75,
+            "exit_price": 19867.0,
+            "exit_idx": 49670,
+            "exit_bar_ts": "2025-03-17T15:00:00+00:00",
+            "gross": 49.5,
+            "net": 48.02,
+            "bars_held": 5
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19944.75,
+            "exit_price": 19867.0,
+            "exit_idx": 49670,
+            "exit_bar_ts": "2025-03-17T15:00:00+00:00",
+            "gross": 155.5,
+            "net": 154.02,
+            "bars_held": 5
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19891.75,
+            "exit_price": 19867.0,
+            "exit_idx": 49670,
+            "exit_bar_ts": "2025-03-17T15:00:00+00:00",
+            "gross": 49.5,
+            "net": 48.02,
+            "bars_held": 6
+          }
+        }
+      },
+      {
+        "date": "2025-03-21",
+        "direction": "LONG",
+        "trigger": 19752.5,
+        "stop": 19602.5,
+        "target": 19830.0,
+        "trigger_bar_ts": "2025-03-21T14:20:00+00:00",
+        "trigger_bar_open": 19721.0,
+        "trigger_bar_high": 19771.25,
+        "trigger_bar_low": 19704.5,
+        "trigger_bar_close": 19759.75,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19752.75,
+            "exit_price": 19830.0,
+            "exit_idx": 50789,
+            "exit_bar_ts": "2025-03-21T16:15:00+00:00",
+            "gross": 154.5,
+            "net": 153.02,
+            "bars_held": 23
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19760.0,
+            "exit_price": 19830.0,
+            "exit_idx": 50789,
+            "exit_bar_ts": "2025-03-21T16:15:00+00:00",
+            "gross": 140.0,
+            "net": 138.52,
+            "bars_held": 23
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19752.75,
+            "exit_price": 19830.0,
+            "exit_idx": 50789,
+            "exit_bar_ts": "2025-03-21T16:15:00+00:00",
+            "gross": 154.5,
+            "net": 153.02,
+            "bars_held": 24
+          }
+        }
+      },
+      {
+        "date": "2025-05-01",
+        "direction": "LONG",
+        "trigger": 19998.0,
+        "stop": 19858.0,
+        "target": 20035.75,
+        "trigger_bar_ts": "2025-05-01T14:25:00+00:00",
+        "trigger_bar_open": 19978.75,
+        "trigger_bar_high": 20005.25,
+        "trigger_bar_low": 19967.25,
+        "trigger_bar_close": 19999.75,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19998.25,
+            "exit_price": 20035.75,
+            "exit_idx": 58498,
+            "exit_bar_ts": "2025-05-01T14:40:00+00:00",
+            "gross": 75.0,
+            "net": 73.52,
+            "bars_held": 3
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 20000.0,
+            "exit_price": 20035.75,
+            "exit_idx": 58498,
+            "exit_bar_ts": "2025-05-01T14:40:00+00:00",
+            "gross": 71.5,
+            "net": 70.02,
+            "bars_held": 3
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19998.25,
+            "exit_price": 20035.75,
+            "exit_idx": 58498,
+            "exit_bar_ts": "2025-05-01T14:40:00+00:00",
+            "gross": 75.0,
+            "net": 73.52,
+            "bars_held": 4
+          }
+        }
+      },
+      {
+        "date": "2025-06-04",
+        "direction": "SHORT",
+        "trigger": 21699.25,
+        "stop": 21793.5,
+        "target": 21655.25,
+        "trigger_bar_ts": "2025-06-04T14:00:00+00:00",
+        "trigger_bar_open": 21712.0,
+        "trigger_bar_high": 21741.0,
+        "trigger_bar_low": 21678.75,
+        "trigger_bar_close": 21694.5,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21699.0,
+            "exit_price": 21655.25,
+            "exit_idx": 65067,
+            "exit_bar_ts": "2025-06-04T14:05:00+00:00",
+            "gross": 87.5,
+            "net": 86.02,
+            "bars_held": 1
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21694.25,
+            "exit_price": 21655.25,
+            "exit_idx": 65067,
+            "exit_bar_ts": "2025-06-04T14:05:00+00:00",
+            "gross": 78.0,
+            "net": 76.52,
+            "bars_held": 1
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21699.0,
+            "exit_price": 21655.25,
+            "exit_idx": 65067,
+            "exit_bar_ts": "2025-06-04T14:05:00+00:00",
+            "gross": 87.5,
+            "net": 86.02,
+            "bars_held": 2
+          }
+        }
+      },
+      {
+        "date": "2025-06-05",
+        "direction": "LONG",
+        "trigger": 21840.0,
+        "stop": 21691.75,
+        "target": 21899.0,
+        "trigger_bar_ts": "2025-06-05T14:40:00+00:00",
+        "trigger_bar_open": 21792.75,
+        "trigger_bar_high": 21867.25,
+        "trigger_bar_low": 21755.75,
+        "trigger_bar_close": 21831.5,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21840.25,
+            "exit_price": 21899.0,
+            "exit_idx": 65357,
+            "exit_bar_ts": "2025-06-05T15:15:00+00:00",
+            "gross": 117.5,
+            "net": 116.02,
+            "bars_held": 7
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21831.75,
+            "exit_price": 21899.0,
+            "exit_idx": 65357,
+            "exit_bar_ts": "2025-06-05T15:15:00+00:00",
+            "gross": 134.5,
+            "net": 133.02,
+            "bars_held": 7
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21840.25,
+            "exit_price": 21899.0,
+            "exit_idx": 65357,
+            "exit_bar_ts": "2025-06-05T15:15:00+00:00",
+            "gross": 117.5,
+            "net": 116.02,
+            "bars_held": 8
+          }
+        }
+      },
+      {
+        "date": "2025-06-26",
+        "direction": "LONG",
+        "trigger": 22566.5,
+        "stop": 22476.25,
+        "target": 22585.0,
+        "trigger_bar_ts": "2025-06-26T14:00:00+00:00",
+        "trigger_bar_open": 22544.0,
+        "trigger_bar_high": 22570.0,
+        "trigger_bar_low": 22544.0,
+        "trigger_bar_close": 22564.0,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 22566.75,
+            "exit_price": 22585.0,
+            "exit_idx": 69440,
+            "exit_bar_ts": "2025-06-26T14:30:00+00:00",
+            "gross": 36.5,
+            "net": 35.02,
+            "bars_held": 6
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 22564.25,
+            "exit_price": 22585.0,
+            "exit_idx": 69440,
+            "exit_bar_ts": "2025-06-26T14:30:00+00:00",
+            "gross": 41.5,
+            "net": 40.02,
+            "bars_held": 6
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 22566.75,
+            "exit_price": 22585.0,
+            "exit_idx": 69440,
+            "exit_bar_ts": "2025-06-26T14:30:00+00:00",
+            "gross": 36.5,
+            "net": 35.02,
+            "bars_held": 7
+          }
+        }
+      },
+      {
+        "date": "2025-06-27",
+        "direction": "LONG",
+        "trigger": 22770.25,
+        "stop": 22682.0,
+        "target": 22787.5,
+        "trigger_bar_ts": "2025-06-27T14:00:00+00:00",
+        "trigger_bar_open": 22764.5,
+        "trigger_bar_high": 22800.25,
+        "trigger_bar_low": 22764.5,
+        "trigger_bar_close": 22793.75,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 22770.5,
+            "exit_price": 22787.5,
+            "exit_idx": 69711,
+            "exit_bar_ts": "2025-06-27T14:05:00+00:00",
+            "gross": 34.0,
+            "net": 32.52,
+            "bars_held": 1
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 69710,
+            "decision_close": 22793.75
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 22770.5,
+            "exit_price": 22787.5,
+            "exit_idx": 69710,
+            "exit_bar_ts": "2025-06-27T14:00:00+00:00",
+            "gross": 34.0,
+            "net": 32.52,
+            "bars_held": 1
+          }
+        }
+      },
+      {
+        "date": "2025-08-11",
+        "direction": "LONG",
+        "trigger": 23745.0,
+        "stop": 23681.0,
+        "target": 23756.25,
+        "trigger_bar_ts": "2025-08-11T14:00:00+00:00",
+        "trigger_bar_open": 23744.75,
+        "trigger_bar_high": 23748.0,
+        "trigger_bar_low": 23710.75,
+        "trigger_bar_close": 23726.25,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 23745.25,
+            "exit_price": 23756.25,
+            "exit_idx": 78175,
+            "exit_bar_ts": "2025-08-11T14:10:00+00:00",
+            "gross": 22.0,
+            "net": 20.52,
+            "bars_held": 2
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 23726.5,
+            "exit_price": 23756.25,
+            "exit_idx": 78175,
+            "exit_bar_ts": "2025-08-11T14:10:00+00:00",
+            "gross": 59.5,
+            "net": 58.02,
+            "bars_held": 2
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 23745.25,
+            "exit_price": 23756.25,
+            "exit_idx": 78175,
+            "exit_bar_ts": "2025-08-11T14:10:00+00:00",
+            "gross": 22.0,
+            "net": 20.52,
+            "bars_held": 3
+          }
+        }
+      },
+      {
+        "date": "2025-08-27",
+        "direction": "LONG",
+        "trigger": 23585.75,
+        "stop": 23488.5,
+        "target": 23621.0,
+        "trigger_bar_ts": "2025-08-27T14:15:00+00:00",
+        "trigger_bar_open": 23566.5,
+        "trigger_bar_high": 23601.75,
+        "trigger_bar_low": 23565.5,
+        "trigger_bar_close": 23598.75,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 23586.0,
+            "exit_price": 23621.0,
+            "exit_idx": 81506,
+            "exit_bar_ts": "2025-08-27T15:45:00+00:00",
+            "gross": 70.0,
+            "net": 68.52,
+            "bars_held": 18
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 81488,
+            "decision_close": 23598.75
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 23586.0,
+            "exit_price": 23621.0,
+            "exit_idx": 81506,
+            "exit_bar_ts": "2025-08-27T15:45:00+00:00",
+            "gross": 70.0,
+            "net": 68.52,
+            "bars_held": 19
+          }
+        }
+      },
+      {
+        "date": "2025-09-05",
+        "direction": "SHORT",
+        "trigger": 23821.5,
+        "stop": 23902.5,
+        "target": 23725.0,
+        "trigger_bar_ts": "2025-09-05T14:00:00+00:00",
+        "trigger_bar_open": 23852.75,
+        "trigger_bar_high": 23854.0,
+        "trigger_bar_low": 23805.25,
+        "trigger_bar_close": 23837.25,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 23821.25,
+            "exit_price": 23725.0,
+            "exit_idx": 83372,
+            "exit_bar_ts": "2025-09-05T14:15:00+00:00",
+            "gross": 192.5,
+            "net": 191.02,
+            "bars_held": 3
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 23837.0,
+            "exit_price": 23725.0,
+            "exit_idx": 83372,
+            "exit_bar_ts": "2025-09-05T14:15:00+00:00",
+            "gross": 224.0,
+            "net": 222.52,
+            "bars_held": 3
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 23821.25,
+            "exit_price": 23725.0,
+            "exit_idx": 83372,
+            "exit_bar_ts": "2025-09-05T14:15:00+00:00",
+            "gross": 192.5,
+            "net": 191.02,
+            "bars_held": 4
+          }
+        }
+      },
+      {
+        "date": "2025-09-18",
+        "direction": "LONG",
+        "trigger": 24713.5,
+        "stop": 24598.75,
+        "target": 24766.0,
+        "trigger_bar_ts": "2025-09-18T14:00:00+00:00",
+        "trigger_bar_open": 24697.0,
+        "trigger_bar_high": 24727.25,
+        "trigger_bar_low": 24694.0,
+        "trigger_bar_close": 24722.25,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 24713.75,
+            "exit_price": 24766.0,
+            "exit_idx": 85637,
+            "exit_bar_ts": "2025-09-18T14:15:00+00:00",
+            "gross": 104.5,
+            "net": 103.02,
+            "bars_held": 3
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 85634,
+            "decision_close": 24722.25
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 24713.75,
+            "exit_price": 24766.0,
+            "exit_idx": 85637,
+            "exit_bar_ts": "2025-09-18T14:15:00+00:00",
+            "gross": 104.5,
+            "net": 103.02,
+            "bars_held": 4
+          }
+        }
+      },
+      {
+        "date": "2025-09-30",
+        "direction": "LONG",
+        "trigger": 24837.0,
+        "stop": 24722.5,
+        "target": 24845.0,
+        "trigger_bar_ts": "2025-09-30T14:45:00+00:00",
+        "trigger_bar_open": 24791.0,
+        "trigger_bar_high": 24838.75,
+        "trigger_bar_low": 24790.5,
+        "trigger_bar_close": 24828.75,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 24837.25,
+            "exit_price": 24845.0,
+            "exit_idx": 87853,
+            "exit_bar_ts": "2025-09-30T14:55:00+00:00",
+            "gross": 15.5,
+            "net": 14.02,
+            "bars_held": 2
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 24829.0,
+            "exit_price": 24845.0,
+            "exit_idx": 87853,
+            "exit_bar_ts": "2025-09-30T14:55:00+00:00",
+            "gross": 32.0,
+            "net": 30.52,
+            "bars_held": 2
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 24837.25,
+            "exit_price": 24845.0,
+            "exit_idx": 87853,
+            "exit_bar_ts": "2025-09-30T14:55:00+00:00",
+            "gross": 15.5,
+            "net": 14.02,
+            "bars_held": 3
+          }
+        }
+      },
+      {
+        "date": "2025-10-10",
+        "direction": "SHORT",
+        "trigger": 25293.75,
+        "stop": 25388.0,
+        "target": 25288.5,
+        "trigger_bar_ts": "2025-10-10T14:55:00+00:00",
+        "trigger_bar_open": 25340.25,
+        "trigger_bar_high": 25346.0,
+        "trigger_bar_low": 25128.0,
+        "trigger_bar_close": 25194.0,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 25293.5,
+            "exit_price": 25288.5,
+            "exit_idx": 90062,
+            "exit_bar_ts": "2025-10-10T15:00:00+00:00",
+            "gross": 10.0,
+            "net": 8.52,
+            "bars_held": 1
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 90061,
+            "decision_close": 25194.0
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 25293.5,
+            "exit_price": 25288.5,
+            "exit_idx": 90061,
+            "exit_bar_ts": "2025-10-10T14:55:00+00:00",
+            "gross": 10.0,
+            "net": 8.52,
+            "bars_held": 1
+          }
+        }
+      },
+      {
+        "date": "2025-10-16",
+        "direction": "SHORT",
+        "trigger": 25026.0,
+        "stop": 25125.5,
+        "target": 25020.75,
+        "trigger_bar_ts": "2025-10-16T14:10:00+00:00",
+        "trigger_bar_open": 25055.0,
+        "trigger_bar_high": 25063.75,
+        "trigger_bar_low": 25013.5,
+        "trigger_bar_close": 25043.5,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "fill_entry": 25025.75,
+            "exit_price": 25125.75,
+            "exit_idx": 91161,
+            "exit_bar_ts": "2025-10-16T14:35:00+00:00",
+            "gross": -200.0,
+            "net": -201.48,
+            "bars_held": 5
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "fill_entry": 25043.25,
+            "exit_price": 25125.75,
+            "exit_idx": 91161,
+            "exit_bar_ts": "2025-10-16T14:35:00+00:00",
+            "gross": -165.0,
+            "net": -166.48,
+            "bars_held": 5
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 25025.75,
+            "exit_price": 25020.75,
+            "exit_idx": 91156,
+            "exit_bar_ts": "2025-10-16T14:10:00+00:00",
+            "gross": 10.0,
+            "net": 8.52,
+            "bars_held": 1
+          }
+        }
+      },
+      {
+        "date": "2026-03-06",
+        "direction": "LONG",
+        "trigger": 24742.5,
+        "stop": 24611.75,
+        "target": 24894.5,
+        "trigger_bar_ts": "2026-03-06T15:00:00+00:00",
+        "trigger_bar_open": 24692.0,
+        "trigger_bar_high": 24754.75,
+        "trigger_bar_low": 24687.75,
+        "trigger_bar_close": 24751.5,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 24742.75,
+            "exit_price": 24894.5,
+            "exit_idx": 118099,
+            "exit_bar_ts": "2026-03-06T16:00:00+00:00",
+            "gross": 303.5,
+            "net": 302.02,
+            "bars_held": 2
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 118097,
+            "decision_close": 24751.5
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 24742.75,
+            "exit_price": 24894.5,
+            "exit_idx": 118099,
+            "exit_bar_ts": "2026-03-06T16:00:00+00:00",
+            "gross": 303.5,
+            "net": 302.02,
+            "bars_held": 3
+          }
+        }
+      },
+      {
+        "date": "2026-04-01",
+        "direction": "LONG",
+        "trigger": 24194.5,
+        "stop": 24036.25,
+        "target": 24245.0,
+        "trigger_bar_ts": "2026-04-01T14:20:00+00:00",
+        "trigger_bar_open": 24178.75,
+        "trigger_bar_high": 24210.25,
+        "trigger_bar_low": 24155.5,
+        "trigger_bar_close": 24176.75,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 24194.75,
+            "exit_price": 24245.0,
+            "exit_idx": 123064,
+            "exit_bar_ts": "2026-04-01T14:50:00+00:00",
+            "gross": 100.5,
+            "net": 99.02,
+            "bars_held": 6
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 24177.0,
+            "exit_price": 24245.0,
+            "exit_idx": 123064,
+            "exit_bar_ts": "2026-04-01T14:50:00+00:00",
+            "gross": 136.0,
+            "net": 134.52,
+            "bars_held": 6
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 24194.75,
+            "exit_price": 24245.0,
+            "exit_idx": 123064,
+            "exit_bar_ts": "2026-04-01T14:50:00+00:00",
+            "gross": 100.5,
+            "net": 99.02,
+            "bars_held": 7
+          }
+        }
+      },
+      {
+        "date": "2026-05-12",
+        "direction": "SHORT",
+        "trigger": 29113.5,
+        "stop": 29295.75,
+        "target": 29113.25,
+        "trigger_bar_ts": "2026-05-12T14:00:00+00:00",
+        "trigger_bar_open": 29129.5,
+        "trigger_bar_high": 29162.5,
+        "trigger_bar_low": 29088.0,
+        "trigger_bar_close": 29110.75,
+        "models": {
+          "plan": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_BRACKET_INVALID_AT_FILL",
+            "exit_idx": 130965,
+            "decision_close": 29110.75
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_BRACKET_INVALID_AT_FILL",
+            "exit_idx": 130965,
+            "decision_close": 29110.75
+          },
+          "prearmed_touch": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_BRACKET_INVALID_AT_FILL",
+            "exit_idx": 130964,
+            "decision_close": 29129.5
+          }
+        }
+      },
+      {
+        "date": "2026-05-13",
+        "direction": "LONG",
+        "trigger": 29304.75,
+        "stop": 29075.25,
+        "target": 29402.25,
+        "trigger_bar_ts": "2026-05-13T14:50:00+00:00",
+        "trigger_bar_open": 29269.75,
+        "trigger_bar_high": 29315.0,
+        "trigger_bar_low": 29256.75,
+        "trigger_bar_close": 29310.25,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 29305.0,
+            "exit_price": 29402.25,
+            "exit_idx": 131269,
+            "exit_bar_ts": "2026-05-13T16:20:00+00:00",
+            "gross": 194.5,
+            "net": 193.02,
+            "bars_held": 18
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 29310.5,
+            "exit_price": 29402.25,
+            "exit_idx": 131269,
+            "exit_bar_ts": "2026-05-13T16:20:00+00:00",
+            "gross": 183.5,
+            "net": 182.02,
+            "bars_held": 18
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 29305.0,
+            "exit_price": 29402.25,
+            "exit_idx": 131269,
+            "exit_bar_ts": "2026-05-13T16:20:00+00:00",
+            "gross": 194.5,
+            "net": 193.02,
+            "bars_held": 19
+          }
+        }
+      },
+      {
+        "date": "2026-06-11",
+        "direction": "SHORT",
+        "trigger": 28927.75,
+        "stop": 29295.5,
+        "target": 28922.75,
+        "trigger_bar_ts": "2026-06-11T14:55:00+00:00",
+        "trigger_bar_open": 29029.5,
+        "trigger_bar_high": 29034.75,
+        "trigger_bar_low": 28884.0,
+        "trigger_bar_close": 28928.75,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 28927.5,
+            "exit_price": 28922.75,
+            "exit_idx": 137001,
+            "exit_bar_ts": "2026-06-11T15:00:00+00:00",
+            "gross": 9.5,
+            "net": 8.02,
+            "bars_held": 1
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 28928.5,
+            "exit_price": 28922.75,
+            "exit_idx": 137001,
+            "exit_bar_ts": "2026-06-11T15:00:00+00:00",
+            "gross": 11.5,
+            "net": 10.02,
+            "bars_held": 1
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 28927.5,
+            "exit_price": 28922.75,
+            "exit_idx": 137000,
+            "exit_bar_ts": "2026-06-11T14:55:00+00:00",
+            "gross": 9.5,
+            "net": 8.02,
+            "bars_held": 1
+          }
+        }
+      }
+    ],
+    "2tick": [
+      {
+        "date": "2024-08-02",
+        "direction": "SHORT",
+        "trigger": 18541.75,
+        "stop": 18761.25,
+        "target": 18508.0,
+        "trigger_bar_ts": "2024-08-02T14:05:00+00:00",
+        "trigger_bar_open": 18545.25,
+        "trigger_bar_high": 18549.25,
+        "trigger_bar_low": 18446.5,
+        "trigger_bar_close": 18476.25,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 18541.25,
+            "exit_price": 18508.0,
+            "exit_idx": 6209,
+            "exit_bar_ts": "2024-08-02T14:10:00+00:00",
+            "gross": 66.5,
+            "net": 65.02,
+            "bars_held": 1
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 6208,
+            "decision_close": 18476.25
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 18541.25,
+            "exit_price": 18508.0,
+            "exit_idx": 6208,
+            "exit_bar_ts": "2024-08-02T14:05:00+00:00",
+            "gross": 66.5,
+            "net": 65.02,
+            "bars_held": 1
+          }
+        }
+      },
+      {
+        "date": "2024-08-14",
+        "direction": "SHORT",
+        "trigger": 19011.0,
+        "stop": 19175.0,
+        "target": 19004.25,
+        "trigger_bar_ts": "2024-08-14T14:10:00+00:00",
+        "trigger_bar_open": 19022.75,
+        "trigger_bar_high": 19026.25,
+        "trigger_bar_low": 18965.75,
+        "trigger_bar_close": 18985.5,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19010.5,
+            "exit_price": 19004.25,
+            "exit_idx": 8418,
+            "exit_bar_ts": "2024-08-14T14:15:00+00:00",
+            "gross": 12.5,
+            "net": 11.02,
+            "bars_held": 1
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 8417,
+            "decision_close": 18985.5
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19010.5,
+            "exit_price": 19004.25,
+            "exit_idx": 8417,
+            "exit_bar_ts": "2024-08-14T14:10:00+00:00",
+            "gross": 12.5,
+            "net": 11.02,
+            "bars_held": 1
+          }
+        }
+      },
+      {
+        "date": "2024-08-22",
+        "direction": "SHORT",
+        "trigger": 19944.5,
+        "stop": 20025.75,
+        "target": 19938.0,
+        "trigger_bar_ts": "2024-08-22T14:05:00+00:00",
+        "trigger_bar_open": 19961.5,
+        "trigger_bar_high": 19972.25,
+        "trigger_bar_low": 19905.0,
+        "trigger_bar_close": 19908.25,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19944.0,
+            "exit_price": 19938.0,
+            "exit_idx": 10073,
+            "exit_bar_ts": "2024-08-22T14:10:00+00:00",
+            "gross": 12.0,
+            "net": 10.52,
+            "bars_held": 1
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 10072,
+            "decision_close": 19908.25
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19944.0,
+            "exit_price": 19938.0,
+            "exit_idx": 10072,
+            "exit_bar_ts": "2024-08-22T14:05:00+00:00",
+            "gross": 12.0,
+            "net": 10.52,
+            "bars_held": 1
+          }
+        }
+      },
+      {
+        "date": "2024-08-30",
+        "direction": "SHORT",
+        "trigger": 19513.0,
+        "stop": 19603.0,
+        "target": 19508.25,
+        "trigger_bar_ts": "2024-08-30T14:55:00+00:00",
+        "trigger_bar_open": 19540.0,
+        "trigger_bar_high": 19548.75,
+        "trigger_bar_low": 19466.5,
+        "trigger_bar_close": 19469.0,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19512.5,
+            "exit_price": 19508.25,
+            "exit_idx": 11739,
+            "exit_bar_ts": "2024-08-30T15:00:00+00:00",
+            "gross": 8.5,
+            "net": 7.02,
+            "bars_held": 1
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 11738,
+            "decision_close": 19469.0
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19512.5,
+            "exit_price": 19508.25,
+            "exit_idx": 11738,
+            "exit_bar_ts": "2024-08-30T14:55:00+00:00",
+            "gross": 8.5,
+            "net": 7.02,
+            "bars_held": 1
+          }
+        }
+      },
+      {
+        "date": "2024-09-06",
+        "direction": "SHORT",
+        "trigger": 18741.5,
+        "stop": 18972.5,
+        "target": 18723.0,
+        "trigger_bar_ts": "2024-09-06T14:00:00+00:00",
+        "trigger_bar_open": 18745.75,
+        "trigger_bar_high": 18768.0,
+        "trigger_bar_low": 18709.5,
+        "trigger_bar_close": 18754.0,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 18741.0,
+            "exit_price": 18723.0,
+            "exit_idx": 13061,
+            "exit_bar_ts": "2024-09-06T14:10:00+00:00",
+            "gross": 36.0,
+            "net": 34.52,
+            "bars_held": 2
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 18753.5,
+            "exit_price": 18723.0,
+            "exit_idx": 13061,
+            "exit_bar_ts": "2024-09-06T14:10:00+00:00",
+            "gross": 61.0,
+            "net": 59.52,
+            "bars_held": 2
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 18741.0,
+            "exit_price": 18723.0,
+            "exit_idx": 13059,
+            "exit_bar_ts": "2024-09-06T14:00:00+00:00",
+            "gross": 36.0,
+            "net": 34.52,
+            "bars_held": 1
+          }
+        }
+      },
+      {
+        "date": "2024-09-11",
+        "direction": "SHORT",
+        "trigger": 18773.25,
+        "stop": 18929.25,
+        "target": 18730.75,
+        "trigger_bar_ts": "2024-09-11T14:00:00+00:00",
+        "trigger_bar_open": 18792.0,
+        "trigger_bar_high": 18815.75,
+        "trigger_bar_low": 18741.5,
+        "trigger_bar_close": 18800.0,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 18772.75,
+            "exit_price": 18730.75,
+            "exit_idx": 13889,
+            "exit_bar_ts": "2024-09-11T14:10:00+00:00",
+            "gross": 84.0,
+            "net": 82.52,
+            "bars_held": 2
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 18799.5,
+            "exit_price": 18730.75,
+            "exit_idx": 13889,
+            "exit_bar_ts": "2024-09-11T14:10:00+00:00",
+            "gross": 137.5,
+            "net": 136.02,
+            "bars_held": 2
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 18772.75,
+            "exit_price": 18730.75,
+            "exit_idx": 13889,
+            "exit_bar_ts": "2024-09-11T14:10:00+00:00",
+            "gross": 84.0,
+            "net": 82.52,
+            "bars_held": 3
+          }
+        }
+      },
+      {
+        "date": "2024-09-12",
+        "direction": "LONG",
+        "trigger": 19523.0,
+        "stop": 19416.25,
+        "target": 19569.75,
+        "trigger_bar_ts": "2024-09-12T14:10:00+00:00",
+        "trigger_bar_open": 19482.0,
+        "trigger_bar_high": 19555.0,
+        "trigger_bar_low": 19475.0,
+        "trigger_bar_close": 19546.25,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19523.5,
+            "exit_price": 19569.75,
+            "exit_idx": 14166,
+            "exit_bar_ts": "2024-09-12T14:15:00+00:00",
+            "gross": 92.5,
+            "net": 91.02,
+            "bars_held": 1
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 14165,
+            "decision_close": 19546.25
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19523.5,
+            "exit_price": 19569.75,
+            "exit_idx": 14166,
+            "exit_bar_ts": "2024-09-12T14:15:00+00:00",
+            "gross": 92.5,
+            "net": 91.02,
+            "bars_held": 2
+          }
+        }
+      },
+      {
+        "date": "2024-10-10",
+        "direction": "LONG",
+        "trigger": 20390.0,
+        "stop": 20301.25,
+        "target": 20472.0,
+        "trigger_bar_ts": "2024-10-10T14:05:00+00:00",
+        "trigger_bar_open": 20374.75,
+        "trigger_bar_high": 20400.0,
+        "trigger_bar_low": 20356.0,
+        "trigger_bar_close": 20385.5,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 20390.5,
+            "exit_price": 20472.0,
+            "exit_idx": 19706,
+            "exit_bar_ts": "2024-10-10T15:55:00+00:00",
+            "gross": 163.0,
+            "net": 161.52,
+            "bars_held": 22
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 20386.0,
+            "exit_price": 20472.0,
+            "exit_idx": 19706,
+            "exit_bar_ts": "2024-10-10T15:55:00+00:00",
+            "gross": 172.0,
+            "net": 170.52,
+            "bars_held": 22
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 20390.5,
+            "exit_price": 20472.0,
+            "exit_idx": 19706,
+            "exit_bar_ts": "2024-10-10T15:55:00+00:00",
+            "gross": 163.0,
+            "net": 161.52,
+            "bars_held": 23
+          }
+        }
+      },
+      {
+        "date": "2024-10-11",
+        "direction": "LONG",
+        "trigger": 20379.75,
+        "stop": 20313.25,
+        "target": 20416.25,
+        "trigger_bar_ts": "2024-10-11T14:00:00+00:00",
+        "trigger_bar_open": 20359.25,
+        "trigger_bar_high": 20380.5,
+        "trigger_bar_low": 20323.5,
+        "trigger_bar_close": 20361.5,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 20380.25,
+            "exit_price": 20416.25,
+            "exit_idx": 19961,
+            "exit_bar_ts": "2024-10-11T14:10:00+00:00",
+            "gross": 72.0,
+            "net": 70.52,
+            "bars_held": 2
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 20362.0,
+            "exit_price": 20416.25,
+            "exit_idx": 19961,
+            "exit_bar_ts": "2024-10-11T14:10:00+00:00",
+            "gross": 108.5,
+            "net": 107.02,
+            "bars_held": 2
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 20380.25,
+            "exit_price": 20416.25,
+            "exit_idx": 19961,
+            "exit_bar_ts": "2024-10-11T14:10:00+00:00",
+            "gross": 72.0,
+            "net": 70.52,
+            "bars_held": 3
+          }
+        }
+      },
+      {
+        "date": "2024-11-26",
+        "direction": "SHORT",
+        "trigger": 20924.25,
+        "stop": 21025.0,
+        "target": 20920.0,
+        "trigger_bar_ts": "2024-11-26T15:15:00+00:00",
+        "trigger_bar_open": 20969.0,
+        "trigger_bar_high": 20970.0,
+        "trigger_bar_low": 20919.0,
+        "trigger_bar_close": 20924.5,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 20923.75,
+            "exit_price": 20920.0,
+            "exit_idx": 28795,
+            "exit_bar_ts": "2024-11-26T15:20:00+00:00",
+            "gross": 7.5,
+            "net": 6.02,
+            "bars_held": 1
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 20924.0,
+            "exit_price": 20920.0,
+            "exit_idx": 28795,
+            "exit_bar_ts": "2024-11-26T15:20:00+00:00",
+            "gross": 8.0,
+            "net": 6.52,
+            "bars_held": 1
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 20923.75,
+            "exit_price": 20920.0,
+            "exit_idx": 28794,
+            "exit_bar_ts": "2024-11-26T15:15:00+00:00",
+            "gross": 7.5,
+            "net": 6.02,
+            "bars_held": 1
+          }
+        }
+      },
+      {
+        "date": "2024-12-23",
+        "direction": "SHORT",
+        "trigger": 21552.5,
+        "stop": 21675.5,
+        "target": 21543.75,
+        "trigger_bar_ts": "2024-12-23T15:05:00+00:00",
+        "trigger_bar_open": 21586.5,
+        "trigger_bar_high": 21596.25,
+        "trigger_bar_low": 21513.25,
+        "trigger_bar_close": 21514.75,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21552.0,
+            "exit_price": 21543.75,
+            "exit_idx": 33942,
+            "exit_bar_ts": "2024-12-23T15:10:00+00:00",
+            "gross": 16.5,
+            "net": 15.02,
+            "bars_held": 1
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 33941,
+            "decision_close": 21514.75
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21552.0,
+            "exit_price": 21543.75,
+            "exit_idx": 33941,
+            "exit_bar_ts": "2024-12-23T15:05:00+00:00",
+            "gross": 16.5,
+            "net": 15.02,
+            "bars_held": 1
+          }
+        }
+      },
+      {
+        "date": "2025-01-20",
+        "direction": "SHORT",
+        "trigger": 21658.5,
+        "stop": 21780.0,
+        "target": 21538.0,
+        "trigger_bar_ts": "2025-01-20T15:40:00+00:00",
+        "trigger_bar_open": 21687.0,
+        "trigger_bar_high": 21697.0,
+        "trigger_bar_low": 21641.0,
+        "trigger_bar_close": 21657.5,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21658.0,
+            "exit_price": 21538.0,
+            "exit_idx": 38816,
+            "exit_bar_ts": "2025-01-21T00:50:00+00:00",
+            "gross": 240.0,
+            "net": 238.52,
+            "bars_held": 50
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21657.0,
+            "exit_price": 21538.0,
+            "exit_idx": 38816,
+            "exit_bar_ts": "2025-01-21T00:50:00+00:00",
+            "gross": 238.0,
+            "net": 236.52,
+            "bars_held": 50
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21658.0,
+            "exit_price": 21538.0,
+            "exit_idx": 38816,
+            "exit_bar_ts": "2025-01-21T00:50:00+00:00",
+            "gross": 240.0,
+            "net": 238.52,
+            "bars_held": 51
+          }
+        }
+      },
+      {
+        "date": "2025-02-07",
+        "direction": "SHORT",
+        "trigger": 21864.25,
+        "stop": 21967.75,
+        "target": 21790.0,
+        "trigger_bar_ts": "2025-02-07T15:00:00+00:00",
+        "trigger_bar_open": 21905.25,
+        "trigger_bar_high": 21905.5,
+        "trigger_bar_low": 21732.25,
+        "trigger_bar_close": 21753.25,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21863.75,
+            "exit_price": 21790.0,
+            "exit_idx": 42548,
+            "exit_bar_ts": "2025-02-07T15:05:00+00:00",
+            "gross": 147.5,
+            "net": 146.02,
+            "bars_held": 1
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 42547,
+            "decision_close": 21753.25
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21863.75,
+            "exit_price": 21790.0,
+            "exit_idx": 42547,
+            "exit_bar_ts": "2025-02-07T15:00:00+00:00",
+            "gross": 147.5,
+            "net": 146.02,
+            "bars_held": 1
+          }
+        }
+      },
+      {
+        "date": "2025-02-12",
+        "direction": "LONG",
+        "trigger": 21701.0,
+        "stop": 21510.0,
+        "target": 21848.5,
+        "trigger_bar_ts": "2025-02-12T15:20:00+00:00",
+        "trigger_bar_open": 21672.5,
+        "trigger_bar_high": 21739.0,
+        "trigger_bar_low": 21666.75,
+        "trigger_bar_close": 21718.5,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "DAY_ONLY_FLATTEN",
+            "fill_entry": 21701.5,
+            "exit_price": 21801.75,
+            "exit_idx": 43446,
+            "exit_bar_ts": "2025-02-12T20:55:00+00:00",
+            "gross": 200.5,
+            "net": 199.02,
+            "bars_held": 67
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 43379,
+            "decision_close": 21718.5
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "DAY_ONLY_FLATTEN",
+            "fill_entry": 21701.5,
+            "exit_price": 21801.75,
+            "exit_idx": 43446,
+            "exit_bar_ts": "2025-02-12T20:55:00+00:00",
+            "gross": 200.5,
+            "net": 199.02,
+            "bars_held": 68
+          }
+        }
+      },
+      {
+        "date": "2025-02-26",
+        "direction": "LONG",
+        "trigger": 21313.0,
+        "stop": 21188.5,
+        "target": 21332.5,
+        "trigger_bar_ts": "2025-02-26T15:00:00+00:00",
+        "trigger_bar_open": 21300.75,
+        "trigger_bar_high": 21321.0,
+        "trigger_bar_low": 21259.75,
+        "trigger_bar_close": 21303.0,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21313.5,
+            "exit_price": 21332.5,
+            "exit_idx": 46072,
+            "exit_bar_ts": "2025-02-26T15:10:00+00:00",
+            "gross": 38.0,
+            "net": 36.52,
+            "bars_held": 2
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21303.5,
+            "exit_price": 21332.5,
+            "exit_idx": 46072,
+            "exit_bar_ts": "2025-02-26T15:10:00+00:00",
+            "gross": 58.0,
+            "net": 56.52,
+            "bars_held": 2
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21313.5,
+            "exit_price": 21332.5,
+            "exit_idx": 46072,
+            "exit_bar_ts": "2025-02-26T15:10:00+00:00",
+            "gross": 38.0,
+            "net": 36.52,
+            "bars_held": 3
+          }
+        }
+      },
+      {
+        "date": "2025-03-17",
+        "direction": "SHORT",
+        "trigger": 19892.0,
+        "stop": 20057.75,
+        "target": 19867.0,
+        "trigger_bar_ts": "2025-03-17T14:35:00+00:00",
+        "trigger_bar_open": 19916.0,
+        "trigger_bar_high": 19950.25,
+        "trigger_bar_low": 19880.25,
+        "trigger_bar_close": 19945.0,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19891.5,
+            "exit_price": 19867.0,
+            "exit_idx": 49670,
+            "exit_bar_ts": "2025-03-17T15:00:00+00:00",
+            "gross": 49.0,
+            "net": 47.52,
+            "bars_held": 5
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19944.5,
+            "exit_price": 19867.0,
+            "exit_idx": 49670,
+            "exit_bar_ts": "2025-03-17T15:00:00+00:00",
+            "gross": 155.0,
+            "net": 153.52,
+            "bars_held": 5
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19891.5,
+            "exit_price": 19867.0,
+            "exit_idx": 49670,
+            "exit_bar_ts": "2025-03-17T15:00:00+00:00",
+            "gross": 49.0,
+            "net": 47.52,
+            "bars_held": 6
+          }
+        }
+      },
+      {
+        "date": "2025-03-21",
+        "direction": "LONG",
+        "trigger": 19752.5,
+        "stop": 19602.5,
+        "target": 19830.0,
+        "trigger_bar_ts": "2025-03-21T14:20:00+00:00",
+        "trigger_bar_open": 19721.0,
+        "trigger_bar_high": 19771.25,
+        "trigger_bar_low": 19704.5,
+        "trigger_bar_close": 19759.75,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19753.0,
+            "exit_price": 19830.0,
+            "exit_idx": 50789,
+            "exit_bar_ts": "2025-03-21T16:15:00+00:00",
+            "gross": 154.0,
+            "net": 152.52,
+            "bars_held": 23
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19760.25,
+            "exit_price": 19830.0,
+            "exit_idx": 50789,
+            "exit_bar_ts": "2025-03-21T16:15:00+00:00",
+            "gross": 139.5,
+            "net": 138.02,
+            "bars_held": 23
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19753.0,
+            "exit_price": 19830.0,
+            "exit_idx": 50789,
+            "exit_bar_ts": "2025-03-21T16:15:00+00:00",
+            "gross": 154.0,
+            "net": 152.52,
+            "bars_held": 24
+          }
+        }
+      },
+      {
+        "date": "2025-05-01",
+        "direction": "LONG",
+        "trigger": 19998.0,
+        "stop": 19858.0,
+        "target": 20035.75,
+        "trigger_bar_ts": "2025-05-01T14:25:00+00:00",
+        "trigger_bar_open": 19978.75,
+        "trigger_bar_high": 20005.25,
+        "trigger_bar_low": 19967.25,
+        "trigger_bar_close": 19999.75,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19998.5,
+            "exit_price": 20035.75,
+            "exit_idx": 58498,
+            "exit_bar_ts": "2025-05-01T14:40:00+00:00",
+            "gross": 74.5,
+            "net": 73.02,
+            "bars_held": 3
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 20000.25,
+            "exit_price": 20035.75,
+            "exit_idx": 58498,
+            "exit_bar_ts": "2025-05-01T14:40:00+00:00",
+            "gross": 71.0,
+            "net": 69.52,
+            "bars_held": 3
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19998.5,
+            "exit_price": 20035.75,
+            "exit_idx": 58498,
+            "exit_bar_ts": "2025-05-01T14:40:00+00:00",
+            "gross": 74.5,
+            "net": 73.02,
+            "bars_held": 4
+          }
+        }
+      },
+      {
+        "date": "2025-06-04",
+        "direction": "SHORT",
+        "trigger": 21699.25,
+        "stop": 21793.5,
+        "target": 21655.25,
+        "trigger_bar_ts": "2025-06-04T14:00:00+00:00",
+        "trigger_bar_open": 21712.0,
+        "trigger_bar_high": 21741.0,
+        "trigger_bar_low": 21678.75,
+        "trigger_bar_close": 21694.5,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21698.75,
+            "exit_price": 21655.25,
+            "exit_idx": 65067,
+            "exit_bar_ts": "2025-06-04T14:05:00+00:00",
+            "gross": 87.0,
+            "net": 85.52,
+            "bars_held": 1
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21694.0,
+            "exit_price": 21655.25,
+            "exit_idx": 65067,
+            "exit_bar_ts": "2025-06-04T14:05:00+00:00",
+            "gross": 77.5,
+            "net": 76.02,
+            "bars_held": 1
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21698.75,
+            "exit_price": 21655.25,
+            "exit_idx": 65067,
+            "exit_bar_ts": "2025-06-04T14:05:00+00:00",
+            "gross": 87.0,
+            "net": 85.52,
+            "bars_held": 2
+          }
+        }
+      },
+      {
+        "date": "2025-06-05",
+        "direction": "LONG",
+        "trigger": 21840.0,
+        "stop": 21691.75,
+        "target": 21899.0,
+        "trigger_bar_ts": "2025-06-05T14:40:00+00:00",
+        "trigger_bar_open": 21792.75,
+        "trigger_bar_high": 21867.25,
+        "trigger_bar_low": 21755.75,
+        "trigger_bar_close": 21831.5,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21840.5,
+            "exit_price": 21899.0,
+            "exit_idx": 65357,
+            "exit_bar_ts": "2025-06-05T15:15:00+00:00",
+            "gross": 117.0,
+            "net": 115.52,
+            "bars_held": 7
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21832.0,
+            "exit_price": 21899.0,
+            "exit_idx": 65357,
+            "exit_bar_ts": "2025-06-05T15:15:00+00:00",
+            "gross": 134.0,
+            "net": 132.52,
+            "bars_held": 7
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21840.5,
+            "exit_price": 21899.0,
+            "exit_idx": 65357,
+            "exit_bar_ts": "2025-06-05T15:15:00+00:00",
+            "gross": 117.0,
+            "net": 115.52,
+            "bars_held": 8
+          }
+        }
+      },
+      {
+        "date": "2025-06-26",
+        "direction": "LONG",
+        "trigger": 22566.5,
+        "stop": 22476.25,
+        "target": 22585.0,
+        "trigger_bar_ts": "2025-06-26T14:00:00+00:00",
+        "trigger_bar_open": 22544.0,
+        "trigger_bar_high": 22570.0,
+        "trigger_bar_low": 22544.0,
+        "trigger_bar_close": 22564.0,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 22567.0,
+            "exit_price": 22585.0,
+            "exit_idx": 69440,
+            "exit_bar_ts": "2025-06-26T14:30:00+00:00",
+            "gross": 36.0,
+            "net": 34.52,
+            "bars_held": 6
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 22564.5,
+            "exit_price": 22585.0,
+            "exit_idx": 69440,
+            "exit_bar_ts": "2025-06-26T14:30:00+00:00",
+            "gross": 41.0,
+            "net": 39.52,
+            "bars_held": 6
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 22567.0,
+            "exit_price": 22585.0,
+            "exit_idx": 69440,
+            "exit_bar_ts": "2025-06-26T14:30:00+00:00",
+            "gross": 36.0,
+            "net": 34.52,
+            "bars_held": 7
+          }
+        }
+      },
+      {
+        "date": "2025-06-27",
+        "direction": "LONG",
+        "trigger": 22770.25,
+        "stop": 22682.0,
+        "target": 22787.5,
+        "trigger_bar_ts": "2025-06-27T14:00:00+00:00",
+        "trigger_bar_open": 22764.5,
+        "trigger_bar_high": 22800.25,
+        "trigger_bar_low": 22764.5,
+        "trigger_bar_close": 22793.75,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 22770.75,
+            "exit_price": 22787.5,
+            "exit_idx": 69711,
+            "exit_bar_ts": "2025-06-27T14:05:00+00:00",
+            "gross": 33.5,
+            "net": 32.02,
+            "bars_held": 1
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 69710,
+            "decision_close": 22793.75
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 22770.75,
+            "exit_price": 22787.5,
+            "exit_idx": 69710,
+            "exit_bar_ts": "2025-06-27T14:00:00+00:00",
+            "gross": 33.5,
+            "net": 32.02,
+            "bars_held": 1
+          }
+        }
+      },
+      {
+        "date": "2025-08-11",
+        "direction": "LONG",
+        "trigger": 23745.0,
+        "stop": 23681.0,
+        "target": 23756.25,
+        "trigger_bar_ts": "2025-08-11T14:00:00+00:00",
+        "trigger_bar_open": 23744.75,
+        "trigger_bar_high": 23748.0,
+        "trigger_bar_low": 23710.75,
+        "trigger_bar_close": 23726.25,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 23745.5,
+            "exit_price": 23756.25,
+            "exit_idx": 78175,
+            "exit_bar_ts": "2025-08-11T14:10:00+00:00",
+            "gross": 21.5,
+            "net": 20.02,
+            "bars_held": 2
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 23726.75,
+            "exit_price": 23756.25,
+            "exit_idx": 78175,
+            "exit_bar_ts": "2025-08-11T14:10:00+00:00",
+            "gross": 59.0,
+            "net": 57.52,
+            "bars_held": 2
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 23745.5,
+            "exit_price": 23756.25,
+            "exit_idx": 78175,
+            "exit_bar_ts": "2025-08-11T14:10:00+00:00",
+            "gross": 21.5,
+            "net": 20.02,
+            "bars_held": 3
+          }
+        }
+      },
+      {
+        "date": "2025-08-27",
+        "direction": "LONG",
+        "trigger": 23585.75,
+        "stop": 23488.5,
+        "target": 23621.0,
+        "trigger_bar_ts": "2025-08-27T14:15:00+00:00",
+        "trigger_bar_open": 23566.5,
+        "trigger_bar_high": 23601.75,
+        "trigger_bar_low": 23565.5,
+        "trigger_bar_close": 23598.75,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 23586.25,
+            "exit_price": 23621.0,
+            "exit_idx": 81506,
+            "exit_bar_ts": "2025-08-27T15:45:00+00:00",
+            "gross": 69.5,
+            "net": 68.02,
+            "bars_held": 18
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 81488,
+            "decision_close": 23598.75
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 23586.25,
+            "exit_price": 23621.0,
+            "exit_idx": 81506,
+            "exit_bar_ts": "2025-08-27T15:45:00+00:00",
+            "gross": 69.5,
+            "net": 68.02,
+            "bars_held": 19
+          }
+        }
+      },
+      {
+        "date": "2025-09-05",
+        "direction": "SHORT",
+        "trigger": 23821.5,
+        "stop": 23902.5,
+        "target": 23725.0,
+        "trigger_bar_ts": "2025-09-05T14:00:00+00:00",
+        "trigger_bar_open": 23852.75,
+        "trigger_bar_high": 23854.0,
+        "trigger_bar_low": 23805.25,
+        "trigger_bar_close": 23837.25,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 23821.0,
+            "exit_price": 23725.0,
+            "exit_idx": 83372,
+            "exit_bar_ts": "2025-09-05T14:15:00+00:00",
+            "gross": 192.0,
+            "net": 190.52,
+            "bars_held": 3
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 23836.75,
+            "exit_price": 23725.0,
+            "exit_idx": 83372,
+            "exit_bar_ts": "2025-09-05T14:15:00+00:00",
+            "gross": 223.5,
+            "net": 222.02,
+            "bars_held": 3
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 23821.0,
+            "exit_price": 23725.0,
+            "exit_idx": 83372,
+            "exit_bar_ts": "2025-09-05T14:15:00+00:00",
+            "gross": 192.0,
+            "net": 190.52,
+            "bars_held": 4
+          }
+        }
+      },
+      {
+        "date": "2025-09-18",
+        "direction": "LONG",
+        "trigger": 24713.5,
+        "stop": 24598.75,
+        "target": 24766.0,
+        "trigger_bar_ts": "2025-09-18T14:00:00+00:00",
+        "trigger_bar_open": 24697.0,
+        "trigger_bar_high": 24727.25,
+        "trigger_bar_low": 24694.0,
+        "trigger_bar_close": 24722.25,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 24714.0,
+            "exit_price": 24766.0,
+            "exit_idx": 85637,
+            "exit_bar_ts": "2025-09-18T14:15:00+00:00",
+            "gross": 104.0,
+            "net": 102.52,
+            "bars_held": 3
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 85634,
+            "decision_close": 24722.25
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 24714.0,
+            "exit_price": 24766.0,
+            "exit_idx": 85637,
+            "exit_bar_ts": "2025-09-18T14:15:00+00:00",
+            "gross": 104.0,
+            "net": 102.52,
+            "bars_held": 4
+          }
+        }
+      },
+      {
+        "date": "2025-09-30",
+        "direction": "LONG",
+        "trigger": 24837.0,
+        "stop": 24722.5,
+        "target": 24845.0,
+        "trigger_bar_ts": "2025-09-30T14:45:00+00:00",
+        "trigger_bar_open": 24791.0,
+        "trigger_bar_high": 24838.75,
+        "trigger_bar_low": 24790.5,
+        "trigger_bar_close": 24828.75,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 24837.5,
+            "exit_price": 24845.0,
+            "exit_idx": 87853,
+            "exit_bar_ts": "2025-09-30T14:55:00+00:00",
+            "gross": 15.0,
+            "net": 13.52,
+            "bars_held": 2
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 24829.25,
+            "exit_price": 24845.0,
+            "exit_idx": 87853,
+            "exit_bar_ts": "2025-09-30T14:55:00+00:00",
+            "gross": 31.5,
+            "net": 30.02,
+            "bars_held": 2
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 24837.5,
+            "exit_price": 24845.0,
+            "exit_idx": 87853,
+            "exit_bar_ts": "2025-09-30T14:55:00+00:00",
+            "gross": 15.0,
+            "net": 13.52,
+            "bars_held": 3
+          }
+        }
+      },
+      {
+        "date": "2025-10-10",
+        "direction": "SHORT",
+        "trigger": 25293.75,
+        "stop": 25388.0,
+        "target": 25288.5,
+        "trigger_bar_ts": "2025-10-10T14:55:00+00:00",
+        "trigger_bar_open": 25340.25,
+        "trigger_bar_high": 25346.0,
+        "trigger_bar_low": 25128.0,
+        "trigger_bar_close": 25194.0,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 25293.25,
+            "exit_price": 25288.5,
+            "exit_idx": 90062,
+            "exit_bar_ts": "2025-10-10T15:00:00+00:00",
+            "gross": 9.5,
+            "net": 8.02,
+            "bars_held": 1
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 90061,
+            "decision_close": 25194.0
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 25293.25,
+            "exit_price": 25288.5,
+            "exit_idx": 90061,
+            "exit_bar_ts": "2025-10-10T14:55:00+00:00",
+            "gross": 9.5,
+            "net": 8.02,
+            "bars_held": 1
+          }
+        }
+      },
+      {
+        "date": "2025-10-16",
+        "direction": "SHORT",
+        "trigger": 25026.0,
+        "stop": 25125.5,
+        "target": 25020.75,
+        "trigger_bar_ts": "2025-10-16T14:10:00+00:00",
+        "trigger_bar_open": 25055.0,
+        "trigger_bar_high": 25063.75,
+        "trigger_bar_low": 25013.5,
+        "trigger_bar_close": 25043.5,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "fill_entry": 25025.5,
+            "exit_price": 25126.0,
+            "exit_idx": 91161,
+            "exit_bar_ts": "2025-10-16T14:35:00+00:00",
+            "gross": -201.0,
+            "net": -202.48,
+            "bars_held": 5
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "fill_entry": 25043.0,
+            "exit_price": 25126.0,
+            "exit_idx": 91161,
+            "exit_bar_ts": "2025-10-16T14:35:00+00:00",
+            "gross": -166.0,
+            "net": -167.48,
+            "bars_held": 5
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 25025.5,
+            "exit_price": 25020.75,
+            "exit_idx": 91156,
+            "exit_bar_ts": "2025-10-16T14:10:00+00:00",
+            "gross": 9.5,
+            "net": 8.02,
+            "bars_held": 1
+          }
+        }
+      },
+      {
+        "date": "2026-03-06",
+        "direction": "LONG",
+        "trigger": 24742.5,
+        "stop": 24611.75,
+        "target": 24894.5,
+        "trigger_bar_ts": "2026-03-06T15:00:00+00:00",
+        "trigger_bar_open": 24692.0,
+        "trigger_bar_high": 24754.75,
+        "trigger_bar_low": 24687.75,
+        "trigger_bar_close": 24751.5,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 24743.0,
+            "exit_price": 24894.5,
+            "exit_idx": 118099,
+            "exit_bar_ts": "2026-03-06T16:00:00+00:00",
+            "gross": 303.0,
+            "net": 301.52,
+            "bars_held": 2
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 118097,
+            "decision_close": 24751.5
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 24743.0,
+            "exit_price": 24894.5,
+            "exit_idx": 118099,
+            "exit_bar_ts": "2026-03-06T16:00:00+00:00",
+            "gross": 303.0,
+            "net": 301.52,
+            "bars_held": 3
+          }
+        }
+      },
+      {
+        "date": "2026-04-01",
+        "direction": "LONG",
+        "trigger": 24194.5,
+        "stop": 24036.25,
+        "target": 24245.0,
+        "trigger_bar_ts": "2026-04-01T14:20:00+00:00",
+        "trigger_bar_open": 24178.75,
+        "trigger_bar_high": 24210.25,
+        "trigger_bar_low": 24155.5,
+        "trigger_bar_close": 24176.75,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 24195.0,
+            "exit_price": 24245.0,
+            "exit_idx": 123064,
+            "exit_bar_ts": "2026-04-01T14:50:00+00:00",
+            "gross": 100.0,
+            "net": 98.52,
+            "bars_held": 6
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 24177.25,
+            "exit_price": 24245.0,
+            "exit_idx": 123064,
+            "exit_bar_ts": "2026-04-01T14:50:00+00:00",
+            "gross": 135.5,
+            "net": 134.02,
+            "bars_held": 6
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 24195.0,
+            "exit_price": 24245.0,
+            "exit_idx": 123064,
+            "exit_bar_ts": "2026-04-01T14:50:00+00:00",
+            "gross": 100.0,
+            "net": 98.52,
+            "bars_held": 7
+          }
+        }
+      },
+      {
+        "date": "2026-05-12",
+        "direction": "SHORT",
+        "trigger": 29113.5,
+        "stop": 29295.75,
+        "target": 29113.25,
+        "trigger_bar_ts": "2026-05-12T14:00:00+00:00",
+        "trigger_bar_open": 29129.5,
+        "trigger_bar_high": 29162.5,
+        "trigger_bar_low": 29088.0,
+        "trigger_bar_close": 29110.75,
+        "models": {
+          "plan": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_BRACKET_INVALID_AT_FILL",
+            "exit_idx": 130965,
+            "decision_close": 29110.75
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_BRACKET_INVALID_AT_FILL",
+            "exit_idx": 130965,
+            "decision_close": 29110.75
+          },
+          "prearmed_touch": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_BRACKET_INVALID_AT_FILL",
+            "exit_idx": 130964,
+            "decision_close": 29129.5
+          }
+        }
+      },
+      {
+        "date": "2026-05-13",
+        "direction": "LONG",
+        "trigger": 29304.75,
+        "stop": 29075.25,
+        "target": 29402.25,
+        "trigger_bar_ts": "2026-05-13T14:50:00+00:00",
+        "trigger_bar_open": 29269.75,
+        "trigger_bar_high": 29315.0,
+        "trigger_bar_low": 29256.75,
+        "trigger_bar_close": 29310.25,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 29305.25,
+            "exit_price": 29402.25,
+            "exit_idx": 131269,
+            "exit_bar_ts": "2026-05-13T16:20:00+00:00",
+            "gross": 194.0,
+            "net": 192.52,
+            "bars_held": 18
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 29310.75,
+            "exit_price": 29402.25,
+            "exit_idx": 131269,
+            "exit_bar_ts": "2026-05-13T16:20:00+00:00",
+            "gross": 183.0,
+            "net": 181.52,
+            "bars_held": 18
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 29305.25,
+            "exit_price": 29402.25,
+            "exit_idx": 131269,
+            "exit_bar_ts": "2026-05-13T16:20:00+00:00",
+            "gross": 194.0,
+            "net": 192.52,
+            "bars_held": 19
+          }
+        }
+      },
+      {
+        "date": "2026-06-11",
+        "direction": "SHORT",
+        "trigger": 28927.75,
+        "stop": 29295.5,
+        "target": 28922.75,
+        "trigger_bar_ts": "2026-06-11T14:55:00+00:00",
+        "trigger_bar_open": 29029.5,
+        "trigger_bar_high": 29034.75,
+        "trigger_bar_low": 28884.0,
+        "trigger_bar_close": 28928.75,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 28927.25,
+            "exit_price": 28922.75,
+            "exit_idx": 137001,
+            "exit_bar_ts": "2026-06-11T15:00:00+00:00",
+            "gross": 9.0,
+            "net": 7.52,
+            "bars_held": 1
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 28928.25,
+            "exit_price": 28922.75,
+            "exit_idx": 137001,
+            "exit_bar_ts": "2026-06-11T15:00:00+00:00",
+            "gross": 11.0,
+            "net": 9.52,
+            "bars_held": 1
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 28927.25,
+            "exit_price": 28922.75,
+            "exit_idx": 137000,
+            "exit_bar_ts": "2026-06-11T14:55:00+00:00",
+            "gross": 9.0,
+            "net": 7.52,
+            "bars_held": 1
+          }
+        }
+      }
+    ],
+    "3tick": [
+      {
+        "date": "2024-08-02",
+        "direction": "SHORT",
+        "trigger": 18541.75,
+        "stop": 18761.25,
+        "target": 18508.0,
+        "trigger_bar_ts": "2024-08-02T14:05:00+00:00",
+        "trigger_bar_open": 18545.25,
+        "trigger_bar_high": 18549.25,
+        "trigger_bar_low": 18446.5,
+        "trigger_bar_close": 18476.25,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 18541.0,
+            "exit_price": 18508.0,
+            "exit_idx": 6209,
+            "exit_bar_ts": "2024-08-02T14:10:00+00:00",
+            "gross": 66.0,
+            "net": 64.52,
+            "bars_held": 1
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 6208,
+            "decision_close": 18476.25
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 18541.0,
+            "exit_price": 18508.0,
+            "exit_idx": 6208,
+            "exit_bar_ts": "2024-08-02T14:05:00+00:00",
+            "gross": 66.0,
+            "net": 64.52,
+            "bars_held": 1
+          }
+        }
+      },
+      {
+        "date": "2024-08-14",
+        "direction": "SHORT",
+        "trigger": 19011.0,
+        "stop": 19175.0,
+        "target": 19004.25,
+        "trigger_bar_ts": "2024-08-14T14:10:00+00:00",
+        "trigger_bar_open": 19022.75,
+        "trigger_bar_high": 19026.25,
+        "trigger_bar_low": 18965.75,
+        "trigger_bar_close": 18985.5,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19010.25,
+            "exit_price": 19004.25,
+            "exit_idx": 8418,
+            "exit_bar_ts": "2024-08-14T14:15:00+00:00",
+            "gross": 12.0,
+            "net": 10.52,
+            "bars_held": 1
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 8417,
+            "decision_close": 18985.5
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19010.25,
+            "exit_price": 19004.25,
+            "exit_idx": 8417,
+            "exit_bar_ts": "2024-08-14T14:10:00+00:00",
+            "gross": 12.0,
+            "net": 10.52,
+            "bars_held": 1
+          }
+        }
+      },
+      {
+        "date": "2024-08-22",
+        "direction": "SHORT",
+        "trigger": 19944.5,
+        "stop": 20025.75,
+        "target": 19938.0,
+        "trigger_bar_ts": "2024-08-22T14:05:00+00:00",
+        "trigger_bar_open": 19961.5,
+        "trigger_bar_high": 19972.25,
+        "trigger_bar_low": 19905.0,
+        "trigger_bar_close": 19908.25,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19943.75,
+            "exit_price": 19938.0,
+            "exit_idx": 10073,
+            "exit_bar_ts": "2024-08-22T14:10:00+00:00",
+            "gross": 11.5,
+            "net": 10.02,
+            "bars_held": 1
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 10072,
+            "decision_close": 19908.25
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19943.75,
+            "exit_price": 19938.0,
+            "exit_idx": 10072,
+            "exit_bar_ts": "2024-08-22T14:05:00+00:00",
+            "gross": 11.5,
+            "net": 10.02,
+            "bars_held": 1
+          }
+        }
+      },
+      {
+        "date": "2024-08-30",
+        "direction": "SHORT",
+        "trigger": 19513.0,
+        "stop": 19603.0,
+        "target": 19508.25,
+        "trigger_bar_ts": "2024-08-30T14:55:00+00:00",
+        "trigger_bar_open": 19540.0,
+        "trigger_bar_high": 19548.75,
+        "trigger_bar_low": 19466.5,
+        "trigger_bar_close": 19469.0,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19512.25,
+            "exit_price": 19508.25,
+            "exit_idx": 11739,
+            "exit_bar_ts": "2024-08-30T15:00:00+00:00",
+            "gross": 8.0,
+            "net": 6.52,
+            "bars_held": 1
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 11738,
+            "decision_close": 19469.0
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19512.25,
+            "exit_price": 19508.25,
+            "exit_idx": 11738,
+            "exit_bar_ts": "2024-08-30T14:55:00+00:00",
+            "gross": 8.0,
+            "net": 6.52,
+            "bars_held": 1
+          }
+        }
+      },
+      {
+        "date": "2024-09-06",
+        "direction": "SHORT",
+        "trigger": 18741.5,
+        "stop": 18972.5,
+        "target": 18723.0,
+        "trigger_bar_ts": "2024-09-06T14:00:00+00:00",
+        "trigger_bar_open": 18745.75,
+        "trigger_bar_high": 18768.0,
+        "trigger_bar_low": 18709.5,
+        "trigger_bar_close": 18754.0,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 18740.75,
+            "exit_price": 18723.0,
+            "exit_idx": 13061,
+            "exit_bar_ts": "2024-09-06T14:10:00+00:00",
+            "gross": 35.5,
+            "net": 34.02,
+            "bars_held": 2
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 18753.25,
+            "exit_price": 18723.0,
+            "exit_idx": 13061,
+            "exit_bar_ts": "2024-09-06T14:10:00+00:00",
+            "gross": 60.5,
+            "net": 59.02,
+            "bars_held": 2
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 18740.75,
+            "exit_price": 18723.0,
+            "exit_idx": 13059,
+            "exit_bar_ts": "2024-09-06T14:00:00+00:00",
+            "gross": 35.5,
+            "net": 34.02,
+            "bars_held": 1
+          }
+        }
+      },
+      {
+        "date": "2024-09-11",
+        "direction": "SHORT",
+        "trigger": 18773.25,
+        "stop": 18929.25,
+        "target": 18730.75,
+        "trigger_bar_ts": "2024-09-11T14:00:00+00:00",
+        "trigger_bar_open": 18792.0,
+        "trigger_bar_high": 18815.75,
+        "trigger_bar_low": 18741.5,
+        "trigger_bar_close": 18800.0,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 18772.5,
+            "exit_price": 18730.75,
+            "exit_idx": 13889,
+            "exit_bar_ts": "2024-09-11T14:10:00+00:00",
+            "gross": 83.5,
+            "net": 82.02,
+            "bars_held": 2
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 18799.25,
+            "exit_price": 18730.75,
+            "exit_idx": 13889,
+            "exit_bar_ts": "2024-09-11T14:10:00+00:00",
+            "gross": 137.0,
+            "net": 135.52,
+            "bars_held": 2
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 18772.5,
+            "exit_price": 18730.75,
+            "exit_idx": 13889,
+            "exit_bar_ts": "2024-09-11T14:10:00+00:00",
+            "gross": 83.5,
+            "net": 82.02,
+            "bars_held": 3
+          }
+        }
+      },
+      {
+        "date": "2024-09-12",
+        "direction": "LONG",
+        "trigger": 19523.0,
+        "stop": 19416.25,
+        "target": 19569.75,
+        "trigger_bar_ts": "2024-09-12T14:10:00+00:00",
+        "trigger_bar_open": 19482.0,
+        "trigger_bar_high": 19555.0,
+        "trigger_bar_low": 19475.0,
+        "trigger_bar_close": 19546.25,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19523.75,
+            "exit_price": 19569.75,
+            "exit_idx": 14166,
+            "exit_bar_ts": "2024-09-12T14:15:00+00:00",
+            "gross": 92.0,
+            "net": 90.52,
+            "bars_held": 1
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 14165,
+            "decision_close": 19546.25
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19523.75,
+            "exit_price": 19569.75,
+            "exit_idx": 14166,
+            "exit_bar_ts": "2024-09-12T14:15:00+00:00",
+            "gross": 92.0,
+            "net": 90.52,
+            "bars_held": 2
+          }
+        }
+      },
+      {
+        "date": "2024-10-10",
+        "direction": "LONG",
+        "trigger": 20390.0,
+        "stop": 20301.25,
+        "target": 20472.0,
+        "trigger_bar_ts": "2024-10-10T14:05:00+00:00",
+        "trigger_bar_open": 20374.75,
+        "trigger_bar_high": 20400.0,
+        "trigger_bar_low": 20356.0,
+        "trigger_bar_close": 20385.5,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 20390.75,
+            "exit_price": 20472.0,
+            "exit_idx": 19706,
+            "exit_bar_ts": "2024-10-10T15:55:00+00:00",
+            "gross": 162.5,
+            "net": 161.02,
+            "bars_held": 22
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 20386.25,
+            "exit_price": 20472.0,
+            "exit_idx": 19706,
+            "exit_bar_ts": "2024-10-10T15:55:00+00:00",
+            "gross": 171.5,
+            "net": 170.02,
+            "bars_held": 22
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 20390.75,
+            "exit_price": 20472.0,
+            "exit_idx": 19706,
+            "exit_bar_ts": "2024-10-10T15:55:00+00:00",
+            "gross": 162.5,
+            "net": 161.02,
+            "bars_held": 23
+          }
+        }
+      },
+      {
+        "date": "2024-10-11",
+        "direction": "LONG",
+        "trigger": 20379.75,
+        "stop": 20313.25,
+        "target": 20416.25,
+        "trigger_bar_ts": "2024-10-11T14:00:00+00:00",
+        "trigger_bar_open": 20359.25,
+        "trigger_bar_high": 20380.5,
+        "trigger_bar_low": 20323.5,
+        "trigger_bar_close": 20361.5,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 20380.5,
+            "exit_price": 20416.25,
+            "exit_idx": 19961,
+            "exit_bar_ts": "2024-10-11T14:10:00+00:00",
+            "gross": 71.5,
+            "net": 70.02,
+            "bars_held": 2
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 20362.25,
+            "exit_price": 20416.25,
+            "exit_idx": 19961,
+            "exit_bar_ts": "2024-10-11T14:10:00+00:00",
+            "gross": 108.0,
+            "net": 106.52,
+            "bars_held": 2
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 20380.5,
+            "exit_price": 20416.25,
+            "exit_idx": 19961,
+            "exit_bar_ts": "2024-10-11T14:10:00+00:00",
+            "gross": 71.5,
+            "net": 70.02,
+            "bars_held": 3
+          }
+        }
+      },
+      {
+        "date": "2024-11-26",
+        "direction": "SHORT",
+        "trigger": 20924.25,
+        "stop": 21025.0,
+        "target": 20920.0,
+        "trigger_bar_ts": "2024-11-26T15:15:00+00:00",
+        "trigger_bar_open": 20969.0,
+        "trigger_bar_high": 20970.0,
+        "trigger_bar_low": 20919.0,
+        "trigger_bar_close": 20924.5,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 20923.5,
+            "exit_price": 20920.0,
+            "exit_idx": 28795,
+            "exit_bar_ts": "2024-11-26T15:20:00+00:00",
+            "gross": 7.0,
+            "net": 5.52,
+            "bars_held": 1
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 20923.75,
+            "exit_price": 20920.0,
+            "exit_idx": 28795,
+            "exit_bar_ts": "2024-11-26T15:20:00+00:00",
+            "gross": 7.5,
+            "net": 6.02,
+            "bars_held": 1
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 20923.5,
+            "exit_price": 20920.0,
+            "exit_idx": 28794,
+            "exit_bar_ts": "2024-11-26T15:15:00+00:00",
+            "gross": 7.0,
+            "net": 5.52,
+            "bars_held": 1
+          }
+        }
+      },
+      {
+        "date": "2024-12-23",
+        "direction": "SHORT",
+        "trigger": 21552.5,
+        "stop": 21675.5,
+        "target": 21543.75,
+        "trigger_bar_ts": "2024-12-23T15:05:00+00:00",
+        "trigger_bar_open": 21586.5,
+        "trigger_bar_high": 21596.25,
+        "trigger_bar_low": 21513.25,
+        "trigger_bar_close": 21514.75,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21551.75,
+            "exit_price": 21543.75,
+            "exit_idx": 33942,
+            "exit_bar_ts": "2024-12-23T15:10:00+00:00",
+            "gross": 16.0,
+            "net": 14.52,
+            "bars_held": 1
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 33941,
+            "decision_close": 21514.75
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21551.75,
+            "exit_price": 21543.75,
+            "exit_idx": 33941,
+            "exit_bar_ts": "2024-12-23T15:05:00+00:00",
+            "gross": 16.0,
+            "net": 14.52,
+            "bars_held": 1
+          }
+        }
+      },
+      {
+        "date": "2025-01-20",
+        "direction": "SHORT",
+        "trigger": 21658.5,
+        "stop": 21780.0,
+        "target": 21538.0,
+        "trigger_bar_ts": "2025-01-20T15:40:00+00:00",
+        "trigger_bar_open": 21687.0,
+        "trigger_bar_high": 21697.0,
+        "trigger_bar_low": 21641.0,
+        "trigger_bar_close": 21657.5,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21657.75,
+            "exit_price": 21538.0,
+            "exit_idx": 38816,
+            "exit_bar_ts": "2025-01-21T00:50:00+00:00",
+            "gross": 239.5,
+            "net": 238.02,
+            "bars_held": 50
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21656.75,
+            "exit_price": 21538.0,
+            "exit_idx": 38816,
+            "exit_bar_ts": "2025-01-21T00:50:00+00:00",
+            "gross": 237.5,
+            "net": 236.02,
+            "bars_held": 50
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21657.75,
+            "exit_price": 21538.0,
+            "exit_idx": 38816,
+            "exit_bar_ts": "2025-01-21T00:50:00+00:00",
+            "gross": 239.5,
+            "net": 238.02,
+            "bars_held": 51
+          }
+        }
+      },
+      {
+        "date": "2025-02-07",
+        "direction": "SHORT",
+        "trigger": 21864.25,
+        "stop": 21967.75,
+        "target": 21790.0,
+        "trigger_bar_ts": "2025-02-07T15:00:00+00:00",
+        "trigger_bar_open": 21905.25,
+        "trigger_bar_high": 21905.5,
+        "trigger_bar_low": 21732.25,
+        "trigger_bar_close": 21753.25,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21863.5,
+            "exit_price": 21790.0,
+            "exit_idx": 42548,
+            "exit_bar_ts": "2025-02-07T15:05:00+00:00",
+            "gross": 147.0,
+            "net": 145.52,
+            "bars_held": 1
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 42547,
+            "decision_close": 21753.25
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21863.5,
+            "exit_price": 21790.0,
+            "exit_idx": 42547,
+            "exit_bar_ts": "2025-02-07T15:00:00+00:00",
+            "gross": 147.0,
+            "net": 145.52,
+            "bars_held": 1
+          }
+        }
+      },
+      {
+        "date": "2025-02-12",
+        "direction": "LONG",
+        "trigger": 21701.0,
+        "stop": 21510.0,
+        "target": 21848.5,
+        "trigger_bar_ts": "2025-02-12T15:20:00+00:00",
+        "trigger_bar_open": 21672.5,
+        "trigger_bar_high": 21739.0,
+        "trigger_bar_low": 21666.75,
+        "trigger_bar_close": 21718.5,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "DAY_ONLY_FLATTEN",
+            "fill_entry": 21701.75,
+            "exit_price": 21801.75,
+            "exit_idx": 43446,
+            "exit_bar_ts": "2025-02-12T20:55:00+00:00",
+            "gross": 200.0,
+            "net": 198.52,
+            "bars_held": 67
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 43379,
+            "decision_close": 21718.5
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "DAY_ONLY_FLATTEN",
+            "fill_entry": 21701.75,
+            "exit_price": 21801.75,
+            "exit_idx": 43446,
+            "exit_bar_ts": "2025-02-12T20:55:00+00:00",
+            "gross": 200.0,
+            "net": 198.52,
+            "bars_held": 68
+          }
+        }
+      },
+      {
+        "date": "2025-02-26",
+        "direction": "LONG",
+        "trigger": 21313.0,
+        "stop": 21188.5,
+        "target": 21332.5,
+        "trigger_bar_ts": "2025-02-26T15:00:00+00:00",
+        "trigger_bar_open": 21300.75,
+        "trigger_bar_high": 21321.0,
+        "trigger_bar_low": 21259.75,
+        "trigger_bar_close": 21303.0,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21313.75,
+            "exit_price": 21332.5,
+            "exit_idx": 46072,
+            "exit_bar_ts": "2025-02-26T15:10:00+00:00",
+            "gross": 37.5,
+            "net": 36.02,
+            "bars_held": 2
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21303.75,
+            "exit_price": 21332.5,
+            "exit_idx": 46072,
+            "exit_bar_ts": "2025-02-26T15:10:00+00:00",
+            "gross": 57.5,
+            "net": 56.02,
+            "bars_held": 2
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21313.75,
+            "exit_price": 21332.5,
+            "exit_idx": 46072,
+            "exit_bar_ts": "2025-02-26T15:10:00+00:00",
+            "gross": 37.5,
+            "net": 36.02,
+            "bars_held": 3
+          }
+        }
+      },
+      {
+        "date": "2025-03-17",
+        "direction": "SHORT",
+        "trigger": 19892.0,
+        "stop": 20057.75,
+        "target": 19867.0,
+        "trigger_bar_ts": "2025-03-17T14:35:00+00:00",
+        "trigger_bar_open": 19916.0,
+        "trigger_bar_high": 19950.25,
+        "trigger_bar_low": 19880.25,
+        "trigger_bar_close": 19945.0,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19891.25,
+            "exit_price": 19867.0,
+            "exit_idx": 49670,
+            "exit_bar_ts": "2025-03-17T15:00:00+00:00",
+            "gross": 48.5,
+            "net": 47.02,
+            "bars_held": 5
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19944.25,
+            "exit_price": 19867.0,
+            "exit_idx": 49670,
+            "exit_bar_ts": "2025-03-17T15:00:00+00:00",
+            "gross": 154.5,
+            "net": 153.02,
+            "bars_held": 5
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19891.25,
+            "exit_price": 19867.0,
+            "exit_idx": 49670,
+            "exit_bar_ts": "2025-03-17T15:00:00+00:00",
+            "gross": 48.5,
+            "net": 47.02,
+            "bars_held": 6
+          }
+        }
+      },
+      {
+        "date": "2025-03-21",
+        "direction": "LONG",
+        "trigger": 19752.5,
+        "stop": 19602.5,
+        "target": 19830.0,
+        "trigger_bar_ts": "2025-03-21T14:20:00+00:00",
+        "trigger_bar_open": 19721.0,
+        "trigger_bar_high": 19771.25,
+        "trigger_bar_low": 19704.5,
+        "trigger_bar_close": 19759.75,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19753.25,
+            "exit_price": 19830.0,
+            "exit_idx": 50789,
+            "exit_bar_ts": "2025-03-21T16:15:00+00:00",
+            "gross": 153.5,
+            "net": 152.02,
+            "bars_held": 23
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19760.5,
+            "exit_price": 19830.0,
+            "exit_idx": 50789,
+            "exit_bar_ts": "2025-03-21T16:15:00+00:00",
+            "gross": 139.0,
+            "net": 137.52,
+            "bars_held": 23
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19753.25,
+            "exit_price": 19830.0,
+            "exit_idx": 50789,
+            "exit_bar_ts": "2025-03-21T16:15:00+00:00",
+            "gross": 153.5,
+            "net": 152.02,
+            "bars_held": 24
+          }
+        }
+      },
+      {
+        "date": "2025-05-01",
+        "direction": "LONG",
+        "trigger": 19998.0,
+        "stop": 19858.0,
+        "target": 20035.75,
+        "trigger_bar_ts": "2025-05-01T14:25:00+00:00",
+        "trigger_bar_open": 19978.75,
+        "trigger_bar_high": 20005.25,
+        "trigger_bar_low": 19967.25,
+        "trigger_bar_close": 19999.75,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19998.75,
+            "exit_price": 20035.75,
+            "exit_idx": 58498,
+            "exit_bar_ts": "2025-05-01T14:40:00+00:00",
+            "gross": 74.0,
+            "net": 72.52,
+            "bars_held": 3
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 20000.5,
+            "exit_price": 20035.75,
+            "exit_idx": 58498,
+            "exit_bar_ts": "2025-05-01T14:40:00+00:00",
+            "gross": 70.5,
+            "net": 69.02,
+            "bars_held": 3
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 19998.75,
+            "exit_price": 20035.75,
+            "exit_idx": 58498,
+            "exit_bar_ts": "2025-05-01T14:40:00+00:00",
+            "gross": 74.0,
+            "net": 72.52,
+            "bars_held": 4
+          }
+        }
+      },
+      {
+        "date": "2025-06-04",
+        "direction": "SHORT",
+        "trigger": 21699.25,
+        "stop": 21793.5,
+        "target": 21655.25,
+        "trigger_bar_ts": "2025-06-04T14:00:00+00:00",
+        "trigger_bar_open": 21712.0,
+        "trigger_bar_high": 21741.0,
+        "trigger_bar_low": 21678.75,
+        "trigger_bar_close": 21694.5,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21698.5,
+            "exit_price": 21655.25,
+            "exit_idx": 65067,
+            "exit_bar_ts": "2025-06-04T14:05:00+00:00",
+            "gross": 86.5,
+            "net": 85.02,
+            "bars_held": 1
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21693.75,
+            "exit_price": 21655.25,
+            "exit_idx": 65067,
+            "exit_bar_ts": "2025-06-04T14:05:00+00:00",
+            "gross": 77.0,
+            "net": 75.52,
+            "bars_held": 1
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21698.5,
+            "exit_price": 21655.25,
+            "exit_idx": 65067,
+            "exit_bar_ts": "2025-06-04T14:05:00+00:00",
+            "gross": 86.5,
+            "net": 85.02,
+            "bars_held": 2
+          }
+        }
+      },
+      {
+        "date": "2025-06-05",
+        "direction": "LONG",
+        "trigger": 21840.0,
+        "stop": 21691.75,
+        "target": 21899.0,
+        "trigger_bar_ts": "2025-06-05T14:40:00+00:00",
+        "trigger_bar_open": 21792.75,
+        "trigger_bar_high": 21867.25,
+        "trigger_bar_low": 21755.75,
+        "trigger_bar_close": 21831.5,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21840.75,
+            "exit_price": 21899.0,
+            "exit_idx": 65357,
+            "exit_bar_ts": "2025-06-05T15:15:00+00:00",
+            "gross": 116.5,
+            "net": 115.02,
+            "bars_held": 7
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21832.25,
+            "exit_price": 21899.0,
+            "exit_idx": 65357,
+            "exit_bar_ts": "2025-06-05T15:15:00+00:00",
+            "gross": 133.5,
+            "net": 132.02,
+            "bars_held": 7
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 21840.75,
+            "exit_price": 21899.0,
+            "exit_idx": 65357,
+            "exit_bar_ts": "2025-06-05T15:15:00+00:00",
+            "gross": 116.5,
+            "net": 115.02,
+            "bars_held": 8
+          }
+        }
+      },
+      {
+        "date": "2025-06-26",
+        "direction": "LONG",
+        "trigger": 22566.5,
+        "stop": 22476.25,
+        "target": 22585.0,
+        "trigger_bar_ts": "2025-06-26T14:00:00+00:00",
+        "trigger_bar_open": 22544.0,
+        "trigger_bar_high": 22570.0,
+        "trigger_bar_low": 22544.0,
+        "trigger_bar_close": 22564.0,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 22567.25,
+            "exit_price": 22585.0,
+            "exit_idx": 69440,
+            "exit_bar_ts": "2025-06-26T14:30:00+00:00",
+            "gross": 35.5,
+            "net": 34.02,
+            "bars_held": 6
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 22564.75,
+            "exit_price": 22585.0,
+            "exit_idx": 69440,
+            "exit_bar_ts": "2025-06-26T14:30:00+00:00",
+            "gross": 40.5,
+            "net": 39.02,
+            "bars_held": 6
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 22567.25,
+            "exit_price": 22585.0,
+            "exit_idx": 69440,
+            "exit_bar_ts": "2025-06-26T14:30:00+00:00",
+            "gross": 35.5,
+            "net": 34.02,
+            "bars_held": 7
+          }
+        }
+      },
+      {
+        "date": "2025-06-27",
+        "direction": "LONG",
+        "trigger": 22770.25,
+        "stop": 22682.0,
+        "target": 22787.5,
+        "trigger_bar_ts": "2025-06-27T14:00:00+00:00",
+        "trigger_bar_open": 22764.5,
+        "trigger_bar_high": 22800.25,
+        "trigger_bar_low": 22764.5,
+        "trigger_bar_close": 22793.75,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 22771.0,
+            "exit_price": 22787.5,
+            "exit_idx": 69711,
+            "exit_bar_ts": "2025-06-27T14:05:00+00:00",
+            "gross": 33.0,
+            "net": 31.52,
+            "bars_held": 1
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 69710,
+            "decision_close": 22793.75
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 22771.0,
+            "exit_price": 22787.5,
+            "exit_idx": 69710,
+            "exit_bar_ts": "2025-06-27T14:00:00+00:00",
+            "gross": 33.0,
+            "net": 31.52,
+            "bars_held": 1
+          }
+        }
+      },
+      {
+        "date": "2025-08-11",
+        "direction": "LONG",
+        "trigger": 23745.0,
+        "stop": 23681.0,
+        "target": 23756.25,
+        "trigger_bar_ts": "2025-08-11T14:00:00+00:00",
+        "trigger_bar_open": 23744.75,
+        "trigger_bar_high": 23748.0,
+        "trigger_bar_low": 23710.75,
+        "trigger_bar_close": 23726.25,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 23745.75,
+            "exit_price": 23756.25,
+            "exit_idx": 78175,
+            "exit_bar_ts": "2025-08-11T14:10:00+00:00",
+            "gross": 21.0,
+            "net": 19.52,
+            "bars_held": 2
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 23727.0,
+            "exit_price": 23756.25,
+            "exit_idx": 78175,
+            "exit_bar_ts": "2025-08-11T14:10:00+00:00",
+            "gross": 58.5,
+            "net": 57.02,
+            "bars_held": 2
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 23745.75,
+            "exit_price": 23756.25,
+            "exit_idx": 78175,
+            "exit_bar_ts": "2025-08-11T14:10:00+00:00",
+            "gross": 21.0,
+            "net": 19.52,
+            "bars_held": 3
+          }
+        }
+      },
+      {
+        "date": "2025-08-27",
+        "direction": "LONG",
+        "trigger": 23585.75,
+        "stop": 23488.5,
+        "target": 23621.0,
+        "trigger_bar_ts": "2025-08-27T14:15:00+00:00",
+        "trigger_bar_open": 23566.5,
+        "trigger_bar_high": 23601.75,
+        "trigger_bar_low": 23565.5,
+        "trigger_bar_close": 23598.75,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 23586.5,
+            "exit_price": 23621.0,
+            "exit_idx": 81506,
+            "exit_bar_ts": "2025-08-27T15:45:00+00:00",
+            "gross": 69.0,
+            "net": 67.52,
+            "bars_held": 18
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 81488,
+            "decision_close": 23598.75
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 23586.5,
+            "exit_price": 23621.0,
+            "exit_idx": 81506,
+            "exit_bar_ts": "2025-08-27T15:45:00+00:00",
+            "gross": 69.0,
+            "net": 67.52,
+            "bars_held": 19
+          }
+        }
+      },
+      {
+        "date": "2025-09-05",
+        "direction": "SHORT",
+        "trigger": 23821.5,
+        "stop": 23902.5,
+        "target": 23725.0,
+        "trigger_bar_ts": "2025-09-05T14:00:00+00:00",
+        "trigger_bar_open": 23852.75,
+        "trigger_bar_high": 23854.0,
+        "trigger_bar_low": 23805.25,
+        "trigger_bar_close": 23837.25,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 23820.75,
+            "exit_price": 23725.0,
+            "exit_idx": 83372,
+            "exit_bar_ts": "2025-09-05T14:15:00+00:00",
+            "gross": 191.5,
+            "net": 190.02,
+            "bars_held": 3
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 23836.5,
+            "exit_price": 23725.0,
+            "exit_idx": 83372,
+            "exit_bar_ts": "2025-09-05T14:15:00+00:00",
+            "gross": 223.0,
+            "net": 221.52,
+            "bars_held": 3
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 23820.75,
+            "exit_price": 23725.0,
+            "exit_idx": 83372,
+            "exit_bar_ts": "2025-09-05T14:15:00+00:00",
+            "gross": 191.5,
+            "net": 190.02,
+            "bars_held": 4
+          }
+        }
+      },
+      {
+        "date": "2025-09-18",
+        "direction": "LONG",
+        "trigger": 24713.5,
+        "stop": 24598.75,
+        "target": 24766.0,
+        "trigger_bar_ts": "2025-09-18T14:00:00+00:00",
+        "trigger_bar_open": 24697.0,
+        "trigger_bar_high": 24727.25,
+        "trigger_bar_low": 24694.0,
+        "trigger_bar_close": 24722.25,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 24714.25,
+            "exit_price": 24766.0,
+            "exit_idx": 85637,
+            "exit_bar_ts": "2025-09-18T14:15:00+00:00",
+            "gross": 103.5,
+            "net": 102.02,
+            "bars_held": 3
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 85634,
+            "decision_close": 24722.25
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 24714.25,
+            "exit_price": 24766.0,
+            "exit_idx": 85637,
+            "exit_bar_ts": "2025-09-18T14:15:00+00:00",
+            "gross": 103.5,
+            "net": 102.02,
+            "bars_held": 4
+          }
+        }
+      },
+      {
+        "date": "2025-09-30",
+        "direction": "LONG",
+        "trigger": 24837.0,
+        "stop": 24722.5,
+        "target": 24845.0,
+        "trigger_bar_ts": "2025-09-30T14:45:00+00:00",
+        "trigger_bar_open": 24791.0,
+        "trigger_bar_high": 24838.75,
+        "trigger_bar_low": 24790.5,
+        "trigger_bar_close": 24828.75,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 24837.75,
+            "exit_price": 24845.0,
+            "exit_idx": 87853,
+            "exit_bar_ts": "2025-09-30T14:55:00+00:00",
+            "gross": 14.5,
+            "net": 13.02,
+            "bars_held": 2
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 24829.5,
+            "exit_price": 24845.0,
+            "exit_idx": 87853,
+            "exit_bar_ts": "2025-09-30T14:55:00+00:00",
+            "gross": 31.0,
+            "net": 29.52,
+            "bars_held": 2
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 24837.75,
+            "exit_price": 24845.0,
+            "exit_idx": 87853,
+            "exit_bar_ts": "2025-09-30T14:55:00+00:00",
+            "gross": 14.5,
+            "net": 13.02,
+            "bars_held": 3
+          }
+        }
+      },
+      {
+        "date": "2025-10-10",
+        "direction": "SHORT",
+        "trigger": 25293.75,
+        "stop": 25388.0,
+        "target": 25288.5,
+        "trigger_bar_ts": "2025-10-10T14:55:00+00:00",
+        "trigger_bar_open": 25340.25,
+        "trigger_bar_high": 25346.0,
+        "trigger_bar_low": 25128.0,
+        "trigger_bar_close": 25194.0,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 25293.0,
+            "exit_price": 25288.5,
+            "exit_idx": 90062,
+            "exit_bar_ts": "2025-10-10T15:00:00+00:00",
+            "gross": 9.0,
+            "net": 7.52,
+            "bars_held": 1
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 90061,
+            "decision_close": 25194.0
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 25293.0,
+            "exit_price": 25288.5,
+            "exit_idx": 90061,
+            "exit_bar_ts": "2025-10-10T14:55:00+00:00",
+            "gross": 9.0,
+            "net": 7.52,
+            "bars_held": 1
+          }
+        }
+      },
+      {
+        "date": "2025-10-16",
+        "direction": "SHORT",
+        "trigger": 25026.0,
+        "stop": 25125.5,
+        "target": 25020.75,
+        "trigger_bar_ts": "2025-10-16T14:10:00+00:00",
+        "trigger_bar_open": 25055.0,
+        "trigger_bar_high": 25063.75,
+        "trigger_bar_low": 25013.5,
+        "trigger_bar_close": 25043.5,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "fill_entry": 25025.25,
+            "exit_price": 25126.25,
+            "exit_idx": 91161,
+            "exit_bar_ts": "2025-10-16T14:35:00+00:00",
+            "gross": -202.0,
+            "net": -203.48,
+            "bars_held": 5
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "LOSS",
+            "exit_reason": "STOP_HIT",
+            "fill_entry": 25042.75,
+            "exit_price": 25126.25,
+            "exit_idx": 91161,
+            "exit_bar_ts": "2025-10-16T14:35:00+00:00",
+            "gross": -167.0,
+            "net": -168.48,
+            "bars_held": 5
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 25025.25,
+            "exit_price": 25020.75,
+            "exit_idx": 91156,
+            "exit_bar_ts": "2025-10-16T14:10:00+00:00",
+            "gross": 9.0,
+            "net": 7.52,
+            "bars_held": 1
+          }
+        }
+      },
+      {
+        "date": "2026-03-06",
+        "direction": "LONG",
+        "trigger": 24742.5,
+        "stop": 24611.75,
+        "target": 24894.5,
+        "trigger_bar_ts": "2026-03-06T15:00:00+00:00",
+        "trigger_bar_open": 24692.0,
+        "trigger_bar_high": 24754.75,
+        "trigger_bar_low": 24687.75,
+        "trigger_bar_close": 24751.5,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 24743.25,
+            "exit_price": 24894.5,
+            "exit_idx": 118099,
+            "exit_bar_ts": "2026-03-06T16:00:00+00:00",
+            "gross": 302.5,
+            "net": 301.02,
+            "bars_held": 2
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_NOT_FILLED",
+            "exit_idx": 118097,
+            "decision_close": 24751.5
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 24743.25,
+            "exit_price": 24894.5,
+            "exit_idx": 118099,
+            "exit_bar_ts": "2026-03-06T16:00:00+00:00",
+            "gross": 302.5,
+            "net": 301.02,
+            "bars_held": 3
+          }
+        }
+      },
+      {
+        "date": "2026-04-01",
+        "direction": "LONG",
+        "trigger": 24194.5,
+        "stop": 24036.25,
+        "target": 24245.0,
+        "trigger_bar_ts": "2026-04-01T14:20:00+00:00",
+        "trigger_bar_open": 24178.75,
+        "trigger_bar_high": 24210.25,
+        "trigger_bar_low": 24155.5,
+        "trigger_bar_close": 24176.75,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 24195.25,
+            "exit_price": 24245.0,
+            "exit_idx": 123064,
+            "exit_bar_ts": "2026-04-01T14:50:00+00:00",
+            "gross": 99.5,
+            "net": 98.02,
+            "bars_held": 6
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 24177.5,
+            "exit_price": 24245.0,
+            "exit_idx": 123064,
+            "exit_bar_ts": "2026-04-01T14:50:00+00:00",
+            "gross": 135.0,
+            "net": 133.52,
+            "bars_held": 6
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 24195.25,
+            "exit_price": 24245.0,
+            "exit_idx": 123064,
+            "exit_bar_ts": "2026-04-01T14:50:00+00:00",
+            "gross": 99.5,
+            "net": 98.02,
+            "bars_held": 7
+          }
+        }
+      },
+      {
+        "date": "2026-05-12",
+        "direction": "SHORT",
+        "trigger": 29113.5,
+        "stop": 29295.75,
+        "target": 29113.25,
+        "trigger_bar_ts": "2026-05-12T14:00:00+00:00",
+        "trigger_bar_open": 29129.5,
+        "trigger_bar_high": 29162.5,
+        "trigger_bar_low": 29088.0,
+        "trigger_bar_close": 29110.75,
+        "models": {
+          "plan": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_BRACKET_INVALID_AT_FILL",
+            "exit_idx": 130965,
+            "decision_close": 29110.75
+          },
+          "ioc_close": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_BRACKET_INVALID_AT_FILL",
+            "exit_idx": 130965,
+            "decision_close": 29110.75
+          },
+          "prearmed_touch": {
+            "status": "NO_FILL",
+            "reason": "ENTRY_BRACKET_INVALID_AT_FILL",
+            "exit_idx": 130964,
+            "decision_close": 29129.5
+          }
+        }
+      },
+      {
+        "date": "2026-05-13",
+        "direction": "LONG",
+        "trigger": 29304.75,
+        "stop": 29075.25,
+        "target": 29402.25,
+        "trigger_bar_ts": "2026-05-13T14:50:00+00:00",
+        "trigger_bar_open": 29269.75,
+        "trigger_bar_high": 29315.0,
+        "trigger_bar_low": 29256.75,
+        "trigger_bar_close": 29310.25,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 29305.5,
+            "exit_price": 29402.25,
+            "exit_idx": 131269,
+            "exit_bar_ts": "2026-05-13T16:20:00+00:00",
+            "gross": 193.5,
+            "net": 192.02,
+            "bars_held": 18
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 29311.0,
+            "exit_price": 29402.25,
+            "exit_idx": 131269,
+            "exit_bar_ts": "2026-05-13T16:20:00+00:00",
+            "gross": 182.5,
+            "net": 181.02,
+            "bars_held": 18
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 29305.5,
+            "exit_price": 29402.25,
+            "exit_idx": 131269,
+            "exit_bar_ts": "2026-05-13T16:20:00+00:00",
+            "gross": 193.5,
+            "net": 192.02,
+            "bars_held": 19
+          }
+        }
+      },
+      {
+        "date": "2026-06-11",
+        "direction": "SHORT",
+        "trigger": 28927.75,
+        "stop": 29295.5,
+        "target": 28922.75,
+        "trigger_bar_ts": "2026-06-11T14:55:00+00:00",
+        "trigger_bar_open": 29029.5,
+        "trigger_bar_high": 29034.75,
+        "trigger_bar_low": 28884.0,
+        "trigger_bar_close": 28928.75,
+        "models": {
+          "plan": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 28927.0,
+            "exit_price": 28922.75,
+            "exit_idx": 137001,
+            "exit_bar_ts": "2026-06-11T15:00:00+00:00",
+            "gross": 8.5,
+            "net": 7.02,
+            "bars_held": 1
+          },
+          "ioc_close": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 28928.0,
+            "exit_price": 28922.75,
+            "exit_idx": 137001,
+            "exit_bar_ts": "2026-06-11T15:00:00+00:00",
+            "gross": 10.5,
+            "net": 9.02,
+            "bars_held": 1
+          },
+          "prearmed_touch": {
+            "status": "RESOLVED",
+            "result": "WIN",
+            "exit_reason": "TARGET_HIT",
+            "fill_entry": 28927.0,
+            "exit_price": 28922.75,
+            "exit_idx": 137000,
+            "exit_bar_ts": "2026-06-11T14:55:00+00:00",
+            "gross": 8.5,
+            "net": 7.02,
+            "bars_held": 1
+          }
+        }
+      }
+    ]
+  }
+}
