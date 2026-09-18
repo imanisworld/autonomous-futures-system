@@ -25,7 +25,11 @@ from typing import Any, Mapping, Sequence
 
 from alert_ranker.market_data import OptionChain, OptionContractQuote
 from alert_ranker.options_selector_input import serialized_selector_input_from_option_chains
-from options_manager.contracts import selection_input_from_json
+from options_manager.contracts import (
+    selection_input_from_json,
+    select_contract_from_serialized_input,
+    selector_rule_from_mapping,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 SELECTOR_RULE_PATH = ROOT / "options_manager" / "contracts" / "selector_rule_v1.json"
@@ -97,7 +101,9 @@ def build_selector_evidence_capture(
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         raise ValueError("decision_ts must be timezone-aware")
 
-    rule_sha256 = _selector_rule_sha256(rule_path)
+    rule_bytes = rule_path.read_bytes()
+    rule_sha256 = hashlib.sha256(rule_bytes).hexdigest()
+    rule = selector_rule_from_mapping(json.loads(rule_bytes.decode("utf-8")))
     selector_payload = serialized_selector_input_from_option_chains(
         [chain],
         rule_sha256=rule_sha256,
@@ -106,6 +112,10 @@ def build_selector_evidence_capture(
         direction=selector_direction,
     )
     parsed_selector = selection_input_from_json(selector_payload)
+    canonical_result = select_contract_from_serialized_input(
+        rule=rule,
+        payload=selector_payload,
+    )
 
     supplements = [
         _quote_supplement(quote, expiration)
@@ -133,6 +143,7 @@ def build_selector_evidence_capture(
         "selector_input_sha256": hashlib.sha256(selector_payload).hexdigest(),
         "selector_input_json": selector_payload.decode("utf-8").rstrip("\n"),
         "selector_input_rows": len(parsed_selector.chain),
+        "canonical_selector_result": asdict(canonical_result),
         "underlying": {
             "price": underlying_price,
             "snapshot": dict(underlying_snapshot or {}),
