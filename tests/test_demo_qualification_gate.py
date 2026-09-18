@@ -102,8 +102,8 @@ def _complete_evidence(tmp_path: Path) -> dict:
             "multiple_months_covered": True,
             "walk_forward_pass": True,
             "sample_requirement_pre_registered": True,
-            "required_resolved_fills": 30,
-            "resolved_fills": 40,
+            "required_resolved_fills_per_cell": 30,
+            "minimum_resolved_fills_in_required_cells": 40,
             "drawdown_within_pre_registered_limit": True,
             "concentration_check_pass": True,
             "session_filters_respected": True,
@@ -216,11 +216,11 @@ def test_session_day_identity_must_be_proven(tmp_path: Path, monkeypatch) -> Non
     assert any("session_day_identity_proven" in blocker for blocker in report["blockers"])
 
 
-def test_sample_floor_cannot_be_registered_below_30(tmp_path: Path, monkeypatch) -> None:
+def test_sample_floor_cannot_be_registered_below_30_per_required_cell(tmp_path: Path, monkeypatch) -> None:
     _pin_runtime_head_and_diff(monkeypatch)
     payload = _complete_evidence(tmp_path)
-    payload["validation"]["required_resolved_fills"] = 12
-    payload["validation"]["resolved_fills"] = 12
+    payload["validation"]["required_resolved_fills_per_cell"] = 12
+    payload["validation"]["minimum_resolved_fills_in_required_cells"] = 12
     evidence = _write_evidence(tmp_path, payload)
 
     report = build_demo_qualification_report(
@@ -228,7 +228,7 @@ def test_sample_floor_cannot_be_registered_below_30(tmp_path: Path, monkeypatch)
     )
 
     assert report["gate_pass"] is False
-    assert any("required_resolved_fills" in blocker for blocker in report["blockers"])
+    assert any("required_resolved_fills_per_cell" in blocker for blocker in report["blockers"])
 
 
 def test_manifest_bytes_are_verified_not_just_claimed(tmp_path: Path, monkeypatch) -> None:
