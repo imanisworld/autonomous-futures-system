@@ -160,3 +160,34 @@ def test_malformed_retained_quote_bytes_fail_closed_not_skipped():
     assert choice.reason_code == "retained_quote_parse_failed"
     assert choice.index == 0
     assert choice.payload is None
+
+
+
+def test_bar_open_outside_range_fails_closed():
+    result = resolve_exit_trigger(
+        direction="CALL",
+        bar=UnderlyingBar(open=112.0, high=111.0, low=99.0),
+        stop_level=95.0,
+        target_level=110.0,
+    )
+    assert result.reason == "INVALID"
+    assert result.detail == "bar_open_outside_range"
+
+
+def test_invalid_directional_stop_target_geometry_fails_closed():
+    call = resolve_exit_trigger(
+        direction="CALL",
+        bar=UnderlyingBar(open=100.0, high=101.0, low=99.0),
+        stop_level=110.0,
+        target_level=95.0,
+    )
+    put = resolve_exit_trigger(
+        direction="PUT",
+        bar=UnderlyingBar(open=100.0, high=101.0, low=99.0),
+        stop_level=90.0,
+        target_level=105.0,
+    )
+    assert call.reason == "INVALID"
+    assert call.detail == "invalid_call_stop_target_geometry"
+    assert put.reason == "INVALID"
+    assert put.detail == "invalid_put_stop_target_geometry"
