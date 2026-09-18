@@ -18,25 +18,25 @@
 
 ## Work prepared after #667
 
-### PR #676 — selector serialized replay/forward parity
+### #676 — selector serialized replay/forward parity
 
-Status: open, ready for review; latest head `0072b8d52f333f8633c28a4c1b4d536ff12d24cc`; exact-head CI `35347751616` passed.
+Merged to main as `56a9cf452f98bea27d04e802c91042c580098768`. Exact PR head `0072b8d52f333f8633c28a4c1b4d536ff12d24cc` had green CI (`35347751616`) before merge.
 
 Adds a canonical byte-stable selector-input envelope, strict schema parsing, one select-from-serialized-input path, replay/forward golden parity on identical bytes, no-hindsight through that path, and fail-closed malformed identity/schema cases.
 
 This advances Item 1 but **does not yet prove the real forward producer emits these exact serialized bytes**.
 
-### PR #678 — premium-stop risk + no-averaging core
+### #678 — premium-stop risk + no-averaging core
 
-Status: open, ready for review; latest head `b96c2a64f3c47611579c7a846f2a1338d4b7139d`; exact-head CI `35347581518` passed.
+Merged to main as `f61e46606e56e57649a4338b925ca4156a9938f8` **before its final exact-head CI completed**. That final CI (`35348366453`) later failed 1 test / passed 5901: the opposite-direction averaging-guard fixture omitted the newly required explicit `open_orders` snapshot. Independent local targeted validation reproduced exactly the same single failure (136 passed, 1 failed). Runtime logic is intentionally fail-closed; PR #685 is the test-only correction and must pass before main is called green.
 
 Adds a named planned-risk formula from planned entry premium and premium stop, rejects invalid/non-finite stop/risk inputs, removes clamp-to-zero behavior, and rejects same-underlying + same-direction canonical open positions or supplied open orders.
 
 The aggregate-risk budget remains **unset by default**. No `$1,000` runtime default was added. Budget provenance remains incomplete.
 
-### PR #679 — fill event realism
+### #679 — fill event realism
 
-Status: open, ready for review; latest head `f8b8d10f86529b476efefb8f205feb59ab8c5133`; exact-head CI `35347806060` passed.
+Merged to main as `679a226584fc715285254fc3c1e83df1605cb901`. Exact PR head `f8b8d10f86529b476efefb8f205feb59ab8c5133` had green CI (`35347806060`) before merge.
 
 Adds pessimistic same-bar stop-first resolution, CALL/PUT gap-through-stop classification, first-available executable retained-quote selection, explicit `NO_FILL`, malformed-retained-data blocking, and malformed bar/stop-target geometry checks.
 
@@ -44,7 +44,7 @@ This advances Item 2B but does **not** choose unapproved fee/slippage policy val
 
 ### PR #682 — market-hours Public timestamp probe
 
-Status: open draft; latest head `4ea9a38eca4d08ecc48608eb649d4205b5d1e068`; exact-head CI is still running (`35348093921`).
+Status: open, ready for review; latest head `4ea9a38eca4d08ecc48608eb649d4205b5d1e068`; exact-head CI `35348093921` passed.
 
 Adds a read-only probe using the existing Public market-data client. It reports actual bid/ask executable timestamp coverage and freshness for the configured scanner watchlist, uses the frozen quote-age rule and selector DTE bands, requires the frozen Public source identity, prints no credentials/account ID, writes nothing, and calls no trading/account endpoints.
 
@@ -69,14 +69,15 @@ The next live-data action is read-only: run the #682 Public timestamp probe duri
 
 Do **not** deploy or restart just to manufacture proof. If later options scanner runtime changes are merged and we want the running scanner to use them, deployment/restart must be separately approved and followed by post-restart journal/runtime proof.
 
-## Weekend restart point
+## Immediate restart point
 
-Do not reconstruct prior work. Start by checking PRs #676, #678, #679, #682 and current main. Then:
+Do not reconstruct prior work.
 
-1. finish/merge reviewed infrastructure slices;
-2. run the read-only Public timestamp capture during market hours;
-3. obtain/freeze real historical quote bytes and manifest;
-4. finish Item 2B fee/slippage/stress policy only with explicitly approved values;
-5. finish aggregate-budget provenance without inventing a default;
-6. rerun the preserved #653 gate package;
-7. require the result to remain `BLOCKED / WAIT` with exactly the expected 23 strategy-specific blockers and both activation flags false.
+1. PR #685 must restore green CI after the #678 merge-order regression; do not call main green until that exact fix passes.
+2. PR #682 is the ready, read-only market-hours Public timestamp probe.
+3. After current-main CI is green, run the Public timestamp capture during market hours.
+4. Obtain/freeze real historical quote bytes and manifest.
+5. Finish Item 2B fee/slippage/stress policy only with explicitly approved values.
+6. Finish aggregate-budget provenance without inventing a default.
+7. Rerun the preserved #653 gate package.
+8. Require the result to remain `BLOCKED / WAIT` with exactly the expected 23 strategy-specific blockers and both activation flags false.
