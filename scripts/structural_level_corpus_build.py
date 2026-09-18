@@ -57,7 +57,7 @@ from sources.polygon_client import (  # noqa: E402
     contract_schedule,
 )
 
-TOOL_VERSION = "slc-build-v1.4"
+TOOL_VERSION = "slc-build-v1.5"
 _ET = ZoneInfo("America/New_York")
 
 # Files whose bytes define the corpus content (P2 spec §3.1 pins).
@@ -75,6 +75,7 @@ REQUIRED_FIELDS = (
     "timestamp", "instrument", "session", "open", "high", "low", "close", "volume",
     "orb_high", "orb_low", "orb_status",
     "london_orb_high", "london_orb_low", "london_orb_status",
+    "prev_week_high", "prev_week_low",
     "reconstructed_market_condition", "legacy_market_condition",
 )
 
