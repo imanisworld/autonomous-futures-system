@@ -18,7 +18,7 @@ from enum import Enum
 import hashlib
 import json
 import math
-from typing import Literal, Mapping, Optional, Sequence
+from typing import Literal, Mapping, Optional
 
 QuoteStatus = Literal["OK", "MISSING", "STALE", "FUTURE", "INVALID", "WIDE_SPREAD"]
 
@@ -30,9 +30,9 @@ class QuoteSource(str, Enum):
     requires an explicit rule/version change rather than accepting free text.
     """
 
+    # Test-only source. Real provider sources must be added only when the
+    # provider+endpoint identity is mechanically known at ingestion time.
     FIXTURE_OPTION_CHAIN = "fixture:option_chain_snapshot"
-    ROBINHOOD_READONLY_OPTION_QUOTE = "robinhood_readonly:normalize_option_quote"
-    ROBINHOOD_READONLY_OPTION_CHAIN = "robinhood_readonly:normalize_option_chain"
 
 
 @dataclass(frozen=True)
@@ -313,11 +313,38 @@ def build_quote_manifest(
             raise ValueError("manifest payloads must be bytes")
 
         rows = [line for line in payload.splitlines() if line.strip()]
+        required_record_fields = set(QuoteRecord.__dataclass_fields__)
         for raw_line in rows:
             try:
                 row = json.loads(raw_line)
             except json.JSONDecodeError as exc:
                 raise ValueError(f"{path} contains invalid JSONL") from exc
+            if not isinstance(row, dict):
+                raise ValueError(f"{path} contains a non-object JSONL row")
+
+            missing_record_fields = sorted(required_record_fields - set(row))
+            extra_record_fields = sorted(set(row) - required_record_fields)
+            if missing_record_fields or extra_record_fields:
+                raise ValueError(
+                    f"{path} row schema mismatch: "
+                    f"missing={missing_record_fields}, extra={extra_record_fields}"
+                )
+
+            if row.get("rule_id") != rule.rule_id:
+                raise ValueError(f"{path} row rule_id does not match manifest rule")
+            if str(row.get("rule_sha256", "")).lower() != rule_sha256.lower():
+                raise ValueError(f"{path} row rule_sha256 does not match manifest rule")
+
+            if row.get("status") not in {
+                "OK",
+                "MISSING",
+                "STALE",
+                "FUTURE",
+                "INVALID",
+                "WIDE_SPREAD",
+            }:
+                raise ValueError(f"{path} contains invalid quote status {row.get('status')!r}")
+
             source = row.get("source")
             try:
                 parsed_source = QuoteSource(source)
