@@ -343,6 +343,37 @@ def _registry_field(registry: dict[str, Any] | None, *, system: str) -> dict[str
     return {"name": "Evidence registry", "value": value or "No registry entries"}
 
 
+def _collector_health(census: dict[str, Any], *, options: bool, end: date) -> tuple[dict[str, Any], bool]:
+    """Lead with failures and retain the timestamps needed to investigate them."""
+    collectors = census.get("collectors")
+    chosen = [item for item in collectors if isinstance(item, dict)
+              and str(item.get("name") or "").startswith("options ") == options] if isinstance(collectors, list) else []
+    healthy = {"FRESH", "FRESH_AT_CLOSE", "QUIET_BY_DESIGN"}
+    statuses = [(item, *_effective_status(item, session_end=end)) for item in chosen]
+    attention = [(item, status, note) for item, status, note in statuses if status not in healthy]
+    counts = Counter(status for _, status, _ in statuses)
+    lines = []
+    for item, status, note in attention[:5]:
+        lines.append(f"**{_display_name(str(item.get('name') or 'Unnamed collector'))}** — {_display_name(status).lower()}")
+        last = _parse_ts(item.get("last"))
+        lines.append(note or (f"Last seen {last.astimezone(timezone.utc).strftime('%b %d %H:%M UTC')}" if last else "Last seen unavailable"))
+    if len(attention) > 5:
+        lines.append(f"+ {len(attention) - 5} more needing review")
+    if statuses:
+        lines.append(" · ".join(f"{n} {_display_name(k).lower()}" for k, n in sorted(counts.items())))
+    else:
+        lines.append("Collector health unavailable — review the census.")
+    for item, status, note in statuses:
+        if note and status in {"FRESH_AT_CLOSE", "QUIET_BY_DESIGN"}:
+            lines.append(f"{_display_name(str(item.get('name') or 'Collector'))}: {note}")
+    if attention or not statuses:
+        lines.append("Check: collector census and the affected collector logs.")
+    value = "\n".join(lines)
+    if len(value) > 900:
+        value = value[:800] + "\n… Full collector details in the JSON artifact."
+    return {"name": "⚠ Collector attention" if attention or not statuses else "✓ Collector health", "value": value}, bool(attention) or not statuses
+
+
 def futures_discord_payload(
     summary: dict[str, Any],
     census: dict[str, Any],
@@ -353,24 +384,9 @@ def futures_discord_payload(
     registry: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """A mobile-readable card; counts are observations, never inferred fills/P&L."""
-    collectors = [
-        item for item in census.get("collectors", [])
-        if isinstance(item, dict) and not str(item.get("name") or "").startswith("options ")
-    ] if isinstance(census.get("collectors"), list) else []
-    statuses = [(item, _effective_status(item, session_end=end)[0]) for item in collectors]
-    healthy = {"FRESH", "FRESH_AT_CLOSE", "QUIET_BY_DESIGN"}
-    attention = [(item, status) for item, status in statuses if status not in healthy]
-    health_counts = Counter(status for _, status in statuses)
-    health = " · ".join(f"{count} {_display_name(status).lower()}" for status, count in sorted(health_counts.items()))
-    if not statuses:
-        health = "Collector health unavailable — review the census."
-    elif attention:
-        health = "\n".join(
-            f"**{_display_name(str(item.get('name') or 'Unnamed collector'))}** — {_display_name(status).lower()}"
-            for item, status in attention[:5]
-        ) + (f"\n+ {len(attention) - 5} more needing review" if len(attention) > 5 else "") + "\n" + health
+    health_field, health_warning = _collector_health(census, options=False, end=end)
 
-    warning = bool(attention) or not statuses or summary["rows"] == 0
+    warning = health_warning or summary["rows"] == 0
     outcomes = summary.get("shadow_outcomes") or {}
     outcome_lines = []
     for keys in (("WIN", "LOSS"), ("NO_FILL", "OPEN")):
@@ -391,7 +407,7 @@ def futures_discord_payload(
         collection += "\n⚠ zero futures journal rows in the report window"
 
     fields = [
-        {"name": "⚠ Collector attention" if attention else ("Collector health" if not statuses else "✓ Collector health"), "value": health},
+        health_field,
         {"name": "Decisions", "value": _count_lines(summary.get("decisions") or {}), "inline": True},
         {"name": "Shadow outcomes", "value": outcome_text + "\nObserved setups · not executed trades", "inline": True},
         {"name": "Shadow activity · top 5", "value": _count_lines(summary.get("shadow_strategies") or {})},
@@ -440,33 +456,69 @@ def format_futures_report(
     return "\n\n".join(sections)
 
 
-def format_options_report(
-    summary: dict[str, Any],
-    census: dict[str, Any],
-    *,
-    period: str,
-    start: date,
-    end: date,
-    registry: dict[str, Any] | None = None,
-) -> str:
-    title = "EOD" if period == "eod" else "EOW"
+def options_discord_payload(
+    summary: dict[str, Any], census: dict[str, Any], *, period: str,
+    start: date, end: date, registry: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Match the futures card without interpreting journal statuses as option P&L."""
     tables = summary.get("tables") or {}
     scans = tables.get("scans") or {}
     journal = tables.get("options_shadow_journal") or {}
-    lines = [
-        f"**OPTIONS PAPER COLLECTION — {title}** {start.isoformat()}" + ("" if start == end else f" → {end.isoformat()}"),
-        f"scanner DB: {summary.get('status', 'UNKNOWN')}",
-        f"scans: **{scans.get('rows', 'unknown')}** ({scans.get('status', 'UNKNOWN')})",
-        f"shadow journal: **{journal.get('rows', 'unknown')}** ({journal.get('status', 'UNKNOWN')})",
-        f"shadow-journal status field counts (row status, NOT option P&L outcomes): {_top(journal.get('status_counts') or {})}",
-        *_census_lines(census, options=True, session_end=end),
-    ]
-    if scans.get("rows") == 0:
-        lines.append("⚠️ zero option scans in the report window")
-    if period == "eow" and registry:
-        lines.extend(format_registry_lines(registry, system="options", max_entries=8))
-    lines.append("READ ONLY — evidence rollup; no promotion or execution action")
-    return "\n".join(lines)
+    health, warning = _collector_health(census, options=True, end=end)
+    issues = []
+    db_status = summary.get("status", "UNKNOWN")
+    if db_status != "OK":
+        issues.append(f"Scanner database: {_display_name(db_status)} ({db_status}). Check database availability and read access.")
+    collection = [f"Scanner database: {_display_name(db_status)}"]
+    for label, table in (("Scans", scans), ("Shadow journal", journal)):
+        status = table.get("status", "UNKNOWN")
+        rows = table.get("rows")
+        if status == "OK" and isinstance(rows, int):
+            collection.append(f"**{rows:,}** · {label}")
+        else:
+            collection.append(f"{label}: window count unavailable ({status})")
+            if db_status == "OK":
+                issues.append(f"{label}: {status}. Check the scanner database table and timestamp column.")
+    if scans.get("status") == "OK" and scans.get("rows") == 0:
+        issues.append("zero option scans in the report window. Check the session calendar and scanner logs.")
+    fields = [health]
+    if issues:
+        fields.insert(0, {"name": "⚠ Data attention", "value": "\n".join(issues)})
+    journal_statuses = (_count_lines(journal.get("status_counts") or {})
+                        if journal.get("status") == "OK" else "Unavailable — see data attention")
+    fields.extend([
+        {"name": "Collection", "value": "\n".join(collection)},
+        {"name": "Journal row statuses", "value": journal_statuses + "\nRow status only · NOT option P&L outcomes"},
+    ])
+    if period == "eow":
+        field = _registry_field(registry, system="options")
+        if field:
+            fields.append(field)
+    fields.append({"name": "Troubleshooting reference", "value": f"paper_collection_{period}_{end.isoformat()}.json\nRaw counts and collector timestamps · in the configured report log directory"})
+    for field in fields:
+        if len(field["value"]) > 900:
+            field["value"] = field["value"][:850] + "\n… Full details in the JSON artifact."
+    window = start.strftime("%b %d, %Y")
+    if start != end:
+        window += " → " + end.strftime("%b %d, %Y")
+    return {"allowed_mentions": {"parse": []}, "embeds": [{
+        "title": "Options · " + ("Daily paper report" if period == "eod" else "Weekly paper report"),
+        "description": window + " · UTC database window",
+        "color": 0xF0B232 if warning or issues else 0x5865F2,
+        "fields": fields,
+        "footer": {"text": "READ ONLY · Evidence collection · No promotion or execution action"},
+    }]}
+
+
+def format_options_report(
+    summary: dict[str, Any], census: dict[str, Any], *, period: str,
+    start: date, end: date, registry: dict[str, Any] | None = None,
+) -> str:
+    embed = options_discord_payload(summary, census, period=period, start=start, end=end, registry=registry)["embeds"][0]
+    sections = [f"**{embed['title']}**\n{embed['description']}"]
+    sections.extend(f"**{field['name']}**\n{field['value']}" for field in embed["fields"])
+    sections.append(embed["footer"]["text"])
+    return "\n\n".join(sections)
 
 
 def _post_discord(webhook_url: str, content: str | dict[str, Any]) -> bool:
@@ -591,7 +643,10 @@ def main(argv: list[str] | None = None) -> int:
         futures_card = futures_discord_payload(
             futures, census, period=args.period, start=start, end=end, registry=registry
         )
-        for env_name, report in ((FUTURES_ENV, futures_card), (OPTIONS_ENV, options_report)):
+        options_card = options_discord_payload(
+            options, census, period=args.period, start=start, end=end, registry=registry
+        )
+        for env_name, report in ((FUTURES_ENV, futures_card), (OPTIONS_ENV, options_card)):
             webhook = (os.getenv(env_name) or "").strip()
             if not webhook:
                 print(f"[paper_collection_report] {env_name} unset; artifact only")
