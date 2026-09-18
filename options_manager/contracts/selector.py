@@ -331,7 +331,12 @@ def select_contract(
         excluded[reason] = excluded.get(reason, 0) + 1
 
     for row in chain:
-        if not row.contract_id or not row.expiration:
+        if (
+            not isinstance(row.contract_id, str)
+            or not row.contract_id.strip()
+            or not isinstance(row.expiration, str)
+            or not row.expiration.strip()
+        ):
             reject("missing_identity")
             continue
         try:
