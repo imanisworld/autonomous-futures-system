@@ -35,7 +35,7 @@ from strategy.transition_failed_breakdown_reclaim import (
     RESEARCH_DUMMY_TARGET_TICKS as TRANSITION_RESEARCH_DUMMY_TARGET_TICKS,
     RESEARCH_STOP_TICKS as TRANSITION_RESEARCH_STOP_TICKS,
     RESEARCH_STRATEGY as TRANSITION_RESEARCH_STRATEGY,
-    detect_transition_failed_breakdown_reclaim,
+    detect_transition_geometry,
 )
 
 
@@ -2730,7 +2730,7 @@ class DecisionEngine:
         position after six available 5-minute bars; this target never determines
         an economic exit.
         """
-        signal = detect_transition_failed_breakdown_reclaim(
+        signal = detect_transition_geometry(
             state, list(getattr(state, "bar_history_15m", []) or [])
         )
         if signal is None:

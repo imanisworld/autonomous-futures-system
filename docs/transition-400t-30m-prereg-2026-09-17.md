@@ -198,6 +198,27 @@ Before Backtest -> DEMO qualification can even be attempted, a future implementa
 
 That future implementation is **not authorized by this document**.
 
+## Candidate identity parity amendment (2026-09-17)
+
+A full preserved-corpus audit resolved the candidate-identity question.
+
+The legacy shadow wrapper's market-condition label is not replay-portable:
+under current ReplayEngine labels it reproduces only 28/3,292 preserved
+timestamps. However, the objective price/volume sweep-reclaim-hold geometry
+reproduces **3,292/3,292 candidates with zero extras** across all 621 corpus
+files.
+
+The canonical research variant is therefore frozen to the objective geometry,
+while the legacy shadow observer retains its historical label filter for
+continuity. This is a representation-parity correction, not a P&L-driven
+parameter change.
+
+See `docs/transition-candidate-parity-2026-09-17.md` and
+`scripts/transition_candidate_parity_audit.py`.
+
+The full DecisionEngine market-condition policy is still unresolved: no
+TRENDING/non-tradable exemption is authorized here.
+
 ## Required validation before DEMO eligibility
 
 If an executable version is ever authorized, the validation package must satisfy the merged Backtest -> DEMO qualification gate, including:

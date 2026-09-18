@@ -197,3 +197,22 @@ def test_full_decision_engine_keeps_existing_range_trending_gate(fresh_market_st
     )
     assert decision.decision == "NO_TRADE"
     assert "MARKET_CONDITION_NOT_TRENDING" in decision.failed_gates
+
+
+def test_research_geometry_is_label_independent_but_legacy_shadow_is_not(
+    fresh_market_state,
+):
+    from strategy.transition_failed_breakdown_reclaim import (
+        detect_transition_geometry,
+        detect_transition_failed_breakdown_reclaim,
+    )
+
+    state, bars = _transition_state_and_bars(fresh_market_state)
+    state.market_condition = "TRENDING"
+
+    assert detect_transition_failed_breakdown_reclaim(state, bars) is None
+    assert detect_transition_geometry(state, bars) is not None
+
+    candidate = canonical_candidate(state, _research_test_config(), DailyState())
+    assert candidate is not None
+    assert candidate.setup.strategy == RESEARCH_STRATEGY

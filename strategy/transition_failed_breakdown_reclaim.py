@@ -1,8 +1,11 @@
 """Shared detector contract for Transition failed-breakdown reclaim.
 
 This module contains signal identity only. It places no orders and changes no
-permissions. Both shadow observation and the isolated 400t/30m research
-candidate call the same detector so candidate identity cannot drift silently.
+permissions. The objective price/volume geometry is shared by shadow observation
+and the isolated 400t/30m research candidate. The legacy shadow wrapper retains
+its historical market-condition label filter; the research variant uses geometry
+directly because the preserved-corpus parity audit proved the label representation
+is not replay-portable while the geometry is exactly portable.
 """
 from __future__ import annotations
 
@@ -67,14 +70,10 @@ def _bars_with_current(state: MarketState, bars: list[dict]) -> list[dict]:
     return [*bars, current]
 
 
-def detect_transition_failed_breakdown_reclaim(
+def detect_transition_geometry(
     state: MarketState, bars: list[dict]
 ) -> TransitionSignal | None:
-    """Return the frozen Transition signal identity, or None."""
-    condition = str(state.market_condition or "").upper()
-    if condition not in {"RANGE_BOUND", "CHOPPY", "TRANSITION"}:
-        return None
-
+    """Return the objective Transition price/volume geometry, or None."""
     seq = _bars_with_current(state, bars)
     if len(seq) < 8:
         return None
@@ -145,3 +144,12 @@ def detect_transition_failed_breakdown_reclaim(
             f"{close_quality}, expansion={'volume' if volume_expanded else 'range'}"
         ),
     )
+
+def detect_transition_failed_breakdown_reclaim(
+    state: MarketState, bars: list[dict]
+) -> TransitionSignal | None:
+    """Legacy shadow contract: geometry plus its historical condition label."""
+    condition = str(state.market_condition or "").upper()
+    if condition not in {"RANGE_BOUND", "CHOPPY", "TRANSITION"}:
+        return None
+    return detect_transition_geometry(state, bars)
