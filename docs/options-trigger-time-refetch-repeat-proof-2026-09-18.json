@@ -1,0 +1,75 @@
+{
+  "all_bar_files_identical": true,
+  "bar_rows_primary": 28204,
+  "bar_rows_repeat": 28204,
+  "files": [
+    {
+      "path": "2026-09-09_30Min.jsonl",
+      "repeat_match": true,
+      "rows": 4051,
+      "sha256": "1bea540c276d54b7f77a8dcca3c3d56afc66d4a664a29f186a77d938ab7c0269"
+    },
+    {
+      "path": "2026-09-09_5Min.jsonl",
+      "repeat_match": true,
+      "rows": 1580,
+      "sha256": "ff1b65589d29d587658577d4b65a143ebd4423b9754de61a19fe404603829471"
+    },
+    {
+      "path": "2026-09-10_30Min.jsonl",
+      "repeat_match": true,
+      "rows": 4675,
+      "sha256": "9bf0a1925a3f6feb583de0b6e493799aa54795764a62a8f3ad3587a33ba43cf9"
+    },
+    {
+      "path": "2026-09-10_5Min.jsonl",
+      "repeat_match": true,
+      "rows": 1580,
+      "sha256": "2196994fabf35ca36fd57938f9ee5b6e9916343c5bbe454734cc729225a18b52"
+    },
+    {
+      "path": "2026-09-11_30Min.jsonl",
+      "repeat_match": true,
+      "rows": 4676,
+      "sha256": "18ee65c23c8dacd40d0d4f23db8b248072eebb593a5848c5c29b9798400cb564"
+    },
+    {
+      "path": "2026-09-11_5Min.jsonl",
+      "repeat_match": true,
+      "rows": 1580,
+      "sha256": "bbf0868278307e81af0d601de3220634ac3229d4a16be52791e2853ed473b7b1"
+    },
+    {
+      "path": "2026-09-14_30Min.jsonl",
+      "repeat_match": true,
+      "rows": 3450,
+      "sha256": "730927d7c56485bec74b48c98e2653af8c48aeab0dc54cce88ef4bd815e6f6ce"
+    },
+    {
+      "path": "2026-09-14_5Min.jsonl",
+      "repeat_match": true,
+      "rows": 1580,
+      "sha256": "9a12e85f02c4a750b81481d70a774c24004033fef64f948ba1b04a64d60f614d"
+    },
+    {
+      "path": "2026-09-15_30Min.jsonl",
+      "repeat_match": true,
+      "rows": 3452,
+      "sha256": "49eb2d255a88cf52c14c38b265dced3e6e7f748406a480c7eff0f6f4cb0a089e"
+    },
+    {
+      "path": "2026-09-15_5Min.jsonl",
+      "repeat_match": true,
+      "rows": 1580,
+      "sha256": "ca737808f26550cf04be910000d3a3a9e7d3978d25bbaf77103bfb2f3093fe21"
+    }
+  ],
+  "observer_reference_identical": true,
+  "primary_fetched_at": "2026-09-18T16:49:47.168479+00:00",
+  "primary_manifest_sha256": "8d9cd8a4674827abc11bf60805d53ca812c738bb28417b672a10e3f98790dc1b",
+  "proof_id": "OPTIONS_TRIGGER_BAR_REFETCH_REPEAT",
+  "proof_version": "repeat-v0.1",
+  "repeat_fetched_at": "2026-09-18T16:50:51.048241+00:00",
+  "repeat_manifest_sha256": "d8839ead568075bfa61c79b615b2740bcba9e7a3ab673602349ea758e999f1db",
+  "same_file_set": true
+}
