@@ -12,8 +12,13 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import sys
 import tempfile
 from typing import Iterable
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from options_manager.quotes import (
     build_quote_manifest,
@@ -60,6 +65,7 @@ def materialize_manifest(
     rule = retention_rule_from_mapping(rule_raw)
     rule_sha = hashlib.sha256(rule_bytes).hexdigest()
 
+    quote_files = tuple(quote_files)
     files: dict[str, bytes] = {}
     for supplied in quote_files:
         path = supplied if supplied.is_absolute() else root / supplied
@@ -75,6 +81,22 @@ def materialize_manifest(
     payload = quote_manifest_json(manifest).encode("utf-8")
 
     destination = output_path if output_path.is_absolute() else root / output_path
+    if destination.is_symlink():
+        raise ValueError(f"manifest output must not be a symlink: {destination}")
+    destination_resolved = destination.resolve(strict=False)
+    try:
+        destination_resolved.relative_to(root)
+    except ValueError as exc:
+        raise ValueError(f"manifest output must stay inside dataset root: {destination}") from exc
+
+    input_paths = {
+        (supplied if supplied.is_absolute() else root / supplied).resolve(strict=True)
+        for supplied in quote_files
+    }
+    if destination_resolved in input_paths:
+        raise ValueError(f"manifest output must not overwrite quote dataset input: {destination}")
+
+    destination = destination_resolved
     destination.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(dir=destination.parent, prefix=f".{destination.name}.", delete=False) as tmp:
         tmp.write(payload)
