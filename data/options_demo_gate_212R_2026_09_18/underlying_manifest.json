@@ -1,0 +1,74 @@
+{
+  "classifier_files_at_code_sha": {
+    "alert_ranker/coverage_observer.py": "93024c42aee8eeeec44e6f72c5d3e5b3d9bf5aa81af03b20aa5656e2054f4ed5",
+    "strategy/strat_classifier.py": "f0ff1e997976dcfb9dc02986018949d994a03ba2d059bf4f864deef1a15f0837"
+  },
+  "code_sha": "5633a59ca5cd3a2487b28e2caee598881bf5e857",
+  "files": {
+    "AUDIT_REPORT.md": {
+      "bytes": 12092,
+      "sha256": "abd8d0de26b7f724a64842f7af23679c5070903c4660260bc320fabbe1cdbba3"
+    },
+    "BASELINE_COMPARISON.csv": {
+      "bytes": 300845,
+      "sha256": "3f0695487970744d3d1d0b4c0c971175e8ae6269be2331a8588482e1ab122c86"
+    },
+    "FAMILY_POPULATION_MASTER.csv": {
+      "bytes": 3538363,
+      "sha256": "bc9d469c88a1e2d02b5febdc8e9ea691f477756d910910a93bc89bd305f20685"
+    },
+    "FAMILY_SUMMARY.csv": {
+      "bytes": 6368,
+      "sha256": "32f21ea4049277781ff7c31f52dabb9e69c71da4abb98c565a4055bf1ef82344"
+    },
+    "FAMILY_SUMMARY_EX_OPENING.csv": {
+      "bytes": 1150,
+      "sha256": "88de5a2c3f3768a195c30e869433363e69bab8d62fff4b45323ded3160cd4828"
+    },
+    "SESSION_SYMBOL_CONCENTRATION.csv": {
+      "bytes": 12246,
+      "sha256": "0ebc156e72065210c2694ef1eb3a05f2b467c816c1600b182c1957890bf220a7"
+    },
+    "family_validation.py": {
+      "bytes": 20305,
+      "sha256": "52815f50feb673d348db5c84c1a27f26e5beebcc00fbdcb237ced88a2d7cda90"
+    },
+    "outcomes_2026-09-09_2026-09-15.json": {
+      "bytes": 35024516,
+      "sha256": "1963db73bccf0fd366eaaa077bb4e9582ed453ff220f1c5e789961096f3f113c"
+    },
+    "prospective_family_summary.csv": {
+      "bytes": 4363,
+      "sha256": "01c5b4b3484f834eae80e01fdc1343e53380756ca2af4e8147845e6783dc9ccc"
+    },
+    "prospective_validation.py": {
+      "bytes": 13464,
+      "sha256": "4c9503701b9a4b54afdf58a9b6d50042f5e9854610a32887fa50cec14d7ed5f1"
+    },
+    "status.json": {
+      "bytes": 236,
+      "sha256": "bcb95cd5b0c6afc60680375b5a15a01bab67d506da57a62e9611472c2a5dd20e"
+    }
+  },
+  "manifest_version": "underlying-v1",
+  "note": "UNDERLYING ONLY. No option chain, quote, contract or premium data exists for STRAT_212_REVERSAL episodes.",
+  "option_quote_rows": 0,
+  "population": {
+    "STRAT_212_REVERSAL_primary20_rows": 81,
+    "master_rows_all_families": 7071,
+    "sessions_prospective": [
+      "2026-09-16",
+      "2026-09-17"
+    ],
+    "sessions_retrospective": [
+      "2026-09-09",
+      "2026-09-10",
+      "2026-09-11",
+      "2026-09-14",
+      "2026-09-15"
+    ]
+  },
+  "source": "09-16 outcome-independent family validation (session 4c018889 scratchpad missed-signal-audit/family_validation) + prospective_validation 09-16/09-17",
+  "strategy_family": "STRAT_212_REVERSAL",
+  "underlying_bar_provider": "options coverage observer (alert_ranker/coverage_observer.py), 30m RTH bars, 20-symbol universe; collector pinned 771b6cf at collection time"
+}
