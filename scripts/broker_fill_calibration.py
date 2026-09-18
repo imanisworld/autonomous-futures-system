@@ -188,28 +188,69 @@ def _summarize(fills: list[dict[str, Any]], no_fills: list[dict[str, Any]], unkn
 
 def audit(paths: list[Path], *, source_mode: str = "unproven") -> dict[str, Any]:
     rows, read_errors = _rows(paths)
-    fills: list[dict[str, Any]] = []
-    no_fills: list[dict[str, Any]] = []
-    unknown_rows: list[dict[str, Any]] = []
+    fills_by_id: dict[str, dict[str, Any]] = {}
+    no_fills_by_id: dict[str, dict[str, Any]] = {}
+    unknown_by_id: dict[str, dict[str, Any]] = {}
+    identity_conflicts: list[str] = []
+    duplicate_identity_rows = 0
     paper_trade_rows = 0
 
     for row in rows:
         if row.get("decision") == "TRADE" and row.get("paper_order_id"):
             paper_trade_rows += 1
+
         fill = _fill_measurement(row)
         if fill is not None:
-            fills.append(fill)
+            client_id = str(fill["client_order_id"])
+            previous = fills_by_id.get(client_id)
+            if previous is None:
+                fills_by_id[client_id] = fill
+            else:
+                duplicate_identity_rows += 1
+                comparable = (
+                    "instrument", "requested_entry", "actual_entry",
+                    "slippage_ticks", "adverse_slippage_ticks",
+                )
+                if any(previous.get(k) != fill.get(k) for k in comparable):
+                    identity_conflicts.append(
+                        f"conflicting exact fill rows for client_order_id={client_id}"
+                    )
         elif _external_trade_without_exact_audit(row):
-            unknown_rows.append({
+            client_id = str(row.get("client_order_id") or "").strip()
+            unknown_by_id.setdefault(client_id, {
                 "instrument": str(row.get("instrument") or "").upper(),
-                "client_order_id": row.get("client_order_id"),
+                "client_order_id": client_id,
                 "ts": row.get("ts"),
                 "source_path": row.get("_source_path"),
                 "source_line": row.get("_source_line"),
             })
+
         no_fill = _no_fill_measurement(row)
         if no_fill is not None:
-            no_fills.append(no_fill)
+            client_id = str(no_fill["client_order_id"])
+            previous = no_fills_by_id.get(client_id)
+            if previous is None:
+                no_fills_by_id[client_id] = no_fill
+            else:
+                duplicate_identity_rows += 1
+                comparable = ("instrument", "no_fill_reason", "order_type", "requested_entry")
+                if any(previous.get(k) != no_fill.get(k) for k in comparable):
+                    identity_conflicts.append(
+                        f"conflicting no-fill rows for client_order_id={client_id}"
+                    )
+
+    overlap = sorted(set(fills_by_id) & set(no_fills_by_id))
+    identity_conflicts.extend(
+        f"client_order_id={client_id} appears as both exact fill and CANCELLED no-fill"
+        for client_id in overlap
+    )
+
+    fills = list(fills_by_id.values())
+    no_fills = list(no_fills_by_id.values())
+    unknown_rows = [
+        row for client_id, row in unknown_by_id.items()
+        if client_id not in fills_by_id and client_id not in no_fills_by_id
+    ]
 
     instruments = sorted(
         {row["instrument"] for row in fills + no_fills + unknown_rows if row.get("instrument")}
@@ -224,7 +265,7 @@ def audit(paths: list[Path], *, source_mode: str = "unproven") -> dict[str, Any]
     overall = _summarize(fills, no_fills, len(unknown_rows))
     status = (
         "CORRUPT_SOURCE"
-        if read_errors
+        if read_errors or identity_conflicts
         else "MEASURED"
         if fills or no_fills
         else "INSUFFICIENT"
@@ -243,6 +284,8 @@ def audit(paths: list[Path], *, source_mode: str = "unproven") -> dict[str, Any]
         "input_files": [str(path) for path in _paths(paths)],
         "rows_read": len(rows),
         "read_errors": read_errors,
+        "identity_conflicts": list(dict.fromkeys(identity_conflicts)),
+        "duplicate_identity_rows_deduplicated": duplicate_identity_rows,
         "paper_trade_rows_excluded": paper_trade_rows,
         "overall": overall,
         "by_instrument": by_instrument,
