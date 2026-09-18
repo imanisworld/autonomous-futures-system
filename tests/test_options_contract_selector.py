@@ -18,6 +18,7 @@ from options_manager.contracts.selector import (
 )
 
 RULE_PATH = Path("options_manager/contracts/selector_rule_v1.json")
+QUOTE_RULE_PATH = Path("options_manager/quotes/quote_retention_rule_v1.json")
 
 
 def _rule():
@@ -67,6 +68,7 @@ def test_rule_file_loads_and_is_conservative():
     assert rule.min_volume == 100
     assert rule.min_open_interest == 500
     assert rule.max_spread_percent == 20.0
+    assert rule.max_quote_age_seconds == 900
 
 
 def test_same_inputs_are_deterministic_and_chain_order_independent():
@@ -186,6 +188,47 @@ def test_future_quote_cannot_win_no_hindsight():
     result = _select([future_better, known])
     assert result.contract_id == "KNOWN"
     assert result.candidates_excluded_by_reason["future_quote"] == 1
+
+
+def test_stale_best_contract_is_excluded_before_ranking():
+    fresh = _row(
+        contract_id="FRESH",
+        delta=0.52,
+        strike=552.0,
+        quote_ts="2026-09-18T13:59:00+00:00",
+    )
+    stale_better = _row(
+        contract_id="STALE",
+        delta=0.50,
+        strike=550.0,
+        quote_ts="2026-09-18T13:45:59+00:00",
+    )
+    result = _select([stale_better, fresh])
+    assert result.status == "SELECTED"
+    assert result.contract_id == "FRESH"
+    assert result.candidates_excluded_by_reason["stale_quote"] == 1
+
+
+def test_quote_exactly_at_frozen_age_limit_is_eligible():
+    result = _select(
+        [_row(contract_id="BOUNDARY", quote_ts="2026-09-18T13:46:00+00:00")]
+    )
+    assert result.status == "SELECTED"
+    assert result.contract_id == "BOUNDARY"
+    assert "stale_quote" not in result.candidates_excluded_by_reason
+
+
+def test_quote_one_second_beyond_frozen_age_limit_is_stale():
+    result = _select(
+        [_row(contract_id="STALE", quote_ts="2026-09-18T13:45:59+00:00")]
+    )
+    assert result.status == "NO_CONTRACT"
+    assert result.candidates_excluded_by_reason["stale_quote"] == 1
+
+
+def test_selector_quote_age_limit_matches_retention_rule():
+    retention = json.loads(QUOTE_RULE_PATH.read_text())
+    assert _rule().max_quote_age_seconds == retention["max_quote_age_seconds"] == 900
 
 
 def test_wrong_option_right_is_rejected():
@@ -330,3 +373,15 @@ def test_serialized_non_string_contract_identity_fails_closed_without_sort_error
     assert result.status == "SELECTED"
     assert result.contract_id == "B"
     assert result.candidates_excluded_by_reason["missing_identity"] == 1
+
+
+
+def test_invalid_quote_age_rule_boolean_is_rejected():
+    raw = json.loads(RULE_PATH.read_text())
+    raw["max_quote_age_seconds"] = True
+    try:
+        selector_rule_from_mapping(raw)
+    except ValueError as exc:
+        assert "max_quote_age_seconds" in str(exc)
+    else:
+        raise AssertionError("boolean max_quote_age_seconds must be rejected")
