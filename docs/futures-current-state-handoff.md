@@ -451,7 +451,7 @@ Verified since the prior handoff:
 - MNQ/MES future BarHistory provenance now preserves incoming `MNQ1!` / `MES1!` source ticker metadata (#663), without rewriting history or proving dated-contract identity.
 - **Roll-proof correction:** Sep-14 MNQ/MES evidence proves U6 before an intraday gap and Z6 from 22:00Z onward, but does not observe the switch boundary itself. The prior claim that the U6→Z6 switch was observed exactly at 22:00Z is superseded. Exact seam status is `NOT_OBSERVABLE` / `ROLL_PROVENANCE_UNKNOWN`.
 - X0 v1.5.1 had a research-proof defect that could call a seam `FEED_CONFIRMED` across an evidence gap. v1.5.2 adds fail-closed continuity enforcement. This is research tooling only; no runtime path changes.
-- Transition 400t/30m PR #659 remains draft / research-only / PAPER ONLY and fails required adverse-slippage robustness; do not merge or deploy it for execution.
+- Transition 400t/30m PR #659 is **closed unmerged**; the research classification remains WAIT / PAPER ONLY after failing required adverse-slippage robustness. Do not revive or deploy it for execution.
 
 Deployment state during this reconciliation:
 
