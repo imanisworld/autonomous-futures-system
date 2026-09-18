@@ -10,6 +10,7 @@ from .retention import (
     quote_record_json,
     retain_quote,
     retention_rule_from_mapping,
+    verify_quote_manifest_files,
 )
 
 __all__ = [
@@ -22,4 +23,5 @@ __all__ = [
     "quote_record_json",
     "retain_quote",
     "retention_rule_from_mapping",
+    "verify_quote_manifest_files",
 ]
