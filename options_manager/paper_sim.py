@@ -19,6 +19,7 @@ Independent of risk/risk_engine.py (futures) and risk/options_risk_engine.py
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import math
 from typing import Literal, Optional
 
 from .config import OptionsManagerConfig
@@ -146,6 +147,30 @@ def simulate_round_trip(
                 f"contract_quality data_blocked: failed_rule={quality_result.failed_rule!r}, "
                 f"reason={quality_result.reason!r}",
             )
+
+    cost_inputs = (
+        ("paper_sim_slippage_percent", cfg.paper_sim_slippage_percent, False),
+        ("paper_sim_per_contract_fee", cfg.paper_sim_per_contract_fee, False),
+        ("paper_sim_contract_multiplier", cfg.paper_sim_contract_multiplier, True),
+    )
+    for name, value, require_integer in cost_inputs:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            reason = (
+                f"{name} must be a positive integer"
+                if require_integer
+                else f"{name} must be a finite non-negative number"
+            )
+            return _rejected("fill_model", reason)
+        numeric = float(value)
+        if not math.isfinite(numeric) or numeric < 0:
+            reason = (
+                f"{name} must be a positive integer"
+                if require_integer
+                else f"{name} must be a finite non-negative number"
+            )
+            return _rejected("fill_model", reason)
+        if require_integer and (not isinstance(value, int) or value <= 0):
+            return _rejected("fill_model", f"{name} must be a positive integer")
 
     # 3. Entry fill.
     entry_mode = (cfg.paper_sim_entry_fill or "").strip().upper()
