@@ -438,11 +438,32 @@ Do not delete historical evidence files merely because they are old. Closed PRs 
 - `context/structural_regime.py` contiguity/warm-up rule while any Asia-session evidence is being collected
 - the #376 real-book isolation (HOLD; reversal is a separate ruling)
 
+## 2026-09-18 audit reconciliation — current override
+
+This section supersedes the older statement below that all repository work is complete.
+
+Verified since the prior handoff:
+
+- Backtest fidelity Layer 1 (#652) merged; MNQ/MES v1.5 frozen replay rebuild passed manifest/hash and weekly-level semantic verification.
+- C14-affected P3 parity rerun passed for every admitted structural level; VWAP/C16 remains diagnostic / not admitted.
+- Tradovate runtime provenance was independently proven DEMO with live trading disabled; broker-fill calibration remains **INSUFFICIENT** because all 95 journals contain zero exact external fills/no-fills.
+- M2K 2026-09-17 transport gap was audited: 11 missing 15m bars (13:30Z–16:00Z); contaminated terminal outcomes are automatically excluded by the deployed `DATA_GAP_CONTAMINATED` quality gate.
+- MNQ/MES future BarHistory provenance now preserves incoming `MNQ1!` / `MES1!` source ticker metadata (#663), without rewriting history or proving dated-contract identity.
+- **Roll-proof correction:** Sep-14 MNQ/MES evidence proves U6 before an intraday gap and Z6 from 22:00Z onward, but does not observe the switch boundary itself. The prior claim that the U6→Z6 switch was observed exactly at 22:00Z is superseded. Exact seam status is `NOT_OBSERVABLE` / `ROLL_PROVENANCE_UNKNOWN`.
+- X0 v1.5.1 had a research-proof defect that could call a seam `FEED_CONFIRMED` across an evidence gap. v1.5.2 adds fail-closed continuity enforcement. This is research tooling only; no runtime path changes.
+- Transition 400t/30m PR #659 remains draft / research-only / PAPER ONLY and fails required adverse-slippage robustness; do not merge or deploy it for execution.
+
+Deployment state during this reconciliation:
+
+- futures service remains on release `94eb7d388c02b744eed5a3d3d36b14fa724f1781` (`94eb7d3` release directory), active since 2026-09-17 21:36Z;
+- current preflight is not armed, reports `preflight_passed_not_armed`, zero open positions and zero working orders; live-box drift guard is healthy;
+- runtime environment remains Tradovate DEMO, live trading disabled, `SCHEDULE_MODE=always_on_shadow`;
+- no restart or deployment was performed for #652, #660, #662 or #663;
+- do **not** restart merely to pick up research/docs/provenance changes. A future sanctioned release should reconcile the full `main` delta and be cut only when there is an operational reason.
+
 ## Safe next step
 
-**Repository work is complete and all four collections are collecting.** The remaining work is
-observation, not building. No `.env`, release, restart, runner, strategy or gate change before
-2026-09-30 (the #595 activation was a one-time, explicitly waived exception).
+Repository work is **not** globally complete: the X0 gap-continuity proof correction must merge first. After that, remaining roll questions are observation-bound (MCL first live seam, MBT Sep-25 seam, MGC late-Nov seam) and broker-fill calibration is data-bound. No strategy activation, `.env` change, broker submission or runtime restart is authorized merely to manufacture evidence.
 
 Next:
 
