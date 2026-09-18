@@ -23,6 +23,7 @@ from .selector import (
     OptionChainRow,
     SelectorRule,
     select_contract,
+    selection_result_json,
     selector_rule_from_mapping,
 )
 
@@ -35,5 +36,6 @@ __all__ = [
     "OptionChainRow",
     "SelectorRule",
     "select_contract",
+    "selection_result_json",
     "selector_rule_from_mapping",
 ]
