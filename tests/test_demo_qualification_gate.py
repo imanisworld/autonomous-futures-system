@@ -4,7 +4,10 @@ import hashlib
 import json
 from pathlib import Path
 
-from ops.project_check.demo_qualification import build_demo_qualification_report
+from ops.project_check.demo_qualification import (
+    _verify_session_day_identity,
+    build_demo_qualification_report,
+)
 
 
 def _sha256(path: Path) -> str:
@@ -29,8 +32,29 @@ def _runtime_snapshot(**_kwargs) -> dict:
 
 
 def _complete_evidence(tmp_path: Path) -> dict:
+    replay_file = tmp_path / "bars_MNQ_2026-01-02.jsonl"
+    replay_file.write_text('{"timestamp":"2026-01-02T00:00:00+00:00"}\n', encoding="utf-8")
     manifest = tmp_path / "manifest.json"
-    manifest.write_text('{"dataset":"frozen"}\n', encoding="utf-8")
+    manifest.write_text(
+        json.dumps(
+            {
+                "instrument": "MNQ",
+                "timeframe_minutes": 15,
+                "coverage": {"files": 1, "rows": 1},
+                "gap_ledger_cme_hours": [],
+                "files": {
+                    replay_file.name: {
+                        "sha256": _sha256(replay_file),
+                        "rows": 1,
+                        "first": "2026-01-02T00:00:00+00:00",
+                        "last": "2026-01-02T00:00:00+00:00",
+                    }
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     risk_rules = tmp_path / "risk_rules.yaml"
     risk_rules.write_text("version: test\n", encoding="utf-8")
     return {
@@ -140,6 +164,16 @@ def _pin_runtime_head_and_diff(monkeypatch, changed_files: str = "strategy/examp
         "ops.project_check.demo_qualification.gitutil.run_git",
         lambda _args, cwd: (changed_files, None),
     )
+    monkeypatch.setattr(
+        "ops.project_check.demo_qualification._verify_session_day_identity",
+        lambda _root, instrument: {
+            "ok": instrument == "MNQ",
+            "instrument": instrument,
+            "rows_checked": 1,
+            "mismatches": [],
+            "reason": None if instrument == "MNQ" else "unsupported test instrument",
+        },
+    )
 
 
 def test_complete_strategy_only_evidence_qualifies_for_demo(tmp_path: Path, monkeypatch) -> None:
@@ -214,6 +248,74 @@ def test_session_day_identity_must_be_proven(tmp_path: Path, monkeypatch) -> Non
 
     assert report["gate_pass"] is False
     assert any("session_day_identity_proven" in blocker for blocker in report["blockers"])
+
+
+def test_session_day_identity_true_claim_still_requires_mechanical_fixture_proof(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _pin_runtime_head_and_diff(monkeypatch)
+    monkeypatch.setattr(
+        "ops.project_check.demo_qualification._verify_session_day_identity",
+        lambda _root, _instrument: {"ok": False, "reason": "fixture hash mismatch"},
+    )
+    evidence = _write_evidence(tmp_path, _complete_evidence(tmp_path))
+
+    report = build_demo_qualification_report(
+        strategy="example", repo_root=tmp_path, evidence_path=evidence
+    )
+
+    assert report["gate_pass"] is False
+    assert any("mechanical C14 fixture proof" in blocker for blocker in report["blockers"])
+
+
+def test_current_c14_fixture_package_mechanically_proves_mes_and_mnq() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    for instrument in ("MES", "MNQ"):
+        proof = _verify_session_day_identity(repo_root, instrument)
+        assert proof["ok"] is True, proof
+        assert proof["rows_checked"] > 0
+        assert proof["mismatches"] == []
+
+
+def test_feed_integrity_true_claim_still_requires_replay_file_hashes(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _pin_runtime_head_and_diff(monkeypatch)
+    payload = _complete_evidence(tmp_path)
+    (tmp_path / "bars_MNQ_2026-01-02.jsonl").write_text(
+        '{"timestamp":"tampered"}\n', encoding="utf-8"
+    )
+    evidence = _write_evidence(tmp_path, payload)
+
+    report = build_demo_qualification_report(
+        strategy="example", repo_root=tmp_path, evidence_path=evidence
+    )
+
+    assert report["gate_pass"] is False
+    feed = report["data_integrity"]["mechanical_feed_integrity"]
+    assert feed["ok"] is False
+    assert feed["file_hash_mismatches"]
+    assert any("frozen manifest/file proof" in blocker for blocker in report["blockers"])
+
+
+def test_feed_integrity_requires_explicit_gap_ledger(tmp_path: Path, monkeypatch) -> None:
+    _pin_runtime_head_and_diff(monkeypatch)
+    payload = _complete_evidence(tmp_path)
+    manifest = Path(payload["data_integrity"]["dataset_manifest_path"])
+    body = json.loads(manifest.read_text(encoding="utf-8"))
+    body.pop("gap_ledger_cme_hours")
+    manifest.write_text(json.dumps(body) + "\n", encoding="utf-8")
+    payload["data_integrity"]["dataset_manifest_sha256"] = _sha256(manifest)
+    evidence = _write_evidence(tmp_path, payload)
+
+    report = build_demo_qualification_report(
+        strategy="example", repo_root=tmp_path, evidence_path=evidence
+    )
+
+    assert report["gate_pass"] is False
+    feed = report["data_integrity"]["mechanical_feed_integrity"]
+    assert feed["ok"] is False
+    assert any("gap_ledger_cme_hours" in problem for problem in feed["problems"])
 
 
 def test_sample_floor_cannot_be_registered_below_30_per_required_cell(tmp_path: Path, monkeypatch) -> None:
