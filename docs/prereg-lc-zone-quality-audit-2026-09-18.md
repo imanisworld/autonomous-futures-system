@@ -40,7 +40,10 @@ Measure, at every 15m as-of point:
 - top/bottom boundary agreement;
 - rate of current-live nearest zones whose defining impulse HTF bucket was not
   complete at the as-of time;
-- within-bucket zone churn (appears, changes, or disappears before HTF close).
+- within-bucket zone churn (appears, changes, or disappears before HTF close);
+- rolling-MTR qualification churn: an already-formed, unbroken, in-lookback zone
+  disappears/reappears solely because the detector recomputes the impulse
+  threshold against a later rolling MTR.
 
 **Blocking rule:** if nearest-zone identity differs on >= 1.0% of comparable
 as-of rows, or if any 4HR target-geometry row used a zone created from an
@@ -142,10 +145,13 @@ first-touch pairs:
 If combined uplift is positive but the CI crosses zero or one instrument
 reverses, classify **PROMISING BUT UNPROVEN**.
 
-If uplift is near zero, classify **NO EVIDENCE OF ZONE QUALITY**.
+For this prereg, "near zero" means absolute combined uplift < 2.0 percentage
+points; classify **NO EVIDENCE OF ZONE QUALITY**.
 
-If controls materially outperform the detected zones, classify **BROKEN AS A
-REACTION-AREA DETECTOR**.
+Controls "materially outperform" when combined uplift is <= -5.0 percentage
+points and the paired-bootstrap 95% CI upper bound is < 0; classify **BROKEN AS
+A REACTION-AREA DETECTOR**. Negative results not meeting that materiality rule
+are **NO EVIDENCE OF ZONE QUALITY**.
 
 Regardless of outcome, this audit cannot classify a trading strategy as
 VALIDATED.
