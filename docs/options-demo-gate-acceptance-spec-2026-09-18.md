@@ -32,6 +32,13 @@ The machine-readable partition is `docs/options-demo-gate-acceptance/expected_re
 
 ## 3. Item 1 — Mechanical contract selector
 
+**Implementation status (2026-09-18).** PR #656 merged as `d87d858` and establishes the canonical
+advisory-only selector foundation: frozen rule file, deterministic expiration/strike ranking, DTE/liquidity
+filters, no-hindsight quote exclusion, rule SHA-256 in output, expiration↔DTE consistency checks, and
+byte-stable serialization. **Item 1 is not yet complete for gate retirement.** Replay/forward golden parity
+and wiring the exact same serialized selector inputs through both evidence paths remain outstanding, so none
+of the 10 Item-1 baseline blockers should be marked retired solely because #656 merged.
+
 **Requirement.** A pure function that, given a frozen selector rule file and a decision-time chain snapshot,
 chooses **exactly one** contract (or `NO_CONTRACT` with a reason code) from: deterministic expiration rule,
 strike / delta / moneyness rule, DTE rule, liquidity rule. `contracts/contract_validator.evaluate_contract_constraints`
@@ -141,7 +148,7 @@ slippage stress (e.g. 2× the base slippage%) must still leave the aggregate res
 
 **Requirement.**
 - **Planned risk from premium stop.** `planned_risk_dollars = (entry_fill − premium_stop) × multiplier × contracts`; must be finite, > 0, ≤ `risk_max_total_premium_dollars` (300). A plan whose planned risk is derived from anything else (e.g. full premium, underlying stop) is rejected with a reason code. `plans/base.py` already requires `premium_stop: float`; the calculation must be a single named function with a test.
-- **Explicit aggregate open-risk budget.** `validation/portfolio_risk_gate.evaluate_portfolio_risk` already blocks on `None` (`aggregate_risk_budget_missing`) — keep. Add: the evidence packet must carry the *same* finite value the runtime config carries, and the gate compares them (new key, e.g. `risk_policy.aggregate_budget_source_path` + hash), so a packet cannot claim a budget the box does not enforce. *Setting the box value is a `.env` change — held until after 09-30.*
+- **Explicit aggregate open-risk budget.** `validation/portfolio_risk_gate.evaluate_portfolio_risk` already blocks on `None` (`aggregate_risk_budget_missing`) — keep. Add: the evidence packet must carry the *same* finite value the runtime config carries, and the gate compares them (new key, e.g. `risk_policy.aggregate_budget_source_path` + hash), so a packet cannot claim a budget the box does not enforce. *Setting the box value is a `.env` / box configuration change and is **not authorized by the implementation waiver**; it still requires a separate explicit operator approval.*
 - **No averaging down.** A new entry on an underlying+direction that already has an open position (or an open order) is rejected with `averaging_down_rejected`; no code path may bypass it. Currently no such guard exists in `options_manager/` (baseline `_averaging_basis`).
 
 **Proof required:**
@@ -212,14 +219,22 @@ The preserved #653 evidence remains unchanged, so those two lines intentionally 
 an option-side backtest with ≥30 resolved fills per required cell, positive after-cost expectancy, and a prospective sample
 that actually persists — none of which this spec authorizes.
 
-## 8. Freeze boundary (until 2026-09-30, absent an explicit waiver)
+## 8. Post-waiver implementation boundary (2026-09-18)
 
-| Allowed now (offline) | Held |
+The operator explicitly waived the 09-30 **implementation** hold for Items 1, 2, 2B, and 3.
+That waiver changes what may be built and reviewed; it does **not** authorize operational activation.
+
+| Allowed now | Still requires separate explicit approval / proof |
 |---|---|
-| This spec; refinements to it | Selector code |
-| Fixture *design* (expected inputs/outputs written down, no code) | Quote-retention change in scanner/runtime |
-| 212R drawdown/concentration pre-registration (docs) | Averaging-down guard, planned-risk function |
-| Test-plan review | Any `.env` / box config change (aggregate budget) |
-| | Any rerun that requires new code |
+| Selector implementation and tests (Item 1; foundation merged in #656) | Deploy/restart of any service |
+| Quote-retention implementation and tests (Item 2) | Any `.env` / box config change, including aggregate-risk budget |
+| Executable-fill reconstruction and tests (Item 2B) | Paper/DEMO activation |
+| Planned-risk / no-averaging implementation and tests (Item 3) | Broker submission or LIVE trading |
+| Offline fixtures, manifests, gate reruns, and evidence regeneration needed to prove the infrastructure | Claiming a blocker retired without the required hashed artifact / parity fixture |
+| Docs/spec refinements and independent review | Promotion of 212R while classification remains `WAIT` |
+
+The implementation waiver does not alter the regression target: infrastructure is only "done" when the preserved
+#653 baseline rerun leaves exactly the 23 strategy-specific blockers, remains `BLOCKED`, remains `WAIT`, and
+both activation flags remain `false`.
 
 Related: `docs/options-backtest-to-demo-qualification-gate.md` (gate contract, verified-vs-attested table).
