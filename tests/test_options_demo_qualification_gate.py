@@ -16,10 +16,24 @@ def _evidence(tmp_path: Path) -> dict:
     quotes = tmp_path / "quotes_manifest.json"
     policy = tmp_path / "options_policy.json"
     selector = tmp_path / "selector_rule.json"
+    risk_budget = tmp_path / "aggregate_risk_budget.json"
     underlying.write_text('{"frozen":true}\n', encoding="utf-8")
     quotes.write_text('{"frozen":true}\n', encoding="utf-8")
     policy.write_text('{"policy":"test"}\n', encoding="utf-8")
     selector.write_text('{"selector":"test"}\n', encoding="utf-8")
+    risk_budget.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "source_env_key": "OPTIONS_MANAGER_MAX_AGGREGATE_OPEN_RISK_DOLLARS",
+                "max_aggregate_open_risk_dollars": 900.0,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     return {
         "strategy": "options_test",
         "classification": "PROMISING BUT UNPROVEN",
@@ -91,6 +105,8 @@ def _evidence(tmp_path: Path) -> dict:
             "no_averaging_down": True,
             "max_trade_risk_dollars": 300,
             "max_aggregate_open_risk_dollars": 900,
+            "aggregate_budget_source_path": str(risk_budget),
+            "aggregate_budget_source_sha256": _sha(risk_budget),
         },
         "validation": {
             "untouched_validation_window": True,
@@ -329,3 +345,105 @@ def test_bad_classification_blocks(tmp_path: Path, monkeypatch) -> None:
     )
     assert report["gate_pass"] is False
     assert any("classification" in x for x in report["blockers"])
+
+
+def test_missing_aggregate_budget_source_blocks(tmp_path: Path, monkeypatch) -> None:
+    _patch_repo(monkeypatch)
+    payload = _evidence(tmp_path)
+    payload["risk_policy"].pop("aggregate_budget_source_path")
+    payload["risk_policy"].pop("aggregate_budget_source_sha256")
+    report = gate.build_options_demo_qualification_report(
+        strategy="options_test",
+        repo_root=tmp_path,
+        evidence_path=_write(tmp_path, payload),
+    )
+    assert report["gate_pass"] is False
+    assert any("aggregate_budget_source_path is required" in x for x in report["blockers"])
+    assert any("aggregate_budget_source_sha256 is required" in x for x in report["blockers"])
+
+
+def test_aggregate_budget_source_value_must_match_claim(tmp_path: Path, monkeypatch) -> None:
+    _patch_repo(monkeypatch)
+    payload = _evidence(tmp_path)
+    source = Path(payload["risk_policy"]["aggregate_budget_source_path"])
+    source.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "source_env_key": "OPTIONS_MANAGER_MAX_AGGREGATE_OPEN_RISK_DOLLARS",
+                "max_aggregate_open_risk_dollars": 850.0,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    payload["risk_policy"]["aggregate_budget_source_sha256"] = _sha(source)
+    report = gate.build_options_demo_qualification_report(
+        strategy="options_test",
+        repo_root=tmp_path,
+        evidence_path=_write(tmp_path, payload),
+    )
+    assert report["gate_pass"] is False
+    assert any("does not match aggregate budget source" in x for x in report["blockers"])
+
+
+def test_aggregate_budget_source_env_key_is_frozen(tmp_path: Path, monkeypatch) -> None:
+    _patch_repo(monkeypatch)
+    payload = _evidence(tmp_path)
+    source = Path(payload["risk_policy"]["aggregate_budget_source_path"])
+    source.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "source_env_key": "OTHER_KEY",
+                "max_aggregate_open_risk_dollars": 900.0,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    payload["risk_policy"]["aggregate_budget_source_sha256"] = _sha(source)
+    report = gate.build_options_demo_qualification_report(
+        strategy="options_test",
+        repo_root=tmp_path,
+        evidence_path=_write(tmp_path, payload),
+    )
+    assert report["gate_pass"] is False
+    assert any("OPTIONS_MANAGER_MAX_AGGREGATE_OPEN_RISK_DOLLARS" in x for x in report["blockers"])
+
+
+def test_aggregate_budget_source_hash_drift_blocks(tmp_path: Path, monkeypatch) -> None:
+    _patch_repo(monkeypatch)
+    payload = _evidence(tmp_path)
+    payload["risk_policy"]["aggregate_budget_source_sha256"] = "0" * 64
+    report = gate.build_options_demo_qualification_report(
+        strategy="options_test",
+        repo_root=tmp_path,
+        evidence_path=_write(tmp_path, payload),
+    )
+    assert report["gate_pass"] is False
+    assert any("aggregate_budget_source_sha256 does not match current bytes" in x for x in report["blockers"])
+
+
+def test_aggregate_budget_source_rejects_extra_fields(tmp_path: Path, monkeypatch) -> None:
+    _patch_repo(monkeypatch)
+    payload = _evidence(tmp_path)
+    source = Path(payload["risk_policy"]["aggregate_budget_source_path"])
+    raw = json.loads(source.read_text(encoding="utf-8"))
+    raw["accidental_secret"] = "must-not-be-accepted"
+    source.write_text(
+        json.dumps(raw, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+    payload["risk_policy"]["aggregate_budget_source_sha256"] = _sha(source)
+    report = gate.build_options_demo_qualification_report(
+        strategy="options_test",
+        repo_root=tmp_path,
+        evidence_path=_write(tmp_path, payload),
+    )
+    assert report["gate_pass"] is False
+    assert any("aggregate budget source schema mismatch" in x for x in report["blockers"])

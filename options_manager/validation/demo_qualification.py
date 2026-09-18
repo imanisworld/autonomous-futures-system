@@ -8,6 +8,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from .portfolio_risk_gate import AGGREGATE_RISK_BUDGET_ENV
+
 MIN_CELL_FILLS = 30
 MAX_TRADE_RISK = 300.0
 PASS_CLASSES = {"PROMISING BUT UNPROVEN", "VALIDATED"}
@@ -169,7 +171,69 @@ def _fills(ev: dict[str, Any], blockers: list[str]) -> dict[str, Any]:
     return sec
 
 
-def _risk(ev: dict[str, Any], blockers: list[str]) -> dict[str, Any]:
+def _risk_budget_source(
+    root: Path,
+    sec: dict[str, Any],
+    aggregate: float | None,
+    blockers: list[str],
+) -> dict[str, Any]:
+    check = _hash_check(
+        root,
+        sec,
+        "aggregate_budget_source_path",
+        "aggregate_budget_source_sha256",
+        blockers,
+        "risk_policy",
+    )
+    path = _resolve(root, sec.get("aggregate_budget_source_path"))
+    source_env_key: str | None = None
+    source_value: float | None = None
+    if path is not None:
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            blockers.append("risk_policy.aggregate_budget_source_path must contain valid JSON")
+        else:
+            if not isinstance(raw, dict):
+                blockers.append("risk_policy aggregate budget source must be a JSON object")
+            else:
+                expected_keys = {
+                    "schema_version",
+                    "source_env_key",
+                    "max_aggregate_open_risk_dollars",
+                }
+                if set(raw) != expected_keys:
+                    blockers.append(
+                        "risk_policy aggregate budget source schema mismatch"
+                    )
+                if raw.get("schema_version") != 1:
+                    blockers.append(
+                        "risk_policy aggregate budget source schema_version must be 1"
+                    )
+                source_env_key = str(raw.get("source_env_key") or "").strip()
+                if source_env_key != AGGREGATE_RISK_BUDGET_ENV:
+                    blockers.append(
+                        "risk_policy aggregate budget source must identify "
+                        f"{AGGREGATE_RISK_BUDGET_ENV}"
+                    )
+                source_value = _number(raw.get("max_aggregate_open_risk_dollars"))
+                if source_value is None or source_value <= 0:
+                    blockers.append(
+                        "risk_policy aggregate budget source value must be finite and > 0"
+                    )
+                elif aggregate is not None and source_value != aggregate:
+                    blockers.append(
+                        "risk_policy.max_aggregate_open_risk_dollars does not match "
+                        "aggregate budget source"
+                    )
+    return {
+        **check,
+        "source_env_key": source_env_key,
+        "source_value": source_value,
+    }
+
+
+def _risk(root: Path, ev: dict[str, Any], blockers: list[str]) -> dict[str, Any]:
     sec = _flags(ev, blockers, "risk_policy", (
         "underlying_invalidation_required", "numeric_premium_stop_required",
         "planned_risk_uses_premium_stop", "aggregate_open_risk_enforced",
@@ -182,7 +246,8 @@ def _risk(ev: dict[str, Any], blockers: list[str]) -> dict[str, Any]:
     aggregate = _number(sec.get("max_aggregate_open_risk_dollars"))
     if aggregate is None or aggregate <= 0:
         blockers.append("risk_policy.max_aggregate_open_risk_dollars must be explicitly configured")
-    return sec
+    source = _risk_budget_source(root, sec, aggregate, blockers)
+    return {**sec, "aggregate_budget_source_check": source}
 
 
 def _validation(ev: dict[str, Any], blockers: list[str]) -> dict[str, Any]:
@@ -289,7 +354,7 @@ def build_options_demo_qualification_report(*, strategy: str, repo_root: str | P
     selection = {**selection, "selection_rule_check": selection_rule_check}
     data = _data(root, ev, blockers)
     fills = _fills(ev, blockers)
-    risk = _risk(ev, blockers)
+    risk = _risk(root, ev, blockers)
     validation = _validation(ev, blockers)
     parity = _flags(ev, blockers, "golden_parity", (
         "fixture_set_frozen", "underlying_candidate_parity", "contract_selection_parity",
