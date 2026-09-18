@@ -14,7 +14,7 @@ The options scanner now has its **own service-specific immutable release**, inde
 
 The futures bot is separately pinned and must not be conflated with the options-scanner release. Service-aware drift monitoring verifies each pinned release independently.
 
-Current repository `main` is **`f3149be8c5fa9559fd405015f03346cc5c1e8500`** after #710/#712/#713. #710/#712 add selector evidence capture/replay and do **not** change the frozen production contract-selection policy. They are **not deployed** in the options-scanner service-specific release as of this handoff.
+Current repository `main` remains ahead of the service-specific scanner release. #710/#712 add selector evidence capture/replay and do **not** change the frozen production contract-selection policy. The v3 minimal-runtime refactor keeps that evidence path independent of `options_manager`. None of this newer selector-evidence work is deployed in the options-scanner service-specific release as of this handoff.
 
 Focused options-scanner regression for the service-specific provenance deployment: **144 passed**. Targeted selector-evidence regression on merged current `main`: **26 passed**.
 
@@ -47,18 +47,19 @@ The production contract selector authority is **`OPTIONS_PAPER_V1`** in `alert_r
 
 #710 added append-only prospective decision-time selector evidence. #712 then added replay through the same pure `choose_expiration()` + `choose_contract()` functions used by production and made the evidence fail closed if retained-input replay diverges from the actual production choice.
 
-Evidence schema v2 now preserves:
+Evidence schema v3 keeps the active scanner runtime minimal and production-authoritative. It preserves:
 
-- exact serialized selector-input bytes + SHA-256;
+- exact byte-stable production-selector input + SHA-256;
 - exact production selector source SHA-256;
 - all expiration candidates + production-chosen expiration;
 - underlying price/source/timestamp provenance;
 - chain bid/ask plus side timestamps, volume, OI, delta, IV and source identity;
 - actual production selection;
-- exact production replay result + parity;
-- canonical/reference selector result, explicitly labeled non-authoritative.
+- exact production replay result + parity.
 
-Post-merge proof on code baseline `3b343b0` used an isolated temp SQLite DB and a live SPY chain with no Discord send and no broker/order path: 282 chain rows were retained, all 282 carried bid/ask timestamps, OI, delta and IV, production selected `SPY261120C00775000`, retained-input production replay selected the same contract, and `production_replay_parity=true`. The reference canonical selector chose a different contract in the same capture, which is why its role is explicitly non-authoritative.
+The canonical/reference selector is now **offline reference only** and is not imported by the runtime evidence modules. This removes the inactive `options_manager` selector package from the proposed scanner deployment dependency set.
+
+Live branch proof on `476a6b3` used an isolated temp SQLite DB and a live SPY chain with no Discord send and no broker/order path: 282 chain rows were retained, all 282 carried bid/ask timestamps, OI, delta and IV, production selected `SPY261120C00775000`, retained-input production replay selected the same contract, and `production_replay_parity=true`. Runtime evidence modules also have an import guard proving they do not import `options_manager`.
 
 This proves the **current forward capture/replay boundary for the observed capture**, not historical strategy results. Full historical 212R contract-selection replay remains **DATA BLOCKED** because the frozen historical population still lacks proven decision-time delta/open-interest and exact underlying-price provenance. Do not synthesize those fields or substitute current snapshots.
 
