@@ -159,6 +159,33 @@ def test_future_quote_is_excluded_by_selector():
     assert result.candidates_excluded_by_reason["future_quote"] == 1
 
 
+def test_provider_bridge_stale_best_contract_loses_to_fresh_second_best():
+    payload = _payload(
+        [
+            _chain(
+                calls=[
+                    _quote(
+                        symbol="STALE_BEST",
+                        strike=550.0,
+                        delta=0.50,
+                        quote_timestamp="2026-09-18T13:45:59+00:00",
+                    ),
+                    _quote(
+                        symbol="FRESH_SECOND",
+                        strike=552.0,
+                        delta=0.52,
+                        quote_timestamp="2026-09-18T13:59:00+00:00",
+                    ),
+                ]
+            )
+        ]
+    )
+    result = select_contract_from_serialized_input(rule=_rule(), payload=payload)
+    assert result.status == "SELECTED"
+    assert result.contract_id == "FRESH_SECOND"
+    assert result.candidates_excluded_by_reason["stale_quote"] == 1
+
+
 @pytest.mark.parametrize(
     ("chains", "message"),
     [
