@@ -25,6 +25,11 @@ from typing import Any, Mapping, Sequence
 
 from alert_ranker.market_data import OptionChain, OptionContractQuote
 from alert_ranker.options_selector_input import serialized_selector_input_from_option_chains
+from alert_ranker.options_production_selector_replay import (
+    production_selection_matches_replay,
+    production_selector_code_sha256,
+    replay_production_selector,
+)
 from options_manager.contracts import (
     selection_input_from_json,
     select_contract_from_serialized_input,
@@ -33,7 +38,7 @@ from options_manager.contracts import (
 
 ROOT = Path(__file__).resolve().parents[1]
 SELECTOR_RULE_PATH = ROOT / "options_manager" / "contracts" / "selector_rule_v1.json"
-EVIDENCE_VERSION = 1
+EVIDENCE_VERSION = 2
 
 
 def _canonical_json_bytes(value: Mapping[str, Any]) -> bytes:
@@ -139,6 +144,9 @@ def build_selector_evidence_capture(
         "decision_ts": decision_ts,
         "expiration_candidates": [str(item) for item in expirations],
         "chosen_expiration": chosen_expiration,
+        "selector_authority": "OPTIONS_PAPER_V1",
+        "canonical_selector_role": "reference_only_not_production_authority",
+        "production_selector_code_sha256": production_selector_code_sha256(),
         "selector_rule_sha256": rule_sha256,
         "selector_input_sha256": hashlib.sha256(selector_payload).hexdigest(),
         "selector_input_json": selector_payload.decode("utf-8").rstrip("\n"),
@@ -162,11 +170,21 @@ def finalize_selector_evidence(
     *,
     production_selection: Mapping[str, Any],
 ) -> dict[str, Any]:
-    """Attach the scanner's actual selection result and refresh evidence hash."""
+    """Attach actual production selection and prove retained-input replay parity."""
 
     out = dict(evidence)
     out.pop("evidence_sha256", None)
     out["production_selection"] = dict(production_selection)
+
+    if out.get("status") == "CAPTURED":
+        replay = replay_production_selector(out)
+        parity = production_selection_matches_replay(production_selection, replay)
+        out["production_replay_result"] = replay
+        out["production_replay_parity"] = parity
+        if not parity:
+            out["status"] = "DATA_BLOCKED"
+            out["reason_code"] = "production_replay_mismatch"
+
     out["evidence_sha256"] = hashlib.sha256(_canonical_json_bytes(out)).hexdigest()
     return out
 
