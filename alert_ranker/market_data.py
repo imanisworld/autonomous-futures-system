@@ -110,6 +110,7 @@ class _HttpProvider:
 PUBLIC_AUTH_TOKEN_PATH = "/userapiauthservice/personal/access-tokens"
 PUBLIC_MARKETDATA_PREFIX = "/userapigateway/marketdata"
 PUBLIC_ALLOWED_PREFIXES = (PUBLIC_MARKETDATA_PREFIX,)
+PUBLIC_OPTION_CHAIN_SOURCE = "public:/userapigateway/marketdata/{accountId}/option-chain"
 
 
 @dataclass(frozen=True)
@@ -125,6 +126,8 @@ class OptionContractQuote:
     open_interest: float | None
     delta: float | None
     implied_volatility: float | None
+    quote_timestamp: str | None = None
+    source: str | None = None
 
 
 @dataclass(frozen=True)
@@ -569,6 +572,10 @@ def _parse_public_contracts(items: Any, option_type: str) -> tuple[OptionContrac
                 open_interest=_first_float(item, ("openInterest",)),
                 delta=_first_float(greeks, ("delta",)),
                 implied_volatility=_first_float(greeks, ("impliedVolatility",)),
+                quote_timestamp=(
+                    str(item.get("lastTimestamp")) if item.get("lastTimestamp") else None
+                ),
+                source=PUBLIC_OPTION_CHAIN_SOURCE,
             )
         )
     return tuple(contracts)
