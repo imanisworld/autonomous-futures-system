@@ -14,6 +14,11 @@ from .contract_marks import aggregate_open_planned_risk, record_contract_mark
 from .discord import AlertDecision, DiscordAlerter
 from .lifecycle import classify_candidate, open_candidate_fields, resolve_open_setup
 from .market_data import MarketDataClient, build_provider_capabilities
+from .options_selector_evidence import (
+    blocked_selector_evidence,
+    build_selector_evidence_capture,
+    finalize_selector_evidence,
+)
 from .paper_v1 import (
     DEFAULT_MIN_REMAINING_RR,
     ENTRY_LATE_STATUS,
@@ -276,13 +281,66 @@ class OptionsScanner:
             data.update(data_invalid("chain_expiration_mismatch"))
             return data
 
+        evidence_decision_ts = datetime.now(timezone.utc).isoformat()
+        underlying_price = _float_or_none(normalized.get("price"))
+        try:
+            selector_evidence = build_selector_evidence_capture(
+                ticker=ticker,
+                production_direction=direction,
+                expirations=expirations,
+                chosen_expiration=expiry_decision.expiry.expiration,
+                chain=chain,
+                decision_ts=evidence_decision_ts,
+                underlying_price=underlying_price,
+                underlying_snapshot={
+                    "provider": normalized.get("market_data_provider"),
+                    "price": normalized.get("market_data_price"),
+                    "quote_timestamp": normalized.get("market_data_quote_timestamp"),
+                    "stale": normalized.get("market_data_stale"),
+                    "price_source": normalized.get("underlying_price_source"),
+                    "source_timestamp": normalized.get("source_timestamp"),
+                    "raw": normalized.get("market_data_raw") or {},
+                },
+            )
+        except Exception as exc:  # noqa: BLE001 - evidence must fail explicit, never synthesize
+            selector_evidence = blocked_selector_evidence(
+                ticker=ticker,
+                production_direction=direction,
+                decision_ts=evidence_decision_ts,
+                reason_code=f"selector_capture_invalid:{type(exc).__name__}",
+            )
+
         side = "CALL" if direction == "LONG" else "PUT"
         contracts = getattr(chain, "calls", ()) if side == "CALL" else getattr(chain, "puts", ())
         contract_decision = choose_contract(
             contracts,
             option_type=side,
-            underlying_price=_float_or_none(normalized.get("price")),
+            underlying_price=underlying_price,
         )
+        selector_evidence = finalize_selector_evidence(
+            selector_evidence,
+            production_selection={
+                "status": contract_decision.status,
+                "reason": contract_decision.reason,
+                "contract": (
+                    asdict(contract_decision.contract)
+                    if contract_decision.contract is not None
+                    else None
+                ),
+            },
+        )
+        try:
+            data["selector_evidence_id"] = self.storage.record_selector_evidence(
+                selector_evidence,
+                timestamp=datetime.fromisoformat(evidence_decision_ts),
+            )
+            data["selector_evidence_status"] = selector_evidence.get("status")
+            data["selector_evidence_sha256"] = selector_evidence.get("evidence_sha256")
+            data["selector_input_sha256"] = selector_evidence.get("selector_input_sha256")
+        except Exception as exc:  # noqa: BLE001 - preserve scanner behavior, mark evidence loss
+            data["selector_evidence_status"] = "DATA_BLOCKED"
+            data["selector_evidence_reason"] = f"selector_evidence_storage_error:{type(exc).__name__}"
+
         if not contract_decision.valid or contract_decision.contract is None:
             data.update(data_invalid(contract_decision.reason or "contract_invalid"))
             return data
@@ -595,6 +653,12 @@ class OptionsScanner:
             or now.isoformat(),
             "market_data_provider": self.config.market_data_provider,
             "market_data_error": snapshot.error,
+            "market_data_price": snapshot.price,
+            "market_data_quote_timestamp": snapshot.quote_timestamp,
+            "market_data_stale": snapshot.stale,
+            "underlying_price_source": (
+                "context_override" if context.get("price") is not None else "market_data_snapshot"
+            ),
             "market_data_raw": snapshot.raw,
             # Backward-compatible aliases for existing status/tests.
             "tastytrade_error": snapshot.error if self.config.market_data_provider == "tastytrade" else None,
