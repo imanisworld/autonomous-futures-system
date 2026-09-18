@@ -234,7 +234,8 @@ def test_opposite_direction_open_position_does_not_trigger_averaging_guard():
                     "planned_dollar_risk": 50.0,
                     "capital_deployed": 100.0,
                 }
-            ]
+            ],
+            "open_orders": [],
         },
         proof_packet=_proof(),
         contract=_contract(),
