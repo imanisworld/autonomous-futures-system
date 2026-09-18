@@ -217,7 +217,7 @@ MIN_SEPARATION_TICKS = 20    # the runner-up contract must be far away (contract
 
 
 def live_identity(live: list[dict], candidates: dict[str, dict[datetime, PolygonBar]], tick: float,
-                  example_limit: int = 5) -> dict:
+                  timeframe_minutes: int = 15, example_limit: int = 5) -> dict:
     """Identify the dated contract behind each live bar: nearest candidate by max |OHLC diff|,
     admitted only when within ``IDENTITY_TOL_TICKS`` and the runner-up is at least
     ``MIN_SEPARATION_TICKS`` farther. Exact one-tick agreement is tallied separately (that is
@@ -259,17 +259,7 @@ def live_identity(live: list[dict], candidates: dict[str, dict[datetime, Polygon
             runs[-1]["last"] = ts.isoformat(); runs[-1]["bars"] += 1
         else:
             runs.append({"contract": t, "first": ts.isoformat(), "last": ts.isoformat(), "bars": 1})
-    timeframe_minutes = 15
-    if len(live) >= 2:
-        positive = sorted(
-            {
-                int((live[i]["ts"] - live[i - 1]["ts"]).total_seconds() // 60)
-                for i in range(1, len(live))
-                if live[i]["ts"] > live[i - 1]["ts"]
-            }
-        )
-        if positive:
-            timeframe_minutes = positive[0]
+    timeframe_minutes = max(1, int(timeframe_minutes))
 
     contiguous_switches: list[dict] = []
     for (prev_ts, prev_contract), (next_ts, next_contract) in zip(ident, ident[1:]):
@@ -399,7 +389,7 @@ def run(corpus_dir: str, client: PolygonFuturesClient, *, bars_root: str | None 
             # the first seam and after the last one are included by construction
             for t, _s, _e in segments:
                 candidates[t] = _merge(candidates.get(t, {}), _fetch(client, cache, t, ls, le, timeframe))
-            live_id = live_identity(live, candidates, tick)
+            live_id = live_identity(live, candidates, tick, timeframe_minutes=timeframe)
     for s in seams:
         if "status" not in s:
             s["feed_reconciliation"] = reconcile_seam(s, live_id)

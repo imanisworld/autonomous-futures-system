@@ -458,6 +458,7 @@ Deployment state during this reconciliation:
 - futures service remains on release `94eb7d388c02b744eed5a3d3d36b14fa724f1781` (`94eb7d3` release directory), active since 2026-09-17 21:36Z;
 - current preflight is not armed, reports `preflight_passed_not_armed`, zero open positions and zero working orders; live-box drift guard is healthy;
 - runtime environment remains Tradovate DEMO, live trading disabled, `SCHEDULE_MODE=always_on_shadow`;
+- the isolated wide-stop DEMO route is currently armed with matching proof pins, while its paper ledger remains `paper_sim`; this is not live authorization and DEMO evidence stays separate from paper evidence;
 - no restart or deployment was performed for #652, #660, #662 or #663;
 - do **not** restart merely to pick up research/docs/provenance changes. A future sanctioned release should reconcile the full `main` delta and be cut only when there is an operational reason.
 

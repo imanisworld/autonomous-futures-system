@@ -645,6 +645,22 @@ def test_x0_feed_confirmed_and_contradicted_seams(tmp_path):
 
 def test_x0_gapped_contract_change_is_not_feed_confirmed():
     from scripts import structural_level_x0_roll_proof as x0
+    from sources.polygon_client import PolygonBar
+
+    old_ts = datetime(2026, 9, 14, 20, 45, tzinfo=UTC)
+    new_ts = datetime(2026, 9, 15, 0, 0, tzinfo=UTC)
+    live_rows = [
+        {"ts": old_ts, "open": 100.0, "high": 101.0, "low": 99.0, "close": 100.5, "source_ticker": "M2K1!"},
+        {"ts": new_ts, "open": 120.0, "high": 121.0, "low": 119.0, "close": 120.5, "source_ticker": "M2K1!"},
+    ]
+    candidates = {
+        "M2KU6": {old_ts: PolygonBar(old_ts, 100.0, 101.0, 99.0, 100.5, 1.0, "M2KU6")},
+        "M2KZ6": {new_ts: PolygonBar(new_ts, 120.0, 121.0, 119.0, 120.5, 1.0, "M2KZ6")},
+    }
+    identified = x0.live_identity(live_rows, candidates, 0.1)
+    assert identified["contract_change_observed_in_live_span"] is True
+    assert identified["contiguous_contract_switches"] == []
+    assert identified["feed_switch_observed_in_live_span"] is False
 
     seam = {
         "from": "M2KU6",
