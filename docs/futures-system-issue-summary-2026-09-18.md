@@ -32,16 +32,30 @@ Offline pre-armed touch survives stress, but the deployed 1m lane is evidence-on
 
 Until then, 1m does not get paper-fill authority.
 
-### 2. 4HR target-geometry causality / sample
+### 2. LC_ZONE quality / 4HR target geometry
 
-The inside-opposing-zone cell is promising but small.
-Need one controlled test:
-- same population;
-- same entry/stop/fill assumptions;
-- canonical target versus zone-clipped target;
-- no multi-parameter sweep.
+The preregistered independent LC_ZONE audit does **not** support the current v1
+zone detector as a superior reaction-area detector.
 
-Do not promote a target rule from n=14.
+Corrected audit findings:
+- live current-vs-completed HTF nearest-zone identity disagreement reaches
+  **9.39%**;
+- rolling-MTR qualification makes historical zone identities appear/disappear
+  without a break;
+- 2 existing 4HR geometry rows used a 1H zone before the defining impulse 1H
+  candle completed;
+- one affected row changes from `BEYOND_ZONE` to `BEFORE_ZONE` when corrected;
+- on 2,698 paired first touches, actual clean 0.5-MTR rejection was 86.43% vs
+  90.51% for matched controls;
+- uplift **−4.08 pp**, 95% CI **[−5.67, −2.41] pp**;
+- supply was approximately flat, demand materially worse.
+
+Preregistered statistical classification: **NO EVIDENCE OF ZONE QUALITY**. Reviewer ruling: **INCONCLUSIVE / CONTROL MATCH FAILURE** because the placebo matching did not achieve adequate common support. The negative result is preserved but is not promoted into a claim that the zone concept is worse than random.
+
+The timing/identity instability is independently proven and sufficient to block target-rule validation.
+
+The formerly planned 4HR zone-clipped-target A/B is **BLOCKED / DO NOT RUN**
+under LC_ZONE v1. Any replacement zone definition requires a new preregistration.
 
 ### 3. 3-2-2 trigger timing
 
@@ -111,9 +125,9 @@ Do not restart:
 
 ## Next work
 
-1. 4HR zone-clipped-target controlled A/B.
-2. Let natural MNQ 1m armed-trigger evidence accumulate.
-3. 3-2-2 trigger-timing A/B.
+1. Let natural MNQ 1m armed-trigger evidence accumulate.
+2. 3-2-2 trigger-timing A/B.
+3. Keep LC_ZONE v1 / 4HR zone-target changes on HOLD; only reopen zone design under a new preregistration.
 4. Reassess whether any strategy deserves paper-fill authority from 1m.
 5. Continue passive six-root context collection.
 

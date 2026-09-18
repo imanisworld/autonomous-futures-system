@@ -1,8 +1,22 @@
 # 4HR Zone Interaction and Target Geometry — 2026-09-18
 
+## Supersession note — later LC_ZONE quality audit
+
+**DO NOT use this document to authorize target clipping.**
+
+A later preregistered independent LC_ZONE audit found:
+- current live HTF zone semantics are **UNSAFE FOR TARGET-RULE VALIDATION**;
+- 2 rows in this study used a 1H zone before its defining impulse 1H candle completed;
+- one affected row changes from `BEYOND_ZONE` to `BEFORE_ZONE` under strict completed-HTF semantics;
+- the corrected persistent-at-formation LC_ZONE v1 construct was negative in the preregistered placebo comparison (−4.08 pp, 95% CI [−5.67, −2.41]), but the control match failed common-support review; reaction-area quality is therefore **inconclusive**, not proven inferior.
+
+The historical results below remain useful as provenance only. The previously
+listed zone-clipped-target next step is **cancelled / blocked** for LC_ZONE v1.
+See `docs/lc-zone-quality-audit-2026-09-18.md`.
+
 ## Verdict
 
-**PROMISING BUT UNPROVEN / AUDIT ONLY / PAPER ONLY.**
+**PROMISING BUT UNPROVEN / AUDIT ONLY / PAPER ONLY — HISTORICAL DIAGNOSTIC ONLY AFTER THE LATER ZONE AUDIT.**
 
 Scope: canonical MNQ 4HR Re-Trigger trades whose completed 4H context is
 `strat_22_continuation` (n=29). No execution, detector, risk, config,
@@ -121,12 +135,15 @@ The data do support further testing of:
 - First-touch rejection rule: **NOT SUPPORTED**.
 - Close-through acceptance rule: **WAIT — n=4**.
 
-## Safe next step
+## Safe next step — superseded
 
-Run a one-variable offline target-geometry test on the same frozen 29 trades:
-compare the existing canonical target with a target clipped to the opposing
-zone boundary / zone interior, while keeping entry, stop, fill path,
-commission, slippage, and candidate population identical.
+The formerly proposed zone-clipped-target A/B is **not authorized** under the
+current LC_ZONE v1 detector.
 
-Do not change runtime or the paper lane until that controlled comparison is
-complete.
+Current safe action:
+- continue 4HR trigger-timing evidence collection;
+- keep supply/demand target rules unchanged;
+- if zone research is reopened, preregister a new zone construct and validate
+  that construct independently before re-running target geometry.
+
+No runtime or paper-lane zone change is supported by this study.
