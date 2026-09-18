@@ -137,3 +137,25 @@ def test_unquoted_contract_does_not_count_as_executable_quote_coverage():
     assert summary.total_contracts == 1
     assert summary.quoted_contracts == 0
     assert summary.all_quoted_have_executable_timestamp is False
+
+
+def test_probe_script_executes_directly_from_repo_root_without_pythonpath():
+    import os
+    from pathlib import Path
+    import subprocess
+    import sys
+
+    root = Path(__file__).resolve().parents[1]
+    env = os.environ.copy()
+    env.pop("PYTHONPATH", None)
+    result = subprocess.run(
+        [sys.executable, str(root / "scripts" / "options_public_quote_timestamp_probe.py"), "--help"],
+        cwd=root,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "Read-only Public option-chain timestamp coverage probe" in result.stdout
