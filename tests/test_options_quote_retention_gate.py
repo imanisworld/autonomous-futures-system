@@ -109,6 +109,12 @@ def test_quote_contract_bid_mismatch_blocks():
     assert any("mismatch for bid" in reason for reason in result.blocking_reasons)
 
 
+def test_quote_contract_spread_mismatch_blocks():
+    result = _check(contract=_contract(spread_percent=1.0))
+    assert result.approved is False
+    assert any("mismatch for spread_percent" in reason for reason in result.blocking_reasons)
+
+
 def test_missing_contract_record_blocks_even_when_quote_is_ok():
     result = check_quote_retention_intake(
         _payload(),
