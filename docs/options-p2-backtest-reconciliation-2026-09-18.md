@@ -12,7 +12,8 @@ It does **not** modify the preserved #653 evidence package, does not activate DE
 - PR #706 merged: parameterized base-vs-adverse slippage stress runner.
 - PR #710 merged: append-only prospective decision-time selector evidence capture.
 - PR #712 merged: exact replay of the actual `OPTIONS_PAPER_V1` production selector from retained evidence.
-- Targeted selector-evidence regression on merged `main`: **26 passed**.
+- Follow-up minimal-runtime refactor removes `options_manager`/canonical-selector imports from the active evidence capture path while retaining the same production replay proof.
+- Targeted selector-evidence regression on the refactor branch: **15 passed**.
 - No VPS deployment or production-service restart was performed for #710/#712.
 
 ## Market-hours proof captured 2026-09-18 15:24Z
@@ -41,10 +42,10 @@ PR #712 resolved the authority boundary without changing production behavior:
 - `OPTIONS_PAPER_V1` remains the production selector authority;
 - retained evidence now hashes the exact production selector source;
 - replay calls the same pure `choose_expiration()` + `choose_contract()` functions used by the scanner;
-- the newer canonical selector remains retained as **reference/research only**, not production-equivalent evidence;
+- the newer canonical selector is **offline reference/research only**, not production-equivalent evidence and not a runtime dependency;
 - any future production-vs-replay divergence fails the evidence record closed as `DATA_BLOCKED / production_replay_mismatch`.
 
-Post-merge proof on `main@3b343b0`, isolated temp SQLite DB, live SPY chain, no Discord send and no broker/order path:
+Live proof on minimal-runtime branch `476a6b3`, isolated temp SQLite DB, live SPY chain, no Discord send and no broker/order path:
 
 - 282 chain rows captured;
 - 282/282 bid timestamps;
@@ -53,21 +54,21 @@ Post-merge proof on `main@3b343b0`, isolated temp SQLite DB, live SPY chain, no 
 - production selection: `SPY261120C00775000`;
 - production replay: `SPY261120C00775000`;
 - production replay parity: `true`;
-- reference canonical selector: `SPY261120C00760000`.
+- runtime evidence modules import no `options_manager` package.
 
-This proves one current merged-main capture can reproduce the production selector exactly. It does not prove historical 212R coverage, every future provider response, or strategy edge.
+This proves the retained production inputs reproduce the production selector exactly for the observed capture while keeping canonical/reference analysis offline. It does not prove historical 212R coverage, every future provider response, or strategy edge.
 
 ## Do not rebuild these shared-infrastructure pieces
 
 The following are already implemented and covered by current tests:
 
 1. Frozen production `OPTIONS_PAPER_V1` selector plus exact retained-input replay.
-2. Separate canonical/reference selector with frozen rule file; reference only unless a future approved cohort explicitly changes authority.
+2. Separate canonical/reference selector with frozen rule file; offline reference only unless a future approved cohort explicitly changes authority.
 3. DTE, volume, open-interest, spread and delta filters.
 4. No-hindsight future-quote exclusion.
 5. Stale-quote exclusion before selector ranking.
 6. Production scanner → retained evidence → production replay parity, fail-closed on mismatch.
-7. Provider-chain → canonical serialized selector input bridge for stable evidence bytes/reference analysis.
+7. Provider-chain → byte-stable production-selector evidence envelope; canonical/reference enrichment remains offline.
 8. Timestamped quote retention with frozen source identity.
 9. Fail-closed MISSING / STALE / FUTURE / INVALID / WIDE_SPREAD quote states.
 10. Quote dataset manifest materialization and exact-byte verification.
@@ -91,7 +92,7 @@ The following are already implemented and covered by current tests:
 
 **Implementation/proof status: COMPLETE in code/tests for the production selector replay boundary.**
 
-Authority is explicit: `OPTIONS_PAPER_V1` is production. The canonical selector is not a substitute for production replay because its ranking semantics differ. Evidence schema v2 preserves both, but only the production replay parity field can support a production-equivalence claim.
+Authority is explicit: `OPTIONS_PAPER_V1` is production. The canonical selector is not a substitute for production replay because its ranking semantics differ. Evidence schema v3 preserves the exact production inputs and replay parity without importing the canonical selector at runtime; only the production replay parity field can support a production-equivalence claim.
 
 The old #653 packet still says these fields are false because it predates the implementation. Do not treat those old false values as a request to rebuild the selector.
 
