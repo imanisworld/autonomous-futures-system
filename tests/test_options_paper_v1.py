@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
+import json
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -283,3 +284,130 @@ def test_discord_never_sends_absurd_2099_expiration(tmp_path):
     assert decision.sent is False
     assert decision.reason == "DATA_INVALID:expiration_out_of_range"
     assert sent == []
+
+
+def test_frozen_212r_cross_trade_price_binds_to_production_selector_context_path(tmp_path):
+    artifact = Path("data/options_trigger_trade_timestamp_audit_2026_09_18/events.jsonl")
+    frozen = None
+    for raw in artifact.read_text().splitlines():
+        row = json.loads(raw)
+        if (
+            row["symbol"] == "AMZN"
+            and row["session_date"] == "2026-09-09"
+            and row["direction"] == "LONG"
+            and row["trigger_level"] == 252.65
+        ):
+            frozen = row
+            break
+    assert frozen is not None
+    cross = frozen["first_cross_trade"]
+    assert cross["timestamp"] == "2026-09-09T14:46:52.595127004Z"
+    assert cross["price"] == 252.66
+
+    expiry = "2026-11-20"
+
+    def amzn_quote(symbol: str, strike: float, bid: float, ask: float) -> OptionContractQuote:
+        return OptionContractQuote(
+            symbol=symbol,
+            option_type="CALL",
+            strike=strike,
+            bid=bid,
+            ask=ask,
+            mid=(bid + ask) / 2.0,
+            last=(bid + ask) / 2.0,
+            volume=1200,
+            open_interest=5000,
+            delta=0.40,
+            implied_volatility=0.30,
+            quote_timestamp=cross["timestamp"],
+            bid_timestamp=cross["timestamp"],
+            ask_timestamp=cross["timestamp"],
+            source=PUBLIC_OPTION_CHAIN_SOURCE,
+        )
+
+    call_250 = amzn_quote("AMZN261120C00250000", 250.0, 9.2, 10.0)
+    call_255 = amzn_quote("AMZN261120C00255000", 255.0, 4.6, 5.0)
+
+    # A provider snapshot at 249 would choose 250C.  The frozen causal crossing
+    # price at 252.66 must instead make production choose the OTM 255C.
+    snapshot_choice = choose_contract(
+        (call_250, call_255), option_type="CALL", underlying_price=249.0
+    )
+    causal_choice = choose_contract(
+        (call_250, call_255), option_type="CALL", underlying_price=cross["price"]
+    )
+    assert snapshot_choice.contract.symbol == "AMZN261120C00250000"
+    assert causal_choice.contract.symbol == "AMZN261120C00255000"
+
+    class FrozenAMZNMarket:
+        provider_name = "public"
+        last_error = None
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_exc):
+            return None
+
+        async def fetch_market_snapshot(self, ticker: str) -> MarketSnapshot:
+            # Deliberately conflicts with the frozen context price so the test
+            # proves which semantic path production actually uses.
+            return MarketSnapshot(
+                ticker.upper(),
+                price=249.0,
+                volume=10_000_000,
+                quote_timestamp="2026-09-09T14:46:52.594958195Z",
+            )
+
+        async def fetch_option_expirations(self, ticker: str) -> list[str]:
+            return [expiry]
+
+        async def fetch_option_chain(
+            self, ticker: str, expiration: str | None = None
+        ) -> OptionChain:
+            assert expiration == expiry
+            return OptionChain(
+                ticker.upper(),
+                expiration,
+                calls=(call_250, call_255),
+                puts=(),
+            )
+
+    config = cfg(tmp_path)
+    storage = ScanStorage(config.sqlite_path)
+    market = FrozenAMZNMarket()
+    scanner = OptionsScanner(config, market, storage, DiscordAlerter(config, storage))
+    decision_now = datetime(2026, 9, 9, 10, 47, tzinfo=NY)
+
+    outcome = asyncio.run(
+        scanner.scan_ticker(
+            "AMZN",
+            source="webhook",
+            context=triggered_context(
+                ticker="AMZN",
+                price=cross["price"],
+                timestamp=cross["timestamp"],
+                vwap=252.0,
+                ema20=251.5,
+                stop=frozen["invalidation_level"],
+                target=254.69,
+            ),
+            now=decision_now,
+        )
+    )
+
+    assert outcome.shadow_id > 0
+    setup = storage.get_shadow_setup(outcome.shadow_id)
+    assert setup.selected_contract["contract"] == "AMZN261120C00255000"
+
+    evidence_rows = storage.latest_selector_evidence()
+    assert len(evidence_rows) == 1
+    evidence = evidence_rows[0]
+    assert evidence["ticker"] == "AMZN"
+    assert evidence["underlying"]["price"] == cross["price"]
+    assert evidence["underlying"]["snapshot"]["price"] == 249.0
+    assert evidence["underlying"]["snapshot"]["price_source"] == "context_override"
+    assert evidence["underlying"]["snapshot"]["source_timestamp"] == cross["timestamp"]
+    assert evidence["production_selection"]["contract"]["symbol"] == "AMZN261120C00255000"
+    assert evidence["production_replay_result"]["contract"]["symbol"] == "AMZN261120C00255000"
+    assert evidence["production_replay_parity"] is True
