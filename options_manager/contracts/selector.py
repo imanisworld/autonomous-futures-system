@@ -6,8 +6,8 @@ runtime activation. The selector is intentionally separate from
 contract_validator.evaluate_contract_constraints(): selection chooses one
 eligible contract; validation independently evaluates the chosen contract.
 
-The function is fail-closed. Missing/invalid fields, future-dated quotes,
-illiquidity, wide spreads, and DTE/delta violations exclude a row. If no
+The function is fail-closed. Missing/invalid fields, future-dated or stale
+quotes, illiquidity, wide spreads, and DTE/delta violations exclude a row. If no
 row survives, the result is NO_CONTRACT.
 """
 
@@ -32,6 +32,7 @@ class SelectorRule:
     max_abs_delta: float
     target_abs_delta: float
     max_spread_percent: float
+    max_quote_age_seconds: int
     min_volume: int
     min_open_interest: int
 
@@ -91,6 +92,7 @@ def selector_rule_from_mapping(raw: Mapping[str, object]) -> SelectorRule:
         "max_abs_delta",
         "target_abs_delta",
         "max_spread_percent",
+        "max_quote_age_seconds",
         "min_volume",
         "min_open_interest",
     )
@@ -124,6 +126,7 @@ def selector_rule_from_mapping(raw: Mapping[str, object]) -> SelectorRule:
         max_abs_delta=number("max_abs_delta"),
         target_abs_delta=number("target_abs_delta"),
         max_spread_percent=number("max_spread_percent"),
+        max_quote_age_seconds=integer("max_quote_age_seconds"),
         min_volume=integer("min_volume"),
         min_open_interest=integer("min_open_interest"),
     )
@@ -136,6 +139,8 @@ def selector_rule_from_mapping(raw: Mapping[str, object]) -> SelectorRule:
         raise ValueError("delta bounds must satisfy 0 < min <= target <= max <= 1")
     if rule.max_spread_percent <= 0:
         raise ValueError("max_spread_percent must be > 0")
+    if rule.max_quote_age_seconds <= 0:
+        raise ValueError("max_quote_age_seconds must be > 0")
     if rule.min_volume < 0 or rule.min_open_interest < 0:
         raise ValueError("liquidity minima must be >= 0")
 
@@ -355,6 +360,10 @@ def select_contract(
             continue
         if quote_dt > decision_dt:
             reject("future_quote")
+            continue
+        quote_age_seconds = (decision_dt - quote_dt).total_seconds()
+        if quote_age_seconds > rule.max_quote_age_seconds:
+            reject("stale_quote")
             continue
 
         numeric_values = (row.strike, row.bid, row.ask, row.delta)
