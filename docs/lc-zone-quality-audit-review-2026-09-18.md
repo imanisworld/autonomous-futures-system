@@ -37,7 +37,7 @@ Eligible corrected output:
   `d4ac01ae94a64be9aa771c03f72eba8619bd874839d5df179e3cabc05c432b16`
   (large reproducible local artifact; not intended for Git commit);
 - generated Markdown SHA-256:
-  `9ceb6e936edc529d2f89107d6cab01d001eec9b1c557146e2ba04f4c3ee494ea`;
+  `9dd85817683ac8d1b49b6b0176843a7c965ac2703949fda13c78a1a934b8eb4c`;
 - committed summary JSON SHA-256:
   `50484e63e2179161a32e9b34850a26b1b230ae3db08759b35205e2185f546f35`.
 

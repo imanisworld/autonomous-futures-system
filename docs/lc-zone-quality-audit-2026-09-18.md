@@ -127,4 +127,3 @@ explicitly invalidated in
 The results in this report come from the corrected committed harness at
 `11bb0ef75b5d84944320329594db1e29da3a4fa3`, which excludes only the
 still-forming clock bucket and otherwise uses the available market bars.
-
