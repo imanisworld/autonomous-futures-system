@@ -1,0 +1,13 @@
+[Unit]
+Description=AFS wide-stop Tradovate DEMO 4PM exit fallback
+After=network.target futures-bot.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/autonomous-futures-system
+EnvironmentFile=/root/afs-shared/.env
+ExecStart=/root/autonomous-futures-system/.venv/bin/python /root/autonomous-futures-system/scripts/wide_stop_demo_eod_fallback.py
+NoNewPrivileges=true
+PrivateTmp=true
+StandardOutput=journal
+StandardError=journal

@@ -94,6 +94,7 @@ class _FakeBroker:
     def __init__(
         self, *, live=False, fill=None, positions=None, orders=None,
         snapshot_confirmed=True, snapshot_position=None, unreadable=False,
+        flatten_result=None,
     ):
         self.is_live = live
         self.fill = fill
@@ -102,6 +103,8 @@ class _FakeBroker:
         self.snapshot_confirmed = snapshot_confirmed
         self.snapshot_position = snapshot_position
         self.unreadable = unreadable
+        self.flatten_result = flatten_result
+        self.flatten_calls = 0
         self.execute_calls = 0
         self.last_order = None
         self._last_order_ids = None
@@ -139,6 +142,9 @@ class _FakeBroker:
         return None
 
     def flatten_position(self):
+        self.flatten_calls += 1
+        if self.flatten_result is not None:
+            return dict(self.flatten_result)
         return {"flat_confirmed": False, "close_fill_price": None}
 
 
@@ -424,3 +430,177 @@ def test_operator_session_hold_still_blocks_an_armed_lane(tmp_path, monkeypatch)
     )
     assert broker.execute_calls == 0
     assert any(row.get("lane_failed_rule") == "execution_gate" for row in events)
+
+
+def _save_open_demo_position(tmp_path):
+    root = _root(tmp_path)
+    state = demo_state.empty_state(DAY)
+    key = "eod-open"
+    demo_state.reserve_slot(state, key, FOUR_HR)
+    demo_state.confirm_slot(state, key, FOUR_HR)
+    state["position"] = {
+        "candidate_key": key,
+        "strategy": FOUR_HR,
+        "instrument": "MNQ",
+        "session": "new_york",
+        "direction": "LONG",
+        "planned_entry": 20_000.0,
+        "entry": 20_000.25,
+        "stop": 19_950.0,
+        "target": 20_070.0,
+        "rr_ratio": 1.4,
+        "contracts": 1,
+        "entry_time": "2026-09-08T14:05:00+00:00",
+        "client_order_id": "ws-eod-open",
+        "broker_order_ids": {"instrument": "MNQ", "entry": 11, "target": 12, "stop": 13},
+        "trading_date": DAY.isoformat(),
+    }
+    demo_state.save_state(root, state)
+    return root
+
+
+def _eod_broker(*, live=False, flatten_ok=True):
+    pos = Position(
+        instrument="MNQ", direction="LONG", entry_price=20_000.25,
+        stop=19_950.0, target=20_070.0, quantity=1, open=True,
+    )
+    return _FakeBroker(
+        live=live,
+        positions=[{"contractId": 123, "netPos": 1}],
+        orders=[
+            {"id": 12, "ordStatus": "Working"},
+            {"id": 13, "ordStatus": "Working"},
+        ],
+        snapshot_confirmed=True,
+        snapshot_position=pos,
+        flatten_result=(
+            {"flat_confirmed": True, "close_fill_price": 20_010.0, "close_order_id": 14}
+            if flatten_ok else
+            {"flat_confirmed": False, "close_fill_price": None}
+        ),
+    )
+
+
+def test_independent_eod_fallback_flattens_existing_demo_position(tmp_path, monkeypatch):
+    _demo_env(monkeypatch)
+    root = _save_open_demo_position(tmp_path)
+    broker = _eod_broker()
+    result = demo.run_demo_eod_fallback(
+        cfg=_cfg(),
+        log_dir=tmp_path,
+        now=datetime(2026, 9, 8, 20, 2, tzinfo=timezone.utc),  # 16:02 ET
+        broker_factory=lambda: broker,
+    )
+    assert result["ok"] is True
+    assert result["action"] == "DEMO_POSITION_RESOLVED"
+    assert broker.flatten_calls == 1
+    state = demo_state.load_state(root, DAY)
+    assert state["position"] is None
+    assert result["outcome"]["valid_outcome"] is False
+    assert result["outcome"]["exit_reason"] == "EOD_BAR_MISSING"
+
+
+def test_independent_eod_fallback_refuses_before_4pm(tmp_path, monkeypatch):
+    _demo_env(monkeypatch)
+    _save_open_demo_position(tmp_path)
+    broker = _eod_broker()
+    result = demo.run_demo_eod_fallback(
+        cfg=_cfg(),
+        log_dir=tmp_path,
+        now=datetime(2026, 9, 8, 19, 59, tzinfo=timezone.utc),
+        broker_factory=lambda: broker,
+    )
+    assert result == {"ok": False, "action": "FAIL_CLOSED", "reason": "BEFORE_EOD_CLOSE"}
+    assert broker.flatten_calls == 0
+
+
+def test_independent_eod_fallback_refuses_live_broker(tmp_path, monkeypatch):
+    _demo_env(monkeypatch)
+    _save_open_demo_position(tmp_path)
+    broker = _eod_broker(live=True)
+    with pytest.raises(ValueError, match="refuses a live broker"):
+        demo.run_demo_eod_fallback(
+            cfg=_cfg(),
+            log_dir=tmp_path,
+            now=datetime(2026, 9, 8, 20, 2, tzinfo=timezone.utc),
+            broker_factory=lambda: broker,
+        )
+    assert broker.flatten_calls == 0
+
+
+def test_independent_eod_fallback_survives_entry_lane_disarm(tmp_path, monkeypatch):
+    _demo_env(monkeypatch)
+    monkeypatch.setenv(execution.DEMO_EXECUTION_ENABLED_ENV, "false")
+    monkeypatch.setenv(execution.ROUTE_ENV, execution.PAPER_ROUTE)
+    _save_open_demo_position(tmp_path)
+    broker = _eod_broker()
+    result = demo.run_demo_eod_fallback(
+        cfg=_cfg(),
+        log_dir=tmp_path,
+        now=datetime(2026, 9, 8, 20, 2, tzinfo=timezone.utc),
+        broker_factory=lambda: broker,
+    )
+    assert result["ok"] is True
+    assert broker.flatten_calls == 1
+
+
+def test_independent_eod_fallback_blocks_live_env_even_with_demo_state(tmp_path, monkeypatch):
+    _demo_env(monkeypatch)
+    monkeypatch.setenv("TRADOVATE_ENV", "live")
+    _save_open_demo_position(tmp_path)
+    broker = _eod_broker()
+    result = demo.run_demo_eod_fallback(
+        cfg=_cfg(),
+        log_dir=tmp_path,
+        now=datetime(2026, 9, 8, 20, 2, tzinfo=timezone.utc),
+        broker_factory=lambda: broker,
+    )
+    assert result["ok"] is False
+    assert result["reason"] == "DEMO_EXIT_CONFIG_BLOCKED"
+    assert "tradovate_env_not_demo" in result["errors"]
+    assert broker.flatten_calls == 0
+
+
+def test_independent_eod_fallback_no_state_is_noop(tmp_path, monkeypatch):
+    _demo_env(monkeypatch)
+    result = demo.run_demo_eod_fallback(
+        cfg=_cfg(),
+        log_dir=tmp_path,
+        now=datetime(2026, 9, 8, 20, 2, tzinfo=timezone.utc),
+        broker_factory=lambda: (_ for _ in ()).throw(AssertionError("broker must not be created")),
+    )
+    assert result == {"ok": True, "action": "NO_ACTION", "reason": "NO_DEMO_STATE"}
+
+
+def test_independent_eod_fallback_persistent_next_day_closes_prior_day_state(tmp_path, monkeypatch):
+    _demo_env(monkeypatch)
+    root = _save_open_demo_position(tmp_path)
+    broker = _eod_broker()
+    result = demo.run_demo_eod_fallback(
+        cfg=_cfg(),
+        log_dir=tmp_path,
+        now=datetime(2026, 9, 9, 20, 2, tzinfo=timezone.utc),
+        broker_factory=lambda: broker,
+    )
+    assert result["ok"] is True
+    assert broker.flatten_calls == 1
+    state = demo_state.load_state(root, DAY)
+    assert state["position"] is None
+
+
+def test_independent_eod_fallback_refuses_unexpected_working_order(tmp_path, monkeypatch):
+    _demo_env(monkeypatch)
+    _save_open_demo_position(tmp_path)
+    broker = _eod_broker()
+    broker.orders.append({"id": 99, "ordStatus": "Working"})
+    result = demo.run_demo_eod_fallback(
+        cfg=_cfg(),
+        log_dir=tmp_path,
+        now=datetime(2026, 9, 8, 20, 2, tzinfo=timezone.utc),
+        broker_factory=lambda: broker,
+    )
+    assert result["ok"] is False
+    assert result["reason"] == "UNRESOLVED_EOD_ACCOUNT_NOT_EXCLUSIVE"
+    assert broker.flatten_calls == 0
+    state = demo_state.load_state(_root(tmp_path), DAY)
+    assert state["position"] is not None
