@@ -14,13 +14,15 @@ The options scanner has its **own service-specific immutable release**, independ
 
 The futures bot is separately pinned and must not be conflated with the options-scanner release. Service-aware drift monitoring verifies each pinned release independently.
 
-Repository `main` now includes the full research/evidence chain through **#730**. #710/#712/#715 production-selector evidence/replay is deployed only through the curated scanner release above; unrelated `main` changes are not deployed to the scanner.
+Repository `main` now includes the full research/evidence chain through **#741**. #710/#712/#715 production-selector evidence/replay is deployed only through the curated scanner release above; unrelated `main` changes, including the dedicated 212R collector and its recent-SIP entitlement preflight, are **not** deployed to the scanner.
 
-Trigger-time and 212R research has advanced beyond the old completed-bar clock: #717/#719 add the causal trigger model and continuation fail-closed guards; #721/#722 freeze/reproduce the trigger-time SIP study; #724/#726 bind source-defined 212R geometry to the exact frozen 81; #733 resolves the exact nanosecond SIP price-forming trigger-cross trade for **81/81** rows with frozen 5-minute OHLC reproduced **81/81** and a byte-identical repeat proof.
+Trigger-time and 212R research has advanced beyond the old completed-bar clock: #717/#719 add the causal trigger model and continuation fail-closed guards; #721/#722 freeze/reproduce the trigger-time SIP study; #724/#726 bind source-defined 212R geometry to the exact frozen 81; #733 resolves the exact nanosecond SIP price-forming trigger-cross trade for **81/81** rows with frozen 5-minute OHLC reproduced **81/81** and a byte-identical repeat proof; #738 proves on the frozen AMZN case that the exact causal trigger price can traverse the real scanner `context.price -> normalized price -> OPTIONS_PAPER_V1` path with production replay parity.
 
-#730 adds the missing **observation-only prospective 212R collector** in code. It requires a true pre-trigger ARMED record, strict pre-arm timing, final post-fetch capture-lag validation, isolated append-only evidence storage, production-selector replay parity, and no trade/risk/broker/order path. It is **merged but not deployed or scheduled**. Its CLI intentionally has no default capture-lag threshold.
+#730 builds the dedicated **observation-only prospective 212R collector**. #739 corrects its evidence clock and moves first-break detection into the active `WATCHING` window: a pre-armed setup resolves the first strict-through Alpaca SIP boundary break before the 5-minute bar closes, reuses the same 212 family/geometry rules, measures selector-capture lag from the exact SIP crossing, preserves immutable raw SIP-window hashes, and fails closed on missing timing/quote/parity evidence. An end-to-end `run()` test proves the WATCHING branch reaches selector evidence before bar close. The collector is **merged but not deployed or scheduled**. Its CLI intentionally has no default capture-lag threshold.
 
-Current state is therefore: production selector-evidence capture is deployed for the running V1 scanner; 212R trigger-time/geometry/tick research is merged; the 212R prospective collector is built but not deployed; 212R remains research-only.
+A 2026-09-18 isolated RTH cycle exposed an additional deployment blocker: the configured Alpaca account returned HTTP 403 with `subscription does not permit querying recent SIP data` for a still-live SPY watch window. Older same-day SIP windows succeeded only after aging beyond the recent-data restriction. #741 now makes this an explicit fail-closed collector preflight: unavailable recent consolidated SIP blocks the prospective evidence cycle before it can be mistaken for valid exact-cross evidence. Therefore the current account can support frozen/historical SIP reconciliation but **cannot supply the real-time consolidated-SIP first-break clock required by collector v0.3**. #742 independently proves IEX is not source-equivalent on the frozen 81, so do not deploy v0.3 on this entitlement and do not substitute IEX as SIP-equivalent evidence.
+
+Current state is therefore: production selector-evidence capture is deployed for the running V1 scanner; 212R trigger-time/geometry/tick and prospective-collector code is merged; the dedicated 212R collector is not running; 212R remains research-only / `WAIT`.
 
 ## What is built
 
@@ -63,7 +65,7 @@ The canonical/reference selector is now **offline reference only** and is not im
 
 Live branch proof on `476a6b3` used an isolated temp SQLite DB and a live SPY chain with no Discord send and no broker/order path: 282 chain rows were retained, all 282 carried bid/ask timestamps, OI, delta and IV, production selected `SPY261120C00775000`, retained-input production replay selected the same contract, and `production_replay_parity=true`. Runtime evidence modules also have an import guard proving they do not import `options_manager`.
 
-This proves the **current forward capture/replay boundary for the observed capture**, not historical strategy results. #733 now proves the exact causal underlying trigger-cross trade/time for all 81 frozen 212R rows, including byte-identical repeat evidence. Full historical 212R contract-selection replay remains **DATA BLOCKED** because historical decision-time option Delta and contract-level open interest are still unproven, and the corrected historical replay packet has not yet bound those fields to the exact trigger timestamps. Do not synthesize them or substitute current snapshots.
+This proves the **current forward capture/replay boundary for the observed capture**, not historical strategy results. #733 proves the exact causal underlying trigger-cross trade/time for all 81 frozen 212R rows, including byte-identical repeat evidence. #738 separately proves that the frozen AMZN trigger price can be supplied through the real scanner `context.price` override and produce retained-input production replay parity even when the provider snapshot price differs. Full historical 212R contract-selection replay nevertheless remains **DATA BLOCKED** because causal historical decision-time option Delta and contract-level open interest are still unproven for the frozen population. Do not synthesize them or substitute current snapshots.
 
 ## Frozen `OPTIONS_PAPER_V1` trade policy
 
@@ -325,10 +327,13 @@ The remaining uncertainty is primarily **operational proof + strategy evidence**
 
 ## Next action
 
-There are now two separate evidence tracks and they must not be conflated:
+There are now three separate evidence tracks and they must not be conflated:
 
-1. **Current-scanner selector provenance:** #716 is prepared for a future service-specific options-scanner deployment. When an appropriate restart window is chosen, run the actual-box preflight, deploy only exact candidate `5c14577c...`, preserve the production DB, do not restart futures, and require the first natural candidate to record `production_replay_parity=true` or fail closed.
-2. **Strategy-entry timing:** #717 is offline/research only. Run the trigger-time comparison on the already-frozen underlying corpus, rebuild SPY/QQQ + HTF context at the causal trigger timestamp, quantify changed families/latency/ambiguity/later-outside failures, and only then freeze decision timestamps for any historical option-side acquisition.
+1. **Running V1 scanner:** selector-evidence/replay is already deployed on scanner release `58f1c505...`. Continue natural V1 collection without tuning; do not redeploy unrelated `main` changes merely to absorb research code.
+2. **Dedicated 212R prospective evidence:** collector v0.3 is merged in #739 but **not deployed or scheduled**. Before any service/timer exists, first resolve the real-time consolidated-SIP source blocker (current Alpaca entitlement rejects SIP queries inside the latest 15 minutes) or separately validate a different prospective trigger source with explicit later SIP reconciliation; then explicitly pre-register the maximum allowed trigger-to-selector-capture lag and collector cadence; then separately authorize and prove a service-specific observation-only release. First acceptance proof must be a real RTH `ARMED -> proven first break -> selector evidence` row with no scanner/risk/broker mutation.
+3. **Historical 212R option replay:** exact frozen trigger time/price and the production context-price path are proven (#733/#738), but exact historical selector/fill replay remains **DATA BLOCKED** on causal historical Delta and contract-level OI. Do not purchase data, synthesize analytics, or use current snapshots without separate authorization/evidence.
+
+212R market-context policy, source-target/runner management, and numeric slippage/stress qualification also remain explicit policy decisions; none is authorized by the collector build.
 
 Existing V1 collection continues without tuning. Steps 1–5 of the original deployment checklist remain complete (deployed, smoke proven, epochs `V1-EPOCH-1` and `V1-EPOCH-2` recorded). Also continue to:
 

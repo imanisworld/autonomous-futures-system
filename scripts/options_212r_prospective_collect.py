@@ -55,6 +55,7 @@ from alert_ranker.trigger_time import (  # noqa: E402
 )
 from scripts.options_trigger_trade_timestamp_audit import (  # noqa: E402
     AlpacaTradeProvider,
+    TriggerTradeAuditError,
     canonical_trade_payload,
     first_crossing_trade,
 )
@@ -206,6 +207,16 @@ def _persist_sip_trade_window(
     return str(target), digest
 
 
+def _sip_data_block_reason(exc: Exception, *, live: bool) -> str:
+    """Return a stable fail-closed reason without leaking provider credentials."""
+    if isinstance(exc, TriggerTradeAuditError):
+        text = str(exc).lower()
+        if "subscription does not permit querying recent sip data" in text:
+            return "alpaca_recent_sip_not_entitled"
+    prefix = "sip_live_cross_error" if live else "sip_cross_error"
+    return f"{prefix}:{type(exc).__name__}"
+
+
 async def _capture_exact_trigger_cross(
     provider: AlpacaTradeProvider | None,
     *,
@@ -285,7 +296,7 @@ async def _capture_exact_trigger_cross(
     except Exception as exc:  # fail closed; never synthesize a crossing clock
         return {
             "status": "DATA_BLOCKED",
-            "reason_code": f"sip_cross_error:{type(exc).__name__}",
+            "reason_code": _sip_data_block_reason(exc, live=False),
         }
 
 
@@ -392,7 +403,7 @@ async def _capture_live_first_boundary(
     except Exception as exc:  # fail closed; never infer a boundary ordering
         return {
             "status": "DATA_BLOCKED",
-            "reason_code": f"sip_live_cross_error:{type(exc).__name__}",
+            "reason_code": _sip_data_block_reason(exc, live=True),
         }
 
 

@@ -216,15 +216,18 @@ Collector v0.3 corrects the lane by:
 
 ## Actual next gate
 
-Before any deployment/scheduling of the 212R collector:
+Collector v0.3 review/CI is complete: #730/#739 are merged, and #741 adds an explicit fail-closed preflight for the current Alpaca entitlement.
 
-1. complete independent review/CI for collector v0.3;
-2. choose and pre-register a numeric `max_capture_lag_seconds` measured from the exact SIP crossing; prior 60-second review values were mechanics-only, not policy;
-3. choose and pre-register collector timer cadence;
-4. separately authorize a service-specific observation-only deployment whose route cannot mutate scanner/risk/broker state;
-5. obtain the first real RTH `ARMED -> exact SIP cross -> selector evidence` proof.
+The deployment gate is now:
 
-Do not invent the policy values or deployment authorization in code.
+1. **Resolve the trigger-source entitlement first.** A same-session RTH probe proved the configured Alpaca account cannot query recent consolidated SIP data (`provider_entitlement`: subscription does not permit querying recent SIP data). The same source can reproduce older/frozen SIP windows after they age, but that is not equivalent to prospective exact-cross observation.
+2. Do **not** substitute IEX for consolidated SIP. #742 proves IEX is **not source-equivalent** on the frozen 81: 73/81 matched the same first-break direction, 8/81 had no IEX cross in the same five-minute bucket, and matched rows could lag consolidated SIP by up to 132.851s.
+3. After a source can actually provide the required recent consolidated-SIP first-break evidence, choose and pre-register a numeric `max_capture_lag_seconds` measured from the exact SIP crossing; prior 60-second review values were mechanics-only, not policy.
+4. Choose and pre-register collector timer cadence.
+5. Separately authorize a service-specific observation-only deployment whose route cannot mutate scanner/risk/broker state.
+6. Obtain the first real RTH `ARMED -> exact SIP cross -> selector evidence` proof.
+
+Do not invent the source, policy values, or deployment authorization in code. #741 is a safety proof: unavailable recent SIP must block collection rather than degrade to a weaker source.
 
 After an authorized collector begins accumulating real prospective rows, existing fill-realism and risk tooling can be used to calculate option-side evidence. Historical exact option replay still remains DATA BLOCKED on causal historical Delta and contract-level OI; #738 separately proves that the exact trigger price can traverse the production `context.price` selector path with replay parity.
 
