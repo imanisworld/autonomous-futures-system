@@ -2,7 +2,7 @@
 
 ## Verdict
 
-The historical options backtest remains **DATA BLOCKED** on real decision-time option-chain evidence. The repository now has deterministic retention/manifest/parity machinery, but no acceptable real historical option-quote dataset for the 212R decision population.
+The historical options backtest remains **DATA BLOCKED** on complete real decision-time option-chain evidence. Historical bid/ask entitlement is now proven with an isolated test-only Polygon/Massive credential, but the repository still does not have a complete decision-time selector dataset for the 212R population because historical Greeks/open interest and exact underlying-price provenance remain unproven.
 
 ## What was checked
 
@@ -28,15 +28,21 @@ Sources:
 - https://public.com/api/docs/resources/market-data/get-quotes
 - https://public.com/api/docs/resources/market-data/get-bars-v2
 
-### Existing Polygon/Massive credential entitlement
+### Polygon/Massive credential entitlement
 
-Read-only entitlement probes were performed without printing or persisting the credential.
+Read-only entitlement probes were performed without printing the credential or committing it to git.
+
+The normal repository-local `POLYGON_API_KEY` remains unchanged and was previously observed returning `NOT_AUTHORIZED` for historical option quotes.
+
+A separate isolated test-only credential supplied on 2026-09-18 was stored only in ignored local `.env.test-20260918` with mode `600`. Using that credential:
 
 - Options reference contracts: HTTP 200 / API `OK`.
-- Historical options quotes `GET /v3/quotes/{optionsTicker}`: HTTP 403 / API `NOT_AUTHORIZED` (`not entitled to this data`).
-- Current option-contract snapshot: HTTP 403 / API `NOT_AUTHORIZED`.
+- Historical options quotes `GET /v3/quotes/{optionsTicker}`: HTTP 200 / API `OK`.
+- A real 2026-09-10 SPY option quote query returned bid, ask, and nanosecond SIP timestamp data.
+- The merged read-only entitlement probe (`scripts/options_polygon_historical_quote_probe.py`, PR #698) independently returned `ENTITLED` / HTTP 200 / API `OK` against the same isolated key.
+- Historical AMZN stock quote access under the same credential returned HTTP 403 / `NOT_AUTHORIZED`, so stock/underlying historical quote entitlement is not established by this key.
 
-Massive's official options documentation does expose historical quote data at `GET /v3/quotes/{optionsTicker}` and describes it as bid/ask quote history with precise timestamps. The currently configured credential cannot access it.
+Massive's official options documentation describes `GET /v3/quotes/{optionsTicker}` as historical bid/ask quote history with precise timestamps. That specific bid/ask entitlement blocker is therefore cleared for the isolated test credential, but only for options quote history.
 
 Sources:
 
@@ -45,7 +51,7 @@ Sources:
 
 ## Important selector gap
 
-The frozen selector requires bid, ask, volume, open interest, and delta at the decision boundary. Historical bid/ask access alone is not enough to claim full selector replay. The reviewed Massive documentation describes historical quote records separately from snapshot analytics such as Greeks, IV, and open interest. This audit did not establish a historical decision-time source for every selector field, so none will be synthesized or back-filled from future/current snapshots.
+The frozen selector requires bid, ask, volume, open interest, and delta at the decision boundary. Historical bid/ask access alone is not enough to claim full selector replay. Massive's historical quote endpoint covers quote history; its snapshot products separately expose Greeks, IV, open interest, and the current underlying price. This audit has not established a decision-time historical source for every selector field, and the isolated test credential does not currently establish historical stock-quote entitlement for the underlying. None of those missing values will be synthesized or back-filled from future/current snapshots.
 
 ## Safe work completed around the blocker
 
@@ -55,13 +61,14 @@ The same PR adds an outcome-independent acquisition-index builder. Against the f
 
 ## Next evidence step
 
-Once an authorized historical source exists, start with a minimal real decision-time sample before any broad pull:
+Historical option bid/ask access now exists, so the next step remains a minimal complete decision-time sample before any broad pull:
 
-1. retrieve the actual chain/quote evidence required by the frozen selector at one historical decision timestamp;
-2. prove all required selector fields are decision-time valid and source-attributed;
-3. normalize through the existing quote-retention rule without inference;
-4. materialize + hash the dataset and manifest through PR #686 tooling;
-5. run selector/fill parity on those exact bytes;
-6. expand only after the one-sample proof passes.
+1. use one frozen 212R acquisition-index decision as the sample boundary;
+2. retrieve exact historical option bid/ask evidence for candidate contracts at that timestamp;
+3. prove decision-time sources for the remaining selector fields (especially delta/open interest and the underlying price) without using current/future snapshots;
+4. normalize through the existing quote-retention rule without inference;
+5. materialize + hash the dataset and manifest through PR #686 tooling;
+6. run selector/fill parity on those exact bytes;
+7. expand only after the one-sample proof passes.
 
 Until then, no historical options backtest result should be treated as executable-price evidence, and `strat_212_reversal_30m_options` remains **BLOCKED / WAIT**.
