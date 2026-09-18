@@ -77,7 +77,7 @@ def _contract(**overrides):
 
 def test_candidate_risk_and_capital_are_derived_not_caller_supplied():
     result = check_portfolio_risk_intake(
-        {"open_positions": [], "candidate_correlation_group": "tech"},
+        {"open_positions": [], "open_orders": [], "candidate_correlation_group": "tech"},
         proof_packet=_proof(),
         contract=_contract(),
         max_aggregate_open_risk_dollars=BUDGET,
@@ -128,7 +128,7 @@ def test_many_positions_are_allowed_when_projected_risk_is_under_budget():
         for i in range(12)
     ]
     result = check_portfolio_risk_intake(
-        {"open_positions": open_positions},
+        {"open_positions": open_positions, "open_orders": []},
         proof_packet=_proof(max_contracts=1, max_dollar_risk=100.0),
         contract=_contract(max_contracts=1, max_dollar_risk=100.0),
         max_aggregate_open_risk_dollars=BUDGET,
@@ -140,7 +140,7 @@ def test_many_positions_are_allowed_when_projected_risk_is_under_budget():
 
 def test_canonical_intake_without_a_budget_blocks_by_name():
     result = check_portfolio_risk_intake(
-        {"open_positions": []},
+        {"open_positions": [], "open_orders": []},
         proof_packet=_proof(),
         contract=_contract(),
     )
@@ -150,7 +150,7 @@ def test_canonical_intake_without_a_budget_blocks_by_name():
 
 
 
-def test_planned_risk_formula_uses_executable_entry_fill_and_premium_stop():
+def test_planned_risk_formula_uses_planned_entry_premium_and_premium_stop():
     risk, reason = planned_risk_from_premium_stop(
         entry_fill=2.10,
         premium_stop=1.60,
@@ -193,7 +193,8 @@ def test_matching_open_position_rejects_averaging_down():
                     "planned_dollar_risk": 50.0,
                     "capital_deployed": 100.0,
                 }
-            ]
+            ],
+            "open_orders": [],
         },
         proof_packet=_proof(),
         contract=_contract(),
@@ -240,3 +241,15 @@ def test_opposite_direction_open_position_does_not_trigger_averaging_guard():
         max_aggregate_open_risk_dollars=BUDGET,
     )
     assert result.verdict == PortfolioRiskVerdict.PASS
+
+
+
+def test_missing_open_orders_snapshot_does_not_silently_assume_none():
+    result = check_portfolio_risk_intake(
+        {"open_positions": []},
+        proof_packet=_proof(),
+        contract=_contract(),
+        max_aggregate_open_risk_dollars=BUDGET,
+    )
+    assert result.verdict == PortfolioRiskVerdict.BLOCK
+    assert any("open_orders" in reason for reason in result.blocking_reasons)
