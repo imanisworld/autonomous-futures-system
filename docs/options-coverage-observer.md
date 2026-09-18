@@ -242,8 +242,13 @@ Rulings and numbers live in `docs/options-current-state-handoff.md` (section
   entitlement-timing failure and repaired under unchanged rules (binding
   sidecar carries `observer_repair`); 1,219 episodes, 977 clean, 0 unpriced.
   2-1-2 reversal 10 episodes, 1-2-2 15 episodes: both `INSUFFICIENT
-  PROSPECTIVE SAMPLE`. Unattended collection is not yet proven; the first
-  clean timer firing is expected 2026-09-17 20:45Z.
+  PROSPECTIVE SAMPLE`.
+- **Unattended collection proven 2026-09-17.** The 20:45Z firing on pinned
+  `58d6c5f` completed on its own (observer "ran", no repair, 1,450 events all
+  priced, 1,243 episodes) and passed the six-point check. Two prospective
+  sessions: 2-1-2 reversal 29 episodes (−4.3 pp ex-opening), 1-2-2 28
+  episodes (+23.0 pp ex-opening); both still `INSUFFICIENT PROSPECTIVE
+  SAMPLE` until the third session.
 - **Prospective rule, fixed before any prospective session existed.** For
   2-1-2 reversal and 1-2-2 (inside break counted passively): `PERSISTING
   POSSIBLE SIGNAL` needs ≥30 prospective episodes over ≥3 sessions, both

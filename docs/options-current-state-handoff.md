@@ -1,6 +1,6 @@
 # Options — Current State Handoff
 
-_As of 2026-09-16. This is the single current-state authority for the options lane._
+_As of 2026-09-17. This is the single current-state authority for the options lane._
 
 Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`; the read-only coverage evidence lane (observer, reducer, outcome study, after-close collector) is described in `docs/options-coverage-observer.md`.
 
@@ -10,7 +10,7 @@ Historical dated notes and old/closed PRs are provenance only. They do not overr
 
 Epoch record: `docs/options_v1_evidence_epoch.json`. **Cohort `V1-EPOCH-2` (`UNIVERSE_EXPANSION_6_TO_20`) started 2026-09-16T16:47:46Z** on the first clean RTH cycle after the watchlist grew from 6 to 20 symbols (deployed release `62546883`, scanner code identical to `899a524`; rules, risk, cadence and Signa authority unchanged). `V1-EPOCH-1` (six symbols, 2026-09-15T16:50:00Z to 2026-09-16T16:47:46Z) is retained inside the record. Rows before an epoch's start belong to the previous cohort, not to it. Rules in force: #570 late-entry guard, #571 Daily-lane timing + 1R target floor, #575 ENTRY_LATE episode block (counterfactual preservation). Any rule change starts a new cohort.
 
-Deployed baseline on `main` and on the box: **`899a524aad82a66c80ba832ea5601430bdac7355`** (release dir `899a524aad82-20260914-203217`).
+Deployed baseline on the box since 2026-09-17T21:36Z: **`94eb7d388c02b744eed5a3d3d36b14fa724f1781`** (release dir `94eb7d388c02-20260917-173551`) = the live minimal futures release `11b3d91` plus #648 only. Scanner behaviour (entries, targets, guards, risk, contracts) is unchanged from `899a524`; #648 changes shadow-row accounting only. `main` carries the same options code at `8766049`.
 
 Final CI for that baseline: **4,921 passed / 7 skipped / 2 warnings**.
 
@@ -172,6 +172,29 @@ If premium stop and underlying target are both true on the same observed snapsho
 
 Later analysis can include/exclude the ambiguous cohort explicitly.
 
+## Shadow-row entry geometry (accounting repair, 2026-09-17)
+
+A read-only audit of the epoch-2 shadow rows (export `afs_options_export_20260917`) found that **58 of 117** rows had been created with the live first-sight price already at or beyond `target_1`, and 12 more beyond the stop. All were COUNTERFACTUAL observer rows (H1/H4 timeframe-observation, market-alignment rejects, the 30m sequence counterfactual). The counterfactual contract branch never evaluated entry geometry (`paper_entry_remaining_rr` was null on 107 of 117 rows) and `resolve_open_setup` is a level-state test, so those rows resolved `target_hit` on the next resolver tick. Their option "outcome" was the bid/ask spread: 56 target-hit rows, +4 / −51 / 1, net −$790. Reproduced exactly from the snapshot. #575 was working as specified; it guards the ACTIVE path only.
+
+**Repair (#648, deployed as `94eb7d3`), accounting only:**
+
+- every shadow row stores `paper_entry_remaining_rr` and `paper_entry_geometry` at creation (`AHEAD`, `TARGET_CONSUMED_AT_ENTRY`, `STOP_CONSUMED_AT_ENTRY`, same comparisons as the ACTIVE late-entry guard);
+- a consumed row resolves into that state with no chain call and no P&L; rows written before the field existed derive it from their stored first-sight inputs;
+- the two states are closed non-outcomes: excluded from closed/wins/losses/win rate/P&L (`ShadowJournalSummary.entry_consumed`), `NOT_AN_OUTCOME` in diagnostics;
+- unchanged: #575, the ACTIVE 1.0 R:R guard, target finding, contract selection, DTE, premium stop, risk caps, coverage evidence.
+
+Re-running the epoch-2 snapshot through the corrected classification: 84 WIN / 23 LOSS / 10 OPEN → 28 WIN / 11 LOSS / 8 OPEN / 58 target-consumed / 12 stop-consumed; net −$1,821 → −$764 on 39 resolved AHEAD rows. Zero consumed rows remain WIN or LOSS. Live acceptance on fresh rows is verified read-only on the first session after deployment.
+
+**What the clean population says (47 AHEAD rows, descriptive only, no tuning).** Three separate issues remain, and none is proven yet:
+
+1. **Target geometry is shallow.** `target_1` sits a median 0.52 R from the actual entry and 0.17 R on the rows that reach it; the lane wins about a fifth of a risk unit and loses a full one. The 10 stop-first rows alone are −$436 of the −$764.
+2. **Option translation loses on small moves.** On the 22 rows where the underlying did reach `target_1`, the option still netted −$48 (+8 / −13); a 0.17 R move does not cover the spread.
+3. **Horizon may be wrong for Daily/4H.** Those rows show a median MFE of 0.24 R under every geometry because the same-session horizon truncates them.
+
+Widening the target improves average underlying R (fixed 1.5 R: +0.30; 2.0 R: +0.42 vs +0.05 at `target_1`) **but** unresolved-at-close rises from 15 to 27 of 47, so the gain is entangled with censoring. "Bad target geometry first" is a strong hypothesis from this sample, not proof that wider targets improve expectancy.
+
+**Research order (ruled):** (1) live acceptance of #648; (2) the third prospective collector session, independently; (3) no V1 tuning; (4) a controlled target-geometry test holding entry, stop, contract, costs and **horizon** constant with censoring handled explicitly; (5) a **separate** horizon-compatibility test for Daily/4H. Never combine a longer holding window with the geometry test.
+
 ## Coverage evidence lane and read-only audits (2026-09-16)
 
 Everything in this section is **observation only**. None of it changed the scanner, the policy, the universe, contracts, risk, or cadence, and none of it authorizes a change. Nothing here proves an edge.
@@ -210,7 +233,7 @@ Population: every directional 30m bar (944 bars, 835 episodes, zero missing rows
 
 Operator ruling: most missing families are coverage, not edge, so **no broad detector expansion**. 2-1-2 reversal is the strongest follow-up candidate, 1-2-2 the same pattern at a descriptive sample size. 2-2-2 continuation and outside bar are not to be pursued. Nothing is production-ready; no expectancy, P&L, or contract claim is made.
 
-### Pre-registered prospective validation (staged, not yet started)
+### Pre-registered prospective validation (running)
 
 - Question: do the 2-1-2 reversal and 1-2-2 first-sight excesses persist on sessions after 2026-09-15 that were never used to find them? Inside break is counted passively with no dedicated lane.
 - Method: the unchanged observer, reducer and outcome modules; the same first-sight view, matched baseline and ex-opening reporting; a read-only analysis script over the collector's aggregate output. No new detector, lane, timer, threshold, or production change.
@@ -225,7 +248,16 @@ Operator ruling: most missing families are coverage, not edge, so **no broad det
 | inside break (passive) | 3 | — | — | — | — | — | counted only |
 
 - Retrospective hashes were verified unchanged after the repair. The retrospective tables are not re-scored.
-- **Automation is not proven.** The 09-16 data came from a failed timer firing, a failed catch-up run and a manual run. The first clean unattended firing must be 2026-09-17 at 20:45Z, verified with the same six checks (unit result, pinned tree executed, module versions, collector env fingerprints, session completeness with 17.9-minute first sight and an independent bar count, retrospective hashes frozen). Until then the lane collects but the timer is unproven.
+- **Automation proven 2026-09-17.** The 20:45Z firing (pinned `58d6c5f`) completed unattended in 59 s: observer step "ran", no repair flag, 148/150 observable, 1,450 events all priced, 1,243 episodes, aggregate of seven sessions, every retrospective hash unchanged, independent SIP bar count equal to the event count per symbol. All six checks passed.
+- Second prospective session, 2026-09-17, two sessions total (still short of the three-session minimum):
+
+| Family | prospective n | L / S | first-sight 1R | matched baseline | diff | ex-opening diff | status |
+|---|---|---|---|---|---|---|---|
+| 2-1-2 reversal | 29 | 17 / 12 | 42.9% | 53.9% | −11.0 pp | −4.3 pp | INSUFFICIENT PROSPECTIVE SAMPLE |
+| 1-2-2 | 28 | 13 / 15 | 42.9% | 14.4% | +28.5 pp | +23.0 pp | INSUFFICIENT PROSPECTIVE SAMPLE |
+| inside break (passive) | 6 | — | — | — | — | — | counted only |
+
+  The 2-1-2 reversal excess has not reappeared so far; the 1-2-2 excess is large but rests on 28 episodes with a 60% to 23% split between the two days. The pre-registered rule is applied for the first time after the third session.
 
 ### Daily evidence rollups (reporting only)
 
@@ -265,9 +297,9 @@ The remaining uncertainty is primarily **operational proof + strategy evidence**
 Steps 1–5 of the deployment checklist are complete (deployed, smoke proven, epochs `V1-EPOCH-1` and `V1-EPOCH-2` recorded). What remains:
 
 1. Collect natural candidates on the 20-symbol universe without tuning V1. Any rule change starts a new cohort.
-2. Let the after-close collector add one session per weekday; the first clean unattended firing (2026-09-17 20:45Z) must pass the six-point check before the timer is trusted.
+2. Let the after-close collector add one session per weekday (unattended firing proven 2026-09-17); keep the six-point check until the prospective sample reaches its thresholds.
 3. Re-run the pre-registered prospective family validation as sessions accrue and report its status only in the fixed vocabulary above.
-4. Diagnose signal/timeframe → entry → stop → target/exit → filters → execution realism once V1 samples are useful.
+4. Verify #648 on fresh rows, then run the controlled target-geometry test and the separate Daily/4H horizon test on the clean shadow population before any V1 tuning.
 5. Treat legacy Signa read timeouts as a separate reliability audit; they cannot alter a trade decision (scorer contribution 0, no branch on Signa state).
 
 **No proof, no trade. No optimization before evidence.**

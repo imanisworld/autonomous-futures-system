@@ -4,7 +4,7 @@ This is the operational gate for starting the first `OPTIONS_PAPER_V1` evidence 
 
 Options-ready baseline: **`9d008a0dcdcb69270d80b663c678b4522f27ebb6`** with **4,921 passed / 7 skipped / 2 warnings**. If `main` advances before deployment, verify the deployed commit still contains this options baseline and has green CI.
 
-**Current state (2026-09-15): DEPLOYED and PROVEN. V1 evidence epoch RECORDED.**
+**Current state (2026-09-17): DEPLOYED and PROVEN. V1 evidence epochs 1 and 2 RECORDED. Box release `94eb7d3` (live 2026-09-17T21:36:10Z) = minimal futures release `11b3d91` + #648 shadow-row accounting repair; options entry/target/risk behaviour unchanged since `899a524`.**
 
 | | |
 |---|---|
