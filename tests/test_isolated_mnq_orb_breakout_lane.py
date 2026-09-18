@@ -1,6 +1,6 @@
 """Focused governance proof for the retired MNQ ORB Breakout inverse lane.
 
-Pins the shipped risk_rules.yaml (1.2.1) configuration after the inverse/base
+Pins the shipped risk_rules.yaml (1.2.2) configuration after the inverse/base
 ORB Breakout evidence retirement, plus the runtime invariants preserved for the
 parked implementation: the inverse transform forces one contract + PaperBroker,
 and the inverse/legacy-proof modes stay mutually exclusive.
@@ -74,7 +74,7 @@ def test_vwap_hold_and_pdh_reclaim_demotions_preserved_as_governance_records():
 
 
 def test_risk_rules_version_bumped():
-    assert _shipped_rules()["version"] == "1.2.1"
+    assert _shipped_rules()["version"] == "1.2.2"
 
 
 # ─── Shutdown guarantee ────────────────────────────────────────────────────────
