@@ -1,9 +1,11 @@
 # 60M 3-2-2 FIRST LIVE STRATEGY
 **Complete Trading Rules — MNQ Futures Only**
-*Status: PROMISING BUT UNPROVEN — MNQ 34 candidates / 20 resolved / net $1,595.70 / PF 10.36
-(coded detector + honest-fill replay, PR #340, 2026-07-26) | Opposite 9AM boundary stop.
-Supersedes the earlier manual-study figure (n=31, +$66.50/trade, labeled VALIDATED) — see
-§7.*
+*Status: PROMISING BUT UNPROVEN — MNQ n=34. The 2026-09-18 trigger-timing
+audit supersedes completed-5m IOC as the final entry-timing model: causal
+pre-armed First Live produced 33 fills / 33 resolved wins / 1 bracket-invalid
+no-fill and +$2,709.66 at 3 adverse ticks, with both chronological halves
+positive. Current real-account stop/R:R constraints still block execution.
+See §7 and `docs/322-trigger-timing-ab-2026-09-18.md`.*
 
 ---
 
@@ -77,7 +79,7 @@ The 9AM candle must be directional (2U or 2D). Mark its high and low.
 
 Gap-open handling: if the 10AM candle opens beyond the trigger level at exactly 10:00 AM without trading through it tick by tick, the gap counts as a valid break. Enter at the 10AM candle open price.
 
-> ⛔ **DO NOT apply the 50% breach rule.** Testing showed it materially damaged the validated MNQ edge.
+> ⛔ **DO NOT apply the 50% breach rule.** Historical testing showed it materially damaged the MNQ candidate evidence; the strategy remains PROMISING BUT UNPROVEN.
 
 ---
 
@@ -125,11 +127,35 @@ unchanged and retain authority through the final bar.
 
 ## 7. EVIDENCE STATUS
 
-**Classification: PROMISING BUT UNPROVEN** — not VALIDATED. See
-[`60M_322_EXPANDED_EVIDENCE_2026-07-26.md`](60M_322_EXPANDED_EVIDENCE_2026-07-26.md) for
-the full study (PR #340, 2026-07-26): coded detector (`research/detector_322_first_live.py`)
-+ IOC-faithful honest-fill replay, current `EOD_BAR_MISSING`/`DAY_ONLY_FLATTEN` exit
-contract applied.
+**Classification: PROMISING BUT UNPROVEN** — not VALIDATED.
+
+### 2026-09-18 trigger-timing correction
+
+The July completed-5m IOC replay remains provenance, but it is no longer the
+final timing model for the documented First Live rule.
+
+Frozen 34-candidate A/B:
+- accepted research detector and canonical state machine matched 34/34 on
+  date/direction/trigger/stop/target;
+- at the completed crossing-bar close, **13/34 (38.24%)** were more than the
+  32-tick IOC tolerance adversely detached from the First Live trigger;
+- causal pre-armed First Live at 3 adverse ticks: **33 fills / 33 resolved
+  wins / 1 bracket-invalid no-fill, +$2,709.66**;
+- H1 **+$1,366.34**, H2 **+$1,343.32**;
+- 12 same-trigger-bar target resolutions; all 12 had open → trigger → target
+  causally ordered; zero trigger bars touched both stop and target.
+
+Timing classification: **TIMING EDGE SURVIVES / PROMISING BUT UNPROVEN**.
+
+This does not authorize execution. The sample remains thin and consumed, and
+the current real-account stop-width/R:R architecture remains incompatible with
+the historical population. See `docs/322-trigger-timing-ab-2026-09-18.md`.
+
+### July 2026 provenance
+
+See [`60M_322_EXPANDED_EVIDENCE_2026-07-26.md`](60M_322_EXPANDED_EVIDENCE_2026-07-26.md)
+for the original coded detector + completed-5m IOC-faithful replay under the
+current day-only exit contract.
 
 | Instrument | Candidates | Fills | Resolved | W-L | Net | PF | Status |
 |---|---|---|---|---|---|---|---|

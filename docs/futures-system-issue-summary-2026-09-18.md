@@ -15,6 +15,7 @@ There is no current blocker to passive 1m/5m/15m evidence collection. There are 
 - **4HR “late entry” mechanism:** proven. The documented touch was being inferred from completed 5m OHLC.
 - **4HR optimistic historical entry:** quantified. Old trigger-price backfill is retired as the executable headline.
 - **4HR hour-boundary stop timing:** proven and corrected in the pre-armed offline model; stop must come from the last 1H candle complete at the true trigger time.
+- **3-2-2 First Live timing:** offline mechanism audit complete; causal pre-armed timing survives 3-tick stress with both halves positive. This closes the timing question only; sample and account-risk blockers remain.
 - **Generic “require 1→2” idea:** tested and not supported as a simple 4HR gate.
 - **Simple “touch supply/demand = reverse” idea:** tested and not supported as a blanket rule.
 
@@ -57,10 +58,24 @@ The timing/identity instability is independently proven and sufficient to block 
 The formerly planned 4HR zone-clipped-target A/B is **BLOCKED / DO NOT RUN**
 under LC_ZONE v1. Any replacement zone definition requires a new preregistration.
 
-### 3. 3-2-2 trigger timing
+### 3. 3-2-2 trigger timing — CLOSED AS AN OFFLINE MECHANISM QUESTION
 
-The documented rule is “First Live” / no candle-close requirement, but the implementation can still infer a touch from completed 5m OHLC.
-Need a frozen-population pre-armed-touch A/B analogous to 4HR before treating historical IOC evidence as final.
+The frozen 34-candidate First Live A/B is complete.
+
+- completed-5m close exceeded the 32-tick adverse IOC tolerance on **13/34 (38.24%)** candidates;
+- pre-armed First Live at 3 adverse ticks: **33 fills / 33 resolved wins / 1 bracket-invalid no-fill**;
+- net **+$2,709.66**;
+- H1 **+$1,366.34** / H2 **+$1,343.32**;
+- zero same-trigger-bar both-stop-and-target ambiguities.
+
+Classification: **TIMING EDGE SURVIVES / PROMISING BUT UNPROVEN.**
+
+Still open:
+- prospective confirmation;
+- more sample including losses;
+- current real-account stop-width/R:R incompatibility.
+
+The timing audit does not authorize an execution path or risk-policy change.
 
 ### 4. Miyagi timing and sample
 
@@ -80,7 +95,7 @@ M2K/MGC/MCL/MBT now have better 1m coverage, but this does not justify strategy 
 
 - **MNQ 4HR Re-Trigger:** PROMISING BUT UNPROVEN / PAPER ONLY.
 - **MES 4HR:** BROKEN / WAIT.
-- **MNQ 3-2-2 First Live:** positive historical signal under old timing model but current real-account risk incompatible; trigger-timing audit pending.
+- **MNQ 3-2-2 First Live:** **PROMISING BUT UNPROVEN**; corrected pre-armed timing survives 3-tick stress with both halves positive, but n=34 is thin and current real-account stop/R:R architecture remains incompatible.
 - **Miyagi:** thin / parked; timing audit only if reopened.
 - **Daily 2-2:** paper evidence lane; no live claim.
 - **MES 15m 1-2-2:** PROMISING BUT UNPROVEN / thin.
@@ -125,10 +140,10 @@ Do not restart:
 
 ## Next work
 
-1. Let natural MNQ 1m armed-trigger evidence accumulate.
-2. 3-2-2 trigger-timing A/B.
+1. Let natural MNQ 4HR 1m armed-trigger evidence accumulate.
+2. Keep 3-2-2 in passive evidence mode; if a lower-latency 3-2-2 observer is separately authorized, it must be observation-only first.
 3. Keep LC_ZONE v1 / 4HR zone-target changes on HOLD; only reopen zone design under a new preregistration.
-4. Reassess whether any strategy deserves paper-fill authority from 1m.
+4. Miyagi timing audit only if that parked strategy is reopened.
 5. Continue passive six-root context collection.
 
 No live expansion.
