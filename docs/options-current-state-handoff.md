@@ -14,11 +14,15 @@ The options scanner now has its **own service-specific immutable release**, inde
 
 The futures bot is separately pinned and must not be conflated with the options-scanner release. Service-aware drift monitoring verifies each pinned release independently.
 
-Current repository `main` remains ahead of the service-specific scanner release. #710/#712 add selector evidence capture/replay and do **not** change the frozen production contract-selection policy. The v3 minimal-runtime refactor keeps that evidence path independent of `options_manager`. None of this newer selector-evidence work is deployed in the options-scanner service-specific release as of this handoff.
+Current repository `main` is **`331b8f05a44694de45c14bdf8fb1cd5addeb16e5`**. #710/#712/#715 add selector evidence capture/replay and do **not** change the frozen production contract-selection policy. The v3 minimal-runtime evidence path is independent of `options_manager`. None of this newer selector-evidence work is deployed in the options-scanner service-specific release as of this handoff.
 
-Focused options-scanner regression for the service-specific provenance deployment: **144 passed**. Targeted selector-evidence regression on merged current `main`: **26 passed**.
+A service-specific selector-evidence candidate is prepared but **not deployed**: **`5c14577cf2b71270bd714ee5b3b783bab4d7b12f`** on `release/options-selector-evidence-v3` (tracked by #716). Exact delta from the active options-scanner release is four runtime evidence/storage files plus two tests; it leaves `paper_v1.py`, market-data policy, setup logic, risk, config, broker/order code and futures runtime unchanged. Candidate proof: **31 targeted tests passed** plus an isolated live SPY probe with 282/282 bid timestamps, ask timestamps, OI, delta and IV and `production_replay_parity=true`.
 
-Do not claim the options scanner is on current `main` until a separate service-specific deployment and market-hours smoke prove it.
+#717 adds a **research/advisory-only trigger-time Strat model**. It does not change the running scanner. Its ruling is important for backtesting: completed-30m-bar classification is not the final strategy-entry clock. Historical option-side acquisition for Strat strategy testing should wait until the trigger-time comparison freezes causal break timestamps and trigger-time market context. The existing completed-bar evidence remains valid for measuring what the current V1 scanner could see.
+
+Focused options-scanner regression for the deployed service-specific provenance release: **144 passed**.
+
+Do not claim the options scanner is on current `main` or on the prepared #716 candidate until a separate service-specific deployment and market-hours smoke prove it.
 
 ## What is built
 
@@ -323,7 +327,12 @@ The remaining uncertainty is primarily **operational proof + strategy evidence**
 
 ## Next action
 
-Steps 1–5 of the deployment checklist are complete (deployed, smoke proven, epochs `V1-EPOCH-1` and `V1-EPOCH-2` recorded). What remains:
+There are now two separate evidence tracks and they must not be conflated:
+
+1. **Current-scanner selector provenance:** #716 is prepared for a future service-specific options-scanner deployment. When an appropriate restart window is chosen, run the actual-box preflight, deploy only exact candidate `5c14577c...`, preserve the production DB, do not restart futures, and require the first natural candidate to record `production_replay_parity=true` or fail closed.
+2. **Strategy-entry timing:** #717 is offline/research only. Run the trigger-time comparison on the already-frozen underlying corpus, rebuild SPY/QQQ + HTF context at the causal trigger timestamp, quantify changed families/latency/ambiguity/later-outside failures, and only then freeze decision timestamps for any historical option-side acquisition.
+
+Existing V1 collection continues without tuning. Steps 1–5 of the original deployment checklist remain complete (deployed, smoke proven, epochs `V1-EPOCH-1` and `V1-EPOCH-2` recorded). Also continue to:
 
 1. Collect natural candidates on the 20-symbol universe without tuning V1. Any rule change starts a new cohort.
 2. Let the after-close collector add one session per weekday (unattended firing proven 2026-09-17); keep the six-point check until the prospective sample reaches its thresholds.
