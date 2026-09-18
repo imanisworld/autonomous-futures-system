@@ -637,3 +637,21 @@ def test_run_routes_prearmed_watching_sip_break_into_selector_capture(
     assert resolution["option_evidence"]["capture_lag_seconds"] == pytest.approx(
         16.876543211
     )
+
+
+def test_recent_sip_entitlement_failure_has_stable_block_reason():
+    from scripts.options_212r_prospective_collect import _sip_data_block_reason
+    from scripts.options_trigger_trade_timestamp_audit import TriggerTradeAuditError
+
+    exc = TriggerTradeAuditError(
+        'trade provider HTTP 403: {"message":"subscription does not permit querying recent SIP data"}'
+    )
+    assert _sip_data_block_reason(exc, live=False) == "alpaca_recent_sip_not_entitled"
+    assert _sip_data_block_reason(exc, live=True) == "alpaca_recent_sip_not_entitled"
+
+
+def test_other_sip_errors_remain_fail_closed_and_typed():
+    from scripts.options_212r_prospective_collect import _sip_data_block_reason
+
+    assert _sip_data_block_reason(RuntimeError("boom"), live=False) == "sip_cross_error:RuntimeError"
+    assert _sip_data_block_reason(RuntimeError("boom"), live=True) == "sip_live_cross_error:RuntimeError"
