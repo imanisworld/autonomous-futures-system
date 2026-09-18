@@ -75,6 +75,7 @@ REQUIRED_FIELDS = (
     "timestamp", "instrument", "session", "open", "high", "low", "close", "volume",
     "orb_high", "orb_low", "orb_status",
     "london_orb_high", "london_orb_low", "london_orb_status",
+    "prev_week_high", "prev_week_low",
     "reconstructed_market_condition", "legacy_market_condition",
 )
 
