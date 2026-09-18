@@ -23,11 +23,11 @@ Replay and forward fixtures consume identical frozen `QuoteRecord` bytes through
 
 ## New safe offline work this run
 
-Added explicit no-record parity at the actual selector boundary. A decision population with zero retained quote records is passed to `choose_contract` as an empty population in both replay and forward fixtures. Both return the identical fail-closed `DATA_INVALID / no_liquid_contract` decision with no selected contract. The fixture does not synthesize a `MISSING` record and does not reconstruct quote state.
+Added a retained-quote → `ContractMarketSnapshot` adapter and golden replay/forward proof through the existing `options_manager.paper_sim.simulate_round_trip` executable fill consumer. Identical frozen `OK` quote bytes produce identical ASK-entry/BID-exit fills. `MISSING`, `STALE`, and `WIDE_SPREAD` retained entry records expose no executable ask and the fill consumer returns `DATA_BLOCKED` rather than reconstructing a quote.
 
-Code/test head: `7f3bf4a0c6266569788096d3b7a20b20549b980c`.
+Targeted proof: `41 passed` (`tests/test_options_quote_replay_parity.py` + `tests/test_options_paper_sim.py`). Code/test head: `92c316051a44b062a31a7d109a910ef1decf6292`.
 
-This closes the previously explicit selector-level missing-row fixture gap. It does **not** prove fill reconstruction, full gate/runtime parity, or that the required real historical dataset exists.
+This establishes a shared serialized quote → existing fill-consumer parity boundary. It does **not** complete Item 2B: frozen fee/slippage rules, explicit no-fill taxonomy, gap-through-stop handling, same-bar pessimism, stress proof, and the real historical quote dataset remain outstanding.
 
 ## Not proven / blockers that remain
 
