@@ -643,6 +643,41 @@ def test_x0_feed_confirmed_and_contradicted_seams(tmp_path):
     assert rep2["classification"]["roll_provenance"] == "ROLL_PROVENANCE_UNKNOWN"
 
 
+def test_x0_gapped_contract_change_is_not_feed_confirmed():
+    from scripts import structural_level_x0_roll_proof as x0
+
+    seam = {
+        "from": "M2KU6",
+        "to": "M2KZ6",
+        "seam_utc": "2026-09-15T00:00:00+00:00",
+    }
+    live = {
+        "identity_runs": [
+            {
+                "contract": "M2KU6",
+                "first": "2026-09-14T20:00:00+00:00",
+                "last": "2026-09-14T20:45:00+00:00",
+                "bars": 4,
+            },
+            {
+                "contract": "M2KZ6",
+                "first": "2026-09-15T00:00:00+00:00",
+                "last": "2026-09-15T01:00:00+00:00",
+                "bars": 5,
+            },
+        ],
+        "identity_sequence": [
+            {"ts": "2026-09-14T20:00:00+00:00", "contract": "M2KU6"},
+            {"ts": "2026-09-14T20:15:00+00:00", "contract": "M2KU6"},
+            {"ts": "2026-09-14T20:30:00+00:00", "contract": "M2KU6"},
+            {"ts": "2026-09-14T20:45:00+00:00", "contract": "M2KU6"},
+            {"ts": "2026-09-15T00:00:00+00:00", "contract": "M2KZ6"},
+        ],
+        "timeframe_minutes_inferred": 15,
+    }
+    assert x0.reconcile_seam(seam, live) == "NOT_OBSERVABLE"
+
+
 def test_corpus_build_fixed_contract_has_no_seam_and_x0_proves_it(tmp_path):
     from scripts import structural_level_corpus_build as cb
     from scripts import structural_level_x0_roll_proof as x0

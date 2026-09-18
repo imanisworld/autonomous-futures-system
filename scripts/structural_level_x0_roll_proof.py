@@ -68,7 +68,7 @@ sys.path.insert(0, str(REPO))
 from research.structural_level_p2 import load_corpus_bars, parse_dt, read_jsonl  # noqa: E402
 from sources.polygon_client import PolygonBar, PolygonFuturesClient  # noqa: E402
 
-TOOL_VERSION = "slx0-roll-proof-v1.5.1"
+TOOL_VERSION = "slx0-roll-proof-v1.5.2"
 
 
 def _tick(inst: str) -> float:
@@ -259,6 +259,32 @@ def live_identity(live: list[dict], candidates: dict[str, dict[datetime, Polygon
             runs[-1]["last"] = ts.isoformat(); runs[-1]["bars"] += 1
         else:
             runs.append({"contract": t, "first": ts.isoformat(), "last": ts.isoformat(), "bars": 1})
+    timeframe_minutes = 15
+    if len(live) >= 2:
+        positive = sorted(
+            {
+                int((live[i]["ts"] - live[i - 1]["ts"]).total_seconds() // 60)
+                for i in range(1, len(live))
+                if live[i]["ts"] > live[i - 1]["ts"]
+            }
+        )
+        if positive:
+            timeframe_minutes = positive[0]
+
+    contiguous_switches: list[dict] = []
+    for (prev_ts, prev_contract), (next_ts, next_contract) in zip(ident, ident[1:]):
+        if prev_contract == next_contract:
+            continue
+        gap_minutes = (next_ts - prev_ts).total_seconds() / 60.0
+        if gap_minutes <= timeframe_minutes + 1e-9:
+            contiguous_switches.append({
+                "from": prev_contract,
+                "to": next_contract,
+                "last_old": prev_ts.isoformat(),
+                "first_new": next_ts.isoformat(),
+                "gap_minutes": gap_minutes,
+            })
+
     return {"live_bars": len(live),
             "live_first": live[0]["ts"].isoformat() if live else None,
             "live_last": live[-1]["ts"].isoformat() if live else None,
@@ -267,7 +293,11 @@ def live_identity(live: list[dict], candidates: dict[str, dict[datetime, Polygon
             "identified_per_contract": dict(per),
             "within_one_tick_per_contract": dict(strict),
             "identity_runs": runs,
-            "feed_switch_observed_in_live_span": len({r["contract"] for r in runs}) > 1,
+            "identity_sequence": [{"ts": ts.isoformat(), "contract": contract} for ts, contract in ident],
+            "timeframe_minutes_inferred": timeframe_minutes,
+            "contract_change_observed_in_live_span": len({r["contract"] for r in runs}) > 1,
+            "contiguous_contract_switches": contiguous_switches,
+            "feed_switch_observed_in_live_span": bool(contiguous_switches),
             "examples_unidentified": ex_none}
 
 
@@ -276,19 +306,38 @@ def reconcile_seam(seam: dict, live_id: dict | None) -> str:
         return "NOT_APPLICABLE"
     seam_ts = parse_dt(seam["seam_utc"])
     runs = live_id["identity_runs"]
-    if not runs:
+    sequence = live_id.get("identity_sequence") or []
+    if not runs or not sequence:
         return "NOT_OBSERVABLE"
+
     before = [r for r in runs if parse_dt(r["first"]) < seam_ts]
     after = [r for r in runs if parse_dt(r["last"]) >= seam_ts]
     if not before or not after:
         return "NOT_OBSERVABLE"
-    # identity on each side must equal the declared contract on that side
+
+    # Any identified contract on the wrong side contradicts the declared seam.
     ok_before = all(r["contract"] == seam["from"] for r in runs if parse_dt(r["last"]) < seam_ts)
     ok_after = all(r["contract"] == seam["to"] for r in runs if parse_dt(r["first"]) >= seam_ts)
     straddle = [r for r in runs if parse_dt(r["first"]) < seam_ts <= parse_dt(r["last"])]
-    if ok_before and ok_after and not straddle:
-        return "FEED_CONFIRMED"
-    return "FEED_CONTRADICTED"
+    if not ok_before or not ok_after or straddle:
+        return "FEED_CONTRADICTED"
+
+    # Fail closed when the identity evidence has an observation gap across the
+    # seam. Seeing OLD hours before and NEW at/after the seam does not prove
+    # where the continuous feed actually switched.
+    seq = [(parse_dt(r["ts"]), r["contract"]) for r in sequence]
+    seq = [(ts, contract) for ts, contract in seq if ts is not None]
+    last_before = max((x for x in seq if x[0] < seam_ts), default=None, key=lambda x: x[0])
+    first_after = min((x for x in seq if x[0] >= seam_ts), default=None, key=lambda x: x[0])
+    if last_before is None or first_after is None:
+        return "NOT_OBSERVABLE"
+    if last_before[1] != seam["from"] or first_after[1] != seam["to"]:
+        return "FEED_CONTRADICTED"
+    timeframe = int(live_id.get("timeframe_minutes_inferred") or 15)
+    gap_minutes = (first_after[0] - last_before[0]).total_seconds() / 60.0
+    if gap_minutes > timeframe + 1e-9:
+        return "NOT_OBSERVABLE"
+    return "FEED_CONFIRMED"
 
 
 def run(corpus_dir: str, client: PolygonFuturesClient, *, bars_root: str | None = None,
