@@ -68,13 +68,17 @@ def evaluate_capture_gate(
     prearmed_at: datetime | None,
     decision_ts: datetime,
     max_capture_lag_seconds: float,
+    trigger_crossed_at: datetime | None = None,
 ) -> CaptureGate:
     """Decide whether current option data can count as prospective trigger evidence.
 
     The gate is deliberately stricter than simply reconstructing a trigger after
-    the fact: the setup must have been observed before the first crossing 5m
-    bucket began, the source target must still exist, and capture must happen
-    promptly after that 5m bucket becomes observable.
+    the fact: the setup must have been observed before the causal break and the
+    source target must still exist. When an exact SIP crossing timestamp is
+    supplied, both the no-hindsight arm deadline and capture lag use that
+    crossing. Otherwise the legacy mechanics-only fallback requires an arm
+    before the 5m bucket and measures lag from bar detectability. Production
+    evidence must supply the exact crossing clock.
     """
     if decision_ts.tzinfo is None or decision_ts.utcoffset() is None:
         raise ValueError("decision_ts must be timezone-aware")
@@ -84,15 +88,33 @@ def evaluate_capture_gate(
         return CaptureGate(False, "not_212r_trigger", None)
     trigger_start = _parse_observation_ts(observation.trigger_bar_start)
     detectable = _parse_observation_ts(observation.trigger_detectable_at)
-    if prearmed_at is None or trigger_start is None or prearmed_at.astimezone(timezone.utc) >= trigger_start:
+    if prearmed_at is None or trigger_start is None:
         return CaptureGate(False, "no_proven_pretrigger_arm", None)
     if observation.source_target_consumed:
         return CaptureGate(False, "source_target_consumed_at_trigger", None)
     if detectable is None:
         return CaptureGate(False, "trigger_detectable_time_missing", None)
-    lag = (decision_ts.astimezone(timezone.utc) - detectable).total_seconds()
+
+    lag_anchor = detectable
+    prearm_deadline = trigger_start
+    negative_reason = "trigger_bar_not_yet_observable"
+    if trigger_crossed_at is not None:
+        if trigger_crossed_at.tzinfo is None or trigger_crossed_at.utcoffset() is None:
+            raise ValueError("trigger_crossed_at must be timezone-aware")
+        crossed = trigger_crossed_at.astimezone(timezone.utc)
+        trigger_end = trigger_start + MINUTE_5.delta
+        if crossed < trigger_start or crossed >= trigger_end:
+            return CaptureGate(False, "trigger_cross_outside_proven_bucket", None)
+        lag_anchor = crossed
+        prearm_deadline = crossed
+        negative_reason = "trigger_cross_not_yet_observable"
+
+    if prearmed_at.astimezone(timezone.utc) >= prearm_deadline:
+        return CaptureGate(False, "no_proven_pretrigger_arm", None)
+
+    lag = (decision_ts.astimezone(timezone.utc) - lag_anchor).total_seconds()
     if lag < 0:
-        return CaptureGate(False, "trigger_bar_not_yet_observable", lag)
+        return CaptureGate(False, negative_reason, lag)
     if lag > max_capture_lag_seconds:
         return CaptureGate(False, "decision_time_capture_late", lag)
     return CaptureGate(True, None, lag)

@@ -10,6 +10,13 @@ It does not alert a trade, reserve ACTIVE risk, build an order ticket, call a br
 
 ## Source boundary
 
+Collector v0.2 uses two read-only market-data sources with separate roles:
+
+- **Public** supplies prospective chart structure, current underlying/option-chain evidence, and the production-selector inputs;
+- **Alpaca consolidated SIP trades** resolve the exact strict-through underlying crossing timestamp inside the already-proven Public 5-minute trigger bucket.
+
+The Public structure source remains separately labeled and is not relabeled as SIP.
+
 The collector uses the separately proven Public source:
 
 - Public `DAY` regular-market 5m chart bars for causal lower-timeframe observation;
@@ -23,12 +30,25 @@ Malformed, off-grid, partial, duplicate, or gapped 5m evidence fails closed. No 
 
 ## Review-tightened timing boundary
 
-Independent review tightened two timing details without changing the lane's observation-only scope:
+Independent review tightened three timing details without changing the lane's observation-only scope:
 
 - `ARMED` evidence is timestamped with the time that ticker's Public source payload was actually received, not one process-wide run-start timestamp. A later ticker in a serial 20-symbol pass cannot inherit an earlier observation time.
-- The capture-lag gate is checked again after the option/selector evidence finishes, using the selector evidence's actual `captured_at` timestamp. Starting a chain request inside the window is not enough if it finishes after the pre-registered deadline.
+- The exact trigger clock is resolved from the first Alpaca SIP price-forming trade **strictly through** the proven Public trigger boundary. Equality prints do not count. The same trade-condition and strict-cross semantics used by the frozen 81-row historical trigger audit are reused here.
+- The capture-lag gate is checked both before and after option/selector evidence and is measured from the **exact SIP crossing timestamp**, not from the five-minute bar close. Starting a chain request inside the window is not enough if it finishes after the pre-registered deadline.
 
-These checks prevent serial-loop latency or network latency from being mislabeled as decision-time evidence. The numeric capture-lag threshold remains an operator policy decision; no value is approved by this review.
+This closes a defect in v0.1 where evidence captured one second after a five-minute close could appear one second late even when the actual trigger crossed several minutes earlier inside that bar. The numeric capture-lag threshold remains an operator policy decision; no value is approved by this review.
+
+### Bar-close architecture limit
+
+The v0.2 correction makes latency honest, but it does **not** make the current bar-close collector timely. On the frozen 81 exact SIP trigger events, the unavoidable delay from true crossing to five-minute bar close is:
+
+- minimum: **11.716s**;
+- median: **169.751s**;
+- maximum: **299.821s**.
+
+Before any network or option-chain latency, only **11/81 (13.6%)** of frozen triggers are within 60 seconds of bar close; 32/81 are within 120 seconds and 42/81 within 180 seconds.
+
+Therefore v0.2 is a **safety correction, not deployment approval**. A low-lag qualifying collector must inspect SIP trades while the active five-minute bucket is still forming and initiate selector capture on the next observation cycle after the exact break. Otherwise a tight lag policy creates strong within-bar selection bias, while a loose policy accepts multi-minute-late chains.
 
 ## No-hindsight requirement
 
@@ -37,10 +57,11 @@ A historical reconstruction is not allowed to become prospective evidence merely
 For selector evidence to be captured:
 
 1. the 212 setup must already have an append-only `ARMED` record;
-2. that arm record timestamp must be strictly earlier than the start of the first 5m bucket that eventually proves the break;
+2. once exact SIP crossing evidence exists, that arm record timestamp must be strictly earlier than the true crossing timestamp; equality or a later arm is hindsight and blocks the event;
 3. the trigger must be `STRAT_212_REVERSAL`;
 4. source magnitude must still remain at the trigger (`TARGET_CONSUMED_AT_ENTRY` is blocked);
-5. both the pre-selector gate and the final completed selector capture must fall within a caller-supplied, pre-registered maximum lag after that 5m bar becomes complete.
+5. an Alpaca SIP trade window for that proven bucket must resolve the first strict-through crossing without unknown trade semantics;
+6. both the pre-selector gate and the final completed selector capture must fall within a caller-supplied, pre-registered maximum lag after that exact SIP crossing.
 
 There is deliberately **no default capture-lag threshold**. The CLI requires `--max-capture-lag-seconds`, so deployment cannot silently invent the acceptance window.
 
@@ -85,9 +106,13 @@ Reason: the frozen context formula uses VWAP. Public chart bars do not expose th
 
 No alignment variant is used as an entry gate by this collector.
 
-## Isolated journal
+## Isolated evidence storage
 
-Default path: `logs/options_212r_prospective.jsonl`.
+Default journal: `logs/options_212r_prospective.jsonl`.
+
+Default raw SIP window directory: `logs/options_212r_sip_trades/`.
+
+Each qualifying reversal retains the exact crossing-trade metadata plus a SHA-256 of the canonical SIP trade window. Non-dry-run collection persists that raw window immutably; an existing path with different bytes fails closed as source drift.
 
 The journal is append-only and independent of `options_scanner.sqlite`. It stores `ARMED` and terminal `RESOLUTION` records. Malformed existing journal rows fail closed instead of being skipped. Resolution records distinguish `capture_gate_eligible` (the trigger passed the pre-selector timing gate) from `option_evidence_usable` (the completed selector capture also passed final timing/freshness/parity checks).
 

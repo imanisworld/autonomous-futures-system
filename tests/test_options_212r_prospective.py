@@ -164,3 +164,83 @@ def test_212_setup_can_reanchor_from_previous_session_into_open():
     assert row.status == "TRIGGERED"
     assert row.family == "STRAT_212_REVERSAL"
     assert row.direction == "SHORT"
+
+
+def test_capture_gate_exact_cross_timestamp_overrides_bar_close_lag():
+    from alert_ranker.options_212r_prospective import evaluate_capture_gate
+
+    lower = [
+        _bar("2026-09-18T15:00:00", 9.4, 10.0, 7.0, 8.0),
+        _bar("2026-09-18T15:05:00", 8.0, 8.5, 6.4, 6.8),
+    ]
+    obs = [x for x in observe_212_setups(
+        ticker="SPY", history_30m=_history(), session_5m=lower,
+        session=_session(), decision_ts=datetime(2026, 9, 18, 15, 11, tzinfo=UTC),
+    ) if x.watch_start == "2026-09-18T15:00:00+00:00"][0]
+
+    result = evaluate_capture_gate(
+        obs,
+        prearmed_at=datetime(2026, 9, 18, 15, 4, tzinfo=UTC),
+        decision_ts=datetime(2026, 9, 18, 15, 10, 45, tzinfo=UTC),
+        max_capture_lag_seconds=60,
+        trigger_crossed_at=datetime(2026, 9, 18, 15, 6, 30, tzinfo=UTC),
+    )
+    assert result.eligible is False
+    assert result.reason_code == "decision_time_capture_late"
+    assert result.lag_seconds == 255
+
+
+def test_capture_gate_rejects_exact_cross_outside_proven_five_minute_bucket():
+    from alert_ranker.options_212r_prospective import evaluate_capture_gate
+
+    lower = [
+        _bar("2026-09-18T15:00:00", 9.4, 10.0, 7.0, 8.0),
+        _bar("2026-09-18T15:05:00", 8.0, 8.5, 6.4, 6.8),
+    ]
+    obs = [x for x in observe_212_setups(
+        ticker="SPY", history_30m=_history(), session_5m=lower,
+        session=_session(), decision_ts=datetime(2026, 9, 18, 15, 11, tzinfo=UTC),
+    ) if x.watch_start == "2026-09-18T15:00:00+00:00"][0]
+
+    result = evaluate_capture_gate(
+        obs,
+        prearmed_at=datetime(2026, 9, 18, 15, 4, tzinfo=UTC),
+        decision_ts=datetime(2026, 9, 18, 15, 10, 45, tzinfo=UTC),
+        max_capture_lag_seconds=60,
+        trigger_crossed_at=datetime(2026, 9, 18, 15, 10, 0, tzinfo=UTC),
+    )
+    assert result.eligible is False
+    assert result.reason_code == "trigger_cross_outside_proven_bucket"
+
+
+def test_exact_cross_allows_arm_after_bucket_start_when_arm_precedes_true_cross():
+    from alert_ranker.options_212r_prospective import evaluate_capture_gate
+
+    lower = [
+        _bar("2026-09-18T15:00:00", 9.4, 10.0, 7.0, 8.0),
+        _bar("2026-09-18T15:05:00", 8.0, 8.5, 6.4, 6.8),
+    ]
+    obs = [x for x in observe_212_setups(
+        ticker="SPY", history_30m=_history(), session_5m=lower,
+        session=_session(), decision_ts=datetime(2026, 9, 18, 15, 11, tzinfo=UTC),
+    ) if x.watch_start == "2026-09-18T15:00:00+00:00"][0]
+
+    result = evaluate_capture_gate(
+        obs,
+        prearmed_at=datetime(2026, 9, 18, 15, 5, 5, tzinfo=UTC),
+        decision_ts=datetime(2026, 9, 18, 15, 6, 45, tzinfo=UTC),
+        max_capture_lag_seconds=60,
+        trigger_crossed_at=datetime(2026, 9, 18, 15, 6, 30, tzinfo=UTC),
+    )
+    assert result.eligible is True
+    assert result.lag_seconds == 15
+
+    hindsight = evaluate_capture_gate(
+        obs,
+        prearmed_at=datetime(2026, 9, 18, 15, 6, 30, tzinfo=UTC),
+        decision_ts=datetime(2026, 9, 18, 15, 6, 45, tzinfo=UTC),
+        max_capture_lag_seconds=60,
+        trigger_crossed_at=datetime(2026, 9, 18, 15, 6, 30, tzinfo=UTC),
+    )
+    assert hindsight.eligible is False
+    assert hindsight.reason_code == "no_proven_pretrigger_arm"

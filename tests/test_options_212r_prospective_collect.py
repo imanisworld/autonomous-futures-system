@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import asyncio
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -107,29 +108,37 @@ def _triggered_observation():
     )
 
 
-def test_final_selector_capture_must_finish_inside_capture_window():
+def test_final_selector_capture_uses_exact_cross_not_five_minute_close():
     from scripts.options_212r_prospective_collect import _enforce_final_capture_lag
 
     obs = _triggered_observation()
     prearmed = datetime(2026, 9, 18, 15, 4, tzinfo=UTC)
+
+    # The five-minute bar closes at 15:10, which would make this look only
+    # 45 seconds late. The actual strict crossing occurred at 15:06:30, so
+    # the evidence is really 255 seconds late and must be blocked.
+    exact_cross = datetime(2026, 9, 18, 15, 6, 30, tzinfo=UTC)
+    late = _enforce_final_capture_lag(
+        {"status": "CAPTURED", "captured_at": "2026-09-18T15:10:45+00:00"},
+        observation=obs,
+        prearmed_at=prearmed,
+        max_capture_lag_seconds=60,
+        trigger_crossed_at=exact_cross,
+    )
+    assert late["status"] == "DATA_BLOCKED"
+    assert late["reason_code"] == "post_selector_decision_time_capture_late"
+    assert late["capture_lag_seconds"] == 255
+
+    on_time_cross = datetime(2026, 9, 18, 15, 9, 50, tzinfo=UTC)
     on_time = _enforce_final_capture_lag(
         {"status": "CAPTURED", "captured_at": "2026-09-18T15:10:45+00:00"},
         observation=obs,
         prearmed_at=prearmed,
         max_capture_lag_seconds=60,
+        trigger_crossed_at=on_time_cross,
     )
     assert on_time["status"] == "CAPTURED"
-    assert on_time["capture_lag_seconds"] == 45
-
-    late = _enforce_final_capture_lag(
-        {"status": "CAPTURED", "captured_at": "2026-09-18T15:11:30+00:00"},
-        observation=obs,
-        prearmed_at=prearmed,
-        max_capture_lag_seconds=60,
-    )
-    assert late["status"] == "DATA_BLOCKED"
-    assert late["reason_code"] == "post_selector_decision_time_capture_late"
-    assert late["capture_lag_seconds"] == 90
+    assert on_time["capture_lag_seconds"] == 55
 
 
 def test_collector_armed_timestamp_uses_per_ticker_observation_clock():
@@ -137,3 +146,126 @@ def test_collector_armed_timestamp_uses_per_ticker_observation_clock():
     assert "source_observed_at = datetime.now(timezone.utc)" in source
     assert "armed_seen[setup_id] = source_observed_at" in source
     assert '"observed_at": source_observed_at.isoformat()' in source
+
+
+def test_exact_sip_cross_skips_equal_trigger_and_persists_immutable_window(tmp_path: Path):
+    from scripts.options_212r_prospective_collect import _capture_exact_trigger_cross
+    from scripts.options_trigger_trade_timestamp_audit import parse_trade
+
+    class FakeProvider:
+        async def fetch_trades(self, *, symbol, start, end):
+            assert symbol == "SPY"
+            return [
+                parse_trade(
+                    "SPY",
+                    {
+                        "t": "2026-09-18T15:05:01.000000000Z",
+                        "p": 7.0,
+                        "s": 100,
+                        "x": "Q",
+                        "c": ["@"],
+                        "z": "C",
+                        "i": 1,
+                    },
+                ),
+                parse_trade(
+                    "SPY",
+                    {
+                        "t": "2026-09-18T15:05:02.000000000Z",
+                        "p": 6.5,
+                        "s": 100,
+                        "x": "Q",
+                        "c": ["@"],
+                        "z": "C",
+                        "i": 2,
+                    },
+                ),
+                parse_trade(
+                    "SPY",
+                    {
+                        "t": "2026-09-18T15:05:03.123456789Z",
+                        "p": 6.49,
+                        "s": 100,
+                        "x": "Q",
+                        "c": ["@"],
+                        "z": "C",
+                        "i": 3,
+                    },
+                ),
+            ]
+
+    out = asyncio.run(
+        _capture_exact_trigger_cross(
+            FakeProvider(),
+            observation=_triggered_observation(),
+            setup_id="abc",
+            sip_trade_dir=tmp_path,
+            persist_raw=True,
+        )
+    )
+    assert out["status"] == "PROVEN"
+    assert out["trigger_crossed_at"] == "2026-09-18T15:05:03.123456789Z"
+    assert out["trigger_cross_trade"]["price"] == 6.49
+    assert out["raw_trade_rows"] == 3
+    assert out["eligible_trade_rows"] == 3
+    raw = Path(out["raw_trade_file"])
+    assert raw.exists()
+    assert raw.name == "abc.jsonl"
+
+    # Same source bytes are idempotent rather than rewritten.
+    again = asyncio.run(
+        _capture_exact_trigger_cross(
+            FakeProvider(),
+            observation=_triggered_observation(),
+            setup_id="abc",
+            sip_trade_dir=tmp_path,
+            persist_raw=True,
+        )
+    )
+    assert again["raw_trade_sha256"] == out["raw_trade_sha256"]
+
+
+def test_exact_sip_cross_missing_blocks_before_selector_capture(tmp_path: Path):
+    from scripts.options_212r_prospective_collect import _capture_exact_trigger_cross
+    from scripts.options_trigger_trade_timestamp_audit import parse_trade
+
+    class NoCrossProvider:
+        async def fetch_trades(self, *, symbol, start, end):
+            return [
+                parse_trade(
+                    "SPY",
+                    {
+                        "t": "2026-09-18T15:05:02.000000000Z",
+                        "p": 6.5,
+                        "s": 100,
+                        "x": "Q",
+                        "c": ["@"],
+                        "z": "C",
+                        "i": 1,
+                    },
+                ),
+                parse_trade(
+                    "SPY",
+                    {
+                        "t": "2026-09-18T15:05:03.000000000Z",
+                        "p": 6.7,
+                        "s": 100,
+                        "x": "Q",
+                        "c": ["@"],
+                        "z": "C",
+                        "i": 2,
+                    },
+                ),
+            ]
+
+    out = asyncio.run(
+        _capture_exact_trigger_cross(
+            NoCrossProvider(),
+            observation=_triggered_observation(),
+            setup_id="abc",
+            sip_trade_dir=tmp_path,
+            persist_raw=False,
+        )
+    )
+    assert out["status"] == "DATA_BLOCKED"
+    assert out["reason_code"] == "sip_strict_trigger_cross_missing"
