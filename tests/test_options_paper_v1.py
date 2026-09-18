@@ -220,6 +220,9 @@ def test_triggered_scanner_replaces_fake_2099_with_current_chain_and_journals_ma
     assert evidence["chosen_expiration"] == GOOD_EXPIRY
     assert evidence["production_selection"]["status"] == "VALID"
     assert evidence["production_selection"]["contract"]["symbol"] == "SPY261030C00505000"
+    assert evidence["production_replay_parity"] is True
+    assert evidence["production_replay_result"]["contract"]["symbol"] == "SPY261030C00505000"
+    assert evidence["selector_authority"] == POLICY_ID
     assert evidence["underlying"]["snapshot"]["price_source"] == "context_override"
 
 
