@@ -84,7 +84,7 @@ def evaluate_capture_gate(
         return CaptureGate(False, "not_212r_trigger", None)
     trigger_start = _parse_observation_ts(observation.trigger_bar_start)
     detectable = _parse_observation_ts(observation.trigger_detectable_at)
-    if prearmed_at is None or trigger_start is None or prearmed_at.astimezone(timezone.utc) > trigger_start:
+    if prearmed_at is None or trigger_start is None or prearmed_at.astimezone(timezone.utc) >= trigger_start:
         return CaptureGate(False, "no_proven_pretrigger_arm", None)
     if observation.source_target_consumed:
         return CaptureGate(False, "source_target_consumed_at_trigger", None)

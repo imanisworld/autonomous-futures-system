@@ -119,6 +119,14 @@ def test_capture_gate_requires_true_prearm_and_timely_detection():
     assert good.eligible is True
     assert good.lag_seconds == 45
 
+    exact_bucket_arm = evaluate_capture_gate(
+        obs, prearmed_at=datetime(2026, 9, 18, 15, 5, tzinfo=UTC),
+        decision_ts=datetime(2026, 9, 18, 15, 10, 45, tzinfo=UTC),
+        max_capture_lag_seconds=60,
+    )
+    assert exact_bucket_arm.eligible is False
+    assert exact_bucket_arm.reason_code == "no_proven_pretrigger_arm"
+
     late_arm = evaluate_capture_gate(
         obs, prearmed_at=datetime(2026, 9, 18, 15, 6, tzinfo=UTC),
         decision_ts=datetime(2026, 9, 18, 15, 10, 45, tzinfo=UTC),
