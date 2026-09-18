@@ -212,6 +212,19 @@ def test_triggered_scanner_replaces_fake_2099_with_current_chain_and_journals_ma
     assert marks[0]["ask"] == 5.0
     assert marks[0]["raw"]["event"] == "ENTRY"
 
+    evidence_rows = storage.latest_selector_evidence()
+    assert len(evidence_rows) == 1
+    evidence = evidence_rows[0]
+    assert evidence["ticker"] == "SPY"
+    assert evidence["production_direction"] == "LONG"
+    assert evidence["chosen_expiration"] == GOOD_EXPIRY
+    assert evidence["production_selection"]["status"] == "VALID"
+    assert evidence["production_selection"]["contract"]["symbol"] == "SPY261030C00505000"
+    assert evidence["production_replay_parity"] is True
+    assert evidence["production_replay_result"]["contract"]["symbol"] == "SPY261030C00505000"
+    assert evidence["selector_authority"] == POLICY_ID
+    assert evidence["underlying"]["snapshot"]["price_source"] == "context_override"
+
 
 def test_v1_resolver_reprices_exact_contract_and_exits_at_premium_stop(tmp_path):
     config = cfg(tmp_path)
