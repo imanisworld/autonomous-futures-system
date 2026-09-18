@@ -139,3 +139,51 @@ They are cleanup candidates only. Do not delete any branch unless its unique-wor
 ## Safe next step
 
 Keep the VPS untouched. When the freeze ends or an explicit waiver is granted, perform the **actual-box preflight first**, then build/verify the exact minimal candidate. Do not promote anything until the candidate and box-state gates pass.
+
+---
+
+## Update 2026-09-17 — candidate built, deployment window approved (PAPER ONLY)
+
+Supersedes the verdict above for the facts below; everything not restated stays in force.
+
+**Deployed base (proven from the box, `/proc/<pid>/cwd`):** `3beffb7b4ebd97a11cc2c23b17407e7212bbd38a` — #612 is **already in this base** (`4ebb29a` is an ancestor; `webhook/runner.py` blob `0ad19162519a…` and `strategy/signal_engine.py` blob `39b5049232ed…` are identical in base, candidate and `main`). The earlier "last verified deployed = `8fd8b21`" statement is stale.
+
+**Candidate (immutable, exact SHA):** `11b3d910822b1dec930c8d4309b20c3aa01b42b1` on branch `release/minimal-3beffb7-c8-641-642` = base + three `cherry-pick -x` commits:
+
+| Item | Source commit on `main` | Runtime file (candidate blob = `main` blob) |
+|---|---|---|
+| C8 journal `market_condition` normalization | `d65c118` (#638) | `journal/journal_logger.py` = `72b81b7a60b2…` |
+| #641 daily safety gate fails closed on unverifiable proof-critical state | `6383ab2` | `ops/project_check/daily.py` = `5d8289d18a0c…` |
+| #642 malformed / non-ASCII webhook secret → 401, not 500 | `10c3d09` | `webhook/app.py` = `c2fc1213ef63…` |
+
+Exact diff vs base = those three files + `tests/test_c8_market_condition_normalization.py`, `tests/test_project_check_daily_drift_unverified.py`, `tests/test_webhook_secret_non_ascii.py` (347/−3). No change under `strategy/`, `risk/`, `execution/`, `config/`, `context/`, `adaptive/`, `replay/`, `research/`, `scripts/`, `risk_rules.yaml`. Focused tests 359 pass; full suite 5652 pass / 7 skip. The exclusion list above (incl. #621 replay repair, research tooling, #563/#568/#574) is honoured by construction.
+
+**Why #642 joined the set:** on 2026-09-17 a re-created TradingView M2K 15m alert delivered a secret containing a non-ASCII homoglyph; `hmac.compare_digest(str, str)` raised `TypeError`, every delivery returned HTTP 500 and the bar was dropped after TradingView's retries (M2K 15m gap 13:30→16:00Z, 11 bars; 2026-09-17 is not a clean M2K session). The alert was corrected externally (16:30Z close → 200). #642 turns that input class into a clean 401; it does not make a wrong secret valid.
+
+**Deployment rules (operator-approved):**
+
+- deploy the **SHA**, never the branch name (the release branch is unprotected);
+- method = the sanctioned local `afs-deploy.sh --release <full-sha>` (manifest built from a detached worktree at the exact SHA; `EXPECTED_LIVE_COMMIT` / `EXPECTED_RELEASE_FINGERPRINT` are written **from the generated manifest** — never pre-pinned from a predicted value);
+- window = after the 21:00Z close (no mid-RTH restart);
+- immediately before mutation reconfirm `LIVE_TRADING_ENABLED=false`, `TRADOVATE_ENV=demo`, `SCHEDULE_MODE=always_on_shadow`, 0 positions, 0 working orders;
+- one controlled `.env` edit (backup first) adding the four proof pins the live-box guard reports as unpinned — `EXPECTED_PROOF_WIDE_STOP_LEDGER_MODE`, `EXPECTED_PROOF_WIDE_STOP_LEDGER_EPOCH_START`, `EXPECTED_PROOF_ASIA_D_EMA_PAPER_MODE`, `EXPECTED_PROOF_ASIA_D_EMA_PAPER_EPOCH_START` — with the currently observed values, before the restart so the new process loads them; these are what #641's gate will otherwise block on;
+- `systemctl restart afs-watcher` afterwards per runbook; rollback = `--release 3beffb7b4ebd97a11cc2c23b17407e7212bbd38a` + restore the `.env` backup + watcher restart;
+- post-deploy proof: cwd/symlink = candidate, release integrity PASS, posture unchanged, 0 positions/orders, #612 markers present, `project_check daily` PASS with the new pins, first naturally eligible C8-normalized row, a controlled non-ASCII-secret POST returns 401, M2K 15m bars continue, campaign/epoch identifiers and journal continuity preserved.
+
+**Pre-declared divergence — not runtime drift.** This release is deliberately *not* `main` head. After promotion the box will legitimately lack the research/replay files merged to `main` since `3beffb7` (`research/structural_level_*.py`, `replay/replay_engine.py` #621, `scripts/structural_level_*`, …). None is imported by the service. That difference is intentional and must not be read as drift.
+
+**Drift-gate finding (checked read-only 2026-09-17, before deployment):** the box-side gate `/root/bin/afs-drift-gate.sh` (cron 11:05Z) clones **public `main` HEAD** and compares it to the live tree; it has no notion of the pinned release (`EXPECTED_LIVE_COMMIT`) or the release manifest. It already alarmed on 2026-09-17T11:05Z with exactly the pre-existing 3-item set (`DIFFER replay/replay_engine.py`, `MISSING research/structural_level_features.py`, `MISSING research/structural_level_p2.py`; `scripts/`, `tests/`, `docs/` are filtered out), because `main` moved after the `3beffb7` deploy. The same 3 items are expected after this release. The repo-side `scripts/afs-drift-gate.sh` does accept `AFS_DRIFT_REF` but watches a different, narrower path set. **Recorded as a monitoring defect for a separate focused fix:** the box gate should compare against the pinned deployed release SHA/manifest (or an approved-release allowlist), so intentional release divergence is distinguishable from unexpected drift. Do **not** reseed or suppress the alarm blindly, and do not treat a daily known-false alarm as acceptable.
+
+**Also backlog, separate from this release:** the AFS watcher marks 15-minute-cadence webhook 500s "RECOVERED" between bar closes (false recovery); the single 2026-09-17T16:25:49Z 422 (body-validation reject during the alert edit; detail not logged).
+
+## Outcome 2026-09-17 21:03Z — release `11b3d91` deployed (paper only), then superseded at 21:36Z
+
+**Deployment (21:01–21:17Z, single owner, sanctioned path):** deploy-window lock → pre-deploy snapshot (all stop conditions clear: cwd `3beffb7`, NRestarts 0, `LIVE_TRADING_ENABLED=false` / `TRADOVATE_ENV=demo` / `SCHEDULE_MODE=always_on_shadow` / `EXIT_MODE=static`, 0 positions, 0 orders, `.env` untouched since the previous release, candidate head = `11b3d910822b1dec930c8d4309b20c3aa01b42b1`, 6-file delta) → `.env` backed up and the four `EXPECTED_PROOF_*` pins appended (the only edit) → `afs-deploy.sh --release 11b3d910822b1dec930c8d4309b20c3aa01b42b1` (1068 files, integrity PASS at build/staging/startup; commit + fingerprint pinned **from the generated manifest**) → symlink switched 21:03:14Z → watcher restarted and re-baselined → lock released 21:17Z.
+
+**Post-deploy proof (all passed):** live-box guard `status ok` with `missing_pins=[]`, `unpinned_runtime_overrides=[]`; the daily gate no longer reports `RUNTIME_DRIFT_UNVERIFIED` (#641 objective met); a controlled fabricated non-ASCII secret POST returned **401** with nothing queued and no traceback (#642); the box drift gate reported **exactly the three pre-declared items** and nothing else (alert fired as on every run; not reseeded); epochs, ledgers and posture unchanged; position `None`. Close-out (01:06Z 09-18): MNQ/MES/M2K 15m bars 22:00Z→00:45Z with zero gaps and 0 non-200 deliveries; C8 proven on 24 real post-restart rows (24/24 top-level `market_condition` == `context.market_condition`, 0 `None`, versus 85/170 `None` on the same day before the restart).
+
+**Two on-box daily-gate blockers are pre-existing and release-independent** (reproduced identically by running the old `3beffb7` release read-only under the pre-release `.env` backup): `TRADE_CHAIN_FAIL` (three historical unmatched outcomes from 2026-06-01 and 2026-07-14) and `REPO_PRESERVATION_UNVERIFIED` (release directories ship without `.git`, so repository checks must be run from a git checkout). Both stay on the backlog.
+
+**Superseded 21:36:10Z:** nineteen minutes after the lock was released, a different session deployed `94eb7d388c02b744eed5a3d3d36b14fa724f1781` (branch `release/minimal-11b3d91-648` = `11b3d91` + #648, options-lane observer accounting only: `alert_ranker/*` + tests, no futures-runtime files) through the same sanctioned path (integrity PASS 1069 files, pins re-written, `current.previous` → the `11b3d91` directory, watcher and options-scanner restarted). Posture and the four proof pins were preserved. **No deployment-ownership declaration was made for that deploy** — a process breach, recorded for operator ruling; the futures-side proofs above remain valid for the `11b3d91` code carried inside `94eb7d38`. The post-restart memory warning at 23:01Z (+156 MB in ~95 min) matches the documented warm-up climb and plateaued at ~300 MB with the warning cleared; not a leak on current evidence.
+
+Rollback for the futures release remains `--release 3beffb7b4ebd97a11cc2c23b17407e7212bbd38a` + restore of the pre-release `.env` backup + watcher restart (this would also drop #648).
