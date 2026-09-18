@@ -49,7 +49,7 @@ Prospective production-selector evidence/replay has already been built (#710/#71
 - production choice == retained-input production replay;
 - `production_replay_parity=true`.
 
-Issue #716 is a prepared service-specific deployment for that evidence capture. It is not yet deployed.
+The minimal service-specific selector-evidence release is deployed on `options-scanner` as `58f1c50583d8bb747c0b221eabb75af376b10ecc`. It remains advisory/Public read-only and does not activate 212R as a running strategy family.
 
 ### 3. Causal 212R trigger clock
 
@@ -119,14 +119,35 @@ Developing-HTF trigger-time failure counts:
 
 This proves full alignment is an extremely restrictive independent filter on this population. It does **not** prove that relaxing alignment improves option expectancy.
 
+### 6. Exact underlying trigger-cross trade clock
+
+A SHA-bound historical Alpaca SIP trade audit now resolves the exact first price-forming trade strictly through the frozen trigger for **81/81** rows.
+
+Proof gates:
+- frozen observer SHA verified before population binding;
+- frozen trigger snapshot SHA verified before replay;
+- only the already-proven five-minute first-cross bucket is queried;
+- unknown SIP tapes or trade-condition codes fail closed;
+- accepted price-forming trades reproduce frozen five-minute **OHLC exactly for 81/81 rows**;
+- trigger semantics are strict (`>` for LONG, `<` for SHORT), so equality prints do not start the clock;
+- all 81 rows resolve to nanosecond SIP timestamps and causal crossing-trade prices.
+
+Compact evidence:
+- manifest SHA-256: `29a1ecdcc052348708583818da1334f098af9425da69d9612f0c6e0b0003e103`;
+- events SHA-256: `58718220328645e7f87aaa6826fd20fadf9f45e75a36ed920b4242635c9d42f6`;
+- raw SIP trade rows retained: **353,456** across 81 windows;
+- first-cross offset from five-minute bucket start: min **0.178917261s**, median **130.249476936s**, max **288.283787331s**.
+
+This proves the exact causal crossing-trade clock/price. It does not by itself prove historical option-selector parity; the replay packet must still show that this causal price is fed through the intended `context.price -> normalized price -> OPTIONS_PAPER_V1` path.
+
 ## DATA BLOCKED
 
 ### Historical executable option replay
 
 The frozen historical trigger population still lacks a proven causal source for every production-selector input at the trigger boundary, especially:
 - historical decision-time Delta;
-- historical decision-time open interest;
-- exact underlying-price provenance at the trigger timestamp.
+- historical decision-time contract-level open interest;
+- a final replay packet proving the exact trigger-cross trade price is wired through the same historical `context.price -> normalized price -> OPTIONS_PAPER_V1` semantic path used for the corrected 212R replay.
 
 Massive historical bid/ask is available, but current/future snapshots must not be used to back-fill historical analytics.
 
@@ -176,7 +197,7 @@ The stress engine exists, but the numeric qualification policy still needs a fro
 
 ## Important operational distinction
 
-Deploying issue #716 would start trustworthy production-selector evidence for the **current running V1 scanner**.
+Production-selector evidence capture is already deployed for the **current running V1 scanner**.
 
 It is useful, but it is **not sufficient to collect 212R option evidence**, because `alert_ranker.trigger_time` remains research/offline and 212R is not a running production strategy family.
 
