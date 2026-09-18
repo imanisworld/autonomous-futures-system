@@ -724,8 +724,10 @@ can be handled entirely in the offline builder):
   bars); the level *definitions* are unchanged and already proven on MNQ/MES.
 - **C23 — scheduler seams are not feed provenance (v1.5 X0; #625).** `roll_days=N` places a
   seam at UTC midnight of a calendar-derived date; the live continuous feed switches when it
-  switches (MNQ/MES: observed 2026-09-14T22:00Z, four trading days after the `roll_days=8`
-  convention and two hours before the `roll_days=3` one). For M2K the live switch was never
+  switches. **Correction 2026-09-18:** MNQ/MES U6 identity is proven before an intraday
+  observation gap and Z6 identity is proven from 2026-09-14T22:00Z onward, but neither 15m nor
+  5m evidence observes a contiguous U6→Z6 boundary. Therefore the exact switch time is
+  **NOT_OBSERVABLE**, not proven at 22:00Z. For M2K the live switch was never
   observed (no bars before 2026-09-16T12:15Z). **Handling:** every corpus gets an X0 report;
   a corpus whose in-window seam is `NOT_OBSERVABLE` / `FEED_CONTRADICTED` against the live feed
   it is compared with is `ROLL_PROVENANCE_UNKNOWN` and not admitted for parity; single-contract
