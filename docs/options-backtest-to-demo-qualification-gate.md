@@ -54,6 +54,23 @@ A correct underlying call/put thesis can still be a bad option trade because of:
 
 The existing options replay model explicitly does not simulate option premium or fetch an option chain. This gate therefore requires a separate frozen option-quote evidence package before a strategy may become DEMO evidence eligible.
 
+## What the gate verifies mechanically vs what it requires as attestation
+
+A PASS is **not proof that every historical claim was independently recomputed by this command**.
+
+| Evidence | Gate treatment |
+| --- | --- |
+| `base_sha...HEAD` changed-file scope | **Mechanically verified** with git |
+| `code_sha == HEAD` | **Mechanically verified** |
+| Underlying manifest SHA-256 | **Mechanically verified against current bytes** |
+| Option-quote manifest SHA-256 | **Mechanically verified against current bytes** |
+| Contract-selector rule SHA-256 | **Mechanically verified against current bytes** |
+| Options-policy SHA-256 | **Mechanically verified against current bytes** |
+| Numeric cell sample floors, expectancy sign, risk caps, quote-age validity | **Mechanically checked from supplied evidence values** |
+| No lookahead, formula parity, executable quote use, spread/fees/slippage inclusion, stale/missing-quote fail-closed behavior, parity fixture coverage, walk-forward/drawdown/concentration claims | **Required explicit attestations**; omission or false values block, but this command does not independently reconstruct those studies |
+
+Therefore `DEMO_EVIDENCE_ELIGIBLE` means the evidence packet is structurally complete and passes the checks this tool can mechanically perform. Independent review remains mandatory before any paper/DEMO activation.
+
 ## Hard requirements
 
 ### 1. Change scope is mechanically narrow
@@ -98,7 +115,7 @@ The contract selector must be fixed before validation and prove:
 - no hindsight contract choice;
 - the same selector is used in replay and forward operation.
 
-The evidence packet records a selector ID and SHA-256.
+The evidence packet records a selector ID, selector-rule file path, and SHA-256. The gate hashes that file and requires the bytes to match the claimed digest.
 
 ### 4. Underlying and option quote datasets are frozen
 
@@ -259,6 +276,7 @@ Exit codes:
     "no_hindsight_contract_choice": true,
     "same_selector_replay_and_forward": true,
     "selection_rule_id": "selector-v1",
+    "selection_rule_path": "evidence/selector_rule.json",
     "selection_rule_sha256": "<sha256>"
   },
   "data_integrity": {
