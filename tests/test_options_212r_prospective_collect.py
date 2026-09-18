@@ -512,3 +512,128 @@ def test_shared_sip_audit_dependency_has_no_execution_or_broker_imports():
             imported.add(node.module)
     forbidden = ("execution", "risk", "webhook", "notifications", "broker")
     assert not [name for name in imported if name.startswith(forbidden)]
+
+
+def test_run_routes_prearmed_watching_sip_break_into_selector_capture(
+    tmp_path: Path, monkeypatch
+):
+    import argparse
+    from types import SimpleNamespace
+
+    import scripts.options_212r_prospective_collect as collector
+
+    fixed_now = datetime(2026, 9, 18, 15, 5, 10, tzinfo=UTC)
+
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            point = fixed_now
+            return point if tz is None else point.astimezone(tz)
+
+    class FakePublic:
+        def __init__(self, cfg):
+            self.cfg = cfg
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_exc):
+            return None
+
+    async def fake_chart(_pub, _ticker, _period):
+        return {}
+
+    async def fake_live_cross(*_args, **_kwargs):
+        return {
+            "status": "PROVEN",
+            "reason_code": None,
+            "source": "alpaca_sip",
+            "trigger_crossed_at": "2026-09-18T15:05:03.123456789Z",
+            "break_side": "LOW",
+            "direction": "SHORT",
+            "raw_trade_rows": 3,
+            "eligible_trade_rows": 3,
+            "raw_trade_sha256": "abc123",
+            "raw_trade_file": None,
+            "trigger_cross_trade": {
+                "timestamp": "2026-09-18T15:05:03.123456789Z",
+                "price": 6.49,
+            },
+        }
+
+    async def fake_selector(*_args, **_kwargs):
+        return {
+            "status": "CAPTURED",
+            "reason_code": None,
+            "captured_at": "2026-09-18T15:05:20+00:00",
+            "selected_contract": "SPY_FAKE",
+            "selector_evidence": {"production_replay_parity": True},
+        }
+
+    triggered = _triggered_observation()
+
+    monkeypatch.setattr(collector, "datetime", FixedDateTime)
+    monkeypatch.setattr(
+        collector,
+        "load_config",
+        lambda: SimpleNamespace(alpaca_data_base_url="https://data.alpaca.markets"),
+    )
+    monkeypatch.setattr(
+        collector, "resolve_alpaca_credentials", lambda: ("key", "secret")
+    )
+    monkeypatch.setattr(collector, "PublicMarketDataClient", FakePublic)
+    monkeypatch.setattr(collector, "_public_chart", fake_chart)
+    monkeypatch.setattr(
+        collector,
+        "parse_regular_market_bars",
+        lambda *_args, **_kwargs: SimpleNamespace(bars=[]),
+    )
+    monkeypatch.setattr(collector, "build_session_timeframe", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(
+        collector, "observe_212_setups", lambda **_kwargs: (_watching_observation(),)
+    )
+    monkeypatch.setattr(collector, "_capture_live_first_boundary", fake_live_cross)
+    monkeypatch.setattr(
+        collector,
+        "_live_observation_from_cross",
+        lambda _obs, **_kwargs: triggered,
+    )
+    monkeypatch.setattr(collector, "_capture_selector_evidence", fake_selector)
+
+    journal = tmp_path / "evidence.jsonl"
+    armed = _state_row(
+        "ARMED",
+        setup_id="abc",
+        observed_at="2026-09-18T14:59:59+00:00",
+        observation={"setup_fingerprint": "fp1"},
+    )
+    journal.write_text(json.dumps(armed) + "\n")
+
+    args = argparse.Namespace(
+        env_file=None,
+        ticker=["SPY"],
+        journal=str(journal),
+        sip_trade_dir=str(tmp_path / "sip"),
+        max_capture_lag_seconds=60.0,
+        dry_run=False,
+    )
+    result = asyncio.run(collector.run(args))
+
+    assert result["reversal_triggers"] == 1
+    assert result["sip_trigger_cross_proven"] == 1
+    assert result["option_evidence_captured"] == 1
+    assert result["option_evidence_blocked"] == 0
+
+    rows = [json.loads(line) for line in journal.read_text().splitlines()]
+    resolution = rows[-1]
+    assert resolution["record_type"] == "RESOLUTION"
+    assert resolution["capture_gate_eligible"] is True
+    assert resolution["option_evidence_usable"] is True
+    assert (
+        resolution["trigger_cross_evidence"]["trigger_crossed_at"]
+        == "2026-09-18T15:05:03.123456789Z"
+    )
+    assert resolution["option_evidence"]["status"] == "CAPTURED"
+    assert resolution["option_evidence"]["capture_lag_seconds"] == pytest.approx(
+        16.876543211
+    )
