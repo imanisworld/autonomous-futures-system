@@ -104,8 +104,8 @@ Required:
 - multiple months covered;
 - chronological walk-forward passes;
 - sample requirement pre-registered before the validation result is inspected;
-- minimum pre-registered requirement is 30 resolved fills;
-- actual resolved fills meet that requirement;
+- minimum pre-registered requirement is 30 resolved fills **per required validation cell**;
+- the least-populated required validation cell meets that requirement;
 - drawdown stays within the pre-registered limit;
 - concentration check passes;
 - session filters and direction-coverage requirements are respected.
@@ -246,8 +246,8 @@ Exit code:
     "multiple_months_covered": true,
     "walk_forward_pass": true,
     "sample_requirement_pre_registered": true,
-    "required_resolved_fills": 30,
-    "resolved_fills": 0,
+    "required_resolved_fills_per_cell": 30,
+    "minimum_resolved_fills_in_required_cells": 0,
     "drawdown_within_pre_registered_limit": true,
     "concentration_check_pass": true,
     "session_filters_respected": true,
