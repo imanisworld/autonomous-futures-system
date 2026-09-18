@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.options_212r_prospective_collect import _load_journal
+from scripts.options_212r_prospective_collect import _load_journal, _week_sessions
 
 UTC = timezone.utc
 
@@ -68,3 +68,10 @@ def test_journal_source_revision_fails_closed(tmp_path: Path):
     path.write_text("".join(json.dumps(row) + "\n" for row in rows))
     with pytest.raises(RuntimeError, match="journal_setup_fingerprint_drift"):
         _load_journal(path)
+
+
+def test_week_history_includes_previous_friday_for_monday_open_reanchor():
+    sessions = _week_sessions(datetime(2026, 9, 21, tzinfo=UTC).date())
+    dates = {item.date.isoformat() for item in sessions}
+    assert "2026-09-18" in dates
+    assert "2026-09-21" in dates

@@ -68,9 +68,11 @@ def _age_seconds(now: datetime, value: Any) -> float | None:
 
 
 def _week_sessions(day: date) -> list[Any]:
-    monday = day - timedelta(days=day.weekday())
+    # WEEK history must include the previous regular session so a Friday
+    # precursor can re-anchor into Monday's opening 30m watch window.
+    start = day - timedelta(days=7)
     out = []
-    cursor = monday
+    cursor = start
     while cursor <= day:
         session = nyse_session_for(cursor)
         if session is not None:

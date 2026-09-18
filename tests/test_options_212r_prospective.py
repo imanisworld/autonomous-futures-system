@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from alert_ranker.causal_bars import Bar
 from alert_ranker.options_212r_prospective import observe_212_setups
@@ -133,3 +133,26 @@ def test_capture_gate_requires_true_prearm_and_timely_detection():
     )
     assert late_capture.reason_code == "decision_time_capture_late"
     assert late_capture.eligible is False
+
+
+def test_212_setup_can_reanchor_from_previous_session_into_open():
+    monday = nyse_session_for(date(2026, 9, 21))
+    assert monday is not None
+    friday = nyse_session_for(date(2026, 9, 18))
+    assert friday is not None
+    history = [
+        Bar(start=datetime(2026, 9, 18, 18, 30, tzinfo=UTC), open=7, high=10, low=5, close=8, volume=1000, vwap=8),
+        Bar(start=datetime(2026, 9, 18, 19, 0, tzinfo=UTC), open=8, high=11, low=6, close=10, volume=1000, vwap=9),
+        Bar(start=datetime(2026, 9, 18, 19, 30, tzinfo=UTC), open=9, high=10.5, low=6.5, close=9.5, volume=1000, vwap=9),
+    ]
+    lower = [
+        Bar(start=monday.open, open=9, high=10, low=6.4, close=6.8, volume=1000, vwap=8),
+    ]
+    rows = observe_212_setups(
+        ticker="SPY", history_30m=history, session_5m=lower,
+        session=monday, decision_ts=monday.open + timedelta(minutes=6),
+    )
+    row = [x for x in rows if x.watch_start == monday.open.isoformat()][0]
+    assert row.status == "TRIGGERED"
+    assert row.family == "STRAT_212_REVERSAL"
+    assert row.direction == "SHORT"

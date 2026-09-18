@@ -8,13 +8,13 @@ for the 212 reversal research lane.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 from typing import Sequence
 
 from .causal_bars import Bar, MINUTE_5, MINUTE_30
-from .session_calendar import Session
+from .session_calendar import Session, nyse_session_for
 from .trigger_geometry import geometry_for_trigger
 from .trigger_time import arm_trigger_setup, resolve_trigger
 
@@ -127,6 +127,16 @@ def _setup_fingerprint(*, high: float, low: float, reference: str | None) -> str
     return hashlib.sha256(payload).hexdigest()
 
 
+def _previous_session(session: Session) -> Session | None:
+    cursor = session.date - timedelta(days=1)
+    for _ in range(10):
+        previous = nyse_session_for(cursor)
+        if previous is not None:
+            return previous
+        cursor -= timedelta(days=1)
+    return None
+
+
 def _source_r(direction: str, trigger: float, stop: float, target: float) -> tuple[float | None, bool]:
     risk = trigger - stop if direction == "LONG" else stop - trigger
     reward = target - trigger if direction == "LONG" else trigger - target
@@ -168,7 +178,15 @@ def observe_212_setups(
             bar for bar in history
             if bar.start_utc + MINUTE_30.delta <= watch_start
         ]
-        if not completed or completed[-1].start_utc + MINUTE_30.delta != watch_start:
+        if not completed:
+            watch_start += MINUTE_30.delta
+            continue
+        last_close = completed[-1].start_utc + MINUTE_30.delta
+        contiguous = last_close == watch_start
+        if not contiguous and watch_start == open_utc:
+            previous = _previous_session(session)
+            contiguous = previous is not None and last_close == previous.close.astimezone(timezone.utc)
+        if not contiguous:
             watch_start += MINUTE_30.delta
             continue
         armed = arm_trigger_setup(completed)
