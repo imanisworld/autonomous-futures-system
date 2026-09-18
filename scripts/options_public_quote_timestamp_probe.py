@@ -182,7 +182,17 @@ async def _run(tickers: list[str]) -> tuple[dict[str, object], int]:
             2,
         )
 
-    max_age, min_dte, preferred_min_dte = _load_rule_numbers()
+    try:
+        max_age, min_dte, preferred_min_dte = _load_rule_numbers()
+    except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
+        return (
+            {
+                "verdict": "BLOCKED",
+                "reason": f"frozen rule load failed: {type(exc).__name__}",
+            },
+            2,
+        )
+
     summaries: list[ChainTimestampSummary] = []
 
     async with PublicMarketDataClient(cfg) as client:
