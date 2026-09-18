@@ -48,6 +48,10 @@ class ReplayCandle:
     ema_200: Optional[float] = None
     hod: Optional[float] = None
     lod: Optional[float] = None
+    # Previous completed trading-week extremes. Live carries these from Pine
+    # into KeyLevels and confluence scoring; replay must not silently drop them.
+    prev_week_high: Optional[float] = None
+    prev_week_low: Optional[float] = None
     # Strat classification (optional — Phase 2; computed from bar history when present)
     current_bar_type: Optional[str] = None
     previous_bar_type: Optional[str] = None
@@ -235,6 +239,8 @@ class ReplayCandleLoader:
             ema_200=_float_or_none(raw.get("ema_200")),
             hod=_float_or_none(raw.get("hod")),
             lod=_float_or_none(raw.get("lod")),
+            prev_week_high=_float_or_none(raw.get("prev_week_high")),
+            prev_week_low=_float_or_none(raw.get("prev_week_low")),
             current_bar_type=raw.get("current_bar_type"),
             previous_bar_type=raw.get("previous_bar_type"),
             two_bars_back_type=raw.get("two_bars_back_type"),
