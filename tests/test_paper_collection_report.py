@@ -136,7 +136,8 @@ def test_format_reports_show_zero_activity_and_health():
     )
     assert "zero option scans" in o
     assert "NOT option P&L outcomes" in o
-    assert "attention: options scans" in o
+    assert "⚠ Collector attention" in o
+    assert "**Options scans** — stale" in o
 
 
 def test_post_discord_uses_only_supplied_url(monkeypatch):
@@ -261,3 +262,55 @@ def test_retired_overnight_watch_log_never_raises_collector_attention(tmp_path):
         _screenshot_summary(), census, period="eow", start=date(2026, 9, 14), end=date(2026, 9, 16)
     )
     assert "overnight" not in text.lower()
+
+
+def test_options_card_matches_screenshot_counts_and_close_context():
+    summary = {"status": "OK", "tables": {
+        "scans": {"status": "OK", "rows": 3165},
+        "options_shadow_journal": {"status": "OK", "rows": 69, "status_counts": {"WIN": 51, "LOSS": 10, "OPEN": 8}},
+    }}
+    census = {"collectors": [
+        {"name": "options scans", "status": "STALE", "last": "2026-09-17T19:57:00Z", "limit_minutes": 30},
+        {"name": "options companion", "status": "DEAD"},
+        {"name": "options shadow journal", "status": "FRESH"},
+        {"name": "futures journal", "status": "DEAD"},
+    ]}
+    before = json.dumps([summary, census], sort_keys=True)
+    payload = report.options_discord_payload(summary, census, period="eod", start=date(2026, 9, 17), end=date(2026, 9, 17))
+    embed = payload["embeds"][0]
+    fields = {f["name"]: f["value"] for f in embed["fields"]}
+    assert embed["color"] == 0x5865F2
+    assert "15:57 ET" in fields["✓ Collector health"]
+    assert "disabled by design" in fields["✓ Collector health"]
+    assert "**3,165**" in fields["Collection"]
+    assert "**51** · Win" in fields["Journal row statuses"]
+    assert "NOT option P&L outcomes" in fields["Journal row statuses"]
+    assert "futures journal" not in json.dumps(payload)
+    assert payload["allowed_mentions"] == {"parse": []}
+    assert json.dumps([summary, census], sort_keys=True) == before
+
+
+def test_options_unscoped_or_missing_data_never_looks_like_healthy_window_counts():
+    for status in ("NO_TIMESTAMP_COLUMN", "MISSING_TABLE", "QUERY_ERROR"):
+        summary = {"status": "OK", "tables": {"scans": {"status": status, "rows": 5000}}}
+        card = report.options_discord_payload(summary, {"status": "ERROR"}, period="eow", start=date(2026, 9, 14), end=date(2026, 9, 18))["embeds"][0]
+        text = json.dumps(card)
+        assert card["color"] == 0xF0B232
+        assert status in text
+        assert "5,000" not in text
+        assert "window count unavailable" in text
+        assert all(len(f["value"]) <= 1024 for f in card["fields"])
+        assert sum(len(f["name"]) + len(f["value"]) for f in card["fields"]) < 5500
+
+
+def test_main_routes_options_card_and_keeps_missing_db_diagnostic(tmp_path, monkeypatch):
+    monkeypatch.setattr(report, "run_collector_census", lambda _: {})
+    monkeypatch.delenv(report.FUTURES_ENV, raising=False)
+    monkeypatch.setenv(report.OPTIONS_ENV, "https://example.invalid/options")
+    posts = []
+    monkeypatch.setattr(report, "_post_discord", lambda url, payload: posts.append((url, payload)) or True)
+    assert report.main(["--period", "eod", "--date", "2026-09-17", "--log-dir", str(tmp_path), "--options-db", str(tmp_path / "missing.sqlite")]) == 0
+    assert len(posts) == 1
+    assert posts[0][0] == "https://example.invalid/options"
+    assert "MISSING_DB" in json.dumps(posts[0][1])
+    assert posts[0][1]["embeds"][0]["title"] == "Options · Daily paper report"

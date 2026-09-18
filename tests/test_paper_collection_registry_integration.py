@@ -76,7 +76,7 @@ def test_eow_registry_appears_only_in_weekly_output():
         end=date(2026, 9, 18),
         registry=_registry(),
     )
-    assert "evidence registry:" in weekly_text
+    assert "**Evidence registry**" in weekly_text
     assert "2-1-2 reversal" in weekly_text
 
 

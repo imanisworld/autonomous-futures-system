@@ -116,7 +116,7 @@ def test_format_event_always_leads_with_root_and_label():
     out = obs.format_event({"record_type": "OUTCOME", "instrument": "MBT", "strategy": "strat_212",
                             "direction": "LONG", "result": "WIN", "pnl_r": 2.0, "exit_reason": "TARGET_HIT",
                             "resolved_at_bar_ts": _ts(15, 15)})
-    assert out.startswith("MBT — OBSERVATION ONLY — strat_212 LONG outcome WIN +2.00R (TARGET_HIT)")
+    assert out.startswith("MBT — OBSERVATION ONLY — strat_212 LONG\nOutcome: WIN +2.00R (TARGET_HIT)")
     assert obs.format_event({"record_type": "CANDIDATE", "strategy": "x"}) is None          # no root → nothing
     assert obs.format_event({"record_type": "BAR", "instrument": "MGC", "strategy": "x"}) is None
 
@@ -138,7 +138,7 @@ def test_collection_only_detection_routes_to_observation_with_root_and_label(tmp
     for _, msg in capture_router:
         assert msg.startswith("MGC — OBSERVATION ONLY — ")
         assert re.search(r"\bMGC\b", msg)
-    assert any("strat_212 LONG structural candidate" in m for _, m in capture_router)
+    assert any("strat_212 LONG\nstructural candidate" in m for _, m in capture_router)
 
 
 def test_unset_observation_route_never_breaks_collection(tmp_path, config, armed, monkeypatch, capture_router):
@@ -284,5 +284,5 @@ def test_stale_pending_with_persisted_outcome_is_cleared_without_duplicate_event
     resolved = cio.resolve_pending(tmp_path, instrument="M2K", bars=[], current_bar_ts=_ts(15, 30))
     assert [r["candidate_id"] for r in resolved] == ["fresh-1"]
     assert obs.notify_observation(resolved) == 1 and len(capture_router) == 1
-    assert capture_router[0][1].startswith("M2K — OBSERVATION ONLY — strat_212 LONG outcome WIN")
+    assert capture_router[0][1].startswith("M2K — OBSERVATION ONLY — strat_212 LONG\nOutcome: WIN")
     assert cio.resolve_pending(tmp_path, instrument="M2K", bars=[], current_bar_ts=_ts(15, 45)) == []  # nothing left

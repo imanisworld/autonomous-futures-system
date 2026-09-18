@@ -38,7 +38,7 @@ def _bar_label(ts: object) -> str:
 
 
 def format_event(event: dict) -> Optional[str]:
-    """One line per event; returns None for anything that is not announceable.
+    """Short sections per event; returns None for anything not announceable.
 
     The instrument root is always the first token and ``OBSERVATION ONLY`` is
     always the second, so a reader can never mistake the line for a signal.
@@ -56,11 +56,11 @@ def format_event(event: dict) -> Optional[str]:
         r_text = f" {float(pnl_r):+.2f}R" if isinstance(pnl_r, (int, float)) else ""
         reason = str(event.get("exit_reason") or "").strip()
         tail = f" ({reason})" if reason else ""
-        return f"{head} outcome {result}{r_text}{tail} · bar {_bar_label(event.get('resolved_at_bar_ts') or event.get('exit_timestamp'))}"
+        return f"{head}\nOutcome: {result}{r_text}{tail}\nBar: {_bar_label(event.get('resolved_at_bar_ts') or event.get('exit_timestamp'))}"
     mode = "structural candidate" if kind == "CANDIDATE" else "signal (bracket not authoritative)"
     return (
-        f"{head} {mode} · entry {_fmt_price(event.get('entry'))} stop {_fmt_price(event.get('stop'))} "
-        f"target {_fmt_price(event.get('target'))} · 15m bar {_bar_label(event.get('signal_timestamp'))}"
+        f"{head}\n{mode}\nentry {_fmt_price(event.get('entry'))} · stop {_fmt_price(event.get('stop'))} "
+        f"· target {_fmt_price(event.get('target'))}\n15m bar {_bar_label(event.get('signal_timestamp'))}"
     )
 
 
