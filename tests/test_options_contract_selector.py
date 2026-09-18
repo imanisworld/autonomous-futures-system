@@ -317,3 +317,16 @@ def test_serialized_selector_chain_row_schema_drift_fails_closed():
     result = select_contract_from_serialized_input(rule=_rule(), payload=payload)
     assert result.status == "NO_CONTRACT"
     assert result.reason_code == "serialized_input_invalid"
+
+
+
+def test_serialized_non_string_contract_identity_fails_closed_without_sort_error():
+    raw = json.loads(_serialized_input([_row(contract_id="A"), _row(contract_id="B")]))
+    raw["chain"][0]["contract_id"] = True
+    payload = (json.dumps(raw, sort_keys=True, separators=(",", ":")) + "\n").encode(
+        "utf-8"
+    )
+    result = select_contract_from_serialized_input(rule=_rule(), payload=payload)
+    assert result.status == "SELECTED"
+    assert result.contract_id == "B"
+    assert result.candidates_excluded_by_reason["missing_identity"] == 1
