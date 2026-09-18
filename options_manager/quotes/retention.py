@@ -33,6 +33,7 @@ class QuoteSource(str, Enum):
     # Test-only source. Real provider sources must be added only when the
     # provider+endpoint identity is mechanically known at ingestion time.
     FIXTURE_OPTION_CHAIN = "fixture:option_chain_snapshot"
+    PUBLIC_OPTION_CHAIN = "public:/userapigateway/marketdata/{accountId}/option-chain"
 
 
 @dataclass(frozen=True)
