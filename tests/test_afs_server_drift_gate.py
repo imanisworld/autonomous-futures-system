@@ -114,7 +114,7 @@ def test_main_ahead_is_informational_and_non_failing():
             repo_url=repo,
         )
         assert result.returncode == 0, result.stderr + result.stdout
-        assert "INFO main-ahead: 1 merged-but-unshipped runtime item(s)" in result.stdout
+        assert "INFO main-vs-primary-release: 1 difference(s)" in result.stdout
         assert "DIFFER webhook/app.py" in result.stdout
         assert "ALARM" not in result.stdout
         assert "UNEXPECTED drift" not in result.stdout
@@ -128,3 +128,36 @@ def test_missing_manifest_fails_closed():
         assert result.returncode == 1
         assert "integrity proof unavailable" not in result.stdout  # Discord title only
         assert "live release tree/manifest unavailable" in result.stdout
+
+
+def test_options_scanner_release_integrity_failure_is_red_alarm():
+    with tempfile.TemporaryDirectory() as tmp:
+        root, live, shared = _fixture(tmp)
+        result = _run_sourced(
+            root,
+            live,
+            shared,
+            'release_integrity_check(){ echo "release integrity: OK"; }\n'
+            'options_scanner_release_check(){ echo "options hash mismatch"; return 1; }\n'
+            'post_red_alert(){ echo "RED_ALERT:$1:$2"; }\nrun_gate\n',
+        )
+        assert result.returncode == 1
+        assert "options-scanner release integrity FAILED" in result.stdout
+        assert "options hash mismatch" in result.stdout
+        assert "RED_ALERT:" in result.stdout
+
+
+def test_options_scanner_release_integrity_success_is_reported():
+    with tempfile.TemporaryDirectory() as tmp:
+        root, live, shared = _fixture(tmp)
+        result = _run_sourced(
+            root,
+            live,
+            shared,
+            'release_integrity_check(){ echo "release integrity: OK"; }\n'
+            'options_scanner_release_check(){ echo "OK options-scanner release-integrity: deadbeefcafe (/release)"; }\n'
+            'run_gate\n',
+        )
+        assert result.returncode == 0, result.stderr + result.stdout
+        assert "OK options-scanner release-integrity: deadbeefcafe" in result.stdout
+        assert "ALARM" not in result.stdout
