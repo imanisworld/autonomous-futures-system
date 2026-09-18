@@ -417,10 +417,31 @@ def vwap_day_range(day_ranges: list[tuple[int, int]], bar_idx: int) -> tuple[int
     return None
 
 
+def expected_week_trade_dates(week_start: date, instrument: str) -> frozenset[date]:
+    """Exchange trade dates a complete Monday-started trading week must hold.
+
+    Mon-Fri minus the proven C14 non-trade dates for products on the CME
+    equity-index calendar (``cme_equity_index_non_trade_dates``). A product with
+    no proven calendar keeps the mechanical Mon-Fri expectation, so a holiday
+    there fails closed rather than borrowing an unproven calendar. Good Friday
+    is deliberately absent from the proven calendar (see that docstring), so a
+    fully closed Good Friday also fails closed for the following week: the
+    replay becomes less permissive, never silently more.
+    """
+    days = {week_start + timedelta(days=i) for i in range(5)}
+    if trading_day_calendar(instrument) == CALENDAR_CME_EQUITY_INDEX:
+        week_end = week_start + timedelta(days=4)
+        closed = cme_equity_index_non_trade_dates(week_start.year)
+        if week_end.year != week_start.year:
+            closed = closed | cme_equity_index_non_trade_dates(week_end.year)
+        days -= closed
+    return frozenset(days)
+
+
 def previous_week_extremes(
     bars: list[dict], instrument: str
 ) -> list[tuple[float | None, float | None]]:
-    """Previous completed trading-week high/low for every bar.
+    """Previous completed trading-week high/low for every bar, or (None, None).
 
     Live carries Pine weekly high[1]/low[1] into KeyLevels and the confluence
     scorer. Canonical replay previously had no copy at all, so identical live
@@ -429,16 +450,24 @@ def previous_week_extremes(
     Group bars by the Monday of their CME trade-date week (Sunday reopen belongs
     to Monday), then expose ONLY the immediately preceding week. Using the full
     prior-week group is causal: by definition that week is complete before any
-    bar in the current week. Missing source bars can still contaminate an
-    extreme; corpus gap/provenance checks remain responsible for that data-
-    quality question rather than silently inventing a price.
+    bar in the current week.
+
+    Fail closed on an incomplete prior week: if any trade date that
+    ``expected_week_trade_dates`` requires has no bar, the level is (None, None)
+    rather than an extreme computed from whatever bars happen to exist. This
+    mirrors the P3-validated feature builder (``research.structural_level_
+    features``: "previous week incomplete in window" -> NOT_AVAILABLE) and
+    means a source gap makes the backtest less permissive, never more. Missing
+    bars inside a present trade date are still the corpus gap ledger's job.
     """
     weekly: dict[date, tuple[float, float]] = {}
+    weekly_trade_dates: dict[date, set[date]] = {}
     week_for_bar: list[date] = []
     for bar in bars:
         trading_day = cme_trading_day(bar["ts"], instrument)
         week_start = trading_day - timedelta(days=trading_day.weekday())
         week_for_bar.append(week_start)
+        weekly_trade_dates.setdefault(week_start, set()).add(trading_day)
         high = float(bar["high"])
         low = float(bar["low"])
         current = weekly.get(week_start)
@@ -449,8 +478,16 @@ def previous_week_extremes(
 
     out: list[tuple[float | None, float | None]] = []
     for week_start in week_for_bar:
-        prev = weekly.get(week_start - timedelta(days=7))
-        out.append(prev if prev is not None else (None, None))
+        prev_start = week_start - timedelta(days=7)
+        prev = weekly.get(prev_start)
+        if prev is None:
+            out.append((None, None))
+            continue
+        expected = expected_week_trade_dates(prev_start, instrument)
+        if not expected.issubset(weekly_trade_dates[prev_start]):
+            out.append((None, None))
+            continue
+        out.append(prev)
     return out
 
 

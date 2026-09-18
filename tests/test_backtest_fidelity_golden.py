@@ -19,21 +19,65 @@ def _ts(iso: str) -> int:
     return int(datetime.fromisoformat(iso).timestamp())
 
 
+def _bar(iso: str, high: float, low: float) -> dict:
+    return {"ts": _ts(iso), "high": high, "low": low}
+
+
+def _ordinary_week_2026_08_31() -> list[dict]:
+    # Mon 08/31 -> Fri 09/04: every expected trade date holds a bar. The
+    # week's extreme (20325 / 19775) prints on Friday.
+    return [
+        _bar("2026-08-31T14:00:00+00:00", 20100.0, 19920.0),   # Mon (10:00 ET)
+        _bar("2026-08-31T22:00:00+00:00", 20150.0, 19950.0),   # Mon 18:00 ET -> Tue
+        _bar("2026-09-02T14:00:00+00:00", 20200.0, 19900.0),   # Wed
+        _bar("2026-09-03T14:00:00+00:00", 20250.0, 19850.0),   # Thu
+        _bar("2026-09-04T20:45:00+00:00", 20325.0, 19775.0),   # Fri
+    ]
+
+
 def test_previous_week_extremes_respects_c14_labor_day_trade_week() -> None:
-    # Prior week: Mon 08/31 -> Fri 09/04. The Sunday 09/06 18:00 ET reopen
-    # belongs to Tuesday 09/08 under the proven C14 identity, but it is still
-    # in the new Monday-started trading week and must see 08/31-09/04 as [1].
-    bars = [
-        {"ts": _ts("2026-08-31T22:00:00+00:00"), "high": 20100.0, "low": 19920.0},
-        {"ts": _ts("2026-09-04T20:45:00+00:00"), "high": 20325.0, "low": 19775.0},
-        {"ts": _ts("2026-09-06T22:00:00+00:00"), "high": 20200.0, "low": 20000.0},
+    # The Sunday 09/06 18:00 ET reopen belongs to Tuesday 09/08 under the
+    # proven C14 identity, but it is still in the new Monday-started trading
+    # week and must see the complete 08/31-09/04 week as [1].
+    bars = _ordinary_week_2026_08_31() + [
+        _bar("2026-09-06T22:00:00+00:00", 20200.0, 20000.0),
     ]
 
     levels = previous_week_extremes(bars, "MNQ")
 
-    assert levels[0] == (None, None)
-    assert levels[1] == (None, None)
-    assert levels[2] == (20325.0, 19775.0)
+    assert levels[:5] == [(None, None)] * 5
+    assert levels[5] == (20325.0, 19775.0)
+
+
+def test_previous_week_extremes_fails_closed_on_missing_prior_week_trade_date() -> None:
+    # Same week with Thursday 09/03 absent from the source: an ordinary
+    # trade date with no bar. The partial extreme must NOT be exposed; the
+    # P3-validated builder marks this NOT_AVAILABLE and replay now agrees.
+    bars = [b for b in _ordinary_week_2026_08_31() if not b["ts"] == _ts("2026-09-03T14:00:00+00:00")]
+    bars.append(_bar("2026-09-06T22:00:00+00:00", 20200.0, 20000.0))
+
+    levels = previous_week_extremes(bars, "MNQ")
+
+    assert levels[-1] == (None, None)
+
+
+def test_previous_week_extremes_accepts_holiday_shortened_prior_week() -> None:
+    # Labor Day week 09/07-09/11: Monday 09/07 is a proven C14 non-trade date
+    # (its sessions belong to Tuesday 09/08), so Tue-Fri is a COMPLETE week.
+    # The following week must still see its extreme (20400 / 19700).
+    bars = [
+        _bar("2026-09-06T22:00:00+00:00", 20200.0, 20000.0),   # Sun 18:00 ET -> Tue 09/08
+        _bar("2026-09-08T14:00:00+00:00", 20300.0, 19900.0),   # Tue
+        _bar("2026-09-09T14:00:00+00:00", 20400.0, 19800.0),   # Wed
+        _bar("2026-09-10T14:00:00+00:00", 20350.0, 19700.0),   # Thu
+        _bar("2026-09-11T14:00:00+00:00", 20250.0, 19850.0),   # Fri
+        _bar("2026-09-13T22:00:00+00:00", 20100.0, 20000.0),   # Sun 18:00 ET -> Mon 09/14
+    ]
+
+    levels = previous_week_extremes(bars, "MNQ")
+
+    assert levels[:5] == [(None, None)] * 5
+    assert levels[5] == (20400.0, 19700.0)
 
 
 def _replay_row(**overrides) -> dict:
