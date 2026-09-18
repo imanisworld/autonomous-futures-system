@@ -142,7 +142,7 @@ def test_supplied_dte_must_match_expiration_and_decision_date():
 
 
 def test_below_minimum_dte_is_rejected():
-    result = _select([_row(dte=7)])
+    result = _select([_row(expiration="2026-09-25", dte=7)])
     assert result.status == "NO_CONTRACT"
     assert result.candidates_excluded_by_reason["dte_too_short"] == 1
 
