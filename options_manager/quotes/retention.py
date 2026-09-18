@@ -30,8 +30,9 @@ class QuoteSource(str, Enum):
     requires an explicit rule/version change rather than accepting free text.
     """
 
-    # Test-only source. Real provider sources must be added only when the
-    # provider+endpoint identity is mechanically known at ingestion time.
+    # Sources are frozen provider+endpoint identities, never arbitrary free text.
+    # The fixture source remains test-only; Public names the existing read-only
+    # account-scoped option-chain route without embedding a real account id.
     FIXTURE_OPTION_CHAIN = "fixture:option_chain_snapshot"
     PUBLIC_OPTION_CHAIN = "public:/userapigateway/marketdata/{accountId}/option-chain"
 
