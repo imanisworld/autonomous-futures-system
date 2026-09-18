@@ -176,18 +176,6 @@ def evaluate_portfolio_risk(
 
     exposures = tuple(open_positions)
 
-    candidate_ticker = candidate.ticker.strip().upper()
-    for exposure in exposures:
-        if (
-            exposure.ticker.strip().upper() == candidate_ticker
-            and exposure.direction == candidate.direction
-        ):
-            blocking.append(
-                f"{AVERAGING_DOWN_REJECTED_CODE}: open position already exists for "
-                f"{candidate_ticker} {candidate.direction}"
-            )
-            break
-
     for index, exposure in enumerate((*exposures, candidate)):
         label = "candidate" if index == len(exposures) else f"open_positions[{index}]"
         if not exposure.ticker.strip():
@@ -387,18 +375,18 @@ def check_portfolio_risk_intake(
 
     assert contract.premium_stop is not None
     candidate_risk, planned_risk_error = planned_risk_from_premium_stop(
-        entry_fill=contract.ask,
+        entry_fill=contract.premium,
         premium_stop=contract.premium_stop,
         contracts=contract.max_contracts,
         max_trade_risk_dollars=max_trade_risk_dollars,
     )
-    ask_value = contract.ask
+    premium_value = contract.premium
     candidate_capital = (
-        float(ask_value) * CONTRACT_MULTIPLIER * contract.max_contracts
-        if not isinstance(ask_value, bool)
-        and isinstance(ask_value, (int, float))
-        and math.isfinite(float(ask_value))
-        and float(ask_value) >= 0
+        float(premium_value) * CONTRACT_MULTIPLIER * contract.max_contracts
+        if not isinstance(premium_value, bool)
+        and isinstance(premium_value, (int, float))
+        and math.isfinite(float(premium_value))
+        and float(premium_value) >= 0
         else 0.0
     )
     candidate = RiskExposure(
@@ -420,11 +408,22 @@ def check_portfolio_risk_intake(
     if planned_risk_error is not None:
         extra_blocking.append(planned_risk_error)
 
+    candidate_ticker = proof_packet.ticker.strip().upper()
+    for exposure in open_positions:
+        if (
+            exposure.ticker.strip().upper() == candidate_ticker
+            and exposure.direction == proof_packet.direction
+        ):
+            extra_blocking.append(
+                f"{AVERAGING_DOWN_REJECTED_CODE}: open position already exists for "
+                f"{candidate_ticker} {proof_packet.direction}"
+            )
+            break
+
     raw_open_orders = payload.get("open_orders", [])
     if not isinstance(raw_open_orders, list):
         extra_blocking.append("portfolio_risk.open_orders must be a list when supplied")
     else:
-        candidate_ticker = proof_packet.ticker.strip().upper()
         for index, raw_order in enumerate(raw_open_orders):
             if not isinstance(raw_order, Mapping):
                 extra_blocking.append(f"open_orders[{index}] must be a dict-like mapping")
