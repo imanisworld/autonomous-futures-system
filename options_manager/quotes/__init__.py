@@ -1,5 +1,11 @@
 """Fail-closed, advisory-only option quote retention primitives."""
 
+from .massive_historical import (
+    HistoricalOptionIdentity,
+    MASSIVE_HISTORICAL_QUOTE_SOURCE,
+    normalize_massive_historical_quote,
+    sip_timestamp_ns_to_iso8601,
+)
 from .retention import (
     QuoteRecord,
     QuoteRetentionInput,
@@ -14,6 +20,10 @@ from .retention import (
 )
 
 __all__ = [
+    "HistoricalOptionIdentity",
+    "MASSIVE_HISTORICAL_QUOTE_SOURCE",
+    "normalize_massive_historical_quote",
+    "sip_timestamp_ns_to_iso8601",
     "QuoteRecord",
     "QuoteRetentionInput",
     "QuoteRetentionRule",
