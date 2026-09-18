@@ -415,3 +415,26 @@ def test_quote_contract_mismatch_is_avoid(monkeypatch, tmp_path):
     assert body["verdict"] == "AVOID"
     assert body["quote_retention_approved"] is False
     assert any("quote/contract mismatch for strike" in r for r in body["blocking_reasons"])
+
+
+def test_corrupt_quote_rule_fails_closed_not_http_500(monkeypatch, tmp_path):
+    import options_manager.app as app_module
+
+    monkeypatch.delenv("OPTIONS_MANAGER_INGEST_SECRET", raising=False)
+    monkeypatch.setenv("OPTIONS_MANAGER_JOURNAL_DIR", str(tmp_path))
+    monkeypatch.setenv("OPTIONS_MANAGER_MAX_AGGREGATE_OPEN_RISK_DOLLARS", "1000")
+
+    bad_rule = tmp_path / "bad_quote_rule.json"
+    bad_rule.write_text("{not valid json", encoding="utf-8")
+    monkeypatch.setattr(app_module, "_QUOTE_RULE_PATH", bad_rule)
+
+    response = client.post("/options/packet", json=_payload())
+    assert response.status_code == 200
+    body = response.json()
+    assert body["verdict"] == "AVOID"
+    assert body["actionable"] is False
+    assert body["quote_retention_approved"] is False
+    assert any(
+        "quote retention rule provenance unavailable" in reason
+        for reason in body["blocking_reasons"]
+    )
