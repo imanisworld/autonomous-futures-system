@@ -98,11 +98,14 @@ the safe sequence is:
 Freshness does not prove completeness. One missing 15m bar can change a Strat
 sequence, a multi-bar detector, or a hypothetical resolution path.
 
-**Mitigation before strategy validation:** add product-aware continuity coverage
-for the campaign. Candidate detector windows and forward-resolution windows that
-cross an unexplained missing bar should be tagged `DATA_GAP_CONTAMINATED` and
-excluded from readiness gates. Do not backfill with invented bars. Maintenance
-and known exchange closures must be classified separately from unexplained gaps.
+**Mitigation implemented:** `execution/cross_instrument_evidence_quality.py`
+provides the authoritative read-only continuity gate. For terminal structural
+outcomes it reconstructs the detector dependency window, extends through the
+signal-to-resolution interval, compares observed 15m BarHistory against the
+product-aware expected grid, tags any missing expected bar
+`DATA_GAP_CONTAMINATED`, and excludes the row from quality-eligible readiness
+counts. Do not backfill with invented bars. Maintenance and known exchange
+closures must remain separately classified from unexplained gaps.
 
 **Verified incident — M2K 2026-09-17:** the persisted 15m BarHistory is missing
 11 M2K bars from **13:30Z through 16:00Z** (surrounding boundary 13:15Z →
@@ -114,9 +117,12 @@ normal successes plus four retries of one failing alert every 15 minutes. The
 second phase is proven to be a re-created TradingView alert with a non-ASCII
 webhook secret triggering the old string `hmac.compare_digest` TypeError.
 Current/deployed authentication code fails such input closed as HTTP 401 instead.
-Treat any M2K detector/resolution window crossing the missing interval as
-`DATA_GAP_CONTAMINATED`; do not backfill or attribute the pre-14:30 phase to
-the malformed-secret defect without new evidence. Full incident record:
+The deployed `cross_instrument_evidence_quality_v1` gate was checked against
+the real gap and classified **8 M2K terminal outcomes** whose dependency /
+resolution windows crossed it as `DATA_GAP_CONTAMINATED`; all eight were
+`eligible=false`. This proves the contaminated terminal outcomes are excluded
+from readiness counts. Do not backfill or attribute the pre-14:30 phase to the
+malformed-secret defect without new evidence. Full incident record:
 [`m2k-feed-gap-incident-2026-09-17.md`](m2k-feed-gap-incident-2026-09-17.md).
 
 ### 2. MBT outcome horizon
@@ -176,7 +182,6 @@ as a required quality check.
 
 ## Deferred / separate proof work
 
-- product-aware continuity / `DATA_GAP_CONTAMINATED` gate;
 - sanitized detector-input provenance / replay spot-check tooling;
 - MBT structural outcome horizon or formal signal-only policy;
 - MGC/MCL/MBT continuous historical roll schedules;
@@ -192,6 +197,7 @@ None of those are implied by collecting observations.
 python3 -m pytest -q tests/test_cross_instrument_observation_transport.py
 python3 -m pytest -q tests/test_cross_instrument_observation_integrity.py
 python3 -m pytest -q tests/test_cross_instrument_feed_health.py
+python3 -m pytest -q tests/test_cross_instrument_evidence_quality.py
 python3 -m pytest -q
 git diff --exit-code b4cb614 -- risk_rules.yaml config/forward_evidence_campaign.json execution/tradovate_broker.py execution/paper_broker.py execution/forward_evidence_campaign.py execution/evidence_identity.py strategy/signal_engine.py risk/risk_engine.py context/mes_122_paper_lane.py context/wide_stop_execution.py tradingview/ deploy/
 ```
