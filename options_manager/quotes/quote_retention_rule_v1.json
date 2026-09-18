@@ -1,0 +1,10 @@
+{
+  "rule_id": "quote-retention-v1",
+  "max_quote_age_seconds": 900,
+  "max_spread_percent": 20.0,
+  "allowed_sources": [
+    "fixture:option_chain_snapshot",
+    "robinhood_readonly:normalize_option_quote",
+    "robinhood_readonly:normalize_option_chain"
+  ]
+}
