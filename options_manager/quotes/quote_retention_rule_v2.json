@@ -1,0 +1,10 @@
+{
+  "rule_id": "quote-retention-v2",
+  "max_quote_age_seconds": 900,
+  "max_spread_percent": 20.0,
+  "allowed_sources": [
+    "fixture:option_chain_snapshot",
+    "public:/userapigateway/marketdata/{accountId}/option-chain",
+    "massive:/v3/quotes/{optionsTicker}"
+  ]
+}

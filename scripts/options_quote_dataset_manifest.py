@@ -27,7 +27,7 @@ from options_manager.quotes import (
     verify_quote_manifest_files,
 )
 
-DEFAULT_RULE = Path("options_manager/quotes/quote_retention_rule_v1.json")
+DEFAULT_RULE = Path("options_manager/quotes/quote_retention_rule_v2.json")
 
 
 def _relative_dataset_path(root: Path, candidate: Path) -> str:
