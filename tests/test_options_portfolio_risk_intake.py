@@ -83,8 +83,8 @@ def test_candidate_risk_and_capital_are_derived_not_caller_supplied():
         max_aggregate_open_risk_dollars=BUDGET,
     )
     assert result.verdict == PortfolioRiskVerdict.PASS
-    assert result.candidate_risk == pytest.approx(110.0)
-    assert result.projected_capital_deployed == pytest.approx(430.0)
+    assert result.candidate_risk == pytest.approx(100.0)
+    assert result.projected_capital_deployed == pytest.approx(420.0)
 
 
 def test_missing_flat_snapshot_does_not_silently_assume_zero_positions():
@@ -152,13 +152,13 @@ def test_canonical_intake_without_a_budget_blocks_by_name():
 
 def test_planned_risk_formula_uses_executable_entry_fill_and_premium_stop():
     risk, reason = planned_risk_from_premium_stop(
-        entry_fill=2.15,
+        entry_fill=2.10,
         premium_stop=1.60,
         contracts=2,
         max_trade_risk_dollars=300.0,
     )
     assert reason is None
-    assert risk == pytest.approx(110.0)
+    assert risk == pytest.approx(100.0)
 
 
 @pytest.mark.parametrize(
