@@ -82,7 +82,13 @@ Evidence must prove:
 - futures session-day identity;
 - feed integrity.
 
-`session_day_identity_proven` is where the C14/TradingView fixture work belongs. Until that is proven for studies sensitive to day/session resets, this gate fails closed.
+The two boolean claims are necessary but no longer sufficient by themselves.
+
+For `MES` and `MNQ`, `session_day_identity_proven` is mechanically corroborated by the gate: the committed TradingView/Pine C14 CSV bytes are hash-pinned in gate code (outside the strategy-only diff allowance), and the current `cme_trading_day` implementation must reproduce Pine `time_tradingday` on every fixture row. A fixture hash change, an implementation mismatch, or an instrument without a registered external fixture proof fails closed.
+
+`feed_integrity_proven` is also mechanically corroborated from the frozen dataset manifest. The manifest must identify the claimed instrument/timeframe, contain a non-empty `files` map with per-file SHA-256 and row counts, and contain an explicit `gap_ledger_cme_hours` list. Every listed replay file is re-hashed by the gate and coverage counts are cross-checked when present.
+
+A non-empty gap ledger is **not** silently converted into PASS or FAIL. Exchange closures and real feed holes can both appear there. The gate proves that frozen bytes and missing intervals are explicitly enumerated; the strategy evidence must still exclude/fail closed on any gap-contaminated decision or outcome window. Missing bars are never synthesized to satisfy this gate.
 
 ### 5. Execution realism
 

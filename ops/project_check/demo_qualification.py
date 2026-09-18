@@ -34,7 +34,10 @@ DEMO activation.
 """
 from __future__ import annotations
 
+import csv
 import hashlib
+import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -45,6 +48,14 @@ MIN_RESOLVED_FILLS_PER_CELL = 30
 REQUIRED_SLIPPAGE_STRESS_TICKS = {2, 3}
 DEMO_CLASSIFICATIONS = {"VALIDATED", "PROMISING BUT UNPROVEN"}
 DIRECT_TO_DEMO_ALLOWED_DIFF_PREFIXES = ("strategy/", "tests/", "docs/")
+
+# External Pine/TradingView daily-identity fixtures proven in C14 (#646).
+# Pin the bytes here (outside the direct-to-DEMO allowed strategy/tests/docs diff)
+# so a strategy-only change cannot silently rewrite the proof fixture it relies on.
+_C14_FIXTURE_SHA256 = {
+    "MES": "5bba4743ae916ae0f37b7cd6c2b38c35e2dbb25cf773ebfed4fd5210e321d7e0",
+    "MNQ": "beb1164079b8134f6228c4dd163395f18d87939e61ed34c204eca50b46c45985",
+}
 
 
 def _sha256(path: Path) -> str | None:
@@ -186,6 +197,189 @@ def _check_identity_parity(evidence: dict[str, Any], blockers: list[str]) -> dic
     return parity
 
 
+
+def _verify_session_day_identity(root: Path, instrument: str | None) -> dict[str, Any]:
+    """Mechanically re-check current replay trade-date logic against pinned Pine rows."""
+    root_symbol = str(instrument or "").strip().upper()
+    expected_sha = _C14_FIXTURE_SHA256.get(root_symbol)
+    if expected_sha is None:
+        return {
+            "ok": False,
+            "instrument": root_symbol or None,
+            "reason": (
+                "no hash-pinned TradingView/Pine session-day fixture is registered "
+                f"for {root_symbol or 'UNKNOWN'}"
+            ),
+        }
+
+    fixture = root / "tests" / "fixtures" / "c14_pine_daily_identity" / f"{root_symbol}1_15m.csv"
+    actual_sha = _sha256(fixture)
+    if actual_sha != expected_sha:
+        return {
+            "ok": False,
+            "instrument": root_symbol,
+            "fixture_path": str(fixture),
+            "expected_fixture_sha256": expected_sha,
+            "actual_fixture_sha256": actual_sha,
+            "reason": "C14 TradingView/Pine fixture bytes do not match the pinned proof",
+        }
+
+    try:
+        from scripts.csv_to_replay import (
+            CALENDAR_CME_EQUITY_INDEX,
+            cme_trading_day,
+            trading_day_calendar,
+        )
+    except Exception as exc:
+        return {
+            "ok": False,
+            "instrument": root_symbol,
+            "fixture_path": str(fixture),
+            "reason": f"could not import current session-day implementation: {exc}",
+        }
+
+    if trading_day_calendar(root_symbol) != CALENDAR_CME_EQUITY_INDEX:
+        return {
+            "ok": False,
+            "instrument": root_symbol,
+            "fixture_path": str(fixture),
+            "reason": "current replay no longer routes this instrument through the proven C14 calendar",
+        }
+
+    rows = 0
+    mismatches: list[dict[str, str]] = []
+    try:
+        with fixture.open(newline="", encoding="utf-8") as handle:
+            for row in csv.DictReader(handle):
+                rows += 1
+                observed = datetime.fromisoformat(row["time"])
+                pine_day = datetime.fromtimestamp(
+                    int(row["time_tradingday"]) / 1000, tz=timezone.utc
+                ).date()
+                replay_day = cme_trading_day(observed, root_symbol)
+                if replay_day != pine_day and len(mismatches) < 10:
+                    mismatches.append(
+                        {
+                            "time": row["time"],
+                            "pine_trade_date": pine_day.isoformat(),
+                            "replay_trade_date": replay_day.isoformat(),
+                        }
+                    )
+    except (OSError, ValueError, KeyError) as exc:
+        return {
+            "ok": False,
+            "instrument": root_symbol,
+            "fixture_path": str(fixture),
+            "fixture_sha256": actual_sha,
+            "reason": f"could not evaluate C14 fixture: {exc}",
+        }
+
+    return {
+        "ok": rows > 0 and not mismatches,
+        "instrument": root_symbol,
+        "fixture_path": str(fixture),
+        "fixture_sha256": actual_sha,
+        "rows_checked": rows,
+        "mismatches": mismatches,
+        "reason": None if rows > 0 and not mismatches else "current replay disagrees with pinned Pine trade dates",
+    }
+
+
+def _verify_feed_manifest(
+    manifest_path: Path | None,
+    *,
+    instrument: str | None,
+) -> dict[str, Any]:
+    """Verify frozen corpus files and require an explicit CME-hours gap ledger.
+
+    A non-empty gap ledger is not itself a failure: exchange closures and known
+    holes remain visible for downstream contamination rules. The gate proves
+    that the frozen bytes and gap enumeration exist; it never turns missing data
+    into synthetic bars.
+    """
+    if manifest_path is None:
+        return {"ok": False, "reason": "dataset manifest path is missing"}
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return {"ok": False, "manifest_path": str(manifest_path), "reason": f"manifest unreadable: {exc}"}
+    if not isinstance(manifest, dict):
+        return {"ok": False, "manifest_path": str(manifest_path), "reason": "manifest must be a JSON object"}
+
+    claimed_instrument = str(instrument or "").strip().upper()
+    manifest_instrument = str(manifest.get("instrument") or "").strip().upper()
+    problems: list[str] = []
+    if not manifest_instrument:
+        problems.append("manifest.instrument is required")
+    elif claimed_instrument and manifest_instrument != claimed_instrument:
+        problems.append(
+            f"manifest.instrument={manifest_instrument} does not match claimed instrument {claimed_instrument}"
+        )
+
+    timeframe = _as_int(manifest.get("timeframe_minutes"))
+    if timeframe is None or timeframe <= 0:
+        problems.append("manifest.timeframe_minutes must be a positive integer")
+
+    gap_ledger = manifest.get("gap_ledger_cme_hours")
+    if not isinstance(gap_ledger, list):
+        problems.append("manifest.gap_ledger_cme_hours must be an explicit list")
+
+    files = manifest.get("files")
+    if not isinstance(files, dict) or not files:
+        problems.append("manifest.files must be a non-empty object of frozen replay files")
+        files = {}
+
+    hash_mismatches: list[dict[str, Any]] = []
+    verified_rows = 0
+    for rel, meta in files.items():
+        if not isinstance(meta, dict):
+            hash_mismatches.append({"path": str(rel), "reason": "file metadata must be an object"})
+            continue
+        expected = str(meta.get("sha256") or "").strip().lower()
+        if len(expected) != 64:
+            hash_mismatches.append({"path": str(rel), "reason": "missing/invalid sha256"})
+            continue
+        file_path = Path(str(rel))
+        if not file_path.is_absolute():
+            file_path = manifest_path.parent / file_path
+        actual = _sha256(file_path)
+        if actual != expected:
+            hash_mismatches.append(
+                {"path": str(file_path), "expected_sha256": expected, "actual_sha256": actual}
+            )
+        rows = _as_int(meta.get("rows"))
+        if rows is None or rows < 0:
+            hash_mismatches.append({"path": str(file_path), "reason": "rows must be a non-negative integer"})
+        else:
+            verified_rows += rows
+
+    coverage = manifest.get("coverage")
+    if isinstance(coverage, dict):
+        expected_files = _as_int(coverage.get("files"))
+        expected_rows = _as_int(coverage.get("rows"))
+        if expected_files is not None and expected_files != len(files):
+            problems.append(
+                f"manifest.coverage.files={expected_files} does not match files object count {len(files)}"
+            )
+        if expected_rows is not None and expected_rows != verified_rows:
+            problems.append(
+                f"manifest.coverage.rows={expected_rows} does not match summed file rows {verified_rows}"
+            )
+
+    return {
+        "ok": not problems and not hash_mismatches,
+        "manifest_path": str(manifest_path),
+        "manifest_instrument": manifest_instrument or None,
+        "timeframe_minutes": timeframe,
+        "files_verified": len(files),
+        "rows_declared": verified_rows,
+        "gap_runs_declared": len(gap_ledger) if isinstance(gap_ledger, list) else None,
+        "problems": problems,
+        "file_hash_mismatches": hash_mismatches[:20],
+        "reason": None if not problems and not hash_mismatches else "frozen feed manifest proof failed",
+    }
+
+
 def _check_data_integrity(root: Path, evidence: dict[str, Any], blockers: list[str]) -> dict[str, Any]:
     data = evidence.get("data_integrity") or {}
     for key in (
@@ -208,10 +402,31 @@ def _check_data_integrity(root: Path, evidence: dict[str, Any], blockers: list[s
         blockers.append(
             "data_integrity.dataset_manifest_sha256 does not match the current manifest bytes"
         )
+
+    instrument = str(
+        (evidence.get("execution_context_claimed") or {}).get("instrument") or ""
+    ).strip().upper() or None
+
+    session_proof = _verify_session_day_identity(root, instrument)
+    if not session_proof.get("ok"):
+        blockers.append(
+            "data_integrity.session_day_identity_proven lacks mechanical C14 fixture proof: "
+            + str(session_proof.get("reason") or "unknown failure")
+        )
+
+    feed_proof = _verify_feed_manifest(manifest_path, instrument=instrument)
+    if not feed_proof.get("ok"):
+        blockers.append(
+            "data_integrity.feed_integrity_proven lacks frozen manifest/file proof: "
+            + str(feed_proof.get("reason") or "unknown failure")
+        )
+
     return {
         **data,
         "resolved_manifest_path": str(manifest_path) if manifest_path else None,
         "actual_manifest_sha256": actual,
+        "mechanical_session_day_identity": session_proof,
+        "mechanical_feed_integrity": feed_proof,
     }
 
 
