@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import ast
 import hashlib
+from pathlib import Path
 
 from alert_ranker.market_data import (
     OptionChain,
@@ -60,17 +62,18 @@ def test_capture_preserves_replay_bytes_side_timestamps_and_underlying_provenanc
     )
 
     assert evidence["status"] == "CAPTURED"
-    assert evidence["evidence_version"] == 2
+    assert evidence["evidence_version"] == 3
     assert evidence["selector_authority"] == "OPTIONS_PAPER_V1"
-    assert evidence["canonical_selector_role"] == "reference_only_not_production_authority"
+    assert evidence["canonical_selector_role"] == "offline_reference_only_not_runtime_dependency"
     assert len(evidence["production_selector_code_sha256"]) == 64
     assert evidence["chosen_expiration"] == "2026-11-20"
     assert evidence["selector_input_rows"] == 1
+    assert evidence["production_selector_input_rows"] == 1
     assert hashlib.sha256(
         (evidence["selector_input_json"] + "\n").encode("utf-8")
     ).hexdigest() == evidence["selector_input_sha256"]
-    assert evidence["canonical_selector_result"]["status"] == "SELECTED"
-    assert evidence["canonical_selector_result"]["contract_id"] == "SPY261120C00550000"
+    assert evidence["production_selector_input_sha256"] == evidence["selector_input_sha256"]
+    assert "canonical_selector_result" not in evidence
     supplement = evidence["chain_supplement"][0]
     assert supplement["bid_timestamp"] == "2026-09-18T14:00:00+00:00"
     assert supplement["ask_timestamp"] == "2026-09-18T14:00:01+00:00"
@@ -122,7 +125,7 @@ def test_storage_is_append_only_and_round_trips_evidence(tmp_path):
     assert rows[0]["_storage_id"] == second
 
 
-def test_production_replay_can_match_when_reference_canonical_selector_differs():
+def test_production_replay_uses_frozen_v1_target_from_retained_inputs():
     call_40 = OptionContractQuote(
         symbol="SPY261120C00555000",
         option_type="CALL",
@@ -174,8 +177,7 @@ def test_production_replay_can_match_when_reference_canonical_selector_differs()
         underlying_snapshot={"provider": "public", "price_source": "market_data_snapshot"},
     )
 
-    # Reference selector targets 0.50 delta; production V1 targets 0.40.
-    assert evidence["canonical_selector_result"]["contract_id"] == "SPY261120C00550000"
+    assert "canonical_selector_result" not in evidence
 
     replay = replay_production_selector(evidence)
     assert replay["status"] == "VALID"
@@ -222,3 +224,18 @@ def test_finalize_fails_closed_when_production_replay_mismatches():
     assert final["status"] == "DATA_BLOCKED"
     assert final["reason_code"] == "production_replay_mismatch"
     assert final["production_replay_parity"] is False
+
+
+def test_runtime_selector_evidence_modules_do_not_import_options_manager():
+    for path in (
+        Path("alert_ranker/options_selector_evidence.py"),
+        Path("alert_ranker/options_production_selector_replay.py"),
+    ):
+        tree = ast.parse(path.read_text())
+        imports = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imports.extend(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                imports.append(node.module)
+        assert not any(name == "options_manager" or name.startswith("options_manager.") for name in imports)
