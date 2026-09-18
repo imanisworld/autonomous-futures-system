@@ -417,8 +417,15 @@ def _resolve_one_position(
         contracts=contract.CONTRACTS,
         paper_order_id=position.get("paper_order_id"),
     )
+    # Pass the bar's open so PaperBroker's gap-through-stop pricing (STOP_GAP:
+    # exit priced from the actual open, not the stale stop level) can operate.
+    # Without it the resolver silently assumed every stop filled at its level.
     fill = broker.resolve_position(
-        NextBarOHLC(high=float(bar["high"]), low=float(bar["low"]))
+        NextBarOHLC(
+            open=float(bar["open"]),
+            high=float(bar["high"]),
+            low=float(bar["low"]),
+        )
     )
     if fill is None:
         fill = resolve_paper_eod(
@@ -488,6 +495,7 @@ def _process_five_min_bar_locked(
         return []
     day = _trading_date(current_ts, for_date)
     bar = {
+        "open": float(payload.open),
         "high": float(payload.high),
         "low": float(payload.low),
         "close": float(payload.close),
