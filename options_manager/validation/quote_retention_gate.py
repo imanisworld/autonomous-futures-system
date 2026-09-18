@@ -22,13 +22,15 @@ class QuoteRetentionGateResult:
     record: Optional[QuoteRecord] = None
 
 
-def _same_number(left: object, right: object) -> bool:
+def _same_number(left: object, right: object, *, abs_tol: float = 1e-9) -> bool:
     try:
         a = float(left)
         b = float(right)
     except (TypeError, ValueError):
         return False
-    return math.isfinite(a) and math.isfinite(b) and math.isclose(a, b, rel_tol=0.0, abs_tol=1e-9)
+    return math.isfinite(a) and math.isfinite(b) and math.isclose(
+        a, b, rel_tol=0.0, abs_tol=abs_tol
+    )
 
 
 def check_quote_retention_intake(
@@ -92,7 +94,15 @@ def check_quote_retention_intake(
             ("open_interest", record.open_interest, contract.open_interest, True),
         )
         for label, observed, expected, numeric in comparisons:
-            matches = _same_number(observed, expected) if numeric else observed == expected
+            if numeric:
+                # Contract-quality payloads historically carry spread_percent
+                # rounded to one decimal place, while retention recomputes it
+                # directly from bid/ask. Permit only that representation
+                # tolerance; all other numeric identity fields remain exact.
+                abs_tol = 0.05 if label == "spread_percent" else 1e-9
+                matches = _same_number(observed, expected, abs_tol=abs_tol)
+            else:
+                matches = observed == expected
             if not matches:
                 blocking.append(
                     f"quote/contract mismatch for {label}: quote={observed!r}, contract={expected!r}"
