@@ -201,29 +201,32 @@ Production-selector evidence capture is already deployed for the **current runni
 
 The dedicated 212R prospective collector is now also **built in code** (#730), but it is **not deployed or scheduled** and it does not make 212R a running strategy family. Its evidence journal is isolated from scanner trade/risk state.
 
-The collector already:
-1. arms completed 30m 2-1-2 reversal precursors using the proven trigger-time model;
-2. resolves the first causal lower-timeframe break without waiting for the 30m close;
-3. preserves source entry, inside-bar invalidation, and source magnitude;
-4. defers SPY/QQQ + HTF policy use rather than inventing an unapproved alignment gate;
-5. reads only Public market-data / option-chain inputs required by the existing production selector;
-6. retains underlying provenance, chain fields, side timestamps, selected contract, selector source hash, and production replay parity;
-7. writes isolated append-only JSONL evidence;
-8. has no alert, ACTIVE risk, broker/account, order, DEMO, or live path;
-9. fails closed on missing 5m evidence, source revision, missing pre-arm, late capture, quote problems, or selector replay mismatch.
+Independent timing review found that collector v0.1 measured evidence lag from the completed five-minute trigger bar rather than from the actual strict-through crossing inside that bar. The frozen 81 showed that bar-close-only detection would inherit 11.716s to 299.821s of delay, with 169.751s median, before any network/chain latency.
+
+Collector v0.3 corrects the lane by:
+1. retaining the proven Public chart structure/arm logic;
+2. while a pre-armed setup is still `WATCHING`, querying Alpaca consolidated SIP trades only from the frozen watch start through the current source-observation time;
+3. resolving whichever frozen boundary broke first with the same strict price-forming trade semantics as #733, including exact nanosecond crossing time;
+4. reusing the same 212 family classifier and canonical source-geometry function for the live first break;
+5. measuring both pre-selector and final selector-capture lag from the exact SIP crossing timestamp;
+6. allowing a first-bucket arm only when its recorded observation time is truly before the exact crossing;
+7. preserving the canonical raw SIP trade window separately with SHA-256 provenance;
+8. blocking selector evidence if SIP credentials, exact crossing proof, quote evidence, parity, freshness, or timing proof are missing;
+9. keeping all output in isolated evidence storage with no alert, ACTIVE risk, broker/account, order, DEMO, or live route.
 
 ## Actual next gate
 
-There is **no missing Phase-1 collector build** now.
+Before any deployment/scheduling of the 212R collector:
 
-Before any deployment/scheduling of #730, two things remain explicit operator/policy gates:
+1. complete independent review/CI for collector v0.3;
+2. choose and pre-register a numeric `max_capture_lag_seconds` measured from the exact SIP crossing; prior 60-second review values were mechanics-only, not policy;
+3. choose and pre-register collector timer cadence;
+4. separately authorize a service-specific observation-only deployment whose route cannot mutate scanner/risk/broker state;
+5. obtain the first real RTH `ARMED -> exact SIP cross -> selector evidence` proof.
 
-- choose and pre-register a numeric `max_capture_lag_seconds` value; the CLI intentionally has no default and prior 60-second review runs were mechanics-only, not policy;
-- separately authorize an observation-only deployment/schedule if desired.
+Do not invent the policy values or deployment authorization in code.
 
-Do not invent either value/action in code.
-
-After an authorized collector begins accumulating real prospective rows, existing fill-realism and risk tooling can be used to calculate option-side evidence. Historical exact option replay remains blocked by missing causal historical Delta and contract-level OI.
+After an authorized collector begins accumulating real prospective rows, existing fill-realism and risk tooling can be used to calculate option-side evidence. Historical exact option replay still remains DATA BLOCKED on causal historical Delta and contract-level OI; #738 separately proves that the exact trigger price can traverse the production `context.price` selector path with replay parity.
 
 ## Current verdict
 

@@ -2,9 +2,11 @@
 """Collect prospective 212R trigger + option-selector evidence, observation only.
 
 The lane is deliberately isolated from the options scanner journal and from all
-risk/broker/order paths.  It observes Public chart bars, proves a 2-1-2 setup
-was ARMED before the trigger bucket when possible, and captures the existing
-OPTIONS_PAPER_V1 selector inputs only for timely, pre-armed reversal events.
+risk/broker/order paths. It observes Public chart bars, proves a 2-1-2 setup
+was ARMED before the trigger bucket, resolves the exact strict-through crossing
+from Alpaca SIP trades using the same semantics as the frozen historical audit,
+and captures existing OPTIONS_PAPER_V1 selector inputs only for timely,
+pre-armed reversal events.
 
 No alert is sent and no trade/risk state is created.
 """
@@ -13,7 +15,8 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-from dataclasses import asdict
+from dataclasses import asdict, replace
+import hashlib
 from datetime import date, datetime, timedelta, timezone
 import json
 import math
@@ -29,9 +32,13 @@ if str(ROOT) not in sys.path:
 from dotenv import load_dotenv  # noqa: E402
 
 from alert_ranker.causal_bars import MINUTE_5, MINUTE_30, build_session_timeframe  # noqa: E402
-from alert_ranker.config import load_config  # noqa: E402
+from alert_ranker.config import load_config, resolve_alpaca_credentials  # noqa: E402
 from alert_ranker.market_data import PublicMarketDataClient  # noqa: E402
-from alert_ranker.options_212r_prospective import evaluate_capture_gate, observe_212_setups  # noqa: E402
+from alert_ranker.options_212r_prospective import (  # noqa: E402
+    evaluate_capture_gate,
+    observe_212_setups,
+    source_reward_to_risk,
+)
 from alert_ranker.options_selector_evidence import (  # noqa: E402
     blocked_selector_evidence,
     build_selector_evidence_capture,
@@ -40,6 +47,17 @@ from alert_ranker.options_selector_evidence import (  # noqa: E402
 from alert_ranker.paper_v1 import choose_contract, choose_expiration  # noqa: E402
 from alert_ranker.public_chart_bars import PUBLIC_CHART_SOURCE, parse_regular_market_bars  # noqa: E402
 from alert_ranker.session_calendar import nyse_session_for  # noqa: E402
+from alert_ranker.trigger_geometry import geometry_for_trigger  # noqa: E402
+from alert_ranker.trigger_time import (  # noqa: E402
+    ArmedStratTrigger,
+    TriggerResolution,
+    _family_for_break,
+)
+from scripts.options_trigger_trade_timestamp_audit import (  # noqa: E402
+    AlpacaTradeProvider,
+    canonical_trade_payload,
+    first_crossing_trade,
+)
 
 PRIMARY_20 = (
     "AAPL", "MSFT", "NVDA", "TSLA", "SPY", "QQQ", "AMZN", "GOOGL", "PLTR", "INTC",
@@ -47,7 +65,7 @@ PRIMARY_20 = (
 )
 HISTORICDATA_PREFIX = "/userapigateway/historicdata"
 COLLECTOR_ID = "OPTIONS_212R_PROSPECTIVE_COLLECTOR"
-COLLECTOR_VERSION = "212r-collector-v0.1"
+COLLECTOR_VERSION = "212r-collector-v0.3"
 
 
 def _parse_ts(value: Any) -> datetime | None:
@@ -117,6 +135,12 @@ def _load_journal(path: Path) -> tuple[dict[str, datetime], set[str], dict[str, 
             raise RuntimeError(f"journal_invalid_json_line_{number}") from exc
         if not isinstance(row, dict) or not row.get("setup_id"):
             raise RuntimeError(f"journal_invalid_row_{number}")
+        if row.get("record_type") in {"ARMED", "RESOLUTION", "SOURCE_DRIFT"}:
+            if (
+                row.get("collector_id") != COLLECTOR_ID
+                or row.get("collector_version") != COLLECTOR_VERSION
+            ):
+                raise RuntimeError(f"journal_collector_version_mismatch_{number}")
         setup_id = str(row["setup_id"])
         observation = row.get("observation") if isinstance(row.get("observation"), dict) else {}
         fingerprint = observation.get("setup_fingerprint")
@@ -157,6 +181,331 @@ def _blocked_option(reason: str, *, ticker: str, direction: str | None, decision
             reason_code=reason,
         ) if direction in {"LONG", "SHORT"} else None,
     }
+
+
+def _persist_sip_trade_window(
+    directory: Path,
+    *,
+    setup_id: str,
+    payload: bytes,
+) -> tuple[str, str]:
+    """Persist one immutable canonical SIP trade window and return path + SHA."""
+    directory.mkdir(parents=True, exist_ok=True)
+    target = directory / f"{setup_id}.jsonl"
+    digest = hashlib.sha256(payload).hexdigest()
+    if target.exists():
+        existing = target.read_bytes()
+        if existing != payload:
+            raise RuntimeError("sip_trade_window_drift")
+        return str(target), digest
+
+    with target.open("xb") as handle:
+        handle.write(payload)
+        handle.flush()
+        os.fsync(handle.fileno())
+    return str(target), digest
+
+
+async def _capture_exact_trigger_cross(
+    provider: AlpacaTradeProvider | None,
+    *,
+    observation: Any,
+    setup_id: str,
+    sip_trade_dir: Path,
+    persist_raw: bool,
+) -> dict[str, Any]:
+    """Resolve the exact SIP trade strictly through the proven trigger boundary."""
+    if provider is None:
+        return {
+            "status": "DATA_BLOCKED",
+            "reason_code": "alpaca_sip_credentials_missing",
+        }
+    trigger_start = _parse_ts(observation.trigger_bar_start)
+    if trigger_start is None:
+        return {
+            "status": "DATA_BLOCKED",
+            "reason_code": "trigger_bar_start_missing",
+        }
+    if observation.direction not in {"LONG", "SHORT"} or observation.trigger_level is None:
+        return {
+            "status": "DATA_BLOCKED",
+            "reason_code": "trigger_boundary_missing",
+        }
+    trigger_end = trigger_start + MINUTE_5.delta
+
+    try:
+        trades = await provider.fetch_trades(
+            symbol=str(observation.ticker),
+            start=trigger_start,
+            end=trigger_end,
+        )
+        crossing, eligible = first_crossing_trade(
+            trades=trades,
+            direction=str(observation.direction),
+            trigger_level=float(observation.trigger_level),
+            window_start=trigger_start,
+            window_end=trigger_end,
+        )
+        if not eligible:
+            return {
+                "status": "DATA_BLOCKED",
+                "reason_code": "sip_price_forming_trades_missing",
+            }
+        if crossing is None:
+            return {
+                "status": "DATA_BLOCKED",
+                "reason_code": "sip_strict_trigger_cross_missing",
+            }
+
+        payload = canonical_trade_payload(trades)
+        digest = hashlib.sha256(payload).hexdigest()
+        raw_path = None
+        if persist_raw:
+            raw_path, persisted_digest = _persist_sip_trade_window(
+                sip_trade_dir,
+                setup_id=setup_id,
+                payload=payload,
+            )
+            if persisted_digest != digest:
+                raise RuntimeError("sip_trade_window_hash_mismatch")
+
+        return {
+            "status": "PROVEN",
+            "reason_code": None,
+            "source": "alpaca_sip",
+            "query_window_start": trigger_start.isoformat(),
+            "query_window_end_exclusive": trigger_end.isoformat(),
+            "raw_trade_rows": len(trades),
+            "eligible_trade_rows": len(eligible),
+            "raw_trade_sha256": digest,
+            "raw_trade_file": raw_path,
+            "trigger_crossed_at": crossing.timestamp,
+            "trigger_cross_trade": crossing.as_dict(),
+        }
+    except Exception as exc:  # fail closed; never synthesize a crossing clock
+        return {
+            "status": "DATA_BLOCKED",
+            "reason_code": f"sip_cross_error:{type(exc).__name__}",
+        }
+
+
+async def _capture_live_first_boundary(
+    provider: AlpacaTradeProvider | None,
+    *,
+    observation: Any,
+    observed_until: datetime,
+    setup_id: str,
+    sip_trade_dir: Path,
+    persist_raw: bool,
+) -> dict[str, Any]:
+    """Resolve the first SIP break of either frozen 212 boundary while WATCHING."""
+    if provider is None:
+        return {
+            "status": "DATA_BLOCKED",
+            "reason_code": "alpaca_sip_credentials_missing",
+        }
+
+    watch_start = _parse_ts(observation.watch_start)
+    watch_until = _parse_ts(observation.watch_until)
+    if watch_start is None or watch_until is None:
+        return {"status": "DATA_BLOCKED", "reason_code": "watch_window_missing"}
+    if observed_until.tzinfo is None or observed_until.utcoffset() is None:
+        raise ValueError("observed_until must be timezone-aware")
+    end = min(observed_until.astimezone(timezone.utc), watch_until)
+    if end <= watch_start:
+        return {"status": "WATCHING", "reason_code": "watch_not_started"}
+
+    try:
+        trades = await provider.fetch_trades(
+            symbol=str(observation.ticker),
+            start=watch_start,
+            end=end,
+        )
+        high_cross, eligible = first_crossing_trade(
+            trades=trades,
+            direction="LONG",
+            trigger_level=float(observation.boundary_high),
+            window_start=watch_start,
+            window_end=end,
+        )
+        low_cross, eligible_low = first_crossing_trade(
+            trades=trades,
+            direction="SHORT",
+            trigger_level=float(observation.boundary_low),
+            window_start=watch_start,
+            window_end=end,
+        )
+        if len(eligible) != len(eligible_low):
+            raise RuntimeError("sip_eligibility_pass_mismatch")
+
+        candidates = [
+            ("HIGH", "LONG", high_cross),
+            ("LOW", "SHORT", low_cross),
+        ]
+        candidates = [item for item in candidates if item[2] is not None]
+        if not candidates:
+            return {
+                "status": "WATCHING",
+                "reason_code": "no_sip_boundary_break_yet",
+                "raw_trade_rows": len(trades),
+                "eligible_trade_rows": len(eligible),
+            }
+
+        candidates.sort(key=lambda item: (item[2].timestamp_ns, item[0]))
+        if (
+            len(candidates) > 1
+            and candidates[0][2].timestamp_ns == candidates[1][2].timestamp_ns
+        ):
+            return {
+                "status": "DATA_BLOCKED",
+                "reason_code": "sip_simultaneous_boundary_break",
+            }
+
+        side, direction, crossing = candidates[0]
+        payload = canonical_trade_payload(trades)
+        digest = hashlib.sha256(payload).hexdigest()
+        raw_path = None
+        if persist_raw:
+            raw_path, persisted_digest = _persist_sip_trade_window(
+                sip_trade_dir,
+                setup_id=setup_id,
+                payload=payload,
+            )
+            if persisted_digest != digest:
+                raise RuntimeError("sip_trade_window_hash_mismatch")
+
+        return {
+            "status": "PROVEN",
+            "reason_code": None,
+            "source": "alpaca_sip",
+            "query_window_start": watch_start.isoformat(),
+            "query_window_end_exclusive": end.isoformat(),
+            "raw_trade_rows": len(trades),
+            "eligible_trade_rows": len(eligible),
+            "raw_trade_sha256": digest,
+            "raw_trade_file": raw_path,
+            "break_side": side,
+            "direction": direction,
+            "trigger_crossed_at": crossing.timestamp,
+            "trigger_cross_trade": crossing.as_dict(),
+        }
+    except Exception as exc:  # fail closed; never infer a boundary ordering
+        return {
+            "status": "DATA_BLOCKED",
+            "reason_code": f"sip_live_cross_error:{type(exc).__name__}",
+        }
+
+
+def _live_observation_from_cross(
+    observation: Any,
+    *,
+    cross_evidence: Mapping[str, Any],
+    history_30m: list[Any],
+) -> Any:
+    """Convert one proven SIP first break into the same 212 family/geometry model."""
+    crossed = _parse_ts(cross_evidence.get("trigger_crossed_at"))
+    watch_start = _parse_ts(observation.watch_start)
+    watch_until = _parse_ts(observation.watch_until)
+    if crossed is None or watch_start is None or watch_until is None:
+        raise ValueError("live crossing timestamps are incomplete")
+
+    side = str(cross_evidence.get("break_side") or "")
+    if side not in {"HIGH", "LOW"}:
+        raise ValueError("live crossing break side is invalid")
+
+    armed = ArmedStratTrigger(
+        pattern="212",
+        armed_at=watch_start,
+        watch_until=watch_until,
+        boundary_high=float(observation.boundary_high),
+        boundary_low=float(observation.boundary_low),
+        reference_direction=observation.reference_direction,
+        source_timeframe=observation.source_timeframe,
+    )
+    family, subtype, direction = _family_for_break(armed, side)
+    if family is None or direction not in {"LONG", "SHORT"}:
+        raise ValueError("live 212 family resolution failed")
+    if direction != cross_evidence.get("direction"):
+        raise ValueError("live crossing direction mismatch")
+
+    trigger_level = (
+        float(observation.boundary_high)
+        if direction == "LONG"
+        else float(observation.boundary_low)
+    )
+    invalidation = (
+        float(observation.boundary_low)
+        if direction == "LONG"
+        else float(observation.boundary_high)
+    )
+
+    completed = sorted(
+        (
+            bar
+            for bar in history_30m
+            if bar.start_utc + MINUTE_30.delta <= watch_start
+        ),
+        key=lambda bar: bar.start_utc,
+    )
+    if len(completed) < 2:
+        raise ValueError("live 212 parent bar missing")
+    parent_bar = completed[-2]
+
+    elapsed = (crossed - watch_start).total_seconds()
+    if elapsed < 0 or crossed >= watch_until:
+        raise ValueError("live crossing outside watch window")
+    bucket_index = int(elapsed // MINUTE_5.delta.total_seconds())
+    trigger_bucket_start = watch_start + bucket_index * MINUTE_5.delta
+
+    result = TriggerResolution(
+        status="TRIGGERED",
+        pattern="212",
+        family=family,
+        subtype=subtype,
+        direction=direction,
+        break_side=side,
+        trigger_level=trigger_level,
+        invalidation_level=invalidation,
+        trigger_bar_start=trigger_bucket_start,
+        trigger_bar_timeframe=MINUTE_5.name,
+        final_scenario="LIVE_FIRST_BREAK_PENDING",
+        opposite_side_broken_later=False,
+        reason_code="live_sip_first_boundary_break",
+    )
+    geometry = geometry_for_trigger(
+        armed=armed,
+        result=result,
+        parent_bar=parent_bar,
+    )
+
+    target = geometry.target
+    target_r = None
+    consumed = False
+    if family == "STRAT_212_REVERSAL" and target is not None:
+        target_r, consumed = source_reward_to_risk(
+            direction,
+            trigger_level,
+            invalidation,
+            float(target),
+        )
+
+    return replace(
+        observation,
+        status="TRIGGERED",
+        family=family,
+        subtype=subtype,
+        direction=direction,
+        trigger_bar_start=trigger_bucket_start.isoformat(),
+        trigger_detectable_at=(trigger_bucket_start + MINUTE_5.delta).isoformat(),
+        trigger_level=trigger_level,
+        invalidation_level=invalidation,
+        source_target=target,
+        source_target_r=target_r,
+        source_target_consumed=consumed,
+        final_scenario="LIVE_FIRST_BREAK_PENDING",
+        opposite_side_broken_later=False,
+        reason_code="live_sip_first_boundary_break",
+    )
 
 
 async def _capture_selector_evidence(
@@ -260,6 +609,7 @@ def _enforce_final_capture_lag(
     observation: Any,
     prearmed_at: datetime | None,
     max_capture_lag_seconds: float,
+    trigger_crossed_at: datetime,
 ) -> dict[str, Any]:
     """Fail closed if selector evidence finishes outside the pre-registered window."""
     result = dict(option_evidence)
@@ -275,6 +625,7 @@ def _enforce_final_capture_lag(
         prearmed_at=prearmed_at,
         decision_ts=captured_at,
         max_capture_lag_seconds=max_capture_lag_seconds,
+        trigger_crossed_at=trigger_crossed_at,
     )
     result["capture_lag_seconds"] = gate.lag_seconds
     if not gate.eligible:
@@ -287,6 +638,17 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
     if args.env_file:
         load_dotenv(args.env_file, override=True)
     cfg = load_config()
+    alpaca_key, alpaca_secret = resolve_alpaca_credentials()
+    sip_provider = (
+        AlpacaTradeProvider(
+            base_url=cfg.alpaca_data_base_url,
+            api_key=alpaca_key,
+            secret_key=alpaca_secret,
+        )
+        if alpaca_key and alpaca_secret
+        else None
+    )
+    sip_trade_dir = Path(args.sip_trade_dir)
     run_started_at = datetime.now(timezone.utc)
     session = nyse_session_for(run_started_at.date())
     if session is None:
@@ -307,6 +669,8 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
         "armed_written": 0,
         "resolutions_written": 0,
         "reversal_triggers": 0,
+        "sip_trigger_cross_proven": 0,
+        "sip_trigger_cross_blocked": 0,
         "option_evidence_captured": 0,
         "option_evidence_blocked": 0,
         "data_blocked": 0,
@@ -357,6 +721,7 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
             for obs in observations:
                 row = obs.to_dict()
                 setup_id = obs.setup_id
+                trigger_cross_evidence: dict[str, Any] | None = None
                 prior_fingerprint = fingerprint_seen.get(setup_id)
                 if prior_fingerprint is not None and prior_fingerprint != obs.setup_fingerprint:
                     summary["data_blocked"] += 1
@@ -373,26 +738,52 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
                             "reason_code": "public_completed_bar_revision",
                         })
                     continue
-                if obs.status == "WATCHING":
-                    if setup_id in armed_seen:
-                        continue
-                    record = {
-                        "record_type": "ARMED",
-                        "observed_at": source_observed_at.isoformat(),
-                        "collector_id": COLLECTOR_ID,
-                        "collector_version": COLLECTOR_VERSION,
-                        "setup_id": setup_id,
-                        "observation": row,
-                    }
-                    if not args.dry_run:
-                        _append(journal, record)
-                    armed_seen[setup_id] = source_observed_at
-                    fingerprint_seen[setup_id] = obs.setup_fingerprint
-                    summary["armed_written"] += 1
-                    continue
-
                 if setup_id in terminal_seen:
                     continue
+
+                if obs.status == "WATCHING":
+                    if setup_id not in armed_seen:
+                        record = {
+                            "record_type": "ARMED",
+                            "observed_at": source_observed_at.isoformat(),
+                            "collector_id": COLLECTOR_ID,
+                            "collector_version": COLLECTOR_VERSION,
+                            "setup_id": setup_id,
+                            "observation": row,
+                        }
+                        if not args.dry_run:
+                            _append(journal, record)
+                        armed_seen[setup_id] = source_observed_at
+                        fingerprint_seen[setup_id] = obs.setup_fingerprint
+                        summary["armed_written"] += 1
+
+                if obs.status in {"WATCHING", "AMBIGUOUS"}:
+                    trigger_cross_evidence = await _capture_live_first_boundary(
+                        sip_provider,
+                        observation=obs,
+                        observed_until=source_observed_at,
+                        setup_id=setup_id,
+                        sip_trade_dir=sip_trade_dir,
+                        persist_raw=not args.dry_run,
+                    )
+                    if trigger_cross_evidence.get("status") == "WATCHING":
+                        continue
+                    if trigger_cross_evidence.get("status") != "PROVEN":
+                        summary["data_blocked"] += 1
+                        summary["sip_trigger_cross_blocked"] += 1
+                        continue
+                    try:
+                        obs = _live_observation_from_cross(
+                            obs,
+                            cross_evidence=trigger_cross_evidence,
+                            history_30m=history30,
+                        )
+                    except Exception:
+                        summary["data_blocked"] += 1
+                        summary["sip_trigger_cross_blocked"] += 1
+                        continue
+                    row = obs.to_dict()
+                    summary["sip_trigger_cross_proven"] += 1
 
                 if obs.status == "DATA_BLOCKED":
                     summary["data_blocked"] += 1
@@ -405,26 +796,74 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
                 if obs.family == "STRAT_212_REVERSAL" and obs.status == "TRIGGERED":
                     summary["reversal_triggers"] += 1
                     gate_checked_at = datetime.now(timezone.utc)
-                    gate = evaluate_capture_gate(
-                        obs, prearmed_at=prearmed_at, decision_ts=gate_checked_at,
-                        max_capture_lag_seconds=args.max_capture_lag_seconds,
-                    )
-                    if not gate.eligible:
-                        detail = gate.reason_code or "capture_gate_blocked"
-                        if gate.lag_seconds is not None:
-                            detail += f":{round(gate.lag_seconds,3)}"
+
+                    if trigger_cross_evidence is None:
+                        trigger_cross_evidence = await _capture_exact_trigger_cross(
+                            sip_provider,
+                            observation=obs,
+                            setup_id=setup_id,
+                            sip_trade_dir=sip_trade_dir,
+                            persist_raw=not args.dry_run,
+                        )
+                        if trigger_cross_evidence.get("status") == "PROVEN":
+                            summary["sip_trigger_cross_proven"] += 1
+
+                    if trigger_cross_evidence.get("status") != "PROVEN":
+                        summary["sip_trigger_cross_blocked"] += 1
                         option_evidence = _blocked_option(
-                            detail, ticker=ticker, direction=obs.direction, decision_ts=gate_checked_at,
+                            str(
+                                trigger_cross_evidence.get("reason_code")
+                                or "sip_trigger_cross_unproven"
+                            ),
+                            ticker=ticker,
+                            direction=obs.direction,
+                            decision_ts=gate_checked_at,
                         )
                     else:
-                        capture_gate_eligible = True
-                        option_evidence = await _capture_selector_evidence(
-                            pub, ticker=ticker, direction=str(obs.direction), cfg=cfg
+                        crossed_at = _parse_ts(
+                            trigger_cross_evidence.get("trigger_crossed_at")
                         )
-                        option_evidence = _enforce_final_capture_lag(
-                            option_evidence, observation=obs, prearmed_at=prearmed_at,
-                            max_capture_lag_seconds=args.max_capture_lag_seconds,
-                        )
+                        if crossed_at is None:
+                            summary["sip_trigger_cross_blocked"] += 1
+                            option_evidence = _blocked_option(
+                                "sip_trigger_cross_timestamp_invalid",
+                                ticker=ticker,
+                                direction=obs.direction,
+                                decision_ts=gate_checked_at,
+                            )
+                        else:
+                            gate = evaluate_capture_gate(
+                                obs,
+                                prearmed_at=prearmed_at,
+                                decision_ts=gate_checked_at,
+                                max_capture_lag_seconds=args.max_capture_lag_seconds,
+                                trigger_crossed_at=crossed_at,
+                            )
+                            if not gate.eligible:
+                                detail = gate.reason_code or "capture_gate_blocked"
+                                if gate.lag_seconds is not None:
+                                    detail += f":{round(gate.lag_seconds,3)}"
+                                option_evidence = _blocked_option(
+                                    detail,
+                                    ticker=ticker,
+                                    direction=obs.direction,
+                                    decision_ts=gate_checked_at,
+                                )
+                            else:
+                                capture_gate_eligible = True
+                                option_evidence = await _capture_selector_evidence(
+                                    pub,
+                                    ticker=ticker,
+                                    direction=str(obs.direction),
+                                    cfg=cfg,
+                                )
+                                option_evidence = _enforce_final_capture_lag(
+                                    option_evidence,
+                                    observation=obs,
+                                    prearmed_at=prearmed_at,
+                                    max_capture_lag_seconds=args.max_capture_lag_seconds,
+                                    trigger_crossed_at=crossed_at,
+                                )
                     if option_evidence and option_evidence.get("status") == "CAPTURED":
                         summary["option_evidence_captured"] += 1
                     else:
@@ -446,6 +885,7 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
                         "reason": "Public chart bars do not expose the VWAP input used by the frozen context formula",
                     },
                     "observation": row,
+                    "trigger_cross_evidence": trigger_cross_evidence,
                     "option_evidence": option_evidence,
                 }
                 if not args.dry_run:
@@ -462,8 +902,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--ticker", action="append", default=[])
     parser.add_argument("--env-file")
     parser.add_argument("--journal", default="logs/options_212r_prospective.jsonl")
-    parser.add_argument("--max-capture-lag-seconds", type=float, required=True,
-                        help="Pre-registered max seconds from completed trigger 5m bar to evidence capture")
+    parser.add_argument(
+        "--sip-trade-dir",
+        default="logs/options_212r_sip_trades",
+        help="Isolated immutable raw SIP trade windows used to prove exact crossings",
+    )
+    parser.add_argument(
+        "--max-capture-lag-seconds",
+        type=float,
+        required=True,
+        help="Pre-registered max seconds from exact SIP trigger crossing to evidence capture",
+    )
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
     if not args.ticker:
