@@ -14,7 +14,7 @@ row survives, the result is NO_CONTRACT.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 import json
 import math
 from typing import Literal, Mapping, Sequence
@@ -146,6 +146,15 @@ def _parse_ts(value: str) -> datetime:
     return parsed
 
 
+def _parse_expiration(value: str) -> date:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("expiration must be a non-empty ISO date")
+    parsed = date.fromisoformat(value)
+    if parsed.isoformat() != value:
+        raise ValueError("expiration must be canonical YYYY-MM-DD")
+    return parsed
+
+
 def _finite_number(value: object) -> bool:
     return (
         not isinstance(value, bool)
@@ -223,6 +232,11 @@ def select_contract(
         if not row.contract_id or not row.expiration:
             reject("missing_identity")
             continue
+        try:
+            expiration_date = _parse_expiration(row.expiration)
+        except (TypeError, ValueError):
+            reject("invalid_expiration")
+            continue
         if row.right != direction:
             reject("wrong_right")
             continue
@@ -242,6 +256,10 @@ def select_contract(
             continue
         if isinstance(row.dte, bool) or not isinstance(row.dte, int):
             reject("invalid_dte")
+            continue
+        computed_dte = (expiration_date - decision_dt.date()).days
+        if computed_dte != row.dte:
+            reject("dte_expiration_mismatch")
             continue
         if isinstance(row.volume, bool) or not isinstance(row.volume, int):
             reject("invalid_volume")
