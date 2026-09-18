@@ -1,0 +1,654 @@
+{
+  "by_timeframe": {
+    "1D": {
+      "plus_one_rth_session": {
+        "censored_n": 4,
+        "forced_horizon_avg_pnl": 13.7,
+        "forced_horizon_pnl_all_rows": 137.0,
+        "n": 10,
+        "resolution_counts": {
+          "CENSORED_AT_HORIZON": 4,
+          "STOP": 2,
+          "TARGET": 4
+        }
+      },
+      "pnl_delta": 495.0,
+      "same_session": {
+        "censored_n": 8,
+        "forced_horizon_avg_pnl": -35.8,
+        "forced_horizon_pnl_all_rows": -358.0,
+        "n": 10,
+        "resolution_counts": {
+          "CENSORED_AT_HORIZON": 8,
+          "STOP": 2
+        }
+      }
+    },
+    "4H_RTH": {
+      "plus_one_rth_session": {
+        "censored_n": 1,
+        "forced_horizon_avg_pnl": -48.29,
+        "forced_horizon_pnl_all_rows": -676.0,
+        "n": 14,
+        "resolution_counts": {
+          "CENSORED_AT_HORIZON": 1,
+          "STOP": 5,
+          "TARGET": 8
+        }
+      },
+      "pnl_delta": -463.0,
+      "same_session": {
+        "censored_n": 7,
+        "forced_horizon_avg_pnl": -15.21,
+        "forced_horizon_pnl_all_rows": -213.0,
+        "n": 14,
+        "resolution_counts": {
+          "CENSORED_AT_HORIZON": 7,
+          "STOP": 1,
+          "TARGET": 6
+        }
+      }
+    }
+  },
+  "controls": {
+    "baseline_horizon": "same RTH session close",
+    "censoring": "explicit; unresolved rows marked to last executable BID by each fixed horizon",
+    "changed_variable": "holding horizon only",
+    "contract": "unchanged selected contract and quantity",
+    "costs": "unchanged ASK entry / BID exit, no added fee",
+    "entry": "unchanged first-sight underlying price",
+    "extended_horizon": "close of exactly one additional RTH session",
+    "path": "same retained option marks matched to same-time scanner underlying prices",
+    "same_observation_ambiguity": "STOP_AMBIGUOUS pessimistic if stop and target are both true",
+    "stop": "unchanged underlying invalidation and premium stop",
+    "target": "unchanged recorded target_1"
+  },
+  "input_sha256": "d3a55e8a217a49e7283550b319cbd10427072cfa74c9aaf5683c0a773074135e",
+  "limitations": [
+    "This is a 24-row Daily/4H subset of the frozen clean shadow cohort, not a 212R-specific option population.",
+    "Rows are not fully independent; the 10 Daily rows represent 7 structural keys because some setups were observed in more than one evidence lane/first-sight row.",
+    "The one-extra-session horizon is the minimal common extension available for every row; this is not an optimization sweep and does not establish an optimal hold period.",
+    "Observed scanner/contract snapshots do not reveal price order between snapshots.",
+    "No fee/slippage overlay, target change, contract reselection or V1 policy change is introduced.",
+    "Small samples cannot establish positive expectancy or promotion eligibility."
+  ],
+  "overall": {
+    "plus_one_rth_session": {
+      "censored_n": 5,
+      "forced_horizon_avg_pnl": -22.46,
+      "forced_horizon_pnl_all_rows": -539.0,
+      "n": 24,
+      "resolution_counts": {
+        "CENSORED_AT_HORIZON": 5,
+        "STOP": 7,
+        "TARGET": 12
+      }
+    },
+    "pnl_delta": 32.0,
+    "resolution_transitions": {
+      "CENSORED_AT_HORIZON->CENSORED_AT_HORIZON": 5,
+      "CENSORED_AT_HORIZON->STOP": 4,
+      "CENSORED_AT_HORIZON->TARGET": 6,
+      "STOP->STOP": 3,
+      "TARGET->TARGET": 6
+    },
+    "same_session": {
+      "censored_n": 15,
+      "forced_horizon_avg_pnl": -23.79,
+      "forced_horizon_pnl_all_rows": -571.0,
+      "n": 24,
+      "resolution_counts": {
+        "CENSORED_AT_HORIZON": 15,
+        "STOP": 3,
+        "TARGET": 6
+      }
+    }
+  },
+  "population": {
+    "daily_h4_rows": 24,
+    "source_ahead_rows": 47,
+    "source_geometry_input_sha256": "0074cd80b659ea84766737b3199f9bce1c689c4cbf09c9306f43da13f3c364ea",
+    "source_geometry_study": "OPTIONS_SHADOW_TARGET_GEOMETRY_CONTROLLED_V0_1",
+    "timeframe_counts": {
+      "1D": 10,
+      "4H_RTH": 14
+    },
+    "unique_structural_keys": 21,
+    "unique_structural_keys_by_timeframe": {
+      "1D": 7,
+      "4H_RTH": 14
+    }
+  },
+  "rows": [
+    {
+      "direction": "LONG",
+      "plus_one_rth_session": {
+        "exit_bid": 8.6,
+        "exit_timestamp": "2026-09-17T13:32:46.760654+00:00",
+        "observation_count": 40,
+        "pnl_dollars": 150.0,
+        "resolution": "TARGET"
+      },
+      "same_session": {
+        "exit_bid": 6.75,
+        "exit_timestamp": "2026-09-16T19:57:46.551927+00:00",
+        "observation_count": 39,
+        "pnl_dollars": -35.0,
+        "resolution": "CENSORED_AT_HORIZON"
+      },
+      "setup_type": "DAILY_222_CONTINUATION",
+      "shadow_id": 9207,
+      "structural_key": "INTC|1D|DAILY_222_CONTINUATION|LONG|100.48|2026-09-16",
+      "ticker": "INTC",
+      "timeframe": "1D"
+    },
+    {
+      "direction": "LONG",
+      "plus_one_rth_session": {
+        "exit_bid": 4.73,
+        "exit_timestamp": "2026-09-16T18:57:46.552332+00:00",
+        "observation_count": 27,
+        "pnl_dollars": -127.0,
+        "resolution": "STOP"
+      },
+      "same_session": {
+        "exit_bid": 4.73,
+        "exit_timestamp": "2026-09-16T18:57:46.552332+00:00",
+        "observation_count": 27,
+        "pnl_dollars": -127.0,
+        "resolution": "STOP"
+      },
+      "setup_type": "DAILY_222_REVERSAL",
+      "shadow_id": 9209,
+      "structural_key": "IWM|1D|DAILY_222_REVERSAL|LONG|286.93|2026-09-16",
+      "ticker": "IWM",
+      "timeframe": "1D"
+    },
+    {
+      "direction": "LONG",
+      "plus_one_rth_session": {
+        "exit_bid": 5.15,
+        "exit_timestamp": "2026-09-17T14:07:46.552324+00:00",
+        "observation_count": 47,
+        "pnl_dollars": -190.0,
+        "resolution": "STOP"
+      },
+      "same_session": {
+        "exit_bid": 6.05,
+        "exit_timestamp": "2026-09-16T19:57:46.551927+00:00",
+        "observation_count": 39,
+        "pnl_dollars": -100.0,
+        "resolution": "CENSORED_AT_HORIZON"
+      },
+      "setup_type": "H4_322_CONTINUATION",
+      "shadow_id": 9210,
+      "structural_key": "JPM|4H_RTH|H4_322_CONTINUATION|LONG|354.7|2026-09-16",
+      "ticker": "JPM",
+      "timeframe": "4H_RTH"
+    },
+    {
+      "direction": "LONG",
+      "plus_one_rth_session": {
+        "exit_bid": 6.0,
+        "exit_timestamp": "2026-09-17T13:42:46.552716+00:00",
+        "observation_count": 43,
+        "pnl_dollars": 30.0,
+        "resolution": "TARGET"
+      },
+      "same_session": {
+        "exit_bid": 5.65,
+        "exit_timestamp": "2026-09-16T19:57:46.551927+00:00",
+        "observation_count": 39,
+        "pnl_dollars": -5.0,
+        "resolution": "CENSORED_AT_HORIZON"
+      },
+      "setup_type": "DAILY_222_REVERSAL",
+      "shadow_id": 9212,
+      "structural_key": "MRK|1D|DAILY_222_REVERSAL|LONG|144.15|2026-09-16",
+      "ticker": "MRK",
+      "timeframe": "1D"
+    },
+    {
+      "direction": "LONG",
+      "plus_one_rth_session": {
+        "exit_bid": 4.73,
+        "exit_timestamp": "2026-09-16T18:57:46.552332+00:00",
+        "observation_count": 21,
+        "pnl_dollars": -131.0,
+        "resolution": "STOP"
+      },
+      "same_session": {
+        "exit_bid": 4.73,
+        "exit_timestamp": "2026-09-16T18:57:46.552332+00:00",
+        "observation_count": 21,
+        "pnl_dollars": -131.0,
+        "resolution": "STOP"
+      },
+      "setup_type": "DAILY_222_REVERSAL",
+      "shadow_id": 9216,
+      "structural_key": "IWM|1D|DAILY_222_REVERSAL|LONG|286.93|2026-09-16",
+      "ticker": "IWM",
+      "timeframe": "1D"
+    },
+    {
+      "direction": "LONG",
+      "plus_one_rth_session": {
+        "exit_bid": 6.0,
+        "exit_timestamp": "2026-09-17T13:42:46.552716+00:00",
+        "observation_count": 37,
+        "pnl_dollars": 15.0,
+        "resolution": "TARGET"
+      },
+      "same_session": {
+        "exit_bid": 5.65,
+        "exit_timestamp": "2026-09-16T19:57:46.551927+00:00",
+        "observation_count": 33,
+        "pnl_dollars": -20.0,
+        "resolution": "CENSORED_AT_HORIZON"
+      },
+      "setup_type": "DAILY_222_REVERSAL",
+      "shadow_id": 9218,
+      "structural_key": "MRK|1D|DAILY_222_REVERSAL|LONG|144.15|2026-09-16",
+      "ticker": "MRK",
+      "timeframe": "1D"
+    },
+    {
+      "direction": "LONG",
+      "plus_one_rth_session": {
+        "exit_bid": 2.44,
+        "exit_timestamp": "2026-09-16T19:52:46.552100+00:00",
+        "observation_count": 14,
+        "pnl_dollars": -32.0,
+        "resolution": "STOP"
+      },
+      "same_session": {
+        "exit_bid": 2.44,
+        "exit_timestamp": "2026-09-16T19:52:46.552100+00:00",
+        "observation_count": 14,
+        "pnl_dollars": -32.0,
+        "resolution": "STOP"
+      },
+      "setup_type": "H4_222_REVERSAL",
+      "shadow_id": 9241,
+      "structural_key": "WMT|4H_RTH|H4_222_REVERSAL|LONG|108.62|2026-09-16",
+      "ticker": "WMT",
+      "timeframe": "4H_RTH"
+    },
+    {
+      "direction": "SHORT",
+      "plus_one_rth_session": {
+        "exit_bid": 5.8,
+        "exit_timestamp": "2026-09-17T19:57:46.552586+00:00",
+        "observation_count": 86,
+        "pnl_dollars": 20.0,
+        "resolution": "CENSORED_AT_HORIZON"
+      },
+      "same_session": {
+        "exit_bid": 5.75,
+        "exit_timestamp": "2026-09-16T19:57:46.551927+00:00",
+        "observation_count": 9,
+        "pnl_dollars": 15.0,
+        "resolution": "CENSORED_AT_HORIZON"
+      },
+      "setup_type": "DAILY_222_CONTINUATION",
+      "shadow_id": 9244,
+      "structural_key": "WMT|1D|DAILY_222_CONTINUATION|SHORT|107.86|2026-09-16",
+      "ticker": "WMT",
+      "timeframe": "1D"
+    },
+    {
+      "direction": "SHORT",
+      "plus_one_rth_session": {
+        "exit_bid": 5.8,
+        "exit_timestamp": "2026-09-17T19:57:46.552586+00:00",
+        "observation_count": 82,
+        "pnl_dollars": -5.0,
+        "resolution": "CENSORED_AT_HORIZON"
+      },
+      "same_session": {
+        "exit_bid": 5.75,
+        "exit_timestamp": "2026-09-16T19:57:46.551927+00:00",
+        "observation_count": 5,
+        "pnl_dollars": -10.0,
+        "resolution": "CENSORED_AT_HORIZON"
+      },
+      "setup_type": "DAILY_222_CONTINUATION",
+      "shadow_id": 9251,
+      "structural_key": "WMT|1D|DAILY_222_CONTINUATION|SHORT|107.86|2026-09-16",
+      "ticker": "WMT",
+      "timeframe": "1D"
+    },
+    {
+      "direction": "SHORT",
+      "plus_one_rth_session": {
+        "exit_bid": 10.65,
+        "exit_timestamp": "2026-09-17T13:37:46.552628+00:00",
+        "observation_count": 5,
+        "pnl_dollars": -55.0,
+        "resolution": "TARGET"
+      },
+      "same_session": {
+        "exit_bid": 10.9,
+        "exit_timestamp": "2026-09-16T19:57:46.551927+00:00",
+        "observation_count": 3,
+        "pnl_dollars": -30.0,
+        "resolution": "CENSORED_AT_HORIZON"
+      },
+      "setup_type": "H4_222_REVERSAL",
+      "shadow_id": 9252,
+      "structural_key": "AAPL|4H_RTH|H4_222_REVERSAL|SHORT|331.87|2026-09-16",
+      "ticker": "AAPL",
+      "timeframe": "4H_RTH"
+    },
+    {
+      "direction": "SHORT",
+      "plus_one_rth_session": {
+        "exit_bid": 7.45,
+        "exit_timestamp": "2026-09-17T13:32:46.760654+00:00",
+        "observation_count": 4,
+        "pnl_dollars": -190.0,
+        "resolution": "STOP"
+      },
+      "same_session": {
+        "exit_bid": 9.15,
+        "exit_timestamp": "2026-09-16T19:57:46.551927+00:00",
+        "observation_count": 3,
+        "pnl_dollars": -20.0,
+        "resolution": "CENSORED_AT_HORIZON"
+      },
+      "setup_type": "H4_222_REVERSAL",
+      "shadow_id": 9253,
+      "structural_key": "INTC|4H_RTH|H4_222_REVERSAL|SHORT|100.76|2026-09-16",
+      "ticker": "INTC",
+      "timeframe": "4H_RTH"
+    },
+    {
+      "direction": "SHORT",
+      "plus_one_rth_session": {
+        "exit_bid": 4.55,
+        "exit_timestamp": "2026-09-17T13:32:46.760654+00:00",
+        "observation_count": 4,
+        "pnl_dollars": -40.0,
+        "resolution": "TARGET"
+      },
+      "same_session": {
+        "exit_bid": 4.55,
+        "exit_timestamp": "2026-09-16T19:57:46.551927+00:00",
+        "observation_count": 3,
+        "pnl_dollars": -40.0,
+        "resolution": "CENSORED_AT_HORIZON"
+      },
+      "setup_type": "H4_222_CONTINUATION",
+      "shadow_id": 9254,
+      "structural_key": "XOM|4H_RTH|H4_222_CONTINUATION|SHORT|163.15|2026-09-16",
+      "ticker": "XOM",
+      "timeframe": "4H_RTH"
+    },
+    {
+      "direction": "LONG",
+      "plus_one_rth_session": {
+        "exit_bid": 10.2,
+        "exit_timestamp": "2026-09-18T19:56:17.713665+00:00",
+        "observation_count": 145,
+        "pnl_dollars": 50.0,
+        "resolution": "CENSORED_AT_HORIZON"
+      },
+      "same_session": {
+        "exit_bid": 9.35,
+        "exit_timestamp": "2026-09-17T19:57:46.552586+00:00",
+        "observation_count": 69,
+        "pnl_dollars": -35.0,
+        "resolution": "CENSORED_AT_HORIZON"
+      },
+      "setup_type": "DAILY_222_CONTINUATION",
+      "shadow_id": 9255,
+      "structural_key": "NVDA|1D|DAILY_222_CONTINUATION|LONG|216.76|2026-09-17",
+      "ticker": "NVDA",
+      "timeframe": "1D"
+    },
+    {
+      "direction": "LONG",
+      "plus_one_rth_session": {
+        "exit_bid": 10.12,
+        "exit_timestamp": "2026-09-17T14:22:46.552138+00:00",
+        "observation_count": 2,
+        "pnl_dollars": 17.0,
+        "resolution": "TARGET"
+      },
+      "same_session": {
+        "exit_bid": 10.12,
+        "exit_timestamp": "2026-09-17T14:22:46.552138+00:00",
+        "observation_count": 2,
+        "pnl_dollars": 17.0,
+        "resolution": "TARGET"
+      },
+      "setup_type": "H4_222_REVERSAL",
+      "shadow_id": 9257,
+      "structural_key": "SPY|4H_RTH|H4_222_REVERSAL|LONG|761.225|2026-09-17",
+      "ticker": "SPY",
+      "timeframe": "4H_RTH"
+    },
+    {
+      "direction": "LONG",
+      "plus_one_rth_session": {
+        "exit_bid": 12.1,
+        "exit_timestamp": "2026-09-18T15:07:28.986028+00:00",
+        "observation_count": 89,
+        "pnl_dollars": 170.0,
+        "resolution": "TARGET"
+      },
+      "same_session": {
+        "exit_bid": 10.5,
+        "exit_timestamp": "2026-09-17T19:57:46.552586+00:00",
+        "observation_count": 69,
+        "pnl_dollars": 10.0,
+        "resolution": "CENSORED_AT_HORIZON"
+      },
+      "setup_type": "DAILY_222_REVERSAL",
+      "shadow_id": 9259,
+      "structural_key": "AMZN|1D|DAILY_222_REVERSAL|LONG|249.26|2026-09-17",
+      "ticker": "AMZN",
+      "timeframe": "1D"
+    },
+    {
+      "direction": "LONG",
+      "plus_one_rth_session": {
+        "exit_bid": 12.6,
+        "exit_timestamp": "2026-09-17T14:42:46.554176+00:00",
+        "observation_count": 6,
+        "pnl_dollars": 60.0,
+        "resolution": "TARGET"
+      },
+      "same_session": {
+        "exit_bid": 12.6,
+        "exit_timestamp": "2026-09-17T14:42:46.554176+00:00",
+        "observation_count": 6,
+        "pnl_dollars": 60.0,
+        "resolution": "TARGET"
+      },
+      "setup_type": "H4_222_REVERSAL",
+      "shadow_id": 9261,
+      "structural_key": "GOOGL|4H_RTH|H4_222_REVERSAL|LONG|346.68|2026-09-17",
+      "ticker": "GOOGL",
+      "timeframe": "4H_RTH"
+    },
+    {
+      "direction": "LONG",
+      "plus_one_rth_session": {
+        "exit_bid": 11.05,
+        "exit_timestamp": "2026-09-18T19:56:17.713665+00:00",
+        "observation_count": 145,
+        "pnl_dollars": 0.0,
+        "resolution": "CENSORED_AT_HORIZON"
+      },
+      "same_session": {
+        "exit_bid": 11.2,
+        "exit_timestamp": "2026-09-17T19:57:46.552586+00:00",
+        "observation_count": 69,
+        "pnl_dollars": 15.0,
+        "resolution": "CENSORED_AT_HORIZON"
+      },
+      "setup_type": "H4_222_REVERSAL",
+      "shadow_id": 9264,
+      "structural_key": "JPM|4H_RTH|H4_222_REVERSAL|LONG|352.81|2026-09-17",
+      "ticker": "JPM",
+      "timeframe": "4H_RTH"
+    },
+    {
+      "direction": "LONG",
+      "plus_one_rth_session": {
+        "exit_bid": 11.65,
+        "exit_timestamp": "2026-09-17T18:07:46.554874+00:00",
+        "observation_count": 8,
+        "pnl_dollars": 30.0,
+        "resolution": "TARGET"
+      },
+      "same_session": {
+        "exit_bid": 11.65,
+        "exit_timestamp": "2026-09-17T18:07:46.554874+00:00",
+        "observation_count": 8,
+        "pnl_dollars": 30.0,
+        "resolution": "TARGET"
+      },
+      "setup_type": "H4_222_CONTINUATION",
+      "shadow_id": 9285,
+      "structural_key": "PLTR|4H_RTH|H4_222_CONTINUATION|LONG|174.7651|2026-09-17",
+      "ticker": "PLTR",
+      "timeframe": "4H_RTH"
+    },
+    {
+      "direction": "LONG",
+      "plus_one_rth_session": {
+        "exit_bid": 5.92,
+        "exit_timestamp": "2026-09-18T15:12:28.974893+00:00",
+        "observation_count": 51,
+        "pnl_dollars": -199.0,
+        "resolution": "STOP"
+      },
+      "same_session": {
+        "exit_bid": 7.41,
+        "exit_timestamp": "2026-09-17T19:57:46.552586+00:00",
+        "observation_count": 30,
+        "pnl_dollars": -50.0,
+        "resolution": "CENSORED_AT_HORIZON"
+      },
+      "setup_type": "H4_222_REVERSAL",
+      "shadow_id": 9287,
+      "structural_key": "IWM|4H_RTH|H4_222_REVERSAL|LONG|287.0199|2026-09-17",
+      "ticker": "IWM",
+      "timeframe": "4H_RTH"
+    },
+    {
+      "direction": "SHORT",
+      "plus_one_rth_session": {
+        "exit_bid": 3.4,
+        "exit_timestamp": "2026-09-18T19:56:17.713665+00:00",
+        "observation_count": 100,
+        "pnl_dollars": -35.0,
+        "resolution": "CENSORED_AT_HORIZON"
+      },
+      "same_session": {
+        "exit_bid": 3.55,
+        "exit_timestamp": "2026-09-17T19:57:46.552586+00:00",
+        "observation_count": 24,
+        "pnl_dollars": -20.0,
+        "resolution": "CENSORED_AT_HORIZON"
+      },
+      "setup_type": "DAILY_222_CONTINUATION",
+      "shadow_id": 9294,
+      "structural_key": "WMT|1D|DAILY_222_CONTINUATION|SHORT|107.45|2026-09-17",
+      "ticker": "WMT",
+      "timeframe": "1D"
+    },
+    {
+      "direction": "LONG",
+      "plus_one_rth_session": {
+        "exit_bid": 10.35,
+        "exit_timestamp": "2026-09-17T18:27:46.552514+00:00",
+        "observation_count": 2,
+        "pnl_dollars": -55.0,
+        "resolution": "TARGET"
+      },
+      "same_session": {
+        "exit_bid": 10.35,
+        "exit_timestamp": "2026-09-17T18:27:46.552514+00:00",
+        "observation_count": 2,
+        "pnl_dollars": -55.0,
+        "resolution": "TARGET"
+      },
+      "setup_type": "H4_222_CONTINUATION",
+      "shadow_id": 9297,
+      "structural_key": "COIN|4H_RTH|H4_222_CONTINUATION|LONG|172.65|2026-09-17",
+      "ticker": "COIN",
+      "timeframe": "4H_RTH"
+    },
+    {
+      "direction": "SHORT",
+      "plus_one_rth_session": {
+        "exit_bid": 7.63,
+        "exit_timestamp": "2026-09-17T19:32:46.552489+00:00",
+        "observation_count": 12,
+        "pnl_dollars": 6.0,
+        "resolution": "TARGET"
+      },
+      "same_session": {
+        "exit_bid": 7.63,
+        "exit_timestamp": "2026-09-17T19:32:46.552489+00:00",
+        "observation_count": 12,
+        "pnl_dollars": 6.0,
+        "resolution": "TARGET"
+      },
+      "setup_type": "H4_222_REVERSAL",
+      "shadow_id": 9302,
+      "structural_key": "IWM|4H_RTH|H4_222_REVERSAL|SHORT|286.38|2026-09-17",
+      "ticker": "IWM",
+      "timeframe": "4H_RTH"
+    },
+    {
+      "direction": "LONG",
+      "plus_one_rth_session": {
+        "exit_bid": 0.84,
+        "exit_timestamp": "2026-09-18T13:37:28.974180+00:00",
+        "observation_count": 5,
+        "pnl_dollars": -13.0,
+        "resolution": "STOP"
+      },
+      "same_session": {
+        "exit_bid": 0.98,
+        "exit_timestamp": "2026-09-17T19:57:46.552586+00:00",
+        "observation_count": 3,
+        "pnl_dollars": 1.0,
+        "resolution": "CENSORED_AT_HORIZON"
+      },
+      "setup_type": "H4_322_CONTINUATION",
+      "shadow_id": 9319,
+      "structural_key": "TLT|4H_RTH|H4_322_CONTINUATION|LONG|81.73|2026-09-17",
+      "ticker": "TLT",
+      "timeframe": "4H_RTH"
+    },
+    {
+      "direction": "LONG",
+      "plus_one_rth_session": {
+        "exit_bid": 6.85,
+        "exit_timestamp": "2026-09-17T19:52:46.552076+00:00",
+        "observation_count": 2,
+        "pnl_dollars": -15.0,
+        "resolution": "TARGET"
+      },
+      "same_session": {
+        "exit_bid": 6.85,
+        "exit_timestamp": "2026-09-17T19:52:46.552076+00:00",
+        "observation_count": 2,
+        "pnl_dollars": -15.0,
+        "resolution": "TARGET"
+      },
+      "setup_type": "H4_222_CONTINUATION",
+      "shadow_id": 9321,
+      "structural_key": "MRK|4H_RTH|H4_222_CONTINUATION|LONG|147.4|2026-09-17",
+      "ticker": "MRK",
+      "timeframe": "4H_RTH"
+    }
+  ],
+  "scope": "research_only_no_v1_tuning",
+  "study": "OPTIONS_SHADOW_HORIZON_COMPATIBILITY_V0_1"
+}
