@@ -41,17 +41,34 @@ def quote_record_from_json_line(payload: bytes) -> QuoteRecord:
 
 
 def executable_quote_projection(payload: bytes) -> dict[str, object]:
-    """Return the shared replay/forward executable-quote decision projection."""
+    """Return the shared replay/forward selector-input projection.
+
+    Identity/liquidity fields are preserved for the selector, but executable
+    bid/ask are exposed only for an OK retained record. This keeps replay from
+    rebuilding a cleaner quote than the forward evidence actually retained.
+    """
     record = quote_record_from_json_line(payload)
     executable = record.status == "OK"
     return {
         "contract_id": record.contract_id,
+        "symbol": record.contract_id,
+        "underlying": record.underlying,
+        "expiration": record.expiration,
+        "strike": record.strike,
+        "right": record.right,
+        "option_type": record.right,
         "decision_ts": record.decision_ts,
         "quote_ts": record.quote_ts,
+        "quote_timestamp": record.quote_ts,
         "source": record.source,
         "status": record.status,
         "reason_code": record.reason_code,
         "bid": record.bid if executable else None,
         "ask": record.ask if executable else None,
+        "mid": ((record.bid + record.ask) / 2.0) if executable and record.bid is not None and record.ask is not None else None,
+        "volume": record.volume,
+        "open_interest": record.open_interest,
+        "delta": record.delta,
+        "implied_volatility": record.iv,
         "executable": executable,
     }
