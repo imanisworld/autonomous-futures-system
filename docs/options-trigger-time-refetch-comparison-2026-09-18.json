@@ -1,0 +1,131 @@
+{
+  "audit_id": "OPTIONS_TRIGGER_SNAPSHOT_COMPARISON",
+  "audit_version": "trigger-compare-v0.1",
+  "claims_not_made": [
+    "byte identity with the original cov-v0.1 provider responses",
+    "trigger-time market-alignment parity",
+    "exact intrabar trigger timestamp inside the first 5-minute crossing bar",
+    "option-contract selection at trigger time",
+    "option profitability",
+    "strategy promotion"
+  ],
+  "from_date": "2026-09-09",
+  "frozen_observer_version": "cov-v0.1",
+  "frozen_old_event_rows": 944,
+  "observer_sha256": "edba1ab55e859357f38db843c48b9942e685c1b148db82e2cefafaca632df286",
+  "rows": null,
+  "snapshot_manifest_sha256": "8d9cd8a4674827abc11bf60805d53ca812c738bb28417b672a10e3f98790dc1b",
+  "snapshot_study_epoch": "NEW_REFETCH_NOT_FROZEN_COV_V0_1",
+  "snapshot_version": "trigger-bars-v0.1",
+  "summary": {
+    "armed_watch_bars": 1268,
+    "direction_changed_among_comparable": 0,
+    "family_change_transitions": {
+      "OTHER:strat_outside_continuation -> STRAT_32_CONTINUATION": 67,
+      "OTHER:strat_outside_continuation -> STRAT_32_REVERSAL": 13
+    },
+    "family_changed_among_comparable": 80,
+    "frozen_212_reversal": {
+      "additional_reversals_that_later_became_outside": 8,
+      "additional_trigger_time_reversals_absent_frozen_close_events": 8,
+      "ambiguous": 0,
+      "changed_examples": [],
+      "exact_trigger_and_invalidation_level_matches": 81,
+      "later_became_outside": 0,
+      "old_first_sight_latency_from_trigger_bar_start_minutes": {
+        "max": 47.95,
+        "median": 47.95,
+        "min": 22.95,
+        "n": 81
+      },
+      "old_rows": 81,
+      "recovered_same_family_and_direction": 81,
+      "trigger_offset_distribution": {
+        "0.0": 42,
+        "5.0": 16,
+        "10.0": 8,
+        "15.0": 6,
+        "20.0": 8,
+        "25.0": 1
+      },
+      "trigger_offset_minutes": {
+        "max": 25.0,
+        "median": 0.0,
+        "min": 0.0,
+        "n": 81
+      },
+      "trigger_status_counts": {
+        "TRIGGERED": 81
+      },
+      "trigger_time_total_reversal_rows": 89,
+      "triggered_changed_family_or_direction": 0
+    },
+    "missing_frozen_event_final_scenario_counts": {
+      "outside_bar": 54
+    },
+    "missing_frozen_event_trigger_family_counts": {
+      "OTHER:strat_122": 13,
+      "STRAT_212_CONTINUATION": 5,
+      "STRAT_212_REVERSAL": 8,
+      "STRAT_222_REVERSAL": 22,
+      "STRAT_312": 1,
+      "STRAT_322_REVERSAL": 1,
+      "STRAT_32_CONTINUATION": 3,
+      "STRAT_32_REVERSAL": 1
+    },
+    "old_first_sight_latency_from_trigger_bar_start_minutes": {
+      "max": 47.95,
+      "median": 47.95,
+      "min": 22.95,
+      "n": 506
+    },
+    "status_counts": {
+      "AMBIGUOUS": 20,
+      "CANCELLED": 447,
+      "NO_TRIGGER": 241,
+      "TRIGGERED": 560
+    },
+    "trigger_family_counts": {
+      "OTHER:strat_122": 73,
+      "STRAT_212_CONTINUATION": 64,
+      "STRAT_212_REVERSAL": 89,
+      "STRAT_222_REVERSAL": 198,
+      "STRAT_312": 22,
+      "STRAT_322_REVERSAL": 30,
+      "STRAT_32_CONTINUATION": 70,
+      "STRAT_32_REVERSAL": 14
+    },
+    "trigger_offset_minutes": {
+      "max": 25.0,
+      "median": 0.0,
+      "min": 0.0,
+      "n": 560
+    },
+    "triggered": 560,
+    "triggered_bar_later_became_outside": 54,
+    "triggered_missing_from_frozen_directional_events": 54
+  },
+  "symbols": [
+    "AAPL",
+    "MSFT",
+    "NVDA",
+    "TSLA",
+    "SPY",
+    "QQQ",
+    "AMZN",
+    "GOOGL",
+    "PLTR",
+    "INTC",
+    "IWM",
+    "TLT",
+    "JPM",
+    "BAC",
+    "COIN",
+    "XOM",
+    "MRK",
+    "WMT",
+    "NFLX",
+    "GE"
+  ],
+  "to_date": "2026-09-15"
+}
