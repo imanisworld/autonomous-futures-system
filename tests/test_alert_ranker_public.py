@@ -140,7 +140,9 @@ def test_successful_option_chain(tmp_path):
             "last": "2.10",
             "lastTimestamp": "2026-09-18T14:00:00Z",
             "bid": "2.05",
+            "bidTimestamp": "2026-09-18T13:59:58Z",
             "ask": "2.15",
+            "askTimestamp": "2026-09-18T14:00:01Z",
             "volume": 350,
             "openInterest": 1500,
             "optionDetails": {
@@ -166,7 +168,11 @@ def test_successful_option_chain(tmp_path):
         assert call.open_interest == 1500
         assert call.delta == 0.52
         assert call.implied_volatility == 0.19
-        assert call.quote_timestamp == "2026-09-18T14:00:00Z"
+        # Executable quote freshness is based on the older side of bid/ask,
+        # not lastTimestamp.
+        assert call.quote_timestamp == "2026-09-18T13:59:58Z"
+        assert call.bid_timestamp == "2026-09-18T13:59:58Z"
+        assert call.ask_timestamp == "2026-09-18T14:00:01Z"
         assert call.source == PUBLIC_OPTION_CHAIN_SOURCE
 
     asyncio.run(run())
@@ -391,3 +397,45 @@ def test_load_config_reads_public_pins(monkeypatch, tmp_path):
     assert cfg.market_data_provider in {"public", "tastytrade", "alpaca"}
     if cfg.market_data_provider == "public":
         assert cfg.market_data_configured is True
+
+
+def test_option_chain_missing_one_side_timestamp_does_not_synthesize_quote_time(tmp_path):
+    def handler(request: httpx.Request) -> httpx.Response:
+        auth = auth_ok(request)
+        if auth:
+            return auth
+        if request.url.path == EXPIRATIONS_PATH:
+            return httpx.Response(
+                200, json={"baseSymbol": "SPY", "expirations": ["2099-01-16"]}
+            )
+        contract = {
+            "instrument": {"symbol": "SPY990116C00500000", "type": "OPTION"},
+            "outcome": "SUCCESS",
+            "last": "2.10",
+            "lastTimestamp": "2026-09-18T14:00:00Z",
+            "bid": "2.05",
+            "bidTimestamp": "2026-09-18T13:59:58Z",
+            "ask": "2.15",
+            "volume": 350,
+            "openInterest": 1500,
+            "optionDetails": {
+                "greeks": {"delta": "0.52", "impliedVolatility": "0.19"},
+                "strikePrice": "500",
+                "midPrice": "2.10",
+            },
+        }
+        return httpx.Response(200, json={"baseSymbol": "SPY", "calls": [contract], "puts": []})
+
+    cfg = public_config(tmp_path)
+
+    async def run():
+        public = make_client(cfg, handler)
+        chain = await public.fetch_option_chain("SPY")
+        assert chain.error is None
+        call = chain.calls[0]
+        assert call.bid_timestamp == "2026-09-18T13:59:58Z"
+        assert call.ask_timestamp is None
+        assert call.quote_timestamp is None
+        assert call.source == PUBLIC_OPTION_CHAIN_SOURCE
+
+    asyncio.run(run())
