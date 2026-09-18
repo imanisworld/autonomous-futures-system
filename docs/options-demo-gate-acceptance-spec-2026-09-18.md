@@ -108,12 +108,11 @@ contract feasibility UNKNOWN for 91% of opportunities because no chain is retain
 | `golden_parity.missing_quote_case_covered must be explicitly true` |
 | `golden_parity.wide_spread_case_covered must be explicitly true` |
 
-## 5. Item 2B — Executable-fill reconstruction (dependent on item 2) — *needs operator confirmation of scope*
+## 5. Item 2B — Executable-fill reconstruction (dependent on item 2) — **operator-confirmed shared infrastructure**
 
 Retained quotes alone do not retire the fill-model blockers; a backtest fill engine over the retained quotes does.
 `options_manager/paper_sim.py` already implements ASK-entry / BID-exit and fails closed on a missing ask/bid; it lacks
-fees, slippage stress, no-fill, gap handling, and same-bar ambiguity. This sub-item is shared across families, which is
-why it is listed here rather than under 212R — but it was not one of the three items in the 09-18 ruling.
+fees, slippage stress, no-fill, gap handling, and same-bar ambiguity. Operator ruling 09-18 confirmed this sub-item belongs in shared infrastructure because replay families must not implement different executable-fill semantics.
 
 **Requirement.** Fill = `ask × (1 + slippage%) + fees` on entry, `bid × (1 − slippage%) − fees` on exit, from a quote whose
 `status=OK`; `NO_FILL` when the quote is `MISSING`/`STALE` or the spread exceeds the frozen limit; same-bar target-and-stop →
@@ -205,9 +204,10 @@ Acceptance is **all** of:
 | `golden_parity.underlying_invalidation_case_covered must be explicitly true` |
 | `golden_parity.event_risk_case_covered must be explicitly true` |
 
-Of these, two are pre-registration items that *may* be done offline before 09-30 without code
-(`validation.drawdown_limit_pre_registered`, `validation.concentration_limit_pre_registered`) — as a docs-only
-pre-registration for 212R, dated and hashed, if the operator wants it. Everything else needs a 212R implementation,
+Of these, two are pre-registration items that were completed offline on 09-18 without code
+(`validation.drawdown_limit_pre_registered`, `validation.concentration_limit_pre_registered`) in
+`docs/options-demo-gate-acceptance/212R_drawdown_concentration_preregistration_2026-09-18.md`.
+The preserved #653 evidence remains unchanged, so those two lines intentionally remain in the baseline 23-blocker regression target until a future evidence package mechanically references the frozen pre-registration. Everything else needs a 212R implementation,
 an option-side backtest with ≥30 resolved fills per required cell, positive after-cost expectancy, and a prospective sample
 that actually persists — none of which this spec authorizes.
 
