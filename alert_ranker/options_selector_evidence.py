@@ -16,7 +16,6 @@ historical Greeks, open interest, quote timestamps, or underlying provenance.
 
 from __future__ import annotations
 
-from dataclasses import asdict
 from datetime import datetime
 import hashlib
 import json
@@ -24,21 +23,13 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from alert_ranker.market_data import OptionChain, OptionContractQuote
-from alert_ranker.options_selector_input import serialized_selector_input_from_option_chains
 from alert_ranker.options_production_selector_replay import (
     production_selection_matches_replay,
     production_selector_code_sha256,
     replay_production_selector,
 )
-from options_manager.contracts import (
-    selection_input_from_json,
-    select_contract_from_serialized_input,
-    selector_rule_from_mapping,
-)
-
 ROOT = Path(__file__).resolve().parents[1]
-SELECTOR_RULE_PATH = ROOT / "options_manager" / "contracts" / "selector_rule_v1.json"
-EVIDENCE_VERSION = 2
+EVIDENCE_VERSION = 3
 
 
 def _canonical_json_bytes(value: Mapping[str, Any]) -> bytes:
@@ -82,13 +73,13 @@ def build_selector_evidence_capture(
     decision_ts: str,
     underlying_price: float,
     underlying_snapshot: Mapping[str, Any] | None,
-    rule_path: Path = SELECTOR_RULE_PATH,
 ) -> dict[str, Any]:
     """Build one replayable decision-time evidence envelope.
 
-    Raises when the canonical selector input cannot be represented exactly.
+    Raises when production replay evidence cannot be represented exactly.
     Callers may record that failure as DATA_BLOCKED, but must never synthesize
-    missing fields.
+    missing fields. No options_manager/canonical-selector runtime dependency is
+    required; canonical/reference analysis can be performed offline later.
     """
 
     selector_direction = "CALL" if production_direction == "LONG" else "PUT"
@@ -106,22 +97,6 @@ def build_selector_evidence_capture(
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         raise ValueError("decision_ts must be timezone-aware")
 
-    rule_bytes = rule_path.read_bytes()
-    rule_sha256 = hashlib.sha256(rule_bytes).hexdigest()
-    rule = selector_rule_from_mapping(json.loads(rule_bytes.decode("utf-8")))
-    selector_payload = serialized_selector_input_from_option_chains(
-        [chain],
-        rule_sha256=rule_sha256,
-        decision_ts=decision_ts,
-        underlying_price=underlying_price,
-        direction=selector_direction,
-    )
-    parsed_selector = selection_input_from_json(selector_payload)
-    canonical_result = select_contract_from_serialized_input(
-        rule=rule,
-        payload=selector_payload,
-    )
-
     supplements = [
         _quote_supplement(quote, expiration)
         for quote in (*chain.calls, *chain.puts)
@@ -135,6 +110,20 @@ def build_selector_evidence_capture(
         )
     )
 
+    production_code_sha = production_selector_code_sha256()
+    selector_input = {
+        "selector_authority": "OPTIONS_PAPER_V1",
+        "production_selector_code_sha256": production_code_sha,
+        "ticker": ticker.upper(),
+        "production_direction": production_direction,
+        "decision_ts": decision_ts,
+        "expiration_candidates": [str(item) for item in expirations],
+        "chosen_expiration": chosen_expiration,
+        "underlying_price": underlying_price,
+        "chain": supplements,
+    }
+    selector_payload = _canonical_json_bytes(selector_input)
+
     envelope: dict[str, Any] = {
         "evidence_version": EVIDENCE_VERSION,
         "status": "CAPTURED",
@@ -145,19 +134,19 @@ def build_selector_evidence_capture(
         "expiration_candidates": [str(item) for item in expirations],
         "chosen_expiration": chosen_expiration,
         "selector_authority": "OPTIONS_PAPER_V1",
-        "canonical_selector_role": "reference_only_not_production_authority",
-        "production_selector_code_sha256": production_selector_code_sha256(),
-        "selector_rule_sha256": rule_sha256,
+        "canonical_selector_role": "offline_reference_only_not_runtime_dependency",
+        "production_selector_code_sha256": production_code_sha,
+        "production_selector_input_sha256": hashlib.sha256(selector_payload).hexdigest(),
+        "production_selector_input_json": selector_payload.decode("utf-8").rstrip("\n"),
+        "production_selector_input_rows": len(supplements),
+        # Compatibility aliases for existing evidence readers.
         "selector_input_sha256": hashlib.sha256(selector_payload).hexdigest(),
         "selector_input_json": selector_payload.decode("utf-8").rstrip("\n"),
-        "selector_input_rows": len(parsed_selector.chain),
-        "canonical_selector_result": asdict(canonical_result),
+        "selector_input_rows": len(supplements),
         "underlying": {
             "price": underlying_price,
             "snapshot": dict(underlying_snapshot or {}),
         },
-        # Supplemental fields not present in the frozen selector schema but
-        # required for provenance/audit (side timestamps, IV, source identity).
         "chain_supplement": supplements,
     }
     envelope_bytes = _canonical_json_bytes(envelope)
