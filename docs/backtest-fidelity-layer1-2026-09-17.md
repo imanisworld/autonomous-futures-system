@@ -27,16 +27,18 @@ Existing P3 evidence already validates the bar-derived prior-week definition aga
 - polygon_to_replay uses the same helper.
 - structural_level_corpus_build requires those fields in rebuilt corpora and bumps its tool identity from slc-build-v1.4 to slc-build-v1.5.
 
-Missing source bars are not repaired or guessed. Gap/provenance evidence still decides whether a weekly extreme is admissible.
+Missing source bars are not repaired or guessed. The derived copy **fails closed**: if the immediately preceding trading week is missing any expected exchange trade date, replay carries `prev_week_high` / `prev_week_low` = `None` instead of an extreme computed from whatever bars exist (the same NOT_AVAILABLE rule the P3-validated feature builder applies). "Expected" uses the proven C14 calendar for MES/MNQ/M2K, so a holiday-shortened week (e.g. Labor Day Tue-Fri) is complete; a product with no proven calendar keeps the mechanical Mon-Fri expectation and a fully closed Good Friday (deliberately absent from the proven calendar) also fails closed for the following week. Missing bars inside a present trade date remain the corpus gap ledger's question.
 
 ## Golden fidelity regression
 
-tests/test_backtest_fidelity_golden.py freezes four boundaries:
+tests/test_backtest_fidelity_golden.py freezes six boundaries:
 
 1. Labor Day/C14 trading-week identity still points to the correct previous week.
-2. Replay candle loading preserves PWH/PWL.
-3. Replay restores those levels into KeyLevels.
-4. A target-near-PWH fixture produces identical live/replay KeyLevels and confluence scoring.
+2. A prior week missing an ordinary trade date yields PWH/PWL = None (fail closed).
+3. A holiday-shortened prior week that is otherwise complete still yields PWH/PWL.
+4. Replay candle loading preserves PWH/PWL.
+5. Replay restores those levels into KeyLevels.
+6. A target-near-PWH fixture produces identical live/replay KeyLevels and confluence scoring.
 
 This is a focused golden fixture, not a claim that every state field is globally proven identical.
 
