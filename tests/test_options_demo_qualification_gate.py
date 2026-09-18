@@ -15,9 +15,11 @@ def _evidence(tmp_path: Path) -> dict:
     underlying = tmp_path / "underlying_manifest.json"
     quotes = tmp_path / "quotes_manifest.json"
     policy = tmp_path / "options_policy.json"
+    selector = tmp_path / "selector_rule.json"
     underlying.write_text('{"frozen":true}\n', encoding="utf-8")
     quotes.write_text('{"frozen":true}\n', encoding="utf-8")
     policy.write_text('{"policy":"test"}\n', encoding="utf-8")
+    selector.write_text('{"selector":"test"}\n', encoding="utf-8")
     return {
         "strategy": "options_test",
         "classification": "PROMISING BUT UNPROVEN",
@@ -51,7 +53,8 @@ def _evidence(tmp_path: Path) -> dict:
             "no_hindsight_contract_choice": True,
             "same_selector_replay_and_forward": True,
             "selection_rule_id": "selector-v1",
-            "selection_rule_sha256": "a" * 64,
+            "selection_rule_path": str(selector),
+            "selection_rule_sha256": _sha(selector),
         },
         "data_integrity": {
             "underlying_dataset_frozen": True,
@@ -244,3 +247,85 @@ def test_midpoint_only_fill_model_cannot_qualify(tmp_path: Path, monkeypatch) ->
     )
     assert report["gate_pass"] is False
     assert any("entry_fill_basis" in x for x in report["blockers"])
+
+
+def test_bool_numeric_values_fail_closed(tmp_path: Path, monkeypatch) -> None:
+    _patch_repo(monkeypatch)
+    payload = _evidence(tmp_path)
+    payload["risk_policy"]["max_trade_risk_dollars"] = True
+    payload["validation"]["cells"][0]["expectancy_r_after_costs"] = True
+    payload["validation"]["cells"][0]["average_spread_percent"] = True
+    report = gate.build_options_demo_qualification_report(
+        strategy="options_test",
+        repo_root=tmp_path,
+        evidence_path=_write(tmp_path, payload),
+    )
+    assert report["gate_pass"] is False
+    assert any("max_trade_risk_dollars" in x for x in report["blockers"])
+    assert any("missing finite expectancy" in x for x in report["blockers"])
+    assert any("missing valid average spread" in x for x in report["blockers"])
+
+
+def test_selector_hash_is_verified_against_bytes(tmp_path: Path, monkeypatch) -> None:
+    _patch_repo(monkeypatch)
+    payload = _evidence(tmp_path)
+    payload["contract_selection"]["selection_rule_sha256"] = "0" * 64
+    report = gate.build_options_demo_qualification_report(
+        strategy="options_test",
+        repo_root=tmp_path,
+        evidence_path=_write(tmp_path, payload),
+    )
+    assert report["gate_pass"] is False
+    assert any("selection_rule_sha256" in x for x in report["blockers"])
+
+
+def test_code_sha_mismatch_blocks(tmp_path: Path, monkeypatch) -> None:
+    _patch_repo(monkeypatch)
+    payload = _evidence(tmp_path)
+    payload["provenance"]["code_sha"] = "wrong"
+    report = gate.build_options_demo_qualification_report(
+        strategy="options_test",
+        repo_root=tmp_path,
+        evidence_path=_write(tmp_path, payload),
+    )
+    assert report["gate_pass"] is False
+    assert any("code_sha" in x for x in report["blockers"])
+
+
+def test_base_sha_equal_to_head_blocks(tmp_path: Path, monkeypatch) -> None:
+    _patch_repo(monkeypatch, changed="")
+    payload = _evidence(tmp_path)
+    payload["change_scope"]["base_sha"] = "head123"
+    report = gate.build_options_demo_qualification_report(
+        strategy="options_test",
+        repo_root=tmp_path,
+        evidence_path=_write(tmp_path, payload),
+    )
+    assert report["gate_pass"] is False
+    assert any("pre-change commit" in x for x in report["blockers"])
+
+
+def test_lookahead_true_blocks(tmp_path: Path, monkeypatch) -> None:
+    _patch_repo(monkeypatch)
+    payload = _evidence(tmp_path)
+    payload["strategy_identity"]["lookahead_or_future_leak"] = True
+    report = gate.build_options_demo_qualification_report(
+        strategy="options_test",
+        repo_root=tmp_path,
+        evidence_path=_write(tmp_path, payload),
+    )
+    assert report["gate_pass"] is False
+    assert any("lookahead_or_future_leak" in x for x in report["blockers"])
+
+
+def test_bad_classification_blocks(tmp_path: Path, monkeypatch) -> None:
+    _patch_repo(monkeypatch)
+    payload = _evidence(tmp_path)
+    payload["classification"] = "WAIT"
+    report = gate.build_options_demo_qualification_report(
+        strategy="options_test",
+        repo_root=tmp_path,
+        evidence_path=_write(tmp_path, payload),
+    )
+    assert report["gate_pass"] is False
+    assert any("classification" in x for x in report["blockers"])
