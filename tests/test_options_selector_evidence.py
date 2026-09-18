@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import ast
 import hashlib
+from pathlib import Path
 
 from alert_ranker.market_data import (
     OptionChain,
@@ -222,3 +224,18 @@ def test_finalize_fails_closed_when_production_replay_mismatches():
     assert final["status"] == "DATA_BLOCKED"
     assert final["reason_code"] == "production_replay_mismatch"
     assert final["production_replay_parity"] is False
+
+
+def test_runtime_selector_evidence_modules_do_not_import_options_manager():
+    for path in (
+        Path("alert_ranker/options_selector_evidence.py"),
+        Path("alert_ranker/options_production_selector_replay.py"),
+    ):
+        tree = ast.parse(path.read_text())
+        imports = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imports.extend(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                imports.append(node.module)
+        assert not any(name == "options_manager" or name.startswith("options_manager.") for name in imports)
