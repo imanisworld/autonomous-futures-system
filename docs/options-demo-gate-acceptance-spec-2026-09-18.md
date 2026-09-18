@@ -78,6 +78,20 @@ with `quote_ts ≤ decision_ts` (rows violating this are excluded before ranking
 
 ## 4. Item 2 — Timestamped option-quote retention
 
+**Implementation status (2026-09-18).** PR #661 merged as `a9fee8c` and establishes the
+canonical retention foundation: required quote schema, frozen 900-second freshness rule, fail-closed
+`OK/MISSING/STALE/FUTURE/INVALID/WIDE_SPREAD` statuses, canonical JSONL, rule SHA provenance, and
+reproducible schema/provenance-checked manifests. PR #664 merged as `70fa9c4` and wires that model into
+the canonical Phase-1 advisory intake: quote evidence is now required for canonical requests, non-`OK`
+records block `TAKE`, quote identity is reconciled against the independently validated contract record,
+rule-load failure fails closed, and the normalized `QuoteRecord` is persisted in the options advisory
+journal. **Item 2 is not yet complete for blocker retirement.** The frozen v1 source allowlist remains
+fixture-only; the existing scanner/Public market-data client has a real read-only option-chain endpoint,
+but the retained quote model is not yet mechanically fed from that provider with provider+endpoint source
+identity and decision-time quote timestamps. Backtest/replay dataset emission, manifest file materialization,
+gate `_hash_check`, and replay/forward golden parity also remain outstanding. Therefore none of the 12
+Item-2 baseline blockers should be marked retired solely because #661/#664 merged.
+
 **Requirement.** At every decision point that reaches contract stage (and, for backtest reconstruction, at every
 candidate decision point the backtest is claimed over), persist a quote record sufficient to reconstruct an executable
 fill later: `contract_id, underlying, expiration, strike, right, bid, ask, quote_ts, decision_ts, source, volume, open_interest, delta, iv`.
