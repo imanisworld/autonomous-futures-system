@@ -13,7 +13,7 @@ row survives, the result is NO_CONTRACT.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from datetime import date, datetime
 import json
 import math
@@ -49,6 +49,17 @@ class OptionChainRow:
     open_interest: int
     delta: float
     dte: int
+
+
+@dataclass(frozen=True)
+class ContractSelectionInput:
+    """Canonical serialized selector input shared by replay and forward proof paths."""
+
+    rule_sha256: str
+    decision_ts: str
+    underlying_price: float
+    direction: OptionRight
+    chain: tuple[OptionChainRow, ...]
 
 
 @dataclass(frozen=True)
@@ -135,6 +146,97 @@ def selection_result_json(result: ContractSelectionResult) -> str:
     """Canonical byte-stable JSON serialization for evidence/parity checks."""
 
     return json.dumps(asdict(result), sort_keys=True, separators=(",", ":")) + "\n"
+
+
+def selection_input_json(value: ContractSelectionInput) -> str:
+    """Canonical byte-stable selector input serialization."""
+
+    return json.dumps(asdict(value), sort_keys=True, separators=(",", ":")) + "\n"
+
+
+def selection_input_from_json(payload: bytes | str) -> ContractSelectionInput:
+    """Parse one canonical selector input record and fail closed on schema drift."""
+
+    if isinstance(payload, bytes):
+        try:
+            text = payload.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ValueError("selector input is not valid UTF-8") from exc
+    elif isinstance(payload, str):
+        text = payload
+    else:
+        raise ValueError("selector input must be bytes or string")
+
+    if not text.strip() or "\n" in text.rstrip("\n"):
+        raise ValueError("selector input must contain exactly one JSON record")
+    try:
+        raw = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ValueError("selector input is not valid JSON") from exc
+    if not isinstance(raw, dict):
+        raise ValueError("selector input must be a JSON object")
+
+    expected = {"rule_sha256", "decision_ts", "underlying_price", "direction", "chain"}
+    missing = sorted(expected - set(raw))
+    extra = sorted(set(raw) - expected)
+    if missing or extra:
+        raise ValueError(f"selector input schema mismatch: missing={missing}, extra={extra}")
+
+    chain = raw["chain"]
+    if not isinstance(chain, list):
+        raise ValueError("selector input chain must be a list")
+
+    row_fields = {item.name for item in fields(OptionChainRow)}
+    parsed_rows: list[OptionChainRow] = []
+    for index, row in enumerate(chain):
+        if not isinstance(row, dict):
+            raise ValueError(f"selector input chain[{index}] must be an object")
+        row_missing = sorted(row_fields - set(row))
+        row_extra = sorted(set(row) - row_fields)
+        if row_missing or row_extra:
+            raise ValueError(
+                f"selector input chain[{index}] schema mismatch: "
+                f"missing={row_missing}, extra={row_extra}"
+            )
+        try:
+            parsed_rows.append(OptionChainRow(**row))
+        except TypeError as exc:
+            raise ValueError(f"selector input chain[{index}] is malformed") from exc
+
+    return ContractSelectionInput(
+        rule_sha256=raw["rule_sha256"],
+        decision_ts=raw["decision_ts"],
+        underlying_price=raw["underlying_price"],
+        direction=raw["direction"],
+        chain=tuple(parsed_rows),
+    )
+
+
+def select_contract_from_serialized_input(
+    *,
+    rule: SelectorRule,
+    payload: bytes | str,
+) -> ContractSelectionResult:
+    """Run the canonical selector from the exact serialized input bytes."""
+
+    try:
+        value = selection_input_from_json(payload)
+    except ValueError:
+        return ContractSelectionResult(
+            status="NO_CONTRACT",
+            reason_code="serialized_input_invalid",
+            rule_id=rule.rule_id,
+            rule_sha256="",
+        )
+
+    return select_contract(
+        rule=rule,
+        rule_sha256=value.rule_sha256,
+        decision_ts=value.decision_ts,
+        underlying_price=value.underlying_price,
+        direction=value.direction,
+        chain=value.chain,
+    )
 
 
 def _parse_ts(value: str) -> datetime:
