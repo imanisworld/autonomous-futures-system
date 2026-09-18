@@ -8,9 +8,12 @@ non-canonical. No broker calls or order calls exist here.
 
 from __future__ import annotations
 
+import hashlib
 import ipaddress
+import json
 import logging
 import os
+from pathlib import Path
 import secrets as secrets_module
 
 from fastapi import FastAPI, Request
@@ -21,6 +24,7 @@ from .journal import log_advisory_decision
 from .live_lock import assert_live_options_trading_disabled
 from .notify import notify_advisory_decision
 from .packet_builder import build_packet
+from .quotes import retention_rule_from_mapping
 from .validation.advisory_decision import check_advisory_decision_intake
 
 logger = logging.getLogger(__name__)
@@ -32,6 +36,14 @@ app = FastAPI(title="options_manager", version="0.2.0-advisory")
 SECRET_HEADER = "X-Options-Manager-Secret"
 GENERIC_INVALID_PACKET_DETAIL = "missing or malformed packet field"
 _CANONICAL_SECTION_KEYS = frozenset(("proof_packet", "contract_quality", "portfolio_risk"))
+
+_QUOTE_RULE_PATH = Path(__file__).resolve().parent / "quotes" / "quote_retention_rule_v1.json"
+
+
+def _load_quote_retention_rule():
+    raw = _QUOTE_RULE_PATH.read_bytes()
+    mapping = json.loads(raw.decode("utf-8"))
+    return retention_rule_from_mapping(mapping), hashlib.sha256(raw).hexdigest()
 
 
 def _auth_ok(request: Request, config: OptionsManagerConfig) -> bool:
@@ -88,9 +100,13 @@ async def receive_packet(request: Request) -> JSONResponse:
         )
 
     if _is_canonical_payload(raw_input):
+        quote_rule, quote_rule_sha256 = _load_quote_retention_rule()
         result = check_advisory_decision_intake(
             raw_input,
             require_portfolio_risk=True,
+            require_quote_retention=True,
+            quote_retention_rule=quote_rule,
+            quote_retention_rule_sha256=quote_rule_sha256,
             # No default budget lives below this line. Unset here means the
             # portfolio gate blocks and the verdict cannot be TAKE.
             max_aggregate_open_risk_dollars=config.max_aggregate_open_risk_dollars,
@@ -115,6 +131,8 @@ async def receive_packet(request: Request) -> JSONResponse:
                 "proof_valid": result.proof_valid,
                 "contract_verdict": result.contract_verdict.value,
                 "portfolio_verdict": result.portfolio_verdict.value,
+                "quote_retention_approved": result.quote_retention_approved,
+                "quote_status": result.quote_record.status if result.quote_record is not None else None,
                 "blocking_reasons": list(result.blocking_reasons),
                 "warnings": list(result.warnings),
                 "no_trade_reasons": [reason.value for reason in result.no_trade_reasons],
