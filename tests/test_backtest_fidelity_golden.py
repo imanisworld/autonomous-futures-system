@@ -9,7 +9,8 @@ from replay.candle_loader import ReplayCandleLoader
 from replay.replay_engine import ReplayEngine
 from scripts.csv_to_replay import previous_week_extremes
 from strategy.confluence_scorer import score_setup
-from strategy.signal_engine import SetupDetail
+from risk.risk_engine import DailyState
+from strategy.signal_engine import DecisionEngine, SetupDetail
 from webhook.payload import AlertPayload
 from webhook.state_builder import build_market_state
 
@@ -162,3 +163,96 @@ def test_live_and_replay_key_levels_and_pwh_confluence_match(tmp_path: Path, con
 
     assert replay_score == live_score
     assert any("Target near PWH" in factor for factor in live_score.factors)
+
+
+def test_live_and_replay_decision_output_match_on_golden_ny_bar(tmp_path: Path, config) -> None:
+    payload = AlertPayload(
+        ticker="MNQ1!",
+        timestamp="2026-09-17T14:30:00+00:00",
+        timeframe="15m",
+        open=19480.0,
+        high=19510.0,
+        low=19475.0,
+        close=19505.25,
+        volume=4200,
+        avg_volume=3800,
+        vwap=19495.0,
+        vwap_reclaimed=True,
+        orb_high=19498.0,
+        orb_low=19462.0,
+        orb_status="reclaimed_high",
+        market_condition="TRENDING",
+        trend_direction="UP",
+        trend_strength="MODERATE",
+        previous_day_high=19520.0,
+        previous_day_low=19440.0,
+        previous_day_close=19475.0,
+        previous_bar_high=19500.0,
+        previous_bar_low=19490.0,
+        prev_week_high=19600.0,
+        prev_week_low=19200.0,
+    )
+    live = build_market_state(payload)
+
+    # Replay derives vwap_reclaimed from the previous/current bar relationship,
+    # so provide the causal prior bar rather than copying the live boolean.
+    previous = _load_one(
+        tmp_path,
+        _replay_row(
+            timestamp="2026-09-17T14:15:00+00:00",
+            open=19485.0,
+            high=19498.0,
+            low=19470.0,
+            close=19490.0,
+            vwap=19495.0,
+            price_vs_vwap="below",
+            orb_status="inside",
+            prev_week_high=19600.0,
+            prev_week_low=19200.0,
+        ),
+    )
+    current = _load_one(
+        tmp_path,
+        _replay_row(
+            open=19480.0,
+            high=19510.0,
+            low=19475.0,
+            close=19505.25,
+            volume=4200,
+            avg_volume=3800,
+            vwap=19495.0,
+            price_vs_vwap="above",
+            orb_high=19498.0,
+            orb_low=19462.0,
+            orb_status="reclaimed_high",
+            market_condition=live.market_condition,
+            trend_direction=live.trend.direction,
+            trend_strength=live.trend.strength,
+            previous_day_high=19520.0,
+            previous_day_low=19440.0,
+            previous_day_close=19475.0,
+            price_vs_pdh="below",
+            price_vs_pdl="above",
+            previous_bar_high=19500.0,
+            previous_bar_low=19490.0,
+            prev_week_high=19600.0,
+            prev_week_low=19200.0,
+            hod=None,
+            lod=None,
+            ema_9=None,
+            ema_21=None,
+            ema_55=None,
+            ema_200=None,
+        ),
+    )
+    replay = ReplayEngine(
+        config=config,
+        log_dir=str(tmp_path / "decision-replay"),
+        htf_lookup=HTFLookup(),
+    )._market_state_from_candle(current, prev_candle=previous)
+
+    live_decision = DecisionEngine(config=config).evaluate(live, DailyState())
+    replay_decision = DecisionEngine(config=config).evaluate(replay, DailyState())
+
+    assert replay.vwap.reclaimed is live.vwap.reclaimed is True
+    assert replay_decision.to_dict() == live_decision.to_dict()
