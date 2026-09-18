@@ -2,7 +2,7 @@
 
 ## Status
 
-**BUILT OFFLINE / OBSERVATION ONLY / NOT DEPLOYED.**
+**BUILT OFFLINE / OBSERVATION ONLY / NOT DEPLOYED / CURRENT REAL-TIME SIP ENTITLEMENT BLOCKED.**
 
 This is the missing Phase-1 bridge between the proven 212R trigger-time model and the already-built `OPTIONS_PAPER_V1` prospective selector-evidence path.
 
@@ -16,6 +16,8 @@ Collector v0.2 uses two read-only market-data sources with separate roles:
 - **Alpaca consolidated SIP trades** resolve the exact strict-through underlying crossing timestamp inside the already-proven Public 5-minute trigger bucket.
 
 The Public structure source remains separately labeled and is not relabeled as SIP.
+
+Current deployment blocker discovered in isolated RTH testing: the configured Alpaca account rejects consolidated SIP trade queries inside the latest 15 minutes with HTTP 403 (`subscription does not permit querying recent SIP data`). Same-day SIP windows older than that restriction remain usable for historical/reconciliation work. Collector v0.3 therefore cannot honestly perform its intended real-time exact-SIP first-break detection on the current entitlement. IEX or delayed SIP must not be silently substituted and called equivalent evidence.
 
 The collector uses the separately proven Public source:
 
@@ -130,9 +132,10 @@ That is the intended no-hindsight behavior.
 ## Still required before deployment
 
 - independent review + CI;
+- resolve real-time first-break source access: either prove current credentials can query real-time consolidated SIP or explicitly validate a different prospective trigger source with later SIP reconciliation;
 - explicit operator choice of the prospective capture-lag limit and timer cadence;
 - a service-specific collector release/location that cannot mutate scanner/risk/broker state;
-- first live `ARMED -> exact SIP cross -> selector evidence` proof during RTH;
+- first live `ARMED -> proven first break -> selector evidence` proof during RTH;
 - delayed SIP context/source reconciliation;
 - only then accumulation of option-side outcome evidence.
 
