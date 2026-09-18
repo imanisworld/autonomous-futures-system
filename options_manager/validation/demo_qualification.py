@@ -27,6 +27,8 @@ def _text(sec: dict[str, Any], key: str, blockers: list[str], prefix: str) -> st
 
 
 def _number(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
     try:
         n = float(value)
     except (TypeError, ValueError):
@@ -35,6 +37,8 @@ def _number(value: Any) -> float | None:
 
 
 def _integer(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
     try:
         return int(value)
     except (TypeError, ValueError):
@@ -274,7 +278,15 @@ def build_options_demo_qualification_report(*, strategy: str, repo_root: str | P
         "quote_timestamp_aligned_to_decision", "no_hindsight_contract_choice",
         "same_selector_replay_and_forward"))
     _text(selection, "selection_rule_id", blockers, "contract_selection")
-    _text(selection, "selection_rule_sha256", blockers, "contract_selection")
+    selection_rule_check = _hash_check(
+        root,
+        selection,
+        "selection_rule_path",
+        "selection_rule_sha256",
+        blockers,
+        "contract_selection",
+    )
+    selection = {**selection, "selection_rule_check": selection_rule_check}
     data = _data(root, ev, blockers)
     fills = _fills(ev, blockers)
     risk = _risk(ev, blockers)
