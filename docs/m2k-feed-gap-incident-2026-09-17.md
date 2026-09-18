@@ -50,7 +50,7 @@ Do not:
 - use detector windows or hypothetical outcome paths that cross the missing interval for validation/promotion;
 - attribute the entire 13:30Z–16:00Z gap to the malformed-secret bug.
 
-Any future completeness gate should mark candidate/resolution windows crossing this interval as contaminated and exclude them from readiness counts.
+The deployed `cross_instrument_evidence_quality_v1` gate was subsequently audited against the real incident data. It identified **8 M2K terminal outcomes** whose detector dependency / signal-to-resolution windows crossed the missing interval; each was tagged `DATA_GAP_CONTAMINATED` and returned `eligible=false`. The missing-bar continuity protection is therefore implemented and working for terminal-outcome readiness.
 
 ## Evidence sources
 
