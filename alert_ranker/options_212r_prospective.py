@@ -25,6 +25,7 @@ PROSPECTIVE_212R_VERSION = "212r-prospective-v0.1"
 @dataclass(frozen=True)
 class Prospective212Observation:
     setup_id: str
+    setup_fingerprint: str
     ticker: str
     session_date: str
     watch_start: str
@@ -106,11 +107,18 @@ def _parse_observation_ts(value: str | None) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
-def _setup_id(ticker: str, watch_start: datetime, *, high: float, low: float, reference: str | None) -> str:
+def _setup_id(ticker: str, watch_start: datetime) -> str:
     raw = {
         "ticker": ticker.upper(),
         "watch_start": watch_start.astimezone(timezone.utc).isoformat(),
         "pattern": "212",
+    }
+    payload = json.dumps(raw, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _setup_fingerprint(*, high: float, low: float, reference: str | None) -> str:
+    raw = {
         "boundary_high": float(high),
         "boundary_low": float(low),
         "reference_direction": reference,
@@ -179,9 +187,9 @@ def observe_212_setups(
         if missing:
             out.append(
                 Prospective212Observation(
-                    setup_id=_setup_id(
-                        ticker, watch_start, high=armed.boundary_high, low=armed.boundary_low,
-                        reference=armed.reference_direction,
+                    setup_id=_setup_id(ticker, watch_start),
+                    setup_fingerprint=_setup_fingerprint(
+                        high=armed.boundary_high, low=armed.boundary_low, reference=armed.reference_direction
                     ),
                     ticker=ticker.upper(), session_date=session.date.isoformat(),
                     watch_start=watch_start.isoformat(), watch_until=watch_until.isoformat(),
@@ -232,12 +240,9 @@ def observe_212_setups(
         detectable = trigger_start + MINUTE_5.delta if trigger_start is not None else None
         out.append(
             Prospective212Observation(
-                setup_id=_setup_id(
-                    ticker,
-                    watch_start,
-                    high=armed.boundary_high,
-                    low=armed.boundary_low,
-                    reference=armed.reference_direction,
+                setup_id=_setup_id(ticker, watch_start),
+                setup_fingerprint=_setup_fingerprint(
+                    high=armed.boundary_high, low=armed.boundary_low, reference=armed.reference_direction
                 ),
                 ticker=ticker.upper(),
                 session_date=session.date.isoformat(),

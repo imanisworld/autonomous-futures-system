@@ -82,6 +82,8 @@ Default path: `logs/options_212r_prospective.jsonl`.
 
 The journal is append-only and independent of `options_scanner.sqlite`. It stores `ARMED` and terminal `RESOLUTION` records. Malformed existing journal rows fail closed instead of being skipped.
 
+Setup identity is stable by ticker + watch window + pattern. The exact Public boundary levels/reference direction are stored under a separate source fingerprint. If a completed Public bar is later revised and the same setup identity produces different frozen boundaries, the lane records source drift and fails the event closed instead of silently creating a second setup.
+
 ## Current RTH smoke
 
 A read-only dry run over the primary 20 at 2026-09-18T18:29:57Z reconstructed 14 212R reversals and 21 total terminal 212 setup resolutions from the session.
