@@ -18,6 +18,7 @@ import pytest
 from alert_ranker.config import ScannerConfig, load_config
 from alert_ranker.market_data import (
     PUBLIC_AUTH_TOKEN_PATH,
+    PUBLIC_OPTION_CHAIN_SOURCE,
     PublicMarketDataClient,
     build_provider_capabilities,
 )
@@ -137,6 +138,7 @@ def test_successful_option_chain(tmp_path):
             "instrument": {"symbol": "SPY990116C00500000", "type": "OPTION"},
             "outcome": "SUCCESS",
             "last": "2.10",
+            "lastTimestamp": "2026-09-18T14:00:00Z",
             "bid": "2.05",
             "ask": "2.15",
             "volume": 350,
@@ -164,6 +166,8 @@ def test_successful_option_chain(tmp_path):
         assert call.open_interest == 1500
         assert call.delta == 0.52
         assert call.implied_volatility == 0.19
+        assert call.quote_timestamp == "2026-09-18T14:00:00Z"
+        assert call.source == PUBLIC_OPTION_CHAIN_SOURCE
 
     asyncio.run(run())
 
