@@ -14,6 +14,7 @@ from options_manager.quotes import (
     retain_quote,
     retention_rule_from_mapping,
 )
+from options_manager.validation.demo_qualification import _hash_check
 
 RULE_PATH = Path("options_manager/quotes/quote_retention_rule_v1.json")
 
@@ -99,6 +100,28 @@ def test_manifest_serialization_is_canonical_for_gate_hash(tmp_path):
     path.write_bytes(first)
     evidence_sha = hashlib.sha256(first).hexdigest()
     assert hashlib.sha256(path.read_bytes()).hexdigest() == evidence_sha
+
+
+def test_canonical_manifest_passes_demo_gate_hash_and_tamper_fails(tmp_path):
+    row = quote_record_json(_retain()).encode()
+    manifest = build_quote_manifest({"quotes/day.jsonl": row}, rule=_rule(), rule_sha256=_rule_sha())
+    path = tmp_path / "option_quotes_manifest.json"
+    payload = quote_manifest_json(manifest).encode("utf-8")
+    path.write_bytes(payload)
+    claimed = hashlib.sha256(payload).hexdigest()
+    section = {"option_quotes_manifest_path": path.name, "option_quotes_manifest_sha256": claimed}
+
+    blockers: list[str] = []
+    check = _hash_check(tmp_path, section, "option_quotes_manifest_path", "option_quotes_manifest_sha256", blockers, "data_integrity")
+    assert blockers == []
+    assert check["claimed_sha256"] == claimed
+    assert check["actual_sha256"] == claimed
+
+    path.write_bytes(payload + b"\n")
+    blockers = []
+    check = _hash_check(tmp_path, section, "option_quotes_manifest_path", "option_quotes_manifest_sha256", blockers, "data_integrity")
+    assert blockers == ["data_integrity.option_quotes_manifest_sha256 does not match current bytes"]
+    assert check["actual_sha256"] != claimed
 
 
 def test_manifest_rejects_unknown_source():
