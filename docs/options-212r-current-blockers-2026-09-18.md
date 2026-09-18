@@ -199,26 +199,31 @@ The stress engine exists, but the numeric qualification policy still needs a fro
 
 Production-selector evidence capture is already deployed for the **current running V1 scanner**.
 
-It is useful, but it is **not sufficient to collect 212R option evidence**, because `alert_ranker.trigger_time` remains research/offline and 212R is not a running production strategy family.
+The dedicated 212R prospective collector is now also **built in code** (#730), but it is **not deployed or scheduled** and it does not make 212R a running strategy family. Its evidence journal is isolated from scanner trade/risk state.
 
-The repository currently has no runtime/advisory path that watches a 212R precursor, detects the causal lower-timeframe break, and captures the production-selector option-chain evidence at that trigger while remaining observation-only.
+The collector already:
+1. arms completed 30m 2-1-2 reversal precursors using the proven trigger-time model;
+2. resolves the first causal lower-timeframe break without waiting for the 30m close;
+3. preserves source entry, inside-bar invalidation, and source magnitude;
+4. defers SPY/QQQ + HTF policy use rather than inventing an unapproved alignment gate;
+5. reads only Public market-data / option-chain inputs required by the existing production selector;
+6. retains underlying provenance, chain fields, side timestamps, selected contract, selector source hash, and production replay parity;
+7. writes isolated append-only JSONL evidence;
+8. has no alert, ACTIVE risk, broker/account, order, DEMO, or live path;
+9. fails closed on missing 5m evidence, source revision, missing pre-arm, late capture, quote problems, or selector replay mismatch.
 
-## Actual next build
+## Actual next gate
 
-The next missing Phase-1 component for 212R is an **observation-only prospective trigger-evidence collector**.
+There is **no missing Phase-1 collector build** now.
 
-It should:
-1. arm completed 30m 2-1-2 reversal precursors using the proven trigger-time model;
-2. detect the first causal lower-timeframe break without waiting for the 30m bar close;
-3. preserve source entry, inside-bar invalidation, and source magnitude;
-4. record SPY/QQQ + HTF context as fields without using an unapproved alignment variant to promote the signal;
-5. fetch/read only the option-chain data required by the existing production selector;
-6. retain underlying quote provenance, full chain fields, bid/ask side timestamps, volume, OI, delta, IV, selected contract, selector source hash, and production replay parity;
-7. write to isolated evidence storage;
-8. never alert as a trade, reserve ACTIVE risk, submit an order, or reach a broker path;
-9. fail closed on missing trigger, missing invalidation, missing quote evidence, selector mismatch, or stale data.
+Before any deployment/scheduling of #730, two things remain explicit operator/policy gates:
 
-Only after that lane accumulates real prospective rows should existing fill-realism and risk tooling be used to calculate option-side expectancy.
+- choose and pre-register a numeric `max_capture_lag_seconds` value; the CLI intentionally has no default and prior 60-second review runs were mechanics-only, not policy;
+- separately authorize an observation-only deployment/schedule if desired.
+
+Do not invent either value/action in code.
+
+After an authorized collector begins accumulating real prospective rows, existing fill-realism and risk tooling can be used to calculate option-side evidence. Historical exact option replay remains blocked by missing causal historical Delta and contract-level OI.
 
 ## Current verdict
 
