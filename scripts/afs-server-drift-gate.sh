@@ -81,6 +81,64 @@ release_integrity_check() {
   PYTHONPATH="$LIVE" "$PYTHON" -m ops.release_integrity --repo-root "$LIVE"
 }
 
+options_scanner_release_check() {
+  local pid runtime_root configured_root scanner_python commit integrity
+
+  command -v systemctl >/dev/null 2>&1 || return 0
+  systemctl is-active --quiet options-scanner 2>/dev/null || return 0
+
+  pid="$(systemctl show options-scanner -p MainPID --value 2>/dev/null || true)"
+  [[ -n "$pid" && "$pid" != "0" ]] || {
+    echo "options-scanner active but MainPID unavailable"
+    return 1
+  }
+
+  runtime_root="$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)"
+  configured_root="$(systemctl show options-scanner -p WorkingDirectory --value 2>/dev/null || true)"
+  [[ -n "$runtime_root" && -d "$runtime_root" ]] || {
+    echo "options-scanner runtime cwd unavailable"
+    return 1
+  }
+
+  if [[ -n "$configured_root" ]]; then
+    configured_root="$(readlink -f "$configured_root" 2>/dev/null || printf '%s' "$configured_root")"
+    if [[ "$runtime_root" != "$configured_root" ]]; then
+      echo "options-scanner cwd mismatch: runtime=$runtime_root configured=$configured_root"
+      return 1
+    fi
+  fi
+
+  [[ -f "$runtime_root/release_manifest.json" ]] || {
+    echo "options-scanner release manifest missing: $runtime_root"
+    return 1
+  }
+
+  scanner_python="$runtime_root/.venv/bin/python"
+  [[ -x "$scanner_python" ]] || scanner_python="$runtime_root/.venv/bin/python3"
+  [[ -x "$scanner_python" ]] || {
+    echo "options-scanner release python missing: $runtime_root/.venv/bin"
+    return 1
+  }
+
+  if ! integrity="$(PYTHONPATH="$runtime_root" "$scanner_python" -m ops.release_integrity --repo-root "$runtime_root" 2>&1)"; then
+    printf '%s\n' "$integrity"
+    return 1
+  fi
+
+  commit="$(python3 - "$runtime_root/release_manifest.json" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1], encoding="utf-8"))
+print((data.get("repo") or {}).get("commit") or "")
+PY
+)"
+  [[ -n "$commit" ]] || {
+    echo "options-scanner manifest commit missing"
+    return 1
+  }
+
+  printf 'OK options-scanner release-integrity: %s (%s)\n' "${commit:0:12}" "$runtime_root"
+}
+
 discord_hook() {
   env_value DISCORD_ROUTE_DEPLOYMENT 2>/dev/null \
     || env_value DISCORD_ROUTE_ERROR 2>/dev/null \
@@ -144,12 +202,12 @@ main_ahead_report() {
 
   count="$(wc -l < "$drift" | tr -d ' ')"
   if [[ "$count" -eq 0 ]]; then
-    [[ "$QUIET" -eq 1 ]] || log_line "INFO main-ahead: live release matches current main for compared runtime files"
+    [[ "$QUIET" -eq 1 ]] || log_line "INFO main-vs-primary-release: primary futures release matches current main for compared runtime files"
     rm -rf "$tmp"
     return 0
   fi
 
-  log_line "INFO main-ahead: $count merged-but-unshipped runtime item(s); informational only, release integrity is authoritative"
+  log_line "INFO main-vs-primary-release: $count difference(s); informational only, service-specific releases may legitimately differ"
   if [[ "$QUIET" -ne 1 ]]; then
     sed -n '1,20p' "$drift"
     if [[ "$count" -gt 20 ]]; then
@@ -195,6 +253,18 @@ run_gate() {
   fi
 
   [[ "$QUIET" -eq 1 ]] || log_line "OK release-integrity: ${manifest_commit:0:12} matches manifest and durable pins"
+
+  local options_integrity
+  if ! options_integrity="$(options_scanner_release_check 2>&1)"; then
+    body="$options_integrity"
+    log_line "ALARM release-drift: options-scanner release integrity FAILED"
+    printf '%s\n' "$body"
+    post_red_alert "🚨 **AFS release drift: options-scanner release integrity FAILED**" "$body"
+    return 1
+  fi
+  if [[ -n "$options_integrity" && "$QUIET" -ne 1 ]]; then
+    printf '%s\n' "$options_integrity" | tee -a "$LOG"
+  fi
 
   if [[ "$INFO_MAIN" == "1" ]]; then
     main_ahead_report
