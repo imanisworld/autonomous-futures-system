@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+from datetime import datetime
 import os
 from typing import Any, Protocol
 
@@ -127,6 +128,8 @@ class OptionContractQuote:
     delta: float | None
     implied_volatility: float | None
     quote_timestamp: str | None = None
+    bid_timestamp: str | None = None
+    ask_timestamp: str | None = None
     source: str | None = None
 
 
@@ -572,13 +575,43 @@ def _parse_public_contracts(items: Any, option_type: str) -> tuple[OptionContrac
                 open_interest=_first_float(item, ("openInterest",)),
                 delta=_first_float(greeks, ("delta",)),
                 implied_volatility=_first_float(greeks, ("impliedVolatility",)),
-                quote_timestamp=(
-                    str(item.get("lastTimestamp")) if item.get("lastTimestamp") else None
+                quote_timestamp=_executable_quote_timestamp(
+                    item.get("bidTimestamp"), item.get("askTimestamp")
+                ),
+                bid_timestamp=(
+                    str(item.get("bidTimestamp")) if item.get("bidTimestamp") else None
+                ),
+                ask_timestamp=(
+                    str(item.get("askTimestamp")) if item.get("askTimestamp") else None
                 ),
                 source=PUBLIC_OPTION_CHAIN_SOURCE,
             )
         )
     return tuple(contracts)
+
+
+def _executable_quote_timestamp(bid_ts: Any, ask_ts: Any) -> str | None:
+    """Conservative timestamp for an executable bid/ask pair.
+
+    Both sides must carry timezone-aware timestamps. The older side is used so
+    freshness checks attest the age of the full executable pair rather than the
+    newer side or an unrelated last-trade timestamp.
+    """
+    if not bid_ts or not ask_ts:
+        return None
+    try:
+        bid_dt = datetime.fromisoformat(str(bid_ts).replace("Z", "+00:00"))
+        ask_dt = datetime.fromisoformat(str(ask_ts).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if (
+        bid_dt.tzinfo is None
+        or bid_dt.utcoffset() is None
+        or ask_dt.tzinfo is None
+        or ask_dt.utcoffset() is None
+    ):
+        return None
+    return str(bid_ts) if bid_dt <= ask_dt else str(ask_ts)
 
 
 def _midpoint(quote: dict[str, Any]) -> float | None:
