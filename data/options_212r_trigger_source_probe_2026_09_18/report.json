@@ -1,478 +1,571 @@
 {
-  "captured_at": "2026-09-18T18:21:54.414263+00:00",
+  "captured_at": "2026-09-18T18:30:17.537925+00:00",
   "claims_not_made": [
     "Public bars are byte-identical to Alpaca SIP",
     "212R has positive option expectancy",
     "strategy promotion",
     "DEMO or live authorization"
   ],
+  "completed_at": "2026-09-18T18:30:37.147112+00:00",
   "probe_id": "OPTIONS_212R_TRIGGER_SOURCE_PROBE",
   "public": {
     "AAPL": {
       "day_5m": {
-        "complete_bars": 58,
+        "complete_bars": 60,
         "ignored_off_grid": 1,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T18:15:00+00:00"
+        "latest_complete_start": "2026-09-18T18:25:00+00:00"
       },
       "quote": {
-        "ask_age_seconds": 0.414,
-        "ask_timestamp": "2026-09-18T18:21:54Z",
-        "bid_age_seconds": 0.414,
-        "bid_timestamp": "2026-09-18T18:21:54Z",
-        "last_age_seconds": 0.414,
-        "last_timestamp": "2026-09-18T18:21:54Z",
-        "outcome": "SUCCESS"
+        "ask_age_seconds": 1.02,
+        "ask_timestamp": "2026-09-18T18:30:17Z",
+        "ask_timestamp_future": false,
+        "bid_age_seconds": 1.02,
+        "bid_timestamp": "2026-09-18T18:30:17Z",
+        "bid_timestamp_future": false,
+        "last_age_seconds": 2.02,
+        "last_timestamp": "2026-09-18T18:30:16Z",
+        "last_timestamp_future": false,
+        "outcome": "SUCCESS",
+        "received_at": "2026-09-18T18:30:18.020058+00:00"
       },
       "week_current_session_30m": {
-        "complete_bars": 9,
+        "complete_bars": 10,
         "ignored_outside_session": 56,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T17:30:00+00:00"
+        "latest_complete_start": "2026-09-18T18:00:00+00:00"
       }
     },
     "AMZN": {
       "day_5m": {
-        "complete_bars": 58,
+        "complete_bars": 60,
         "ignored_off_grid": 1,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T18:15:00+00:00"
+        "latest_complete_start": "2026-09-18T18:25:00+00:00"
       },
       "quote": {
-        "ask_age_seconds": -5.586,
-        "ask_timestamp": "2026-09-18T18:22:00Z",
-        "bid_age_seconds": -5.586,
-        "bid_timestamp": "2026-09-18T18:22:00Z",
-        "last_age_seconds": -4.586,
-        "last_timestamp": "2026-09-18T18:21:59Z",
-        "outcome": "SUCCESS"
+        "ask_age_seconds": 1.549,
+        "ask_timestamp": "2026-09-18T18:30:22Z",
+        "ask_timestamp_future": false,
+        "bid_age_seconds": 1.549,
+        "bid_timestamp": "2026-09-18T18:30:22Z",
+        "bid_timestamp_future": false,
+        "last_age_seconds": 1.549,
+        "last_timestamp": "2026-09-18T18:30:22Z",
+        "last_timestamp_future": false,
+        "outcome": "SUCCESS",
+        "received_at": "2026-09-18T18:30:23.548751+00:00"
       },
       "week_current_session_30m": {
-        "complete_bars": 9,
+        "complete_bars": 10,
         "ignored_outside_session": 56,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T17:30:00+00:00"
+        "latest_complete_start": "2026-09-18T18:00:00+00:00"
       }
     },
     "BAC": {
       "day_5m": {
-        "complete_bars": 58,
+        "complete_bars": 60,
         "ignored_off_grid": 1,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T18:15:00+00:00"
+        "latest_complete_start": "2026-09-18T18:25:00+00:00"
       },
       "quote": {
-        "ask_age_seconds": -10.586,
-        "ask_timestamp": "2026-09-18T18:22:05Z",
-        "bid_age_seconds": -10.586,
-        "bid_timestamp": "2026-09-18T18:22:05Z",
-        "last_age_seconds": -8.586,
-        "last_timestamp": "2026-09-18T18:22:03Z",
-        "outcome": "SUCCESS"
+        "ask_age_seconds": 2.955,
+        "ask_timestamp": "2026-09-18T18:30:27Z",
+        "ask_timestamp_future": false,
+        "bid_age_seconds": 2.955,
+        "bid_timestamp": "2026-09-18T18:30:27Z",
+        "bid_timestamp_future": false,
+        "last_age_seconds": 7.955,
+        "last_timestamp": "2026-09-18T18:30:22Z",
+        "last_timestamp_future": false,
+        "outcome": "SUCCESS",
+        "received_at": "2026-09-18T18:30:29.955061+00:00"
       },
       "week_current_session_30m": {
-        "complete_bars": 9,
+        "complete_bars": 10,
         "ignored_outside_session": 56,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T17:30:00+00:00"
+        "latest_complete_start": "2026-09-18T18:00:00+00:00"
       }
     },
     "COIN": {
       "day_5m": {
-        "complete_bars": 58,
+        "complete_bars": 60,
         "ignored_off_grid": 1,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T18:15:00+00:00"
+        "latest_complete_start": "2026-09-18T18:25:00+00:00"
       },
       "quote": {
-        "ask_age_seconds": -12.586,
-        "ask_timestamp": "2026-09-18T18:22:07Z",
-        "bid_age_seconds": -12.586,
-        "bid_timestamp": "2026-09-18T18:22:07Z",
-        "last_age_seconds": -11.586,
-        "last_timestamp": "2026-09-18T18:22:06Z",
-        "outcome": "SUCCESS"
+        "ask_age_seconds": 2.796,
+        "ask_timestamp": "2026-09-18T18:30:28Z",
+        "ask_timestamp_future": false,
+        "bid_age_seconds": 2.796,
+        "bid_timestamp": "2026-09-18T18:30:28Z",
+        "bid_timestamp_future": false,
+        "last_age_seconds": 1.796,
+        "last_timestamp": "2026-09-18T18:30:29Z",
+        "last_timestamp_future": false,
+        "outcome": "SUCCESS",
+        "received_at": "2026-09-18T18:30:30.796098+00:00"
       },
       "week_current_session_30m": {
-        "complete_bars": 9,
+        "complete_bars": 10,
         "ignored_outside_session": 56,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T17:30:00+00:00"
+        "latest_complete_start": "2026-09-18T18:00:00+00:00"
       }
     },
     "GE": {
       "day_5m": {
-        "complete_bars": 58,
+        "complete_bars": 60,
         "ignored_off_grid": 1,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T18:15:00+00:00"
+        "latest_complete_start": "2026-09-18T18:25:00+00:00"
       },
       "quote": {
-        "ask_age_seconds": -16.586,
-        "ask_timestamp": "2026-09-18T18:22:11Z",
-        "bid_age_seconds": -16.586,
-        "bid_timestamp": "2026-09-18T18:22:11Z",
-        "last_age_seconds": -12.586,
-        "last_timestamp": "2026-09-18T18:22:07Z",
-        "outcome": "SUCCESS"
+        "ask_age_seconds": 3.201,
+        "ask_timestamp": "2026-09-18T18:30:32Z",
+        "ask_timestamp_future": false,
+        "bid_age_seconds": 3.201,
+        "bid_timestamp": "2026-09-18T18:30:32Z",
+        "bid_timestamp_future": false,
+        "last_age_seconds": 14.201,
+        "last_timestamp": "2026-09-18T18:30:21Z",
+        "last_timestamp_future": false,
+        "outcome": "SUCCESS",
+        "received_at": "2026-09-18T18:30:35.201498+00:00"
       },
       "week_current_session_30m": {
-        "complete_bars": 9,
+        "complete_bars": 10,
         "ignored_outside_session": 56,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T17:30:00+00:00"
+        "latest_complete_start": "2026-09-18T18:00:00+00:00"
       }
     },
     "GOOGL": {
       "day_5m": {
-        "complete_bars": 58,
+        "complete_bars": 60,
         "ignored_off_grid": 1,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T18:15:00+00:00"
+        "latest_complete_start": "2026-09-18T18:25:00+00:00"
       },
       "quote": {
-        "ask_age_seconds": -6.586,
-        "ask_timestamp": "2026-09-18T18:22:01Z",
-        "bid_age_seconds": -6.586,
-        "bid_timestamp": "2026-09-18T18:22:01Z",
-        "last_age_seconds": -3.586,
-        "last_timestamp": "2026-09-18T18:21:58Z",
-        "outcome": "SUCCESS"
+        "ask_age_seconds": 1.46,
+        "ask_timestamp": "2026-09-18T18:30:23Z",
+        "ask_timestamp_future": false,
+        "bid_age_seconds": 1.46,
+        "bid_timestamp": "2026-09-18T18:30:23Z",
+        "bid_timestamp_future": false,
+        "last_age_seconds": 2.46,
+        "last_timestamp": "2026-09-18T18:30:22Z",
+        "last_timestamp_future": false,
+        "outcome": "SUCCESS",
+        "received_at": "2026-09-18T18:30:24.459919+00:00"
       },
       "week_current_session_30m": {
-        "complete_bars": 9,
+        "complete_bars": 10,
         "ignored_outside_session": 56,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T17:30:00+00:00"
+        "latest_complete_start": "2026-09-18T18:00:00+00:00"
       }
     },
     "INTC": {
       "day_5m": {
-        "complete_bars": 58,
+        "complete_bars": 60,
         "ignored_off_grid": 1,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T18:15:00+00:00"
+        "latest_complete_start": "2026-09-18T18:25:00+00:00"
       },
       "quote": {
-        "ask_age_seconds": -7.586,
-        "ask_timestamp": "2026-09-18T18:22:02Z",
-        "bid_age_seconds": -7.586,
-        "bid_timestamp": "2026-09-18T18:22:02Z",
-        "last_age_seconds": -7.586,
-        "last_timestamp": "2026-09-18T18:22:02Z",
-        "outcome": "SUCCESS"
+        "ask_age_seconds": 1.294,
+        "ask_timestamp": "2026-09-18T18:30:25Z",
+        "ask_timestamp_future": false,
+        "bid_age_seconds": 1.294,
+        "bid_timestamp": "2026-09-18T18:30:25Z",
+        "bid_timestamp_future": false,
+        "last_age_seconds": 1.294,
+        "last_timestamp": "2026-09-18T18:30:25Z",
+        "last_timestamp_future": false,
+        "outcome": "SUCCESS",
+        "received_at": "2026-09-18T18:30:26.293763+00:00"
       },
       "week_current_session_30m": {
-        "complete_bars": 9,
+        "complete_bars": 10,
         "ignored_outside_session": 56,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T17:30:00+00:00"
+        "latest_complete_start": "2026-09-18T18:00:00+00:00"
       }
     },
     "IWM": {
       "day_5m": {
-        "complete_bars": 58,
+        "complete_bars": 60,
         "ignored_off_grid": 1,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T18:15:00+00:00"
+        "latest_complete_start": "2026-09-18T18:25:00+00:00"
       },
       "quote": {
-        "ask_age_seconds": -8.586,
-        "ask_timestamp": "2026-09-18T18:22:03Z",
-        "bid_age_seconds": -8.586,
-        "bid_timestamp": "2026-09-18T18:22:03Z",
-        "last_age_seconds": -7.586,
-        "last_timestamp": "2026-09-18T18:22:02Z",
-        "outcome": "SUCCESS"
+        "ask_age_seconds": 1.314,
+        "ask_timestamp": "2026-09-18T18:30:26Z",
+        "ask_timestamp_future": false,
+        "bid_age_seconds": 1.314,
+        "bid_timestamp": "2026-09-18T18:30:26Z",
+        "bid_timestamp_future": false,
+        "last_age_seconds": 3.314,
+        "last_timestamp": "2026-09-18T18:30:24Z",
+        "last_timestamp_future": false,
+        "outcome": "SUCCESS",
+        "received_at": "2026-09-18T18:30:27.313759+00:00"
       },
       "week_current_session_30m": {
-        "complete_bars": 9,
+        "complete_bars": 10,
         "ignored_outside_session": 56,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T17:30:00+00:00"
+        "latest_complete_start": "2026-09-18T18:00:00+00:00"
       }
     },
     "JPM": {
       "day_5m": {
-        "complete_bars": 58,
+        "complete_bars": 60,
         "ignored_off_grid": 1,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T18:15:00+00:00"
+        "latest_complete_start": "2026-09-18T18:25:00+00:00"
       },
       "quote": {
-        "ask_age_seconds": -10.586,
-        "ask_timestamp": "2026-09-18T18:22:05Z",
-        "bid_age_seconds": -10.586,
-        "bid_timestamp": "2026-09-18T18:22:05Z",
-        "last_age_seconds": -10.586,
-        "last_timestamp": "2026-09-18T18:22:05Z",
-        "outcome": "SUCCESS"
+        "ask_age_seconds": 2.077,
+        "ask_timestamp": "2026-09-18T18:30:27Z",
+        "ask_timestamp_future": false,
+        "bid_age_seconds": 2.077,
+        "bid_timestamp": "2026-09-18T18:30:27Z",
+        "bid_timestamp_future": false,
+        "last_age_seconds": 4.077,
+        "last_timestamp": "2026-09-18T18:30:25Z",
+        "last_timestamp_future": false,
+        "outcome": "SUCCESS",
+        "received_at": "2026-09-18T18:30:29.076681+00:00"
       },
       "week_current_session_30m": {
-        "complete_bars": 9,
+        "complete_bars": 10,
         "ignored_outside_session": 56,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T17:30:00+00:00"
+        "latest_complete_start": "2026-09-18T18:00:00+00:00"
       }
     },
     "MRK": {
       "day_5m": {
-        "complete_bars": 58,
+        "complete_bars": 60,
         "ignored_off_grid": 1,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T18:15:00+00:00"
+        "latest_complete_start": "2026-09-18T18:25:00+00:00"
       },
       "quote": {
-        "ask_age_seconds": -11.586,
-        "ask_timestamp": "2026-09-18T18:22:06Z",
-        "bid_age_seconds": -11.586,
-        "bid_timestamp": "2026-09-18T18:22:06Z",
-        "last_age_seconds": -0.586,
-        "last_timestamp": "2026-09-18T18:21:55Z",
-        "outcome": "SUCCESS"
+        "ask_age_seconds": 1.509,
+        "ask_timestamp": "2026-09-18T18:30:31Z",
+        "ask_timestamp_future": false,
+        "bid_age_seconds": 1.509,
+        "bid_timestamp": "2026-09-18T18:30:31Z",
+        "bid_timestamp_future": false,
+        "last_age_seconds": 3.509,
+        "last_timestamp": "2026-09-18T18:30:29Z",
+        "last_timestamp_future": false,
+        "outcome": "SUCCESS",
+        "received_at": "2026-09-18T18:30:32.508777+00:00"
       },
       "week_current_session_30m": {
-        "complete_bars": 9,
+        "complete_bars": 10,
         "ignored_outside_session": 56,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T17:30:00+00:00"
+        "latest_complete_start": "2026-09-18T18:00:00+00:00"
       }
     },
     "MSFT": {
       "day_5m": {
-        "complete_bars": 58,
+        "complete_bars": 60,
         "ignored_off_grid": 1,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T18:15:00+00:00"
+        "latest_complete_start": "2026-09-18T18:25:00+00:00"
       },
       "quote": {
-        "ask_age_seconds": -0.586,
-        "ask_timestamp": "2026-09-18T18:21:55Z",
-        "bid_age_seconds": -0.586,
-        "bid_timestamp": "2026-09-18T18:21:55Z",
-        "last_age_seconds": -0.586,
-        "last_timestamp": "2026-09-18T18:21:55Z",
-        "outcome": "SUCCESS"
+        "ask_age_seconds": 1.988,
+        "ask_timestamp": "2026-09-18T18:30:17Z",
+        "ask_timestamp_future": false,
+        "bid_age_seconds": 1.988,
+        "bid_timestamp": "2026-09-18T18:30:17Z",
+        "bid_timestamp_future": false,
+        "last_age_seconds": 1.988,
+        "last_timestamp": "2026-09-18T18:30:17Z",
+        "last_timestamp_future": false,
+        "outcome": "SUCCESS",
+        "received_at": "2026-09-18T18:30:18.987778+00:00"
       },
       "week_current_session_30m": {
-        "complete_bars": 9,
+        "complete_bars": 10,
         "ignored_outside_session": 56,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T17:30:00+00:00"
+        "latest_complete_start": "2026-09-18T18:00:00+00:00"
       }
     },
     "NFLX": {
       "day_5m": {
-        "complete_bars": 58,
+        "complete_bars": 60,
         "ignored_off_grid": 1,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T18:15:00+00:00"
+        "latest_complete_start": "2026-09-18T18:25:00+00:00"
       },
       "quote": {
-        "ask_age_seconds": -15.586,
-        "ask_timestamp": "2026-09-18T18:22:10Z",
-        "bid_age_seconds": -15.586,
-        "bid_timestamp": "2026-09-18T18:22:10Z",
-        "last_age_seconds": -14.586,
-        "last_timestamp": "2026-09-18T18:22:09Z",
-        "outcome": "SUCCESS"
+        "ask_age_seconds": 1.309,
+        "ask_timestamp": "2026-09-18T18:30:33Z",
+        "ask_timestamp_future": false,
+        "bid_age_seconds": 1.309,
+        "bid_timestamp": "2026-09-18T18:30:33Z",
+        "bid_timestamp_future": false,
+        "last_age_seconds": 1.309,
+        "last_timestamp": "2026-09-18T18:30:33Z",
+        "last_timestamp_future": false,
+        "outcome": "SUCCESS",
+        "received_at": "2026-09-18T18:30:34.309174+00:00"
       },
       "week_current_session_30m": {
-        "complete_bars": 9,
+        "complete_bars": 10,
         "ignored_outside_session": 56,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T17:30:00+00:00"
+        "latest_complete_start": "2026-09-18T18:00:00+00:00"
       }
     },
     "NVDA": {
       "day_5m": {
-        "complete_bars": 58,
+        "complete_bars": 60,
         "ignored_off_grid": 1,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T18:15:00+00:00"
+        "latest_complete_start": "2026-09-18T18:25:00+00:00"
       },
       "quote": {
-        "ask_age_seconds": -1.586,
-        "ask_timestamp": "2026-09-18T18:21:56Z",
-        "bid_age_seconds": -1.586,
-        "bid_timestamp": "2026-09-18T18:21:56Z",
-        "last_age_seconds": -1.586,
-        "last_timestamp": "2026-09-18T18:21:56Z",
-        "outcome": "SUCCESS"
+        "ask_age_seconds": 0.919,
+        "ask_timestamp": "2026-09-18T18:30:19Z",
+        "ask_timestamp_future": false,
+        "bid_age_seconds": 0.919,
+        "bid_timestamp": "2026-09-18T18:30:19Z",
+        "bid_timestamp_future": false,
+        "last_age_seconds": 0.919,
+        "last_timestamp": "2026-09-18T18:30:19Z",
+        "last_timestamp_future": false,
+        "outcome": "SUCCESS",
+        "received_at": "2026-09-18T18:30:19.919094+00:00"
       },
       "week_current_session_30m": {
-        "complete_bars": 9,
+        "complete_bars": 10,
         "ignored_outside_session": 56,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T17:30:00+00:00"
+        "latest_complete_start": "2026-09-18T18:00:00+00:00"
       }
     },
     "PLTR": {
       "day_5m": {
-        "complete_bars": 58,
+        "complete_bars": 60,
         "ignored_off_grid": 1,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T18:15:00+00:00"
+        "latest_complete_start": "2026-09-18T18:25:00+00:00"
       },
       "quote": {
-        "ask_age_seconds": -6.586,
-        "ask_timestamp": "2026-09-18T18:22:01Z",
-        "bid_age_seconds": -6.586,
-        "bid_timestamp": "2026-09-18T18:22:01Z",
-        "last_age_seconds": -3.586,
-        "last_timestamp": "2026-09-18T18:21:58Z",
-        "outcome": "SUCCESS"
+        "ask_age_seconds": 1.351,
+        "ask_timestamp": "2026-09-18T18:30:24Z",
+        "ask_timestamp_future": false,
+        "bid_age_seconds": 1.351,
+        "bid_timestamp": "2026-09-18T18:30:24Z",
+        "bid_timestamp_future": false,
+        "last_age_seconds": 1.351,
+        "last_timestamp": "2026-09-18T18:30:24Z",
+        "last_timestamp_future": false,
+        "outcome": "SUCCESS",
+        "received_at": "2026-09-18T18:30:25.350838+00:00"
       },
       "week_current_session_30m": {
-        "complete_bars": 9,
+        "complete_bars": 10,
         "ignored_outside_session": 56,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T17:30:00+00:00"
+        "latest_complete_start": "2026-09-18T18:00:00+00:00"
       }
     },
     "QQQ": {
       "day_5m": {
-        "complete_bars": 58,
+        "complete_bars": 60,
         "ignored_off_grid": 1,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T18:15:00+00:00"
+        "latest_complete_start": "2026-09-18T18:25:00+00:00"
       },
       "quote": {
-        "ask_age_seconds": -4.586,
-        "ask_timestamp": "2026-09-18T18:21:59Z",
-        "bid_age_seconds": -4.586,
-        "bid_timestamp": "2026-09-18T18:21:59Z",
-        "last_age_seconds": -3.586,
-        "last_timestamp": "2026-09-18T18:21:58Z",
-        "outcome": "SUCCESS"
+        "ask_age_seconds": 0.68,
+        "ask_timestamp": "2026-09-18T18:30:22Z",
+        "ask_timestamp_future": false,
+        "bid_age_seconds": 0.68,
+        "bid_timestamp": "2026-09-18T18:30:22Z",
+        "bid_timestamp_future": false,
+        "last_age_seconds": 0.68,
+        "last_timestamp": "2026-09-18T18:30:22Z",
+        "last_timestamp_future": false,
+        "outcome": "SUCCESS",
+        "received_at": "2026-09-18T18:30:22.680384+00:00"
       },
       "week_current_session_30m": {
-        "complete_bars": 9,
+        "complete_bars": 10,
         "ignored_outside_session": 56,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T17:30:00+00:00"
+        "latest_complete_start": "2026-09-18T18:00:00+00:00"
       }
     },
     "SPY": {
       "day_5m": {
-        "complete_bars": 58,
+        "complete_bars": 60,
         "ignored_off_grid": 1,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T18:15:00+00:00"
+        "latest_complete_start": "2026-09-18T18:25:00+00:00"
       },
       "quote": {
-        "ask_age_seconds": -3.586,
-        "ask_timestamp": "2026-09-18T18:21:58Z",
-        "bid_age_seconds": -3.586,
-        "bid_timestamp": "2026-09-18T18:21:58Z",
-        "last_age_seconds": -2.586,
-        "last_timestamp": "2026-09-18T18:21:57Z",
-        "outcome": "SUCCESS"
+        "ask_age_seconds": 1.77,
+        "ask_timestamp": "2026-09-18T18:30:20Z",
+        "ask_timestamp_future": false,
+        "bid_age_seconds": 1.77,
+        "bid_timestamp": "2026-09-18T18:30:20Z",
+        "bid_timestamp_future": false,
+        "last_age_seconds": 1.77,
+        "last_timestamp": "2026-09-18T18:30:20Z",
+        "last_timestamp_future": false,
+        "outcome": "SUCCESS",
+        "received_at": "2026-09-18T18:30:21.770101+00:00"
       },
       "week_current_session_30m": {
-        "complete_bars": 9,
+        "complete_bars": 10,
         "ignored_outside_session": 56,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T17:30:00+00:00"
+        "latest_complete_start": "2026-09-18T18:00:00+00:00"
       }
     },
     "TLT": {
       "day_5m": {
-        "complete_bars": 58,
+        "complete_bars": 60,
         "ignored_off_grid": 1,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T18:15:00+00:00"
+        "latest_complete_start": "2026-09-18T18:25:00+00:00"
       },
       "quote": {
-        "ask_age_seconds": -5.586,
-        "ask_timestamp": "2026-09-18T18:22:00Z",
-        "bid_age_seconds": -5.586,
-        "bid_timestamp": "2026-09-18T18:22:00Z",
-        "last_age_seconds": 4.414,
-        "last_timestamp": "2026-09-18T18:21:50Z",
-        "outcome": "SUCCESS"
+        "ask_age_seconds": 3.195,
+        "ask_timestamp": "2026-09-18T18:30:25Z",
+        "ask_timestamp_future": false,
+        "bid_age_seconds": 3.195,
+        "bid_timestamp": "2026-09-18T18:30:25Z",
+        "bid_timestamp_future": false,
+        "last_age_seconds": 3.195,
+        "last_timestamp": "2026-09-18T18:30:25Z",
+        "last_timestamp_future": false,
+        "outcome": "SUCCESS",
+        "received_at": "2026-09-18T18:30:28.195056+00:00"
       },
       "week_current_session_30m": {
-        "complete_bars": 9,
+        "complete_bars": 10,
         "ignored_outside_session": 56,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T17:30:00+00:00"
+        "latest_complete_start": "2026-09-18T18:00:00+00:00"
       }
     },
     "TSLA": {
       "day_5m": {
-        "complete_bars": 58,
+        "complete_bars": 60,
         "ignored_off_grid": 1,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T18:15:00+00:00"
+        "latest_complete_start": "2026-09-18T18:25:00+00:00"
       },
       "quote": {
-        "ask_age_seconds": -2.586,
-        "ask_timestamp": "2026-09-18T18:21:57Z",
-        "bid_age_seconds": -2.586,
-        "bid_timestamp": "2026-09-18T18:21:57Z",
-        "last_age_seconds": -0.586,
-        "last_timestamp": "2026-09-18T18:21:55Z",
-        "outcome": "SUCCESS"
+        "ask_age_seconds": 0.874,
+        "ask_timestamp": "2026-09-18T18:30:20Z",
+        "ask_timestamp_future": false,
+        "bid_age_seconds": 0.874,
+        "bid_timestamp": "2026-09-18T18:30:20Z",
+        "bid_timestamp_future": false,
+        "last_age_seconds": 1.874,
+        "last_timestamp": "2026-09-18T18:30:19Z",
+        "last_timestamp_future": false,
+        "outcome": "SUCCESS",
+        "received_at": "2026-09-18T18:30:20.873697+00:00"
       },
       "week_current_session_30m": {
-        "complete_bars": 9,
+        "complete_bars": 10,
         "ignored_outside_session": 56,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T17:30:00+00:00"
+        "latest_complete_start": "2026-09-18T18:00:00+00:00"
       }
     },
     "WMT": {
       "day_5m": {
-        "complete_bars": 58,
+        "complete_bars": 60,
         "ignored_off_grid": 1,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T18:15:00+00:00"
+        "latest_complete_start": "2026-09-18T18:25:00+00:00"
       },
       "quote": {
-        "ask_age_seconds": -13.586,
-        "ask_timestamp": "2026-09-18T18:22:08Z",
-        "bid_age_seconds": -13.586,
-        "bid_timestamp": "2026-09-18T18:22:08Z",
-        "last_age_seconds": -11.586,
-        "last_timestamp": "2026-09-18T18:22:06Z",
-        "outcome": "SUCCESS"
+        "ask_age_seconds": 1.38,
+        "ask_timestamp": "2026-09-18T18:30:32Z",
+        "ask_timestamp_future": false,
+        "bid_age_seconds": 1.38,
+        "bid_timestamp": "2026-09-18T18:30:32Z",
+        "bid_timestamp_future": false,
+        "last_age_seconds": 10.38,
+        "last_timestamp": "2026-09-18T18:30:23Z",
+        "last_timestamp_future": false,
+        "outcome": "SUCCESS",
+        "received_at": "2026-09-18T18:30:33.379790+00:00"
       },
       "week_current_session_30m": {
-        "complete_bars": 9,
+        "complete_bars": 10,
         "ignored_outside_session": 56,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T17:30:00+00:00"
+        "latest_complete_start": "2026-09-18T18:00:00+00:00"
       }
     },
     "XOM": {
       "day_5m": {
-        "complete_bars": 58,
+        "complete_bars": 60,
         "ignored_off_grid": 1,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T18:15:00+00:00"
+        "latest_complete_start": "2026-09-18T18:25:00+00:00"
       },
       "quote": {
-        "ask_age_seconds": -12.586,
-        "ask_timestamp": "2026-09-18T18:22:07Z",
-        "bid_age_seconds": -12.586,
-        "bid_timestamp": "2026-09-18T18:22:07Z",
-        "last_age_seconds": -8.586,
-        "last_timestamp": "2026-09-18T18:22:03Z",
-        "outcome": "SUCCESS"
+        "ask_age_seconds": 2.669,
+        "ask_timestamp": "2026-09-18T18:30:29Z",
+        "ask_timestamp_future": false,
+        "bid_age_seconds": 2.669,
+        "bid_timestamp": "2026-09-18T18:30:29Z",
+        "bid_timestamp_future": false,
+        "last_age_seconds": 6.669,
+        "last_timestamp": "2026-09-18T18:30:25Z",
+        "last_timestamp_future": false,
+        "outcome": "SUCCESS",
+        "received_at": "2026-09-18T18:30:31.668981+00:00"
       },
       "week_current_session_30m": {
-        "complete_bars": 9,
+        "complete_bars": 10,
         "ignored_outside_session": 56,
         "ignored_partial": 1,
-        "latest_complete_start": "2026-09-18T17:30:00+00:00"
+        "latest_complete_start": "2026-09-18T18:00:00+00:00"
       }
     }
   },
   "public_chart_source": "public:/userapigateway/historicdata/{type}/{symbol}/{period}",
+  "public_quote_summary": {
+    "future_ask_timestamp": 0,
+    "future_bid_timestamp": 0,
+    "future_last_timestamp": 0,
+    "max_ask_age_seconds": 3.201,
+    "max_bid_age_seconds": 3.201,
+    "max_last_age_seconds": 14.201,
+    "missing_ask_timestamp": 0,
+    "missing_bid_timestamp": 0,
+    "missing_last_timestamp": 0,
+    "tickers": 20
+  },
   "sip_comparison": {
     "comparable_30m_bars": 180,
-    "cutoff": "2026-09-18T18:05:54.414263+00:00",
+    "cutoff": "2026-09-18T18:14:17.537925+00:00",
     "exact_high_low": 112,
     "exact_high_low_percent": 62.22,
     "max_high_low_abs_diff": 0.005,
