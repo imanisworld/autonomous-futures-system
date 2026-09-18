@@ -97,9 +97,9 @@ At audit time the deployed global max drawdown was 20%, and the observed runtime
 
 Operator policy was subsequently clarified: the **global account hard survival floor is 30%**, not 20%. `risk_rules.yaml` is therefore updated to 0.30 as a prospective global risk-policy change. This does **not** rewrite historical evidence and does **not** alter frozen lane-specific drawdown contracts: wide-stop 4HR/3-2-2 remains at its preregistered 20% for the active epoch; Daily 2-2 and MES 1-2-2 already use their own 30% hard halts.
 
-At 24.6%, the account is below the intended 30% global floor. The historical 20% rejection remains valid evidence of what the old policy did; it is not a current-policy blocker once the 30% release is deployed.
+At 24.6%, the account is below the intended 30% global floor. The historical 20% rejection remains valid evidence of what the old policy did. The prospective policy was deployed in curated release `3715eb89b1f5...`, which differs from prior `088012983c3d...` by exactly one runtime file: `risk_rules.yaml`. Direct post-deploy invocation of the deployed `RiskEngine._check_max_drawdown()` at the same 24.62% state returned PASS.
 
-**Status: POLICY CORRECTED TO 30%; preserve lane-specific frozen thresholds and record the release boundary.**
+**Status: RESOLVED FOR CURRENT GLOBAL POLICY at the `3715eb89b1f5` release boundary; frozen lane-specific thresholds remain unchanged.**
 
 ## Remaining forward-proof gaps
 
@@ -115,7 +115,7 @@ The #691 release promotion restarted futures-bot at 13:56 UTC. The watcher corre
 - service wrong release;
 - unexpected restart.
 
-The watcher was then restarted/rebaselined at 13:57 UTC and adopted `088012983c3d...`; all three blocker conditions cleared. Futures release integrity, broker flatness and Tradovate reliability remained healthy.
+The watcher was then restarted/rebaselined at 13:57 UTC and adopted `088012983c3d...`; all three blocker conditions cleared. After the later #703 risk-policy promotion, futures-bot moved to `3715eb89b1f5...` at 14:45 UTC. The watcher correctly blocked on the new release until it was explicitly restarted/rebaselined at 15:05 UTC, then adopted `3715eb89b1f5...`. A transient MES feed-stale alert around the release boundary self-cleared by 15:06 UTC; the first post-rebaseline tick showed both feeds healthy and no blocker flags. Futures release integrity, broker flatness and Tradovate reliability remained healthy.
 
 ## Do not do
 

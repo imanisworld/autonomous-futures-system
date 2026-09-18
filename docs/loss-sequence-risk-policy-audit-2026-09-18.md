@@ -109,3 +109,24 @@ Revisit post-loss throttles only when a compatible combined-account population h
 - H1/H2 or equivalent temporal replication.
 
 Until then, an automatic post-loss cooldown would be an invented rule rather than an evidence-based control.
+
+## Deployment closeout
+
+PR #703 merged the evidence-defined loss policy and 30% global drawdown policy to `main`.
+
+The VPS uses curated release `3715eb89b1f5a3d645fc2a8969c3e4d8cf2c42fd`, whose runtime diff from prior release `088012983c3d6da8bc1b433e324703726178d770` is exactly one file: `risk_rules.yaml`.
+
+Post-deploy proof:
+- release integrity PASS for 1,073 files;
+- deployed risk rules version `1.2.2`;
+- `max_drawdown_percent=0.30`;
+- `max_trades_per_day=3`;
+- `max_consecutive_losses=9999`;
+- `circuit_breaker_losses=0`;
+- `early_session_loss_floor=0`;
+- the same ~24.62% account drawdown passes the deployed 30% max-drawdown check;
+- main journal flat and Tradovate DEMO flat/healthy at verification;
+- watcher restarted/rebaselined to `3715eb89b1f5...` and returned to no blocked conditions;
+- a transient MES feed-stale alert at the release boundary self-cleared, with both monitored feeds healthy on the first post-rebaseline tick.
+
+The options-manager risk block elsewhere in `risk_rules.yaml` still has its own `max_consecutive_losses: 2`; that is a separate options advisory configuration and is not the futures shared-account consecutive-loss gate described by this audit.
