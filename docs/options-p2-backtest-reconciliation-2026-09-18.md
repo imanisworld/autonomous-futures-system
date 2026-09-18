@@ -8,13 +8,14 @@ It does **not** modify the preserved #653 evidence package, does not activate DE
 
 ## Current baseline
 
-- current repository `main`: `f3149be8c5fa9559fd405015f03346cc5c1e8500`; selector replay code baseline: `3b343b040be58847d06a6dc544543c516ec3bcda`.
+- current repository `main`: `331b8f05a44694de45c14bdf8fb1cd5addeb16e5`; selector replay code baseline is merged; trigger-time research #717 is also merged.
 - PR #706 merged: parameterized base-vs-adverse slippage stress runner.
 - PR #710 merged: append-only prospective decision-time selector evidence capture.
 - PR #712 merged: exact replay of the actual `OPTIONS_PAPER_V1` production selector from retained evidence.
-- Follow-up minimal-runtime refactor removes `options_manager`/canonical-selector imports from the active evidence capture path while retaining the same production replay proof.
-- Targeted selector-evidence regression on the refactor branch: **15 passed**.
-- No VPS deployment or production-service restart was performed for #710/#712.
+- #715 removes `options_manager`/canonical-selector imports from the active evidence capture path while retaining the same production replay proof.
+- Service-specific deployment candidate `5c14577c...` is prepared under #716; exact candidate regression: **31 passed**; it is not deployed.
+- #717 adds a pure trigger-time Strat observer and audit only; no runtime activation.
+- No selector-evidence v3 VPS deployment or production-service restart has been performed.
 
 ## Market-hours proof captured 2026-09-18 15:24Z
 
@@ -126,11 +127,26 @@ Premium-stop risk, no-averaging, aggregate-risk enforcement, provenance validati
 
 A future evidence packet still has to reference the exact frozen runtime budget artifact rather than merely setting booleans.
 
+## Trigger-time boundary added by #717
+
+The old completed-bar/first-sight clock remains valid for evaluating what V1 observed, but it is not the final strategy-entry clock for Strat qualification. #717 separates completed precursor formation from the first causal lower-timeframe boundary break.
+
+Before spending on or freezing a broader historical option-side quote dataset for Strat strategy testing:
+
+1. reconstruct armed setups from completed 30m precursors;
+2. resolve the first causal break from lower-timeframe bars;
+3. rebuild SPY/QQQ + HTF context as of that trigger;
+4. quantify family changes, latency, later-outside transitions and ambiguous same-lower-bar breaks;
+5. freeze those decision timestamps.
+
+Only then should historical option-side acquisition be keyed to the strategy decision clock. This does not invalidate current-scanner prospective selector evidence; the two questions are separate.
+
 ## What actually remains for 212R
 
 These are strategy/evidence problems, not missing shared infrastructure:
 
 - classification remains `WAIT`;
+- trigger-time strategy-entry clock is not yet frozen on the historical population;
 - no frozen 212R target formula;
 - no 212R replay/forward strategy formula parity;
 - historical option selector replay is blocked by missing decision-time analytics/provenance;
