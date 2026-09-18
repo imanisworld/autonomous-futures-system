@@ -2,6 +2,12 @@
 
 _As of 2026-09-18. This is the single current futures handoff. Historical audit docs remain evidence records, but they do not override this file. Repository state is not proof of VPS/deployment state; verify the box separately before claiming anything is running._
 
+> **CURRENT OPERATOR SUMMARY — supersedes stale deployment/timing statements below:** see `docs/futures-current-status-2026-09-18.md`. Verified active futures release is `a6913c06750dbe9e67ea6ba0120ac43841f1fdc9`; repository `main` is newer and must not be treated as deployed. The box remains `LIVE_TRADING_ENABLED=false`, `TRADOVATE_ENV=demo`, `SCHEDULE_MODE=always_on_shadow`, `EXIT_MODE=static`, hard cap 1. The isolated 1m lane is deployed and proof-pinned. MNQ/MES/M2K/MGC/MCL/MBT all have verified 1m `tf1m` collection. Only MNQ may use 1m to observe a pre-existing ARMED 4HR trigger; M2K/MGC/MCL/MBT remain collection-only and cannot reach execution.
+>
+> **4HR timing correction — 2026-09-18:** the documented retrigger is a level touch, but the prior implementation inferred that touch from a completed 5m bar. The old trigger-price replay therefore overstated executable performance. Controlled MNQ A/B on the same 81 candidates: old trigger-price backfill +$2,886.60 (80 fills); completed-5m IOC8 +$1,266.24 (37 fills); causal pre-armed stop-touch +$1,414.60 at 1 tick / +$1,354.60 at 2 ticks / +$1,294.60 at 3 ticks, with both chronological halves positive at 3 ticks. Current classification: **PROMISING BUT UNPROVEN / PAPER ONLY**; do not call the old +$2.8k baseline executable.
+>
+> The long reconciliation/history below is retained for provenance. Where it conflicts with the current operator summary, the newer summary governs.
+
 ## 2026-09-18 reconciliation
 
 **Repository main at this reconciliation:** `f98a02b4fc82148a85d476fc5265be234185bf56`. Futures runtime fixes #663, #670, #691, and the global risk-policy correction #703 are merged on `main`; later main-only work must not be inferred as deployed.
