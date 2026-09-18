@@ -1,0 +1,11 @@
+{
+  "rule_id": "selector-v1",
+  "min_dte": 14,
+  "preferred_min_dte": 45,
+  "min_abs_delta": 0.3,
+  "max_abs_delta": 0.7,
+  "target_abs_delta": 0.5,
+  "max_spread_percent": 20.0,
+  "min_volume": 100,
+  "min_open_interest": 500
+}
