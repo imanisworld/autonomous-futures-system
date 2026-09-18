@@ -9,8 +9,9 @@
 ## Repository state checked
 
 - PR #667 remains open draft, mergeable, and unmerged.
-- Prior branch head `798cdd266586a1a0f9376d03016b3986b1503e47` passed CI, run `35333510372`.
-- This run advanced safe offline no-record selector parity through `7f3bf4a0c6266569788096d3b7a20b20549b980c`; CI for the new head is pending.
+- Code/test head `7f3bf4a0c6266569788096d3b7a20b20549b980c` completed the no-record selector parity proof.
+- Final overnight branch head `5f2c9fad2d36b81df02865a2df0d8511a06159e6` passed CI, run `35338363364`.
+- PR #667 is mergeable against current main; main advanced only in unrelated futures/research/docs paths, with no overlap in #667's changed files.
 
 ## Item 2 — proven foundation
 
@@ -30,20 +31,19 @@ This closes the previously explicit selector-level missing-row fixture gap. It d
 
 ## Not proven / blockers that remain
 
-1. New branch head `7f3bf4a0...` still needs CI.
-2. No frozen real backtest option-quote dataset + checked-in `option_quotes_manifest.json` exists for the historical decision population.
-3. Production Public responses have not been proven to supply both executable side timestamps for every usable quote.
-4. End-to-end replay/forward parity through fill and gate consumers is not established.
-5. Item 2B executable-fill reconstruction remains dependent on Item 2.
-6. Item 1 replay/forward golden parity remains outstanding.
+1. No frozen real backtest option-quote dataset + checked-in `option_quotes_manifest.json` exists for the historical decision population.
+2. Production Public responses have not been proven to supply both executable side timestamps for every usable quote.
+3. End-to-end replay/forward parity through fill and gate consumers is not established.
+4. Item 2B executable-fill reconstruction remains dependent on Item 2.
+5. Item 1 replay/forward golden parity remains outstanding.
 
 Therefore no evidence blocker is retired; 212R remains **BLOCKED / WAIT**.
 
 ## Next safe work
 
-1. Check CI for `7f3bf4a0...`; repair only if needed.
+1. Review/merge #667 after confirming the final documentation-only refresh remains green.
 2. Trace the fill/gate consumer boundary and add offline parity without changing runtime activation.
-3. If real historical quote bytes or live provider proof are unavailable in-repo, leave the evidence blocker explicit rather than fabricating data.
+3. Obtain real historical quote bytes or live provider proof when available; otherwise keep the evidence blocker explicit rather than fabricating data.
 
 ## Morning operational note
 
