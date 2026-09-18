@@ -18,7 +18,7 @@ decision made by accident.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from typing import Any, Literal, Mapping, Sequence
 
@@ -34,6 +34,10 @@ AGGREGATE_RISK_BUDGET_ENV = "OPTIONS_MANAGER_MAX_AGGREGATE_OPEN_RISK_DOLLARS"
 # operator who set a bad value needs a different fix from one who set nothing.
 AGGREGATE_RISK_BUDGET_MISSING_CODE = "aggregate_risk_budget_missing"
 AGGREGATE_RISK_BUDGET_INVALID_CODE = "aggregate_risk_budget_invalid"
+AVERAGING_DOWN_REJECTED_CODE = "averaging_down_rejected"
+PLANNED_RISK_INVALID_CODE = "planned_risk_invalid"
+PLANNED_RISK_EXCEEDS_CAP_CODE = "planned_risk_exceeds_trade_cap"
+
 AGGREGATE_RISK_BUDGET_UNCONFIGURED = (
     f"{AGGREGATE_RISK_BUDGET_MISSING_CODE}: {AGGREGATE_RISK_BUDGET_ENV} is not configured; "
     "no default is assumed"
@@ -57,6 +61,66 @@ def _usable_budget(value: float | None) -> bool:
     clothes. Neither may reach the comparison below.
     """
     return value is not None and math.isfinite(value) and value > 0
+
+
+def planned_risk_from_premium_stop(
+    *,
+    entry_fill: object,
+    premium_stop: object,
+    contracts: object,
+    max_trade_risk_dollars: float = DEFAULT_MAX_TRADE_RISK_DOLLARS,
+    contract_multiplier: int = CONTRACT_MULTIPLIER,
+) -> tuple[float | None, str | None]:
+    """Return executable-entry planned risk or a stable fail-closed reason.
+
+    The only accepted formula is:
+        (entry_fill - premium_stop) * multiplier * contracts
+
+    Entry fill is the canonical planned contract entry premium supplied by the
+    caller. Full-premium-at-risk, underlying stop distance, and clamped negative
+    values are not substitutes. A later executable-fill consumer may supply an
+    ASK-side fill, but this helper does not invent or fetch one.
+    """
+
+    numeric_values = (entry_fill, premium_stop)
+    if any(
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(float(value))
+        for value in numeric_values
+    ):
+        return None, f"{PLANNED_RISK_INVALID_CODE}: entry_fill and premium_stop must be finite numbers"
+
+    if isinstance(contracts, bool) or not isinstance(contracts, int) or contracts <= 0:
+        return None, f"{PLANNED_RISK_INVALID_CODE}: contracts must be a positive integer"
+    if (
+        isinstance(contract_multiplier, bool)
+        or not isinstance(contract_multiplier, int)
+        or contract_multiplier <= 0
+    ):
+        return None, f"{PLANNED_RISK_INVALID_CODE}: contract_multiplier must be a positive integer"
+    if isinstance(max_trade_risk_dollars, bool) or not _usable_budget(max_trade_risk_dollars):
+        return None, f"{PLANNED_RISK_INVALID_CODE}: max_trade_risk_dollars must be finite and > 0"
+
+    entry = float(entry_fill)
+    stop = float(premium_stop)
+    if entry <= 0:
+        return None, f"{PLANNED_RISK_INVALID_CODE}: entry_fill must be > 0"
+    if stop <= 0:
+        return None, f"{PLANNED_RISK_INVALID_CODE}: premium_stop must be > 0"
+    if stop >= entry:
+        return None, f"{PLANNED_RISK_INVALID_CODE}: premium_stop must be below entry_fill"
+
+    risk = (entry - stop) * contract_multiplier * contracts
+    if not math.isfinite(risk) or risk <= 0:
+        return None, f"{PLANNED_RISK_INVALID_CODE}: planned risk must be finite and > 0"
+    if risk > max_trade_risk_dollars:
+        return (
+            None,
+            f"{PLANNED_RISK_EXCEEDS_CAP_CODE}: planned risk ${risk:.2f} exceeds "
+            f"per-trade cap ${max_trade_risk_dollars:.2f}",
+        )
+    return risk, None
 
 
 class PortfolioRiskVerdict(str, Enum):
@@ -112,16 +176,17 @@ def evaluate_portfolio_risk(
         blocking.append(_invalid_budget_reason(max_aggregate_open_risk_dollars))
 
     exposures = tuple(open_positions)
+
     for index, exposure in enumerate((*exposures, candidate)):
         label = "candidate" if index == len(exposures) else f"open_positions[{index}]"
         if not exposure.ticker.strip():
             blocking.append(f"{label} missing ticker")
         if exposure.direction not in ("CALL", "PUT"):
             blocking.append(f"{label} invalid direction")
-        if exposure.planned_dollar_risk < 0:
-            blocking.append(f"{label} has negative planned_dollar_risk")
-        if exposure.capital_deployed < 0:
-            blocking.append(f"{label} has negative capital_deployed")
+        if not math.isfinite(exposure.planned_dollar_risk) or exposure.planned_dollar_risk < 0:
+            blocking.append(f"{label} has non-finite/negative planned_dollar_risk")
+        if not math.isfinite(exposure.capital_deployed) or exposure.capital_deployed < 0:
+            blocking.append(f"{label} has non-finite/negative capital_deployed")
 
     aggregate_open_risk = sum(p.planned_dollar_risk for p in exposures)
     aggregate_capital = sum(p.capital_deployed for p in exposures)
@@ -192,10 +257,10 @@ def _coerce_exposure(payload: Any, *, label: str) -> tuple[RiskExposure | None, 
         errors.append(f"{label} missing ticker")
     if direction not in ("CALL", "PUT"):
         errors.append(f"{label} direction must be CALL or PUT")
-    if planned_dollar_risk < 0:
-        errors.append(f"{label} planned_dollar_risk must be >= 0")
-    if capital_deployed < 0:
-        errors.append(f"{label} capital_deployed must be >= 0")
+    if not math.isfinite(planned_dollar_risk) or planned_dollar_risk < 0:
+        errors.append(f"{label} planned_dollar_risk must be finite and >= 0")
+    if not math.isfinite(capital_deployed) or capital_deployed < 0:
+        errors.append(f"{label} capital_deployed must be finite and >= 0")
     if errors:
         return None, tuple(errors)
 
@@ -310,23 +375,78 @@ def check_portfolio_risk_intake(
         return _blocked(*errors)
 
     assert contract.premium_stop is not None
-    candidate_risk = (
-        (contract.premium - contract.premium_stop)
-        * CONTRACT_MULTIPLIER
-        * contract.max_contracts
+    candidate_risk, planned_risk_error = planned_risk_from_premium_stop(
+        entry_fill=contract.premium,
+        premium_stop=contract.premium_stop,
+        contracts=contract.max_contracts,
+        max_trade_risk_dollars=max_trade_risk_dollars,
     )
-    candidate_capital = contract.premium * CONTRACT_MULTIPLIER * contract.max_contracts
+    premium_value = contract.premium
+    candidate_capital = (
+        float(premium_value) * CONTRACT_MULTIPLIER * contract.max_contracts
+        if not isinstance(premium_value, bool)
+        and isinstance(premium_value, (int, float))
+        and math.isfinite(float(premium_value))
+        and float(premium_value) >= 0
+        else 0.0
+    )
     candidate = RiskExposure(
         ticker=proof_packet.ticker,
         direction=proof_packet.direction,
-        planned_dollar_risk=max(0.0, candidate_risk),
-        capital_deployed=max(0.0, candidate_capital),
+        planned_dollar_risk=candidate_risk if candidate_risk is not None else 0.0,
+        capital_deployed=candidate_capital if math.isfinite(candidate_capital) and candidate_capital >= 0 else 0.0,
         correlation_group=str(payload.get("candidate_correlation_group", "")),
     )
 
-    return evaluate_portfolio_risk(
+    result = evaluate_portfolio_risk(
         open_positions=open_positions,
         candidate=candidate,
         max_trade_risk_dollars=max_trade_risk_dollars,
         max_aggregate_open_risk_dollars=max_aggregate_open_risk_dollars,
     )
+
+    extra_blocking: list[str] = []
+    if planned_risk_error is not None:
+        extra_blocking.append(planned_risk_error)
+
+    candidate_ticker = proof_packet.ticker.strip().upper()
+    for exposure in open_positions:
+        if (
+            exposure.ticker.strip().upper() == candidate_ticker
+            and exposure.direction == proof_packet.direction
+        ):
+            extra_blocking.append(
+                f"{AVERAGING_DOWN_REJECTED_CODE}: open position already exists for "
+                f"{candidate_ticker} {proof_packet.direction}"
+            )
+            break
+
+    raw_open_orders = payload.get("open_orders")
+    if not isinstance(raw_open_orders, list):
+        extra_blocking.append(
+            "portfolio_risk.open_orders must be supplied as a list (use [] when none)"
+        )
+    else:
+        for index, raw_order in enumerate(raw_open_orders):
+            if not isinstance(raw_order, Mapping):
+                extra_blocking.append(f"open_orders[{index}] must be a dict-like mapping")
+                continue
+            order_ticker = str(raw_order.get("ticker", "")).strip().upper()
+            order_direction = str(raw_order.get("direction", "")).strip().upper()
+            if not order_ticker or order_direction not in ("CALL", "PUT"):
+                extra_blocking.append(f"open_orders[{index}] missing/invalid ticker or direction")
+                continue
+            if order_ticker == candidate_ticker and order_direction == proof_packet.direction:
+                extra_blocking.append(
+                    f"{AVERAGING_DOWN_REJECTED_CODE}: open order already exists for "
+                    f"{candidate_ticker} {proof_packet.direction}"
+                )
+                break
+
+    if extra_blocking:
+        return replace(
+            result,
+            verdict=PortfolioRiskVerdict.BLOCK,
+            blocking_reasons=tuple(extra_blocking) + result.blocking_reasons,
+        )
+    return result

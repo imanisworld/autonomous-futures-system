@@ -152,3 +152,23 @@ def test_debit_and_planned_risk_stay_separate_when_budget_is_missing():
     assert result.projected_open_risk == 200.0
     assert result.projected_capital_deployed == 10000.0
     assert result.open_position_count == 1
+
+
+
+@pytest.mark.parametrize(
+    "risk,capital",
+    [
+        (float("nan"), 100.0),
+        (float("inf"), 100.0),
+        (50.0, float("nan")),
+        (50.0, float("inf")),
+    ],
+)
+def test_nonfinite_direct_exposure_blocks(risk, capital):
+    result = evaluate_portfolio_risk(
+        open_positions=[],
+        candidate=_pos(risk=risk, capital=capital),
+        max_aggregate_open_risk_dollars=BUDGET,
+    )
+    assert result.verdict == PortfolioRiskVerdict.BLOCK
+    assert any("non-finite" in reason for reason in result.blocking_reasons)

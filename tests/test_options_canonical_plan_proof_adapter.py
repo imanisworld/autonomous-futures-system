@@ -175,6 +175,7 @@ def _payload(**proof_overrides):
         },
         "portfolio_risk": {
             "open_positions": [],
+            "open_orders": [],
             "candidate_correlation_group": "mega_cap_tech",
         },
     }

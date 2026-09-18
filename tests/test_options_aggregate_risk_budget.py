@@ -92,7 +92,7 @@ def _payload(**overrides) -> dict:
     payload = dict(
         proof_packet=_proof(),
         contract_quality=_contract(),
-        portfolio_risk={"open_positions": []},
+        portfolio_risk={"open_positions": [], "open_orders": []},
     )
     payload.update(overrides)
     return payload
@@ -249,7 +249,7 @@ def test_position_count_is_telemetry_even_with_a_tight_budget():
         for i in range(25)
     ]
     result = check_advisory_decision_intake(
-        _payload(portfolio_risk={"open_positions": many}),
+        _payload(portfolio_risk={"open_positions": many, "open_orders": []}),
         require_portfolio_risk=True,
         max_aggregate_open_risk_dollars=200.0,
     )

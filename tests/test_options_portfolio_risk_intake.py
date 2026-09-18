@@ -1,10 +1,15 @@
 """Canonical portfolio-risk intake tests."""
 
+import pytest
+
 from options_manager.validation.contract_quality_gate import ContractQualityInput
 from options_manager.validation.portfolio_risk_gate import (
     AGGREGATE_RISK_BUDGET_UNCONFIGURED,
+    AVERAGING_DOWN_REJECTED_CODE,
+    PLANNED_RISK_INVALID_CODE,
     PortfolioRiskVerdict,
     check_portfolio_risk_intake,
+    planned_risk_from_premium_stop,
 )
 from options_manager.validation.proof_packet import ProofPacket, ProofPacketStatus
 
@@ -72,14 +77,14 @@ def _contract(**overrides):
 
 def test_candidate_risk_and_capital_are_derived_not_caller_supplied():
     result = check_portfolio_risk_intake(
-        {"open_positions": [], "candidate_correlation_group": "tech"},
+        {"open_positions": [], "open_orders": [], "candidate_correlation_group": "tech"},
         proof_packet=_proof(),
         contract=_contract(),
         max_aggregate_open_risk_dollars=BUDGET,
     )
     assert result.verdict == PortfolioRiskVerdict.PASS
-    assert result.candidate_risk == 100.0
-    assert result.projected_capital_deployed == 420.0
+    assert result.candidate_risk == pytest.approx(100.0)
+    assert result.projected_capital_deployed == pytest.approx(420.0)
 
 
 def test_missing_flat_snapshot_does_not_silently_assume_zero_positions():
@@ -123,7 +128,7 @@ def test_many_positions_are_allowed_when_projected_risk_is_under_budget():
         for i in range(12)
     ]
     result = check_portfolio_risk_intake(
-        {"open_positions": open_positions},
+        {"open_positions": open_positions, "open_orders": []},
         proof_packet=_proof(max_contracts=1, max_dollar_risk=100.0),
         contract=_contract(max_contracts=1, max_dollar_risk=100.0),
         max_aggregate_open_risk_dollars=BUDGET,
@@ -135,10 +140,116 @@ def test_many_positions_are_allowed_when_projected_risk_is_under_budget():
 
 def test_canonical_intake_without_a_budget_blocks_by_name():
     result = check_portfolio_risk_intake(
-        {"open_positions": []},
+        {"open_positions": [], "open_orders": []},
         proof_packet=_proof(),
         contract=_contract(),
     )
     assert result.verdict == PortfolioRiskVerdict.BLOCK
     assert AGGREGATE_RISK_BUDGET_UNCONFIGURED in result.blocking_reasons
     assert result.candidate_risk == 100.0
+
+
+
+def test_planned_risk_formula_uses_planned_entry_premium_and_premium_stop():
+    risk, reason = planned_risk_from_premium_stop(
+        entry_fill=2.10,
+        premium_stop=1.60,
+        contracts=2,
+        max_trade_risk_dollars=300.0,
+    )
+    assert reason is None
+    assert risk == pytest.approx(100.0)
+
+
+@pytest.mark.parametrize(
+    "entry_fill,premium_stop",
+    [
+        (2.15, 0.0),
+        (2.15, 2.15),
+        (2.15, 2.20),
+        (float("nan"), 1.60),
+        (2.15, float("inf")),
+    ],
+)
+def test_planned_risk_invalid_stop_or_nonfinite_input_fails_closed(entry_fill, premium_stop):
+    risk, reason = planned_risk_from_premium_stop(
+        entry_fill=entry_fill,
+        premium_stop=premium_stop,
+        contracts=1,
+        max_trade_risk_dollars=300.0,
+    )
+    assert risk is None
+    assert reason is not None
+    assert reason.startswith(PLANNED_RISK_INVALID_CODE)
+
+
+def test_matching_open_position_rejects_averaging_down():
+    result = check_portfolio_risk_intake(
+        {
+            "open_positions": [
+                {
+                    "ticker": "ORCL",
+                    "direction": "CALL",
+                    "planned_dollar_risk": 50.0,
+                    "capital_deployed": 100.0,
+                }
+            ],
+            "open_orders": [],
+        },
+        proof_packet=_proof(),
+        contract=_contract(),
+        max_aggregate_open_risk_dollars=BUDGET,
+    )
+    assert result.verdict == PortfolioRiskVerdict.BLOCK
+    assert any(
+        reason.startswith(AVERAGING_DOWN_REJECTED_CODE)
+        for reason in result.blocking_reasons
+    )
+
+
+def test_matching_open_order_rejects_averaging_down():
+    result = check_portfolio_risk_intake(
+        {
+            "open_positions": [],
+            "open_orders": [{"ticker": "ORCL", "direction": "CALL"}],
+        },
+        proof_packet=_proof(),
+        contract=_contract(),
+        max_aggregate_open_risk_dollars=BUDGET,
+    )
+    assert result.verdict == PortfolioRiskVerdict.BLOCK
+    assert any(
+        reason.startswith(AVERAGING_DOWN_REJECTED_CODE)
+        for reason in result.blocking_reasons
+    )
+
+
+def test_opposite_direction_open_position_does_not_trigger_averaging_guard():
+    result = check_portfolio_risk_intake(
+        {
+            "open_positions": [
+                {
+                    "ticker": "ORCL",
+                    "direction": "PUT",
+                    "planned_dollar_risk": 50.0,
+                    "capital_deployed": 100.0,
+                }
+            ]
+        },
+        proof_packet=_proof(),
+        contract=_contract(),
+        max_aggregate_open_risk_dollars=BUDGET,
+    )
+    assert result.verdict == PortfolioRiskVerdict.PASS
+
+
+
+def test_missing_open_orders_snapshot_does_not_silently_assume_none():
+    result = check_portfolio_risk_intake(
+        {"open_positions": []},
+        proof_packet=_proof(),
+        contract=_contract(),
+        max_aggregate_open_risk_dollars=BUDGET,
+    )
+    assert result.verdict == PortfolioRiskVerdict.BLOCK
+    assert any("open_orders" in reason for reason in result.blocking_reasons)
