@@ -1,8 +1,6 @@
 from datetime import datetime, timezone
 import hashlib
 import sqlite3
-import hashlib
-import sqlite3
 
 import pytest
 
@@ -10,14 +8,10 @@ from alert_ranker.causal_bars import Bar
 from alert_ranker.trigger_geometry import geometry_for_trigger
 from alert_ranker.trigger_time import ArmedStratTrigger, TriggerResolution
 from scripts.options_trigger_geometry_audit import (
-    annotate_frozen_212_membership,
-    frozen_212_reversal_keys,
-    summarize_frozen_212,
-)
-from scripts.options_trigger_geometry_audit import (
     _walk_target_stop,
     annotate_frozen_212_membership,
     frozen_212_reversal_keys,
+    summarize_frozen_212,
 )
 
 UTC = timezone.utc
