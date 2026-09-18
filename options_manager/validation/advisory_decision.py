@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Mapping, Optional
 
+from options_manager.quotes import QuoteRecord, QuoteRetentionRule
+
 from .contract_quality_gate import ContractQualityResult, GateVerdict, check_contract_quality_intake
 from .morning_scan_packet import MorningScanPacketResult, check_morning_scan_packet_intake
 from .no_trade_reasons import NoTradeReason, reasons_from_intake_result
@@ -23,6 +25,7 @@ from .portfolio_risk_gate import (
     check_portfolio_risk_intake,
 )
 from .proof_packet_intake import IntakeResult, check_proof_packet_intake
+from .quote_retention_gate import QuoteRetentionGateResult, check_quote_retention_intake
 from .watchlist_lifecycle import WatchlistCandidateResult, WatchlistCandidateStatus, check_watchlist_candidate_intake
 
 _TERMINAL_WATCHLIST_STATUSES = frozenset(
@@ -47,6 +50,8 @@ class AdvisoryDecisionResult:
     proof_valid: bool
     contract_verdict: GateVerdict
     portfolio_verdict: PortfolioRiskVerdict = PortfolioRiskVerdict.PASS
+    quote_retention_approved: bool = True
+    quote_record: Optional[QuoteRecord] = None
     watchlist_status: Optional[WatchlistCandidateStatus] = None
     blocking_reasons: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
@@ -111,6 +116,7 @@ def evaluate_advisory_decision(
     morning_scan_result: Optional[MorningScanPacketResult] = None,
     *,
     portfolio_result: Optional[PortfolioRiskResult] = None,
+    quote_result: Optional[QuoteRetentionGateResult] = None,
     risk_accepted: bool = False,
     notes: str = "",
 ) -> AdvisoryDecisionResult:
@@ -125,6 +131,10 @@ def evaluate_advisory_decision(
     if portfolio_result is not None:
         blocking_reasons.extend(
             f"portfolio risk: {reason}" for reason in portfolio_result.blocking_reasons
+        )
+    if quote_result is not None:
+        blocking_reasons.extend(
+            f"quote retention: {reason}" for reason in quote_result.blocking_reasons
         )
 
     warnings: list[str] = [f"proof packet: {warning}" for warning in proof_result.warnings]
@@ -145,6 +155,9 @@ def evaluate_advisory_decision(
     elif portfolio_result is not None and portfolio_result.verdict == PortfolioRiskVerdict.BLOCK:
         verdict = AdvisoryVerdict.AVOID
         next_required_action = "Resolve portfolio-risk blocks before proceeding (see blocking_reasons)."
+    elif quote_result is not None and not quote_result.approved:
+        verdict = AdvisoryVerdict.AVOID
+        next_required_action = "Resolve quote-retention blocks before proceeding (see blocking_reasons)."
     elif watchlist_status in _TERMINAL_WATCHLIST_STATUSES:
         verdict = AdvisoryVerdict.AVOID
         next_required_action = f"Candidate is already {watchlist_status.value} -- no further action available."
@@ -181,6 +194,8 @@ def evaluate_advisory_decision(
             if portfolio_result is not None
             else PortfolioRiskVerdict.PASS
         ),
+        quote_retention_approved=(quote_result.approved if quote_result is not None else True),
+        quote_record=(quote_result.record if quote_result is not None else None),
         watchlist_status=watchlist_status,
         blocking_reasons=tuple(blocking_reasons),
         warnings=tuple(warnings),
@@ -206,6 +221,9 @@ def check_advisory_decision_intake(
     payload: Any,
     *,
     require_portfolio_risk: bool = False,
+    require_quote_retention: bool = False,
+    quote_retention_rule: Optional[QuoteRetentionRule] = None,
+    quote_retention_rule_sha256: Optional[str] = None,
     max_trade_risk_dollars: float = DEFAULT_MAX_TRADE_RISK_DOLLARS,
     max_aggregate_open_risk_dollars: float | None = None,
 ) -> AdvisoryDecisionResult:
@@ -248,6 +266,21 @@ def check_advisory_decision_intake(
             max_aggregate_open_risk_dollars=max_aggregate_open_risk_dollars,
         )
 
+    quote_result: Optional[QuoteRetentionGateResult] = None
+    if require_quote_retention or "quote_retention" in payload:
+        if quote_retention_rule is None or quote_retention_rule_sha256 is None:
+            quote_result = QuoteRetentionGateResult(
+                approved=False,
+                blocking_reasons=("quote retention rule provenance unavailable",),
+            )
+        else:
+            quote_result = check_quote_retention_intake(
+                payload.get("quote_retention"),
+                contract=contract_result.contract,
+                rule=quote_retention_rule,
+                rule_sha256=quote_retention_rule_sha256,
+            )
+
     watchlist_result: Optional[WatchlistCandidateResult] = None
     if payload.get("watchlist_candidate") is not None:
         watchlist_result = check_watchlist_candidate_intake(payload["watchlist_candidate"])
@@ -270,6 +303,7 @@ def check_advisory_decision_intake(
         watchlist_result,
         morning_scan_result,
         portfolio_result=portfolio_result,
+        quote_result=quote_result,
         risk_accepted=risk_accepted,
         notes=notes,
     )
