@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
+from pathlib import Path
+import subprocess
+import sys
 
 from alert_ranker.market_data import (
     PUBLIC_OPTION_CHAIN_SOURCE,
@@ -137,3 +140,13 @@ def test_unquoted_contract_does_not_count_as_executable_quote_coverage():
     assert summary.total_contracts == 1
     assert summary.quoted_contracts == 0
     assert summary.all_quoted_have_executable_timestamp is False
+
+
+def test_probe_is_directly_invokable_from_repo_root():
+    root = Path(__file__).resolve().parents[1]
+    result = subprocess.run(
+        [sys.executable, "scripts/options_public_quote_timestamp_probe.py", "--help"],
+        cwd=root, capture_output=True, text=True, check=False,
+    )
+    assert result.returncode == 0
+    assert "Read-only Public option-chain timestamp" in result.stdout
