@@ -392,7 +392,15 @@ def check_portfolio_risk_intake(
         contracts=contract.max_contracts,
         max_trade_risk_dollars=max_trade_risk_dollars,
     )
-    candidate_capital = contract.ask * CONTRACT_MULTIPLIER * contract.max_contracts
+    ask_value = contract.ask
+    candidate_capital = (
+        float(ask_value) * CONTRACT_MULTIPLIER * contract.max_contracts
+        if not isinstance(ask_value, bool)
+        and isinstance(ask_value, (int, float))
+        and math.isfinite(float(ask_value))
+        and float(ask_value) >= 0
+        else 0.0
+    )
     candidate = RiskExposure(
         ticker=proof_packet.ticker,
         direction=proof_packet.direction,
