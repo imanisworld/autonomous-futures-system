@@ -83,11 +83,17 @@ def resolve_exit_trigger(
         return ExitTriggerResult("INVALID", detail="nonfinite_level_or_bar")
     if bar.high < bar.low:
         return ExitTriggerResult("INVALID", detail="bar_high_below_low")
+    if not (float(bar.low) <= float(bar.open) <= float(bar.high)):
+        return ExitTriggerResult("INVALID", detail="bar_open_outside_range")
 
     stop = float(stop_level)
     target = float(target_level)
     if stop <= 0 or target <= 0:
         return ExitTriggerResult("INVALID", detail="nonpositive_level")
+    if side == "CALL" and stop >= target:
+        return ExitTriggerResult("INVALID", detail="invalid_call_stop_target_geometry")
+    if side == "PUT" and target >= stop:
+        return ExitTriggerResult("INVALID", detail="invalid_put_stop_target_geometry")
 
     if side == "CALL":
         if float(bar.open) <= stop:
