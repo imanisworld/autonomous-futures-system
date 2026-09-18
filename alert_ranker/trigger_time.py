@@ -169,20 +169,14 @@ def _family_for_break(
         return "STRAT_312", subtype, trade_direction
 
     if armed.pattern == "222":
-        subtype = (
-            "CONTINUATION"
-            if reference is not None and current_direction == reference
-            else "REVERSAL"
-        )
-        return f"STRAT_222_{subtype}", subtype, trade_direction
+        if reference is not None and current_direction == reference:
+            return None, "CONTINUATION", None
+        return "STRAT_222_REVERSAL", "REVERSAL", trade_direction
 
     if armed.pattern == "322":
-        subtype = (
-            "CONTINUATION"
-            if reference is not None and current_direction == reference
-            else "REVERSAL"
-        )
-        return f"STRAT_322_{subtype}", subtype, trade_direction
+        if reference is not None and current_direction == reference:
+            return None, "CONTINUATION", None
+        return "STRAT_322_REVERSAL", "REVERSAL", trade_direction
 
     if armed.pattern == "122":
         if reference is not None and current_direction == reference:
@@ -256,24 +250,32 @@ def resolve_trigger(
         side: BreakSide = "HIGH" if high_break else "LOW"
         family, subtype, direction = _family_for_break(armed, side)
 
-        if armed.pattern == "122" and family is None:
-            return TriggerResolution(
-                status="CANCELLED",
-                pattern=armed.pattern,
-                family=None,
-                subtype=None,
-                direction=None,
-                break_side=side,
-                trigger_level=(
-                    armed.boundary_high if side == "HIGH" else armed.boundary_low
-                ),
-                invalidation_level=None,
-                trigger_bar_start=bar.start_utc,
-                trigger_bar_timeframe=lower_timeframe.name,
-                final_scenario=final_scenario,
-                opposite_side_broken_later=final_scenario == OUTSIDE_BAR,
-                reason_code="same_direction_break_precludes_122_reversal",
-            )
+        if family is None:
+            cancellation_reason = None
+            if armed.pattern == "122":
+                cancellation_reason = "same_direction_break_precludes_122_reversal"
+            elif armed.pattern == "222":
+                cancellation_reason = "same_direction_222_is_run_context_not_entry"
+            elif armed.pattern == "322":
+                cancellation_reason = "same_direction_322_continuation_not_approved"
+            if cancellation_reason is not None:
+                return TriggerResolution(
+                    status="CANCELLED",
+                    pattern=armed.pattern,
+                    family=None,
+                    subtype=subtype,
+                    direction=None,
+                    break_side=side,
+                    trigger_level=(
+                        armed.boundary_high if side == "HIGH" else armed.boundary_low
+                    ),
+                    invalidation_level=None,
+                    trigger_bar_start=bar.start_utc,
+                    trigger_bar_timeframe=lower_timeframe.name,
+                    final_scenario=final_scenario,
+                    opposite_side_broken_later=final_scenario == OUTSIDE_BAR,
+                    reason_code=cancellation_reason,
+                )
 
         later = watched[index + 1 :]
         opposite_later = (

@@ -279,3 +279,35 @@ def test_watch_window_is_exactly_next_30m_bar():
 def test_no_arm_when_latest_completed_bar_has_no_supported_precursor():
     bars = [_bar(0, 10, 0), _bar(30, 9.5, 0.5)]
     assert arm_trigger_setup(bars) is None
+
+
+@pytest.mark.parametrize(
+    ("bars", "high", "reason"),
+    [
+        (
+            [_bar(0, 10, 0), _bar(30, 11, 1), _bar(60, 12, 2)],
+            12.1,
+            "same_direction_222_is_run_context_not_entry",
+        ),
+        (
+            [_bar(0, 10, 5), _bar(30, 12, 3), _bar(60, 13, 4)],
+            13.1,
+            "same_direction_322_continuation_not_approved",
+        ),
+    ],
+)
+def test_same_direction_222_and_322_are_not_promoted_as_entries(bars, high, reason):
+    armed = arm_trigger_setup(bars)
+    assert armed is not None
+
+    result = resolve_trigger(
+        armed,
+        [_fine(armed.armed_at, 0, high, armed.boundary_low + 0.1)],
+        lower_timeframe=MINUTE_5,
+    )
+
+    assert result.status == "CANCELLED"
+    assert result.family is None
+    assert result.subtype == "CONTINUATION"
+    assert result.direction is None
+    assert result.reason_code == reason
