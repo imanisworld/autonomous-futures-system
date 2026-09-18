@@ -84,11 +84,16 @@ certificate could produce false-clean evidence.
 
 ### Current conservative limitation
 
-The collection-only path now preserves exact source ticker. The existing
-MNQ/MES trading-path BarHistory writer does not yet attach that metadata, so
-new cross-instrument MNQ/MES outcomes can remain roll-provenance-blocked until
-that additive provenance field is wired through the already-existing runner.
-That is a quality limitation, not permission to infer a contract from the root.
+The collection-only path preserves the exact incoming source ticker. The
+MNQ/MES trading-path BarHistory writer now also preserves the incoming
+`payload.ticker` on future 15m bars as additive provenance metadata. Existing
+historical MNQ/MES rows are not rewritten and remain without that field.
+
+This does **not** prove dated-contract identity: current TradingView alerts use
+continuous symbols (`MNQ1!` / `MES1!`), so those future rows remain
+`ROLL_PROVENANCE_UNKNOWN` until the underlying dated contract is independently
+proven. Preserving the continuous symbol removes a metadata omission; it does
+not grant evidence admission or execution authority.
 
 ## Code / detector provenance
 
