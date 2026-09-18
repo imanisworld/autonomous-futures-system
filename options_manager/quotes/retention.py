@@ -24,8 +24,6 @@ QuoteStatus = Literal["OK", "MISSING", "STALE", "FUTURE", "INVALID", "WIDE_SPREA
 
 
 class QuoteSource(str, Enum):
-    """Frozen source routes already represented by this repository."""
-
     FIXTURE_OPTION_CHAIN = "fixture:option_chain_snapshot"
     PUBLIC_OPTION_CHAIN = "public:/userapigateway/marketdata/{accountId}/option-chain"
 
@@ -115,12 +113,10 @@ def retention_rule_from_mapping(raw: Mapping[str, object]) -> QuoteRetentionRule
 
 
 def quote_record_json(record: QuoteRecord) -> str:
-    """Canonical byte-stable JSONL representation."""
     return json.dumps(asdict(record), sort_keys=True, separators=(",", ":")) + "\n"
 
 
 def quote_manifest_json(manifest: Mapping[str, object]) -> str:
-    """Canonical byte-stable manifest representation for evidence hashing."""
     return json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n"
 
 
@@ -147,7 +143,6 @@ def _spread_percent(bid: float, ask: float) -> float:
 
 
 def retain_quote(quote: QuoteRetentionInput, *, rule: QuoteRetentionRule, rule_sha256: str) -> QuoteRecord:
-    """Classify and retain one decision-time option quote without fabrication."""
     if not _valid_sha256(rule_sha256):
         raise ValueError("rule_sha256 must be a 64-character hexadecimal SHA-256")
     rule_sha256 = rule_sha256.lower()
@@ -189,7 +184,6 @@ def retain_quote(quote: QuoteRetentionInput, *, rule: QuoteRetentionRule, rule_s
 
 
 def build_quote_manifest(files: Mapping[str, bytes], *, rule: QuoteRetentionRule, rule_sha256: str) -> dict[str, object]:
-    """Build a reproducible manifest over canonical quote JSONL byte payloads."""
     if not _valid_sha256(rule_sha256):
         raise ValueError("rule_sha256 must be a 64-character hexadecimal SHA-256")
     if not files:
@@ -231,3 +225,36 @@ def build_quote_manifest(files: Mapping[str, bytes], *, rule: QuoteRetentionRule
             all_sources.add(parsed_source.value)
         entries.append({"path": path, "sha256": hashlib.sha256(payload).hexdigest(), "row_count": len(rows)})
     return {"manifest_version": 1, "rule_id": rule.rule_id, "rule_sha256": rule_sha256.lower(), "max_quote_age_seconds": rule.max_quote_age_seconds, "max_spread_percent": rule.max_spread_percent, "sources": sorted(all_sources), "files": entries}
+
+
+def verify_quote_manifest_files(manifest: Mapping[str, object], files: Mapping[str, bytes]) -> None:
+    """Fail closed unless supplied dataset bytes exactly match the frozen manifest."""
+    entries = manifest.get("files")
+    if not isinstance(entries, list) or not entries:
+        raise ValueError("manifest files must be a non-empty list")
+    expected_paths: set[str] = set()
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise ValueError("manifest file entry must be an object")
+        path, claimed_sha, claimed_rows = entry.get("path"), entry.get("sha256"), entry.get("row_count")
+        if not isinstance(path, str) or not path or path.startswith("/") or ".." in path.split("/"):
+            raise ValueError("manifest file path is invalid")
+        if path in expected_paths:
+            raise ValueError(f"duplicate manifest path: {path}")
+        expected_paths.add(path)
+        if not _valid_sha256(claimed_sha):
+            raise ValueError(f"manifest sha256 is invalid for {path}")
+        if isinstance(claimed_rows, bool) or not isinstance(claimed_rows, int) or claimed_rows < 0:
+            raise ValueError(f"manifest row_count is invalid for {path}")
+        payload = files.get(path)
+        if not isinstance(payload, bytes):
+            raise ValueError(f"manifest dataset file missing: {path}")
+        actual_sha = hashlib.sha256(payload).hexdigest()
+        if actual_sha != claimed_sha.lower():
+            raise ValueError(f"manifest dataset sha256 mismatch: {path}")
+        actual_rows = sum(1 for line in payload.splitlines() if line.strip())
+        if actual_rows != claimed_rows:
+            raise ValueError(f"manifest dataset row_count mismatch: {path}")
+    extra = sorted(set(files) - expected_paths)
+    if extra:
+        raise ValueError(f"unmanifested dataset files supplied: {','.join(extra)}")
