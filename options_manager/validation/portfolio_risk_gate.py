@@ -421,9 +421,11 @@ def check_portfolio_risk_intake(
             )
             break
 
-    raw_open_orders = payload.get("open_orders", [])
+    raw_open_orders = payload.get("open_orders")
     if not isinstance(raw_open_orders, list):
-        extra_blocking.append("portfolio_risk.open_orders must be a list when supplied")
+        extra_blocking.append(
+            "portfolio_risk.open_orders must be supplied as a list (use [] when none)"
+        )
     else:
         for index, raw_order in enumerate(raw_open_orders):
             if not isinstance(raw_order, Mapping):
