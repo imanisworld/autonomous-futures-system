@@ -43,3 +43,13 @@ def process_demo_five_min_bar(
         for_date=for_date,
         broker_factory=broker_factory,
     )
+
+
+def run_demo_eod_fallback(*, cfg, log_dir: str | Path, now=None, broker_factory=None):
+    """Run the exit-only fallback against DEMO-isolated storage."""
+    return _core.run_demo_eod_fallback(
+        cfg=cfg,
+        log_dir=isolated_log_dir(log_dir),
+        now=now,
+        broker_factory=broker_factory,
+    )

@@ -18,7 +18,10 @@ This module adds only the external-demo safety envelope:
 from __future__ import annotations
 
 import hashlib
-from datetime import date
+import json
+import os
+from datetime import date, datetime, timezone
+from types import SimpleNamespace
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -408,6 +411,149 @@ def _resolve_position(
     state["position"] = None
     demo_state.save_state(log_dir, state)
     return audit
+
+
+
+def _demo_exit_config_errors() -> list[str]:
+    """Exit-only DEMO safety checks.
+
+    Deliberately independent of the entry arm/route and FIVE_MIN_FEED_ENABLED:
+    an already-open DEMO position must remain closable after the entry lane is
+    disarmed or the feed fails. This path can only reduce exposure.
+    """
+    errors: list[str] = []
+    if str(os.getenv("BROKER", "paper")).strip().lower() != "tradovate":
+        errors.append("broker_not_tradovate")
+    if str(os.getenv("TRADOVATE_ENV", "")).strip().lower() != "demo":
+        errors.append("tradovate_env_not_demo")
+    if str(os.getenv("LIVE_TRADING_ENABLED", "false")).strip().lower() in {"1", "true", "yes", "on"}:
+        errors.append("live_trading_enabled")
+    account_pin = str(os.getenv("TRADOVATE_EXPECTED_ACCOUNT_ID", "")).strip()
+    if not account_pin or not account_pin.lstrip("-").isdigit():
+        errors.append("tradovate_expected_account_id_missing_or_invalid")
+    return errors
+
+
+def _stored_demo_day(log_dir: str | Path) -> Optional[date]:
+    """Return the persisted demo trading date without accepting malformed state."""
+    path = demo_state.state_path(log_dir)
+    if not path.exists():
+        return None
+    try:
+        raw = json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError) as exc:
+        raise demo_state.DemoStateError(f"demo state unreadable: {exc}") from exc
+    if not isinstance(raw, dict):
+        raise demo_state.DemoStateError("demo state must be a JSON object")
+    token = str(raw.get("trading_date") or "")
+    try:
+        return date.fromisoformat(token)
+    except ValueError as exc:
+        raise demo_state.DemoStateError(f"invalid demo trading_date: {token!r}") from exc
+
+
+def run_demo_eod_fallback(
+    *,
+    cfg,
+    log_dir: str | Path,
+    now: Optional[datetime] = None,
+    broker_factory: Optional[Callable[[], Any]] = None,
+) -> dict[str, Any]:
+    """Independent 16:00+ ET safety fallback for an existing DEMO position.
+
+    This function never creates an entry. It only reconciles an already-durable
+    pending/position record and, when broker state is exclusive and agrees with
+    that record, lets the existing EOD resolver flatten it. A post-16:00 flatten
+    is recorded as EOD_BAR_MISSING / invalid evidence.
+    """
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None:
+        raise ValueError("wide-stop demo EOD fallback requires a timezone-aware timestamp")
+    if not is_after_eod_close(current):
+        return {"ok": False, "action": "FAIL_CLOSED", "reason": "BEFORE_EOD_CLOSE"}
+
+    root = Path(log_dir)
+    stored_day = _stored_demo_day(root)
+    if stored_day is None:
+        return {"ok": True, "action": "NO_ACTION", "reason": "NO_DEMO_STATE"}
+
+    with collector._collector_lock(root):
+        state = demo_state.load_state(root, stored_day)
+        if not isinstance(state.get("pending"), dict) and not isinstance(state.get("position"), dict):
+            return {"ok": True, "action": "NO_ACTION", "reason": "NO_OPEN_DEMO_POSITION"}
+
+        errors = _demo_exit_config_errors()
+        if errors:
+            return {
+                "ok": False,
+                "action": "FAIL_CLOSED",
+                "reason": "DEMO_EXIT_CONFIG_BLOCKED",
+                "errors": errors,
+            }
+
+        factory = broker_factory or _broker_factory
+        broker = factory()
+        if getattr(broker, "is_live", True):
+            raise ValueError("wide-stop demo EOD fallback refuses a live broker")
+        same_broker = lambda: broker
+        recovered = _pending_reconcile(
+            cfg=cfg,
+            log_dir=root,
+            for_date=stored_day,
+            day=stored_day,
+            state=state,
+            broker_factory=same_broker,
+        )
+        if isinstance(state.get("pending"), dict):
+            return {
+                "ok": False,
+                "action": "FAIL_CLOSED",
+                "reason": "PENDING_SUBMISSION_UNRESOLVED",
+                "recovery": recovered,
+                "demo_portfolio": demo_state.snapshot(state),
+            }
+
+        if not isinstance(state.get("position"), dict):
+            return {
+                "ok": True,
+                "action": "NO_ACTION",
+                "reason": "NO_OPEN_DEMO_POSITION",
+                "recovery": recovered,
+            }
+
+        synthetic = SimpleNamespace(timestamp=current.isoformat())
+        outcome = _resolve_position(
+            cfg=cfg,
+            log_dir=root,
+            for_date=stored_day,
+            state=state,
+            payload=synthetic,
+            broker_factory=same_broker,
+        )
+        if outcome is None:
+            return {
+                "ok": False,
+                "action": "FAIL_CLOSED",
+                "reason": "DEMO_POSITION_UNRESOLVED",
+                "demo_portfolio": demo_state.snapshot(state),
+            }
+        lane_result = str(outcome.get("lane_result") or "")
+        if lane_result.startswith("UNRESOLVED_"):
+            return {
+                "ok": False,
+                "action": "FAIL_CLOSED",
+                "reason": lane_result,
+                "outcome": outcome,
+                "demo_portfolio": demo_state.snapshot(state),
+            }
+        return {
+            "ok": True,
+            "action": "DEMO_POSITION_RESOLVED",
+            "reason": str(outcome.get("exit_reason") or outcome.get("outcome_result") or "RESOLVED"),
+            "outcome": outcome,
+            "recovery": recovered,
+            "demo_portfolio": demo_state.snapshot(state),
+        }
 
 
 def process_demo_five_min_bar(

@@ -1,0 +1,10 @@
+[Unit]
+Description=Run AFS wide-stop Tradovate DEMO fallback shortly after 4PM New York time
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 16:02:00 America/New_York
+Persistent=true
+Unit=afs-wide-stop-demo-eod-fallback.service
+
+[Install]
+WantedBy=timers.target
