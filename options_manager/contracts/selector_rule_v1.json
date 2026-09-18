@@ -6,6 +6,7 @@
   "max_abs_delta": 0.7,
   "target_abs_delta": 0.5,
   "max_spread_percent": 20.0,
+  "max_quote_age_seconds": 900,
   "min_volume": 100,
   "min_open_interest": 500
 }
