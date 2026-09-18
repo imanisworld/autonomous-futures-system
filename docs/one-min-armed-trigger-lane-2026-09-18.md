@@ -1,84 +1,113 @@
-# 1m Armed Trigger Evidence Lane — 2026-09-18
+# 1m Armed Trigger / Context Lane — 2026-09-18
 
 ## Verdict
 
-**APPROVE CODE / HOLD DEPLOYMENT / PAPER EVIDENCE ONLY.**
+**DEPLOYED / PAPER-SHADOW EVIDENCE ONLY / NO LIVE EXECUTION AUTHORITY.**
 
-Purpose: consume 1m TradingView bars only as lower-latency evidence for an
-already-authorized MNQ 4HR Re-Trigger setup.
+Purpose:
+- reduce trigger-latency observation for already-authorized MNQ 4HR setups;
+- collect lower-timeframe context for all configured futures roots;
+- keep setup discovery, strategy authorization, risk approval, and broker submission separate from 1m ingestion.
 
-No live execution, broker route, risk override, or new setup discovery was added.
+Verified active release:
+`a6913c06750dbe9e67ea6ba0120ac43841f1fdc9`
 
-## Build
+Verified loaded posture:
+- `LIVE_TRADING_ENABLED=false`
+- `TRADOVATE_ENV=demo`
+- `SCHEDULE_MODE=always_on_shadow`
+- `EXIT_MODE=static`
+- `MAX_CONTRACTS_HARD_CAP=1`
+- `ONE_MIN_TRIGGER_ENABLED=true`
+- live-box drift guard: **OK**
 
-New module:
+## Architecture
+
+Generic 1m storage:
+- `context/one_min_feed.py`
+- writes isolated `tf1m/` BarHistory only;
+- imports no DecisionEngine, RiskEngine, PaperBroker, or Tradovate code.
+
+MNQ 4HR trigger observer:
 - `context/one_min_trigger.py`
-
-New tests:
-- `tests/test_one_min_trigger.py`
-
-Core routing change:
-- `webhook/runner.py`
-- default-off via `ONE_MIN_TRIGGER_ENABLED`
-- enabled 1m alerts return `ONE_MIN_CONTEXT` before DecisionEngine, RiskEngine,
-  or any broker path.
-## Safety contract
-
-The 1m lane:
-- stores bars under isolated `tf1m/`;
-- accepts all roots as context only;
-- emits a trigger-touch event only for MNQ;
-- requires `strat_4hr_retrigger` to be enabled;
-- requires a persisted MNQ 4HR state with `status == ARMED`;
-- cannot create or arm a 4HR setup;
-- uses only a fully completed prior 1H candle for the stop;
-- deduplicates one trigger event per armed setup;
+- can observe a trigger only when persisted MNQ 4HR state is already `ARMED`;
+- cannot create or arm the setup;
+- uses a genuinely completed prior 1H stop anchor;
+- deduplicates one event per armed setup;
 - records `trade_authorized=false`;
-- records `external_broker=false`;
-- returns before all order-submission code.
+- records `external_broker=false`.
 
-Disabled behavior is unchanged: 1m still returns TIMEFRAME_MISMATCH.
+Main runner:
+- authenticated 1m MNQ/MES inputs are intercepted before the ordinary strategy/risk/broker path;
+- result is context/evidence only.
+
+Collection-only observation transport:
+- M2K/MGC/MCL/MBT remain on the dedicated `OBSERVATION_ONLY` route;
+- their 1m bars are stored through the neutral 1m feed helper;
+- they never enter DecisionEngine, RiskEngine, PaperBroker, or Tradovate because of this patch.
+
+Existing 5m and 15m feeds remain in place. 1m supplements them; it does not replace them.
+
 ## Verification
 
-Focused:
-- `tests/test_one_min_trigger.py`
-- `tests/test_five_min_feed.py`
-- 24/24 passed.
+Initial MNQ armed-trigger lane:
+- focused 1m + 5m tests: 24/24 passed;
+- surrounding webhook/timeframe isolation: 138/138 passed;
+- full current-base suite before deployment: 6,093 passed / 7 skipped.
 
-Surrounding webhook/timeframe isolation:
-- `tests/test_webhook.py`
-- `tests/test_claim_bar_timeframe_isolation.py`
-- 138/138 passed.
+Collection-only 1m extension:
+- focused observation / 1m / webhook suite: **175/175 passed**;
+- structural isolation guard proves observation modules do not import execution/risk engines;
+- full repo suite: **6,099 passed / 7 skipped**;
+- PR #725 CI / analysis / CodeQL: green.
 
-Authoritative repo suite:
-- `pytest -q tests`
-- **6093 passed / 7 skipped** on current `origin/main`.
+Atomic release path:
+- merged SHA release built/verified/promoted through the immutable release flow;
+- post-activation CWD matched exact deployed SHA;
+- proof-critical `ONE_MIN_TRIGGER_ENABLED` pin loaded and guard-clean.
 
-A root-level `pytest -q` command is not authoritative because pytest also
-discovers `private/mes598-proof/source/tests` and raises an import-path
-collision against the repo's own `tests.conftest`.
-## Deployment status
+## Live feed proof
 
-**Not deployed or enabled.**
+Post-deploy, fresh authenticated 1m payloads and `tf1m` files were verified for all six roots:
 
-The local Mac has no running futures/webhook systemd unit. Repository deployment
-metadata points to the Hetzner webhook service and environment file:
-`/etc/risksentinel/webhook.env`.
+- MNQ ✅
+- MES ✅
+- M2K ✅
+- MGC ✅
+- MCL ✅
+- MBT ✅
 
-Required deployment setting:
-`ONE_MIN_TRIGGER_ENABLED=true`
+At the final natural-minute proof:
+- all six latest payloads reported `timeframe=1`;
+- all six had active `bars_<ROOT>_2026-09-18.jsonl` files.
 
-That setting must only be applied with the tested code release. Existing
-5m/15m alerts must remain in place.
+TradingView authentication issue encountered during activation:
+- the six newly-created 1m alerts initially returned 401 because their alert snapshot lacked the Pine body-auth secret;
+- copying the existing body-auth input and recreating the alerts changed them to HTTP 200;
+- server authentication was not weakened.
 
-## Safe next step
+## What this lane does not prove
 
-Release only:
-- `context/one_min_trigger.py`
-- `webhook/runner.py`
-- `tests/test_one_min_trigger.py`
+It does not prove:
+- that 1m execution improves every strategy;
+- that 1m should discover setups;
+- that all armed-trigger families should use identical intrabar semantics;
+- that collection-only instruments are eligible for trading;
+- that MNQ 4HR is validated;
+- that a 1m bar provides exact tick-by-tick price path inside the minute.
 
-Then enable `ONE_MIN_TRIGGER_ENABLED=true` on the paper/shadow webhook box,
-restart/reload through the normal atomic release path, and verify incoming 1m
-alerts produce `ONE_MIN_CONTEXT` plus isolated `tf1m/` records before
-considering any paper-fill authority.
+For MNQ 4HR, 1m is currently evidence infrastructure. Any move from trigger observation to paper-fill authority requires its own controlled proof and explicit authorization.
+
+## Current safe next step
+
+Keep the lane running as evidence-only.
+
+Use natural 1m MNQ events to compare:
+- armed trigger level;
+- actual 1m touch timing;
+- prior 5m-close decision timing;
+- detachment at the old decision point;
+- correct completed-1H stop anchor;
+- duplicate/replay behavior.
+
+Do not extend execution authority to M2K/MGC/MCL/MBT.

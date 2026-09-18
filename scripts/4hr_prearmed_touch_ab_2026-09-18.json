@@ -1,0 +1,392 @@
+{
+  "instrument": "MNQ",
+  "candidates": 81,
+  "models": {
+    "1": {
+      "old_trigger_backfill": {
+        "overall": {
+          "candidates": 81,
+          "fills": 80,
+          "no_fill_or_excluded": 1,
+          "wins": 49,
+          "losses": 31,
+          "win_rate": 0.613,
+          "net_pnl": 2886.6,
+          "expectancy_filled": 36.08,
+          "pf": 1.696
+        },
+        "halves": [
+          {
+            "candidates": 40,
+            "fills": 40,
+            "no_fill_or_excluded": 0,
+            "wins": 25,
+            "losses": 15,
+            "win_rate": 0.625,
+            "net_pnl": 1768.8,
+            "expectancy_filled": 44.22,
+            "pf": 2.172
+          },
+          {
+            "candidates": 41,
+            "fills": 40,
+            "no_fill_or_excluded": 1,
+            "wins": 24,
+            "losses": 16,
+            "win_rate": 0.6,
+            "net_pnl": 1117.8,
+            "expectancy_filled": 27.95,
+            "pf": 1.423
+          }
+        ]
+      },
+      "current_5m_close_ioc8": {
+        "overall": {
+          "candidates": 81,
+          "fills": 37,
+          "no_fill_or_excluded": 44,
+          "wins": 18,
+          "losses": 19,
+          "win_rate": 0.486,
+          "net_pnl": 1266.24,
+          "expectancy_filled": 34.22,
+          "pf": 1.846
+        },
+        "halves": [
+          {
+            "candidates": 40,
+            "fills": 19,
+            "no_fill_or_excluded": 21,
+            "wins": 9,
+            "losses": 10,
+            "win_rate": 0.474,
+            "net_pnl": 43.38,
+            "expectancy_filled": 2.28,
+            "pf": 1.062
+          },
+          {
+            "candidates": 41,
+            "fills": 18,
+            "no_fill_or_excluded": 23,
+            "wins": 9,
+            "losses": 9,
+            "win_rate": 0.5,
+            "net_pnl": 1222.86,
+            "expectancy_filled": 67.94,
+            "pf": 2.543
+          }
+        ],
+        "reasons": {
+          "ENTRY_BRACKET_INVALID_AT_FILL": 5,
+          "ENTRY_NOT_FILLED": 38,
+          "EOD_BAR_MISSING_FAIL_CLOSED": 1
+        }
+      },
+      "prearmed_stop_touch": {
+        "overall": {
+          "candidates": 81,
+          "fills": 80,
+          "no_fill_or_excluded": 1,
+          "wins": 40,
+          "losses": 40,
+          "win_rate": 0.5,
+          "net_pnl": 1414.6,
+          "expectancy_filled": 17.68,
+          "pf": 1.299
+        },
+        "halves": [
+          {
+            "candidates": 40,
+            "fills": 40,
+            "no_fill_or_excluded": 0,
+            "wins": 21,
+            "losses": 19,
+            "win_rate": 0.525,
+            "net_pnl": 861.8,
+            "expectancy_filled": 21.54,
+            "pf": 1.433
+          },
+          {
+            "candidates": 41,
+            "fills": 40,
+            "no_fill_or_excluded": 1,
+            "wins": 19,
+            "losses": 21,
+            "win_rate": 0.475,
+            "net_pnl": 552.8,
+            "expectancy_filled": 13.82,
+            "pf": 1.202
+          }
+        ],
+        "reasons": {
+          "EOD_BAR_MISSING_FAIL_CLOSED": 1
+        },
+        "same_bar_resolutions": 36
+      }
+    },
+    "2": {
+      "old_trigger_backfill": {
+        "overall": {
+          "candidates": 81,
+          "fills": 80,
+          "no_fill_or_excluded": 1,
+          "wins": 49,
+          "losses": 31,
+          "win_rate": 0.613,
+          "net_pnl": 2831.1,
+          "expectancy_filled": 35.39,
+          "pf": 1.677
+        },
+        "halves": [
+          {
+            "candidates": 40,
+            "fills": 40,
+            "no_fill_or_excluded": 0,
+            "wins": 25,
+            "losses": 15,
+            "win_rate": 0.625,
+            "net_pnl": 1741.3,
+            "expectancy_filled": 43.53,
+            "pf": 2.143
+          },
+          {
+            "candidates": 41,
+            "fills": 40,
+            "no_fill_or_excluded": 1,
+            "wins": 24,
+            "losses": 16,
+            "win_rate": 0.6,
+            "net_pnl": 1089.8,
+            "expectancy_filled": 27.24,
+            "pf": 1.41
+          }
+        ]
+      },
+      "current_5m_close_ioc8": {
+        "overall": {
+          "candidates": 81,
+          "fills": 37,
+          "no_fill_or_excluded": 44,
+          "wins": 18,
+          "losses": 19,
+          "win_rate": 0.486,
+          "net_pnl": 1238.24,
+          "expectancy_filled": 33.47,
+          "pf": 1.816
+        },
+        "halves": [
+          {
+            "candidates": 40,
+            "fills": 19,
+            "no_fill_or_excluded": 21,
+            "wins": 9,
+            "losses": 10,
+            "win_rate": 0.474,
+            "net_pnl": 28.88,
+            "expectancy_filled": 1.52,
+            "pf": 1.04
+          },
+          {
+            "candidates": 41,
+            "fills": 18,
+            "no_fill_or_excluded": 23,
+            "wins": 9,
+            "losses": 9,
+            "win_rate": 0.5,
+            "net_pnl": 1209.36,
+            "expectancy_filled": 67.19,
+            "pf": 2.509
+          }
+        ],
+        "reasons": {
+          "ENTRY_BRACKET_INVALID_AT_FILL": 5,
+          "ENTRY_NOT_FILLED": 38,
+          "EOD_BAR_MISSING_FAIL_CLOSED": 1
+        }
+      },
+      "prearmed_stop_touch": {
+        "overall": {
+          "candidates": 81,
+          "fills": 80,
+          "no_fill_or_excluded": 1,
+          "wins": 40,
+          "losses": 40,
+          "win_rate": 0.5,
+          "net_pnl": 1354.6,
+          "expectancy_filled": 16.93,
+          "pf": 1.284
+        },
+        "halves": [
+          {
+            "candidates": 40,
+            "fills": 40,
+            "no_fill_or_excluded": 0,
+            "wins": 21,
+            "losses": 19,
+            "win_rate": 0.525,
+            "net_pnl": 832.3,
+            "expectancy_filled": 20.81,
+            "pf": 1.414
+          },
+          {
+            "candidates": 41,
+            "fills": 40,
+            "no_fill_or_excluded": 1,
+            "wins": 19,
+            "losses": 21,
+            "win_rate": 0.475,
+            "net_pnl": 522.3,
+            "expectancy_filled": 13.06,
+            "pf": 1.189
+          }
+        ],
+        "reasons": {
+          "EOD_BAR_MISSING_FAIL_CLOSED": 1
+        },
+        "same_bar_resolutions": 36
+      }
+    },
+    "3": {
+      "old_trigger_backfill": {
+        "overall": {
+          "candidates": 81,
+          "fills": 80,
+          "no_fill_or_excluded": 1,
+          "wins": 49,
+          "losses": 31,
+          "win_rate": 0.613,
+          "net_pnl": 2775.6,
+          "expectancy_filled": 34.7,
+          "pf": 1.659
+        },
+        "halves": [
+          {
+            "candidates": 40,
+            "fills": 40,
+            "no_fill_or_excluded": 0,
+            "wins": 25,
+            "losses": 15,
+            "win_rate": 0.625,
+            "net_pnl": 1713.8,
+            "expectancy_filled": 42.84,
+            "pf": 2.114
+          },
+          {
+            "candidates": 41,
+            "fills": 40,
+            "no_fill_or_excluded": 1,
+            "wins": 24,
+            "losses": 16,
+            "win_rate": 0.6,
+            "net_pnl": 1061.8,
+            "expectancy_filled": 26.54,
+            "pf": 1.397
+          }
+        ]
+      },
+      "current_5m_close_ioc8": {
+        "overall": {
+          "candidates": 81,
+          "fills": 37,
+          "no_fill_or_excluded": 44,
+          "wins": 18,
+          "losses": 19,
+          "win_rate": 0.486,
+          "net_pnl": 1210.74,
+          "expectancy_filled": 32.72,
+          "pf": 1.788
+        },
+        "halves": [
+          {
+            "candidates": 40,
+            "fills": 19,
+            "no_fill_or_excluded": 21,
+            "wins": 9,
+            "losses": 10,
+            "win_rate": 0.474,
+            "net_pnl": 14.88,
+            "expectancy_filled": 0.78,
+            "pf": 1.021
+          },
+          {
+            "candidates": 41,
+            "fills": 18,
+            "no_fill_or_excluded": 23,
+            "wins": 9,
+            "losses": 9,
+            "win_rate": 0.5,
+            "net_pnl": 1195.86,
+            "expectancy_filled": 66.44,
+            "pf": 2.476
+          }
+        ],
+        "reasons": {
+          "ENTRY_BRACKET_INVALID_AT_FILL": 5,
+          "ENTRY_NOT_FILLED": 38,
+          "EOD_BAR_MISSING_FAIL_CLOSED": 1
+        }
+      },
+      "prearmed_stop_touch": {
+        "overall": {
+          "candidates": 81,
+          "fills": 80,
+          "no_fill_or_excluded": 1,
+          "wins": 40,
+          "losses": 40,
+          "win_rate": 0.5,
+          "net_pnl": 1294.6,
+          "expectancy_filled": 16.18,
+          "pf": 1.269
+        },
+        "halves": [
+          {
+            "candidates": 40,
+            "fills": 40,
+            "no_fill_or_excluded": 0,
+            "wins": 21,
+            "losses": 19,
+            "win_rate": 0.525,
+            "net_pnl": 802.8,
+            "expectancy_filled": 20.07,
+            "pf": 1.396
+          },
+          {
+            "candidates": 41,
+            "fills": 40,
+            "no_fill_or_excluded": 1,
+            "wins": 19,
+            "losses": 21,
+            "win_rate": 0.475,
+            "net_pnl": 491.8,
+            "expectancy_filled": 12.29,
+            "pf": 1.177
+          }
+        ],
+        "reasons": {
+          "EOD_BAR_MISSING_FAIL_CLOSED": 1
+        },
+        "same_bar_resolutions": 36
+      }
+    }
+  },
+  "causal_stop_changes": [
+    {
+      "day": "2025-01-14",
+      "entry_time": "2025-01-14T10:00:00-05:00",
+      "direction": "SHORT",
+      "old_stop": 21129.25,
+      "causal_stop": 21139.0,
+      "causal_stop_ts": "2025-01-14T08:00:00-05:00",
+      "delta_ticks": 39.0
+    },
+    {
+      "day": "2026-03-10",
+      "entry_time": "2026-03-10T10:00:00-04:00",
+      "direction": "SHORT",
+      "old_stop": 25081.0,
+      "causal_stop": 24999.5,
+      "causal_stop_ts": "2026-03-10T08:00:00-04:00",
+      "delta_ticks": 326.0
+    }
+  ]
+}
