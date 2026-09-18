@@ -1293,6 +1293,7 @@ class ReplayEngine:
         same way as production. Returns None when no level data is present."""
         if not any(v is not None for v in (
             candle.hod, candle.lod,
+            candle.prev_week_high, candle.prev_week_low,
             candle.ema_9, candle.ema_21, candle.ema_55, candle.ema_200,
         )):
             return None
@@ -1310,6 +1311,8 @@ class ReplayEngine:
         return KeyLevels(
             hod=candle.hod,
             lod=candle.lod,
+            prev_week_high=candle.prev_week_high,
+            prev_week_low=candle.prev_week_low,
             ema_9=candle.ema_9,
             ema_21=candle.ema_21,
             ema_55=candle.ema_55,
