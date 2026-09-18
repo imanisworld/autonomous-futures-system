@@ -4,7 +4,7 @@ This is the operational gate for starting the first `OPTIONS_PAPER_V1` evidence 
 
 Options-ready baseline: **`9d008a0dcdcb69270d80b663c678b4522f27ebb6`** with **4,921 passed / 7 skipped / 2 warnings**. If `main` advances before deployment, verify the deployed commit still contains this options baseline and has green CI.
 
-**Current state (2026-09-17): DEPLOYED and PROVEN. V1 evidence epochs 1 and 2 RECORDED. Box release `94eb7d3` (live 2026-09-17T21:36:10Z) = minimal futures release `11b3d91` + #648 shadow-row accounting repair; options entry/target/risk behaviour unchanged since `899a524`.**
+**Current state (2026-09-18): original V1 deployment gate is complete and evidence epochs 1 and 2 are recorded. The active options scanner is now independently pinned to service-specific release `3b9770d8fed4ad1825cc325bab536ffea618a94e`. Options entry/target/risk behaviour remains frozen; do not infer that repository `main` is deployed.**
 
 | | |
 |---|---|
@@ -138,6 +138,31 @@ Confirm the report reads the same smoke data without mutation and exposes:
 - ACTIVE vs COUNTERFACTUAL identity;
 - setup/timeframe sample counts and uncertainty ranges;
 - all three friction views: recorded executable, fee stress, fee + 1c/share slippage stress.
+
+## Prospective selector-evidence v3 deployment — prepared, not deployed
+
+This is a separate evidence-only service update; it is **not** a new strategy/policy cohort.
+
+Prepared exact candidate: `5c14577cf2b71270bd714ee5b3b783bab4d7b12f` on `release/options-selector-evidence-v3` (tracked by #716).
+
+Exact delta from active options-scanner release `3b9770d8fed4ad1825cc325bab536ffea618a94e`:
+
+- runtime: `alert_ranker/options_selector_evidence.py`, `alert_ranker/options_production_selector_replay.py`, evidence-only hooks in `alert_ranker/scanner_legacy.py`, append-only evidence storage in `alert_ranker/storage.py`;
+- tests: `tests/test_options_selector_evidence.py`, `tests/test_options_paper_v1.py`.
+
+No change to `alert_ranker/paper_v1.py`, market-data policy, setup rules, DTE/contract ranking, risk caps, broker/order code, `.env`, or futures runtime. Candidate proof before deployment: 31 targeted tests passed; isolated live SPY probe retained 282/282 bid timestamps, ask timestamps, OI, delta and IV; production selection and retained-input production replay matched with `production_replay_parity=true`.
+
+Before promotion, actual-box proof must confirm the currently pinned options release/integrity, advisory-only/read-only posture, `order_supported=false`, account endpoints forbidden, production SQLite path/continuity, current aggregate planned risk, and the exact six-file candidate allowlist. Do not restart the futures bot. Use a service-specific restart window.
+
+After promotion, prove options-scanner cwd/systemd pin equals the exact candidate release, health/posture is unchanged, production DB continuity is preserved, `options_selector_evidence` exists, and there is no traceback/order/broker activity. The first **natural** candidate must create a selector-evidence row with `production_replay_parity=true`; missing required evidence or replay mismatch must fail closed as `DATA_BLOCKED`. Rollback target is `3b9770d8fed4ad1825cc325bab536ffea618a94e`.
+
+This deployment starts prospective selector provenance only. It does not qualify a strategy.
+
+## Trigger-time research boundary — #717
+
+The completed-30m-bar observer remains valid for measuring what the current scanner could see, but #717 establishes that it is not the final Strat strategy-entry clock. For strategy backtesting, a completed precursor must freeze its boundaries and the first causal lower-timeframe boundary break is the trigger event.
+
+Therefore do **not** expand historical option-side acquisition from the old delayed first-sight timestamps. First run the trigger-time comparison on the frozen underlying corpus, rebuild market/HTF context as of trigger time, quantify family/timing/ambiguity changes, and freeze the resulting decision timestamps. #717 is research/advisory only and changes no deployed scanner behavior.
 
 ## Evidence epoch start
 
