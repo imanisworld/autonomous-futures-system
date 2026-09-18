@@ -400,7 +400,7 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
                     continue
 
                 option_evidence: dict[str, Any] | None = None
-                prospective_eligible = False
+                capture_gate_eligible = False
                 prearmed_at = armed_seen.get(setup_id)
                 if obs.family == "STRAT_212_REVERSAL" and obs.status == "TRIGGERED":
                     summary["reversal_triggers"] += 1
@@ -417,7 +417,7 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
                             detail, ticker=ticker, direction=obs.direction, decision_ts=gate_checked_at,
                         )
                     else:
-                        prospective_eligible = True
+                        capture_gate_eligible = True
                         option_evidence = await _capture_selector_evidence(
                             pub, ticker=ticker, direction=str(obs.direction), cfg=cfg
                         )
@@ -437,7 +437,7 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
                     "collector_version": COLLECTOR_VERSION,
                     "setup_id": setup_id,
                     "prearmed_at": prearmed_at.isoformat() if prearmed_at else None,
-                    "prospective_eligible": prospective_eligible,
+                    "capture_gate_eligible": capture_gate_eligible,
                     "option_evidence_usable": bool(
                         option_evidence and option_evidence.get("status") == "CAPTURED"
                     ),
