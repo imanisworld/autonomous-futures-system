@@ -85,6 +85,7 @@ def _payload(**overrides) -> dict:
         },
         "portfolio_risk": {
             "open_positions": [],
+            "open_orders": [],
             "candidate_correlation_group": "mega_cap_tech",
         },
     }
@@ -438,3 +439,17 @@ def test_corrupt_quote_rule_fails_closed_not_http_500(monkeypatch, tmp_path):
         "quote retention rule provenance unavailable" in reason
         for reason in body["blocking_reasons"]
     )
+
+
+
+def test_missing_open_orders_snapshot_is_canonical_avoid(monkeypatch, tmp_path):
+    monkeypatch.delenv("OPTIONS_MANAGER_INGEST_SECRET", raising=False)
+    monkeypatch.setenv("OPTIONS_MANAGER_JOURNAL_DIR", str(tmp_path))
+    monkeypatch.setenv("OPTIONS_MANAGER_MAX_AGGREGATE_OPEN_RISK_DOLLARS", "1000")
+    payload = _payload()
+    del payload["portfolio_risk"]["open_orders"]
+
+    body = client.post("/options/packet", json=payload).json()
+    assert body["verdict"] == "AVOID"
+    assert body["portfolio_verdict"] == "block"
+    assert any("open_orders" in reason for reason in body["blocking_reasons"])
