@@ -57,7 +57,7 @@ from sources.polygon_client import (  # noqa: E402
     contract_schedule,
 )
 
-TOOL_VERSION = "slc-build-v1.4"
+TOOL_VERSION = "slc-build-v1.5"
 _ET = ZoneInfo("America/New_York")
 
 # Files whose bytes define the corpus content (P2 spec §3.1 pins).
