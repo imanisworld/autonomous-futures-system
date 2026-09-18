@@ -51,6 +51,8 @@ The frozen selector requires bid, ask, volume, open interest, and delta at the d
 
 PR #686 adds an offline manifest materializer that consumes only already-normalized retained-quote JSONL, rejects path/schema/provenance drift, verifies exact dataset bytes, and atomically emits canonical `option_quotes_manifest.json` bytes. It does not fetch provider data and cannot make the missing historical dataset appear.
 
+The same PR adds an outcome-independent acquisition-index builder. Against the frozen local `FAMILY_POPULATION_MASTER.csv`, it selected all **81** primary-20 `STRAT_212_REVERSAL` structural episodes across 2026-09-09..15 using only family/universe identity and first-sight timestamps. It produced **81 unique symbol+decision timestamps** (62 symbol-session pairs), SHA-256 `44524ad167aa522f7291a9031aca92d71aec0fd5879d4339a74107dfa34bff16`. A regression proves changing outcome/MFE fields cannot change membership or serialized bytes. The generated index remains local evidence; it was not added to the preserved #653 package.
+
 ## Next evidence step
 
 Once an authorized historical source exists, start with a minimal real decision-time sample before any broad pull:
