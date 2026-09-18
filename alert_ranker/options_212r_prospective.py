@@ -159,7 +159,7 @@ def _previous_session(session: Session) -> Session | None:
     return None
 
 
-def _source_r(direction: str, trigger: float, stop: float, target: float) -> tuple[float | None, bool]:
+def source_reward_to_risk(direction: str, trigger: float, stop: float, target: float) -> tuple[float | None, bool]:
     risk = trigger - stop if direction == "LONG" else stop - trigger
     reward = target - trigger if direction == "LONG" else trigger - target
     if risk <= 0:
@@ -269,7 +269,7 @@ def observe_212_setups(
                 and result.invalidation_level is not None
                 and result.direction is not None
             ):
-                target_r, consumed = _source_r(
+                target_r, consumed = source_reward_to_risk(
                     result.direction,
                     float(result.trigger_level),
                     float(result.invalidation_level),

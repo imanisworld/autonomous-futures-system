@@ -201,29 +201,28 @@ Production-selector evidence capture is already deployed for the **current runni
 
 The dedicated 212R prospective collector is now also **built in code** (#730), but it is **not deployed or scheduled** and it does not make 212R a running strategy family. Its evidence journal is isolated from scanner trade/risk state.
 
-Independent timing review found that collector v0.1 measured evidence lag from the completed five-minute trigger bar rather than from the actual strict-through crossing inside that bar. That can understate evidence latency by up to almost five minutes.
+Independent timing review found that collector v0.1 measured evidence lag from the completed five-minute trigger bar rather than from the actual strict-through crossing inside that bar. The frozen 81 showed that bar-close-only detection would inherit 11.716s to 299.821s of delay, with 169.751s median, before any network/chain latency.
 
-Collector v0.2 corrects the evidence clock by:
+Collector v0.3 corrects the lane by:
 1. retaining the proven Public chart structure/arm logic;
-2. resolving the exact first strict-through crossing from Alpaca consolidated SIP trades using the same semantics as the frozen #733 historical audit;
-3. measuring both pre-selector and final selector-capture lag from that exact SIP crossing timestamp;
-4. allowing a first-bucket arm only when its recorded observation time is truly before the exact crossing, rather than requiring it before the five-minute bucket start;
-5. preserving the canonical raw SIP trade window separately with SHA-256 provenance;
-6. blocking selector evidence if SIP credentials, exact crossing proof, quote evidence, parity, or freshness are missing;
-7. keeping all output in isolated evidence storage with no alert, ACTIVE risk, broker/account, order, DEMO, or live route.
-
-The v0.2 correction makes lag accounting truthful, but the current collector still discovers the break only after the five-minute bar becomes complete. On the frozen 81 exact trigger events, crossing-to-bar-close delay is 11.716s minimum, 169.751s median, and 299.821s maximum; only 11/81 are within 60 seconds before any network/chain latency. A tight lag threshold would therefore select mostly late-in-bar triggers, while a loose threshold would accept multi-minute-late option chains.
+2. while a pre-armed setup is still `WATCHING`, querying Alpaca consolidated SIP trades only from the frozen watch start through the current source-observation time;
+3. resolving whichever frozen boundary broke first with the same strict price-forming trade semantics as #733, including exact nanosecond crossing time;
+4. reusing the same 212 family classifier and canonical source-geometry function for the live first break;
+5. measuring both pre-selector and final selector-capture lag from the exact SIP crossing timestamp;
+6. allowing a first-bucket arm only when its recorded observation time is truly before the exact crossing;
+7. preserving the canonical raw SIP trade window separately with SHA-256 provenance;
+8. blocking selector evidence if SIP credentials, exact crossing proof, quote evidence, parity, freshness, or timing proof are missing;
+9. keeping all output in isolated evidence storage with no alert, ACTIVE risk, broker/account, order, DEMO, or live route.
 
 ## Actual next gate
 
 Before any deployment/scheduling of the 212R collector:
 
-1. complete review/CI for the v0.2 exact-cross timing correction;
-2. move SIP boundary detection into the active `WATCHING` window so selector capture can begin on the first collector cycle after the true crossing instead of after bar close;
-3. choose and pre-register a numeric `max_capture_lag_seconds` measured from the exact SIP crossing; prior 60-second review values were mechanics-only, not policy;
-4. choose and pre-register collector timer cadence;
-5. separately authorize a service-specific observation-only deployment whose route cannot mutate scanner/risk/broker state;
-6. obtain the first real RTH `ARMED -> exact SIP cross -> selector evidence` proof.
+1. complete independent review/CI for collector v0.3;
+2. choose and pre-register a numeric `max_capture_lag_seconds` measured from the exact SIP crossing; prior 60-second review values were mechanics-only, not policy;
+3. choose and pre-register collector timer cadence;
+4. separately authorize a service-specific observation-only deployment whose route cannot mutate scanner/risk/broker state;
+5. obtain the first real RTH `ARMED -> exact SIP cross -> selector evidence` proof.
 
 Do not invent the policy values or deployment authorization in code.
 

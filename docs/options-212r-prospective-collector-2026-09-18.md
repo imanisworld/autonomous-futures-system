@@ -38,17 +38,18 @@ Independent review tightened three timing details without changing the lane's ob
 
 This closes a defect in v0.1 where evidence captured one second after a five-minute close could appear one second late even when the actual trigger crossed several minutes earlier inside that bar. The numeric capture-lag threshold remains an operator policy decision; no value is approved by this review.
 
-### Bar-close architecture limit
+### Why v0.3 resolves during WATCHING
 
-The v0.2 correction makes latency honest, but it does **not** make the current bar-close collector timely. On the frozen 81 exact SIP trigger events, the unavoidable delay from true crossing to five-minute bar close is:
+The v0.2 safety correction made latency honest but still waited for the five-minute bar to close. The frozen 81 proved that architecture was too late for a qualifying prospective lane:
 
-- minimum: **11.716s**;
+- crossing-to-bar-close delay minimum: **11.716s**;
 - median: **169.751s**;
-- maximum: **299.821s**.
+- maximum: **299.821s**;
+- only **11/81 (13.6%)** were within 60 seconds of bar close before any network/chain latency.
 
-Before any network or option-chain latency, only **11/81 (13.6%)** of frozen triggers are within 60 seconds of bar close; 32/81 are within 120 seconds and 42/81 within 180 seconds.
+Collector v0.3 therefore inspects Alpaca SIP trades while a Public-source 212 setup is still `WATCHING`. On each collector cycle it queries only from the frozen watch start through that ticker's current source-observation time, determines which boundary was crossed first using the same strict price-forming trade rules as #733, and immediately runs the existing selector-evidence path when that first break is a valid reversal.
 
-Therefore v0.2 is a **safety correction, not deployment approval**. A low-lag qualifying collector must inspect SIP trades while the active five-minute bucket is still forming and initiate selector capture on the next observation cycle after the exact break. Otherwise a tight lag policy creates strong within-bar selection bias, while a loose policy accepts multi-minute-late chains.
+The completed-five-minute path remains only a fail-closed fallback for a missed observation cycle; it no longer defines the qualifying evidence clock. Actual capture quality is now governed by collector cadence + API/chain latency from the exact SIP crossing.
 
 ## No-hindsight requirement
 
@@ -77,7 +78,7 @@ For a valid 212R trigger the record preserves:
 - source magnitude in R;
 - whether source magnitude was already consumed at trigger;
 - first crossing 5m bucket;
-- later outside-bar transition.
+- exact first-break SIP trade provenance. Later opposite-side/outside evolution remains a later reconciliation field rather than being guessed at the live crossing.
 
 No >=1R target-floor substitution is made.
 
@@ -100,7 +101,7 @@ No risk sizing or ACTIVE aggregate-risk accounting is performed by this collecto
 
 ## Market context
 
-Market context is intentionally recorded as `DEFERRED_SIP_RECONCILIATION` in v0.1.
+Market context is intentionally recorded as `DEFERRED_SIP_RECONCILIATION` in v0.3.
 
 Reason: the frozen context formula uses VWAP. Public chart bars do not expose the same VWAP input, and inventing one from OHLC would violate the evidence rules. Context can be reconstructed later from consolidated SIP using only data timestamped at or before the trigger boundary once the 15-minute entitlement delay has elapsed.
 
@@ -118,9 +119,9 @@ The journal is append-only and independent of `options_scanner.sqlite`. It store
 
 Setup identity is stable by ticker + watch window + pattern. The exact Public boundary levels/reference direction are stored under a separate source fingerprint. If a completed Public bar is later revised and the same setup identity produces different frozen boundaries, the lane records source drift and fails the event closed instead of silently creating a second setup.
 
-## Current RTH smoke
+## Earlier no-hindsight RTH smoke
 
-A read-only dry run over the primary 20 at 2026-09-18T18:29:57Z reconstructed 14 212R reversals and 21 total terminal 212 setup resolutions from the session.
+A pre-v0.3 read-only dry run over the primary 20 at 2026-09-18T18:29:57Z reconstructed 14 212R reversals and 21 total terminal 212 setup resolutions from the session.
 
 Because the collector had **not** existed before those triggers, all 14 reversal option captures were correctly blocked for lack of a proven pre-trigger arm. Zero current option chains were misrepresented as historical decision-time evidence.
 
@@ -131,7 +132,7 @@ That is the intended no-hindsight behavior.
 - independent review + CI;
 - explicit operator choice of the prospective capture-lag limit and timer cadence;
 - a service-specific collector release/location that cannot mutate scanner/risk/broker state;
-- first live `ARMED -> TRIGGERED` proof during RTH;
+- first live `ARMED -> exact SIP cross -> selector evidence` proof during RTH;
 - delayed SIP context/source reconciliation;
 - only then accumulation of option-side outcome evidence.
 
