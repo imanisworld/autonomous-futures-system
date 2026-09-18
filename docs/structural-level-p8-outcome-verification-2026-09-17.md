@@ -293,8 +293,14 @@ loses.
 
 ## 9. Safe Next Step
 
-The smallest justified step is the one the prereg's own order of operations names next (§11), and it
-is **offline and box-free**:
+**2026-09-18 update:** the preregistered one-shot P-OOS-MES holdout below has now been consumed. Exact record: `docs/structural-level-p8-oos-mes-2026-09-18.md`.
+
+Result: H1 preserved sign and narrowly met its frozen 50%-effect floor (+0.0644 R vs +0.061 R); H3 preserved sign but missed its floor (+0.0618 R vs +0.098 R). Neither sign reversed, so K5 is not triggered, but the single H1≈H3 wick-reject finding is **not confirmed**. Classification remains **PROMISING BUT UNPROVEN**. Do not rerun or tune against P-OOS-MES. The next confirmatory gate is the already-frozen P-OOS-PROSPECTIVE window; no runtime change is required.
+
+Historical next-step text, now completed:
+
+The smallest justified step was the one the prereg's own order of operations named next (§11), and it
+was **offline and box-free**:
 
 1. **P-OOS-MES holdout, once, for the single frozen contrast only** (H1 and H3 as frozen — the
    wick-reject event; H2/H5 are also permitted on the holdout by §11 but have nothing to confirm):
