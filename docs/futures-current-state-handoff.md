@@ -4,7 +4,7 @@ _As of 2026-09-18. This is the single current futures handoff. Historical audit 
 
 ## 2026-09-18 reconciliation
 
-**Repository main:** `6a9cb174b31561af313cd021ef3e54bfcddc1574` (#663).
+**Repository main:** `61a6210e9937f633d2c34c680734c929d96b40c9` (#670).
 
 **Verified VPS release:** `/root/afs-releases/94eb7d388c02-20260917-173551`. The futures bot has been active since **2026-09-17 21:36:10 UTC** and the options scanner since **21:36:38 UTC**. This is a deliberately curated minimal-release lineage from common ancestor `3beffb7`; it is not expected to equal current `main`.
 
@@ -25,9 +25,9 @@ Therefore the box must not be summarized as globally paper-only: **live executio
 
 **#663 source-ticker provenance** is merged on `main` but is not in the verified VPS release. It adds MNQ/MES BarHistory `source_ticker` provenance only—no strategy, risk, broker, routing, or execution behavior. It should ride the next sanctioned minimal release; it does **not** justify a standalone restart.
 
-**Wide-stop gap-stop realism (#670):** current deployed code passes only 5m high/low into the wide-stop PaperBroker resolver, so an already-resting stop that gaps through on the next bar cannot use PaperBroker's proven `STOP_GAP` open-price path and can be priced too optimistically at the stale stop. #670 passes the actual 5m open and pins long/short gap regressions. Current `wide_stop_4k` / `wide_stop_6k` paper ledgers are flat and have produced no fills/outcomes in this epoch (one candidate row each), so no existing paper outcome needs invalidation. The fix **does** need to ride the next sanctioned release before future overnight/weekend wide-stop outcomes are trusted. Do not restart tonight solely for this; deployment/restart requires the operator's release-window decision because the September 30 freeze is otherwise in force.
+**Wide-stop gap-stop realism (#670 merged as `61a6210e`):** the repository fix now passes the actual 5m open into PaperBroker and pins long/short `STOP_GAP` behavior. The verified VPS release still predates this fix, so its wide-stop resolver can price a next-bar gap-through-stop too optimistically at the stale stop. Current `wide_stop_4k` / `wide_stop_6k` paper ledgers are flat and have produced no fills/outcomes in this epoch (one candidate row each), so no existing paper outcome needs invalidation. #568 is closed as superseded. **Morning release decision:** #670 should ride the next sanctioned minimal release before future overnight/weekend wide-stop outcomes are trusted; include #663 at the same time rather than restarting twice. The September 30 freeze otherwise remains in force, so no restart was performed tonight.
 
-**Immediate action:** keep the current collection epochs intact. Do not deploy/restart solely for Transition, #644, #645, or #663. Existing forward lanes continue under their frozen contracts. Do not retune the active 4HR/3-2-2/Daily/MES/Asia lanes mid-epoch.
+**Immediate action:** keep the current collection epochs intact overnight. Do not deploy/restart solely for Transition, #644, #645, or #663. In the morning, decide whether to explicitly waive the freeze for one sanctioned minimal release carrying #670 + #663; if not, keep the current box running and treat future wide-stop overnight/weekend outcomes as untrusted until the fix ships. Existing forward lanes continue under their frozen contracts. Do not retune the active 4HR/3-2-2/Daily/MES/Asia lanes mid-epoch.
 
 **Structural-level P8 OOS update (#645 merged as `1f4d901`):** the preregistered one-shot P-OOS-MES holdout is now **consumed**. H1 preserved sign and narrowly cleared its frozen effect floor (+0.0644 R vs +0.061 R); H3 preserved sign but missed its floor (+0.0618 R vs +0.098 R). Neither sign reversed, so K5 is not triggered, but the single H1≈H3 wick-reject finding is **not confirmed**. Classification remains **PROMISING BUT UNPROVEN / PARTIAL REPLICATION**. Do not rerun or tune against this holdout. The next confirmatory gate is the already-frozen P-OOS-PROSPECTIVE window after its calendar/sample threshold; **no new runtime collector, deployment, or restart is required**.
 
