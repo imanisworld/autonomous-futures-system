@@ -37,6 +37,19 @@ MNQ 4HR trigger observer:
 - records `trade_authorized=false`;
 - records `external_broker=false`.
 
+MNQ 3-2-2 First Live observer — **repository build only / not activated on the VPS**:
+- `context/one_min_322_observer.py`;
+- dedicated proof-critical flag `ONE_MIN_322_OBSERVER_ENABLED`, default OFF;
+- requires the generic `ONE_MIN_TRIGGER_ENABLED` flag as well;
+- maintains isolated observer state under `tf1m/322_first_live/`, never executable `DailyState`;
+- arms only from the canonical completed 7AM/8AM/9AM 5m setup at the 10:00 ET boundary;
+- refuses to arm unless all 36 required 5m bars from 07:00 through 09:55 are present;
+- 1m can only observe the first strict break of that pre-armed level;
+- equality at the trigger is not a break;
+- records `trade_authorized=false`, `paper_fill_authorized=false`, and `external_broker=false`;
+- imports no DecisionEngine, RiskEngine, PaperBroker, or broker adapter;
+- activation requires a separate deploy/pin decision.
+
 Main runner:
 - authenticated 1m MNQ/MES inputs are intercepted before the ordinary strategy/risk/broker path;
 - result is context/evidence only.
@@ -60,6 +73,15 @@ Collection-only 1m extension:
 - structural isolation guard proves observation modules do not import execution/risk engines;
 - full repo suite: **6,099 passed / 7 skipped**;
 - PR #725 CI / analysis / CodeQL: green.
+
+3-2-2 First Live observer build:
+- preregistration frozen before implementation;
+- focused 1m / 5m / 3-2-2 / live-box-guard suite: **77/77 passed**;
+- static isolation test proves the observer module imports no DecisionEngine,
+  RiskEngine, PaperBroker, or broker adapter;
+- full repository suite: **6,186 passed / 7 skipped**;
+- `ONE_MIN_322_OBSERVER_ENABLED` is proof-critical and default OFF;
+- **not activated or deployed by this build**.
 
 Atomic release path:
 - merged SHA release built/verified/promoted through the immutable release flow;

@@ -54,10 +54,11 @@ All six configured futures roots now deliver authenticated 1m TradingView data a
 At the post-deploy proof check, each root had a fresh 1m payload and an active `tf1m` file.
 
 Role separation is deliberate:
-- MNQ: 1m may observe an already-armed 4HR trigger;
+- MNQ deployed behavior: 1m may observe an already-armed 4HR trigger;
+- MNQ repository build: an isolated 3-2-2 First Live observer exists behind default-OFF `ONE_MIN_322_OBSERVER_ENABLED`, but it is **not deployed/activated**;
 - MES: 1m context collection;
 - M2K/MGC/MCL/MBT: strictly observation-only 1m collection;
-- 1m does not create a strategy setup.
+- 1m itself does not create a strategy setup. The optional 3-2-2 observer, when separately activated, arms only from the completed canonical 5m 7AM/8AM/9AM structure.
 
 ### Backtest / replay infrastructure
 
@@ -359,7 +360,7 @@ Do not:
 ## Safe next work order
 
 1. **4HR prospective 1m evidence** — verify trigger touch timing, stop anchor, dedupe, and paper-only behavior on natural signals.
-2. **3-2-2 prospective timing evidence** — the offline First Live A/B is complete; the next proof is natural lower-latency observation. Any 1m 3-2-2 observer is a separate, observation-only build and is not authorized by this audit.
+2. **3-2-2 prospective timing evidence** — the offline First Live A/B is complete and the observation-only 1m observer build now exists behind a default-OFF proof-critical flag. Next decision is whether to activate that observer on the VPS; no paper-fill or execution authority is included.
 3. **LC_ZONE v1 is HOLD** — do not tune or rescue the failed quality audit. Reopen zone design only under a new preregistration.
 4. **Miyagi timing parity only if reopened** — its current sample is too small to justify runtime work.
 5. Continue passive evidence collection; do not expand instruments or execution scope.

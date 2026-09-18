@@ -141,7 +141,7 @@ Do not restart:
 ## Next work
 
 1. Let natural MNQ 4HR 1m armed-trigger evidence accumulate.
-2. Keep 3-2-2 in passive evidence mode; if a lower-latency 3-2-2 observer is separately authorized, it must be observation-only first.
+2. 3-2-2 lower-latency observer build is implemented observation-only behind default-OFF `ONE_MIN_322_OBSERVER_ENABLED`; keep it inactive until separate VPS activation/pin proof.
 3. Keep LC_ZONE v1 / 4HR zone-target changes on HOLD; only reopen zone design under a new preregistration.
 4. Miyagi timing audit only if that parked strategy is reopened.
 5. Continue passive six-root context collection.

@@ -105,6 +105,11 @@ from context.one_min_trigger import (
     one_min_enabled,
     record_one_min,
 )
+from context.one_min_322_observer import (
+    advance_322_observer_from_five_min,
+    evaluate_armed_322_touch,
+    one_min_322_observer_enabled,
+)
 from execution.mnq_strat_evidence import process_mnq_strat_evidence
 from execution.mes_trend_consolidation_break_evidence import (
     process_mes_trend_consolidation_break_evidence,
@@ -452,6 +457,8 @@ def process_alert(
     five_min_trigger = None
     five_min_trigger_payload = None
     four_hr_five_min = False
+    one_min_322_observer_event = None
+    one_min_322_observer_error = None
 
     # ── Hard boundary: collection-only roots never enter this pipeline ────────
     # webhook/app.py routes M2K/MGC/MCL/MBT to the observation transport, so
@@ -552,14 +559,18 @@ def process_alert(
         }
 
     # ── Step 0a0: isolated 1-minute armed-trigger evidence lane ───────────────
-    # Default OFF. A 1m alert can only observe a touch of an already-persisted
-    # ARMED MNQ 4HR state. It returns before DecisionEngine, RiskEngine, and all
-    # broker paths, so it cannot discover/authorize/execute a trade.
+    # Default OFF. A 1m alert can observe only an already-persisted armed
+    # evidence state: the existing MNQ 4HR state and, when its separate flag is
+    # enabled, the isolated MNQ 3-2-2 observer state. It returns before
+    # DecisionEngine, RiskEngine, and all broker paths, so 1m cannot discover,
+    # authorize, or execute a trade.
     if one_min_enabled() and is_one_min(payload.timeframe):
         one_min_event = None
         one_min_error = None
+        one_min_recorded = False
         try:
             record_one_min(payload, log_dir, for_date=for_date)
+            one_min_recorded = True
             if "strat_4hr_retrigger" in cfg.enabled_concepts:
                 one_min_event = evaluate_armed_4hr_touch(
                     payload, log_dir, for_date=for_date
@@ -567,6 +578,16 @@ def process_alert(
         except Exception as _exc:  # evidence ingestion must never break webhook
             logger.warning("1m trigger lane skipped: %s", _exc)
             one_min_error = str(_exc)
+
+        if one_min_recorded and one_min_322_observer_enabled():
+            try:
+                one_min_322_observer_event = evaluate_armed_322_touch(
+                    payload, log_dir, for_date=for_date
+                )
+            except Exception as _exc:  # observer must never break 1m ingestion
+                logger.warning("1m 3-2-2 observer skipped: %s", _exc)
+                one_min_322_observer_error = str(_exc)
+
         return {
             "timestamp": payload.timestamp,
             "instrument": _contract_root(payload.ticker) or payload.ticker,
@@ -584,23 +605,38 @@ def process_alert(
             "event_id": getattr(payload, "event_id", None),
             "one_min_trigger": one_min_event,
             "one_min_error": one_min_error,
+            "one_min_322_observer": one_min_322_observer_event,
+            "one_min_322_observer_error": one_min_322_observer_error,
             "execution_reachable": False,
         }
 
     # ── Step 0a: 5-minute entry feed ──────────────────────────────────────────
     # When FIVE_MIN_FEED_ENABLED, a 5M alert is NOT a misconfigured 15M bar — it
-    # is entry-timing context. Store it on its own lane. It may trigger only the
-    # exact original bracket armed by an authoritative 15M decision; it never
-    # evaluates strategy from 5M data. Default OFF → 5M falls through to the
-    # timeframe guard below exactly as before.
+    # is entry-timing context. Store it on its own lane. The legacy retest path
+    # may trigger only an exact bracket armed by an authoritative 15M decision.
+    # Separately, the optional 3-2-2 observer may classify the completed
+    # 7/8/9AM setup with the canonical pure state machine, but writes only to
+    # isolated tf1m evidence state and never enters the executable pipeline.
+    # Default OFF → 5M falls through to the timeframe guard exactly as before.
     if five_min_enabled() and is_five_min(payload.timeframe):
         five_min_trigger_payload = payload
+        five_min_recorded = False
         try:
             record_five_min(payload, log_dir, for_date=for_date)
+            five_min_recorded = True
             five_min_trigger = triggered_armed_setup(payload, log_dir, for_date)
         except Exception as _exc:  # ingestion must never break alert handling
             logger.warning("5m feed: record skipped: %s", _exc)
             five_min_trigger = None
+
+        if five_min_recorded and one_min_322_observer_enabled():
+            try:
+                one_min_322_observer_event = advance_322_observer_from_five_min(
+                    five_min_trigger_payload, log_dir, for_date=for_date
+                )
+            except Exception as _exc:  # observer must never break 5m ingestion
+                logger.warning("5m 3-2-2 observer skipped: %s", _exc)
+                one_min_322_observer_error = str(_exc)
         if five_min_trigger:
             try:
                 payload = AlertPayload(**five_min_trigger["payload"])
@@ -732,6 +768,9 @@ def process_alert(
                 "failed_gates": [],
                 "confidence_score": None,
                 "event_id": getattr(five_min_trigger_payload, "event_id", None),
+                "one_min_322_observer": one_min_322_observer_event,
+                "one_min_322_observer_error": one_min_322_observer_error,
+                "execution_reachable": False,
             }
 
     # ── Step 0b: Timeframe guard (CONFIG_BLOCKED / TIMEFRAME_MISMATCH) ─────────
