@@ -1,0 +1,19 @@
+[Unit]
+Description=AFS options 1-2-2 observation-only prospective collector
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/autonomous-futures-system
+EnvironmentFile=/root/afs-shared/.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/root/autonomous-futures-system/.venv/bin/python -m scripts.options_122_prospective_collect --env-file /root/afs-shared/.env --journal /root/afs-shared/logs/options_122_prospective.jsonl --raw-trade-dir /root/afs-shared/logs/options_122_source_trades --max-capture-lag-seconds 120
+Restart=no
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/root/afs-shared/logs
+
+# Observation only: no scanner DB, broker, risk, order, alert, or ACTIVE state route.
