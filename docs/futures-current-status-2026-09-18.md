@@ -24,6 +24,8 @@ Active deployed futures release verified on the box:
 
 Repository `main` is ahead of the deployed futures release. Repository state must not be used as proof of deployed state. The VPS is intentionally pinned to `ac2b117ec1f98f1470fc54330a4befc913ff15f2`, a minimal runtime release built from prior live `6d5b224aa5c208cad0f1d39c09eda13c6171b98b` plus only #759's append-only 1m observer-response evidence hook. Do not deploy newer `main` merely to catch up.
 
+Final cleanup snapshot for this work session: repository `main=ea195b6ee9f62c33ee627be01fabd8a617e81e53`, local `main` is clean and matches origin, and there are **no open PRs**. The earlier dirty local work that had been preserved by stash was recovered after its stash ref disappeared and is now permanently anchored at `recovery/pre-clean-main-20260918-post754` commit `fe4da8d0a9432aeb3c3fe28d57522731e2623a0a`; do not delete that recovery branch until its preserved work is intentionally reconciled.
+
 ## What is good / high confidence
 
 ### Runtime and execution safety
@@ -94,6 +96,8 @@ High confidence for the scopes that have been explicitly audited:
 - exact replay can be trusted for frozen, explicitly admitted scopes after parity checks;
 - #751 makes Backtest→DEMO data identity fail closed by mechanically checking hash-pinned C14 session identity, frozen corpus file hashes, coverage counts, and explicit gap ledgers;
 - #754 adds hash-bound per-outcome gap proof: counted resolved outcomes must bind strategy-specific dependency start, replay signal/entry/resolution timestamps, replay journal identity, code SHA, and frozen manifest; any declared-gap overlap or missing/mismatched proof fails closed.
+
+#763 also turns the preserved R5 entry-conditioning note into a deterministic hash-gated reproduction. It verifies exact MNQ/MES candidate and corpus hashes, freezes the recovered 16-bar/fill semantics, and reproduces the preserved headline values byte-identically. Classification remains **AUDIT ONLY**. The reproduced ORB false-break symmetric-1R result degrades from 66.7%→51.1% good-first on MNQ and 64.1%→53.5% on MES; this supports a future preregistered one-variable ORB entry-architecture A/B, not a runtime edit. The same reproduction continues to show MNQ 4HR as the strongest structural family headline, but it does not override the forward-proof requirement.
 
 Do **not** generalize this to “all backtests are trustworthy.” Fidelity is still strategy-specific, and older studies without the required historical timestamps/dependency-window proof remain unproven unless rerun or backfilled from sufficient raw data.
 
@@ -390,6 +394,7 @@ Do not:
 5. **LC_ZONE v1 is HOLD** — do not tune or rescue the failed quality audit. Reopen zone design only under a new preregistration.
 6. **Miyagi timing parity only if reopened** — its current sample is too small to justify runtime work.
 7. Continue passive evidence collection; do not expand instruments or execution scope. Current direct audit shows wide-stop 4HR/3-2-2 flat with zero fills so far, Daily 2-2 flat/not halted, MES 1-2-2 journaling through session close, Asia D+EMA actively accumulating candidate/outcome rows, and 2,437 cross-instrument observation rows across all six roots. No natural 4HR/3-2-2 1m observer event exists yet.
+8. **Next actionable futures event = first natural 1m observer event.** On that event, immediately audit arm timing → true touch → completed-1H stop anchor → dedupe → durable response proof → zero execution leakage. If it exposes a concrete mechanism defect, repair only that defect. If it passes, keep collecting. No further deploy, restart, strategy retune, risk change, or feature work is justified merely to stay busy.
 
 ## Bottom line
 

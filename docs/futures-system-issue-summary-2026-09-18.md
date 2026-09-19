@@ -22,6 +22,8 @@ There is no current blocker to passive 1m/5m/15m evidence collection. There are 
 - **Resolved-outcome gap proof:** #754 binds each counted validation outcome to a strategy-specific dependency start plus replay signal/entry/resolution timestamps and hash-bound journals; any declared-gap overlap or missing/mismatched proof fails closed.
 - **1m observer response-proof persistence:** #759 is deployed in minimal release `ac2b117ec1f9`. Natural 4HR/3-2-2 observer events now have an append-only place to retain the actual runner response needed for execution-isolation proof; restart itself creates no row.
 - **Watcher false journal stall:** #760 limits the main-journal causal bar clock to MNQ/MES decision-path 15m files. The exact live-source one-hunk backport is installed at SHA `7d29872d1c85`; watcher has zero BLOCKED findings and the #759 restart is recorded as sanctioned.
+- **Collector-census off-session false failures:** #764 adds `OFF_SESSION` handling for cadence-driven CME equity futures heartbeats and prevents expected weekend Daily 2-2 carry from being mislabeled as stale-feed exposure. **80 adjacent tests passed.** This is read-only monitoring/reporting code and does not require a runtime restart.
+- **R5 entry-conditioning reproduction:** #763 now deterministically reproduces the preserved MNQ/MES R5 audit from exact hash-gated inputs. Classification remains **AUDIT ONLY**. ORB false-break weakens materially under symmetric 1R (MNQ 66.7%→51.1%; MES 64.1%→53.5% good-first among resolved paths); the next valid ORB step is a preregistered one-variable entry-architecture A/B, not runtime tuning.
 
 ## Current blockers
 
@@ -155,5 +157,8 @@ Do not restart:
 5. Keep LC_ZONE v1 / 4HR zone-target changes on HOLD; only reopen zone design under a new preregistration.
 6. Miyagi timing audit only if that parked strategy is reopened.
 7. Continue passive six-root context collection. Direct post-session audit: wide-stop 4HR/3-2-2 remain flat with zero fills, Daily 2-2 is flat/not halted, MES 1-2-2 is still journaling, Asia D+EMA is actively producing candidate/outcome rows, cross-instrument observation has 2,437 rows across all six roots, and no natural 4HR/3-2-2 1m observer event exists yet.
+8. First natural 4HR/3-2-2 1m event is the next actionable futures review. Audit the complete mechanism/evidence chain immediately; change code only if that event proves a specific defect.
+
+Final cleanup snapshot: local/origin `main` are clean at `ea195b6`, there are no open PRs, and the recovered pre-clean local work is anchored on branch `recovery/pre-clean-main-20260918-post754` at `fe4da8d0`.
 
 No live expansion.
