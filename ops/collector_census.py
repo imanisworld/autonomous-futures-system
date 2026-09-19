@@ -27,8 +27,9 @@ import json
 import sqlite3
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, time, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 from typing import Any, Callable
 
 _CAMPAIGN_CONFIG_PATH = Path(__file__).resolve().parents[1] / "config" / "forward_evidence_campaign.json"
@@ -50,6 +51,7 @@ FRESH = "FRESH"
 STALE = "STALE"
 DEAD = "DEAD"
 ABSENT = "ABSENT"
+OFF_SESSION = "OFF_SESSION"
 
 # A collector is STALE past its expected cadence and DEAD past the point where
 # a market-hours gap or a weekend can still explain the silence.
@@ -76,6 +78,7 @@ class Collector:
     target: str
     max_age_minutes: int
     note: str = ""
+    session: str = ""  # "" | "cme_equity"
     # sqlite_table only
     table: str = ""
     time_columns: tuple[str, ...] = ("timestamp", "ts", "created_at", "observed_at")
@@ -83,10 +86,10 @@ class Collector:
 
 COLLECTORS: tuple[Collector, ...] = (
     # --- futures runtime -------------------------------------------------
-    Collector("futures journal", "daily_jsonl", "journal_{date}.jsonl", 30),
-    Collector("bars MNQ", "daily_jsonl", "bars_MNQ_{date}.jsonl", 30),
-    Collector("bars MES", "daily_jsonl", "bars_MES_{date}.jsonl", 30),
-    Collector("strategy context", "jsonl", "strategy_context_observations.jsonl", 30),
+    Collector("futures journal", "daily_jsonl", "journal_{date}.jsonl", 30, session="cme_equity"),
+    Collector("bars MNQ", "daily_jsonl", "bars_MNQ_{date}.jsonl", 30, session="cme_equity"),
+    Collector("bars MES", "daily_jsonl", "bars_MES_{date}.jsonl", 30, session="cme_equity"),
+    Collector("strategy context", "jsonl", "strategy_context_observations.jsonl", 30, session="cme_equity"),
     Collector("feed gap alarm", "file", "feed_gap_alarm_state.json", 15),
     # --- 5-minute feed + hypothetical-ledger lane heartbeats -------------
     # Every MNQ paper lane (Daily 2-2, wide-stop 4HR, wide-stop 3-2-2) resolves
@@ -97,13 +100,14 @@ COLLECTORS: tuple[Collector, ...] = (
     # lane journals a BAR_CLAIM + decision on every MES 15m bar. The wide-stop
     # ledgers have NO heartbeat file (state is written only on candidates) and
     # are reported through hypothetical_lane_positions() instead.
-    Collector("bars MNQ 5m", "daily_jsonl", "tf5m/bars_MNQ_{date}.jsonl", 30),
+    Collector("bars MNQ 5m", "daily_jsonl", "tf5m/bars_MNQ_{date}.jsonl", 30, session="cme_equity"),
     Collector(
         "daily_22 swing state",
         "file",
         f"{LEDGER_ROOT}/daily_22_5k/swing_state.json",
         30,
         note="rewritten on every MNQ 5m bar while WIDE_STOP_LEDGER_MODE=paper_sim",
+        session="cme_equity",
     ),
     Collector(
         "mes_122 lane journal",
@@ -111,6 +115,7 @@ COLLECTORS: tuple[Collector, ...] = (
         f"{LEDGER_ROOT}/mes_122_1500/journal_{{date}}.jsonl",
         30,
         note="BAR_CLAIM + decision on every MES 15m bar while MES_122_PAPER_MODE=paper_sim",
+        session="cme_equity",
     ),
     # --- event-driven futures strategy evidence -------------------------
     # Do not assign wall-clock DEAD thresholds to candidate-driven files.
@@ -173,6 +178,23 @@ def _now() -> datetime:
 
 def _age_minutes(moment: datetime, now: datetime) -> float:
     return (now - moment).total_seconds() / 60.0
+
+
+_ET = ZoneInfo("America/New_York")
+
+
+def _cme_equity_session_open(now: datetime) -> bool:
+    """Standard CME equity-index session clock; holidays remain out of scope."""
+    local = now.astimezone(_ET)
+    weekday = local.weekday()
+    clock = local.timetz().replace(tzinfo=None)
+    if weekday == 5:
+        return False
+    if weekday == 6:
+        return clock >= time(18, 0)
+    if weekday == 4 and clock >= time(17, 0):
+        return False
+    return not (time(17, 0) <= clock < time(18, 0))
 
 
 def _classify(age: float | None, limit: int) -> str:
@@ -287,9 +309,16 @@ def check(collector: Collector, log_dir: Path, now: datetime) -> dict[str, Any]:
         last = _mtime(path)
 
     age = _age_minutes(last, now) if last else None
+    status = _classify(age, collector.max_age_minutes)
+    if (
+        collector.session == "cme_equity"
+        and status != FRESH
+        and not _cme_equity_session_open(now)
+    ):
+        status = OFF_SESSION
     return {
         "name": collector.name,
-        "status": _classify(age, collector.max_age_minutes),
+        "status": status,
         "age_minutes": None if age is None else round(age, 1),
         "limit_minutes": collector.max_age_minutes,
         "last": last.isoformat() if last else None,
@@ -412,9 +441,8 @@ def hypothetical_lane_positions(log_dir: Path, now: datetime | None = None) -> d
     Answers, per lane: does its directory exist yet (they are created lazily), is a
     paper position OPEN right now, when was the lane's state/journal last touched,
     and -- the safety question -- is a position exposed while the 5-minute MNQ bar
-    stream (which every MNQ lane resolves on) has gone quiet. `bars_stale` is a
-    plain age test with no market-hours logic; the caller decides whether the
-    market is open. Never writes.
+    stream (which every MNQ lane resolves on) has gone quiet while the CME
+    equity-index session is open. Off-session silence is expected. Never writes.
     """
     now = now or _now()
     root = log_dir / LEDGER_ROOT
@@ -463,8 +491,10 @@ def hypothetical_lane_positions(log_dir: Path, now: datetime | None = None) -> d
         "five_min_bar_age_minutes": None if five_min_age is None else round(five_min_age, 1),
         "lanes": lanes,
         "open_positions": open_lanes,
-        "mnq_position_exposed_without_fresh_5m_bars": bool(mnq_open) and (
-            five_min_age is None or five_min_age > 30
+        "mnq_position_exposed_without_fresh_5m_bars": (
+            _cme_equity_session_open(now)
+            and bool(mnq_open)
+            and (five_min_age is None or five_min_age > 30)
         ),
     }
 
@@ -491,18 +521,18 @@ def format_census(census: dict[str, Any]) -> str:
         f"COLLECTOR CENSUS  {census['generated_utc']}",
         f"log-dir: {census['log_dir']}",
         "",
-        f"{'status':<7} {'collector':<28} {'age':>10}  {'limit':>7}  rows",
+        f"{'status':<11} {'collector':<28} {'age':>10}  {'limit':>7}  rows",
         "-" * 72,
     ]
-    order = {DEAD: 0, ABSENT: 1, STALE: 2, FRESH: 3}
+    order = {DEAD: 0, ABSENT: 1, STALE: 2, OFF_SESSION: 3, FRESH: 4}
     for row in sorted(census["collectors"], key=lambda r: (order[r["status"]], r["name"])):
         age = "never" if row["age_minutes"] is None else f"{row['age_minutes']:.0f}m"
         rows = "-" if row["rows"] is None else str(row["rows"])
         lines.append(
-            f"{row['status']:<7} {row['name']:<28} {age:>10}  {row['limit_minutes']:>6}m  {rows}"
+            f"{row['status']:<11} {row['name']:<28} {age:>10}  {row['limit_minutes']:>6}m  {rows}"
         )
         if row["note"] and row["status"] != FRESH:
-            lines.append(f"{'':<7} {'':<28} -> {row['note']}")
+            lines.append(f"{'':<11} {'':<28} -> {row['note']}")
 
     campaign = census["campaign_arms"]
     configured_arms = campaign.get("configured", {})
