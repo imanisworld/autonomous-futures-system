@@ -75,6 +75,7 @@ from webhook.runner import process_alert, normalize_timeframe_minutes
 from webhook.observation_transport import observe_collection_only_alert
 from execution import cross_instrument_observation as _cio
 from context.futures_session import product_session_active
+from context.one_min_response_audit import append_observer_response_audit
 from webhook.state_builder import futures_root
 
 # Roots accepted by the webhook ingest filter — the traded micros plus the ES/NQ
@@ -623,6 +624,12 @@ def _handle_alert_blocking(payload: AlertPayload) -> None:
     try:
         result = process_alert(payload, config=_config, log_dir=_config.log_dir)
         _record_latest_webhook(payload, result)
+        try:
+            append_observer_response_audit(_config.log_dir, payload, result)
+        except Exception:
+            # Evidence persistence must never change alert processing. Missing
+            # response proof will fail closed in the later observer review.
+            logger.warning("1m observer response audit skipped", exc_info=True)
         # Attach an independent live index quote for the Discord display price.
         # Fail-soft: a quote-source hiccup must never affect ingestion or risk.
         if _config.live_quote_enabled:
