@@ -92,6 +92,12 @@ Before and after collector activation:
 
 Both services remained active. The new collector timer is separately active.
 
+## Weekend freeze
+
+As of Friday night, deployment work for this lane is complete. Leave the release, timer, source policy, cadence, capture-lag threshold, reconciliation delay, and evidence paths unchanged through the first natural RTH collection. No further options deployment is needed before Monday unless a read-only audit finds a concrete defect or drift.
+
+The correct weekend action is therefore **WAIT / preserve the frozen epoch**. A clean weekend with no market evidence is expected and is not a missing-data problem.
+
 ## First natural RTH gate
 
 The lane is **scheduled but not yet accepted as producing causal option rows**.
