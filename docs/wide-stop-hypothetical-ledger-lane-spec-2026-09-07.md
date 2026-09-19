@@ -1,6 +1,6 @@
 # Wide-stop family — hypothetical-ledger forward paper lane (lane config spec)
 
-Status: **APPROVED 2026-09-07 — operator approved D1–D7 as recommended (see §7). Build authorized per §8; nothing is built yet.**
+Status: **HISTORICAL PREREGISTRATION — approved 2026-09-07; implementation completed by #510 and the lane is now active for isolated paper/guarded DEMO evidence.** The configuration below remains the frozen preregistration basis; current runtime/deployment state is governed by `docs/futures-current-status-2026-09-18.md` and `docs/futures-current-state-handoff.md`.
 
 Parent decision: Option B+ in
 `docs/wide-stop-day-strategy-policy-options-2026-09-07.md` (decided 2026-09-07).
