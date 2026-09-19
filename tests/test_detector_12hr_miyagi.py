@@ -243,13 +243,16 @@ def test_stop_reference_uses_last_completed_60m_bar_before_930_not_earlier_ones(
     assert result["stop_reference_bar_ts"].hour == 8
 
 
-def test_60m_bar_at_or_after_930_is_excluded_from_stop_reference():
+def test_incomplete_9am_60m_bar_is_excluded_from_stop_reference():
     bars_60m = sixty_min_bars() + [
-        bar12(NINE_THIRTY, 999, -999),  # must never be selected as stop ref
+        # 9:00-10:00 ET is still forming at the 9:30 decision and must never
+        # become the stop reference even though its start timestamp is < 9:30.
+        bar12(datetime(2026, 1, 8, 9, 0, tzinfo=ET), 999, -999),
+        bar12(NINE_THIRTY, 888, -888),
     ]
     result = detect_12hr_miyagi(base_12h_bars(), short_signal_5m(), bars_60m, EVAL_DATE, "MNQ")
     assert result["stop_reference"] == 112
-    assert result["stop_reference_bar_ts"].hour == 8
+    assert result["stop_reference_bar_ts"] == datetime(2026, 1, 8, 8, 0, tzinfo=ET)
 
 
 @pytest.mark.parametrize("arg_index", [0, 1, 2])

@@ -36,6 +36,7 @@ CACHE_5M = REPO_ROOT / "data" / "replay_polygon_5m"
 
 STUDY_START = date(2024, 7, 2)
 STUDY_END = date(2026, 6, 26)
+EVIDENCE_SUFFIX = "_corrected_2026-09-18"
 
 
 def detect_candidates(instrument: str, start: date, end: date) -> dict:
@@ -180,7 +181,7 @@ def main() -> None:
         print(f"[{instrument}] detecting candidates {STUDY_START}..{STUDY_END}")
         result = run_instrument_study(instrument)
         print(f"[{instrument}] {result['candidate_count']} candidates")
-        out_path = out_dir / f"{instrument.lower()}_results.json"
+        out_path = out_dir / f"{instrument.lower()}_results{EVIDENCE_SUFFIX}.json"
         out_path.write_text(json.dumps(result, indent=2, default=str) + "\n")
         print(f"[{instrument}] wrote {out_path}")
 
