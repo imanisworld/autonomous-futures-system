@@ -380,6 +380,339 @@ def _verify_feed_manifest(
     }
 
 
+
+GAP_PROOF_SCHEMA_VERSION = "replay_gap_proof_v1"
+
+
+def _parse_iso_utc(value: Any) -> datetime | None:
+    if value in (None, ""):
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed.astimezone(timezone.utc)
+
+
+def _manifest_gap_intervals(manifest_path: Path | None) -> tuple[list[tuple[datetime, datetime]], str | None]:
+    if manifest_path is None:
+        return [], "dataset manifest path is missing"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return [], f"dataset manifest unreadable: {exc}"
+    timeframe = _as_int(manifest.get("timeframe_minutes"))
+    ledger = manifest.get("gap_ledger_cme_hours")
+    if timeframe is None or timeframe <= 0 or not isinstance(ledger, list):
+        return [], "dataset manifest lacks a valid timeframe/gap ledger"
+    intervals: list[tuple[datetime, datetime]] = []
+    from datetime import timedelta
+    for i, run in enumerate(ledger):
+        if not isinstance(run, dict):
+            return [], f"gap ledger row {i} is not an object"
+        start = _parse_iso_utc(run.get("first_missing"))
+        last = _parse_iso_utc(run.get("last_missing"))
+        if start is None or last is None or last < start:
+            return [], f"gap ledger row {i} has invalid timestamps"
+        intervals.append((start, last + timedelta(minutes=timeframe)))
+    return intervals, None
+
+
+def _verify_gap_proof(
+    root: Path,
+    evidence: dict[str, Any],
+    *,
+    manifest_path: Path | None,
+    manifest_sha256: str | None,
+) -> dict[str, Any]:
+    """Mechanically verify every counted resolved outcome avoids declared source gaps.
+
+    The proof producer must supply its strategy-specific dependency start. The
+    gate never guesses that lookback. Signal/entry/exit timestamps are explicit,
+    ordered, and bound to the frozen manifest/code SHA. Any overlap with a
+    declared manifest gap fails closed; scheduled-closure exceptions are not
+    guessed here.
+    """
+    data = evidence.get("data_integrity") or {}
+    raw_path = data.get("gap_proof_path")
+    claimed_sha = str(data.get("gap_proof_sha256") or "").strip().lower()
+    path = _resolve_path(root, raw_path)
+    if path is None:
+        return {"ok": False, "reason": "data_integrity.gap_proof_path is required"}
+    actual_sha = _sha256(path)
+    if actual_sha is None:
+        return {"ok": False, "gap_proof_path": str(path), "reason": "gap proof is unreadable"}
+    if len(claimed_sha) != 64 or actual_sha != claimed_sha:
+        return {
+            "ok": False,
+            "gap_proof_path": str(path),
+            "actual_gap_proof_sha256": actual_sha,
+            "reason": "data_integrity.gap_proof_sha256 does not match the current gap-proof bytes",
+        }
+    try:
+        proof = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return {"ok": False, "gap_proof_path": str(path), "reason": f"gap proof is not valid JSON: {exc}"}
+    if not isinstance(proof, dict):
+        return {"ok": False, "gap_proof_path": str(path), "reason": "gap proof must be a JSON object"}
+
+    problems: list[str] = []
+    if proof.get("schema_version") != GAP_PROOF_SCHEMA_VERSION:
+        problems.append(f"schema_version must be {GAP_PROOF_SCHEMA_VERSION}")
+    instrument = str((evidence.get("execution_context_claimed") or {}).get("instrument") or "").strip().upper()
+    if str(proof.get("instrument") or "").strip().upper() != instrument:
+        problems.append("gap proof instrument does not match execution_context_claimed.instrument")
+    claimed_manifest = str(proof.get("dataset_manifest_sha256") or "").strip().lower()
+    if not manifest_sha256 or claimed_manifest != str(manifest_sha256).strip().lower():
+        problems.append("gap proof dataset_manifest_sha256 does not match the frozen dataset manifest")
+    replay_sha = str((evidence.get("replay_provenance") or {}).get("code_sha") or "").strip()
+    if str(proof.get("code_sha") or "").strip() != replay_sha:
+        problems.append("gap proof code_sha does not match replay_provenance.code_sha")
+
+    dependency_source = proof.get("dependency_windows_source")
+    dependency_map: dict[str, str] = {}
+    dependency_problem: str | None = None
+    if not isinstance(dependency_source, dict):
+        problems.append("gap proof dependency_windows_source must be an object")
+    else:
+        dependency_path = _resolve_path(root, dependency_source.get("path"))
+        expected_dependency_sha = str(dependency_source.get("sha256") or "").strip().lower()
+        actual_dependency_sha = _sha256(dependency_path) if dependency_path is not None else None
+        if dependency_path is None or actual_dependency_sha is None:
+            dependency_problem = "dependency windows source is unreadable"
+        elif len(expected_dependency_sha) != 64 or actual_dependency_sha != expected_dependency_sha:
+            dependency_problem = "dependency windows source sha256 mismatch"
+        else:
+            try:
+                loaded_dependencies = json.loads(dependency_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                dependency_problem = f"dependency windows source is invalid JSON: {exc}"
+            else:
+                if not isinstance(loaded_dependencies, dict):
+                    dependency_problem = "dependency windows source must be a JSON object"
+                elif loaded_dependencies.get("schema_version") != "strategy_dependency_windows_v1":
+                    dependency_problem = "dependency windows schema_version must be strategy_dependency_windows_v1"
+                elif str(loaded_dependencies.get("code_sha") or "").strip() != replay_sha:
+                    dependency_problem = "dependency windows code_sha does not match replay_provenance.code_sha"
+                elif str(loaded_dependencies.get("strategy") or "").strip() != str(evidence.get("strategy") or "").strip():
+                    dependency_problem = "dependency windows strategy does not match evidence.strategy"
+                elif str(loaded_dependencies.get("instrument") or "").strip().upper() != instrument:
+                    dependency_problem = "dependency windows instrument does not match execution_context_claimed.instrument"
+                elif not isinstance(loaded_dependencies.get("windows"), dict):
+                    dependency_problem = "dependency windows source.windows must be an object keyed by paper_order_id"
+                else:
+                    dependency_map = {
+                        str(k).strip(): str(v).strip()
+                        for k, v in loaded_dependencies["windows"].items()
+                        if str(k).strip()
+                    }
+        if dependency_problem:
+            problems.append(dependency_problem)
+
+    journal_specs = proof.get("source_journals")
+    journal_trades: dict[str, dict[str, Any]] = {}
+    journal_outcomes: dict[str, dict[str, Any]] = {}
+    journal_problems: list[str] = []
+    if not isinstance(journal_specs, list) or not journal_specs:
+        problems.append("gap proof source_journals must be a non-empty list")
+        journal_specs = []
+    for jidx, spec in enumerate(journal_specs):
+        if not isinstance(spec, dict):
+            journal_problems.append(f"source_journals[{jidx}] must be an object")
+            continue
+        journal_path = _resolve_path(root, spec.get("path"))
+        expected_journal_sha = str(spec.get("sha256") or "").strip().lower()
+        actual_journal_sha = _sha256(journal_path) if journal_path is not None else None
+        if journal_path is None or actual_journal_sha is None:
+            journal_problems.append(f"source_journals[{jidx}] is unreadable")
+            continue
+        if len(expected_journal_sha) != 64 or actual_journal_sha != expected_journal_sha:
+            journal_problems.append(f"source_journals[{jidx}] sha256 mismatch")
+            continue
+        try:
+            lines = journal_path.read_text(encoding="utf-8").splitlines()
+        except OSError as exc:
+            journal_problems.append(f"source_journals[{jidx}] read failed: {exc}")
+            continue
+        for lidx, line in enumerate(lines, start=1):
+            if not line.strip():
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                journal_problems.append(
+                    f"source_journals[{jidx}] line {lidx} is invalid JSON"
+                )
+                continue
+            if not isinstance(record, dict):
+                continue
+            if record.get("decision") == "TRADE":
+                oid = str(record.get("paper_order_id") or "").strip()
+                if oid:
+                    if oid in journal_trades:
+                        journal_problems.append(f"duplicate TRADE paper_order_id {oid}")
+                    else:
+                        journal_trades[oid] = record
+            if record.get("type") == "OUTCOME":
+                outcome = record.get("outcome") or {}
+                oid = str(outcome.get("paper_order_id") or "").strip()
+                if oid:
+                    if oid in journal_outcomes:
+                        journal_problems.append(f"duplicate OUTCOME paper_order_id {oid}")
+                    else:
+                        journal_outcomes[oid] = record
+    if journal_problems:
+        problems.append(f"{len(journal_problems)} source-journal proof problem(s)")
+
+    rows = proof.get("resolved_outcomes")
+    if not isinstance(rows, list):
+        problems.append("gap proof resolved_outcomes must be a list")
+        rows = []
+    expected_resolved = _as_int((evidence.get("execution") or {}).get("resolved_outcomes"))
+    if expected_resolved is None:
+        problems.append("execution.resolved_outcomes is required for gap proof")
+    elif len(rows) != expected_resolved:
+        problems.append(
+            f"gap proof has {len(rows)} resolved outcomes but execution.resolved_outcomes={expected_resolved}"
+        )
+
+    gap_intervals, gap_error = _manifest_gap_intervals(manifest_path)
+    if gap_error:
+        problems.append(gap_error)
+
+    seen_ids: set[str] = set()
+    contaminated: list[dict[str, Any]] = []
+    invalid_rows: list[dict[str, Any]] = []
+    for idx, row in enumerate(rows):
+        if not isinstance(row, dict):
+            invalid_rows.append({"index": idx, "reason": "row must be an object"})
+            continue
+        order_id = str(row.get("paper_order_id") or "").strip()
+        if not order_id:
+            invalid_rows.append({"index": idx, "reason": "paper_order_id is required"})
+            continue
+        if order_id in seen_ids:
+            invalid_rows.append({"index": idx, "paper_order_id": order_id, "reason": "duplicate paper_order_id"})
+            continue
+        seen_ids.add(order_id)
+        source_dependency = dependency_map.get(order_id)
+        if source_dependency is None:
+            invalid_rows.append(
+                {
+                    "index": idx,
+                    "paper_order_id": order_id,
+                    "reason": "paper_order_id is missing from hash-bound dependency windows source",
+                }
+            )
+            continue
+        if str(row.get("dependency_start_timestamp") or "").strip() != source_dependency:
+            invalid_rows.append(
+                {
+                    "index": idx,
+                    "paper_order_id": order_id,
+                    "reason": "dependency_start_timestamp does not match hash-bound dependency windows source",
+                }
+            )
+            continue
+        dep = _parse_iso_utc(row.get("dependency_start_timestamp"))
+        signal = _parse_iso_utc(row.get("signal_timestamp"))
+        entry = _parse_iso_utc(row.get("entry_timestamp"))
+        exit_ = _parse_iso_utc(row.get("exit_timestamp"))
+        if None in (dep, signal, entry, exit_):
+            invalid_rows.append(
+                {"index": idx, "paper_order_id": order_id, "reason": "all four timezone-aware timestamps are required"}
+            )
+            continue
+        assert dep is not None and signal is not None and entry is not None and exit_ is not None
+        if not (dep <= signal <= entry <= exit_):
+            invalid_rows.append(
+                {
+                    "index": idx,
+                    "paper_order_id": order_id,
+                    "reason": "timestamps must satisfy dependency_start <= signal <= entry <= exit",
+                }
+            )
+            continue
+        trade = journal_trades.get(order_id)
+        outcome_record = journal_outcomes.get(order_id)
+        if trade is None or outcome_record is None:
+            invalid_rows.append(
+                {
+                    "index": idx,
+                    "paper_order_id": order_id,
+                    "reason": "matching TRADE and OUTCOME rows are required in hash-bound source journals",
+                }
+            )
+            continue
+        outcome = outcome_record.get("outcome") or {}
+        audit = outcome.get("execution_audit") or {}
+        journal_signal = str(trade.get("bar_ts") or outcome.get("signal_timestamp") or "").strip()
+        journal_entry = str(audit.get("historical_entry_bar_ts") or "").strip()
+        journal_exit = str(audit.get("historical_resolution_bar_ts") or "").strip()
+        if (
+            _parse_iso_utc(journal_signal) != signal
+            or _parse_iso_utc(journal_entry) != entry
+            or _parse_iso_utc(journal_exit) != exit_
+        ):
+            invalid_rows.append(
+                {
+                    "index": idx,
+                    "paper_order_id": order_id,
+                    "reason": "signal/entry/exit timestamps do not match hash-bound replay journal",
+                }
+            )
+            continue
+        if str(outcome.get("result") or "").upper() not in {"WIN", "LOSS", "BREAKEVEN"}:
+            invalid_rows.append(
+                {
+                    "index": idx,
+                    "paper_order_id": order_id,
+                    "reason": "gap proof row must bind to a terminal resolved replay outcome",
+                }
+            )
+            continue
+
+        overlaps = [
+            {"gap_start": start.isoformat(), "gap_end_exclusive": end.isoformat()}
+            for start, end in gap_intervals
+            if dep < end and exit_ >= start
+        ]
+        if overlaps:
+            contaminated.append(
+                {
+                    "paper_order_id": order_id,
+                    "dependency_start_timestamp": dep.isoformat(),
+                    "exit_timestamp": exit_.isoformat(),
+                    "overlaps": overlaps[:20],
+                }
+            )
+
+    if invalid_rows:
+        problems.append(f"{len(invalid_rows)} gap-proof row(s) are invalid")
+    if contaminated:
+        problems.append(f"{len(contaminated)} counted resolved outcome(s) overlap declared dataset gaps")
+
+    return {
+        "ok": not problems,
+        "gap_proof_path": str(path),
+        "actual_gap_proof_sha256": actual_sha,
+        "schema_version": proof.get("schema_version"),
+        "resolved_outcomes_checked": len(rows),
+        "unique_order_ids": len(seen_ids),
+        "declared_gap_intervals": len(gap_intervals),
+        "dependency_windows_checked": len(dependency_map),
+        "dependency_windows_problem": dependency_problem,
+        "source_journals_checked": len(journal_specs),
+        "source_journal_problems": journal_problems[:20],
+        "invalid_rows": invalid_rows[:20],
+        "contaminated_outcomes": contaminated[:20],
+        "problems": problems,
+        "reason": None if not problems else "resolved-outcome gap proof failed",
+    }
+
+
 def _check_data_integrity(root: Path, evidence: dict[str, Any], blockers: list[str]) -> dict[str, Any]:
     data = evidence.get("data_integrity") or {}
     for key in (
@@ -392,6 +725,8 @@ def _check_data_integrity(root: Path, evidence: dict[str, Any], blockers: list[s
 
     _require_nonempty(data, "dataset_manifest_path", blockers, "data_integrity")
     _require_nonempty(data, "dataset_manifest_sha256", blockers, "data_integrity")
+    _require_nonempty(data, "gap_proof_path", blockers, "data_integrity")
+    _require_nonempty(data, "gap_proof_sha256", blockers, "data_integrity")
 
     manifest_path = _resolve_path(root, data.get("dataset_manifest_path"))
     expected = str(data.get("dataset_manifest_sha256") or "").strip().lower()
@@ -421,12 +756,25 @@ def _check_data_integrity(root: Path, evidence: dict[str, Any], blockers: list[s
             + str(feed_proof.get("reason") or "unknown failure")
         )
 
+    gap_proof = _verify_gap_proof(
+        root,
+        evidence,
+        manifest_path=manifest_path,
+        manifest_sha256=actual,
+    )
+    if not gap_proof.get("ok"):
+        blockers.append(
+            "data_integrity resolved-outcome gap proof failed: "
+            + str(gap_proof.get("reason") or "unknown failure")
+        )
+
     return {
         **data,
         "resolved_manifest_path": str(manifest_path) if manifest_path else None,
         "actual_manifest_sha256": actual,
         "mechanical_session_day_identity": session_proof,
         "mechanical_feed_integrity": feed_proof,
+        "resolved_outcome_gap_proof": gap_proof,
     }
 
 

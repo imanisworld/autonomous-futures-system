@@ -88,7 +88,9 @@ For `MES` and `MNQ`, `session_day_identity_proven` is mechanically corroborated 
 
 `feed_integrity_proven` is also mechanically corroborated from the frozen dataset manifest. The manifest must identify the claimed instrument/timeframe, contain a non-empty `files` map with per-file SHA-256 and row counts, and contain an explicit `gap_ledger_cme_hours` list. Every listed replay file is re-hashed by the gate and coverage counts are cross-checked when present.
 
-A non-empty gap ledger is **not** silently converted into PASS or FAIL. Exchange closures and real feed holes can both appear there. The gate proves that frozen bytes and missing intervals are explicitly enumerated; the strategy evidence must still exclude/fail closed on any gap-contaminated decision or outcome window. Missing bars are never synthesized to satisfy this gate.
+A non-empty gap ledger is **not** silently treated as clean. Direct-to-DEMO evidence now also requires a hash-bound `replay_gap_proof_v1` artifact. For every counted resolved outcome, the artifact must bind a unique `paper_order_id` to an explicit strategy-specific dependency start and to the historical signal, entry and resolution timestamps recorded by replay. The gate re-hashes the dependency-window source and replay journals, verifies the journal timestamps/order identity, and recomputes overlap against the frozen manifest gap ledger. Any missing timestamp, count mismatch, source hash mismatch, or overlap fails closed.
+
+The generic gate deliberately does **not** guess a strategy lookback or a holiday exception. If a declared manifest gap overlaps the supplied dependency→exit window, that outcome cannot count for direct-to-DEMO qualification until a cleaner corpus/window is supplied. Missing bars are never synthesized. `scripts/replay_gap_proof.py` builds the proof artifact and refuses old replay rows that lack the new historical entry/resolution timestamps.
 
 ### 5. Execution realism
 
@@ -232,6 +234,8 @@ Exit code:
     "dataset_frozen": true,
     "dataset_manifest_path": "path/to/manifest.json",
     "dataset_manifest_sha256": "...",
+    "gap_proof_path": "path/to/replay_gap_proof.json",
+    "gap_proof_sha256": "...",
     "contract_roll_identity_proven": true,
     "session_day_identity_proven": true,
     "feed_integrity_proven": true

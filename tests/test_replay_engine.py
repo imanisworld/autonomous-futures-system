@@ -42,6 +42,20 @@ def test_replay_engine_runs_sample_day(config, tmp_path):
     assert Path(report.review_path).exists()
     assert (tmp_path / "replay_report_2026-05-23.md").exists()
 
+    rows = [json.loads(line) for line in Path(report.journal_path).read_text().splitlines()]
+    outcome = next(row for row in rows if row.get("type") == "OUTCOME")
+    payload = outcome["outcome"]
+    audit = payload["execution_audit"]
+    assert payload["signal_timestamp"]
+    assert audit["historical_signal_bar_ts"]
+    assert audit["historical_entry_bar_ts"]
+    assert audit["historical_resolution_bar_ts"]
+    assert (
+        audit["historical_signal_bar_ts"]
+        <= audit["historical_entry_bar_ts"]
+        <= audit["historical_resolution_bar_ts"]
+    )
+
 
 def test_replay_stops_after_max_trades(config, tmp_path):
     from datetime import datetime, timedelta
