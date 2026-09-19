@@ -8,6 +8,22 @@ Do not silently substitute IEX for SIP in collector v0.3.
 
 The study is useful only as a source-coverage comparison and as evidence for a possible future **miss-allowed provisional observer** design that would require explicit policy and later SIP reconciliation.
 
+## Follow-up status
+
+The “future design” proposed by this 81-row source-equivalence study has now been tested separately in #756 on an outcome-independent denominator of **183 structurally ARMED 212 windows**.
+
+That preregistered study supports IEX only as a **miss-allowed provisional research observer with mandatory delayed-SIP reconciliation**:
+
+- 90 IEX provisional reversals;
+- 89 confirmed by delayed SIP;
+- 1 false provisional rejected because SIP continuation broke first;
+- 2 of 91 SIP-authoritative reversals missed by IEX;
+- confirmed timing still has a long tail (median 3.501s, p95 156.273s, max 569.811s).
+
+See `docs/options-212r-iex-provisional-results-2026-09-18.md`.
+
+This does not change this document's original conclusion: IEX is **not** consolidated-SIP equivalent. The 81-row study remains provenance for that rejection; #756 is the authority for the narrower provisional-observer result.
+
 ## Frozen population
 
 Population: exact frozen 81-row 2-1-2 reversal set.
@@ -88,7 +104,7 @@ This study does **not** support treating IEX as consolidated-SIP equivalent.
 
 The encouraging part is that IEX produced no opposite-side-first event in the frozen 81. But it missed 8 SIP-confirmed breaks entirely in the same five-minute trigger bucket and was materially late on several others. That is enough to reject an unqualified substitution.
 
-A future design could evaluate IEX as a deliberately incomplete **provisional trigger detector** that is allowed to miss setups and later reconciles every candidate against delayed consolidated SIP. That would be a new observation policy and must be pre-registered and validated separately before deployment.
+That narrower design has now been pre-registered and validated separately in #756 as a **miss-allowed provisional research observer with mandatory delayed-SIP reconciliation**. It remains a distinct source policy, is not deployed, and does not make IEX SIP-equivalent.
 
 ## Safety
 
