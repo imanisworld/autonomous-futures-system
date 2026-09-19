@@ -268,7 +268,7 @@ Population: every directional 30m bar (944 bars, 835 episodes, zero missing rows
 
 Operator ruling: most missing families are coverage, not edge, so **no broad detector expansion**. 2-1-2 reversal is the strongest follow-up candidate, 1-2-2 the same pattern at a descriptive sample size. 2-2-2 continuation and outside bar are not to be pursued. Nothing is production-ready; no expectancy, P&L, or contract claim is made.
 
-### Pre-registered prospective validation (running)
+### Pre-registered prospective validation (three-session threshold reached)
 
 - Question: do the 2-1-2 reversal and 1-2-2 first-sight excesses persist on sessions after 2026-09-15 that were never used to find them? Inside break is counted passively with no dedicated lane.
 - Method: the unchanged observer, reducer and outcome modules; the same first-sight view, matched baseline and ex-opening reporting; a read-only analysis script over the collector's aggregate output. No new detector, lane, timer, threshold, or production change.
@@ -292,7 +292,17 @@ Operator ruling: most missing families are coverage, not edge, so **no broad det
 | 1-2-2 | 28 | 13 / 15 | 42.9% | 14.4% | +28.5 pp | +23.0 pp | INSUFFICIENT PROSPECTIVE SAMPLE |
 | inside break (passive) | 6 | — | — | — | — | — | counted only |
 
-  The 2-1-2 reversal excess has not reappeared so far; the 1-2-2 excess is large but rests on 28 episodes with a 60% to 23% split between the two days. The pre-registered rule is applied for the first time after the third session.
+  The 2-1-2 reversal excess had not reappeared through two sessions; the 1-2-2 excess was large but still below the pre-registered sample threshold.
+
+- **Third prospective session / first decision point, 2026-09-18.** The collector completed cleanly and the frozen validation script passed its methodology checks: sessions agree across events/outcomes, first-sight delay remains 17.9 min, no missing rows, no provider errors, and the collector source SHA remains in the allowed set.
+
+| Family | prospective n | L / S | first-sight 1R | matched baseline | diff | ex-opening diff | status |
+|---|---:|---:|---:|---:|---:|---:|---|
+| 2-1-2 reversal | 47 | 26 / 21 | 34.9% | 40.4% | −5.5 pp | **−4.2 pp** | **NO LONGER SHOWING EXCESS** |
+| 1-2-2 | 38 | 16 / 22 | 45.9% | 20.8% | +25.1 pp | **+20.9 pp** | **PERSISTING POSSIBLE SIGNAL** |
+| inside break (passive) | 7 | — | — | — | — | — | PASSIVE_ONLY |
+
+  This closes the original three-session persistence question under the pre-registered first-sight framework. It does **not** make 212R a rejected option strategy, because the separate corrected 212R lane uses a causal trigger clock and different option-side evidence boundary. It does mean the retrospective family-level first-sight excess did not persist prospectively. Conversely, 1-2-2 preserved the defined excess threshold and is the only one of the two follow-up families that remains a possible structural signal under this specific study. See `docs/options-prospective-family-validation-2026-09-18.md`.
 
 ### Daily evidence rollups (reporting only)
 
@@ -300,7 +310,7 @@ Operator ruling: most missing families are coverage, not edge, so **no broad det
 
 ### Parked, not authorized
 
-Target-geometry ablation on the full 2-1-2 continuation population, first-hour hourly-context audit, SPY/QQQ neutral-alignment ablation, legacy Signa timeout reliability audit, and option-chain snapshot retention. Each needs a separate operator instruction; none may run before the prospective work has sessions.
+Target-geometry ablation on the full 2-1-2 continuation population, first-hour hourly-context audit, SPY/QQQ neutral-alignment ablation, legacy Signa timeout reliability audit, and option-chain snapshot retention. Each still needs a separate operator instruction. The three-session prospective precondition is now satisfied, but that does **not** authorize any of these parked studies automatically.
 
 ## Retired / superseded options clutter
 
@@ -340,9 +350,9 @@ There are now three separate evidence tracks and they must not be conflated:
 Existing V1 collection continues without tuning. Steps 1–5 of the original deployment checklist remain complete (deployed, smoke proven, epochs `V1-EPOCH-1` and `V1-EPOCH-2` recorded). Also continue to:
 
 1. Collect natural candidates on the 20-symbol universe without tuning V1. Any rule change starts a new cohort.
-2. Let the after-close collector add one session per weekday (unattended firing proven 2026-09-17); keep the six-point check until the prospective sample reaches its thresholds.
-3. Re-run the pre-registered prospective family validation as sessions accrue and report its status only in the fixed vocabulary above.
-4. Verify #648 on fresh rows, then run the controlled target-geometry test and the separate Daily/4H horizon test on the clean shadow population before any V1 tuning.
+2. Let the after-close collector continue adding sessions under the frozen methodology and six-point integrity check. The original three-session decision threshold has now been reached; additional sessions are monitoring evidence, not permission to re-score the retrospective discovery sample.
+3. Preserve the first prospective classification: 2-1-2 reversal = `NO LONGER SHOWING EXCESS`; 1-2-2 = `PERSISTING POSSIBLE SIGNAL`. Any 1-2-2 strategy follow-up must be a new separately authorized causal/option-side study, not an automatic V1 detector expansion.
+4. Treat the controlled target-geometry and Daily/4H horizon studies as complete; do not rerun or tune from them without a new pre-registered question.
 5. Treat legacy Signa read timeouts as a separate reliability audit; they cannot alter a trade decision (scorer contribution 0, no branch on Signa state).
 
 **No proof, no trade. No optimization before evidence.**

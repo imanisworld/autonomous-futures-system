@@ -247,8 +247,16 @@ Rulings and numbers live in `docs/options-current-state-handoff.md` (section
   `58d6c5f` completed on its own (observer "ran", no repair, 1,450 events all
   priced, 1,243 episodes) and passed the six-point check. Two prospective
   sessions: 2-1-2 reversal 29 episodes (−4.3 pp ex-opening), 1-2-2 28
-  episodes (+23.0 pp ex-opening); both still `INSUFFICIENT PROSPECTIVE
+  episodes (+23.0 pp ex-opening); both were still `INSUFFICIENT PROSPECTIVE
   SAMPLE` until the third session.
+- **Third-session decision point 2026-09-18.** The collector completed cleanly
+  and the frozen validation script passed methodology checks. On the primary
+  20-symbol universe, 2-1-2 reversal reached 47 episodes over 3 sessions with
+  both directions and **−4.2 pp ex-opening first-sight excess**, so the frozen
+  status is `NO LONGER SHOWING EXCESS`. 1-2-2 reached 38 episodes over 3
+  sessions with both directions and **+20.9 pp ex-opening excess**, so the
+  frozen status is `PERSISTING POSSIBLE SIGNAL`. This is family-level
+  first-sight evidence only; it is not option expectancy or promotion.
 - **Prospective rule, fixed before any prospective session existed.** For
   2-1-2 reversal and 1-2-2 (inside break counted passively): `PERSISTING
   POSSIBLE SIGNAL` needs ≥30 prospective episodes over ≥3 sessions, both

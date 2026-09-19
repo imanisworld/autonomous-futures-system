@@ -187,6 +187,9 @@ The stress engine exists, but the numeric qualification policy still needs a fro
 
 ## NEEDS MORE EVIDENCE
 
+The separate frozen **first-sight family-persistence** study has now reached its first pre-registered decision point: 47 prospective 212R episodes across 3 sessions, both directions, produced an ex-opening matched-baseline excess of **-4.2 pp**, so that lane classifies 212R as **NO LONGER SHOWING EXCESS**. This does not answer the corrected trigger-time option strategy, but it removes the earlier retrospective first-sight excess as supporting prospective evidence.
+
+Still needed for the corrected 212R lane:
 - prospective 212R observations under corrected trigger timing;
 - prospective option-chain evidence captured at the trigger boundary;
 - executable option marks through resolution;
@@ -233,6 +236,6 @@ After an authorized collector begins accumulating real prospective rows, existin
 
 ## Current verdict
 
-**212R: PROMISING BUT UNPROVEN / WAIT.**
+**212R: UNPROVEN / WAIT.**
 
 No proof, no trade.
