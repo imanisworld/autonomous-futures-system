@@ -102,8 +102,9 @@ M2K/MGC/MCL/MBT now have better 1m coverage, but this does not justify strategy 
 - **MNQ 4HR Re-Trigger:** PROMISING BUT UNPROVEN / PAPER ONLY.
 - **MES 4HR:** BROKEN / WAIT.
 - **MNQ 3-2-2 First Live:** **PROMISING BUT UNPROVEN**; corrected pre-armed timing survives 3-tick stress with both halves positive, but n=34 is thin and current real-account stop/R:R architecture remains incompatible.
-- **Miyagi:** thin / parked; timing audit only if reopened.
-- **Daily 2-2:** paper evidence lane; no live claim.
+- **Miyagi:** thin / parked; #776 repaired the completed-hour lookahead and regenerated corrected evidence, but sample remains too small for runtime work.
+- **Daily 2-2 completed-close / favorable-pullback:** PROMISING BUT UNPROVEN / PAPER ONLY; activation baseline reproduced exactly and current-CME-day variant remains positive, but the 34 fills are not first-touch evidence.
+- **Daily 2-2 first-touch under current rules:** BROKEN / ZERO ADMISSIBLE FILLS at 1/2/3 adverse entry ticks because fixed planned 2R + actual-fill R:R >=2 is mechanically incompatible with adverse touch slippage.
 - **MES 15m 1-2-2:** PROMISING BUT UNPROVEN / thin.
 - **Transition:** WAIT / fails required slippage robustness.
 - **ORB Reclaim current:** BROKEN.
@@ -150,15 +151,16 @@ Do not restart:
 
 ## Next work
 
-1. **No deployment/restart first.** The verified futures box remains healthy at minimal release `ac2b117ec1f9`; #759 response-proof is already deployed, #760 is already installed in the read-only watcher, and #764 is merged read-only census/reporting code that does not justify another restart.
-2. Let natural MNQ 4HR 1m armed-trigger evidence accumulate and specifically test the previously proven late-entry mechanism: correct arm, true 1m touch time, correct prior-completed 1H stop anchor, dedupe, and no stale 5m-close dependence.
-3. Continue the 3-2-2 First Live 1m observer under `docs/prereg-forward-one-min-trigger-evidence-review-2026-09-18.md`; no paper-fill discussion before the preregistered per-strategy sample/safety gate.
-4. Refine a strategy only when evidence isolates a concrete mechanism defect. Do not tune targets, stops, risk caps, or session filters merely to improve results.
-5. Keep LC_ZONE v1 / 4HR zone-target changes on HOLD; only reopen zone design under a new preregistration.
-6. Miyagi timing audit only if that parked strategy is reopened.
-7. Continue passive six-root context collection. Direct post-session audit: wide-stop 4HR/3-2-2 remain flat with zero fills, Daily 2-2 is flat/not halted, MES 1-2-2 is still journaling, Asia D+EMA is actively producing candidate/outcome rows, cross-instrument observation has 2,437 rows across all six roots, and no natural 4HR/3-2-2 1m observer event exists yet.
-8. First natural 4HR/3-2-2 1m event is the next actionable futures review. Audit the complete mechanism/evidence chain immediately; change code only if that event proves a specific defect.
+1. **No deployment/restart first.** The verified futures box remains healthy at minimal release `ac2b117ec1f9`; the Daily timing audit is offline only and does not justify runtime churn.
+2. **Daily 2-2 rule identity decision:** keep the evidenced completed-close/favorable-pullback strategy explicit, or separately preregister a materially different first-touch contract. Do not silently change target placement, R:R floor, or fill model to rescue first-touch.
+3. Let natural MNQ 4HR 1m armed-trigger evidence accumulate and specifically test the previously proven late-entry mechanism: correct arm, true 1m touch time, correct prior-completed 1H stop anchor, dedupe, and no stale 5m-close dependence.
+4. Continue the 3-2-2 First Live 1m observer under `docs/prereg-forward-one-min-trigger-evidence-review-2026-09-18.md`; no paper-fill discussion before the preregistered per-strategy sample/safety gate.
+5. Refine a strategy only when evidence isolates a concrete mechanism defect. Do not tune targets, stops, risk caps, or session filters merely to improve results.
+6. Keep LC_ZONE v1 / 4HR zone-target changes on HOLD; only reopen zone design under a new preregistration.
+7. Miyagi remains WAIT after #776's timing correction; sample is too small for runtime work.
+8. Continue passive six-root context collection. Keep Daily completed-close evidence in its existing epoch and do not mix it with any future first-touch study.
+9. First natural 4HR/3-2-2 1m event remains the next forward execution-mechanism review.
 
-Final cleanup snapshot: local/origin `main` are clean at `cbac669` after #768, there are no open PRs, clean merged/closed worktrees were pruned, dirty/unreviewed worktrees were preserved, and the recovered pre-clean local work is anchored on branch `recovery/pre-clean-main-20260918-post754` at `fe4da8d0`.
+Cleanup snapshot immediately before this audit: local/origin `main` were clean at audit base `3fbd20c`, there were no open PRs, completed temporary futures worktrees were pruned, and the recovered pre-clean local work remains anchored on branch `recovery/pre-clean-main-20260918-post754` at `fe4da8d0`.
 
 No live expansion.

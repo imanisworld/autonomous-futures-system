@@ -6,14 +6,14 @@ This is the concise operator-facing source of truth for the futures system as of
 
 **PAPER / SHADOW / DEMO EVIDENCE ONLY. NO LIVE EXECUTION APPROVED.**
 
-### Late-session reconciliation — repo `d15ac1f`
+### Late-session reconciliation — through audit base `3fbd20c`
 
 - #771 merged: 3-2-2 First Live journal/state persistence repaired.
 - #775 merged: Daily 2-2 CME holiday trading-day identity repaired.
 - #776 merged: Miyagi completed-hour lookahead repaired; Miyagi remains unproven.
 - #778 merged: Daily 2-2 independent epoch identity, fail-closed state loading, and epoch/SHA provenance repaired. CI and CodeQL green; **not deployed**.
 - Generic 2-1-2/1-2-2 does not need a decision-close IOC repair: its shared 15m paper/replay path carries a causal pre-armed stop fill; a live-broker substitute is explicitly refused.
-- Daily 2-2 still has a real completed-5m IOC timing limitation. Five observed continuation triggers show 25/116/2 favorable ticks and 12/8 adverse ticks of close-vs-trigger displacement; tolerance is 8 ticks.
+- Daily 2-2 timing audit is now complete. The activation baseline reproduced exactly (34 fills, +$13,885.18, PF 2.0171, max DD 25.1528%). Under current CME-day identity the completed-close variant remains positive (34 fills, +$13,571.68, PF 1.9482), but all 34 fills occurred only after 2–202 ticks of favorable close-vs-planned-entry retracement (median 33). A preregistered true-touch variant produced 0 admissible fills at 1/2/3 adverse entry ticks because fixed planned 2R plus strict actual-fill R:R >=2 is incompatible with any adverse touch slippage. Completed-close and first-touch must be treated as different strategies.
 - Runtime was re-verified unchanged on immutable `ac2b117ec1f9`: release integrity OK (1,310 files), Tradovate demo, live trading false, one-contract hard cap, shadow schedule. No deploy or restart occurred.
 - No natural 4HR/3-2-2 1m observer event exists yet. That item remains **WAITING FOR NATURAL EVIDENCE**.
 
@@ -35,7 +35,7 @@ Active deployed futures release verified on the box:
 
 Repository `main` is ahead of the deployed futures release. Repository state must not be used as proof of deployed state. The VPS is intentionally pinned to `ac2b117ec1f98f1470fc54330a4befc913ff15f2`, a minimal runtime release built from prior live `6d5b224aa5c208cad0f1d39c09eda13c6171b98b` plus only #759's append-only 1m observer-response evidence hook. Do not deploy newer `main` merely to catch up.
 
-Final cleanup snapshot for this work session: repository `main=cbac669` after #768, local `main` is clean and matches origin, and there are **no open PRs**. Clean merged/closed temporary worktrees were pruned materially; dirty/unreviewed worktrees were intentionally preserved. The earlier dirty local work recovered after its stash ref disappeared remains permanently anchored at `recovery/pre-clean-main-20260918-post754` commit `fe4da8d0a9432aeb3c3fe28d57522731e2623a0a`; do not delete that recovery branch until its preserved work is intentionally reconciled.
+Cleanup snapshot immediately before the Daily timing audit: repository audit base `3fbd20c`, local `main` was clean and matched origin, and there were **no open PRs**. Completed temporary futures worktrees were pruned. The earlier dirty local work recovered after its stash ref disappeared remains permanently anchored at `recovery/pre-clean-main-20260918-post754` commit `fe4da8d0a9432aeb3c3fe28d57522731e2623a0a`; do not delete that recovery branch until its preserved work is intentionally reconciled.
 
 ## What is good / high confidence
 
@@ -184,13 +184,39 @@ Timing classification: **TIMING EDGE SURVIVES / PROMISING BUT UNPROVEN.**
 
 This does not remove the separate current-account blocker: the historical 3-2-2 population remains incompatible with the account's stop-width and R:R architecture, and n=34 is still thin.
 
-Still requiring explicit timing parity if reopened:
-- 12HR Miyagi;
-- generic 2-1-2 / 1-2-2 next-bar boundary triggers.
+Additional timing reconciliation:
+- 12HR Miyagi's completed-hour lookahead was repaired by #776; corrected evidence remains thin/unproven and no runtime promotion follows.
+- generic 2-1-2 / 1-2-2 does **not** share the completed-close IOC defect: the shared 15m paper/replay state machine uses a pre-armed next-bar stop fill. It still has no live-broker authority.
 
 No armed-trigger family inherits another family's timing result automatically.
 
 Close-confirmed strategies such as ORB/VWAP families must not be converted to touch-entry merely because 1m data now exists.
+
+### Daily 2-2 entry identity — audited
+
+The separately preregistered Daily timing audit reproduced the original activation baseline exactly, then separated two entry architectures.
+
+**Completed-close / favorable-pullback architecture:**
+- current CME-day identity: 34 fills, **+$13,571.68**, PF **1.9482**;
+- both chronological halves positive;
+- max DD **26.6323%**;
+- all 34 fills occurred after the completed trigger-bar close moved **2–202 ticks favorably** from the structural planned entry, median **33 ticks favorable**.
+
+**Immediate first-touch architecture under unchanged rules:**
+- 210 current-identity structural continuation days;
+- 124 prior-bar-context-approved first-break opportunities;
+- **0 admissible fills at 1, 2, or 3 adverse entry ticks**;
+- every otherwise eligible one-tick touch failed ACTUAL_RR_BELOW_2.
+
+Cause: the target is fixed at exactly 2R from the planned entry while the lane also demands actual-fill R:R >=2. Any adverse true-touch slippage makes actual R:R strictly <2.
+
+Ruling:
+- completed-close Daily 2-2 remains **PROMISING BUT UNPROVEN / PAPER ONLY**;
+- true-touch Daily 2-2 under current target/R:R rules is **BROKEN / ZERO ADMISSIBLE FILLS**;
+- the 34-fill historical result must not be described as first-touch evidence;
+- choosing a different target/R:R/fill contract requires a separate preregistered strategy decision.
+
+Audit: docs/daily22-trigger-timing-ab-2026-09-18.md.
 
 ## 4HR — current evidence picture
 
@@ -322,8 +348,13 @@ For 3-2-2:
 - confirmation that a future lower-latency observer reproduces the same setup population rather than creating a new one.
 
 For Miyagi:
-- exact timing parity if it is ever considered beyond research;
+- completed-hour lookahead is repaired and corrected timing evidence exists;
 - much larger sample; current n is too small.
+
+For Daily 2-2:
+- keep prospective completed-close/favorable-pullback evidence separate from any future first-touch population;
+- decide the intended entry contract before any target/R:R/fill redesign;
+- if first-touch is reopened, preregister the changed target/R:R/fill contract before testing it.
 
 For MES 1-2-2:
 - prospective evidence under realistic accounting;
@@ -372,8 +403,12 @@ High confidence:
 Medium confidence / promising:
 - MNQ 4HR itself;
 - MNQ 60M 3-2-2 historical signal under corrected First Live timing;
+- MNQ Daily 2-2 **completed-close / favorable-pullback** historical hypothesis, with entry identity explicitly separated from first-touch;
 - 4H 2→2 continuation context;
 - repeated recent 4H compression as context.
+
+Broken / blocked mechanics:
+- MNQ Daily 2-2 **first-touch** architecture under the current fixed planned 2R target + actual-fill R:R >=2 rule: zero admissible fills under 1/2/3 adverse entry ticks.
 
 Low confidence / unresolved:
 - any supply/demand target rule under LC_ZONE v1;
@@ -394,22 +429,24 @@ Do not:
 - change global risk caps to rescue a strategy;
 - convert close-confirmed ORB/VWAP rules into touch triggers;
 - tune target/stop/zone thresholds off the small diagnostic cells;
+- change Daily 2-2 target placement, actual-fill R:R floor, or fill model to rescue first-touch without a separate preregistered rule decision;
 - call 4HR validated.
 
 ## Late 2026-09-18 addendum — mechanical fix + parity/state audits
 
-See `docs/futures-causal-parity-and-state-audits-2026-09-18.md`. Summary: the 3-2-2 First Live `DailyState` journal/restore omission is fixed in PR #771 (not deployed); 3-2-2 remains 0/33 compatible with the account stop-width / R:R caps under the corrected pre-armed timing; Daily 2-2 evidence is **not** promotion-grade yet (shared wide-stop epoch, silent fresh-ledger fallback masked only by the router integrity gate, no epoch stamp on audit rows, n=1); generic 2-1-2/1-2-2 and Daily 2-2 still carry the unmeasured completed-5m touch-inference gap; replay 4H bars are UTC-anchored while TradingView 4H bars are CME-session-anchored — no decision authority today (HTF gate off, `require_htf_alignment` false) but a blocker for ever enabling that gate with `htf_direction_source=payload`.
+See `docs/futures-causal-parity-and-state-audits-2026-09-18.md`. Summary: the 3-2-2 First Live `DailyState` journal/restore omission is fixed in PR #771 (not deployed); 3-2-2 remains 0/33 compatible with the account stop-width / R:R caps under corrected pre-armed timing; #778 independently fixes Daily 2-2 epoch identity/state provenance repo-side (not deployed; preserve the existing epoch on any future sanctioned release); generic 2-1-2/1-2-2 does not share the decision-close IOC defect; replay 4H bars are UTC-anchored while TradingView 4H bars are CME-session-anchored — no decision authority today (HTF gate off, `require_htf_alignment` false) but a blocker for ever enabling that gate with `htf_direction_source=payload`. The subsequent Daily 2-2 timing audit closes its previously unmeasured entry-identity question: completed-close/favorable-pullback evidence reproduces, while true-touch under unchanged target/R:R rules has zero admissible realistic fills.
 
 ## Safe next work order
 
 1. **Preserve collection epochs / no further runtime churn** — #759 is deployed in minimal release `ac2b117ec1f9` and #760 is installed only in the read-only watcher. No further futures-bot or watcher restart is required now.
-2. **4HR prospective 1m evidence** — verify trigger touch timing, stop anchor, dedupe, and the newly persistent response fields `fill_is_none`, `risk_is_none`, `execution_reachable` on natural signals. This is the direct forward check for the previously proven completed-5m late-entry defect.
-3. **3-2-2 prospective 1m evidence** — timing survives the offline causal model; now collect natural First Live arms/touches and the same persistent response proof under `docs/prereg-forward-one-min-trigger-evidence-review-2026-09-18.md`. No paper-fill discussion before the preregistered mechanism threshold.
-4. **Refine only from proven mechanism failures** — if forward evidence shows stale arm state, wrong trigger timestamp, wrong completed-1H stop anchor, duplicate trigger handling, or another live/replay timing mismatch, isolate and repair that exact defect. Do not tune targets/stops/risk merely because P&L is weak.
-5. **LC_ZONE v1 is HOLD** — do not tune or rescue the failed quality audit. Reopen zone design only under a new preregistration.
-6. **Miyagi timing parity only if reopened** — its current sample is too small to justify runtime work.
-7. Continue passive evidence collection; do not expand instruments or execution scope. Current direct audit shows wide-stop 4HR/3-2-2 flat with zero fills so far, Daily 2-2 flat/not halted, MES 1-2-2 journaling through session close, Asia D+EMA actively accumulating candidate/outcome rows, and 2,437 cross-instrument observation rows across all six roots. No natural 4HR/3-2-2 1m observer event exists yet.
-8. **Next actionable futures event = first natural 1m observer event.** On that event, immediately audit arm timing → true touch → completed-1H stop anchor → dedupe → durable response proof → zero execution leakage. If it exposes a concrete mechanism defect, repair only that defect. If it passes, keep collecting. No further deploy, restart, strategy retune, risk change, or feature work is justified merely to stay busy.
+2. **Daily 2-2 rule identity decision — research only, no code change yet** — explicitly choose whether the strategy is the currently evidenced completed-close/favorable-pullback contract or whether a distinct first-touch breakout strategy is worth reopening. The current true-touch target/R:R contract is mechanically broken; do not rescue it by silent tuning.
+3. **4HR prospective 1m evidence** — verify trigger touch timing, stop anchor, dedupe, and the persistent response fields `fill_is_none`, `risk_is_none`, `execution_reachable` on natural signals. This is the direct forward check for the previously proven completed-5m late-entry defect.
+4. **3-2-2 prospective 1m evidence** — timing survives the offline causal model; now collect natural First Live arms/touches and the same persistent response proof under `docs/prereg-forward-one-min-trigger-evidence-review-2026-09-18.md`. No paper-fill discussion before the preregistered mechanism threshold.
+5. **Refine only from proven mechanism failures** — if forward evidence shows stale arm state, wrong trigger timestamp, wrong completed-1H stop anchor, duplicate trigger handling, or another live/replay timing mismatch, isolate and repair that exact defect. Do not tune targets/stops/risk merely because P&L is weak.
+6. **LC_ZONE v1 is HOLD** — do not tune or rescue the failed quality audit. Reopen zone design only under a new preregistration.
+7. **Miyagi is corrected but still WAIT** — #776 repairs the completed-hour lookahead; its sample remains too small to justify runtime work.
+8. Continue passive evidence collection; do not expand instruments or execution scope. Keep Daily completed-close evidence in its existing epoch and do not mix it with any future first-touch study.
+9. **Next natural execution-mechanism checkpoint = first 4HR/3-2-2 1m observer event.** On that event, audit arm timing → true touch → completed-1H stop anchor → dedupe → durable response proof → zero execution leakage. If it exposes a concrete mechanism defect, repair only that defect. If it passes, keep collecting.
 
 ## Bottom line
 

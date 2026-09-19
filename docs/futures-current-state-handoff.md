@@ -127,13 +127,13 @@ The internal journal key `wide_stop_6k` is retained only for historical path con
 
 ### 3. MNQ Daily 2-2 continuation
 
-- status: **PROMISING BUT UNPROVEN / PAPER EVIDENCE**
-- Daily timeframe; causal first break only
+- status: **PROMISING BUT UNPROVEN / PAPER EVIDENCE / ENTRY ARCHITECTURE TIMING-SENSITIVE**
+- Daily structural first break consumes the day's opportunity, but the active entry is **completed-5m close-confirmed**, not an immediate first-touch breakout
 - 1 MNQ contract
 - isolated hypothetical starting ledger: **$5,000**
 - natural prior-Daily-range stop; no stop tightening
-- fixed **2R** target
-- decision-time **8-tick IOC** admission
+- fixed **2R** target from the planned structural entry
+- decision-time **8-tick IOC** admission from the completed trigger-bar close
 - 1 adverse entry tick
 - actual fill R:R must remain **>= 2.0**
 - actual fill-to-stop planned risk must remain **<= $1,750**
@@ -145,15 +145,25 @@ The internal journal key `wide_stop_6k` is retained only for historical path con
 - **30% hard paper halt**
 - no external broker and no promotion path
 
-Preregistered frozen-corpus IOC result used to justify forward paper collection:
-
-- 34 non-overlapping trades
+The 2026-09-18 timing audit reproduced the activation baseline exactly:
+- 34 non-overlapping fills
 - net **+$13,885.18**
-- PF **2.02**
-- H1 positive / H2 positive
+- PF **2.0171**
+- H1 **+$5,661.84** / H2 **+$8,223.34**
 - 2024, 2025 and 2026 positive
-- max historical drawdown **25.15%**
-- the 30% hard halt was not reached
+- max historical drawdown **25.1528%**
+
+Under the current #775 CME trading-day identity, the same completed-close architecture remains positive: 34 fills, **+$13,571.68**, PF **1.9482**, both halves positive, max DD **26.6323%**.
+
+Critical interpretation: all 34 current-identity fills occurred only after the completed trigger-bar close moved **2–202 ticks favorably** from the planned breakout entry (median **33 ticks favorable**). A separately preregistered causal first-touch model produced **0 admissible fills at 1/2/3 adverse entry ticks** because the fixed planned 2R target plus strict actual-fill R:R >=2 rule is mathematically incompatible with any adverse true-touch slippage.
+
+Therefore:
+- the completed-close / favorable-pullback hypothesis remains **PROMISING BUT UNPROVEN / PAPER ONLY**;
+- the immediate first-touch version under current rules is **BROKEN / ZERO ADMISSIBLE FILLS**;
+- do not relabel the 34-trade historical result as first-touch evidence;
+- do not change target or R:R rules without a separate preregistered rule decision.
+
+Audit: `docs/daily22-trigger-timing-ab-2026-09-18.md`.
 
 This is paper evidence, not a live-capital claim.
 
