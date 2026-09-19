@@ -22,7 +22,7 @@ Active deployed futures release verified on the box:
 - matching proof pin `EXPECTED_PROOF_ONE_MIN_322_OBSERVER_ENABLED=true`
 - live-box drift guard: **OK**, no missing pins, no unpinned overrides, no mismatches
 
-Repository `main` is ahead of the deployed futures release. Repository state must not be used as proof of deployed state.
+Repository `main` is ahead of the deployed futures release. Repository state must not be used as proof of deployed state. As of the post-#754 check, `main=d3ba7a46ddb81558b2181192f718071caa60ce15` while the VPS remains intentionally pinned to `6d5b224aa5c208cad0f1d39c09eda13c6171b98b`. The commits between them are offline replay/backtest qualification, docs, and options work; there is no futures runtime-sensitive delta that requires a deploy or restart.
 
 ## What is good / high confidence
 
@@ -71,9 +71,11 @@ High confidence for the scopes that have been explicitly audited:
 - 4HR can now be compared under old trigger-backfill, completed-5m IOC, and causal pre-armed-touch entry models;
 - causal completed-1H stop anchoring has been tested for 4HR;
 - the structural-level R5/R6/R7 corpus/feature/attestation chain is reproducible;
-- exact replay can be trusted for frozen, explicitly admitted scopes after parity checks.
+- exact replay can be trusted for frozen, explicitly admitted scopes after parity checks;
+- #751 makes Backtest→DEMO data identity fail closed by mechanically checking hash-pinned C14 session identity, frozen corpus file hashes, coverage counts, and explicit gap ledgers;
+- #754 adds hash-bound per-outcome gap proof: counted resolved outcomes must bind strategy-specific dependency start, replay signal/entry/resolution timestamps, replay journal identity, code SHA, and frozen manifest; any declared-gap overlap or missing/mismatched proof fails closed.
 
-Do **not** generalize this to “all backtests are trustworthy.” Fidelity is strategy-specific.
+Do **not** generalize this to “all backtests are trustworthy.” Fidelity is still strategy-specific, and older studies without the required historical timestamps/dependency-window proof remain unproven unless rerun or backfilled from sufficient raw data.
 
 ## What is not good / still uncertain
 
@@ -361,11 +363,13 @@ Do not:
 
 ## Safe next work order
 
-1. **4HR prospective 1m evidence** — verify trigger touch timing, stop anchor, dedupe, and paper-only behavior on natural signals.
-2. **Forward 1m trigger evidence** — both MNQ 4HR and 3-2-2 observation lanes are active. Review natural events under `docs/prereg-forward-one-min-trigger-evidence-review-2026-09-18.md`; no paper-fill discussion before the per-strategy minimum of 10 distinct natural touches spanning at least 20 trading days and 2 calendar months with zero safety/parity violations.
-3. **LC_ZONE v1 is HOLD** — do not tune or rescue the failed quality audit. Reopen zone design only under a new preregistration.
-4. **Miyagi timing parity only if reopened** — its current sample is too small to justify runtime work.
-5. Continue passive evidence collection; do not expand instruments or execution scope.
+1. **Preserve collection epochs / no runtime churn** — no deploy or restart is required for #751/#754. Keep the VPS pinned to the verified `6d5b224` release until a proven runtime defect or explicitly approved runtime change exists.
+2. **4HR prospective 1m evidence** — verify trigger touch timing, stop anchor, dedupe, and observation-only behavior on natural signals. This is the direct forward check for the previously proven completed-5m late-entry defect.
+3. **3-2-2 prospective 1m evidence** — timing survives the offline causal model; now collect natural First Live arms/touches under `docs/prereg-forward-one-min-trigger-evidence-review-2026-09-18.md`. No paper-fill discussion before the preregistered mechanism threshold.
+4. **Refine only from proven mechanism failures** — if forward evidence shows stale arm state, wrong trigger timestamp, wrong completed-1H stop anchor, duplicate trigger handling, or another live/replay timing mismatch, isolate and repair that exact defect. Do not tune targets/stops/risk merely because P&L is weak.
+5. **LC_ZONE v1 is HOLD** — do not tune or rescue the failed quality audit. Reopen zone design only under a new preregistration.
+6. **Miyagi timing parity only if reopened** — its current sample is too small to justify runtime work.
+7. Continue passive evidence collection; do not expand instruments or execution scope.
 
 ## Bottom line
 
