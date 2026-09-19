@@ -10,7 +10,7 @@ The preregistered all-arm test supports IEX as a separate, incomplete **provisio
 
 It does **not** support replacing the exact-SIP 212R trigger clock with IEX.
 
-212R remains **PROMISING BUT UNPROVEN / WAIT**.
+This source-policy result is unchanged. **Current overall 212R classification: UNPROVEN / WAIT.** PR #761 later classified the separate first-sight family-persistence lane as `NO LONGER SHOWING EXCESS`; that does not alter this IEX + delayed-SIP source result.
 
 ## Why this study is stronger than the earlier 81-row comparison
 

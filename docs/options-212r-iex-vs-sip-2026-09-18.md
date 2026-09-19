@@ -112,4 +112,4 @@ Research only.
 
 No collector service/timer, scanner mutation, risk reservation, broker/account endpoint, order route, DEMO, or live execution was added.
 
-**212R remains PROMISING BUT UNPROVEN / WAIT.**
+The source-equivalence conclusion above is unchanged. **Current overall 212R classification: UNPROVEN / WAIT.** PR #761 later classified the separate first-sight family-persistence lane as `NO LONGER SHOWING EXCESS`; that does not make IEX SIP-equivalent or otherwise change this study.

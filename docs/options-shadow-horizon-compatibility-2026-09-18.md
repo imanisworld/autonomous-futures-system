@@ -118,4 +118,4 @@ The clean-shadow target-geometry and Daily/4H one-session horizon tests are both
 
 For 212R specifically, the prospective option-evidence lane is still blocked on recent consolidated-SIP access, while exact historical option replay remains DATA BLOCKED on causal historical Delta and contract-level open interest.
 
-**212R remains WAIT / promising but unproven.**
+**Current overall 212R classification: UNPROVEN / WAIT.** PR #761 later classified the separate first-sight family-persistence lane as `NO LONGER SHOWING EXCESS`. This mixed-cohort horizon study remains unchanged and is not a 212R-specific expectancy test.
