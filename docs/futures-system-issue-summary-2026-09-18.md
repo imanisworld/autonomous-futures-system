@@ -20,12 +20,14 @@ There is no current blocker to passive 1m/5m/15m evidence collection. There are 
 - **Simple “touch supply/demand = reverse” idea:** tested and not supported as a blanket rule.
 - **Backtest data-proof gate:** #751 removes bare-boolean trust for session identity/feed integrity by checking hash-pinned C14 fixtures, frozen replay-file hashes, coverage counts, and explicit gap ledgers.
 - **Resolved-outcome gap proof:** #754 binds each counted validation outcome to a strategy-specific dependency start plus replay signal/entry/resolution timestamps and hash-bound journals; any declared-gap overlap or missing/mismatched proof fails closed.
+- **1m observer response-proof persistence:** #759 is deployed in minimal release `ac2b117ec1f9`. Natural 4HR/3-2-2 observer events now have an append-only place to retain the actual runner response needed for execution-isolation proof; restart itself creates no row.
+- **Watcher false journal stall:** #760 limits the main-journal causal bar clock to MNQ/MES decision-path 15m files. The exact live-source one-hunk backport is installed at SHA `7d29872d1c85`; watcher has zero BLOCKED findings and the #759 restart is recorded as sanctioned.
 
 ## Current blockers
 
 ### 1. 4HR prospective trigger-time parity
 
-Offline pre-armed touch survives stress, but the deployed 1m lane is evidence-only. The 2026-09-18 forward baseline contains no 4HR/3-2-2 observer events because MNQ 1m collection began at 17:38Z / 13:38 ET, after both observer windows had ended; this is expected and does not indicate collector failure. Exact deployed release `6d5b224` passes the full targeted 1m observer/isolation suite (**69 passed**), and the same-day futures journal has zero TRADE rows. We still need natural forward examples proving:
+Offline pre-armed touch survives stress, but the deployed 1m lane is evidence-only. The 2026-09-18 forward baseline contains no 4HR/3-2-2 observer events because MNQ 1m collection began at 17:38Z / 13:38 ET, after both observer windows had ended; this is expected and does not indicate collector failure. Current minimal deployed release `ac2b117ec1f9` passed the exact full suite (**6,193 passed / 7 skipped**) and now persists the runner-response proof on future natural observer events; the 2026-09-18 futures journal still has zero TRADE rows. We still need natural forward examples proving:
 - correct armed state;
 - 1m touch time;
 - dedupe;
