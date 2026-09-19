@@ -33,6 +33,7 @@ def _demo_env(monkeypatch):
         execution.ROUTE_PROOF_PIN_ENV: execution.DEMO_ROUTE,
         "WIDE_STOP_LEDGER_MODE": "paper_sim",
         "WIDE_STOP_LEDGER_EPOCH_START": EPOCH,
+        "DAILY_22_EPOCH_START": EPOCH,
         "BROKER": "tradovate",
         "TRADOVATE_ENV": "demo",
         "TRADOVATE_EXPECTED_ACCOUNT_ID": "12345",
@@ -51,6 +52,7 @@ def _cfg():
     cfg = copy.copy(load_config())
     cfg.wide_stop_ledger_mode = "paper_sim"
     cfg.wide_stop_ledger_epoch_start = EPOCH
+    cfg.daily_22_epoch_start = EPOCH
     cfg.schedule_mode = "current"
     cfg.demo_execution_hold_sessions = []
     cfg.paper_eligible_sessions = ["new_york"]
