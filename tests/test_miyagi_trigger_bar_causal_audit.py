@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo
 from research.replay_12hr_miyagi_honest_fill import replay_signal
 from scripts.miyagi_trigger_bar_causal_audit_2026_09_19 import (
     causal_trigger_bar_replay,
+    legacy_trigger_bar_replay,
 )
 
 ET = ZoneInfo("America/New_York")
@@ -37,11 +38,13 @@ def test_same_trigger_bar_stop_is_not_ignored():
         _bar(9, 35, o=100, h=101, low=94, c=96),
     ]
 
-    current = replay_signal(signal, bars, slippage_ticks=2)
+    legacy = legacy_trigger_bar_replay(signal, bars, slippage_ticks=2)
+    canonical = replay_signal(signal, bars, slippage_ticks=2)
     causal = causal_trigger_bar_replay(signal, bars, slippage_ticks=2)
 
-    assert current["result"] == "WIN"
-    assert current["exit_reason"] == "TARGET"
+    assert legacy["result"] == "WIN"
+    assert legacy["exit_reason"] == "TARGET"
+    assert canonical == causal
     assert causal["result"] == "LOSS"
     assert causal["exit_reason"] == "STOP"
     assert causal["exit_bar_ts"] == bars[0]["ts"].isoformat()

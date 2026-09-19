@@ -9,26 +9,14 @@ depend on) -- the day-only-exit vocabulary below (`DAY_ONLY_EXIT_REASON`,
 `EOD_BAR_MISSING`) intentionally matches that shared module's constants so
 the same vocabulary is used across replay and runtime, without a code import.
 
-FILL MODEL -- deliberately simpler than the 3-2-2 precedent's IOC-with-limit
-model. `docs/strategy-rules/12HR_Miyagi_Rules.md` section 12 ("Enter on the
-hit -- no 50% breach rule applies to Miyagi") and its hard-rules section 15
-("Do NOT apply the 50% breach rule to Miyagi") together with the task brief
-that scoped this build both establish that Miyagi has no documented IOC
-tolerance / limit-price cap. Per that brief's explicit fallback instruction
-("use a plain 'fills at the trigger price when crossed, plus adverse
-slippage' model ... don't add speculative limit/IOC machinery beyond what's
-written"), entries here ALWAYS fill at the exact trigger price adjusted by
-adverse slippage, whenever a 5-minute bar's high/low crosses the trigger --
-never at that bar's open/close, and never cancelled for "gapping too far."
-This is a deliberate simplification, not an oversight: at the moment the
-detector confirms a setup (9:30 AM ET), price is already strictly beyond
-Bar C's boundary on the far side of the trigger from the detector's own
-Step 6 (`price_at_open > bar_c_high` for SHORT / `< bar_c_low` for LONG), so
-a "gap-through-the-trigger-at-open" scenario -- the only case the 3-2-2
-precedent's gap-open branch exists to handle -- is structurally impossible
-for Miyagi's very first bar of the entry window; a later 5-minute bar
-gapping past the trigger mid-day is treated the same as a bar merely
-touching it, per the brief's plain-fill-model instruction.
+FILL MODEL -- Miyagi has no documented IOC tolerance / limit-price cap.
+The entry is a pre-armed stop-market style trigger: when the first eligible
+5-minute bar crosses the fixed trigger, the base fill is the trigger unless
+that bar OPENS through the trigger, in which case the base fill is the bar
+open. Adverse slippage is then applied from that causal reference. The fixed
+stop/target bracket is never recomputed from the worse fill. If the slipped
+fill is no longer strictly inside that frozen bracket, the replay fails
+closed as POST_FILL_INVALID_BRACKET.
 
 DAY-ONLY EXIT CONTRACT -- reused faithfully from
 `12HR_Miyagi_Rules.md` section 8 ("Common Day-Only Exit -- 4:00 PM ET"),
@@ -47,17 +35,13 @@ is carried through in the signal/row data for transparency but never used to
 resolve an exit, matching the canonical single-contract rule exactly (not a
 missing feature -- using T2 here would violate an explicit hard rule).
 
-NO-SAME-BAR-RESOLVES-OWN-BRACKET -- mirroring the 3-2-2 precedent's stated
-honest-fill principle, the bar whose trigger-touch fills the entry is
-excluded from that trade's own stop/T1 resolution (its unresolved intrabar
-path after the touch is unknowable from OHLC alone). The sole documented
-exception is the day-only-exit contract's own carve-out for the exact
-15:55-16:00 ET bar: if entry happens to fill on that specific bar, this
-module resolves that trade's stop/T1 on that same bar per the contract's
-express text ("Stop/target resolution has precedence over the day-only exit
-on that bar") rather than raising -- a data-availability edge case, not a
-new leniency, and event-count-quantified in the evidence report if it ever
-fires.
+TRIGGER-BAR RESOLUTION -- the written rule makes the fixed stop active
+immediately when the trigger fills, so the trigger-touch bar is eligible for
+stop/T1 resolution. Five-minute OHLC cannot order an entry touch and an
+opposite stop touch within the same bar; the system's standing conservative
+rule is therefore pessimistic STOP-first. If stop is not touched but T1 is,
+T1 resolves on the trigger bar. The exact 15:55-16:00 ET bar still follows
+the day-only contract: stop/T1 has precedence, otherwise flatten at its close.
 """
 from __future__ import annotations
 
@@ -118,17 +102,14 @@ def _resolve_exit(
     close_time = datetime.combine(signal["date"], _DAY_CLOSE, ET)
     direction = signal["direction"]
 
-    entry_is_eod_bar = entry_bar["ts"].timetz().replace(tzinfo=None) == _EOD_BAR_START
-    if entry_is_eod_bar:
-        # Documented day-only-exit-contract carve-out: entry and the mandatory
-        # flatten bar coincide. Resolve stop/T1 on this same bar before
-        # falling back to DAY_ONLY_FLATTEN at its close.
-        eligible = [entry_bar]
-    else:
-        eligible = sorted(
-            (bar for bar in day_bars if bar["ts"] > entry_bar["ts"] and bar["ts"] < close_time),
-            key=lambda bar: bar["ts"],
-        )
+    eligible = sorted(
+        (
+            bar
+            for bar in day_bars
+            if entry_bar["ts"] <= bar["ts"] < close_time
+        ),
+        key=lambda bar: bar["ts"],
+    )
 
     for bar in eligible:
         stop_hit = (
@@ -199,20 +180,26 @@ def replay_signal(signal: dict, day_bars: list, *, slippage_ticks: float = 2.0) 
         }
 
     entry_bar = entry["bar"]
-    trigger = signal["entry_trigger"]
-    base_fill = trigger
-    fill_price = trigger + slip if direction == "LONG" else trigger - slip
-
-    stop_wrong_side = (
-        signal["stop"] >= fill_price if direction == "LONG" else signal["stop"] <= fill_price
+    trigger = float(signal["entry_trigger"])
+    open_price = float(entry_bar["open"])
+    gap_through = (
+        open_price >= trigger if direction == "LONG" else open_price <= trigger
     )
-    if stop_wrong_side:
+    base_fill = open_price if gap_through else trigger
+    fill_price = base_fill + slip if direction == "LONG" else base_fill - slip
+
+    bracket_valid = (
+        signal["stop"] < fill_price < signal["target"]
+        if direction == "LONG"
+        else signal["target"] < fill_price < signal["stop"]
+    )
+    if not bracket_valid:
         return {
             **base,
             "filled": False,
             "entry_bar_ts": entry_bar["ts"].isoformat(),
             "result": "CANCELLED",
-            "exit_reason": "POST_FILL_INVALID_STOP",
+            "exit_reason": "POST_FILL_INVALID_BRACKET",
             "base_entry_price": base_fill,
             "fill_entry_price": fill_price,
             "base_exit_price": None,
@@ -363,7 +350,7 @@ def _metrics(rows: list) -> dict:
                 DAY_ONLY_EXIT_REASON,
                 EOD_BAR_MISSING,
                 TRIGGER_NOT_HIT,
-                "POST_FILL_INVALID_STOP",
+                "POST_FILL_INVALID_BRACKET",
             )
         },
     }
@@ -396,19 +383,19 @@ def run_replay(
         by_year[str(d.year)].append(row)
 
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "strategy": "12HR_MIYAGI",
         "model": {
             "tick_size": TICK_SIZE,
             "point_value": POINT_VALUE,
-            "entry_fill_model": "TRIGGER_PRICE_PLUS_ADVERSE_SLIPPAGE_NO_IOC_NO_CAP",
+            "entry_fill_model": "PREARMED_STOP_TRIGGER_OR_GAP_OPEN_PLUS_ADVERSE_SLIPPAGE_NO_IOC_CAP",
             "entry_slippage_ticks": slippage_ticks,
             "exit_slippage_ticks": slippage_ticks,
             "round_trip_commission": ROUND_TRIP_COMMISSION,
             "same_bar_ambiguity": "STOP_FIRST",
-            "entry_bar_exit_eligibility": "NEXT_5M_BAR_EXCEPT_EOD_BAR_CARVEOUT",
+            "entry_bar_exit_eligibility": "TRIGGER_BAR_IMMEDIATE_STOP_FIRST",
             "management_mode": "SINGLE_CONTRACT_T1_ONLY",
-            "post_fill_wrong_side_stop": "FAIL_CLOSED",
+            "post_fill_invalid_bracket": "FAIL_CLOSED",
             "unresolved_exit": "EXACT_15_55_ET_BAR_CLOSE_OR_EOD_BAR_MISSING",
         },
         "study_range": {

@@ -10,7 +10,7 @@ This is the concise operator-facing source of truth for the futures system as of
 
 - #771 merged: 3-2-2 First Live journal/state persistence repaired.
 - #775 merged: Daily 2-2 CME holiday trading-day identity repaired.
-- #776 merged: Miyagi completed-hour lookahead repaired. The 2026-09-19 causal/mechanics audit then found a separate replay defect: the trigger-touch 5m bar is excluded from immediate stop/T1 resolution. On the frozen corrected population, MNQ 2024-09-18 flips from TARGET win to same-trigger-bar pessimistic STOP; the 2-tick MNQ result falls from +$552.83 / PF 3.223 to **+$425.33 / PF 2.322**. Miyagi remains unproven/parked pending replay correction and evidence regeneration.
+- #776 merged: Miyagi completed-hour lookahead repaired. The 2026-09-19 causal/mechanics audit then found a separate replay defect: the trigger-touch 5m bar is excluded from immediate stop/T1 resolution. On the frozen corrected population, MNQ 2024-09-18 flips from TARGET win to same-trigger-bar pessimistic STOP; the 2-tick MNQ result falls from +$552.83 / PF 3.223 to **+$425.33 / PF 2.322**. Miyagi replay is now fixed repo-side under `docs/miyagi-trigger-bar-replay-fix-2026-09-19.md`; regenerated evidence confirms the same +$425.33 / PF 2.322 MNQ result. Miyagi remains unproven/parked and the fix requires no deployment.
 - #778 merged: Daily 2-2 independent epoch identity, fail-closed state loading, and epoch/SHA provenance repaired. CI and CodeQL green; **not deployed**.
 - Generic 2-1-2/1-2-2 does not need the same decision-close IOC formula repair: its shared 15m paper/replay state machine reconstructs a causal pre-armed next-bar stop fill. **Operational execution parity is still absent** because no broker order is actually armed ahead of the watched 15m bar; a late live-broker substitute is correctly refused.
 - Daily 2-2 timing audit is now complete. The activation baseline reproduced exactly (34 fills, +$13,885.18, PF 2.0171, max DD 25.1528%). Under current CME-day identity the completed-close variant remains positive (34 fills, +$13,571.68, PF 1.9482), but all 34 fills occurred only after 2–202 ticks of favorable close-vs-planned-entry retracement (median 33). A preregistered true-touch variant produced 0 admissible fills at 1/2/3 adverse entry ticks because fixed planned 2R plus strict actual-fill R:R >=2 is incompatible with any adverse touch slippage. Completed-close and first-touch must be treated as different strategies.
@@ -185,7 +185,7 @@ Timing classification: **TIMING EDGE SURVIVES / PROMISING BUT UNPROVEN.**
 This does not remove the separate current-account blocker: the historical 3-2-2 population remains incompatible with the account's stop-width and R:R architecture, and n=34 is still thin.
 
 Additional timing reconciliation:
-- 12HR Miyagi's completed-hour lookahead was repaired by #776, but `docs/futures-causal-mechanics-audit-2026-09-19.md` proves a second replay mismatch: the current replay suppresses stop/T1 resolution on the trigger-touch bar. The corrected trigger-bar A/B remains positive but weaker and still extremely thin; no runtime promotion follows.
+- 12HR Miyagi's completed-hour lookahead was repaired by #776; the separate trigger-bar replay mismatch found on 2026-09-19 is now **fixed repo-side**. Regenerated frozen evidence confirms MNQ 8 fills / 6W-2L / +$425.33 / PF 2.322 at 2 ticks and MES 10 fills / 7W-3L / +$138.85 / PF 1.593. The sample remains thin and no runtime promotion follows.
 - generic 2-1-2 / 1-2-2 does **not** share the completed-close IOC formula defect: the shared 15m paper/replay state machine reconstructs a pre-armed next-bar stop fill. It still lacks operational execution parity because the real runner never arms that order before the watched bar; non-Paper submission correctly fails closed.
 
 No armed-trigger family inherits another family's timing result automatically.
@@ -349,7 +349,7 @@ For 3-2-2:
 
 For Miyagi:
 - completed-hour lookahead is repaired;
-- **trigger-bar replay semantics still require correction** before the historical headline is treated as execution-faithful evidence;
+- **trigger-bar replay semantics are corrected repo-side**; the superseded headline is retired in favor of the regenerated 2026-09-19 evidence;
 - after the causal trigger-bar A/B, MNQ at 2 ticks is 8 fills, 6W/2L, +$425.33, PF 2.322; H2 is still only one fill;
 - much larger sample remains required.
 
@@ -447,7 +447,7 @@ See `docs/futures-causal-parity-and-state-audits-2026-09-18.md`. Summary: the 3-
 4. **3-2-2 prospective 1m evidence** — timing survives the offline causal model; now collect natural First Live arms/touches and the same persistent response proof under `docs/prereg-forward-one-min-trigger-evidence-review-2026-09-18.md`. No paper-fill discussion before the preregistered mechanism threshold.
 5. **Refine only from proven mechanism failures** — if forward evidence shows stale arm state, wrong trigger timestamp, wrong completed-1H stop anchor, duplicate trigger handling, or another live/replay timing mismatch, isolate and repair that exact defect. Do not tune targets/stops/risk merely because P&L is weak.
 6. **LC_ZONE v1 is HOLD** — do not tune or rescue the failed quality audit. Reopen zone design only under a new preregistration.
-7. **Fix Miyagi replay identity before any further trust/promotion work** — #776 fixed completed-hour lookahead, but the 2026-09-19 causal/mechanics audit proves the trigger-touch bar is still wrongly excluded from immediate stop/T1 resolution. Correct that research replay, regenerate the frozen evidence, and keep Miyagi parked; no runtime wiring or deployment is justified.
+7. **Miyagi replay identity is fixed repo-side** — immediate trigger-bar stop/T1 handling, pessimistic same-bar STOP, gap-open semantics, and fail-closed bracket validation are now in the research replay. Regenerated frozen evidence matches the preregistered causal result. Keep Miyagi parked; no runtime wiring or deployment is justified.
 8. Continue passive evidence collection; do not expand instruments or execution scope. Keep Daily completed-close evidence in its existing epoch and do not mix it with any future first-touch study.
 9. **Next natural execution-mechanism checkpoint = first 4HR/3-2-2 1m observer event.** On that event, audit arm timing → true touch → completed-1H stop anchor → dedupe → durable response proof → zero execution leakage. If it exposes a concrete mechanism defect, repair only that defect. If it passes, keep collecting.
 

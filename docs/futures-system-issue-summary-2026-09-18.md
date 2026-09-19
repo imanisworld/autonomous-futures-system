@@ -86,7 +86,7 @@ The timing audit does not authorize an execution path or risk-policy change.
 
 ### 4. Miyagi trigger-bar replay identity
 
-The completed-hour lookahead is repaired, but the replay still violates the written immediate-stop contract by excluding the trigger-touch 5m bar from stop/T1 resolution. The frozen causal A/B changes MNQ 2024-09-18 from a later TARGET win to a pessimistic same-trigger-bar STOP loss. At 2 ticks the corrected MNQ cell is 8 fills, 6W/2L, +$425.33, PF 2.322; H2 remains only one fill. **Fix/regenerate the research replay before trusting the old headline.** Runtime remains parked.
+The completed-hour lookahead and the separate trigger-bar replay mismatch are now **fixed repo-side**. Regenerated frozen evidence changes MNQ 2024-09-18 from the old later TARGET win to the correct pessimistic same-trigger-bar STOP loss. At 2 ticks MNQ is 8 fills, 6W/2L, +$425.33, PF 2.322; H2 remains only one fill. Runtime remains parked and no deployment follows.
 
 ### 5. MES 1-2-2 remains thin and lacks operational execution parity
 
@@ -101,7 +101,7 @@ M2K/MGC/MCL/MBT now have better 1m coverage, but this does not justify strategy 
 - **MNQ 4HR Re-Trigger:** PROMISING BUT UNPROVEN / PAPER ONLY.
 - **MES 4HR:** BROKEN / WAIT.
 - **MNQ 3-2-2 First Live:** **PROMISING BUT UNPROVEN**; corrected pre-armed timing survives 3-tick stress with both halves positive, but n=34 is thin and current real-account stop/R:R architecture remains incompatible.
-- **Miyagi:** **PROMISING BUT UNPROVEN / PARKED / REPLAY DEFECT FOUND**; #776 repaired completed-hour lookahead, but the 2026-09-19 causal/mechanics audit proves trigger-bar stop/T1 suppression still overstates one MNQ outcome. Research replay must be corrected/regenerated before further trust.
+- **Miyagi:** **PROMISING BUT UNPROVEN / PARKED / REPLAY DEFECT FIXED REPO-SIDE**; #776 repaired completed-hour lookahead and the 2026-09-19 follow-up fixes trigger-bar stop/T1 suppression, gap-open semantics, and fail-closed bracket validation. Frozen evidence regenerated successfully; current-account risk incompatibility and thin sample remain.
 - **Daily 2-2 completed-close / favorable-pullback:** PROMISING BUT UNPROVEN / PAPER ONLY; activation baseline reproduced exactly and current-CME-day variant remains positive, but the 34 fills are not first-touch evidence.
 - **Daily 2-2 first-touch under current rules:** BROKEN / ZERO ADMISSIBLE FILLS at 1/2/3 adverse entry ticks because fixed planned 2R + actual-fill R:R >=2 is mechanically incompatible with adverse touch slippage.
 - **MES 15m 1-2-2:** PROMISING BUT UNPROVEN / thin / **PAPER EVIDENCE ONLY**; reconstructed pre-armed math is causal, but operational execution parity is absent because no broker order is armed before the watched bar.
@@ -156,7 +156,7 @@ Do not restart:
 4. Continue the 3-2-2 First Live 1m observer under `docs/prereg-forward-one-min-trigger-evidence-review-2026-09-18.md`; no paper-fill discussion before the preregistered per-strategy sample/safety gate.
 5. Refine a strategy only when evidence isolates a concrete mechanism defect. Do not tune targets, stops, risk caps, or session filters merely to improve results.
 6. Keep LC_ZONE v1 / 4HR zone-target changes on HOLD; only reopen zone design under a new preregistration.
-7. Correct the **Miyagi research replay** trigger-bar/gap semantics, regenerate the same frozen population, and retire superseded Miyagi headline metrics. No runtime wiring or deployment.
+7. **Miyagi replay fix complete repo-side** — use the regenerated 2026-09-19 evidence as the current headline; keep the strategy parked. No runtime wiring or deployment.
 8. Continue passive six-root context collection. Keep Daily completed-close evidence in its existing epoch and do not mix it with any future first-touch study.
 9. First natural 4HR/3-2-2 1m event remains the next forward execution-mechanism review.
 

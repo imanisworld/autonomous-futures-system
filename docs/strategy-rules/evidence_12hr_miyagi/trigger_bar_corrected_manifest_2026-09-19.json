@@ -1,0 +1,40 @@
+{
+  "instruments": {
+    "MES": {
+      "base_case": {
+        "fills": 10,
+        "losses": 3,
+        "max_drawdown": 133.115,
+        "net_pnl": 138.85,
+        "profit_factor": 1.592502506987561,
+        "wins": 7
+      },
+      "candidate_count": 19,
+      "candidate_identity_sha256": "452b87fe2c8e2de86ab59befb58ce0ea1ca5f666fec2f73ae20960c0dcc8766a",
+      "output_file": "mes_results_trigger_bar_corrected_2026-09-19.json",
+      "output_sha256": "60498f1b27614d89aff96d2559cf666dc93f44a3275b6a431b2cb61b79b66af9",
+      "source_evidence_sha256": "2e5f8ac5bdafe136e6a78d871999f0defe8c83293d3100c02d3d27988eea5310"
+    },
+    "MNQ": {
+      "base_case": {
+        "fills": 8,
+        "losses": 2,
+        "max_drawdown": 321.73,
+        "net_pnl": 425.33,
+        "profit_factor": 2.3220091380971617,
+        "wins": 6
+      },
+      "candidate_count": 15,
+      "candidate_identity_sha256": "58b57b59c79434359d55a650ed7d58e9f47ba95a84a744a08039531ce85bb59a",
+      "output_file": "mnq_results_trigger_bar_corrected_2026-09-19.json",
+      "output_sha256": "78cb67769c03950939c85bd07d4bbe7acea2b5d26dc255b0c4618bc833ca98f2",
+      "source_evidence_sha256": "535c2d8757e0d1e63504f8e1efb4ca245421002e6d96662287a6ed80eed0ba7c"
+    }
+  },
+  "prereg_commit": "38da280e2435f53387e034e1f1fca57040a70233",
+  "status": "RESEARCH_REPLAY_FIX_ONLY",
+  "study_range": {
+    "end": "2026-06-26",
+    "start": "2024-07-02"
+  }
+}
