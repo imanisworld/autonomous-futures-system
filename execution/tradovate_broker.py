@@ -937,10 +937,12 @@ class TradovateBroker(BrokerInterface):
             self._contract_symbol_cache.pop(root, None)
             self._contract_roll_key.pop(root, None)
         # Cache miss — use /contract/suggest (find/search endpoints 404 on Tradovate REST).
-        # Prefer the rolled front-month symbol (e.g. MESU6) over the nearest expiry
-        # (l=1 returns the EXPIRING contract during roll week → thin book + stop
-        # rejections). We ask for several and pick the active front month by name,
-        # falling back to nearest-expiry if the computed symbol isn't listed.
+        # For roots with a computed quarterly front-month symbol (e.g. MNQ/MES),
+        # that exact symbol is mandatory. Never substitute the nearest expiry when
+        # the expected dated contract is absent: exact-contract routing is a
+        # safety invariant, so an unresolved expected symbol must fail closed.
+        # Roots without a computed dated-symbol rule retain the legacy nearest
+        # suggestion behavior until they receive their own explicit roll policy.
 
         last_exc: Exception = RuntimeError("no attempts made")
         for attempt in range(3):
@@ -954,17 +956,22 @@ class TradovateBroker(BrokerInterface):
                                 chosen = r
                                 break
                     if chosen is None:
-                        # Computed roll symbol not in the list (or non-quarterly root):
-                        # keep the old behavior — nearest expiry.
-                        chosen = results[0]
                         if desired:
-                            logger.warning(
-                                "Contract roll: wanted %s for %s but it wasn't in "
-                                "/suggest (%s); falling back to nearest expiry %s",
-                                desired, root,
-                                [str(r.get("name")) for r in results],
-                                chosen.get("name"),
+                            names = [str(r.get("name")) for r in results]
+                            logger.error(
+                                "Contract routing BLOCKED: expected exact front month %s "
+                                "for %s but /contract/suggest returned %s — refusing to "
+                                "substitute another expiry.",
+                                desired, root, names,
                             )
+                            raise ValueError(
+                                f"exact contract {desired} not found for {root}; "
+                                f"suggestions={names}"
+                            )
+                        # No dated-symbol policy exists for this root yet. Preserve
+                        # the legacy nearest suggestion until one is explicitly
+                        # defined rather than inventing a roll rule here.
+                        chosen = results[0]
                     self._contract_cache[root] = int(chosen["id"])
                     self._contract_symbol_cache[root] = str(chosen.get("name") or root)
                     self._contract_roll_key[root] = desired
@@ -1058,7 +1065,15 @@ class TradovateBroker(BrokerInterface):
             if account_block_reason:
                 return self._cancelled_fill(order, account_block_reason)
 
-            contract_id = self._find_contract_id(order.instrument)
+            try:
+                contract_id = self._find_contract_id(order.instrument)
+            except Exception as exc:
+                logger.error(
+                    "BLOCKED Tradovate order: exact contract resolution failed for %s: %s",
+                    order.instrument,
+                    exc,
+                )
+                return self._cancelled_fill(order, "CONTRACT_RESOLUTION_FAILED")
             root = order.instrument.replace("1!", "").upper()
             # Tradovate placeOSO needs the specific contract symbol (e.g. MESM6),
             # NOT the root (MES) — the root is rejected with UnknownReason.

@@ -1,16 +1,16 @@
 """
 tests/test_tradovate_rollover.py
 
-Verification-only tests for the EXISTING front-month rollover logic
-(_front_month_symbol / _find_contract_id). No rollover behavior was changed —
-these lock what is already shipped:
+Tests for front-month rollover and exact-contract routing
+(_front_month_symbol / _find_contract_id). These lock the fail-closed rule:
 
 - quarterly MES/MNQ roll selection (roll off a contract once inside its
   8-day pre-expiration window, including the December→March year wrap);
 - the resolved specific contract symbol (never the bare root) is what routes
   into the order payload;
-- the computed front-month symbol is preferred over the nearest-expiry
-  (expiring) contract when both are listed;
+- the computed front-month symbol is mandatory when a dated quarterly
+  contract is expected; a missing expected symbol never falls back to another
+  expiry;
 - LiquidationOnly / BackMonthProhibited rejections classify explicitly and
   fail closed (covered in test_tradovate_execution_modes.py's provider-failure
   matrix; re-asserted here at the taxonomy level for the roll context).
@@ -18,6 +18,8 @@ these lock what is already shipped:
 from __future__ import annotations
 
 from datetime import date
+
+import pytest
 
 import execution.tradovate_supervisor as supervisor
 from execution.broker_interface import BracketOrder
@@ -130,6 +132,62 @@ def _stub_suggest(broker, monkeypatch, calls):
         calls.append(path)
         return list(_SUGGEST_MNQ)
     monkeypatch.setattr(broker, "_get", fake_get)
+
+
+def test_missing_expected_quarterly_contract_fails_closed(monkeypatch):
+    b = _broker(monkeypatch)
+    monkeypatch.setattr(
+        TradovateBroker,
+        "_trading_date",
+        staticmethod(lambda: date(2026, 9, 11)),
+    )
+    monkeypatch.setattr(
+        b,
+        "_get",
+        lambda path, **k: [
+            {"id": 11, "name": "MNQU6"},
+            {"id": 13, "name": "MNQH7"},
+        ],
+    )
+    monkeypatch.setattr("execution.tradovate_broker.time.sleep", lambda *_: None)
+
+    with pytest.raises(ValueError, match="exact contract MNQZ6 not found"):
+        b._find_contract_id("MNQ")
+
+    assert "MNQ" not in b._contract_cache
+    assert "MNQ" not in b._contract_symbol_cache
+
+
+def test_missing_expected_contract_never_posts_order(monkeypatch):
+    b = _broker(monkeypatch)
+    monkeypatch.setattr(
+        TradovateBroker,
+        "_trading_date",
+        staticmethod(lambda: date(2026, 9, 11)),
+    )
+    monkeypatch.setattr(
+        b,
+        "_get",
+        lambda path, **k: [{"id": 11, "name": "MNQU6"}],
+    )
+    monkeypatch.setattr("execution.tradovate_broker.time.sleep", lambda *_: None)
+    posted = []
+    monkeypatch.setattr(b, "_post", lambda *args, **kwargs: posted.append((args, kwargs)))
+
+    order = BracketOrder(
+        instrument="MNQ",
+        direction="LONG",
+        entry=20000.0,
+        stop=19988.0,
+        target=20036.0,
+        rr_ratio=3.0,
+        strategy="orb_breakout",
+    )
+    fill = b.execute_bracket(order)
+
+    assert fill.result == "CANCELLED"
+    assert fill.exit_reason == "CONTRACT_RESOLUTION_FAILED"
+    assert posted == []
 
 
 def test_same_broker_instance_rerolls_u6_to_z6_across_the_boundary(monkeypatch):

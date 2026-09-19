@@ -449,10 +449,16 @@ def build_daily_report(
 ) -> dict[str, Any]:
     root = Path(repo_root)
     hygiene = _repo_hygiene(root)
-    runtime = runtime_snapshot(repo_root=root, risk_rules_path=risk_rules_path)
+    journal_path = Path(journal_dir)
+    resolved_journal_dir = journal_path if journal_path.is_absolute() else root / journal_path
+    runtime = runtime_snapshot(
+        repo_root=root,
+        risk_rules_path=risk_rules_path,
+        log_dir=resolved_journal_dir,
+    )
     strategy_drift = _strategy_source_of_truth(repo_root=root, rules_active_lanes=runtime.get("active_lanes"))
     trade_chain = build_trade_chain_report(
-        journal_dir=Path(journal_dir) if Path(journal_dir).is_absolute() else root / journal_dir,
+        journal_dir=resolved_journal_dir,
         repo_root=root,
         use_checkpoint=use_checkpoint,
         advance_checkpoint=advance_checkpoint,
