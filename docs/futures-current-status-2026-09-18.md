@@ -186,7 +186,7 @@ This does not remove the separate current-account blocker: the historical 3-2-2 
 
 Additional timing reconciliation:
 - 12HR Miyagi's completed-hour lookahead was repaired by #776; the separate trigger-bar replay mismatch found on 2026-09-19 is now **fixed repo-side**. Regenerated frozen evidence confirms MNQ 8 fills / 6W-2L / +$425.33 / PF 2.322 at 2 ticks and MES 10 fills / 7W-3L / +$138.85 / PF 1.593. The sample remains thin and no runtime promotion follows.
-- generic 2-1-2 / 1-2-2 does **not** share the completed-close IOC formula defect: the shared 15m paper/replay state machine reconstructs a pre-armed next-bar stop fill. It still lacks operational execution parity because the real runner never arms that order before the watched bar; non-Paper submission correctly fails closed.
+- generic 2-1-2 / 1-2-2 does **not** share the completed-close IOC formula defect, but the 2026-09-19 pre-arm feasibility audit proves a stronger limitation: the exact bracket is finalized only when the 15m arm bar closes, which is the same instant the watched bar opens. Therefore exact pre-open execution parity is **not feasible under the same strategy identity**. Paper/replay remains counterfactual evidence; late non-Paper submission correctly fails closed.
 
 No armed-trigger family inherits another family's timing result automatically.
 
@@ -361,7 +361,7 @@ For Daily 2-2:
 For MES 1-2-2:
 - prospective evidence under realistic accounting;
 - current edge is very thin and fails stronger slippage;
-- treat current PaperBroker/replay results as **reconstructed pre-armed evidence**, not proof that the broker-connected runtime can capture the same entry; any execution promotion needs a separately proven pre-armed/lower-latency mechanism.
+- treat current PaperBroker/replay results as **reconstructed pre-armed evidence**, not execution proof. The 2026-09-19 audit shows a true pre-open equivalent cannot be created from the final completed arm-bar geometry without changing strategy identity. If reopened, study **post-arm 1m attainability** observation-only; do not call it parity with the historical next-bar-open model.
 
 For M2K/MGC/MCL/MBT:
 - enough 1m/5m/15m observation history before any strategy or execution expansion is considered.
