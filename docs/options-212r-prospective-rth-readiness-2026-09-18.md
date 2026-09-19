@@ -8,6 +8,22 @@ Do not deploy or schedule collector v0.3 yet.
 
 The collector remains isolated from scanner/risk/broker/order state, exact-cross timing is now correct, and the current Public selector path is fast enough to measure. The configured Alpaca account cannot query consolidated SIP trades inside the latest 15 minutes, so it cannot supply the real-time first-break clock v0.3 requires.
 
+## Follow-up status after #756
+
+This readiness audit remains the authority for **exact-SIP collector v0.3**: with the current Alpaca entitlement, that exact-SIP lane is still not deployable.
+
+A later preregistered source-policy study in #756 completed the alternative path contemplated below. It does **not** overturn the exact-SIP blocker. Instead it establishes a separate result:
+
+- frozen population: all **183** structurally ARMED 212 windows, outcome-independent;
+- IEX provisional reversals: **90**;
+- delayed SIP confirmed: **89/90 (98.9%)**;
+- SIP-authoritative reversals missed by IEX: **2/91 (2.2%)**;
+- false IEX provisional: **1/90 (1.1%)**, rejected because delayed SIP proved continuation broke first;
+- confirmed IEX-minus-SIP lag: median **3.501s**, p95 **156.273s**, max **569.811s**;
+- verdict: `MISS_ALLOWED_RESEARCH_OBSERVER_FEASIBLE`, **not SIP-equivalent and not deployed**.
+
+Therefore the phrase “validate a different prospective observation source” below is now complete for the IEX-provisional research policy. The remaining IEX path is operational/policy proof, not another source-equivalence study: separately version the observer, pre-register lag/cadence, prove execution isolation, and collect a natural RTH provisional row with delayed SIP reconciliation.
+
 ## What was verified
 
 ### Execution isolation
@@ -87,15 +103,25 @@ Therefore:
 
 ## Required before any collector deployment
 
-1. Resolve the prospective first-break source:
-   - prove real-time consolidated SIP entitlement, **or**
-   - explicitly design and validate a different prospective observation source with later consolidated-SIP reconciliation.
-2. Re-run an RTH preflight proving a true `ARMED -> first break -> selector evidence` row.
-3. Only then choose and pre-register:
-   - maximum trigger-to-selector-capture lag;
-   - collector cadence.
-4. Build a service-specific observation-only release that cannot mutate scanner/risk/broker state.
+There are now two distinct prospective source paths.
+
+### Exact-SIP collector v0.3
+
+1. Prove real-time consolidated SIP entitlement/access for the active watch window.
+2. Re-run an RTH preflight proving a true `ARMED -> exact SIP first break -> selector evidence` row.
+3. Choose and pre-register maximum exact-SIP-cross-to-selector-capture lag and collector cadence.
+4. Build/prove the service-specific observation-only release.
 5. Prove first natural RTH evidence on that exact release.
+
+### IEX-provisional + delayed-SIP policy
+
+The offline source-policy validation is complete in #756. Before any prospective deployment:
+
+1. Explicitly authorize a separately versioned IEX-provisional observer/reconciliation release.
+2. Pre-register IEX-trigger-to-selector-evidence lag policy and cadence.
+3. Preserve IEX decision-time evidence immediately; never backfill a missed IEX event from delayed SIP.
+4. Reconcile every provisional reversal later against consolidated SIP and exclude rejected rows from the confirmed cohort.
+5. Prove execution isolation and the first natural RTH `ARMED -> IEX provisional break -> selector evidence -> delayed SIP reconciliation` row.
 
 Historical Delta and contract-level open interest remain separate blockers for exact frozen historical selector replay.
 

@@ -138,16 +138,38 @@ Compact evidence:
 - raw SIP trade rows retained: **353,456** across 81 windows;
 - first-cross offset from five-minute bucket start: min **0.178917261s**, median **130.249476936s**, max **288.283787331s**.
 
-This proves the exact causal crossing-trade clock/price. It does not by itself prove historical option-selector parity; the replay packet must still show that this causal price is fed through the intended `context.price -> normalized price -> OPTIONS_PAPER_V1` path.
+This proves the exact causal crossing-trade clock/price. #738 separately proves that the causal trigger price can flow through the intended `context.price -> normalized price -> OPTIONS_PAPER_V1` path with retained-input replay parity. The remaining historical selector blocker is causal decision-time option analytics (Delta and contract-level OI), not underlying trigger-price provenance.
+
+### 7. Miss-allowed IEX provisional source policy
+
+PR #756 completes the alternative-source study that #742 proposed but did not validate.
+
+Outcome-independent frozen denominator:
+- all structurally ARMED 212 watch windows: **183**;
+- SIP authoritative: **91 reversal / 66 continuation / 26 no-break / 0 blocked**;
+- IEX provisional reversal-first: **90**;
+- delayed SIP confirmation: **89/90 = 98.9%**;
+- SIP reversal recall: **89/91 = 97.8%**;
+- false provisional: **1/90**, rejected because SIP continuation broke first;
+- explicit IEX misses of SIP reversals: **2/91**;
+- confirmed directions: **48 LONG / 41 SHORT**, spanning all five frozen sessions.
+
+Confirmed IEX-minus-SIP timing remains materially different:
+- median: **3.501s**;
+- p95: **156.273s**;
+- max: **569.811s**.
+
+Ruling: `MISS_ALLOWED_RESEARCH_OBSERVER_FEASIBLE`, **not SIP-equivalent**. This validates a distinct research source policy only. It does not deploy a collector, choose cadence/lag, create option expectancy, or promote 212R.
 
 ## DATA BLOCKED
 
 ### Historical executable option replay
 
-The frozen historical trigger population still lacks a proven causal source for every production-selector input at the trigger boundary, especially:
+The frozen historical trigger population still lacks a proven causal source for every production-selector input at the trigger boundary, specifically:
 - historical decision-time Delta;
-- historical decision-time contract-level open interest;
-- a final replay packet proving the exact trigger-cross trade price is wired through the same historical `context.price -> normalized price -> OPTIONS_PAPER_V1` semantic path used for the corrected 212R replay.
+- historical decision-time contract-level open interest.
+
+The underlying trigger boundary is no longer part of this blocker: #733 freezes the exact SIP crossing timestamp/price for 81/81 rows, and #738 proves that causal price can traverse the production `context.price -> normalized price -> OPTIONS_PAPER_V1` path with retained-input replay parity.
 
 Massive historical bid/ask is available, but current/future snapshots must not be used to back-fill historical analytics.
 
@@ -221,18 +243,23 @@ Collector v0.3 corrects the lane by:
 
 Collector v0.3 review/CI is complete: #730/#739 are merged, and #741 adds an explicit fail-closed preflight for the current Alpaca entitlement.
 
-The deployment gate is now:
+The source question is now split cleanly:
 
-1. **Resolve the trigger-source entitlement first.** A same-session RTH probe proved the configured Alpaca account cannot query recent consolidated SIP data (`provider_entitlement`: subscription does not permit querying recent SIP data). The same source can reproduce older/frozen SIP windows after they age, but that is not equivalent to prospective exact-cross observation.
-2. Do **not** substitute IEX for consolidated SIP. #742 proves IEX is **not source-equivalent** on the frozen 81: 73/81 matched the same first-break direction, 8/81 had no IEX cross in the same five-minute bucket, and matched rows could lag consolidated SIP by up to 132.851s.
-3. After a source can actually provide the required recent consolidated-SIP first-break evidence, choose and pre-register a numeric `max_capture_lag_seconds` measured from the exact SIP crossing; prior 60-second review values were mechanics-only, not policy.
-4. Choose and pre-register collector timer cadence.
-5. Separately authorize a service-specific observation-only deployment whose route cannot mutate scanner/risk/broker state.
-6. Obtain the first real RTH `ARMED -> exact SIP cross -> selector evidence` proof.
+- **Exact-SIP lane:** still blocked prospectively because the configured Alpaca entitlement cannot query sufficiently recent consolidated SIP during RTH.
+- **IEX-provisional lane:** the previously proposed alternative-source study is now complete in #756. On the outcome-independent 183-arm frozen population, IEX emitted 90 provisional reversals; delayed SIP confirmed 89, rejected 1 continuation-first false provisional, and IEX missed 2 of 91 SIP-authoritative reversals. Confirmed IEX timing remained materially different from SIP (median 3.501s late, p95 156.273s, max 569.811s), so IEX is **not** an exact-SIP substitute.
 
-Do not invent the source, policy values, or deployment authorization in code. #741 is a safety proof: unavailable recent SIP must block collection rather than degrade to a weaker source.
+If the IEX-provisional source policy is pursued prospectively, the next gates are:
 
-After an authorized collector begins accumulating real prospective rows, existing fill-realism and risk tooling can be used to calculate option-side evidence. Historical exact option replay still remains DATA BLOCKED on causal historical Delta and contract-level OI; #738 separately proves that the exact trigger price can traverse the production `context.price` selector path with replay parity.
+1. Explicitly authorize a **separately versioned observation-only IEX + delayed-SIP reconciliation release**. Do not mutate collector v0.3 by silently swapping its source.
+2. Pre-register the allowed IEX-trigger-to-selector-evidence lag policy. #756 intentionally chose no production threshold.
+3. Pre-register collector cadence. No timer value is authorized by the offline study.
+4. Prove the service-specific route cannot mutate scanner/risk/broker/order state.
+5. Obtain the first natural RTH `ARMED -> IEX provisional reversal -> decision-time selector evidence -> delayed SIP reconciliation` row on that exact release.
+6. Keep confirmed IEX rows in a distinct source cohort; misses/rejections remain explicit and are never backfilled or rewritten to the earlier SIP timestamp.
+
+The exact-SIP path remains separately available only after real-time SIP access is proven. #741 remains the fail-closed proof for that lane.
+
+After an authorized prospective collector begins accumulating real rows, existing fill-realism and risk tooling can be used to calculate option-side evidence. Historical exact option replay still remains DATA BLOCKED on causal historical Delta and contract-level OI; #738 separately proves that the exact trigger price can traverse the production `context.price` selector path with replay parity.
 
 ## Current verdict
 

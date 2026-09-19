@@ -8,7 +8,7 @@ It does **not** modify the preserved #653 evidence package, does not activate DE
 
 ## Current baseline
 
-- current repository `main`: `c7dc6c5de3ddfde0dd0876bf86b28531f976c46b` (#750), after #744/#747 and the separate futures-only #749/#751/#752 changes.
+- repository `main` at this reconciliation pass: `ea195b6ee9f62c33ee627be01fabd8a617e81e53`; options evidence relevant here includes #744/#747/#750/#756/#761. Later futures-only changes do not alter the options selector/risk authority described below.
 - PR #706 merged: parameterized base-vs-adverse slippage stress runner.
 - PR #710 merged: append-only prospective decision-time selector evidence capture.
 - PR #712 merged: exact replay of the actual `OPTIONS_PAPER_V1` production selector from retained evidence.
@@ -19,6 +19,8 @@ It does **not** modify the preserved #653 evidence package, does not activate DE
 - #744 corrects the historical-source audit: exact causal underlying trigger time/price is proven, while historical decision-time Delta and contract-level open interest remain the blocker to exact historical option-selector replay.
 - #747 completes a controlled target-geometry test on the frozen clean V1-EPOCH-2 AHEAD cohort; wider targets improve forced-horizon P&L only slightly and all tested variants remain negative.
 - #750 completes a Daily/4H_RTH hold-horizon compatibility test; Daily improves in a tiny/non-independent subset while 4H_RTH worsens materially, so no blanket higher-timeframe hold extension is supported.
+- #756 completes the outcome-independent 183-arm IEX-provisional source-policy study: 89/90 provisional reversals confirmed by delayed SIP, 2/91 SIP reversals missed, 1 false provisional rejected. This supports a separate miss-allowed research observer only; IEX remains non-equivalent to SIP and nothing is deployed.
+- #761 closes the original three-session first-sight family-persistence question: 212R = `NO LONGER SHOWING EXCESS` under that old first-sight framework; 1-2-2 = `PERSISTING POSSIBLE SIGNAL`. This does not resolve the corrected causal-trigger 212R option lane.
 - #749/#751/#752 are futures-lane observer/backtest-proof changes and do not alter options execution, selector authority, risk policy, or 212R qualification.
 
 ## Market-hours proof captured 2026-09-18 15:24Z
@@ -164,13 +166,13 @@ These are strategy/evidence problems, not missing shared infrastructure:
 - exact underlying trigger time/price is frozen for the historical 81, but full historical option-selector replay is still blocked by missing causal decision-time **Delta** and contract-level **OI**;
 - source-defined 212R magnitude is frozen, but final option target/runner management policy is unresolved because the existing >=1R floor is a separate management hypothesis; #747 weakens target-width-alone as an explanation in the mixed clean-shadow cohort but does not answer 212R-specific expectancy;
 - no complete 212R replay/forward strategy formula parity packet exists under the corrected trigger-time + geometry + option-data boundary;
-- collector v0.3 is merged and observation-only, but #741 proves the configured Alpaca entitlement cannot access sufficiently recent consolidated SIP during RTH, and #742 proves IEX is not source-equivalent on the frozen 81;
-- therefore no trustworthy prospective `ARMED -> exact SIP cross -> option_evidence_usable` 212R row has been collected under the corrected lane;
+- exact-SIP collector v0.3 is merged and observation-only, but #741 proves the configured Alpaca entitlement cannot access sufficiently recent consolidated SIP during RTH; #756 validates IEX only as a **distinct miss-allowed provisional research source with mandatory delayed-SIP reconciliation**, not as an exact-SIP replacement;
+- therefore no trustworthy prospective corrected-lane option cohort exists yet: there is still no natural `ARMED -> IEX provisional break -> decision-time option evidence -> delayed SIP reconciliation` row on an authorized/versioned IEX release, and no natural exact-SIP row under current entitlement;
 - no required resolved option-fill population under corrected timing + geometry;
 - no approved/pre-registered numeric slippage percentage or aggregate slippage-stress qualification pass;
 - no positive after-cost option expectancy or net P&L proof;
 - no completed untouched multi-month / chronological validation;
-- prospective persistence has not met its pre-registered proof requirement;
+- the original first-sight family-persistence study has now met its three-session decision threshold (#761) and classifies 212R as `NO LONGER SHOWING EXCESS` under that old first-sight framework; this does **not** settle the corrected causal-trigger option lane, which still lacks prospective option-side evidence;
 - remaining 212R-specific golden fixtures are not complete.
 
 ## Ruling
@@ -186,7 +188,7 @@ For P2, the correct state is:
 - current merged-main production-selector retained-input replay: proven for the observed SPY capture;
 - canonical/reference selector: deterministic but not production authority;
 - historical 81-point exact underlying trigger replay: proven; exact option selector replay remains DATA BLOCKED on historical Delta/OI;
-- dedicated 212R prospective collector: built and fail-closed, but **HOLD** under current recent-SIP entitlement; IEX fallback rejected by #742;
+- dedicated exact-SIP 212R prospective collector: built and fail-closed, but **HOLD** under current recent-SIP entitlement; silent IEX fallback remains rejected by #742, while #756 separately validates a miss-allowed IEX + delayed-SIP research policy that is **not deployed or scheduled**;
 - #747/#750 controlled studies narrow target/horizon hypotheses but do not establish 212R option expectancy and do not authorize V1 tuning;
 - 212R strategy qualification: WAIT;
-- next useful evidence comes from resolving the real-time consolidated-SIP source gate or obtaining an explicitly approved historical Delta/OI source, then collecting/validating option-side evidence—not another speculative infrastructure rewrite.
+- next useful evidence is either (a) an explicitly authorized/versioned IEX-provisional observation-only release with pre-registered lag/cadence and first natural reconciled option-evidence rows, (b) proven real-time consolidated-SIP access for the exact-SIP lane, or (c) an explicitly approved historical Delta/OI source for exact historical replay—not another speculative infrastructure rewrite.
