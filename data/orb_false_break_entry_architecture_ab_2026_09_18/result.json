@@ -1,0 +1,383 @@
+{
+  "arm_a": "current resting retouch at original entry; fixed stop/target",
+  "arm_b": "completed signal-bar close; fixed original stop/target",
+  "classification": "NO_RUNTIME_CHANGE / MIXED_OR_UNSUPPORTED",
+  "horizon_bars": 16,
+  "population": {
+    "MES": 1550,
+    "MNQ": 1491,
+    "family": "orb_false_break_fade"
+  },
+  "pre_registered_checks": {
+    "improves_both": false,
+    "mes_halves_positive": false,
+    "mnq_halves_positive": false,
+    "one_tick_positive_both": false,
+    "signal_close_positive_both": false
+  },
+  "results": {
+    "MES": {
+      "baseline_resting_retouch": {
+        "by_direction": {
+          "LONG": {
+            "gross_r_all": -0.014341590612777053,
+            "n": 767
+          },
+          "SHORT": {
+            "gross_r_all": -0.06832694763729247,
+            "n": 783
+          }
+        },
+        "by_session": {
+          "london": {
+            "gross_r_all": -0.029726516052318668,
+            "n": 841
+          },
+          "new_york": {
+            "gross_r_all": -0.05571227080394922,
+            "n": 709
+          }
+        },
+        "fill_rate": 0.9135483870967742,
+        "filled_or_admissible": 1416,
+        "gross_r_all": -0.04161290322580645,
+        "gross_r_filled": -0.045550847457627115,
+        "h1_gross_r_all": -0.01032258064516129,
+        "h2_gross_r_all": -0.07290322580645162,
+        "n": 1550,
+        "outcomes": {
+          "no_fill": 134,
+          "stop": 962,
+          "target": 359,
+          "unresolved": 95
+        }
+      },
+      "delta_gross_r_all": -0.04304529891042491,
+      "signal_close": {
+        "by_direction": {
+          "LONG": {
+            "gross_r_all": -0.060567861841741226,
+            "n": 767
+          },
+          "SHORT": {
+            "gross_r_all": -0.10825627494066804,
+            "n": 783
+          }
+        },
+        "by_session": {
+          "london": {
+            "gross_r_all": -0.09143273243702375,
+            "n": 841
+          },
+          "new_york": {
+            "gross_r_all": -0.07662240526321809,
+            "n": 709
+          }
+        },
+        "fill_rate": 0.9670967741935483,
+        "filled_or_admissible": 1499,
+        "gross_r_all": -0.08465820213623136,
+        "gross_r_filled": -0.08753850120824457,
+        "h1_gross_r_all": -0.07251784422172831,
+        "h2_gross_r_all": -0.0967985600507344,
+        "n": 1550,
+        "outcomes": {
+          "invalid_at_entry": 51,
+          "stop": 865,
+          "target": 531,
+          "unresolved": 103
+        }
+      },
+      "signal_close_adverse_tick_stress": {
+        "1": {
+          "by_direction": {
+            "LONG": {
+              "gross_r_all": -0.09608679714607712,
+              "n": 767
+            },
+            "SHORT": {
+              "gross_r_all": -0.1422449786663413,
+              "n": 783
+            }
+          },
+          "by_session": {
+            "london": {
+              "gross_r_all": -0.13434841751003074,
+              "n": 841
+            },
+            "new_york": {
+              "gross_r_all": -0.1016775353749655,
+              "n": 709
+            }
+          },
+          "fill_rate": 0.9651612903225807,
+          "filled_or_admissible": 1496,
+          "gross_r_all": -0.11940412368179769,
+          "gross_r_filled": -0.12371416557940268,
+          "h1_gross_r_all": -0.11032960059017141,
+          "h2_gross_r_all": -0.12847864677342397,
+          "n": 1550,
+          "outcomes": {
+            "invalid_at_entry": 54,
+            "stop": 865,
+            "target": 528,
+            "unresolved": 103
+          }
+        },
+        "2": {
+          "by_direction": {
+            "LONG": {
+              "gross_r_all": -0.12779747847295553,
+              "n": 767
+            },
+            "SHORT": {
+              "gross_r_all": -0.17256228601024015,
+              "n": 783
+            }
+          },
+          "by_session": {
+            "london": {
+              "gross_r_all": -0.17237971759002443,
+              "n": 841
+            },
+            "new_york": {
+              "gross_r_all": -0.12435203588372971,
+              "n": 709
+            }
+          },
+          "fill_rate": 0.9632258064516129,
+          "filled_or_admissible": 1493,
+          "gross_r_all": -0.15041092640953221,
+          "gross_r_filled": -0.15615333954104146,
+          "h1_gross_r_all": -0.1438284127315477,
+          "h2_gross_r_all": -0.15699344008751673,
+          "n": 1550,
+          "outcomes": {
+            "invalid_at_entry": 57,
+            "stop": 865,
+            "target": 525,
+            "unresolved": 103
+          }
+        },
+        "3": {
+          "by_direction": {
+            "LONG": {
+              "gross_r_all": -0.1564046480949009,
+              "n": 767
+            },
+            "SHORT": {
+              "gross_r_all": -0.1998869311111835,
+              "n": 783
+            }
+          },
+          "by_session": {
+            "london": {
+              "gross_r_all": -0.20640686551481302,
+              "n": 841
+            },
+            "new_york": {
+              "gross_r_all": -0.14511376340040605,
+              "n": 709
+            }
+          },
+          "fill_rate": 0.9612903225806452,
+          "filled_or_admissible": 1490,
+          "gross_r_all": -0.17837021428957783,
+          "gross_r_filled": -0.18555290748244674,
+          "h1_gross_r_all": -0.17386271694752128,
+          "h2_gross_r_all": -0.1828777116316344,
+          "n": 1550,
+          "outcomes": {
+            "invalid_at_entry": 60,
+            "stop": 865,
+            "target": 522,
+            "unresolved": 103
+          }
+        }
+      }
+    },
+    "MNQ": {
+      "baseline_resting_retouch": {
+        "by_direction": {
+          "LONG": {
+            "gross_r_all": -0.06154910096818811,
+            "n": 723
+          },
+          "SHORT": {
+            "gross_r_all": 0.07942708333333333,
+            "n": 768
+          }
+        },
+        "by_session": {
+          "london": {
+            "gross_r_all": 0.05442583732057416,
+            "n": 836
+          },
+          "new_york": {
+            "gross_r_all": -0.044274809160305344,
+            "n": 655
+          }
+        },
+        "fill_rate": 0.886653252850436,
+        "filled_or_admissible": 1322,
+        "gross_r_all": 0.011066398390342052,
+        "gross_r_filled": 0.012481089258698942,
+        "h1_gross_r_all": 0.014093959731543624,
+        "h2_gross_r_all": 0.00804289544235925,
+        "n": 1491,
+        "outcomes": {
+          "no_fill": 169,
+          "stop": 896,
+          "target": 365,
+          "unresolved": 61
+        }
+      },
+      "delta_gross_r_all": -0.07062048536303654,
+      "signal_close": {
+        "by_direction": {
+          "LONG": {
+            "gross_r_all": -0.09719441024223516,
+            "n": 723
+          },
+          "SHORT": {
+            "gross_r_all": -0.024119251394728477,
+            "n": 768
+          }
+        },
+        "by_session": {
+          "london": {
+            "gross_r_all": -0.04352390314001843,
+            "n": 836
+          },
+          "new_york": {
+            "gross_r_all": -0.08001398572707187,
+            "n": 655
+          }
+        },
+        "fill_rate": 0.9128101945003353,
+        "filled_or_admissible": 1361,
+        "gross_r_all": -0.05955408697269449,
+        "gross_r_filled": -0.06524257433966751,
+        "h1_gross_r_all": -0.06742057322810728,
+        "h2_gross_r_all": -0.051698145605023546,
+        "n": 1491,
+        "outcomes": {
+          "invalid_at_entry": 130,
+          "stop": 736,
+          "target": 554,
+          "unresolved": 71
+        }
+      },
+      "signal_close_adverse_tick_stress": {
+        "1": {
+          "by_direction": {
+            "LONG": {
+              "gross_r_all": -0.10475960095073983,
+              "n": 723
+            },
+            "SHORT": {
+              "gross_r_all": -0.03395859229414478,
+              "n": 768
+            }
+          },
+          "by_session": {
+            "london": {
+              "gross_r_all": -0.054842807183370555,
+              "n": 836
+            },
+            "new_york": {
+              "gross_r_all": -0.08545466192975619,
+              "n": 655
+            }
+          },
+          "fill_rate": 0.9121395036887995,
+          "filled_or_admissible": 1360,
+          "gross_r_all": -0.06829067093848966,
+          "gross_r_filled": -0.07486866938918241,
+          "h1_gross_r_all": -0.07678028219774959,
+          "h2_gross_r_all": -0.05981243985518049,
+          "n": 1491,
+          "outcomes": {
+            "invalid_at_entry": 131,
+            "stop": 736,
+            "target": 553,
+            "unresolved": 71
+          }
+        },
+        "2": {
+          "by_direction": {
+            "LONG": {
+              "gross_r_all": -0.11071900196844871,
+              "n": 723
+            },
+            "SHORT": {
+              "gross_r_all": -0.043443789194332755,
+              "n": 768
+            }
+          },
+          "by_session": {
+            "london": {
+              "gross_r_all": -0.06454799140220482,
+              "n": 836
+            },
+            "new_york": {
+              "gross_r_all": -0.09076724841556144,
+              "n": 655
+            }
+          },
+          "fill_rate": 0.9114688128772636,
+          "filled_or_admissible": 1359,
+          "gross_r_all": -0.07606617607272702,
+          "gross_r_filled": -0.08345450222548638,
+          "h1_gross_r_all": -0.08447057610494778,
+          "h2_gross_r_all": -0.06767304199229207,
+          "n": 1491,
+          "outcomes": {
+            "invalid_at_entry": 132,
+            "stop": 735,
+            "target": 553,
+            "unresolved": 71
+          }
+        },
+        "3": {
+          "by_direction": {
+            "LONG": {
+              "gross_r_all": -0.11785782441548481,
+              "n": 723
+            },
+            "SHORT": {
+              "gross_r_all": -0.05260157177860907,
+              "n": 768
+            }
+          },
+          "by_session": {
+            "london": {
+              "gross_r_all": -0.07506773224635423,
+              "n": 836
+            },
+            "new_york": {
+              "gross_r_all": -0.0959581527029239,
+              "n": 655
+            }
+          },
+          "fill_rate": 0.9101274312541918,
+          "filled_or_admissible": 1357,
+          "gross_r_all": -0.08424494579367357,
+          "gross_r_filled": -0.09256390138420582,
+          "h1_gross_r_all": -0.09320511790348802,
+          "h2_gross_r_all": -0.0752967846384299,
+          "n": 1491,
+          "outcomes": {
+            "invalid_at_entry": 134,
+            "stop": 735,
+            "target": 551,
+            "unresolved": 71
+          }
+        }
+      }
+    }
+  },
+  "same_bar_ambiguity": "STOP_FIRST",
+  "schema": "orb-false-break-entry-architecture-ab-v1",
+  "signal_bar_reused_for_resolution": false
+}
