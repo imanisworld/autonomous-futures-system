@@ -544,3 +544,81 @@ def test_risk_rules_yaml_disables_strat_122_during_isolated_lane_leaves_212_disa
     # Preserved MES-only record for whenever the concept is re-enabled.
     assert "strat_122" in cfg.disabled_concepts_per_instrument.get("MNQ", [])
     assert "strat_122" not in cfg.disabled_concepts_per_instrument.get("MES", [])
+
+
+# ─── Journal persistence / reconstruction ───────────────────────────────────
+# The 4HR Re-Trigger and 2-1-2/1-2-2 state machines already round-trip their
+# per-instrument DailyState through the journal's ``strategy_state`` block so
+# an armed setup survives a runner restart. The 3-2-2 First Live field was
+# declared on DailyState with the same contract but was never written by the
+# runner/replay journal entries nor restored by ``get_daily_state`` — a
+# restart silently dropped an armed 3-2-2 state. These tests pin the repair.
+
+
+def test_strat_322_first_live_state_round_trips_through_journal(tmp_path):
+    from datetime import date as _date
+
+    from journal.journal_logger import JournalLogger
+
+    journal = JournalLogger(str(tmp_path))
+    armed = _armed_322_state()
+    journal._append(
+        {
+            "ts": "2026-09-18T14:00:00Z",
+            "instrument": "MNQ",
+            "session": "new_york",
+            "decision": "NO_TRADE",
+            "reason": "test",
+            "strategy_state": {
+                "strat_4hr_retrigger": {},
+                "strat_212_122": {},
+                "strat_322_first_live": {"MNQ": dict(armed)},
+            },
+        },
+        for_date=_date(2026, 9, 18),
+    )
+    reconstructed = journal.get_daily_state(_date(2026, 9, 18))
+    assert reconstructed.strat_322_first_live_state["MNQ"] == armed
+    # Sibling fields are untouched by the new restore branch.
+    assert reconstructed.four_hr_retrigger_state == {}
+    assert reconstructed.strat_212_122_state == {}
+
+
+def test_strat_322_first_live_state_absent_from_legacy_journal_is_empty(tmp_path):
+    from datetime import date as _date
+
+    from journal.journal_logger import JournalLogger
+
+    journal = JournalLogger(str(tmp_path))
+    journal._append(
+        {
+            "ts": "2026-09-18T14:00:00Z",
+            "instrument": "MNQ",
+            "session": "new_york",
+            "decision": "NO_TRADE",
+            "reason": "test",
+            "strategy_state": {"strat_4hr_retrigger": {}, "strat_212_122": {}},
+        },
+        for_date=_date(2026, 9, 18),
+    )
+    reconstructed = journal.get_daily_state(_date(2026, 9, 18))
+    assert reconstructed.strat_322_first_live_state == {}
+
+
+def test_every_journaled_strategy_state_block_includes_strat_322_first_live():
+    """Every runner/replay site that journals ``strategy_state`` must carry the
+    3-2-2 First Live state alongside the 4HR and 2-1-2/1-2-2 state, otherwise
+    the restore path has nothing to reconstruct from."""
+    import re
+    from pathlib import Path
+
+    for rel in ("webhook/runner.py", "replay/replay_engine.py"):
+        src = Path(rel).read_text(encoding="utf-8")
+        blocks = re.findall(
+            r'\["strategy_state"\]\s*=\s*\{(.*?)\n\s*\}', src, flags=re.S
+        )
+        assert blocks, f"{rel}: no strategy_state journal blocks found"
+        for block in blocks:
+            assert '"strat_4hr_retrigger"' in block, (rel, block)
+            assert '"strat_212_122"' in block, (rel, block)
+            assert '"strat_322_first_live"' in block, (rel, block)

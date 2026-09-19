@@ -749,6 +749,9 @@ class JournalLogger:
             strat_212_122_state = strategy_state.get("strat_212_122")
             if isinstance(strat_212_122_state, dict):
                 daily_state.strat_212_122_state = dict(strat_212_122_state)
+            strat_322_state = strategy_state.get("strat_322_first_live")
+            if isinstance(strat_322_state, dict):
+                daily_state.strat_322_first_live_state = dict(strat_322_state)
         for entry in entries:
             decision = entry.get("decision")
             risk_check = entry.get("risk_check") or {}
