@@ -10,6 +10,10 @@ _As of 2026-09-18. This is the single current futures handoff. Historical audit 
 >
 > **Backtest proof closure — #751/#754:** Backtest→DEMO qualification now mechanically binds frozen data/session identity and per-outcome gap proof. Counted resolved outcomes must bind a hash-pinned strategy dependency window to replay signal/entry/resolution timestamps and hash-bound journals; missing/mismatched proof or overlap with a declared manifest gap fails closed. Older studies missing those timestamps remain unproven unless rerun/backfilled from sufficient raw data. These changes are offline tooling and do not require a VPS restart.
 >
+> **Post-session cleanup / research closure — #763/#764/#765:** #763 makes the preserved R5 entry-conditioning audit deterministic and hash-gated; classification remains **AUDIT ONLY**, with ORB false-break symmetric-1R quality degrading to near-even and the next valid ORB step being a preregistered one-variable entry-architecture A/B rather than runtime tuning. #764 fixes the read-only collector census so closed-session futures silence is `OFF_SESSION` instead of a false DEAD/ABSENT condition; the live watcher already had its own causal session-safe logic, so no deployment/restart is required. #765 records the current collector state. Final cleanup snapshot: local/origin `main=ea195b6ee9f62c33ee627be01fabd8a617e81e53`, no open PRs, and prior dirty local work is safely anchored at recovery branch `recovery/pre-clean-main-20260918-post754` / `fe4da8d0a9432aeb3c3fe28d57522731e2623a0a`.
+>
+> **Next actionable futures step:** wait for the first natural MNQ 4HR or 3-2-2 1m observer event, then audit arm timing → true touch → completed-1H stop anchor → dedupe → durable response proof → zero execution leakage. Repair only a proven mechanism defect; otherwise keep collecting. No additional deploy, restart, strategy retune, risk change, or feature expansion is currently justified.
+>
 > The long reconciliation/history below is retained for provenance. Where it conflicts with the current operator summary, the newer summary governs.
 
 ## 2026-09-18 reconciliation
