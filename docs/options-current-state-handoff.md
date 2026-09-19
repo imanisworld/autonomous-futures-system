@@ -67,6 +67,8 @@ Live branch proof on `476a6b3` used an isolated temp SQLite DB and a live SPY ch
 
 This proves the **current forward capture/replay boundary for the observed capture**, not historical strategy results. #733 proves the exact causal underlying trigger-cross trade/time for all 81 frozen 212R rows, including byte-identical repeat evidence. #738 separately proves that the frozen AMZN trigger price can be supplied through the real scanner `context.price` override and produce retained-input production replay parity even when the provider snapshot price differs. Full historical 212R contract-selection replay nevertheless remains **DATA BLOCKED** because causal historical decision-time option Delta and contract-level open interest are still unproven for the frozen population. Do not synthesize them or substitute current snapshots.
 
+The external Delta/OI source qualification is now explicit in `docs/options-historical-delta-oi-source-qualification-2026-09-18.md`: **ThetaData Standard is the preferred technical pilot candidate** because its documented historical first-order Greeks support sub-minute timing with option/underlying timestamps and its historical OI semantics are documented. ORATS one-minute intraday is the fallback candidate; Cboe DataShop Option Quote Intervals is an archival fallback. None is currently configured or authorized. Any alternate Delta source is a source-semantics change from current Public and therefore requires field-level provenance plus forward production-selector parity before it can retire the historical blocker. No purchase/integration was authorized.
+
 ## Frozen `OPTIONS_PAPER_V1` trade policy
 
 - max planned risk per ACTIVE paper trade: **$300**;

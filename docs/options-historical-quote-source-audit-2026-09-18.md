@@ -55,13 +55,15 @@ The frozen selector requires bid, ask, volume, open interest, and delta at the d
 
 ## External historical-data candidates
 
-Read-only research on 2026-09-18 found technically relevant external products, but none is currently configured on the VPS and none is authorized as a replacement selector source:
+The external-source qualification has now been tightened in `docs/options-historical-delta-oi-source-qualification-2026-09-18.md`.
 
-- **ThetaData** documents historical per-contract open interest and historical Greeks. Its Greeks are vendor-calculated from option/underlying pricing inputs, so adopting them would be a source-semantics decision rather than proof of historical Public-provider Delta.
-- **ORATS** documents one-minute historical option-chain/Greeks data. It likewise represents an external vendor model/source, not a byte-for-byte reconstruction of the current Public selector analytics.
-- Cboe DataShop remains a plausible raw historical market-data source, but no purchase or entitlement has been authorized.
+Read-only vendor documentation establishes three technically relevant paths, but none is currently configured or authorized:
 
-No `THETA*`, `ORATS*`, `CBOE*`, or `DATABENTO*` credentials/configuration are present in the current VPS environment. Do not purchase or integrate any of these sources implicitly. If an external source is chosen later, its Delta/OI semantics must be explicitly accepted and parity-tested before it can retire the historical selector blocker.
+- **ThetaData Standard** is the preferred technical pilot candidate. Its documented historical first-order Greeks support sub-minute intervals down to tick/10ms/100ms/500ms/1s for single-day requests and return option timestamp, bid/ask, Delta, underlying timestamp, and underlying price. Its historical open-interest endpoint documents the daily OPRA value reported around 06:30 ET for the prior trading day's EOD OI. This is the strongest temporal fit to the exact #733 trigger boundary, but its Delta is ThetaData-calculated and therefore still requires cross-provider selector parity before historical use.
+- **ORATS Intraday Data API** is a viable fallback. Its one-minute chain rows include call/put bid/ask, volume, open interest, and a vendor Delta; ORATS documents that the published Delta is call Delta and put Delta is call Delta minus 1. The one-minute resolution and vendor-model semantics mean it is not a drop-in reconstruction of current Public analytics.
+- **Cboe DataShop Option Quote Intervals** can provide one-minute NBBO/volume with optional OI and Greeks, but remains a purchased archival source and has coarser standard timing than the exact trigger boundary.
+
+No `THETA*`, `ORATS*`, `CBOE*`, or `DATABENTO*` credentials/configuration are present in the current VPS environment. Do not purchase or integrate any of these sources implicitly. A provider choice must be explicit; field-level provenance and a forward selector-parity study against current Public are mandatory before an external Delta/OI source can retire the historical blocker.
 
 ## Safe work completed around the blocker
 
@@ -71,14 +73,16 @@ The same PR adds an outcome-independent acquisition-index builder. Against the f
 
 ## Next evidence step
 
-Historical option bid/ask access and exact causal underlying trigger price now exist. The next evidence step is therefore narrower:
+Historical option bid/ask access and exact causal underlying trigger price now exist. The remaining next step is no longer "find any source"; it is an explicit source-acceptance decision followed by a one-sample parity proof.
 
 1. keep the exact frozen 212R trigger timestamp/price from #733/#738 as the decision boundary;
-2. retrieve exact historical option bid/ask evidence for candidate contracts at that timestamp;
-3. obtain a causal historical source for per-contract Delta and open interest, or explicitly authorize a different historical analytics source and prove its selector semantics before use;
-4. normalize only source-attributed fields through the existing quote-retention rule without inference;
-5. materialize + hash the dataset and manifest through PR #686 tooling;
-6. run production-selector/fill parity on those exact bytes;
-7. expand only after the one-sample proof passes.
+2. if the operator explicitly authorizes an external source, start with **one frozen AMZN sample only**;
+3. retrieve causal per-contract Delta/OI for the selector-relevant chain, requiring every source timestamp to be at or before the trigger;
+4. keep Massive bid/ask/volume unless a separate source-switch decision is made, and preserve field-level provenance;
+5. run the real production selector on the exact frozen underlying price and record Delta-band/OI-floor eligibility plus the selected contract;
+6. run a forward cross-provider selector-parity capture against current Public before treating the alternate Delta/OI semantics as accepted;
+7. only after those checks pass, expand to the frozen 81-row acquisition index, materialize/hash the dataset through PR #686 tooling, then run selector/fill parity and expectancy.
 
-Until then, no historical options backtest result should be treated as executable-price evidence, and `strat_212_reversal_30m_options` remains **BLOCKED / WAIT**.
+The preferred **technical pilot** is ThetaData Standard because its documented historical first-order Greeks have sub-minute timing plus explicit option/underlying timestamps and its historical OI semantics are documented. This is not authorization to subscribe, purchase, or integrate.
+
+Until an external source is explicitly authorized and parity-tested, no historical options backtest result should be treated as executable-price evidence, and `strat_212_reversal_30m_options` remains **BLOCKED / WAIT**.
