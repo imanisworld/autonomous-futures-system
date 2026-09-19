@@ -385,6 +385,10 @@ Do not:
 - tune target/stop/zone thresholds off the small diagnostic cells;
 - call 4HR validated.
 
+## Late 2026-09-18 addendum — mechanical fix + parity/state audits
+
+See `docs/futures-causal-parity-and-state-audits-2026-09-18.md`. Summary: the 3-2-2 First Live `DailyState` journal/restore omission is fixed in PR #771 (not deployed); 3-2-2 remains 0/33 compatible with the account stop-width / R:R caps under the corrected pre-armed timing; Daily 2-2 evidence is **not** promotion-grade yet (shared wide-stop epoch, silent fresh-ledger fallback masked only by the router integrity gate, no epoch stamp on audit rows, n=1); generic 2-1-2/1-2-2 and Daily 2-2 still carry the unmeasured completed-5m touch-inference gap; replay 4H bars are UTC-anchored while TradingView 4H bars are CME-session-anchored — no decision authority today (HTF gate off, `require_htf_alignment` false) but a blocker for ever enabling that gate with `htf_direction_source=payload`.
+
 ## Safe next work order
 
 1. **Preserve collection epochs / no further runtime churn** — #759 is deployed in minimal release `ac2b117ec1f9` and #760 is installed only in the read-only watcher. No further futures-bot or watcher restart is required now.
