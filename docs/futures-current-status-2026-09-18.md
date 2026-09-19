@@ -56,6 +56,12 @@ Post-#759 monitoring exposed a separate read-only watcher defect: `journal_not_a
 
 #760 scopes that causal check to MNQ/MES decision-path 15m files only. Current-main watcher tests passed **148/148**. Because the VPS watcher intentionally trails unrelated newer presentation/triage code, only the proven one-hunk fix was backported to the exact live watcher source; installed watcher SHA-256 is `7d29872d1c85814ec10da50bd3152a57c1eea6873d89c0b1c86fbf8f9ee96563` with a pre-change backup retained. The watcher restart did **not** restart futures-bot. It then recorded the `ac2b117ec1f9` restart as sanctioned, cleared the false stall/release blockers, and returned to **zero BLOCKED findings**.
 
+### Collector-census off-session correction — #764
+
+A separate read-only reporting defect was proven after the Friday session: `collector_census` claimed futures heartbeat files were DEAD/ABSENT solely because the market was closed and the UTC date had rolled. It could also label an intentionally carried Daily 2-2 swing as exposed to stale 5m bars over the weekend.
+
+#764 makes only the cadence-driven futures heartbeat rows CME-session aware. Closed-session silence is reported as `OFF_SESSION`; normal fail-closed freshness resumes when the session reopens, and expected off-session swing carry is not labeled stale-feed exposure. **80 adjacent census/report/watcher tests passed.** This is merged monitoring code only; it does not require a futures-bot or watcher restart because the live watcher already has its own causal session-safe checks.
+
 ### Feed coverage
 
 All six configured futures roots now deliver authenticated 1m TradingView data and write isolated `tf1m/` bars:
@@ -383,7 +389,7 @@ Do not:
 4. **Refine only from proven mechanism failures** — if forward evidence shows stale arm state, wrong trigger timestamp, wrong completed-1H stop anchor, duplicate trigger handling, or another live/replay timing mismatch, isolate and repair that exact defect. Do not tune targets/stops/risk merely because P&L is weak.
 5. **LC_ZONE v1 is HOLD** — do not tune or rescue the failed quality audit. Reopen zone design only under a new preregistration.
 6. **Miyagi timing parity only if reopened** — its current sample is too small to justify runtime work.
-7. Continue passive evidence collection; do not expand instruments or execution scope.
+7. Continue passive evidence collection; do not expand instruments or execution scope. Current direct audit shows wide-stop 4HR/3-2-2 flat with zero fills so far, Daily 2-2 flat/not halted, MES 1-2-2 journaling through session close, Asia D+EMA actively accumulating candidate/outcome rows, and 2,437 cross-instrument observation rows across all six roots. No natural 4HR/3-2-2 1m observer event exists yet.
 
 ## Bottom line
 
