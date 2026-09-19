@@ -1,0 +1,820 @@
+{
+  "base_commit": "36e73f1981850b66b043d849ce877c15bd1ab3e7",
+  "instruments": {
+    "MES": {
+      "affected_entry_bars": [
+        {
+          "close": 6862.25,
+          "date": "2025-12-04",
+          "direction": "SHORT",
+          "entry_bar_ts": "2025-12-04T09:30:00-05:00",
+          "gap_through": false,
+          "high": 6877.0,
+          "low": 6861.0,
+          "open": 6876.25,
+          "same_bar_both": false,
+          "same_bar_stop": true,
+          "same_bar_target": false,
+          "stop": 6870.5,
+          "target": 6854.25,
+          "trigger": 6861.375
+        }
+      ],
+      "affected_source_sha256": {
+        "MES_2025-12-04.jsonl": "49536996ff2c4ca1cc0e765b9b821adc0aa973ab2d83d9e5ad798b0e191900b4"
+      },
+      "candidate_count": 19,
+      "changed_rows": {
+        "1": [],
+        "2": [],
+        "3": [],
+        "4": []
+      },
+      "filled_entry_bar_count": 10,
+      "gap_through_count": 0,
+      "same_trigger_bar_both_count": 0,
+      "same_trigger_bar_stop_count": 1,
+      "same_trigger_bar_target_count": 0,
+      "slippage_sensitivity": {
+        "1": {
+          "causal": {
+            "H1": {
+              "cancellations": 6,
+              "fills": 6,
+              "losses": 1,
+              "max_drawdown": 130.615,
+              "n": 12,
+              "net_pnl": 155.685,
+              "no_fill": 6,
+              "profit_factor": 2.1919381388048844,
+              "resolved_fills": 6,
+              "win_rate": 0.8333333333333334,
+              "wins": 5
+            },
+            "H2": {
+              "cancellations": 3,
+              "fills": 4,
+              "losses": 2,
+              "max_drawdown": 96.23,
+              "n": 7,
+              "net_pnl": 8.164999999999992,
+              "no_fill": 3,
+              "profit_factor": 1.0848487997505973,
+              "resolved_fills": 4,
+              "win_rate": 0.5,
+              "wins": 2
+            },
+            "overall": {
+              "cancellations": 9,
+              "fills": 10,
+              "losses": 3,
+              "max_drawdown": 130.615,
+              "n": 19,
+              "net_pnl": 163.85,
+              "no_fill": 9,
+              "profit_factor": 1.7222993674094644,
+              "resolved_fills": 10,
+              "win_rate": 0.7,
+              "wins": 7
+            }
+          },
+          "current": {
+            "H1": {
+              "cancellations": 6,
+              "fills": 6,
+              "losses": 1,
+              "max_drawdown": 130.615,
+              "n": 12,
+              "net_pnl": 155.685,
+              "no_fill": 6,
+              "profit_factor": 2.1919381388048844,
+              "resolved_fills": 6,
+              "win_rate": 0.8333333333333334,
+              "wins": 5
+            },
+            "H2": {
+              "cancellations": 3,
+              "fills": 4,
+              "losses": 2,
+              "max_drawdown": 96.23,
+              "n": 7,
+              "net_pnl": 8.164999999999992,
+              "no_fill": 3,
+              "profit_factor": 1.0848487997505973,
+              "resolved_fills": 4,
+              "win_rate": 0.5,
+              "wins": 2
+            },
+            "overall": {
+              "cancellations": 9,
+              "fills": 10,
+              "losses": 3,
+              "max_drawdown": 130.615,
+              "n": 19,
+              "net_pnl": 163.85,
+              "no_fill": 9,
+              "profit_factor": 1.7222993674094644,
+              "resolved_fills": 10,
+              "win_rate": 0.7,
+              "wins": 7
+            }
+          }
+        },
+        "2": {
+          "causal": {
+            "H1": {
+              "cancellations": 6,
+              "fills": 6,
+              "losses": 1,
+              "max_drawdown": 133.115,
+              "n": 12,
+              "net_pnl": 140.685,
+              "no_fill": 6,
+              "profit_factor": 2.0568681215490363,
+              "resolved_fills": 6,
+              "win_rate": 0.8333333333333334,
+              "wins": 5
+            },
+            "H2": {
+              "cancellations": 3,
+              "fills": 4,
+              "losses": 2,
+              "max_drawdown": 101.23,
+              "n": 7,
+              "net_pnl": -1.835000000000008,
+              "no_fill": 3,
+              "profit_factor": 0.9818729625605057,
+              "resolved_fills": 4,
+              "win_rate": 0.5,
+              "wins": 2
+            },
+            "overall": {
+              "cancellations": 9,
+              "fills": 10,
+              "losses": 3,
+              "max_drawdown": 133.115,
+              "n": 19,
+              "net_pnl": 138.85,
+              "no_fill": 9,
+              "profit_factor": 1.592502506987561,
+              "resolved_fills": 10,
+              "win_rate": 0.7,
+              "wins": 7
+            }
+          },
+          "current": {
+            "H1": {
+              "cancellations": 6,
+              "fills": 6,
+              "losses": 1,
+              "max_drawdown": 133.115,
+              "n": 12,
+              "net_pnl": 140.685,
+              "no_fill": 6,
+              "profit_factor": 2.0568681215490363,
+              "resolved_fills": 6,
+              "win_rate": 0.8333333333333334,
+              "wins": 5
+            },
+            "H2": {
+              "cancellations": 3,
+              "fills": 4,
+              "losses": 2,
+              "max_drawdown": 101.23,
+              "n": 7,
+              "net_pnl": -1.835000000000008,
+              "no_fill": 3,
+              "profit_factor": 0.9818729625605057,
+              "resolved_fills": 4,
+              "win_rate": 0.5,
+              "wins": 2
+            },
+            "overall": {
+              "cancellations": 9,
+              "fills": 10,
+              "losses": 3,
+              "max_drawdown": 133.115,
+              "n": 19,
+              "net_pnl": 138.85,
+              "no_fill": 9,
+              "profit_factor": 1.592502506987561,
+              "resolved_fills": 10,
+              "win_rate": 0.7,
+              "wins": 7
+            }
+          }
+        },
+        "3": {
+          "causal": {
+            "H1": {
+              "cancellations": 6,
+              "fills": 6,
+              "losses": 1,
+              "max_drawdown": 135.615,
+              "n": 12,
+              "net_pnl": 125.685,
+              "no_fill": 6,
+              "profit_factor": 1.9267780112819377,
+              "resolved_fills": 6,
+              "win_rate": 0.8333333333333334,
+              "wins": 5
+            },
+            "H2": {
+              "cancellations": 3,
+              "fills": 4,
+              "losses": 2,
+              "max_drawdown": 106.23,
+              "n": 7,
+              "net_pnl": -11.835000000000008,
+              "no_fill": 3,
+              "profit_factor": 0.8885907935611409,
+              "resolved_fills": 4,
+              "win_rate": 0.5,
+              "wins": 2
+            },
+            "overall": {
+              "cancellations": 9,
+              "fills": 10,
+              "losses": 3,
+              "max_drawdown": 135.615,
+              "n": 19,
+              "net_pnl": 113.85,
+              "no_fill": 9,
+              "profit_factor": 1.470756062767475,
+              "resolved_fills": 10,
+              "win_rate": 0.7,
+              "wins": 7
+            }
+          },
+          "current": {
+            "H1": {
+              "cancellations": 6,
+              "fills": 6,
+              "losses": 1,
+              "max_drawdown": 135.615,
+              "n": 12,
+              "net_pnl": 125.685,
+              "no_fill": 6,
+              "profit_factor": 1.9267780112819377,
+              "resolved_fills": 6,
+              "win_rate": 0.8333333333333334,
+              "wins": 5
+            },
+            "H2": {
+              "cancellations": 3,
+              "fills": 4,
+              "losses": 2,
+              "max_drawdown": 106.23,
+              "n": 7,
+              "net_pnl": -11.835000000000008,
+              "no_fill": 3,
+              "profit_factor": 0.8885907935611409,
+              "resolved_fills": 4,
+              "win_rate": 0.5,
+              "wins": 2
+            },
+            "overall": {
+              "cancellations": 9,
+              "fills": 10,
+              "losses": 3,
+              "max_drawdown": 135.615,
+              "n": 19,
+              "net_pnl": 113.85,
+              "no_fill": 9,
+              "profit_factor": 1.470756062767475,
+              "resolved_fills": 10,
+              "win_rate": 0.7,
+              "wins": 7
+            }
+          }
+        },
+        "4": {
+          "causal": {
+            "H1": {
+              "cancellations": 6,
+              "fills": 6,
+              "losses": 1,
+              "max_drawdown": 138.115,
+              "n": 12,
+              "net_pnl": 110.685,
+              "no_fill": 6,
+              "profit_factor": 1.8013973862361075,
+              "resolved_fills": 6,
+              "win_rate": 0.8333333333333334,
+              "wins": 5
+            },
+            "H2": {
+              "cancellations": 3,
+              "fills": 4,
+              "losses": 2,
+              "max_drawdown": 111.23,
+              "n": 7,
+              "net_pnl": -21.835000000000008,
+              "no_fill": 3,
+              "profit_factor": 0.8036950463004584,
+              "resolved_fills": 4,
+              "win_rate": 0.5,
+              "wins": 2
+            },
+            "overall": {
+              "cancellations": 9,
+              "fills": 10,
+              "losses": 3,
+              "max_drawdown": 138.115,
+              "n": 19,
+              "net_pnl": 88.85,
+              "no_fill": 9,
+              "profit_factor": 1.3563335940163226,
+              "resolved_fills": 10,
+              "win_rate": 0.7,
+              "wins": 7
+            }
+          },
+          "current": {
+            "H1": {
+              "cancellations": 6,
+              "fills": 6,
+              "losses": 1,
+              "max_drawdown": 138.115,
+              "n": 12,
+              "net_pnl": 110.685,
+              "no_fill": 6,
+              "profit_factor": 1.8013973862361075,
+              "resolved_fills": 6,
+              "win_rate": 0.8333333333333334,
+              "wins": 5
+            },
+            "H2": {
+              "cancellations": 3,
+              "fills": 4,
+              "losses": 2,
+              "max_drawdown": 111.23,
+              "n": 7,
+              "net_pnl": -21.835000000000008,
+              "no_fill": 3,
+              "profit_factor": 0.8036950463004584,
+              "resolved_fills": 4,
+              "win_rate": 0.5,
+              "wins": 2
+            },
+            "overall": {
+              "cancellations": 9,
+              "fills": 10,
+              "losses": 3,
+              "max_drawdown": 138.115,
+              "n": 19,
+              "net_pnl": 88.85,
+              "no_fill": 9,
+              "profit_factor": 1.3563335940163226,
+              "resolved_fills": 10,
+              "win_rate": 0.7,
+              "wins": 7
+            }
+          }
+        }
+      }
+    },
+    "MNQ": {
+      "affected_entry_bars": [
+        {
+          "close": 19697.75,
+          "date": "2024-09-18",
+          "direction": "SHORT",
+          "entry_bar_ts": "2024-09-18T09:30:00-04:00",
+          "gap_through": false,
+          "high": 19736.75,
+          "low": 19689.25,
+          "open": 19731.0,
+          "same_bar_both": false,
+          "same_bar_stop": true,
+          "same_bar_target": false,
+          "stop": 19733.0,
+          "target": 19669.25,
+          "trigger": 19698.125
+        }
+      ],
+      "affected_source_sha256": {
+        "MNQ_2024-09-18.jsonl": "a617193557295e77c3810def0b39a4e3ec3d336425ed9e5e79f9cb1c36665619"
+      },
+      "candidate_count": 15,
+      "changed_rows": {
+        "1": [
+          {
+            "causal": {
+              "exit_reason": "STOP",
+              "net_pnl": -71.99,
+              "result": "LOSS"
+            },
+            "current": {
+              "exit_reason": "TARGET",
+              "net_pnl": 55.51,
+              "result": "WIN"
+            },
+            "date": "2024-09-18"
+          }
+        ],
+        "2": [
+          {
+            "causal": {
+              "exit_reason": "STOP",
+              "net_pnl": -72.99,
+              "result": "LOSS"
+            },
+            "current": {
+              "exit_reason": "TARGET",
+              "net_pnl": 54.51,
+              "result": "WIN"
+            },
+            "date": "2024-09-18"
+          }
+        ],
+        "3": [
+          {
+            "causal": {
+              "exit_reason": "STOP",
+              "net_pnl": -73.99,
+              "result": "LOSS"
+            },
+            "current": {
+              "exit_reason": "TARGET",
+              "net_pnl": 53.51,
+              "result": "WIN"
+            },
+            "date": "2024-09-18"
+          }
+        ],
+        "4": [
+          {
+            "causal": {
+              "exit_reason": "STOP",
+              "net_pnl": -74.99,
+              "result": "LOSS"
+            },
+            "current": {
+              "exit_reason": "TARGET",
+              "net_pnl": 52.51,
+              "result": "WIN"
+            },
+            "date": "2024-09-18"
+          }
+        ]
+      },
+      "filled_entry_bar_count": 8,
+      "gap_through_count": 0,
+      "same_trigger_bar_both_count": 0,
+      "same_trigger_bar_stop_count": 1,
+      "same_trigger_bar_target_count": 0,
+      "slippage_sensitivity": {
+        "1": {
+          "causal": {
+            "H1": {
+              "cancellations": 4,
+              "fills": 7,
+              "losses": 2,
+              "max_drawdown": 319.73,
+              "n": 11,
+              "net_pnl": 298.82,
+              "no_fill": 4,
+              "profit_factor": 1.934601069652519,
+              "resolved_fills": 7,
+              "win_rate": 0.7142857142857143,
+              "wins": 5
+            },
+            "H2": {
+              "cancellations": 3,
+              "fills": 1,
+              "losses": 0,
+              "max_drawdown": 0.0,
+              "n": 4,
+              "net_pnl": 134.51,
+              "no_fill": 3,
+              "profit_factor": null,
+              "resolved_fills": 1,
+              "win_rate": 1.0,
+              "wins": 1
+            },
+            "overall": {
+              "cancellations": 7,
+              "fills": 8,
+              "losses": 2,
+              "max_drawdown": 319.73,
+              "n": 15,
+              "net_pnl": 433.33,
+              "no_fill": 7,
+              "profit_factor": 2.3552997841929124,
+              "resolved_fills": 8,
+              "win_rate": 0.75,
+              "wins": 6
+            }
+          },
+          "current": {
+            "H1": {
+              "cancellations": 4,
+              "fills": 7,
+              "losses": 1,
+              "max_drawdown": 247.74,
+              "n": 11,
+              "net_pnl": 426.32,
+              "no_fill": 4,
+              "profit_factor": 2.720836360700735,
+              "resolved_fills": 7,
+              "win_rate": 0.8571428571428571,
+              "wins": 6
+            },
+            "H2": {
+              "cancellations": 3,
+              "fills": 1,
+              "losses": 0,
+              "max_drawdown": 0.0,
+              "n": 4,
+              "net_pnl": 134.51,
+              "no_fill": 3,
+              "profit_factor": null,
+              "resolved_fills": 1,
+              "win_rate": 1.0,
+              "wins": 1
+            },
+            "overall": {
+              "cancellations": 7,
+              "fills": 8,
+              "losses": 1,
+              "max_drawdown": 247.74,
+              "n": 15,
+              "net_pnl": 560.83,
+              "no_fill": 7,
+              "profit_factor": 3.2637846129006216,
+              "resolved_fills": 8,
+              "win_rate": 0.875,
+              "wins": 7
+            }
+          }
+        },
+        "2": {
+          "causal": {
+            "H1": {
+              "cancellations": 4,
+              "fills": 7,
+              "losses": 2,
+              "max_drawdown": 321.73,
+              "n": 11,
+              "net_pnl": 291.82,
+              "no_fill": 4,
+              "profit_factor": 1.9070338482578557,
+              "resolved_fills": 7,
+              "win_rate": 0.7142857142857143,
+              "wins": 5
+            },
+            "H2": {
+              "cancellations": 3,
+              "fills": 1,
+              "losses": 0,
+              "max_drawdown": 0.0,
+              "n": 4,
+              "net_pnl": 133.51,
+              "no_fill": 3,
+              "profit_factor": null,
+              "resolved_fills": 1,
+              "win_rate": 1.0,
+              "wins": 1
+            },
+            "overall": {
+              "cancellations": 7,
+              "fills": 8,
+              "losses": 2,
+              "max_drawdown": 321.73,
+              "n": 15,
+              "net_pnl": 425.33,
+              "no_fill": 7,
+              "profit_factor": 2.3220091380971617,
+              "resolved_fills": 8,
+              "win_rate": 0.75,
+              "wins": 6
+            }
+          },
+          "current": {
+            "H1": {
+              "cancellations": 4,
+              "fills": 7,
+              "losses": 1,
+              "max_drawdown": 248.74,
+              "n": 11,
+              "net_pnl": 419.32,
+              "no_fill": 4,
+              "profit_factor": 2.6857763126155825,
+              "resolved_fills": 7,
+              "win_rate": 0.8571428571428571,
+              "wins": 6
+            },
+            "H2": {
+              "cancellations": 3,
+              "fills": 1,
+              "losses": 0,
+              "max_drawdown": 0.0,
+              "n": 4,
+              "net_pnl": 133.51,
+              "no_fill": 3,
+              "profit_factor": null,
+              "resolved_fills": 1,
+              "win_rate": 1.0,
+              "wins": 1
+            },
+            "overall": {
+              "cancellations": 7,
+              "fills": 8,
+              "losses": 1,
+              "max_drawdown": 248.74,
+              "n": 15,
+              "net_pnl": 552.83,
+              "no_fill": 7,
+              "profit_factor": 3.2225215084023477,
+              "resolved_fills": 8,
+              "win_rate": 0.875,
+              "wins": 7
+            }
+          }
+        },
+        "3": {
+          "causal": {
+            "H1": {
+              "cancellations": 4,
+              "fills": 7,
+              "losses": 2,
+              "max_drawdown": 323.73,
+              "n": 11,
+              "net_pnl": 284.82,
+              "no_fill": 4,
+              "profit_factor": 1.8798072467797236,
+              "resolved_fills": 7,
+              "win_rate": 0.7142857142857143,
+              "wins": 5
+            },
+            "H2": {
+              "cancellations": 3,
+              "fills": 1,
+              "losses": 0,
+              "max_drawdown": 0.0,
+              "n": 4,
+              "net_pnl": 132.51,
+              "no_fill": 3,
+              "profit_factor": null,
+              "resolved_fills": 1,
+              "win_rate": 1.0,
+              "wins": 1
+            },
+            "overall": {
+              "cancellations": 7,
+              "fills": 8,
+              "losses": 2,
+              "max_drawdown": 323.73,
+              "n": 15,
+              "net_pnl": 417.33,
+              "no_fill": 7,
+              "profit_factor": 2.289129830414234,
+              "resolved_fills": 8,
+              "win_rate": 0.75,
+              "wins": 6
+            }
+          },
+          "current": {
+            "H1": {
+              "cancellations": 4,
+              "fills": 7,
+              "losses": 1,
+              "max_drawdown": 249.74,
+              "n": 11,
+              "net_pnl": 412.32,
+              "no_fill": 4,
+              "profit_factor": 2.6509970369183953,
+              "resolved_fills": 7,
+              "win_rate": 0.8571428571428571,
+              "wins": 6
+            },
+            "H2": {
+              "cancellations": 3,
+              "fills": 1,
+              "losses": 0,
+              "max_drawdown": 0.0,
+              "n": 4,
+              "net_pnl": 132.51,
+              "no_fill": 3,
+              "profit_factor": null,
+              "resolved_fills": 1,
+              "win_rate": 1.0,
+              "wins": 1
+            },
+            "overall": {
+              "cancellations": 7,
+              "fills": 8,
+              "losses": 1,
+              "max_drawdown": 249.74,
+              "n": 15,
+              "net_pnl": 544.83,
+              "no_fill": 7,
+              "profit_factor": 3.181588852406503,
+              "resolved_fills": 8,
+              "win_rate": 0.875,
+              "wins": 7
+            }
+          }
+        },
+        "4": {
+          "causal": {
+            "H1": {
+              "cancellations": 4,
+              "fills": 7,
+              "losses": 2,
+              "max_drawdown": 325.73,
+              "n": 11,
+              "net_pnl": 277.82,
+              "no_fill": 4,
+              "profit_factor": 1.852914990943419,
+              "resolved_fills": 7,
+              "win_rate": 0.7142857142857143,
+              "wins": 5
+            },
+            "H2": {
+              "cancellations": 3,
+              "fills": 1,
+              "losses": 0,
+              "max_drawdown": 0.0,
+              "n": 4,
+              "net_pnl": 131.51,
+              "no_fill": 3,
+              "profit_factor": null,
+              "resolved_fills": 1,
+              "win_rate": 1.0,
+              "wins": 1
+            },
+            "overall": {
+              "cancellations": 7,
+              "fills": 8,
+              "losses": 2,
+              "max_drawdown": 325.73,
+              "n": 15,
+              "net_pnl": 409.33,
+              "no_fill": 7,
+              "profit_factor": 2.256654284223129,
+              "resolved_fills": 8,
+              "win_rate": 0.75,
+              "wins": 6
+            }
+          },
+          "current": {
+            "H1": {
+              "cancellations": 4,
+              "fills": 7,
+              "losses": 1,
+              "max_drawdown": 250.74,
+              "n": 11,
+              "net_pnl": 405.32,
+              "no_fill": 4,
+              "profit_factor": 2.616495174284119,
+              "resolved_fills": 7,
+              "win_rate": 0.8571428571428571,
+              "wins": 6
+            },
+            "H2": {
+              "cancellations": 3,
+              "fills": 1,
+              "losses": 0,
+              "max_drawdown": 0.0,
+              "n": 4,
+              "net_pnl": 131.51,
+              "no_fill": 3,
+              "profit_factor": null,
+              "resolved_fills": 1,
+              "win_rate": 1.0,
+              "wins": 1
+            },
+            "overall": {
+              "cancellations": 7,
+              "fills": 8,
+              "losses": 1,
+              "max_drawdown": 250.74,
+              "n": 15,
+              "net_pnl": 536.83,
+              "no_fill": 7,
+              "profit_factor": 3.1409826912339476,
+              "resolved_fills": 8,
+              "win_rate": 0.875,
+              "wins": 7
+            }
+          }
+        }
+      }
+    }
+  },
+  "midpoint": "2025-06-29",
+  "policy_change": {
+    "audit": "trigger bar eligible immediately; pessimistic STOP if entry and stop both touched",
+    "current": "entry trigger bar excluded from stop/T1 resolution",
+    "gap_rule": "pre-armed stop-market: gap-through fills from bar open plus adverse slippage"
+  },
+  "prereg_commit": "f1e08bd56a31ce5fc97866990228ac4516387c3c",
+  "source_cache_contract": "data/replay_polygon_5m/<ROOT>/<ROOT>_<DATE>.jsonl",
+  "status": "AUDIT_ONLY",
+  "study_range": {
+    "end": "2026-06-26",
+    "start": "2024-07-02"
+  }
+}

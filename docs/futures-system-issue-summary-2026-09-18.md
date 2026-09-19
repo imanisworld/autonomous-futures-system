@@ -24,6 +24,7 @@ There is no current blocker to passive 1m/5m/15m evidence collection. There are 
 - **Watcher false journal stall:** #760 limits the main-journal causal bar clock to MNQ/MES decision-path 15m files. The exact live-source one-hunk backport is installed at SHA `7d29872d1c85`; watcher has zero BLOCKED findings and the #759 restart is recorded as sanctioned.
 - **Collector-census off-session false failures:** #764 adds `OFF_SESSION` handling for cadence-driven CME equity futures heartbeats and prevents expected weekend Daily 2-2 carry from being mislabeled as stale-feed exposure. **80 adjacent tests passed.** This is read-only monitoring/reporting code and does not require a runtime restart.
 - **R5 entry-conditioning reproduction + ORB A/B:** #763 deterministically reproduces the preserved MNQ/MES R5 audit from exact hash-gated inputs. #768 then completes the preregistered ORB false-break entry-architecture A/B. Signal-close is **rejected as a fix**: MNQ +0.0111R/all → -0.0596R/all; MES -0.0416R/all → -0.0847R/all; both halves negative on both instruments; 1/2/3-tick stress worsens further. All five preregistered support gates failed. **NO RUNTIME CHANGE / MIXED_OR_UNSUPPORTED.** Further ORB redesign would be a new strategy hypothesis; the separate 2-2 entry-conditioning question remains untested.
+- **2026-09-19 causal/mechanics audit:** Miyagi has a second proven replay defect after the completed-hour fix: its trigger-touch bar is excluded from immediate stop/T1 resolution. One frozen MNQ row flips WIN→LOSS; at 2 ticks MNQ falls from +$552.83 / PF 3.223 to **+$425.33 / PF 2.322**. Generic futures 2-1-2/1-2-2 has causal reconstructed paper math but **no operational pre-armed broker parity**; late non-Paper submission correctly fails closed. No new HTF lookahead leak was found.
 
 ## Current blockers
 
@@ -83,15 +84,13 @@ Still open:
 
 The timing audit does not authorize an execution path or risk-policy change.
 
-### 4. Miyagi timing and sample
+### 4. Miyagi trigger-bar replay identity
 
-Only reopen if strategically necessary.
-Current sample is too small and timing parity is not proven under the new standard.
+The completed-hour lookahead is repaired, but the replay still violates the written immediate-stop contract by excluding the trigger-touch 5m bar from stop/T1 resolution. The frozen causal A/B changes MNQ 2024-09-18 from a later TARGET win to a pessimistic same-trigger-bar STOP loss. At 2 ticks the corrected MNQ cell is 8 fills, 6W/2L, +$425.33, PF 2.322; H2 remains only one fill. **Fix/regenerate the research replay before trusting the old headline.** Runtime remains parked.
 
-### 5. MES 1-2-2 remains thin
+### 5. MES 1-2-2 remains thin and lacks operational execution parity
 
-Forward accounting edge is slight and stronger slippage turns it negative.
-Continue evidence; do not retune from this sample.
+Forward accounting edge is slight and stronger slippage turns it negative. The shared state machine correctly reconstructs a hypothetical pre-armed next-bar order, including gaps and same-bar outcomes, but the runner does not actually arm a broker order before that watched 15m bar. Paper/replay evidence is therefore **causal reconstructed evidence, not broker-execution parity**. Non-Paper submission fails closed. Continue evidence; do not retune from this sample or grant execution authority.
 
 ### 6. Cross-instrument evidence is observation only
 
@@ -102,10 +101,10 @@ M2K/MGC/MCL/MBT now have better 1m coverage, but this does not justify strategy 
 - **MNQ 4HR Re-Trigger:** PROMISING BUT UNPROVEN / PAPER ONLY.
 - **MES 4HR:** BROKEN / WAIT.
 - **MNQ 3-2-2 First Live:** **PROMISING BUT UNPROVEN**; corrected pre-armed timing survives 3-tick stress with both halves positive, but n=34 is thin and current real-account stop/R:R architecture remains incompatible.
-- **Miyagi:** thin / parked; #776 repaired the completed-hour lookahead and regenerated corrected evidence, but sample remains too small for runtime work.
+- **Miyagi:** **PROMISING BUT UNPROVEN / PARKED / REPLAY DEFECT FOUND**; #776 repaired completed-hour lookahead, but the 2026-09-19 causal/mechanics audit proves trigger-bar stop/T1 suppression still overstates one MNQ outcome. Research replay must be corrected/regenerated before further trust.
 - **Daily 2-2 completed-close / favorable-pullback:** PROMISING BUT UNPROVEN / PAPER ONLY; activation baseline reproduced exactly and current-CME-day variant remains positive, but the 34 fills are not first-touch evidence.
 - **Daily 2-2 first-touch under current rules:** BROKEN / ZERO ADMISSIBLE FILLS at 1/2/3 adverse entry ticks because fixed planned 2R + actual-fill R:R >=2 is mechanically incompatible with adverse touch slippage.
-- **MES 15m 1-2-2:** PROMISING BUT UNPROVEN / thin.
+- **MES 15m 1-2-2:** PROMISING BUT UNPROVEN / thin / **PAPER EVIDENCE ONLY**; reconstructed pre-armed math is causal, but operational execution parity is absent because no broker order is armed before the watched bar.
 - **Transition:** WAIT / fails required slippage robustness.
 - **ORB Reclaim current:** BROKEN.
 - **ORB Breakout:** BROKEN.
@@ -157,7 +156,7 @@ Do not restart:
 4. Continue the 3-2-2 First Live 1m observer under `docs/prereg-forward-one-min-trigger-evidence-review-2026-09-18.md`; no paper-fill discussion before the preregistered per-strategy sample/safety gate.
 5. Refine a strategy only when evidence isolates a concrete mechanism defect. Do not tune targets, stops, risk caps, or session filters merely to improve results.
 6. Keep LC_ZONE v1 / 4HR zone-target changes on HOLD; only reopen zone design under a new preregistration.
-7. Miyagi remains WAIT after #776's timing correction; sample is too small for runtime work.
+7. Correct the **Miyagi research replay** trigger-bar/gap semantics, regenerate the same frozen population, and retire superseded Miyagi headline metrics. No runtime wiring or deployment.
 8. Continue passive six-root context collection. Keep Daily completed-close evidence in its existing epoch and do not mix it with any future first-touch study.
 9. First natural 4HR/3-2-2 1m event remains the next forward execution-mechanism review.
 
