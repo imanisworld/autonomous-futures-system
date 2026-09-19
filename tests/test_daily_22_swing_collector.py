@@ -31,12 +31,10 @@ def _bar(ts, o, h, l, c):
 
 
 def _fixture_bars():
-    # Trading day 9/7: H100/L90.
-    d1 = datetime(2026, 9, 6, 18, 0, tzinfo=ET)
-    # Trading day 9/8: H110/L92 -> 2U relative to 9/7.
-    d2 = datetime(2026, 9, 7, 18, 0, tzinfo=ET)
-    # Trading day 9/9 first-break bar: takes 110 but closes back at 109.5.
-    d3 = datetime(2026, 9, 8, 18, 0, tzinfo=ET)
+    # Ordinary (non-holiday) week: trade dates 9/14, 9/15, 9/16.
+    d1 = datetime(2026, 9, 13, 18, 0, tzinfo=ET)
+    d2 = datetime(2026, 9, 14, 18, 0, tzinfo=ET)
+    d3 = datetime(2026, 9, 15, 18, 0, tzinfo=ET)
     return [
         _bar(d1, 95, 100, 90, 96),
         _bar(d1 + timedelta(minutes=5), 96, 99, 91, 97),
@@ -71,6 +69,12 @@ def test_globex_trading_day_and_maintenance_gap():
     assert lane._trading_day(datetime(2026, 9, 8, 18, 0, tzinfo=ET)).isoformat() == "2026-09-09"
     assert lane._trading_day(datetime(2026, 9, 9, 16, 55, tzinfo=ET)).isoformat() == "2026-09-09"
     assert lane._trading_day(datetime(2026, 9, 9, 17, 30, tzinfo=ET)) is None
+
+
+def test_labor_day_reopen_keeps_pine_cme_trade_date():
+    assert lane._trading_day(datetime(2026, 9, 6, 18, 0, tzinfo=ET)).isoformat() == "2026-09-08"
+    assert lane._trading_day(datetime(2026, 9, 7, 18, 0, tzinfo=ET)).isoformat() == "2026-09-08"
+    assert lane._trading_day(datetime(2026, 9, 8, 18, 0, tzinfo=ET)).isoformat() == "2026-09-09"
 
 
 def test_daily_22_uses_first_boundary_break_and_never_backfills(monkeypatch):

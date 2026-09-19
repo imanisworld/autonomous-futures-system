@@ -38,6 +38,7 @@ from zoneinfo import ZoneInfo
 
 from context import wide_stop_ledger_paper as wide_contract
 from context.bar_history import _parse_dt
+from context.cme_trading_day import cme_trading_day
 from execution.broker_interface import BracketOrder
 from execution.paper_broker import NextBarOHLC, PaperBroker
 from strategy.strat_classifier import TWO_DOWN, TWO_UP, StratBar, classify_bar
@@ -163,9 +164,7 @@ def _trading_day(ts: datetime) -> Optional[date]:
     clock = local.time().replace(tzinfo=None)
     if time(17, 0) <= clock < time(18, 0):
         return None
-    if clock >= time(18, 0):
-        return local.date() + timedelta(days=1)
-    return local.date()
+    return cme_trading_day(ts, INSTRUMENT)
 
 
 def _daily_sessions(bars_5m: list[dict]) -> dict[date, dict[str, Any]]:
