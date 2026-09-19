@@ -1,6 +1,8 @@
 # Options trigger-time refetch comparison — 2026-09-18
 
-## Verdict
+> **Current-state note:** PR #761 later classified the separate pre-registered first-sight family-persistence lane as `NO LONGER SHOWING EXCESS`. Current overall 212R classification is **UNPROVEN / WAIT**. The causal trigger-time comparison below remains valid and is preserved as study-local evidence.
+
+## Study-local verdict
 
 **PROMISING BUT UNPROVEN / WAIT**
 

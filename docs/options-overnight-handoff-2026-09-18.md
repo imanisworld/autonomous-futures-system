@@ -15,7 +15,7 @@ At this checkpoint, `strat_212_reversal_30m_options` was **BLOCKED / WAIT**, no 
 
 Subsequent work completed the shared selector/quote/fill/risk infrastructure, established the production selector authority and replay evidence boundary, corrected the 212R trigger clock and source geometry, proved exact historical SIP trigger-cross timestamps for the frozen 81, and built the observation-only prospective 212R collector.
 
-The current 212R verdict remains **PROMISING BUT UNPROVEN / WAIT**, but for different reasons than this historical checkpoint. In particular:
+The current 212R verdict is **UNPROVEN / WAIT**. The earlier `PROMISING BUT UNPROVEN` wording is superseded by PR #761's pre-registered three-session first-sight result, which classifies 212R as `NO LONGER SHOWING EXCESS`. That does not resolve the separate corrected causal-trigger option lane. Current blockers remain:
 
 - historical exact option replay remains DATA BLOCKED on causal historical Delta and contract-level OI;
 - prospective collector code is merged but not deployed/scheduled;

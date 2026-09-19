@@ -68,4 +68,4 @@ Do **not** tune V1 from this result.
 
 The previously separate Daily/4H horizon-compatibility question remains open. For 212R specifically, prospective option evidence remains blocked on recent consolidated-SIP access, and historical exact option replay remains DATA BLOCKED on causal historical Delta and contract-level open interest.
 
-**212R remains WAIT / promising but unproven.**
+**Current overall 212R classification: UNPROVEN / WAIT.** PR #761 later classified the separate first-sight family-persistence lane as `NO LONGER SHOWING EXCESS`. This mixed-cohort target-width study remains unchanged and is not a 212R-specific expectancy test.

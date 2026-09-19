@@ -160,4 +160,4 @@ This was a read-only historical market-data audit.
 
 No scanner activation, strategy activation, risk reservation, broker/account endpoint, order route, DEMO trade, or live trade was added or used.
 
-**Current strategy classification: PROMISING BUT UNPROVEN / WAIT.**
+**Current overall strategy classification: UNPROVEN / WAIT.** The exact causal trigger timestamp/price proof in this document remains valid. PR #761 later classified the separate first-sight family-persistence lane as `NO LONGER SHOWING EXCESS`; that does not invalidate the trigger-time evidence.

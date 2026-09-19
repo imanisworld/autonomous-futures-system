@@ -127,6 +127,10 @@ Historical Delta and contract-level open interest remain separate blockers for e
 
 ## Classification
 
-**212R: PROMISING BUT UNPROVEN / WAIT.**
+**212R: UNPROVEN / WAIT.**
+
+PR #761 subsequently closed the separate pre-registered three-session **first-sight family-persistence** question: 47 prospective 212R episodes across 3 sessions produced an ex-opening matched-baseline excess of **-4.2 pp**, so that lane is `NO LONGER SHOWING EXCESS`. This does not answer the corrected exact-trigger collector lane in this document, but it removes the earlier retrospective first-sight excess as prospective support.
+
+The operational verdict here is unchanged: **HOLD / do not deploy exact-SIP collector v0.3 under the current real-time SIP entitlement.**
 
 No proof, no trade.
