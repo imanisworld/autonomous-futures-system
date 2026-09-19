@@ -27,7 +27,14 @@ w = _load_watcher()
 NOW = datetime(2026, 9, 5, 16, 0, tzinfo=timezone.utc)
 
 
-def _check_runtime(tmp_path: Path, monkeypatch, *, newer_15m_bar: bool, legacy_state: bool = False):
+def _check_runtime(
+    tmp_path: Path,
+    monkeypatch,
+    *,
+    newer_15m_bar: bool,
+    legacy_state: bool = False,
+    newer_collection_only_bar: bool = False,
+):
     log_dir = tmp_path / "logs"
     log_dir.mkdir()
     release_dir = tmp_path / "release"
@@ -44,7 +51,16 @@ def _check_runtime(tmp_path: Path, monkeypatch, *, newer_15m_bar: bool, legacy_s
     current_bar_mtime = baseline_bar_mtime + (900 if newer_15m_bar else 0)
     os.utime(bar, (current_bar_mtime, current_bar_mtime))
 
-    # Fresh 5m traffic is deliberately outside the top-level bars_*.jsonl glob.
+    # Collection-only roots also write top-level 15m bar files, but never enter
+    # process_alert / the main decision journal. They must not drive the stall
+    # check even when newer than the last journaled MNQ/MES decision bar.
+    if newer_collection_only_bar:
+        collection_bar = log_dir / "bars_MBT_2026-09-05.jsonl"
+        collection_bar.write_text('{"timeframe":"15m"}\n', encoding="utf-8")
+        collection_mtime = (NOW - timedelta(minutes=1)).timestamp()
+        os.utime(collection_bar, (collection_mtime, collection_mtime))
+
+    # Fresh 5m traffic is deliberately outside the top-level decision-bar scan.
     tf5m = log_dir / "tf5m"
     tf5m.mkdir()
     five_min_bar = tf5m / "bars_MNQ.jsonl"
@@ -127,6 +143,20 @@ def _check_runtime(tmp_path: Path, monkeypatch, *, newer_15m_bar: bool, legacy_s
 
 def test_five_minute_only_traffic_does_not_report_journal_stall(tmp_path, monkeypatch):
     _, findings, tick = _check_runtime(tmp_path, monkeypatch, newer_15m_bar=False)
+
+    assert "journal_not_advancing" not in {item["key"] for item in findings.items}
+    assert tick["runtime"]["fifteen_min_bar_since_journal_advance"] is False
+
+
+def test_collection_only_fifteen_minute_bar_does_not_report_main_journal_stall(
+    tmp_path, monkeypatch
+):
+    _, findings, tick = _check_runtime(
+        tmp_path,
+        monkeypatch,
+        newer_15m_bar=False,
+        newer_collection_only_bar=True,
+    )
 
     assert "journal_not_advancing" not in {item["key"] for item in findings.items}
     assert tick["runtime"]["fifteen_min_bar_since_journal_advance"] is False
