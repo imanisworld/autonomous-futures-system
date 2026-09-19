@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+import ops.project_check.daily as daily_module
 from ops.project_check.daily import _normalize, _overall_blockers, _parse_strategy_inventory, _strategy_source_of_truth, build_daily_report
 
 
@@ -199,6 +200,44 @@ def test_strategy_source_of_truth_unmatched_rows_reported_not_dropped(tmp_path: 
     assert result["drift_findings"] == []
     assert len(result["unmatched_inventory_rows"]) == 1
     assert result["unmatched_inventory_rows"][0]["name"] == "12HR Miyagi"
+
+
+def test_build_daily_report_passes_resolved_journal_dir_to_runtime_and_trade_chain(
+    repo: Path, tmp_path: Path, monkeypatch
+) -> None:
+    external_logs = tmp_path / "shared-logs"
+    external_logs.mkdir()
+    captured = {}
+
+    def fake_runtime_snapshot(*, repo_root, risk_rules_path, log_dir):
+        captured["runtime_log_dir"] = Path(log_dir)
+        return {
+            "active_lanes": {"active_lane_summary": {}},
+            "live_box_drift": {"status": "ok"},
+            "risk_rules_load_error": None,
+        }
+
+    def fake_trade_chain_report(*, journal_dir, repo_root, use_checkpoint, advance_checkpoint):
+        captured["trade_chain_log_dir"] = Path(journal_dir)
+        return {"status": "PASS", "summary": {"attempts": 0}}
+
+    monkeypatch.setattr(daily_module, "runtime_snapshot", fake_runtime_snapshot)
+    monkeypatch.setattr(daily_module, "build_trade_chain_report", fake_trade_chain_report)
+    monkeypatch.setattr(
+        daily_module,
+        "_strategy_source_of_truth",
+        lambda **kwargs: {"checked": True, "drift_findings": []},
+    )
+
+    build_daily_report(
+        repo_root=repo,
+        journal_dir=external_logs,
+        use_checkpoint=False,
+        advance_checkpoint=False,
+    )
+
+    assert captured["runtime_log_dir"] == external_logs
+    assert captured["trade_chain_log_dir"] == external_logs
 
 
 def test_build_daily_report_smoke(repo: Path) -> None:
