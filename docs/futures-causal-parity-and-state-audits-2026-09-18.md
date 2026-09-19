@@ -2,6 +2,21 @@
 
 **Status:** AUDIT RECORD. Read-only except PR #771 (a journal-accounting repair). No strategy, risk, gate, threshold, execution, env or deploy change. Nothing here validates a strategy.
 
+### Reconciliation after #775–#778
+
+Later same-session proof supersedes several statements below while preserving the original audit trail:
+
+- #771 is merged repo-side: 3-2-2 First Live journal/state persistence is fixed, but the deployed runtime still predates it.
+- #775 is merged repo-side: Daily 2-2 CME holiday trading-day identity is fixed.
+- #776 is merged repo-side: Miyagi completed-hour lookahead is fixed and corrected evidence was regenerated; Miyagi remains unproven because sample/validation are still insufficient.
+- #778 is merged as `d15ac1f`: Daily 2-2 now has its own proof-critical epoch, fail-closed persisted-state loading, and epoch/SHA provenance on new evidence rows. Focused regression was 100/100 and GitHub CI/CodeQL were green. It is not deployed; the existing Daily epoch must be preserved on any future sanctioned release.
+- Generic 2-1-2/1-2-2 does **not** have the post-close IOC defect described in §2 below. Direct runner verification shows the shared **15m** state machine models a pre-armed stop fill for paper/replay, while `webhook/runner.py` explicitly refuses to submit a substitute live-broker order after the watched bar. The remaining limitation is that no real broker order was armed ahead of the bar; this evidence does not authorize live execution.
+- Daily 2-2 **does** retain a completed-5m IOC timing limitation, and its configured tolerance is **8 ticks**, not 32. Five observed continuation triggers through 2026-09-18 closed 25/116/2 ticks favorably and 12/8 ticks adversely versus the structural trigger. The 12-tick case exceeded tolerance (while already blocked by an open swing); the 8-tick case landed exactly at tolerance and then failed the 2R gate. This is enough to prove timing can alter admission/R:R, not enough to estimate expectancy.
+- The running box remains immutable `ac2b117ec1f9`; release integrity was re-verified OK across 1,310 files with `LIVE_TRADING_ENABLED=false`, `TRADOVATE_ENV=demo`, `MAX_CONTRACTS_HARD_CAP=1`, and `SCHEDULE_MODE=always_on_shadow`. No deploy/restart occurred.
+- No natural 4HR/3-2-2 1m observer event exists yet; that proof remains **WAITING FOR NATURAL EVIDENCE**.
+
+Where the historical sections below conflict with this reconciliation block, this block governs current status.
+
 Operator request (2026-09-18 late): fix the 3-2-2 journal/state-persistence omission; finish causality/timing audits on the remaining higher-timeframe families; finish account-feasibility / risk-architecture checks (3-2-2 stop / R:R vs account rules); audit Daily 2-2 epoch/state coupling before treating its evidence as promotion-grade; do the broader live ↔ replay causal parity audit (HTF feature construction, timestamps, session boundaries, formula identity).
 
 ## 1. 3-2-2 First Live journal/state omission — FIXED in PR #771 (not deployed)

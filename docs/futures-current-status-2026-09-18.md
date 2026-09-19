@@ -6,6 +6,17 @@ This is the concise operator-facing source of truth for the futures system as of
 
 **PAPER / SHADOW / DEMO EVIDENCE ONLY. NO LIVE EXECUTION APPROVED.**
 
+### Late-session reconciliation — repo `d15ac1f`
+
+- #771 merged: 3-2-2 First Live journal/state persistence repaired.
+- #775 merged: Daily 2-2 CME holiday trading-day identity repaired.
+- #776 merged: Miyagi completed-hour lookahead repaired; Miyagi remains unproven.
+- #778 merged: Daily 2-2 independent epoch identity, fail-closed state loading, and epoch/SHA provenance repaired. CI and CodeQL green; **not deployed**.
+- Generic 2-1-2/1-2-2 does not need a decision-close IOC repair: its shared 15m paper/replay path carries a causal pre-armed stop fill; a live-broker substitute is explicitly refused.
+- Daily 2-2 still has a real completed-5m IOC timing limitation. Five observed continuation triggers show 25/116/2 favorable ticks and 12/8 adverse ticks of close-vs-trigger displacement; tolerance is 8 ticks.
+- Runtime was re-verified unchanged on immutable `ac2b117ec1f9`: release integrity OK (1,310 files), Tradovate demo, live trading false, one-contract hard cap, shadow schedule. No deploy or restart occurred.
+- No natural 4HR/3-2-2 1m observer event exists yet. That item remains **WAITING FOR NATURAL EVIDENCE**.
+
 The system is materially safer and more testable than it was at the start of the week, but no strategy is validated. The strongest current strategy lead is MNQ 4HR Re-Trigger, and even that remains **PROMISING BUT UNPROVEN** after correcting its entry-timing realism.
 
 Active deployed futures release verified on the box:
