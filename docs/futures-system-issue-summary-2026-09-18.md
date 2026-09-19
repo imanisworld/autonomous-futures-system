@@ -148,12 +148,12 @@ Do not restart:
 
 ## Next work
 
-1. **No deployment/restart first.** The verified futures box remains healthy at `6d5b224`; #751/#754 are offline qualification/replay tooling and do not require runtime promotion.
+1. **No deployment/restart first.** The verified futures box remains healthy at minimal release `ac2b117ec1f9`; #759 response-proof is already deployed, #760 is already installed in the read-only watcher, and #764 is merged read-only census/reporting code that does not justify another restart.
 2. Let natural MNQ 4HR 1m armed-trigger evidence accumulate and specifically test the previously proven late-entry mechanism: correct arm, true 1m touch time, correct prior-completed 1H stop anchor, dedupe, and no stale 5m-close dependence.
 3. Continue the 3-2-2 First Live 1m observer under `docs/prereg-forward-one-min-trigger-evidence-review-2026-09-18.md`; no paper-fill discussion before the preregistered per-strategy sample/safety gate.
 4. Refine a strategy only when evidence isolates a concrete mechanism defect. Do not tune targets, stops, risk caps, or session filters merely to improve results.
 5. Keep LC_ZONE v1 / 4HR zone-target changes on HOLD; only reopen zone design under a new preregistration.
 6. Miyagi timing audit only if that parked strategy is reopened.
-7. Continue passive six-root context collection.
+7. Continue passive six-root context collection. Direct post-session audit: wide-stop 4HR/3-2-2 remain flat with zero fills, Daily 2-2 is flat/not halted, MES 1-2-2 is still journaling, Asia D+EMA is actively producing candidate/outcome rows, cross-instrument observation has 2,437 rows across all six roots, and no natural 4HR/3-2-2 1m observer event exists yet.
 
 No live expansion.
