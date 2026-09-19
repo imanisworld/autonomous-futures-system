@@ -341,6 +341,20 @@ Target-geometry ablation on the full 2-1-2 continuation population, first-hour h
 
 The remaining uncertainty is primarily **operational proof + strategy evidence**, not another speculative feature build.
 
+### Weekend stop point — 2026-09-19
+
+The options lane is at a deliberate evidence-collection stop point for the weekend. No additional options deployment or cleanup is required before Monday unless a read-only audit finds drift or a defect.
+
+- `main` was clean and synchronized after the 1-2-2 deployment documentation merged; options PRs from this lane were closed/merged.
+- `122-IEX-E1` is deployed as a separate observation-only service on immutable release `36e73f1981850b66b043d849ce877c15bd1ab3e7`; its timer is enabled for Monday collection.
+- the closed-session deployment proof succeeded without creating synthetic evidence, and the futures/options-scanner services were not restarted by that deployment.
+- the next legitimate 1-2-2 work item is **natural RTH evidence**, not another build or parameter change.
+- V1 remains a separate natural-collection lane; do not tune or redeploy it merely to absorb research code.
+- 212R remains `UNPROVEN / WAIT`; its exact-SIP collector is not deployed and historical exact option replay remains blocked on causal historical Delta + contract-level OI.
+- do not delete or alter unrelated concurrent futures worktrees/branches as options cleanup.
+
+A read-only state audit is appropriate before the next operator session; any defect/drift should be reported precisely before changing code, services, cadence, thresholds, source policy, V1, risk, broker, or order state.
+
 ## Next action
 
 There are now four separate evidence tracks and they must not be conflated:

@@ -3,9 +3,11 @@
 > **SUPERSEDED.** This file records the state of the earlier #667 shared-infrastructure build and is retained for provenance only. It is **not** a current options status or work queue.
 >
 > Current authorities:
-> - `docs/options-current-state-handoff.md` — overall options lane;
+> - `docs/options-current-state-handoff.md` — overall options lane and current weekend stop point;
+> - `docs/options-122-prospective-collector-preregistration-2026-09-18.md` — frozen `122-IEX-E1` policy;
+> - `docs/options-122-prospective-deployment-2026-09-18.md` — deployed 1-2-2 observation-only release / first-proof gate;
 > - `docs/options-212r-current-blockers-2026-09-18.md` — 212R blocker / next-gate authority;
-> - `docs/options-212r-prospective-collector-2026-09-18.md` — prospective collector design/evidence boundary.
+> - `docs/options-212r-prospective-collector-2026-09-18.md` — 212R prospective collector design/evidence boundary.
 >
 > The claims below that #667 was open, Public executable timestamps were unproven, selector/fill replay parity was outstanding, or the 212R prospective collector had not been built are historical claims from that checkpoint. They must not be used to reopen completed infrastructure.
 
