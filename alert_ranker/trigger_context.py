@@ -12,9 +12,19 @@ from .coverage_observer import EMA_PERIOD, SymbolSeries
 from .session_calendar import Session
 
 
+TRIGGER_CONTEXT_CUTOFF_BASIS = "start_of_first_crossing_5m_bucket"
+COMPLETED_ALIGNMENT_BASIS = "completed_30m_plus_prior_completed_daily"
+DEVELOPING_PROXY_BASIS = (
+    "completed_30m_derived_htf_proxy_excludes_trigger_bucket"
+)
+
+
 @dataclass(frozen=True)
 class TriggerAlignmentSnapshot:
     cutoff: str
+    cutoff_basis: str
+    completed_alignment_basis: str
+    developing_alignment_basis: str
     direction: str
     desired_trend: str
     desired_candle: str
@@ -75,6 +85,12 @@ def _prior_daily_type(series: SymbolSeries, session: Session) -> str | None:
 
 
 def _developing_daily_type(series: SymbolSeries, session: Session, cutoff: datetime) -> str | None:
+    """Developing daily proxy built only from completed 30m bars before cutoff.
+
+    Despite the legacy helper name, this deliberately excludes the partial
+    trigger-containing 30m bar and therefore is not exact live-at-trigger
+    daily state.
+    """
     prior_days = [series.by_session[item.date] for item in series.sessions if item.date < session.date and item.date in series.by_session]
     previous_candles = [candle for candle in (build_session_candle(day) for day in prior_days) if candle is not None]
     if not previous_candles:
@@ -88,6 +104,12 @@ def _developing_daily_type(series: SymbolSeries, session: Session, cutoff: datet
 
 
 def _developing_hourly_type(series: SymbolSeries, session: Session, cutoff: datetime) -> str | None:
+    """Developing hourly proxy built only from completed 30m bars before cutoff.
+
+    The current trigger-containing 30m interval is excluded. This is a causal
+    completed-data proxy, not an exact partial-hour snapshot at the intrabar
+    trigger instant.
+    """
     point = cutoff.astimezone(timezone.utc)
     current = [bar for bar in series.by_session.get(session.date, ()) if bar.start_utc + MINUTE_30.delta <= point]
     if len(current) < 3:
@@ -130,7 +152,11 @@ def alignment_at_trigger(ticker: SymbolSeries, session: Session, cutoff: datetim
     completed_failures = tuple(name for name, ok in completed_checks if not ok)
     developing_failures = tuple(name for name, ok in developing_checks if not ok)
     return TriggerAlignmentSnapshot(
-        cutoff=cutoff.astimezone(timezone.utc).isoformat(), direction=direction,
+        cutoff=cutoff.astimezone(timezone.utc).isoformat(),
+        cutoff_basis=TRIGGER_CONTEXT_CUTOFF_BASIS,
+        completed_alignment_basis=COMPLETED_ALIGNMENT_BASIS,
+        developing_alignment_basis=DEVELOPING_PROXY_BASIS,
+        direction=direction,
         desired_trend=desired_trend, desired_candle=desired_candle,
         spy_trend=spy_trend, qqq_trend=qqq_trend,
         completed_hourly_type=completed_hourly, prior_daily_type=prior_daily,
