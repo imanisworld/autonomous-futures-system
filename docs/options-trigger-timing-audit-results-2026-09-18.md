@@ -8,6 +8,14 @@ profitability or promotion evidence.
 
 Audit identity: `OPTIONS_STRAT_TRIGGER_TIMING_AUDIT / trigger-audit-v0.1`
 
+### Precision correction after #720/#722
+
+The audit script in #721 performed its own historical provider refetch. The qualification-safe source for subsequent work is now the separately frozen/hash-verified SIP snapshot from #720 plus the frozen `cov-v0.1` observer DB consumed by #722.
+
+The committed JSON summary reports context passes across **all 560 trigger-time rows**: 26 completed-only and 9 legacy `developing_*`. The comparison figures below report the **506 rows that also have a frozen old close-classified event**: 22 completed-only and 8 legacy `developing_*`. Those are different denominators, not contradictory results.
+
+The legacy `developing_*` fields are **not exact live developing HTF state**. They are a causal proxy assembled only from 30-minute bars completed before the first crossing 5-minute bucket; the trigger-containing 30-minute interval is excluded. New evidence labels this basis `completed_30m_derived_htf_proxy_excludes_trigger_bucket`.
+
 Window: 2026-09-09 through 2026-09-15 (5 NYSE sessions)
 
 Universe: frozen primary 20 symbols:

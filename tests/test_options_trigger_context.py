@@ -45,6 +45,11 @@ def test_snapshot_is_causal_and_developing_daily_is_explicit():
     snap = alignment_at_trigger(ticker, session, cutoff, direction="LONG", spy=spy, qqq=qqq)
     assert snap.cutoff == cutoff.isoformat()
     assert snap.developing_daily_type is not None
+    assert snap.cutoff_basis == "start_of_first_crossing_5m_bucket"
+    assert snap.completed_alignment_basis == "completed_30m_plus_prior_completed_daily"
+    assert snap.developing_alignment_basis == (
+        "completed_30m_derived_htf_proxy_excludes_trigger_bucket"
+    )
 
 
 def test_missing_index_context_fails_explicitly():
