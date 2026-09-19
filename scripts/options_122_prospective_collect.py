@@ -382,8 +382,6 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
     armed_seen, terminal_seen, fingerprints, reconciled = _load_state(journal)
     started = datetime.now(timezone.utc)
     session = nyse_session_for(started.date())
-    if session is None:
-        raise RuntimeError("not_a_nyse_session")
     tickers = tuple(dict.fromkeys(t.upper() for t in (args.ticker or PRIMARY_20)))
     summary = {
         "collector_id": COLLECTOR_ID, "collector_version": COLLECTOR_VERSION,
@@ -395,6 +393,14 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
         "option_evidence_captured": 0, "option_evidence_blocked": 0, "data_blocked": 0,
         "claims_not_made": ["strategy profitability", "strategy stop/target", "trade authorization", "DEMO eligibility"],
     }
+    if session is None:
+        summary["status"] = "CLOSED_SESSION"
+        completed = datetime.now(timezone.utc)
+        summary["completed_at"] = completed.isoformat()
+        summary["cycle_seconds"] = round((completed - started).total_seconds(), 3)
+        summary["cycle_over_cadence"] = False
+        return summary
+
     if started < session.open.astimezone(timezone.utc) or started >= session.close.astimezone(timezone.utc):
         recon = await _reconcile_pending(
             journal=journal, terminal=terminal_seen, reconciled=reconciled,

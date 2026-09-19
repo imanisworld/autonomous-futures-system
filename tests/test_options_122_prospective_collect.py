@@ -105,3 +105,23 @@ def test_systemd_unit_is_observation_only_and_policy_pinned():
     assert "broker" not in exec_line.lower()
     assert "order" not in exec_line.lower()
     assert "OnCalendar=Mon..Fri *-*-* 09..16:*:00 America/New_York" in timer
+
+
+def test_closed_session_is_not_an_error(monkeypatch, tmp_path):
+    import argparse
+    import asyncio
+    import scripts.options_122_prospective_collect as mod
+
+    monkeypatch.setattr(mod, "nyse_session_for", lambda _day: None)
+    args = argparse.Namespace(
+        env_file=None,
+        ticker=["SPY"],
+        journal=str(tmp_path / "j.jsonl"),
+        raw_trade_dir=str(tmp_path / "raw"),
+        max_capture_lag_seconds=mod.DEFAULT_MAX_CAPTURE_LAG_SECONDS,
+        dry_run=True,
+    )
+    result = asyncio.run(mod.run(args))
+    assert result["status"] == "CLOSED_SESSION"
+    assert result["resolutions_written"] == 0
+    assert result["option_evidence_captured"] == 0
