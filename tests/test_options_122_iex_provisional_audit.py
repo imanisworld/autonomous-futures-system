@@ -137,3 +137,43 @@ def test_summary_counts_confirmed_recall_and_false_provisional():
     assert summary["exact_sip_substitute"] is False
 
 
+
+def test_committed_all_arm_result_matches_preregistered_population_and_verdict():
+    import json
+    from pathlib import Path
+
+    payload = json.loads(
+        Path("data/options_122_iex_provisional_audit_2026_09_18/result.json").read_text()
+    )
+    summary = payload["summary"]
+    assert summary["arms"] == 186
+    assert summary["sip_class_counts"] == {
+        "CONTINUATION": 89,
+        "NO_BREAK": 24,
+        "REVERSAL": 73,
+    }
+    assert summary["iex_class_counts"] == {
+        "CONTINUATION": 86,
+        "NO_BREAK": 29,
+        "REVERSAL": 71,
+    }
+    assert summary["reconciliation_counts"] == {
+        "CONFIRMED_SAME_REVERSAL": 69,
+        "MISS_NO_PROVISIONAL": 115,
+        "REJECTED_SIP_CONTINUATION_FIRST": 2,
+    }
+    assert summary["study_verdict"] == "MISS_ALLOWED_RESEARCH_OBSERVER_FEASIBLE"
+    assert summary["exact_sip_substitute"] is False
+
+
+def test_committed_result_hash_matches_repeat_proof():
+    import hashlib
+    import json
+    from pathlib import Path
+
+    root = Path("data/options_122_iex_provisional_audit_2026_09_18")
+    payload = (root / "result.json").read_bytes()
+    proof = json.loads((root / "repeat_proof.json").read_text())
+    digest = hashlib.sha256(payload).hexdigest()
+    assert proof["byte_identical"] is True
+    assert digest == proof["primary_sha256"] == proof["repeat_sha256"]
