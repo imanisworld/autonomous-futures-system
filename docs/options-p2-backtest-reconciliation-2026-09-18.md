@@ -8,14 +8,18 @@ It does **not** modify the preserved #653 evidence package, does not activate DE
 
 ## Current baseline
 
-- current repository `main`: `331b8f05a44694de45c14bdf8fb1cd5addeb16e5`; selector replay code baseline is merged; trigger-time research #717 is also merged.
+- current repository `main`: `c7dc6c5de3ddfde0dd0876bf86b28531f976c46b` (#750), after #744/#747 and the separate futures-only #749/#751/#752 changes.
 - PR #706 merged: parameterized base-vs-adverse slippage stress runner.
 - PR #710 merged: append-only prospective decision-time selector evidence capture.
 - PR #712 merged: exact replay of the actual `OPTIONS_PAPER_V1` production selector from retained evidence.
 - #715 removes `options_manager`/canonical-selector imports from the active evidence capture path while retaining the same production replay proof.
-- Service-specific deployment candidate `5c14577c...` is prepared under #716; exact candidate regression: **31 passed**; it is not deployed.
-- #717 adds a pure trigger-time Strat observer and audit only; no runtime activation.
-- No selector-evidence v3 VPS deployment or production-service restart has been performed.
+- The options scanner now runs its service-specific immutable selector-evidence release `58f1c50583d8bb747c0b221eabb75af376b10ecc`, smoke-proven advisory-only with Public read-only data, `order_supported=false`, account endpoints forbidden, and no broker/order activation.
+- #730/#739 build the dedicated observation-only prospective 212R collector and correct it to an exact active-WATCHING SIP first-break clock; it remains **not deployed or scheduled**.
+- #741 fails that collector closed when sufficiently recent consolidated SIP is unavailable; #742 proves IEX is not source-equivalent on the frozen 81 and therefore is not an admissible silent fallback.
+- #744 corrects the historical-source audit: exact causal underlying trigger time/price is proven, while historical decision-time Delta and contract-level open interest remain the blocker to exact historical option-selector replay.
+- #747 completes a controlled target-geometry test on the frozen clean V1-EPOCH-2 AHEAD cohort; wider targets improve forced-horizon P&L only slightly and all tested variants remain negative.
+- #750 completes a Daily/4H_RTH hold-horizon compatibility test; Daily improves in a tiny/non-independent subset while 4H_RTH worsens materially, so no blanket higher-timeframe hold extension is supported.
+- #749/#751/#752 are futures-lane observer/backtest-proof changes and do not alter options execution, selector authority, risk policy, or 212R qualification.
 
 ## Market-hours proof captured 2026-09-18 15:24Z
 
@@ -103,11 +107,13 @@ The old #653 packet still says these fields are false because it predates the im
 
 Current Public market-hours evidence proves executable bid/ask timestamps and source identity for the SPY/AMZN capture.
 
-**Historical 212R dataset: DATA BLOCKED.**
+**Historical 212R dataset: PARTIALLY UNBLOCKED / still DATA BLOCKED for full selector replay.**
 
-Massive historical option bid/ask is available, but a complete historical selector row still lacks proven decision-time historical delta/open interest and exact underlying-price provenance for the frozen population. Do not synthesize those values and do not substitute current snapshots.
+Massive historical option bid/ask is available. #733 proves the exact causal underlying SIP trigger-cross timestamp/price for **81/81** frozen rows with exact frozen 5-minute OHLC reconstruction and byte-identical repeat evidence, and #738 proves that causal price can traverse the production `context.price -> normalized price -> OPTIONS_PAPER_V1` path with retained-input replay parity.
 
-Therefore a full frozen historical `option_quotes_manifest.json` for all 81 212R decisions is not yet honest evidence.
+A complete historical selector row still lacks proven decision-time **Delta** and contract-level **open interest** for the frozen population. Do not synthesize those values, model-derive them as if they were provider bytes, or substitute current snapshots.
+
+Therefore a full frozen historical `option_quotes_manifest.json` / exact selector-fill replay for all 81 212R decisions is not yet honest evidence.
 
 ### Item 2B — executable-fill reconstruction
 
@@ -127,30 +133,41 @@ Premium-stop risk, no-averaging, aggregate-risk enforcement, provenance validati
 
 A future evidence packet still has to reference the exact frozen runtime budget artifact rather than merely setting booleans.
 
-## Trigger-time boundary added by #717
+## Trigger-time and geometry boundary — #717 through #738
 
-The old completed-bar/first-sight clock remains valid for evaluating what V1 observed, but it is not the final strategy-entry clock for Strat qualification. #717 separates completed precursor formation from the first causal lower-timeframe boundary break.
+The old completed-bar/first-sight clock remains valid for evaluating what V1 observed, but it is not the 212R strategy-entry clock.
 
-Before spending on or freezing a broader historical option-side quote dataset for Strat strategy testing:
+The corrected evidence chain is now frozen in stages:
 
-1. reconstruct armed setups from completed 30m precursors;
-2. resolve the first causal break from lower-timeframe bars;
-3. rebuild SPY/QQQ + HTF context as of that trigger;
-4. quantify family changes, latency, later-outside transitions and ambiguous same-lower-bar breaks;
-5. freeze those decision timestamps.
+1. #721/#722 reproduce the exact frozen trigger-time population from completed 30m precursors and causal lower-timeframe breaks;
+2. for the original frozen **81** 212R rows, family, direction, trigger, and invalidation are preserved **81/81** at the causal first-break boundary;
+3. #724/#726 bind source-defined 212R geometry to those same frozen rows with **81/81 stop parity**; median source magnitude is **0.3333R**, **67/81** are below 1R, and **3/81** have source magnitude already consumed at entry;
+4. #733 resolves the exact first price-forming consolidated-SIP trade strictly through each trigger for **81/81** rows, preserving nanosecond timestamp and causal crossing price while reproducing the frozen 5-minute OHLC exactly;
+5. #738 proves on the frozen AMZN case that the causal trigger price can flow through the production `context.price -> normalized price -> OPTIONS_PAPER_V1` selector path with replay parity.
 
-Only then should historical option-side acquisition be keyed to the strategy decision clock. This does not invalidate current-scanner prospective selector evidence; the two questions are separate.
+The old >=1R target floor is therefore not source-equivalent 212R magnitude; it is a separate management hypothesis. Historical option-side acquisition must use the corrected exact trigger boundary, but exact option selection remains blocked on historical Delta/OI provenance.
+
+## Controlled management/horizon evidence added after the trigger correction
+
+Two controlled clean-shadow studies on current `main` narrow management hypotheses without qualifying 212R:
+
+- **#747 target geometry:** on the exact 47 clean V1-EPOCH-2 `AHEAD` rows, forced-horizon P&L is **-$840** at recorded `target_1`, **-$783** at fixed 1.5R, and **-$748** at fixed 2R. Wider targets help slightly but all tested variants remain negative, with censoring increasing as targets widen. This weakens a target-width-alone explanation for that mixed cohort; it is **not** a 212R-specific expectancy test.
+- **#750 hold horizon:** on 24 clean Daily/`4H_RTH` rows, extending the hold by one RTH session changes combined P&L only **-$571 -> -$539**. Daily changes **-$358 -> +$137** on 10 rows / 7 structural keys, while `4H_RTH` changes **-$213 -> -$676** on 14 rows. This supports no blanket higher-timeframe extension; the Daily result is suggestive only and too small/non-independent for a rule change.
+
+Neither study changes V1 policy, resolves 212R option-side data provenance, or authorizes scanner/collector deployment.
 
 ## What actually remains for 212R
 
 These are strategy/evidence problems, not missing shared infrastructure:
 
 - classification remains `WAIT`;
-- trigger-time strategy-entry clock is not yet frozen on the historical population;
-- no frozen 212R target formula;
-- no 212R replay/forward strategy formula parity;
-- historical option selector replay is blocked by missing decision-time analytics/provenance;
-- no required resolved option-fill population;
+- exact underlying trigger time/price is frozen for the historical 81, but full historical option-selector replay is still blocked by missing causal decision-time **Delta** and contract-level **OI**;
+- source-defined 212R magnitude is frozen, but final option target/runner management policy is unresolved because the existing >=1R floor is a separate management hypothesis; #747 weakens target-width-alone as an explanation in the mixed clean-shadow cohort but does not answer 212R-specific expectancy;
+- no complete 212R replay/forward strategy formula parity packet exists under the corrected trigger-time + geometry + option-data boundary;
+- collector v0.3 is merged and observation-only, but #741 proves the configured Alpaca entitlement cannot access sufficiently recent consolidated SIP during RTH, and #742 proves IEX is not source-equivalent on the frozen 81;
+- therefore no trustworthy prospective `ARMED -> exact SIP cross -> option_evidence_usable` 212R row has been collected under the corrected lane;
+- no required resolved option-fill population under corrected timing + geometry;
+- no approved/pre-registered numeric slippage percentage or aggregate slippage-stress qualification pass;
 - no positive after-cost option expectancy or net P&L proof;
 - no completed untouched multi-month / chronological validation;
 - prospective persistence has not met its pre-registered proof requirement;
@@ -168,6 +185,8 @@ For P2, the correct state is:
 - current forward quote capture: working;
 - current merged-main production-selector retained-input replay: proven for the observed SPY capture;
 - canonical/reference selector: deterministic but not production authority;
-- historical 81-point exact selector replay: parked as DATA BLOCKED;
+- historical 81-point exact underlying trigger replay: proven; exact option selector replay remains DATA BLOCKED on historical Delta/OI;
+- dedicated 212R prospective collector: built and fail-closed, but **HOLD** under current recent-SIP entitlement; IEX fallback rejected by #742;
+- #747/#750 controlled studies narrow target/horizon hypotheses but do not establish 212R option expectancy and do not authorize V1 tuning;
 - 212R strategy qualification: WAIT;
-- next useful evidence comes from prospective decision-time captures and later strategy-specific validation, not another speculative infrastructure rewrite.
+- next useful evidence comes from resolving the real-time consolidated-SIP source gate or obtaining an explicitly approved historical Delta/OI source, then collecting/validating option-side evidence—not another speculative infrastructure rewrite.
