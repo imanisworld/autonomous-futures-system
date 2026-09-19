@@ -67,6 +67,7 @@ def _cfg(**overrides) -> SystemConfig:
     base = SystemConfig.__new__(SystemConfig)
     object.__setattr__(base, "wide_stop_ledger_mode", "observe_only")
     object.__setattr__(base, "wide_stop_ledger_epoch_start", None)
+    object.__setattr__(base, "daily_22_epoch_start", None)
     for key, value in overrides.items():
         object.__setattr__(base, key, value)
     return base
@@ -104,9 +105,33 @@ def test_epoch_must_carry_a_utc_offset():
 
 def test_a_valid_epoch_passes():
     _validate_wide_stop_ledger(
-        _cfg(wide_stop_ledger_mode="paper_sim",
-             wide_stop_ledger_epoch_start="2026-09-08T00:00:00+00:00")
+        _cfg(
+            wide_stop_ledger_mode="paper_sim",
+            wide_stop_ledger_epoch_start="2026-09-08T00:00:00+00:00",
+            daily_22_epoch_start="2026-09-09T04:21:04+00:00",
+        )
     )
+
+
+def test_paper_sim_requires_independent_daily_22_epoch():
+    with pytest.raises(ConfigError, match="DAILY_22_EPOCH_START is required"):
+        _validate_wide_stop_ledger(
+            _cfg(
+                wide_stop_ledger_mode="paper_sim",
+                wide_stop_ledger_epoch_start="2026-09-08T00:00:00+00:00",
+            )
+        )
+
+
+def test_daily_22_epoch_must_carry_offset():
+    with pytest.raises(ConfigError, match="DAILY_22_EPOCH_START must include a UTC offset"):
+        _validate_wide_stop_ledger(
+            _cfg(
+                wide_stop_ledger_mode="paper_sim",
+                wide_stop_ledger_epoch_start="2026-09-08T00:00:00+00:00",
+                daily_22_epoch_start="2026-09-09T04:21:04",
+            )
+        )
 
 
 # ────────────────────────────── membership ──────────────────────────────────

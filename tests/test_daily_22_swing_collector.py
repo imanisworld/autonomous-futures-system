@@ -16,6 +16,7 @@ def _cfg():
     cfg = copy.copy(load_config())
     cfg.wide_stop_ledger_mode = "paper_sim"
     cfg.wide_stop_ledger_epoch_start = "2026-09-01T00:00:00+00:00"
+    cfg.daily_22_epoch_start = "2026-09-01T00:00:00+00:00"
     return cfg
 
 
@@ -138,10 +139,44 @@ def test_process_opens_only_hypothetical_position_and_persists_it(tmp_path, monk
     )
     assert events and events[-1]["lane_result"] == "OPEN"
     assert events[-1]["external_broker"] is False
+    assert events[-1]["evidence_epoch"] == "2026-09-01T00:00:00+00:00"
+    assert events[-1]["generating_git_sha"]
+    assert events[-1]["provenance_status"]
     state = lane._load_state(tmp_path, lane._epoch(_cfg()))
     assert state["position"] is not None
     assert state["balance"] == lane.STARTING_BALANCE
     assert lane._audit_path(tmp_path).exists()
+
+
+def test_load_state_fails_closed_on_corrupt_or_wrong_epoch(tmp_path):
+    cfg = _cfg()
+    epoch = lane._epoch(cfg)
+    path = lane._state_path(tmp_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("{not-json", encoding="utf-8")
+    try:
+        lane._load_state(tmp_path, epoch)
+        assert False, "corrupt state must fail closed"
+    except lane.DailySwingStateLoadError as exc:
+        assert "unreadable_or_corrupt" in str(exc)
+
+    path.write_text('{"epoch":"2026-08-01T00:00:00+00:00"}', encoding="utf-8")
+    try:
+        lane._load_state(tmp_path, epoch)
+        assert False, "wrong-epoch state must fail closed"
+    except lane.DailySwingStateLoadError as exc:
+        assert "epoch_mismatch" in str(exc)
+
+
+def test_load_state_missing_with_existing_audit_fails_closed(tmp_path):
+    audit = lane._audit_path(tmp_path)
+    audit.parent.mkdir(parents=True, exist_ok=True)
+    audit.write_text('{"collector_event":"CANDIDATE"}\n', encoding="utf-8")
+    try:
+        lane._load_state(tmp_path, lane._epoch(_cfg()))
+        assert False, "existing evidence without state must fail closed"
+    except lane.DailySwingStateLoadError as exc:
+        assert "missing_with_existing_evidence" in str(exc)
 
 
 def test_swing_position_is_not_flattened_at_eod_or_session_change(tmp_path, monkeypatch):

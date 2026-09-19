@@ -18,7 +18,8 @@ ET = ZoneInfo("America/New_York")
 def _cfg(epoch="2026-09-09T00:00:00+00:00"):
     cfg = copy.copy(load_config())
     cfg.wide_stop_ledger_mode = "paper_sim"
-    cfg.wide_stop_ledger_epoch_start = epoch
+    cfg.wide_stop_ledger_epoch_start = "2026-09-01T00:00:00+00:00"
+    cfg.daily_22_epoch_start = epoch
     return cfg
 
 
@@ -32,6 +33,12 @@ def _write_state(tmp_path, cfg, state):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(state), encoding="utf-8")
     return path
+
+
+def test_daily_epoch_is_independent_of_wide_stop_epoch():
+    cfg = _cfg("2026-09-09T04:21:04+00:00")
+    assert cfg.wide_stop_ledger_epoch_start == "2026-09-01T00:00:00+00:00"
+    assert lane._epoch(cfg).isoformat() == "2026-09-09T04:21:04+00:00"
 
 
 def test_missing_state_is_allowed_only_for_fresh_empty_campaign(tmp_path):
