@@ -1,6 +1,6 @@
 # MNQ/MES Edge Decomposition — 2026-09-18
 
-> **Preserved research note / reproduction required.** The sealed P8 artifacts independently confirm the base population counts used here (MNQ 40,460; MES 39,987). The detailed MFE/MAE, entry-touch conditioning, family gross-R, and H1/H2 calculations in this note came from an uncommitted local analysis and do not yet have a hash-bound committed script/result artifact. Treat those detailed numbers as hypotheses to reproduce before using them for a strategy ruling, implementation, or promotion decision.
+> **REPRODUCED / AUDIT ONLY.** The original local analysis is now reproduced deterministically from the exact sealed R5 candidate bytes and exact hash-pinned `replay_polygon_v2` source corpus. `scripts/r5_entry_conditioning_reproduction.py` fails closed on the frozen candidate/manifests/day-file hashes and reproduces the headline MFE/MAE, fill rates, family gross-R, and 4HR H1/H2 figures below. The result reran byte-identically with SHA-256 `dd452fc369cf37c4148790b37f40798278285d5d021929492ea18c89502177b2`. This proves the diagnostic; it does **not** promote any strategy or authorize a runtime change.
 
 ## Verdict
 
@@ -133,15 +133,35 @@ For ORB false-break:
 
 No broad parameter sweep is justified by this audit.
 
-## Reproduction gate
+## Reproduction proof
 
-Before acting on the entry-architecture conclusions above:
+The preservation/reproduction gate is complete for this diagnostic.
 
-1. freeze the exact R5 candidate files and source-bar manifests used by the sealed P8 run;
-2. commit a deterministic analyzer that reproduces fill-first, MFE/MAE, barrier-order, H1/H2, and instrument-separated tables;
-3. require pessimistic same-bar ordering and no future bars before entry;
-4. hash the result artifact and rerun byte-identically;
-5. compare any apparent 4HR result against the already-audited canonical 4HR detector so structural-observer rows are not conflated with the active lane;
-6. only then preregister an ORB-false-break / 2-2 entry-architecture A/B.
+Frozen inputs:
+- MNQ R5 candidates: 40,460 rows; SHA-256 `148768cd9a7b9b6f48d003d91cdf73b757b3018dca1343dc9a56b7e4f91c1a7a`;
+- MES R5 candidates: 39,987 rows; SHA-256 `e50fa5525422690ceff69a4a115c78517eb9cdec51f8dee5ee004733045a7ebe`;
+- MNQ corpus manifest: SHA-256 `1f16b81b232f0275753c295bbca4686dcc675eec6f0b488cff3099693103d8ac`;
+- MES corpus manifest: SHA-256 `ca4481502b4f9be33de6bdb611c02ac462c36eab1b759a0e62dab45c10594de3`;
+- each corpus: 543 manifest-listed day files / 40,907 bars, with every listed day-file SHA and row count rechecked by the analyzer.
 
-Until that gate passes, this note is **AUDIT ONLY / hypothesis generation**, not a replacement for the current strategy inventory.
+Recovered method, now frozen:
+1. exclude the signal bar;
+2. raw excursion/current-barrier view uses the next 16 completed 15m bars;
+3. the fill-first view requires physical entry touch (`low <= entry <= high`) within those next 16 bars — a gap over the entry is not a fill;
+4. after fill, start a new 16-bar bracket horizon **including the fill bar**;
+5. if stop and target are both reachable in one bar, resolve stop first;
+6. no-fill and unresolved rows contribute 0R to gross-R/all;
+7. symmetric diagnostic barriers are entry ±1R;
+8. H1/H2 split is chronological candidate order at `floor(n/2)`.
+
+The reproduction script has explicit regression tests for no gap-over fills, adverse same-bar ordering, and the fresh post-fill horizon. The same full result was generated twice byte-for-byte at SHA-256 `dd452fc369cf37c4148790b37f40798278285d5d021929492ea18c89502177b2`.
+
+The entry-conditioning conclusion is therefore no longer a loose hypothesis: **ORB false-break has a strong pre-entry 1R directional effect that collapses toward coin-flip after the current resting entry is required**. On resolved symmetric 1R paths:
+- MNQ ORB false-break: **66.7% good-first before fill -> 51.1% after fill**;
+- MES ORB false-break: **64.1% -> 53.5%**.
+
+For comparison, impulse-first-pullback and trend-consolidation remain poor even after fill, supporting their classification as signal/directional failures rather than merely entry-timing defects.
+
+### Next gate
+
+Do **not** change the runtime detector from this result. The next permitted strategy test is a preregistered, one-variable ORB false-break entry-architecture A/B on this exact frozen population. Do not tune target, stop, session, filters, or risk in the same test. The structural 4HR observer result remains diagnostic only and must not be conflated with the separately audited canonical active 4HR lane.
