@@ -327,11 +327,15 @@ class ReplayEngine:
                         contracts=_carry_fill.contracts,
                         for_date=_carried["journal_date"],
                         strategy=_carried.get("strategy"),
+                        signal_timestamp=_carried.get("historical_signal_bar_ts"),
                         paper_order_id=_carry_fill.paper_order_id,
                         execution_audit={
                             "source": "cross_day_carry_forward_resolution",
                             "opened_on": _carried["journal_date"].isoformat(),
                             "resolved_on": journal_date.isoformat(),
+                            "historical_signal_bar_ts": _carried.get("historical_signal_bar_ts"),
+                            "historical_entry_bar_ts": _carried.get("historical_entry_bar_ts"),
+                            "historical_resolution_bar_ts": _fc.timestamp,
                         },
                     )
                     # Mirror the engine's own NORMAL same-day resolve path
@@ -688,9 +692,13 @@ class ReplayEngine:
                         contracts=resolved_fill.contracts,
                         for_date=journal_date,
                         strategy=decision.setup.strategy,
+                        signal_timestamp=candle.timestamp,
                         paper_order_id=resolved_fill.paper_order_id,
                         execution_audit={
-                            "source": "strat_212_122_same_bar_resolution"
+                            "source": "strat_212_122_same_bar_resolution",
+                            "historical_signal_bar_ts": candle.timestamp,
+                            "historical_entry_bar_ts": candle.timestamp,
+                            "historical_resolution_bar_ts": candle.timestamp,
                         },
                     )
                     daily_state.trade_count += 1
@@ -768,6 +776,21 @@ class ReplayEngine:
                         entry_fill = broker.execute_bracket(
                             order, market_price=candle.close, paper_order_id=_paper_order_id
                         )
+                    # Historical timestamps are evidence-only metadata. Market/IOC
+                    # and the causal 2-1-2/1-2-2 restore path are open on the
+                    # decision bar. A stop-market entry is not open until a later
+                    # bar actually triggers it, so leave entry time unknown until
+                    # that transition is observed below.
+                    _historical_signal_ts = candle.timestamp
+                    _historical_entry_ts = (
+                        candle.timestamp
+                        if (
+                            decision.setup.strategy in (STRAT_212, STRAT_122)
+                            or (entry_fill is not None and entry_fill.result == "OPEN")
+                        )
+                        else None
+                    )
+                    _historical_resolution_ts = None
                     if entry_fill is not None and entry_fill.result == "CANCELLED":
                         # IOC-faithful baseline: the entry self-cancelled (market
                         # beyond entry ± tolerance at decision time). Book it the
@@ -784,7 +807,15 @@ class ReplayEngine:
                             pnl_dollars=0.0,
                             contracts=entry_fill.contracts,
                             for_date=journal_date,
+                            strategy=decision.setup.strategy,
+                            signal_timestamp=_historical_signal_ts,
                             paper_order_id=entry_fill.paper_order_id,
+                            execution_audit={
+                                "source": "replay_entry_not_filled",
+                                "historical_signal_bar_ts": _historical_signal_ts,
+                                "historical_entry_bar_ts": None,
+                                "historical_resolution_bar_ts": None,
+                            },
                         )
                         continue
                     fill = None
@@ -817,11 +848,20 @@ class ReplayEngine:
                             # bar stand in as either a day-only exit or a bracket
                             # resolution after the mandated flat time.
                             break
+                        _pending_before = broker.has_pending_entry()
                         fill = broker.resolve_position(
                             NextBarOHLC(open=fc.open, high=fc.high, low=fc.low)
                         )
+                        if (
+                            _historical_entry_ts is None
+                            and _pending_before
+                            and not broker.has_pending_entry()
+                            and (fill is None or fill.result != "CANCELLED")
+                        ):
+                            _historical_entry_ts = fc.timestamp
                         if fill is not None:
                             if fill.result != "CANCELLED":
+                                _historical_resolution_ts = fc.timestamp
                                 skip_to = future_idx + 1
                             break
                         if day_only_trade and is_exact_eod_bar(
@@ -842,6 +882,7 @@ class ReplayEngine:
                                 close=fc.close,
                             )
                             if fill is not None:
+                                _historical_resolution_ts = fc.timestamp
                                 skip_to = future_idx + 1
                             break
                     if fill is None and broker.has_pending_entry():
@@ -858,7 +899,15 @@ class ReplayEngine:
                             pnl_dollars=fill.pnl_dollars,
                             contracts=fill.contracts,
                             for_date=journal_date,
+                            strategy=decision.setup.strategy,
+                            signal_timestamp=_historical_signal_ts,
                             paper_order_id=fill.paper_order_id,
+                            execution_audit={
+                                "source": "replay_historical_resolution",
+                                "historical_signal_bar_ts": _historical_signal_ts,
+                                "historical_entry_bar_ts": _historical_entry_ts,
+                                "historical_resolution_bar_ts": _historical_resolution_ts,
+                            },
                         )
                         if fill.result == "CANCELLED":
                             continue
@@ -927,6 +976,8 @@ class ReplayEngine:
                                 "session": state.session,
                                 "strategy": decision.setup.strategy,
                                 "journal_date": journal_date,
+                                "historical_signal_bar_ts": _historical_signal_ts,
+                                "historical_entry_bar_ts": _historical_entry_ts,
                             }
                 continue
 

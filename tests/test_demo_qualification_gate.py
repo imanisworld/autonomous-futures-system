@@ -55,6 +55,91 @@ def _complete_evidence(tmp_path: Path) -> dict:
         + "\n",
         encoding="utf-8",
     )
+    manifest_sha = _sha256(manifest)
+    journal = tmp_path / "journal_2026-01-02.jsonl"
+    journal_rows = []
+    for i in range(40):
+        order_id = f"PAPER-{i:03d}"
+        journal_rows.append(
+            {
+                "ts": "2026-01-02T00:00:00+00:00",
+                "bar_ts": "2026-01-02T00:00:00+00:00",
+                "decision": "TRADE",
+                "instrument": "MNQ",
+                "paper_order_id": order_id,
+                "setup": {"strategy": "example"},
+            }
+        )
+        journal_rows.append(
+            {
+                "ts": "2026-01-02T12:00:00+00:00",
+                "type": "OUTCOME",
+                "instrument": "MNQ",
+                "outcome": {
+                    "result": "WIN",
+                    "paper_order_id": order_id,
+                    "signal_timestamp": "2026-01-02T00:00:00+00:00",
+                    "execution_audit": {
+                        "historical_signal_bar_ts": "2026-01-02T00:00:00+00:00",
+                        "historical_entry_bar_ts": "2026-01-02T00:00:00+00:00",
+                        "historical_resolution_bar_ts": "2026-01-02T00:15:00+00:00",
+                    },
+                },
+            }
+        )
+    journal.write_text(
+        "\n".join(json.dumps(row) for row in journal_rows) + "\n",
+        encoding="utf-8",
+    )
+
+    dependency_windows = tmp_path / "dependency_windows.json"
+    dependency_windows.write_text(
+        json.dumps(
+            {
+                "schema_version": "strategy_dependency_windows_v1",
+                "code_sha": "abc123",
+                "strategy": "example",
+                "instrument": "MNQ",
+                "windows": {
+                    f"PAPER-{i:03d}": "2026-01-02T00:00:00+00:00"
+                    for i in range(40)
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    gap_proof = tmp_path / "gap_proof.json"
+    gap_proof.write_text(
+        json.dumps(
+            {
+                "schema_version": "replay_gap_proof_v1",
+                "code_sha": "abc123",
+                "dataset_manifest_sha256": manifest_sha,
+                "instrument": "MNQ",
+                "dependency_windows_source": {
+                    "path": str(dependency_windows),
+                    "sha256": _sha256(dependency_windows),
+                },
+                "source_journals": [
+                    {"path": str(journal), "sha256": _sha256(journal)}
+                ],
+                "resolved_outcomes": [
+                    {
+                        "paper_order_id": f"PAPER-{i:03d}",
+                        "dependency_start_timestamp": "2026-01-02T00:00:00+00:00",
+                        "signal_timestamp": "2026-01-02T00:00:00+00:00",
+                        "entry_timestamp": "2026-01-02T00:00:00+00:00",
+                        "exit_timestamp": "2026-01-02T00:15:00+00:00",
+                    }
+                    for i in range(40)
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     risk_rules = tmp_path / "risk_rules.yaml"
     risk_rules.write_text("version: test\n", encoding="utf-8")
     return {
@@ -105,7 +190,9 @@ def _complete_evidence(tmp_path: Path) -> dict:
         "data_integrity": {
             "dataset_frozen": True,
             "dataset_manifest_path": str(manifest),
-            "dataset_manifest_sha256": _sha256(manifest),
+            "dataset_manifest_sha256": manifest_sha,
+            "gap_proof_path": str(gap_proof),
+            "gap_proof_sha256": _sha256(gap_proof),
             "contract_roll_identity_proven": True,
             "session_day_identity_proven": True,
             "feed_integrity_proven": True,
@@ -345,6 +432,96 @@ def test_manifest_bytes_are_verified_not_just_claimed(tmp_path: Path, monkeypatc
 
     assert report["gate_pass"] is False
     assert any("dataset_manifest_sha256" in blocker for blocker in report["blockers"])
+
+
+def test_gap_proof_blocks_counted_outcome_overlapping_declared_gap(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _pin_runtime_head_and_diff(monkeypatch)
+    payload = _complete_evidence(tmp_path)
+    manifest = Path(payload["data_integrity"]["dataset_manifest_path"])
+    body = json.loads(manifest.read_text(encoding="utf-8"))
+    body["gap_ledger_cme_hours"] = [
+        {
+            "first_missing": "2026-01-02T00:10:00+00:00",
+            "last_missing": "2026-01-02T00:10:00+00:00",
+            "slots": 1,
+            "minutes": 15,
+        }
+    ]
+    manifest.write_text(json.dumps(body) + "\n", encoding="utf-8")
+    manifest_sha = _sha256(manifest)
+    payload["data_integrity"]["dataset_manifest_sha256"] = manifest_sha
+
+    gap_proof = Path(payload["data_integrity"]["gap_proof_path"])
+    proof = json.loads(gap_proof.read_text(encoding="utf-8"))
+    proof["dataset_manifest_sha256"] = manifest_sha
+    gap_proof.write_text(json.dumps(proof) + "\n", encoding="utf-8")
+    payload["data_integrity"]["gap_proof_sha256"] = _sha256(gap_proof)
+    evidence = _write_evidence(tmp_path, payload)
+
+    report = build_demo_qualification_report(
+        strategy="example", repo_root=tmp_path, evidence_path=evidence
+    )
+
+    assert report["gate_pass"] is False
+    gap = report["data_integrity"]["resolved_outcome_gap_proof"]
+    assert gap["ok"] is False
+    assert len(gap["contaminated_outcomes"]) == 20
+    assert any("overlap declared dataset gaps" in problem for problem in gap["problems"])
+
+
+def test_gap_proof_requires_full_ordered_timestamps(tmp_path: Path, monkeypatch) -> None:
+    _pin_runtime_head_and_diff(monkeypatch)
+    payload = _complete_evidence(tmp_path)
+    gap_proof = Path(payload["data_integrity"]["gap_proof_path"])
+    proof = json.loads(gap_proof.read_text(encoding="utf-8"))
+    proof["resolved_outcomes"][0]["entry_timestamp"] = None
+    gap_proof.write_text(json.dumps(proof) + "\n", encoding="utf-8")
+    payload["data_integrity"]["gap_proof_sha256"] = _sha256(gap_proof)
+    evidence = _write_evidence(tmp_path, payload)
+
+    report = build_demo_qualification_report(
+        strategy="example", repo_root=tmp_path, evidence_path=evidence
+    )
+
+    assert report["gate_pass"] is False
+    gap = report["data_integrity"]["resolved_outcome_gap_proof"]
+    assert gap["invalid_rows"]
+    assert "four timezone-aware timestamps" in gap["invalid_rows"][0]["reason"]
+
+
+def test_gap_proof_count_must_match_resolved_outcomes(tmp_path: Path, monkeypatch) -> None:
+    _pin_runtime_head_and_diff(monkeypatch)
+    payload = _complete_evidence(tmp_path)
+    gap_proof = Path(payload["data_integrity"]["gap_proof_path"])
+    proof = json.loads(gap_proof.read_text(encoding="utf-8"))
+    proof["resolved_outcomes"].pop()
+    gap_proof.write_text(json.dumps(proof) + "\n", encoding="utf-8")
+    payload["data_integrity"]["gap_proof_sha256"] = _sha256(gap_proof)
+    evidence = _write_evidence(tmp_path, payload)
+
+    report = build_demo_qualification_report(
+        strategy="example", repo_root=tmp_path, evidence_path=evidence
+    )
+
+    assert report["gate_pass"] is False
+    gap = report["data_integrity"]["resolved_outcome_gap_proof"]
+    assert any("execution.resolved_outcomes=40" in problem for problem in gap["problems"])
+
+
+def test_gap_proof_bytes_are_hash_verified(tmp_path: Path, monkeypatch) -> None:
+    _pin_runtime_head_and_diff(monkeypatch)
+    payload = _complete_evidence(tmp_path)
+    payload["data_integrity"]["gap_proof_sha256"] = "0" * 64
+    evidence = _write_evidence(tmp_path, payload)
+
+    report = build_demo_qualification_report(
+        strategy="example", repo_root=tmp_path, evidence_path=evidence
+    )
+
+    assert report["gate_pass"] is False
+    assert "gap_proof_sha256" in report["data_integrity"]["resolved_outcome_gap_proof"]["reason"]
 
 
 def test_two_and_three_tick_stress_are_both_required(tmp_path: Path, monkeypatch) -> None:
