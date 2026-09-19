@@ -25,7 +25,7 @@ There is no current blocker to passive 1m/5m/15m evidence collection. There are 
 
 ### 1. 4HR prospective trigger-time parity
 
-Offline pre-armed touch survives stress, but the deployed 1m lane is evidence-only. We still need natural forward examples proving:
+Offline pre-armed touch survives stress, but the deployed 1m lane is evidence-only. The 2026-09-18 forward baseline contains no 4HR/3-2-2 observer events because MNQ 1m collection began at 17:38Z / 13:38 ET, after both observer windows had ended; this is expected and does not indicate collector failure. We still need natural forward examples proving:
 - correct armed state;
 - 1m touch time;
 - dedupe;

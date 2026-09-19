@@ -53,7 +53,7 @@ All six configured futures roots now deliver authenticated 1m TradingView data a
 - MCL
 - MBT
 
-At the post-deploy proof check, each root had a fresh 1m payload and an active `tf1m` file.
+At the post-deploy proof check, each root had a fresh 1m payload and an active `tf1m` file. Forward-observer baseline after activation: MNQ recorded 201 one-minute bars on 2026-09-18 from 17:38Z through 20:59Z. That began after the 4HR 09:30–11:00 ET and 3-2-2 10:00–11:00 ET observer windows, so zero 4HR/3-2-2 event files on that date is expected rather than evidence of a dead observer. The first eligible natural observer session is the next trading day.
 
 Role separation is deliberate:
 - MNQ deployed behavior: 1m may observe an already-armed 4HR trigger;
