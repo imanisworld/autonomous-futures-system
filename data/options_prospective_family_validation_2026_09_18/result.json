@@ -1,0 +1,68 @@
+{
+  "cutoff": "2026-09-15",
+  "interpretation": [
+    "The preregistered prospective threshold is now reached for both 212R and 1-2-2.",
+    "212R did not preserve the retrospective matched-baseline excess under the frozen first-sight study.",
+    "1-2-2 did preserve an ex-opening first-sight excess under the frozen rule.",
+    "This is structural first-sight evidence only; it is not option expectancy, strategy approval, or production readiness."
+  ],
+  "methodology": {
+    "allowed_collector_shas": [
+      "771b6cfb9039f5e01d3d85a2d2bdbfaf124c95e5",
+      "26721535ff721027951712d85c76597cde18668f",
+      "58d6c5fa25c5dd3c8b8ed2cbeda36db74f6a5efd"
+    ],
+    "first_sight_delay_minutes": 17.9,
+    "observer_version": "cov-v0.1",
+    "outcome_version": "out-v0.1",
+    "reducer_version": "ep-v0.1",
+    "status": "OK"
+  },
+  "prospective_sessions": [
+    "2026-09-16",
+    "2026-09-17",
+    "2026-09-18"
+  ],
+  "results": {
+    "OTHER:strat_122": {
+      "diff_pp": 25.1,
+      "episodes": 38,
+      "ex_opening_diff_pp": 20.9,
+      "first_sight_1R_pct": 45.9,
+      "first_sight_2R_pct": 35.1,
+      "long": 16,
+      "matched_baseline_1R_pct": 20.8,
+      "median_MFE_R": 0.95,
+      "sessions": 3,
+      "short": 22,
+      "status": "PERSISTING POSSIBLE SIGNAL",
+      "stop_first_pct": 16.2
+    },
+    "OTHER:strat_inside_break": {
+      "episodes": 7,
+      "sessions": 3,
+      "status": "PASSIVE_ONLY"
+    },
+    "STRAT_212_REVERSAL": {
+      "diff_pp": -5.5,
+      "episodes": 47,
+      "ex_opening_diff_pp": -4.2,
+      "first_sight_1R_pct": 34.9,
+      "first_sight_2R_pct": 18.6,
+      "long": 26,
+      "matched_baseline_1R_pct": 40.4,
+      "median_MFE_R": 0.452,
+      "sessions": 3,
+      "short": 21,
+      "status": "NO LONGER SHOWING EXCESS",
+      "stop_first_pct": 44.2
+    }
+  },
+  "source_hashes": {
+    "coverage_events_json": "0f753c1b8dbb8778c6f5e621f2aca34b4f7091fa4705fc52f9f05b2eedab94fa",
+    "ledger_jsonl": "a3dbca5e9cb659fa18bd890cc8084a50bd091b0d0cbc2359a1611e24bf0b810b",
+    "observer_sqlite": "a65c49e8e3819dbddb02609c774b3814a7658676e6d9fff99a680aeea8c5ab8b",
+    "outcomes_ALL_json": "82658ec16bd911eb73f3f6970267610a63b71432f917a5af191cbc7b6448dd5e"
+  },
+  "study": "OPTIONS_PROSPECTIVE_FAMILY_VALIDATION_2026_09_18"
+}
