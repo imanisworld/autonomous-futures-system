@@ -91,20 +91,26 @@ def test_fill_price_is_exact_trigger_plus_adverse_slippage_no_ioc_cap():
     assert row["fill_entry_price"] == 100.5  # +2 ticks * 0.25
 
 
-def test_entry_bar_itself_never_resolves_its_own_bracket():
-    """Entry bar's high reaches the target within the same bar, but that
-    must not count -- only bars strictly after the entry bar can resolve."""
+def test_entry_bar_target_resolves_immediately_when_stop_not_touched():
     bars = [
         bar(9, 30, o=95, h=98, low=93, c=97),
-        bar(9, 35, o=98, h=111, low=97, c=108),  # crosses trigger AND reaches target(110) same bar
-        bar(9, 40, o=108, h=109, low=95, c=96),  # dips through stop(90)? no; but shows next-bar used
-        bar(15, 55, o=96, h=97, low=91, c=93),   # eventually hits stop region at EOD bar
+        bar(9, 35, o=98, h=111, low=97, c=108),
+        bar(9, 40, o=108, h=109, low=95, c=96),
     ]
     row = replay_signal(signal("LONG"), bars)
-    # Target hit within the entry bar itself must be ignored -- no stop/target
-    # is reached on any LATER bar either, so this resolves via day-only-flatten.
-    assert row["exit_reason"] == DAY_ONLY_EXIT_REASON
-    assert row["exit_bar_ts"] == bars[-1]["ts"].isoformat()
+    assert row["exit_reason"] == "TARGET"
+    assert row["exit_bar_ts"] == bars[1]["ts"].isoformat()
+
+
+def test_entry_bar_stop_wins_when_entry_and_stop_both_touch():
+    bars = [
+        bar(9, 30, o=105, h=108, low=103, c=106),
+        bar(9, 35, o=106, h=112, low=99, c=101),
+        bar(9, 40, o=101, h=102, low=89, c=90),
+    ]
+    row = replay_signal(signal("SHORT"), bars)
+    assert row["exit_reason"] == "STOP"
+    assert row["exit_bar_ts"] == bars[1]["ts"].isoformat()
 
 
 def test_stop_wins_on_same_bar_stop_and_target_ambiguity():
@@ -117,15 +123,39 @@ def test_stop_wins_on_same_bar_stop_and_target_ambiguity():
     assert row["exit_reason"] == "STOP"
 
 
-def test_post_fill_wrong_side_stop_fails_closed():
+def test_post_fill_invalid_bracket_fails_closed():
     bars = [
         bar(9, 30, o=95, h=98, low=93, c=97),
         bar(9, 35, o=98, h=101, low=97, c=100),
     ]
     row = replay_signal(signal("LONG", stop=101.0), bars)
     assert row["filled"] is False
-    assert row["exit_reason"] == "POST_FILL_INVALID_STOP"
+    assert row["exit_reason"] == "POST_FILL_INVALID_BRACKET"
     assert row["net_pnl"] == 0.0
+
+
+def test_gap_through_uses_open_as_base_fill_reference():
+    bars = [
+        bar(9, 30, o=95, h=98, low=93, c=97),
+        bar(9, 35, o=103, h=104, low=102, c=103.5),
+        bar(9, 40, o=104, h=111, low=103.5, c=110),
+    ]
+    row = replay_signal(signal("LONG"), bars, slippage_ticks=2)
+    assert row["filled"] is True
+    assert row["base_entry_price"] == 103.0
+    assert row["fill_entry_price"] == 103.5
+    assert row["exit_reason"] == "TARGET"
+
+
+def test_gap_through_beyond_fixed_target_fails_closed():
+    bars = [
+        bar(9, 30, o=95, h=98, low=93, c=97),
+        bar(9, 35, o=111, h=112, low=110.5, c=111.5),
+    ]
+    row = replay_signal(signal("LONG"), bars, slippage_ticks=1)
+    assert row["filled"] is False
+    assert row["base_entry_price"] == 111.0
+    assert row["exit_reason"] == "POST_FILL_INVALID_BRACKET"
 
 
 def test_day_only_flatten_at_exact_1555_bar_close():

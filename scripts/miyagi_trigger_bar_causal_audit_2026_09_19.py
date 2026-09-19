@@ -10,17 +10,19 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-from datetime import date
+from datetime import date, datetime, time
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from research.bars_12hr_miyagi_loader import load_5m_day
 from research.replay_12hr_miyagi_honest_fill import (
+    DAY_ONLY_EXIT_REASON,
     EOD_BAR_MISSING,
     POINT_VALUE,
     ROUND_TRIP_COMMISSION,
     TICK_SIZE,
+    TRIGGER_NOT_HIT,
     _metrics,
-    _resolve_exit,
     recover_entry,
     replay_signal,
 )
@@ -46,6 +48,186 @@ def _candidate_signal(candidate: dict) -> dict:
     return {**candidate, "date": date.fromisoformat(candidate["date"])}
 
 
+ET = ZoneInfo("America/New_York")
+_EOD_BAR_START = time(15, 55)
+_DAY_CLOSE = time(16, 0)
+
+
+def _legacy_resolve_exit(signal: dict, day_bars: list, entry_bar: dict) -> dict:
+    """Reproduce the superseded pre-fix entry-bar exclusion exactly."""
+    close_time = datetime.combine(signal["date"], _DAY_CLOSE, ET)
+    direction = signal["direction"]
+    entry_is_eod_bar = (
+        entry_bar["ts"].timetz().replace(tzinfo=None) == _EOD_BAR_START
+    )
+    if entry_is_eod_bar:
+        eligible = [entry_bar]
+    else:
+        eligible = sorted(
+            (
+                bar
+                for bar in day_bars
+                if bar["ts"] > entry_bar["ts"] and bar["ts"] < close_time
+            ),
+            key=lambda bar: bar["ts"],
+        )
+
+    for bar in eligible:
+        stop_hit = (
+            bar["low"] <= signal["stop"]
+            if direction == "LONG"
+            else bar["high"] >= signal["stop"]
+        )
+        target_hit = (
+            bar["high"] >= signal["target"]
+            if direction == "LONG"
+            else bar["low"] <= signal["target"]
+        )
+        if stop_hit:
+            return {"reason": "STOP", "base_exit": signal["stop"], "bar": bar}
+        if target_hit:
+            return {"reason": "TARGET", "base_exit": signal["target"], "bar": bar}
+
+    exact_bar = next(
+        (
+            bar
+            for bar in day_bars
+            if bar["ts"].timetz().replace(tzinfo=None) == _EOD_BAR_START
+        ),
+        None,
+    )
+    if exact_bar is not None:
+        return {
+            "reason": DAY_ONLY_EXIT_REASON,
+            "base_exit": exact_bar["close"],
+            "bar": exact_bar,
+        }
+    return {
+        "reason": EOD_BAR_MISSING,
+        "base_exit": None,
+        "bar": eligible[-1] if eligible else entry_bar,
+    }
+
+
+def legacy_trigger_bar_replay(
+    signal: dict,
+    day_bars: list,
+    *,
+    slippage_ticks: float,
+) -> dict:
+    """Freeze the superseded replay policy for audit provenance only."""
+    instrument = signal["instrument"]
+    point_value = POINT_VALUE[instrument]
+    direction = signal["direction"]
+    slip = slippage_ticks * TICK_SIZE
+    entry = recover_entry(signal, day_bars)
+    base = {
+        "date": signal["date"].isoformat(),
+        "instrument": instrument,
+        "direction": direction,
+        "trigger": signal["entry_trigger"],
+        "stop": signal["stop"],
+        "target": signal["target"],
+        "target_2": signal.get("target_2"),
+        "slippage_ticks": slippage_ticks,
+    }
+    if entry is None:
+        return {
+            **base,
+            "filled": False,
+            "result": "NO_FILL",
+            "exit_reason": TRIGGER_NOT_HIT,
+            "entry_bar_ts": None,
+            "base_entry_price": None,
+            "fill_entry_price": None,
+            "base_exit_price": None,
+            "fill_exit_price": None,
+            "exit_bar_ts": None,
+            "gross_pnl": 0.0,
+            "slippage_cost": 0.0,
+            "commission": 0.0,
+            "total_costs": 0.0,
+            "net_pnl": 0.0,
+        }
+
+    entry_bar = entry["bar"]
+    trigger = signal["entry_trigger"]
+    base_fill = trigger
+    fill_price = trigger + slip if direction == "LONG" else trigger - slip
+    stop_wrong_side = (
+        signal["stop"] >= fill_price
+        if direction == "LONG"
+        else signal["stop"] <= fill_price
+    )
+    if stop_wrong_side:
+        return {
+            **base,
+            "filled": False,
+            "entry_bar_ts": entry_bar["ts"].isoformat(),
+            "result": "CANCELLED",
+            "exit_reason": "POST_FILL_INVALID_STOP",
+            "base_entry_price": base_fill,
+            "fill_entry_price": fill_price,
+            "base_exit_price": None,
+            "fill_exit_price": None,
+            "exit_bar_ts": None,
+            "gross_pnl": 0.0,
+            "slippage_cost": 0.0,
+            "commission": 0.0,
+            "total_costs": 0.0,
+            "net_pnl": 0.0,
+        }
+
+    exit_info = _legacy_resolve_exit(signal, day_bars, entry_bar)
+    if exit_info["reason"] == EOD_BAR_MISSING:
+        return {
+            **base,
+            "filled": True,
+            "entry_bar_ts": entry_bar["ts"].isoformat(),
+            "result": "UNRESOLVED",
+            "exit_reason": EOD_BAR_MISSING,
+            "base_entry_price": base_fill,
+            "fill_entry_price": fill_price,
+            "base_exit_price": None,
+            "fill_exit_price": None,
+            "exit_bar_ts": (
+                exit_info["bar"]["ts"].isoformat() if exit_info["bar"] else None
+            ),
+            "gross_pnl": None,
+            "slippage_cost": None,
+            "commission": None,
+            "total_costs": None,
+            "net_pnl": None,
+        }
+
+    base_exit = exit_info["base_exit"]
+    signed = 1.0 if direction == "LONG" else -1.0
+    actual_exit = base_exit - slip if direction == "LONG" else base_exit + slip
+    gross_pnl = signed * (base_exit - base_fill) * point_value
+    entry_slippage_cost = signed * (fill_price - base_fill) * point_value
+    exit_slippage_cost = signed * (base_exit - actual_exit) * point_value
+    slippage_cost = entry_slippage_cost + exit_slippage_cost
+    total_costs = slippage_cost + ROUND_TRIP_COMMISSION
+    net_pnl = gross_pnl - total_costs
+    return {
+        **base,
+        "filled": True,
+        "entry_bar_ts": entry_bar["ts"].isoformat(),
+        "result": "WIN" if net_pnl > 0 else "LOSS" if net_pnl < 0 else "BREAKEVEN",
+        "exit_reason": exit_info["reason"],
+        "base_entry_price": base_fill,
+        "fill_entry_price": fill_price,
+        "base_exit_price": base_exit,
+        "fill_exit_price": actual_exit,
+        "exit_bar_ts": exit_info["bar"]["ts"].isoformat(),
+        "gross_pnl": gross_pnl,
+        "slippage_cost": slippage_cost,
+        "commission": ROUND_TRIP_COMMISSION,
+        "total_costs": total_costs,
+        "net_pnl": net_pnl,
+    }
+
+
 def _cancelled(old: dict, *, base_fill: float, fill_price: float) -> dict:
     return {
         **old,
@@ -66,75 +248,8 @@ def _cancelled(old: dict, *, base_fill: float, fill_price: float) -> dict:
 
 
 def causal_trigger_bar_replay(signal: dict, day_bars: list, *, slippage_ticks: float) -> dict:
-    """Re-score one signal with the documented stop active on its trigger bar."""
-    old = replay_signal(signal, day_bars, slippage_ticks=slippage_ticks)
-    entry = recover_entry(signal, day_bars)
-    if entry is None:
-        return old
-
-    bar = entry["bar"]
-    direction = signal["direction"]
-    trigger = float(signal["entry_trigger"])
-    stop = float(signal["stop"])
-    target = float(signal["target"])
-    open_price = float(bar["open"])
-    gap_through = open_price >= trigger if direction == "LONG" else open_price <= trigger
-    base_fill = open_price if gap_through else trigger
-    slip = float(slippage_ticks) * TICK_SIZE
-    fill_price = base_fill + slip if direction == "LONG" else base_fill - slip
-
-    bracket_valid = (
-        stop < fill_price < target
-        if direction == "LONG"
-        else target < fill_price < stop
-    )
-    if not bracket_valid:
-        return _cancelled(old, base_fill=base_fill, fill_price=fill_price)
-
-    stop_hit = bar["low"] <= stop if direction == "LONG" else bar["high"] >= stop
-    target_hit = bar["high"] >= target if direction == "LONG" else bar["low"] <= target
-
-    # OHLC cannot order an entry touch and the opposite stop touch within one
-    # bar. The system's standing realism rule is pessimistic: stop wins.
-    if stop_hit:
-        reason, base_exit, exit_bar = "STOP", stop, bar
-    elif target_hit:
-        reason, base_exit, exit_bar = "TARGET", target, bar
-    else:
-        exit_info = _resolve_exit(signal, day_bars, bar)
-        if exit_info["reason"] == EOD_BAR_MISSING:
-            return old
-        reason = exit_info["reason"]
-        base_exit = float(exit_info["base_exit"])
-        exit_bar = exit_info["bar"]
-
-    signed = 1.0 if direction == "LONG" else -1.0
-    actual_exit = base_exit - slip if direction == "LONG" else base_exit + slip
-    point_value = POINT_VALUE[signal["instrument"]]
-    gross_pnl = signed * (base_exit - base_fill) * point_value
-    entry_slippage = signed * (fill_price - base_fill) * point_value
-    exit_slippage = signed * (base_exit - actual_exit) * point_value
-    slippage_cost = entry_slippage + exit_slippage
-    total_costs = slippage_cost + ROUND_TRIP_COMMISSION
-    net_pnl = gross_pnl - total_costs
-
-    return {
-        **old,
-        "filled": True,
-        "entry_bar_ts": bar["ts"].isoformat(),
-        "result": "WIN" if net_pnl > 0 else "LOSS" if net_pnl < 0 else "BREAKEVEN",
-        "exit_reason": reason,
-        "base_entry_price": base_fill,
-        "fill_entry_price": fill_price,
-        "base_exit_price": base_exit,
-        "fill_exit_price": actual_exit,
-        "exit_bar_ts": exit_bar["ts"].isoformat(),
-        "gross_pnl": gross_pnl,
-        "slippage_cost": slippage_cost,
-        "commission": ROUND_TRIP_COMMISSION,
-        "total_costs": total_costs,
-        "net_pnl": net_pnl,
-    }
+    """Canonical corrected replay used as the audit's causal branch."""
+    return replay_signal(signal, day_bars, slippage_ticks=slippage_ticks)
 
 
 def _compact(metrics: dict) -> dict:
@@ -221,7 +336,7 @@ def run(cache_root: Path) -> dict:
         changed_rows = {}
         for slip in (1, 2, 3, 4):
             current_rows = [
-                replay_signal(signal, bars, slippage_ticks=float(slip))
+                legacy_trigger_bar_replay(signal, bars, slippage_ticks=float(slip))
                 for signal, bars in signals_and_bars
             ]
             causal_rows = [
