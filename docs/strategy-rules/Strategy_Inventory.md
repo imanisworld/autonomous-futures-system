@@ -682,12 +682,14 @@ See `ICC_ICT_Research.md` for full breakdown.
    `strategy/signal_engine.py:2074-2134`; see
    `VWAP_FAMILY_SOURCE_OF_TRUTH_AUDIT_2026-07-26.md`
 9. **FVG parameter definition** — after above queue clears
-10. **Hypothetical-ledger forward paper lane for the wide-stop family (B+,
-    2026-09-07)** — isolated account labeled hypothetical $4k / $6k, family
-    caps 400 / 600 ticks, 1 contract, IOC-real, no promotion path; see
-    `docs/wide-stop-day-strategy-policy-options-2026-09-07.md`. **Lane config
-    spec drafted:** `docs/wide-stop-hypothetical-ledger-lane-spec-2026-09-07.md`
-    — **D1–D7 approved 2026-09-07**; build authorized per spec §8, not started.
+10. ~~**Hypothetical-ledger forward paper lane for the wide-stop family (B+)**~~ —
+    **BUILT / DEPLOYED / ACTIVE EVIDENCE COLLECTION** (#510 and later safety/
+    deployment fixes). The isolated wide-stop paper ledgers run under
+    `WIDE_STOP_LEDGER_MODE=paper_sim`; the guarded Tradovate route is DEMO-only
+    with matching proof pins; no promotion path exists. The current handoff is
+    authority for the active $4k 4HR / $5k 3-2-2 evidence contracts and shared
+    epoch constraints. Do not rebuild or reset this lane merely because this
+    historical Build Queue once said "not started."
 
 ---
 
