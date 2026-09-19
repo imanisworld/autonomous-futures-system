@@ -193,7 +193,7 @@ Major remaining blockers:
 - prospective confirmation is still required;
 - every historical candidate remains incompatible with the current real-account
   stop-width / R:R architecture;
-- no 1m 3-2-2 trigger observer is currently authorized.
+- at audit completion, no 1m 3-2-2 trigger observer was authorized. Subsequently, PR #749 deployed an observation-only observer at release `6d5b224aa5c2`; it has no paper-fill or broker authority.
 
 ## Operational ruling
 
