@@ -18,12 +18,14 @@ There is no current blocker to passive 1m/5m/15m evidence collection. There are 
 - **3-2-2 First Live timing:** offline mechanism audit complete; causal pre-armed timing survives 3-tick stress with both halves positive. This closes the timing question only; sample and account-risk blockers remain.
 - **Generic “require 1→2” idea:** tested and not supported as a simple 4HR gate.
 - **Simple “touch supply/demand = reverse” idea:** tested and not supported as a blanket rule.
+- **Backtest data-proof gate:** #751 removes bare-boolean trust for session identity/feed integrity by checking hash-pinned C14 fixtures, frozen replay-file hashes, coverage counts, and explicit gap ledgers.
+- **Resolved-outcome gap proof:** #754 binds each counted validation outcome to a strategy-specific dependency start plus replay signal/entry/resolution timestamps and hash-bound journals; any declared-gap overlap or missing/mismatched proof fails closed.
 
 ## Current blockers
 
 ### 1. 4HR prospective trigger-time parity
 
-Offline pre-armed touch survives stress, but the deployed 1m lane is evidence-only. We still need natural forward examples proving:
+Offline pre-armed touch survives stress, but the deployed 1m lane is evidence-only. The 2026-09-18 forward baseline contains no 4HR/3-2-2 observer events because MNQ 1m collection began at 17:38Z / 13:38 ET, after both observer windows had ended; this is expected and does not indicate collector failure. Exact deployed release `6d5b224` passes the full targeted 1m observer/isolation suite (**69 passed**), and the same-day futures journal has zero TRADE rows. We still need natural forward examples proving:
 - correct armed state;
 - 1m touch time;
 - dedupe;
@@ -118,7 +120,11 @@ Good:
 - chronological halves;
 - causal HTF context/zone reconstruction;
 - entry-model A/B;
+- mechanically verified frozen-data/session identity for Backtest→DEMO qualification;
+- hash-bound dependency→signal→entry→resolution gap checks for counted resolved outcomes;
 - manifest/hash-backed structural research.
+
+Older studies that did not record the required historical timestamps or dependency-window source remain unproven unless sufficient raw data exists to rerun/backfill them.
 
 Still strategy-specific:
 - live/replay timing parity;
@@ -140,10 +146,12 @@ Do not restart:
 
 ## Next work
 
-1. Let natural MNQ 4HR 1m armed-trigger evidence accumulate.
-2. Both active MNQ 1m trigger observers (4HR and 3-2-2) are now in natural forward-evidence collection. Review under `docs/prereg-forward-one-min-trigger-evidence-review-2026-09-18.md`; no paper-fill discussion before the preregistered per-strategy sample/safety gate.
-3. Keep LC_ZONE v1 / 4HR zone-target changes on HOLD; only reopen zone design under a new preregistration.
-4. Miyagi timing audit only if that parked strategy is reopened.
-5. Continue passive six-root context collection.
+1. **No deployment/restart first.** The verified futures box remains healthy at `6d5b224`; #751/#754 are offline qualification/replay tooling and do not require runtime promotion.
+2. Let natural MNQ 4HR 1m armed-trigger evidence accumulate and specifically test the previously proven late-entry mechanism: correct arm, true 1m touch time, correct prior-completed 1H stop anchor, dedupe, and no stale 5m-close dependence.
+3. Continue the 3-2-2 First Live 1m observer under `docs/prereg-forward-one-min-trigger-evidence-review-2026-09-18.md`; no paper-fill discussion before the preregistered per-strategy sample/safety gate.
+4. Refine a strategy only when evidence isolates a concrete mechanism defect. Do not tune targets, stops, risk caps, or session filters merely to improve results.
+5. Keep LC_ZONE v1 / 4HR zone-target changes on HOLD; only reopen zone design under a new preregistration.
+6. Miyagi timing audit only if that parked strategy is reopened.
+7. Continue passive six-root context collection.
 
 No live expansion.
