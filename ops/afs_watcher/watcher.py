@@ -775,11 +775,17 @@ def check_runtime(state: dict, f: Findings, tick: dict) -> None:
         # for 60 min" while logs/tf5m/ was advancing normally and the feed-gap
         # alarm independently reported both instruments healthy.
         #
-        # A real stall is causal: a 15-MINUTE BAR ARRIVED and no journal row
-        # followed. 15m bar files live directly in LOG_DIR; 5m bars are under
-        # LOG_DIR/tf5m/, so this non-recursive glob deliberately excludes them.
+        # A real stall is causal: a 15-MINUTE DECISION-PATH BAR ARRIVED and
+        # no main-journal row followed. Only MNQ/MES enter the decision path.
+        # M2K/MGC/MCL/MBT are collection-only and deliberately bypass
+        # process_alert / the main journal, so their top-level 15m bar files
+        # must not be allowed to manufacture a journal-stall finding.
         try:
-            _bar_mtimes = [os.stat(b).st_mtime for b in LOG_DIR.glob("bars_*.jsonl")]
+            _decision_bar_paths = [
+                *LOG_DIR.glob("bars_MNQ*.jsonl"),
+                *LOG_DIR.glob("bars_MES*.jsonl"),
+            ]
+            _bar_mtimes = [os.stat(b).st_mtime for b in _decision_bar_paths]
             newest_bar_mtime = max(_bar_mtimes) if _bar_mtimes else 0.0
         except OSError:
             newest_bar_mtime = 0.0
