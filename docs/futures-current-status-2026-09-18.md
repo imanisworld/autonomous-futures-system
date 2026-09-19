@@ -22,7 +22,7 @@ Active deployed futures release verified on the box:
 - matching proof pin `EXPECTED_PROOF_ONE_MIN_322_OBSERVER_ENABLED=true`
 - live-box drift guard: **OK**, no missing pins, no unpinned overrides, no mismatches
 
-Repository `main` is ahead of the deployed futures release. Repository state must not be used as proof of deployed state. As of the post-#754 check, `main=d3ba7a46ddb81558b2181192f718071caa60ce15` while the VPS remains intentionally pinned to `6d5b224aa5c208cad0f1d39c09eda13c6171b98b`. The commits between them are offline replay/backtest qualification, docs, and options work; there is no futures runtime-sensitive delta that requires a deploy or restart.
+Repository `main` is ahead of the deployed futures release. Repository state must not be used as proof of deployed state. The VPS remains intentionally pinned to `6d5b224aa5c208cad0f1d39c09eda13c6171b98b`. Most post-release futures changes are offline replay/backtest/docs work, but #759 is one deliberate runtime evidence-only exception: it adds append-only observer response proof in `webhook/app.py` plus `context/one_min_response_audit.py`. #759 is merged on `main` but **not deployed** because the September 30 no-release/no-restart restriction remains in force. It changes no strategy, risk, trigger, or broker authority.
 
 ## What is good / high confidence
 
@@ -53,7 +53,7 @@ All six configured futures roots now deliver authenticated 1m TradingView data a
 - MCL
 - MBT
 
-At the post-deploy proof check, each root had a fresh 1m payload and an active `tf1m` file. Forward-observer baseline after activation: MNQ recorded 201 one-minute bars on 2026-09-18 from 17:38Z through 20:59Z. That began after the 4HR 09:30–11:00 ET and 3-2-2 10:00–11:00 ET observer windows, so zero 4HR/3-2-2 event files on that date is expected rather than evidence of a dead observer. Exact deployed release `6d5b224` passes the full targeted 1m observer/isolation suite (**69 passed**), and the 2026-09-18 futures journal has **0 TRADE rows** / no 1m execution rows. The first eligible natural observer session is the next trading day.
+At the post-deploy proof check, each root had a fresh 1m payload and an active `tf1m` file. Forward-observer baseline after activation: MNQ recorded 201 one-minute bars on 2026-09-18 from 17:38Z through 20:59Z. That began after the 4HR 09:30–11:00 ET and 3-2-2 10:00–11:00 ET observer windows, so zero 4HR/3-2-2 event files on that date is expected rather than evidence of a dead observer. Exact deployed release `6d5b224` passes the full targeted 1m observer/isolation suite (**69 passed**), and the 2026-09-18 futures journal has **0 TRADE rows** / no 1m execution rows. The read-only `scripts/forward_one_min_trigger_review.py` baseline against a copied VPS log snapshot reports **COLLECT**, 0 touches, 0 problems for both strategies. The first eligible natural observer session is the next trading day.
 
 Role separation is deliberate:
 - MNQ deployed behavior: 1m may observe an already-armed 4HR trigger;
@@ -363,13 +363,14 @@ Do not:
 
 ## Safe next work order
 
-1. **Preserve collection epochs / no runtime churn** — no deploy or restart is required for #751/#754. Keep the VPS pinned to the verified `6d5b224` release until a proven runtime defect or explicitly approved runtime change exists.
-2. **4HR prospective 1m evidence** — verify trigger touch timing, stop anchor, dedupe, and observation-only behavior on natural signals. This is the direct forward check for the previously proven completed-5m late-entry defect.
-3. **3-2-2 prospective 1m evidence** — timing survives the offline causal model; now collect natural First Live arms/touches under `docs/prereg-forward-one-min-trigger-evidence-review-2026-09-18.md`. No paper-fill discussion before the preregistered mechanism threshold.
-4. **Refine only from proven mechanism failures** — if forward evidence shows stale arm state, wrong trigger timestamp, wrong completed-1H stop anchor, duplicate trigger handling, or another live/replay timing mismatch, isolate and repair that exact defect. Do not tune targets/stops/risk merely because P&L is weak.
-5. **LC_ZONE v1 is HOLD** — do not tune or rescue the failed quality audit. Reopen zone design only under a new preregistration.
-6. **Miyagi timing parity only if reopened** — its current sample is too small to justify runtime work.
-7. Continue passive evidence collection; do not expand instruments or execution scope.
+1. **Preserve collection epochs / honor the release freeze** — keep the VPS pinned to verified `6d5b224` unless the operator explicitly waives the September 30 no-release/no-restart restriction. #751/#754 need no runtime promotion. #759 is merged evidence-only runtime plumbing but remains inactive until such a sanctioned release.
+2. **Durable observer response proof** — after #759 is eventually activated, every natural 4HR/3-2-2 observer event must have a matching `tf1m/observer_response_audit_<date>.jsonl` row. Events before that activation may be retained as raw evidence but cannot satisfy the execution-isolation proof.
+3. **4HR prospective 1m evidence** — verify trigger touch timing, stop anchor, dedupe, and observation-only behavior on natural signals. This is the direct forward check for the previously proven completed-5m late-entry defect.
+4. **3-2-2 prospective 1m evidence** — timing survives the offline causal model; now collect natural First Live arms/touches under `docs/prereg-forward-one-min-trigger-evidence-review-2026-09-18.md`. No paper-fill discussion before the preregistered mechanism threshold.
+5. **Refine only from proven mechanism failures** — if forward evidence shows stale arm state, wrong trigger timestamp, wrong completed-1H stop anchor, duplicate trigger handling, or another live/replay timing mismatch, isolate and repair that exact defect. Do not tune targets/stops/risk merely because P&L is weak.
+6. **LC_ZONE v1 is HOLD** — do not tune or rescue the failed quality audit. Reopen zone design only under a new preregistration.
+7. **Miyagi timing parity only if reopened** — its current sample is too small to justify runtime work.
+8. Continue passive evidence collection; do not expand instruments or execution scope.
 
 ## Bottom line
 

@@ -25,7 +25,7 @@ There is no current blocker to passive 1m/5m/15m evidence collection. There are 
 
 ### 1. 4HR prospective trigger-time parity
 
-Offline pre-armed touch survives stress, but the deployed 1m lane is evidence-only. The 2026-09-18 forward baseline contains no 4HR/3-2-2 observer events because MNQ 1m collection began at 17:38Z / 13:38 ET, after both observer windows had ended; this is expected and does not indicate collector failure. Exact deployed release `6d5b224` passes the full targeted 1m observer/isolation suite (**69 passed**), and the same-day futures journal has zero TRADE rows. We still need natural forward examples proving:
+Offline pre-armed touch survives stress, but the deployed 1m lane is evidence-only. The 2026-09-18 forward baseline contains no 4HR/3-2-2 observer events because MNQ 1m collection began at 17:38Z / 13:38 ET, after both observer windows had ended; this is expected and does not indicate collector failure. Exact deployed release `6d5b224` passes the full targeted 1m observer/isolation suite (**69 passed**), and the same-day futures journal has zero TRADE rows. A post-baseline audit found that `latest_webhook*.json` was rolling/overwritten and could not durably prove the actual response fields for a later natural event. #759 fixes that with append-only response proof, but is merged-not-deployed under the September 30 release freeze. No natural observer event occurred before the defect was found. We still need natural forward examples proving:
 - correct armed state;
 - 1m touch time;
 - dedupe;
@@ -33,7 +33,7 @@ Offline pre-armed touch survives stress, but the deployed 1m lane is evidence-on
 - no stale 5m-close dependence;
 - no unauthorized paper/broker action.
 
-Until then, 1m does not get paper-fill authority.
+Until then, 1m does not get paper-fill authority. A natural event collected before #759 is activated may remain as raw observer evidence but cannot satisfy the durable execution-isolation requirement. The read-only `scripts/forward_one_min_trigger_review.py` baseline on the current VPS snapshot reports **COLLECT**, 0 touches, and 0 problems for both strategies.
 
 ### 2. LC_ZONE quality / 4HR target geometry
 
@@ -146,12 +146,13 @@ Do not restart:
 
 ## Next work
 
-1. **No deployment/restart first.** The verified futures box remains healthy at `6d5b224`; #751/#754 are offline qualification/replay tooling and do not require runtime promotion.
-2. Let natural MNQ 4HR 1m armed-trigger evidence accumulate and specifically test the previously proven late-entry mechanism: correct arm, true 1m touch time, correct prior-completed 1H stop anchor, dedupe, and no stale 5m-close dependence.
-3. Continue the 3-2-2 First Live 1m observer under `docs/prereg-forward-one-min-trigger-evidence-review-2026-09-18.md`; no paper-fill discussion before the preregistered per-strategy sample/safety gate.
-4. Refine a strategy only when evidence isolates a concrete mechanism defect. Do not tune targets, stops, risk caps, or session filters merely to improve results.
-5. Keep LC_ZONE v1 / 4HR zone-target changes on HOLD; only reopen zone design under a new preregistration.
-6. Miyagi timing audit only if that parked strategy is reopened.
-7. Continue passive six-root context collection.
+1. **Honor the release freeze.** The verified futures box remains healthy at `6d5b224`; #751/#754 need no runtime promotion. #759 is evidence-only runtime plumbing and stays inactive unless the operator explicitly waives the September 30 no-release/no-restart restriction.
+2. After #759 is eventually activated, require a matching durable response-audit row for every natural observer event; missing proof is HOLD and any executable response is UNSAFE.
+3. Let natural MNQ 4HR 1m armed-trigger evidence accumulate and specifically test the previously proven late-entry mechanism: correct arm, true 1m touch time, correct prior-completed 1H stop anchor, dedupe, and no stale 5m-close dependence.
+4. Continue the 3-2-2 First Live 1m observer under `docs/prereg-forward-one-min-trigger-evidence-review-2026-09-18.md`; no paper-fill discussion before the preregistered per-strategy sample/safety gate.
+5. Refine a strategy only when evidence isolates a concrete mechanism defect. Do not tune targets, stops, risk caps, or session filters merely to improve results.
+6. Keep LC_ZONE v1 / 4HR zone-target changes on HOLD; only reopen zone design under a new preregistration.
+7. Miyagi timing audit only if that parked strategy is reopened.
+8. Continue passive six-root context collection.
 
 No live expansion.

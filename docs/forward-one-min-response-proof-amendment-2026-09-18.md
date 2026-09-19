@@ -56,6 +56,21 @@ The original event-class rules remain unchanged:
 - 3-2-2 5m arm/expiry responses must remain `FIVE_MIN_CONTEXT`;
 - observer lanes retain no paper, DEMO, live, or broker authority.
 
+## Read-only review
+
+Use:
+
+`python3 scripts/forward_one_min_trigger_review.py --log-dir <copied-log-dir>`
+
+The reviewer checks persisted event/response pairing, duplicate accepted arms,
+raw 1m trigger inequalities, 4HR completed-1H stop anchoring, 3-2-2 arm
+reconstruction, and completed-5m timing/detachment metrics. It tracks the
+3-touch early mechanism checkpoint and a conservative version of the later
+10-touch / 20-full-window-day / 2-calendar-month / 3-LONG / 3-SHORT threshold.
+
+The tool never calculates expectancy, changes strategy parameters, or grants
+execution authority. Missing proof fails closed.
+
 ## Activation boundary
 
 This proof exists prospectively only after the response-audit code is deployed.
