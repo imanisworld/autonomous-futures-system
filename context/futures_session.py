@@ -63,6 +63,8 @@ def futures_session_active(now: datetime | None = None) -> bool:
 #   metals/energy (MGC/MCL): Sun 18:00 ET → Fri 17:00 ET, daily 17:00–18:00 ET.
 #   crypto        (MBT): 24/7 since 2026; maintenance Mon–Fri 16:00–16:02 CT
 #       (17:00–17:02 ET) and Saturday 02:00–04:00 CT (03:00–05:00 ET).
+#       CME notice 2026-09-14 extends Sat 2026-09-19 maintenance to
+#       02:00–08:00 CT (03:00–09:00 ET) for 24/7 markets.
 PRODUCT_EQUITY_INDEX = "equity_index"
 PRODUCT_METALS_ENERGY = "metals_energy"
 PRODUCT_CRYPTO = "crypto"
@@ -107,6 +109,11 @@ def _globex_weekly_active(et: datetime, *, equity_halt: bool) -> bool:
 
 def _crypto_active(et: datetime) -> bool:
     wd, t = et.weekday(), et.time()
+    # One-off CME 24/7 maintenance extension for Saturday 2026-09-19:
+    # 02:00–08:00 CT = 03:00–09:00 ET. Keep this date-scoped so the normal
+    # recurring 02:00–04:00 CT window resumes automatically afterward.
+    if (et.year, et.month, et.day) == (2026, 9, 19) and time(3, 0) <= t < time(9, 0):
+        return False
     if wd <= 4 and time(17, 0) <= t < time(17, 2):  # Mon–Fri 16:00–16:02 CT
         return False
     if wd == 5 and time(3, 0) <= t < time(5, 0):     # Sat 02:00–04:00 CT

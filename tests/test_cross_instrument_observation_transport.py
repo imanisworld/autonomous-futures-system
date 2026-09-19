@@ -506,7 +506,11 @@ def test_sessions_are_product_aware():
     assert product_of("MBT") == "crypto" and product_of("MGC") == "metals_energy" and product_of("M2K") == "equity_index"
     assert product_session_active("MBT", sat_noon) is True                       # 24/7
     assert product_session_active("MNQ", sat_noon) is False and product_session_active("MGC", sat_noon) is False
-    assert product_session_active("MBT", datetime(2026, 9, 19, 4, 0, tzinfo=ET)) is False   # Sat 02:00–04:00 CT
+    assert product_session_active("MBT", datetime(2026, 9, 19, 4, 0, tzinfo=ET)) is False   # special Sat maintenance
+    assert product_session_active("MBT", datetime(2026, 9, 19, 8, 59, tzinfo=ET)) is False  # extended through 08:00 CT
+    assert product_session_active("MBT", datetime(2026, 9, 19, 9, 0, tzinfo=ET)) is True     # reopen at 08:00 CT
+    assert product_session_active("MBT", datetime(2026, 9, 26, 4, 0, tzinfo=ET)) is False   # normal Sat maintenance
+    assert product_session_active("MBT", datetime(2026, 9, 26, 5, 0, tzinfo=ET)) is True    # normal Sat reopen
     assert product_session_active("MBT", datetime(2026, 9, 14, 17, 1, tzinfo=ET)) is False  # Mon–Fri 16:00–16:02 CT
     assert product_session_active("MBT", datetime(2026, 9, 14, 17, 30, tzinfo=ET)) is True  # no 17:00–18:00 break for crypto
     assert product_session_active("MNQ", datetime(2026, 9, 14, 16, 20, tzinfo=ET)) is False  # equity-index halt
