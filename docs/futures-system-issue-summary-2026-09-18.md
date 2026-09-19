@@ -90,7 +90,7 @@ The completed-hour lookahead and the separate trigger-bar replay mismatch are no
 
 ### 5. MES 1-2-2 remains thin and lacks operational execution parity
 
-Forward accounting edge is slight and stronger slippage turns it negative. The shared state machine correctly reconstructs a hypothetical pre-armed next-bar order, including gaps and same-bar outcomes, but the runner does not actually arm a broker order before that watched 15m bar. Paper/replay evidence is therefore **causal reconstructed evidence, not broker-execution parity**. Non-Paper submission fails closed. Continue evidence; do not retune from this sample or grant execution authority.
+Forward accounting edge is slight and stronger slippage turns it negative. The 2026-09-19 pre-arm feasibility audit proves the exact bracket is first final at the completed 15m arm-bar close, which is the same instant the watched bar opens. Therefore exact pre-open execution parity is **not feasible as the same strategy identity**. Paper/replay remains causal reconstructed counterfactual evidence; non-Paper late submission fails closed. Continue evidence only as paper/observation, not execution proof.
 
 ### 6. Cross-instrument evidence is observation only
 
@@ -104,7 +104,7 @@ M2K/MGC/MCL/MBT now have better 1m coverage, but this does not justify strategy 
 - **Miyagi:** **PROMISING BUT UNPROVEN / PARKED / REPLAY DEFECT FIXED REPO-SIDE**; #776 repaired completed-hour lookahead and the 2026-09-19 follow-up fixes trigger-bar stop/T1 suppression, gap-open semantics, and fail-closed bracket validation. Frozen evidence regenerated successfully; current-account risk incompatibility and thin sample remain.
 - **Daily 2-2 completed-close / favorable-pullback:** PROMISING BUT UNPROVEN / PAPER ONLY; activation baseline reproduced exactly and current-CME-day variant remains positive, but the 34 fills are not first-touch evidence.
 - **Daily 2-2 first-touch under current rules:** BROKEN / ZERO ADMISSIBLE FILLS at 1/2/3 adverse entry ticks because fixed planned 2R + actual-fill R:R >=2 is mechanically incompatible with adverse touch slippage.
-- **MES 15m 1-2-2:** PROMISING BUT UNPROVEN / thin / **PAPER EVIDENCE ONLY**; reconstructed pre-armed math is causal, but operational execution parity is absent because no broker order is armed before the watched bar.
+- **MES 15m 1-2-2:** PROMISING BUT UNPROVEN / thin / **PAPER EVIDENCE ONLY / EXACT PRE-OPEN PARITY NOT FEASIBLE AS SAME STRATEGY**; the final arm-bar geometry is only known at the same instant the watched bar opens. A future 1m lane may study post-arm attainability observation-only, but cannot retroactively validate next-bar-open counterfactual fills.
 - **Transition:** WAIT / fails required slippage robustness.
 - **ORB Reclaim current:** BROKEN.
 - **ORB Breakout:** BROKEN.
