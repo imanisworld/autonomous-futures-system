@@ -162,6 +162,19 @@ The entry-conditioning conclusion is therefore no longer a loose hypothesis: **O
 
 For comparison, impulse-first-pullback and trend-consolidation remain poor even after fill, supporting their classification as signal/directional failures rather than merely entry-timing defects.
 
-### Next gate
+### Next gate — completed
 
-Do **not** change the runtime detector from this result. The next permitted strategy test is a preregistered, one-variable ORB false-break entry-architecture A/B on this exact frozen population. Do not tune target, stop, session, filters, or risk in the same test. The structural 4HR observer result remains diagnostic only and must not be conflated with the separately audited canonical active 4HR lane.
+The preregistered one-variable ORB false-break entry-architecture A/B is now complete (`docs/orb-false-break-entry-architecture-ab-2026-09-18.md`).
+
+Holding the original absolute stop/target fixed and changing only the entry from the later resting retouch to the completed signal-bar close made both instruments worse:
+
+- MNQ: +0.0111R/all -> -0.0596R/all;
+- MES: -0.0416R/all -> -0.0847R/all;
+- both chronological halves were negative under signal-close on both instruments;
+- 1/2/3 adverse-tick signal-close stress worsened the result further.
+
+All five preregistered support conditions failed. Classification: **NO RUNTIME CHANGE / MIXED_OR_UNSUPPORTED**.
+
+Therefore the entry-conditioning diagnosis remains real, but “enter at signal close” is rejected as the fix. Any further ORB redesign is a new strategy hypothesis. The separate 2-2 entry-conditioning finding remains unanswered and requires its own preregistered test if reopened.
+
+The structural 4HR observer result remains diagnostic only and must not be conflated with the separately audited canonical active 4HR lane.
