@@ -9,7 +9,7 @@ This is the concise operator-facing source of truth for the futures system as of
 The system is materially safer and more testable than it was at the start of the week, but no strategy is validated. The strongest current strategy lead is MNQ 4HR Re-Trigger, and even that remains **PROMISING BUT UNPROVEN** after correcting its entry-timing realism.
 
 Active deployed futures release verified on the box:
-- release: `a6913c06750dbe9e67ea6ba0120ac43841f1fdc9`
+- release: `6d5b224aa5c208cad0f1d39c09eda13c6171b98b`
 - service CWD matches that exact release
 - `LIVE_TRADING_ENABLED=false`
 - `TRADOVATE_ENV=demo`
@@ -18,6 +18,8 @@ Active deployed futures release verified on the box:
 - `MAX_CONTRACTS_HARD_CAP=1`
 - `FIVE_MIN_FEED_ENABLED=true`
 - `ONE_MIN_TRIGGER_ENABLED=true`
+- `ONE_MIN_322_OBSERVER_ENABLED=true`
+- matching proof pin `EXPECTED_PROOF_ONE_MIN_322_OBSERVER_ENABLED=true`
 - live-box drift guard: **OK**, no missing pins, no unpinned overrides, no mismatches
 
 Repository `main` is ahead of the deployed futures release. Repository state must not be used as proof of deployed state.
@@ -55,10 +57,10 @@ At the post-deploy proof check, each root had a fresh 1m payload and an active `
 
 Role separation is deliberate:
 - MNQ deployed behavior: 1m may observe an already-armed 4HR trigger;
-- MNQ repository build: an isolated 3-2-2 First Live observer exists behind default-OFF `ONE_MIN_322_OBSERVER_ENABLED`, but it is **not deployed/activated**;
+- MNQ deployed behavior: the isolated 3-2-2 First Live observer is active behind pinned `ONE_MIN_322_OBSERVER_ENABLED=true`; it remains observation-only with no paper-fill or broker authority;
 - MES: 1m context collection;
 - M2K/MGC/MCL/MBT: strictly observation-only 1m collection;
-- 1m itself does not create a strategy setup. The optional 3-2-2 observer, when separately activated, arms only from the completed canonical 5m 7AM/8AM/9AM structure.
+- 1m itself does not create a strategy setup. The active 3-2-2 observer arms only from the completed canonical 5m 7AM/8AM/9AM structure and remains evidence-only.
 
 ### Backtest / replay infrastructure
 
@@ -360,7 +362,7 @@ Do not:
 ## Safe next work order
 
 1. **4HR prospective 1m evidence** — verify trigger touch timing, stop anchor, dedupe, and paper-only behavior on natural signals.
-2. **3-2-2 prospective timing evidence** — the offline First Live A/B is complete and the observation-only 1m observer build now exists behind a default-OFF proof-critical flag. Next decision is whether to activate that observer on the VPS; no paper-fill or execution authority is included.
+2. **Forward 1m trigger evidence** — both MNQ 4HR and 3-2-2 observation lanes are active. Review natural events under `docs/prereg-forward-one-min-trigger-evidence-review-2026-09-18.md`; no paper-fill discussion before the per-strategy minimum of 10 distinct natural touches spanning at least 20 trading days and 2 calendar months with zero safety/parity violations.
 3. **LC_ZONE v1 is HOLD** — do not tune or rescue the failed quality audit. Reopen zone design only under a new preregistration.
 4. **Miyagi timing parity only if reopened** — its current sample is too small to justify runtime work.
 5. Continue passive evidence collection; do not expand instruments or execution scope.

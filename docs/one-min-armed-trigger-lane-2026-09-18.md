@@ -9,8 +9,8 @@ Purpose:
 - collect lower-timeframe context for all configured futures roots;
 - keep setup discovery, strategy authorization, risk approval, and broker submission separate from 1m ingestion.
 
-Verified active release:
-`a6913c06750dbe9e67ea6ba0120ac43841f1fdc9`
+Verified active futures release:
+`6d5b224aa5c208cad0f1d39c09eda13c6171b98b`
 
 Verified loaded posture:
 - `LIVE_TRADING_ENABLED=false`
@@ -19,7 +19,9 @@ Verified loaded posture:
 - `EXIT_MODE=static`
 - `MAX_CONTRACTS_HARD_CAP=1`
 - `ONE_MIN_TRIGGER_ENABLED=true`
-- live-box drift guard: **OK**
+- `ONE_MIN_322_OBSERVER_ENABLED=true`
+- `EXPECTED_PROOF_ONE_MIN_322_OBSERVER_ENABLED=true`
+- live-box drift guard: **OK**, no missing pins, unpinned overrides, or mismatches
 
 ## Architecture
 
@@ -37,7 +39,7 @@ MNQ 4HR trigger observer:
 - records `trade_authorized=false`;
 - records `external_broker=false`.
 
-MNQ 3-2-2 First Live observer — **repository build only / not activated on the VPS**:
+MNQ 3-2-2 First Live observer — **DEPLOYED / ACTIVATED / OBSERVATION ONLY**:
 - `context/one_min_322_observer.py`;
 - dedicated proof-critical flag `ONE_MIN_322_OBSERVER_ENABLED`, default OFF;
 - requires the generic `ONE_MIN_TRIGGER_ENABLED` flag as well;
@@ -48,7 +50,7 @@ MNQ 3-2-2 First Live observer — **repository build only / not activated on the
 - equality at the trigger is not a break;
 - records `trade_authorized=false`, `paper_fill_authorized=false`, and `external_broker=false`;
 - imports no DecisionEngine, RiskEngine, PaperBroker, or broker adapter;
-- activation requires a separate deploy/pin decision.
+- activated only after exact-SHA build/verify/promote, matching proof pin, and a clean live-box guard.
 
 Main runner:
 - authenticated 1m MNQ/MES inputs are intercepted before the ordinary strategy/risk/broker path;
@@ -80,8 +82,9 @@ Collection-only 1m extension:
 - static isolation test proves the observer module imports no DecisionEngine,
   RiskEngine, PaperBroker, or broker adapter;
 - full repository suite: **6,186 passed / 7 skipped**;
-- `ONE_MIN_322_OBSERVER_ENABLED` is proof-critical and default OFF;
-- **not activated or deployed by this build**.
+- `ONE_MIN_322_OBSERVER_ENABLED` is proof-critical and default OFF in code;
+- VPS activation completed at release `6d5b224aa5c2` with explicit runtime value `true` and matching proof pin;
+- forward natural-evidence review preregistered in `docs/prereg-forward-one-min-trigger-evidence-review-2026-09-18.md`, frozen at commit `ae1bf24437cdbdc5de3955af72feec3bdebe562c`.
 
 Atomic release path:
 - merged SHA release built/verified/promoted through the immutable release flow;
