@@ -127,6 +127,14 @@ def test_flat_lanes_with_stale_5m_bars_are_not_exposed(tmp_path):
     assert lanes["mnq_position_exposed_without_fresh_5m_bars"] is False
 
 
+def test_expected_weekend_carry_is_not_reported_as_stale_bar_exposure(tmp_path):
+    _box_like(tmp_path, five_min_bar_at=NOW - timedelta(hours=3), d22_position=True)
+    saturday_utc = datetime(2026, 9, 19, 1, 43, tzinfo=timezone.utc)  # Fri 21:43 ET
+    lanes = hypothetical_lane_positions(tmp_path, saturday_utc)
+    assert lanes["open_positions"] == ["daily_22_5k"]
+    assert lanes["mnq_position_exposed_without_fresh_5m_bars"] is False
+
+
 def test_mes_lane_open_position_comes_from_trade_and_outcome_ids(tmp_path):
     ledger = tmp_path / "hypothetical_ledger" / "mes_122_1500"
     rows = [

@@ -13,6 +13,7 @@ from ops.collector_census import (
     COLLECTORS,
     DEAD,
     FRESH,
+    OFF_SESSION,
     STALE,
     Collector,
     build_census,
@@ -69,6 +70,25 @@ def test_daily_jsonl_resolves_todays_filename(tmp_path):
     _write_jsonl(tmp_path / "journal_2026-08-25.jsonl", [{"ts": "2026-08-25T12:50:00+00:00"}])
     collector = Collector("journal", "daily_jsonl", "journal_{date}.jsonl", 30)
     assert check(collector, tmp_path, NOW)["status"] == FRESH
+
+
+def test_cme_heartbeat_absence_is_off_session_during_weekend(tmp_path):
+    saturday_utc = datetime(2026, 9, 19, 1, 43, tzinfo=timezone.utc)  # Fri 21:43 ET
+    collector = Collector(
+        "bars MNQ", "daily_jsonl", "bars_MNQ_{date}.jsonl", 30, session="cme_equity"
+    )
+    result = check(collector, tmp_path, saturday_utc)
+    assert result["status"] == OFF_SESSION
+    census = build_census(tmp_path, saturday_utc)
+    assert "bars MNQ" not in census["dead"]
+
+
+def test_cme_heartbeat_absence_fails_again_after_session_reopens(tmp_path):
+    monday_utc = datetime(2026, 9, 21, 14, 0, tzinfo=timezone.utc)  # Mon 10:00 ET
+    collector = Collector(
+        "bars MNQ", "daily_jsonl", "bars_MNQ_{date}.jsonl", 30, session="cme_equity"
+    )
+    assert check(collector, tmp_path, monday_utc)["status"] == ABSENT
 
 
 @pytest.mark.parametrize("column", ["timestamp", "ts", "created_at", "observed_at"])
