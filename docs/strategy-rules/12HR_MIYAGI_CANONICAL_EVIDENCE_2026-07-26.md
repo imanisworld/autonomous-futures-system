@@ -1,5 +1,7 @@
 # 12HR Miyagi — Canonical Evidence Study (2026-07-26)
 
+> **SUPERSEDED FOR PERFORMANCE CLAIMS (2026-09-18):** the Step-7 stop selector admitted the still-forming 09:00–10:00 hourly bucket at the 09:30 decision. Use `12HR_MIYAGI_CAUSAL_CORRECTION_2026-09-18.md` and the versioned corrected JSON artifacts for current evidence. This file is retained as historical provenance.
+
 **Status: PROMISING BUT UNPROVEN (both MNQ and MES).** No configuration,
 risk, execution, or deployment behavior changed. This is a research-only
 evidence report. No coded Miyagi detector existed anywhere in this repository

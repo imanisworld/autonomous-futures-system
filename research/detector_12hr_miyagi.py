@@ -132,9 +132,15 @@ def detect_12hr_miyagi(
         # Between Bar C high/low (inclusive of exact equality) -> no setup.
         return None
 
-    # Step 7 -- stop reference from 60-minute bars
+    # Step 7 -- stop reference from the most recently COMPLETED 60-minute bar.
+    # A bar whose start timestamp is merely before 9:30 is not necessarily complete:
+    # the 9:00 ET bucket spans 9:00-10:00 and would leak future 9:30-10:00 data.
     prior_60m = sorted(
-        (bar for bar in bars_60m if _usable(bar) and bar["ts"] < window_end),
+        (
+            bar
+            for bar in bars_60m
+            if _usable(bar) and bar["ts"] + timedelta(hours=1) <= window_end
+        ),
         key=lambda bar: bar["ts"],
     )
     if not prior_60m:
