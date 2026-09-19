@@ -596,6 +596,9 @@ class ReplayEngine:
                         daily_state.four_hr_retrigger_state
                     ),
                     "strat_212_122": dict(daily_state.strat_212_122_state),
+                    "strat_322_first_live": dict(
+                        daily_state.strat_322_first_live_state
+                    ),
                 }
                 # Persist the historical candle time (the record's own `ts` is the
                 # wall-clock replay-run time) so downstream analysis — e.g. the MFE
@@ -936,6 +939,9 @@ class ReplayEngine:
                     daily_state.four_hr_retrigger_state
                 ),
                 "strat_212_122": dict(daily_state.strat_212_122_state),
+                "strat_322_first_live": dict(
+                    daily_state.strat_322_first_live_state
+                ),
             }
             # Persist the historical candle time (the record's own `ts` is the
             # wall-clock replay-run time) so shadow candidates can be re-resolved
