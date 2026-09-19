@@ -9,7 +9,7 @@ This is the concise operator-facing source of truth for the futures system as of
 The system is materially safer and more testable than it was at the start of the week, but no strategy is validated. The strongest current strategy lead is MNQ 4HR Re-Trigger, and even that remains **PROMISING BUT UNPROVEN** after correcting its entry-timing realism.
 
 Active deployed futures release verified on the box:
-- release: `6d5b224aa5c208cad0f1d39c09eda13c6171b98b`
+- release: `ac2b117ec1f98f1470fc54330a4befc913ff15f2`
 - service CWD matches that exact release
 - `LIVE_TRADING_ENABLED=false`
 - `TRADOVATE_ENV=demo`
@@ -22,7 +22,7 @@ Active deployed futures release verified on the box:
 - matching proof pin `EXPECTED_PROOF_ONE_MIN_322_OBSERVER_ENABLED=true`
 - live-box drift guard: **OK**, no missing pins, no unpinned overrides, no mismatches
 
-Repository `main` is ahead of the deployed futures release. Repository state must not be used as proof of deployed state. As of the post-#754 check, `main=d3ba7a46ddb81558b2181192f718071caa60ce15` while the VPS remains intentionally pinned to `6d5b224aa5c208cad0f1d39c09eda13c6171b98b`. The commits between them are offline replay/backtest qualification, docs, and options work; there is no futures runtime-sensitive delta that requires a deploy or restart.
+Repository `main` is ahead of the deployed futures release. Repository state must not be used as proof of deployed state. The VPS is intentionally pinned to `ac2b117ec1f98f1470fc54330a4befc913ff15f2`, a minimal runtime release built from prior live `6d5b224aa5c208cad0f1d39c09eda13c6171b98b` plus only #759's append-only 1m observer-response evidence hook. Do not deploy newer `main` merely to catch up.
 
 ## What is good / high confidence
 
@@ -42,6 +42,20 @@ High confidence:
 
 No evidence currently supports accidental real-money execution through the tested paths.
 
+### 1m response-proof deployment — #759
+
+A forward-proof defect was found before the first natural 4HR/3-2-2 observer event: the observer event files retained the trigger event but not the exact `process_alert()` response fields needed to prove that the 1m observation produced no fill/risk/execution authority.
+
+#759 adds an append-only `tf1m/observer_response_audit_<date>.jsonl` row only when a 4HR or 3-2-2 observer event exists. It persists the payload/event identity plus actual response `decision`, `fill_is_none`, `risk_is_none`, `execution_reachable`, and resolution. A write failure is fail-soft and cannot alter alert handling.
+
+The deployed release `ac2b117ec1f98f1470fc54330a4befc913ff15f2` is deliberately minimal: prior live `6d5b224aa5c208cad0f1d39c09eda13c6171b98b` plus exactly four #759 files. No risk, strategy, execution, config, or `webhook/runner.py` file changed. Exact candidate proof: **6,193 passed / 7 skipped**, immutable integrity **1,310/1,310 files**, isolated verify with broker forced to paper, and post-promote live-box guard PASS. Tradovate remained DEMO/flat; all captured campaign-state hashes were byte-identical across the restart; no response-audit row was fabricated by restart. The first real row still requires a natural observer event.
+
+### Watcher journal-stall correction — #760
+
+Post-#759 monitoring exposed a separate read-only watcher defect: `journal_not_advancing` used the newest top-level `bars_*.jsonl` across every root even though M2K/MGC/MCL/MBT are collection-only and intentionally never advance the main decision journal. A fresh collection-only MBT 15m bar therefore created a false stall.
+
+#760 scopes that causal check to MNQ/MES decision-path 15m files only. Current-main watcher tests passed **148/148**. Because the VPS watcher intentionally trails unrelated newer presentation/triage code, only the proven one-hunk fix was backported to the exact live watcher source; installed watcher SHA-256 is `7d29872d1c85814ec10da50bd3152a57c1eea6873d89c0b1c86fbf8f9ee96563` with a pre-change backup retained. The watcher restart did **not** restart futures-bot. It then recorded the `ac2b117ec1f9` restart as sanctioned, cleared the false stall/release blockers, and returned to **zero BLOCKED findings**.
+
 ### Feed coverage
 
 All six configured futures roots now deliver authenticated 1m TradingView data and write isolated `tf1m/` bars:
@@ -53,7 +67,7 @@ All six configured futures roots now deliver authenticated 1m TradingView data a
 - MCL
 - MBT
 
-At the post-deploy proof check, each root had a fresh 1m payload and an active `tf1m` file. Forward-observer baseline after activation: MNQ recorded 201 one-minute bars on 2026-09-18 from 17:38Z through 20:59Z. That began after the 4HR 09:30–11:00 ET and 3-2-2 10:00–11:00 ET observer windows, so zero 4HR/3-2-2 event files on that date is expected rather than evidence of a dead observer. Exact deployed release `6d5b224` passes the full targeted 1m observer/isolation suite (**69 passed**), and the 2026-09-18 futures journal has **0 TRADE rows** / no 1m execution rows. The first eligible natural observer session is the next trading day.
+At the post-deploy proof check, each root had a fresh 1m payload and an active `tf1m` file. Forward-observer baseline after activation: MNQ recorded 201 one-minute bars on 2026-09-18 from 17:38Z through 20:59Z. That began after the 4HR 09:30–11:00 ET and 3-2-2 10:00–11:00 ET observer windows, so zero 4HR/3-2-2 event files on that date is expected rather than evidence of a dead observer. Prior observer release `6d5b224` passed the targeted 1m isolation suite; current minimal release `ac2b117` additionally passed the exact full suite (**6,193 passed / 7 skipped**), and the 2026-09-18 futures journal has **0 TRADE rows** / no 1m execution rows. The first eligible natural observer session is the next trading day.
 
 Role separation is deliberate:
 - MNQ deployed behavior: 1m may observe an already-armed 4HR trigger;
@@ -363,9 +377,9 @@ Do not:
 
 ## Safe next work order
 
-1. **Preserve collection epochs / no runtime churn** — no deploy or restart is required for #751/#754. Keep the VPS pinned to the verified `6d5b224` release until a proven runtime defect or explicitly approved runtime change exists.
-2. **4HR prospective 1m evidence** — verify trigger touch timing, stop anchor, dedupe, and observation-only behavior on natural signals. This is the direct forward check for the previously proven completed-5m late-entry defect.
-3. **3-2-2 prospective 1m evidence** — timing survives the offline causal model; now collect natural First Live arms/touches under `docs/prereg-forward-one-min-trigger-evidence-review-2026-09-18.md`. No paper-fill discussion before the preregistered mechanism threshold.
+1. **Preserve collection epochs / no further runtime churn** — #759 is deployed in minimal release `ac2b117ec1f9` and #760 is installed only in the read-only watcher. No further futures-bot or watcher restart is required now.
+2. **4HR prospective 1m evidence** — verify trigger touch timing, stop anchor, dedupe, and the newly persistent response fields `fill_is_none`, `risk_is_none`, `execution_reachable` on natural signals. This is the direct forward check for the previously proven completed-5m late-entry defect.
+3. **3-2-2 prospective 1m evidence** — timing survives the offline causal model; now collect natural First Live arms/touches and the same persistent response proof under `docs/prereg-forward-one-min-trigger-evidence-review-2026-09-18.md`. No paper-fill discussion before the preregistered mechanism threshold.
 4. **Refine only from proven mechanism failures** — if forward evidence shows stale arm state, wrong trigger timestamp, wrong completed-1H stop anchor, duplicate trigger handling, or another live/replay timing mismatch, isolate and repair that exact defect. Do not tune targets/stops/risk merely because P&L is weak.
 5. **LC_ZONE v1 is HOLD** — do not tune or rescue the failed quality audit. Reopen zone design only under a new preregistration.
 6. **Miyagi timing parity only if reopened** — its current sample is too small to justify runtime work.
