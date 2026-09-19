@@ -1,0 +1,11 @@
+[Unit]
+Description=Run AFS options 1-2-2 observation-only collector each minute around RTH
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 09..16:*:00 America/New_York
+AccuracySec=1s
+Persistent=false
+Unit=options-122-prospective.service
+
+[Install]
+WantedBy=timers.target
