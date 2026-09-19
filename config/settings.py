@@ -521,6 +521,9 @@ class SystemConfig:
     # daily state are reconstructed from that boundary and never inherit the
     # real book's history.
     wide_stop_ledger_epoch_start: Optional[str] = None
+    # Daily 2-2 uses its own evidence epoch even though it shares the paper
+    # router with the wide-stop lanes. Required while that router is active.
+    daily_22_epoch_start: Optional[str] = None
 
     # ── MNQ vwap_hold proof mode (strategy-restoration candidate #3,
     # 2026-07-14) ─────────────────────────────────────────────────────────
@@ -852,6 +855,7 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         wide_stop_ledger_epoch_start=(
             os.getenv("WIDE_STOP_LEDGER_EPOCH_START") or None
         ),
+        daily_22_epoch_start=(os.getenv("DAILY_22_EPOCH_START") or None),
         mnq_vwap_hold_proof_mode=str(
             os.getenv("MNQ_VWAP_HOLD_PROOF_MODE", "observe_only") or "observe_only"
         ).strip().lower(),
@@ -1301,6 +1305,19 @@ def _validate_wide_stop_ledger(config: SystemConfig) -> None:
         raise ConfigError(
             "WIDE_STOP_LEDGER_EPOCH_START must include a UTC offset."
         )
+
+    daily_epoch = config.daily_22_epoch_start
+    if not daily_epoch:
+        raise ConfigError(
+            "DAILY_22_EPOCH_START is required when WIDE_STOP_LEDGER_MODE=paper_sim; "
+            "Daily 2-2 evidence must not inherit the wide-stop epoch."
+        )
+    try:
+        daily_parsed = datetime.fromisoformat(str(daily_epoch).replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ConfigError("DAILY_22_EPOCH_START must be an ISO-8601 timestamp.") from exc
+    if daily_parsed.tzinfo is None:
+        raise ConfigError("DAILY_22_EPOCH_START must include a UTC offset.")
 
 
 def _env_bool(name: str, default: bool) -> bool:

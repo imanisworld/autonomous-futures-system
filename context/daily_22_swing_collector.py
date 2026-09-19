@@ -40,6 +40,7 @@ from context import wide_stop_ledger_paper as wide_contract
 from context.bar_history import _parse_dt
 from context.cme_trading_day import cme_trading_day
 from execution.broker_interface import BracketOrder
+from execution.forward_evidence_campaign import generating_sha
 from execution.paper_broker import NextBarOHLC, PaperBroker
 from strategy.strat_classifier import TWO_DOWN, TWO_UP, StratBar, classify_bar
 
@@ -70,6 +71,10 @@ MAX_SEEN = 500
 _LOCAL_LOCK = threading.Lock()
 
 
+class DailySwingStateLoadError(RuntimeError):
+    """Persisted Daily evidence state cannot be trusted."""
+
+
 def _ledger_dir(log_dir: str | Path) -> Path:
     return Path(log_dir) / wide_contract.JOURNAL_ROOT / LEDGER_NAME
 
@@ -83,7 +88,7 @@ def _audit_path(log_dir: str | Path) -> Path:
 
 
 def _epoch(cfg) -> Optional[datetime]:
-    raw = wide_contract.epoch_start(cfg)
+    raw = getattr(cfg, "daily_22_epoch_start", None)
     if not raw:
         return None
     try:
@@ -106,12 +111,24 @@ def _empty_state(epoch: datetime) -> dict[str, Any]:
 
 
 def _load_state(log_dir: str | Path, epoch: datetime) -> dict[str, Any]:
+    state_path = _state_path(log_dir)
     try:
-        raw = json.loads(_state_path(log_dir).read_text())
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        raw = json.loads(state_path.read_text())
+    except FileNotFoundError:
+        audit_path = _audit_path(log_dir)
+        try:
+            prior_evidence = audit_path.exists() and audit_path.stat().st_size > 0
+        except OSError as exc:
+            raise DailySwingStateLoadError("daily_swing_audit_state_unreadable") from exc
+        if prior_evidence:
+            raise DailySwingStateLoadError("daily_swing_state_missing_with_existing_evidence")
         return _empty_state(epoch)
-    if not isinstance(raw, dict) or raw.get("epoch") != epoch.isoformat():
-        return _empty_state(epoch)
+    except (json.JSONDecodeError, OSError) as exc:
+        raise DailySwingStateLoadError("daily_swing_state_unreadable_or_corrupt") from exc
+    if not isinstance(raw, dict):
+        raise DailySwingStateLoadError("daily_swing_state_not_object")
+    if raw.get("epoch") != epoch.isoformat():
+        raise DailySwingStateLoadError("daily_swing_state_epoch_mismatch")
     return {
         "epoch": epoch.isoformat(),
         "balance": float(raw.get("balance", STARTING_BALANCE)),
@@ -375,6 +392,7 @@ def _base_row(state: dict[str, Any], event: str, current_ts: datetime) -> dict[s
     peak = float(state["peak"])
     balance = float(state["balance"])
     dd = max(0.0, (peak - balance) / peak) if peak > 0 else 1.0
+    sha, provenance = generating_sha()
     return {
         "label": LABEL,
         "hypothetical": True,
@@ -383,6 +401,9 @@ def _base_row(state: dict[str, Any], event: str, current_ts: datetime) -> dict[s
         "active_book_mutated": False,
         "collector": "daily_22_swing_v1",
         "collector_event": event,
+        "evidence_epoch": state["epoch"],
+        "generating_git_sha": sha,
+        "provenance_status": provenance,
         "instrument": INSTRUMENT,
         "strategy": STRATEGY,
         "ledger": LEDGER_NAME,
