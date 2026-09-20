@@ -2717,7 +2717,11 @@ def _dashboard_payload(for_date: date) -> dict:
         "wins": wins,
         "losses": losses,
         "win_rate": win_rate,
+        # Legacy compatibility: realized_pnl_dollars is cumulative account P&L,
+        # not the selected day's increment. Keep it until consumers migrate, but
+        # expose the meaning explicitly beside the unambiguous daily field.
         "realized_pnl_dollars": round(realized_pnl, 2),
+        "cumulative_realized_pnl_dollars": round(realized_pnl, 2),
         "today_pnl_dollars": round(float(daily_state.realized_pnl_dollars or 0.0), 2),
         "journal_path": summary.get("journal_path", str(path)),
         "latest_entries": [_public_entry(entry) for entry in recent_entries],

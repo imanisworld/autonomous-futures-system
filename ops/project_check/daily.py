@@ -22,6 +22,7 @@ from context import wide_stop_ledger_paper
 from ops.project_check import gitutil
 from ops.project_check.runtime import runtime_snapshot
 from ops.project_check.trade_chain import build_trade_chain_report
+from ops.release_integrity import verify_release
 
 # Confident, explicitly-verified name -> risk_rules.yaml strategy-concept key
 # mappings only. Anything not in this table is left to a best-effort fuzzy
@@ -271,6 +272,73 @@ def _strategy_source_of_truth(*, repo_root: Path, rules_active_lanes: dict[str, 
 
 
 def _repo_hygiene(root: Path) -> dict[str, Any]:
+    # Atomic release directories intentionally ship without .git. In that
+    # environment branch/worktree/stash preservation is not applicable to the
+    # deployed tree; source preservation belongs to the canonical repo that
+    # built the release. Suppress Git-preservation blockers only when the
+    # existing full release-integrity verifier proves the immutable tree exactly
+    # matches its manifest. A missing/corrupt/drifted manifest falls through to
+    # the ordinary Git checks and therefore remains fail-closed/unverified.
+    git_root = gitutil.repo_root(root)
+    if git_root is None:
+        release = verify_release(repo_root=root)
+        if release.get("ok"):
+            return {
+                "mode": "immutable_release",
+                "repo_preservation_applicable": False,
+                "release_integrity": release,
+                "current_branch": release.get("release_branch"),
+                "local_main_relationship": {
+                    "state": "NOT_APPLICABLE",
+                    "reason": "immutable release has no Git worktree",
+                    "local_main_branch": None,
+                    "remote_ref": None,
+                    "ahead": None,
+                    "behind": None,
+                },
+                "dirty_tracked_files": [],
+                "staged_files": [],
+                "untracked_files": [],
+                "worktrees": [],
+                "worktree_inventory_checked": False,
+                "worktrees_with_unverified_state": [],
+                "stash_count": None,
+                "stashes": [],
+                "stash_enumeration": {
+                    "checked": False,
+                    "reason": "not applicable to verified immutable release",
+                },
+                "stash_preservation_note": (
+                    "Git preservation is checked in the canonical source repository; "
+                    "the deployed immutable release is verified by release_manifest.json."
+                ),
+                "open_prs": {"available": False, "complete": False, "prs": []},
+                "branches_tracking_deleted_remotes": [],
+                "local_only_branches": [],
+                "local_branch_enumeration": {
+                    "checked": False,
+                    "reason": "not applicable to verified immutable release",
+                },
+                "local_branch_note": "not applicable to verified immutable release",
+                "unverified_enumerations": [],
+                "evidence_preservation": {
+                    "closed_unmerged_branches_missing_archive_tag": {
+                        "checked": False,
+                        "reason": "not applicable to verified immutable release",
+                        "branches": [],
+                    },
+                    "archive_tags": [],
+                    "archive_tag_enumeration": {
+                        "checked": False,
+                        "reason": "not applicable to verified immutable release",
+                    },
+                    "note": (
+                        "Git evidence-preservation checks are not run inside a verified "
+                        "immutable release; run them in the canonical source repository."
+                    ),
+                },
+            }
+
     main_sync = gitutil.main_sync_state(root)
     status = gitutil.status_porcelain(root)
     all_worktrees = gitutil.worktree_inventory(root)
