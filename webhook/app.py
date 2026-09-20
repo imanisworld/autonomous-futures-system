@@ -614,6 +614,40 @@ def _log_alert_task_exception(task: asyncio.Task) -> None:
         logger.error("Alert processing task raised an unhandled exception: %s", exc, exc_info=exc)
 
 
+def _decision_notification_market_gate(
+    payload: AlertPayload,
+    result: dict,
+    *,
+    now: datetime | None = None,
+) -> tuple[bool, str | None, str | None]:
+    """Fail closed for decision-channel Discord when the instrument is not trading.
+
+    This is notification-only.  The decision/journal/evidence path has already run
+    before this gate, and operational/error notifications do not use it.
+    """
+    instrument = (result.get("context") or {}).get("instrument") or payload.ticker
+    root = futures_root(instrument, _INGEST_FUTURES_ROOTS)
+    if root is None or product_of(root) is None:
+        return False, "UNKNOWN_PRODUCT_CALENDAR", root
+
+    try:
+        from webhook.state_builder import parse_timestamp
+
+        signal_ts = parse_timestamp(payload.timestamp)
+    except Exception:
+        return False, "INVALID_SIGNAL_TIMESTAMP", root
+
+    signal_open = product_session_active(root, signal_ts)
+    if signal_open is not True:
+        return False, "MARKET_CLOSED_AT_SIGNAL", root
+
+    send_open = product_session_active(root, now or datetime.now(timezone.utc))
+    if send_open is not True:
+        return False, "MARKET_CLOSED_BEFORE_SEND", root
+
+    return True, None, root
+
+
 def _handle_alert_blocking(payload: AlertPayload) -> None:
     """Full alert pipeline — decision engine, broker, reference quote, Discord.
 
@@ -641,17 +675,37 @@ def _handle_alert_blocking(payload: AlertPayload) -> None:
                     result["live_quote"] = live_quote
             except Exception as exc:
                 logger.warning("live_quote attach failed: %s", exc)
-        try:
-            from notifications.discord_router import DiscordRouter as _DR
-            from notifications.discord_notifier import _format_message as _fmt
-            _router = _DR()
-            if _router.is_enabled("signal") and result.get("decision") in _config.discord_notify_decisions:
-                _router.send("signal", _fmt(payload, result))
-            else:
+        _decision = result.get("decision")
+        _wants_decision_notification = _decision in _config.discord_notify_decisions
+        _notify_allowed = True
+        if _wants_decision_notification:
+            _notify_allowed, _suppress_reason, _notify_root = _decision_notification_market_gate(
+                payload, result
+            )
+            if not _notify_allowed:
+                logger.info(
+                    "Decision notification suppressed "
+                    "notification_suppressed_reason=%s instrument=%s decision=%s "
+                    "event_id=%s bar_timestamp=%s",
+                    _suppress_reason,
+                    _notify_root or payload.ticker,
+                    _decision,
+                    getattr(payload, "event_id", None),
+                    payload.timestamp,
+                )
+
+        if _notify_allowed:
+            try:
+                from notifications.discord_router import DiscordRouter as _DR
+                from notifications.discord_notifier import _format_message as _fmt
+                _router = _DR()
+                if _router.is_enabled("signal") and _wants_decision_notification:
+                    _router.send("signal", _fmt(payload, result))
+                else:
+                    notify_discord(payload=payload, result=result, config=_config)
+            except Exception as _disc_exc:
+                logger.warning("Discord notification error: %s", _disc_exc)
                 notify_discord(payload=payload, result=result, config=_config)
-        except Exception as _disc_exc:
-            logger.warning("Discord notification error: %s", _disc_exc)
-            notify_discord(payload=payload, result=result, config=_config)
         logger.info("Alert processed: %s -> %s", payload.ticker, result.get("decision"))
     except Exception as exc:
         logger.exception("Error processing alert for %s: %s", payload.ticker, exc)
