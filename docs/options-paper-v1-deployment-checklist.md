@@ -66,7 +66,7 @@ Current verified boundary as of 2026-09-20:
 - read-only balance/positions: proven;
 - option-contract metadata discovery: proven;
 - stock-order preview feasibility: HTTP 200 in isolated sandbox testing;
-- options preview adapter: implemented/tested in PR #822;
+- options preview adapter: merged in PR #822 at `08cc827`; post-merge regression 2,002 passed;
 - options preview server acceptance: **not yet proven**;
 - paper option placement/cancel/fill: **not proven**;
 - live Webull execution: **out of scope**.

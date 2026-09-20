@@ -48,7 +48,7 @@ The final option-preview network call and paper placement/cancel proof were not 
 
 ## Adapter candidate
 
-PR **#822** / branch `feat/webull-sandbox-options-adapter` / commit `84b1475` adds the candidate adapter.
+PR **#822** is merged at `08cc82744883056c50961316d5ceb5b04c34e625`. The merged adapter retains the preview/read-only boundary described below.
 
 The candidate:
 
@@ -63,7 +63,7 @@ The candidate:
 - returns `submitted=false`, `executable=false`, and no broker order id;
 - exposes **no** `place_order`, `place_option`, `cancel_order`, `replace_order`, or `replace_option` capability.
 
-Local regression proof on the candidate: **2,002 tests passed**.
+Local regression proof before merge and again on merged `main`: **2,002 tests passed**.
 
 The candidate changes only:
 
@@ -97,7 +97,7 @@ Webull quote/snapshot access previously returned `MARKET_DATA_NOT_SUBSCRIBED`. N
 
 All of the following must pass before Webull may become a Phase-2 paper execution adapter:
 
-1. PR #822 green CI and reviewed merge.
+1. **Complete:** PR #822 merged at `08cc827` with green CI.
 2. Exact options preview request accepted by Webull sandbox.
 3. One controlled sandbox paper option order is placed locally against the intended paper account.
 4. Order detail proves the expected state transition.
