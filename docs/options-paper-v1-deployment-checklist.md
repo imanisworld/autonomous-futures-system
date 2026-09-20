@@ -55,6 +55,28 @@ Old PR #446 / `claude/options-data-health` is **not** a prerequisite for this V1
 
 Do not use generic/manual exceptions to inject <14 DTE rows into V1.
 
+## Webull sandbox boundary — separate from V1 market-data/execution authority
+
+Webull sandbox feasibility work is separate from the deployed `OPTIONS_PAPER_V1` scanner and does **not** change this V1 evidence cohort.
+
+Current verified boundary as of 2026-09-20:
+
+- sandbox authentication/account list: proven;
+- sandbox **Individual Cash** paper account: proven;
+- read-only balance/positions: proven;
+- option-contract metadata discovery: proven;
+- stock-order preview feasibility: HTTP 200 in isolated sandbox testing;
+- options preview adapter: implemented/tested in PR #822;
+- options preview server acceptance: **not yet proven**;
+- paper option placement/cancel/fill: **not proven**;
+- live Webull execution: **out of scope**.
+
+The adapter must remain pinned to `api.sandbox.webull.com`, paper mode, sandbox live=false, global Webull live=false, and `LIVE_OPTIONS_TRADING_ENABLED=false`. It exposes no order-submission/cancel/replace method in the current candidate.
+
+**Market-data rule:** keep Polygon/existing qualified providers as the options market-data authority. Webull quote/snapshot access is separately subscription-gated and is not required for this paper-broker feasibility phase.
+
+Do not wire Webull submission into the scanner, scheduler, risk engine, or alert path until the remaining Phase-2 gates in `docs/options-webull-sandbox-adapter-2026-09-20.md` are proven and separately authorized.
+
 ## Populations expected
 
 ACTIVE:

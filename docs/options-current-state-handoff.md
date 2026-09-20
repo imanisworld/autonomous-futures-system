@@ -47,6 +47,32 @@ Relevant merged work: #520, #526, #533, #536, #540, #541.
 
 No broker auto-entry/order execution was added by this work.
 
+## Webull sandbox paper-broker feasibility — 2026-09-20
+
+A separate **sandbox-only Webull options adapter** is now in candidate PR **#822** (`84b1475`). This work does not change the production scanner, V1 strategy rules, Polygon/source authority, or live-trading posture.
+
+Verified against Webull sandbox:
+
+- exact sandbox host `api.sandbox.webull.com`;
+- separate sandbox credentials;
+- paper mode with sandbox live trading false and global Webull live API false;
+- sandbox account list succeeds;
+- exactly one **Individual Cash** paper account is usable for this lane;
+- read-only balance and positions succeed; proof account had zero positions;
+- option-contract metadata discovery succeeds; the adapter proof returned 852 AAPL contracts;
+- official SDK `webull-openapi-python-sdk==3.0.1` is the pinned dependency.
+
+The candidate adapter can read sandbox account state, discover option contracts, and construct a broker preview request only after the existing options broker-boundary checks pass. It exposes **no place/cancel/replace/live-routing method**, and every preview result remains `submitted=false`, `executable=false`, with no broker order id.
+
+**Still unproven / blocked from automation:** Webull server acceptance of the new option-preview request, paper option placement, order-state lifecycle, cancel/replace behavior, and fills. A controlled stock preview returned HTTP 200 during feasibility work, but that is not evidence for the option-preview path.
+
+Polygon remains the market-data source. Webull quote/snapshot access previously returned `MARKET_DATA_NOT_SUBSCRIBED`; no Webull market-data purchase is required for this adapter phase. Do not cancel Polygon because Webull sandbox is reachable.
+
+A competing untracked dry-run mirror that hard-coded `INDIVIDUAL_MARGIN` was not supported by the verified paper-account proof and was quarantined outside the repo rather than merged. The verified sandbox target here is the **Individual Cash** paper account.
+
+Full boundary and next-gate record: `docs/options-webull-sandbox-adapter-2026-09-20.md`.
+
+
 ## Backtest fidelity and selector authority — 2026-09-18
 
 The production contract selector authority is **`OPTIONS_PAPER_V1`** in `alert_ranker.paper_v1`. The newer canonical selector under `options_manager.contracts` is deterministic and useful for reference/research, but it is **not** production authority and must not be used as though it reproduces the scanner.
