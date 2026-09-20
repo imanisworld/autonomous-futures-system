@@ -166,24 +166,43 @@ drift_post_discord() {
   fi
   python3 - "$header" "$body_file" "$url" <<'PY'
 import json, sys, urllib.request
+from collections import Counter
 
 header, body_file, url = sys.argv[1], sys.argv[2], sys.argv[3]
 lines = open(body_file).read().splitlines()
+counts = Counter((line.split() or ["UNKNOWN"])[0] for line in lines)
+summary = " · ".join(f"{counts[k]} {k.lower()}" for k in ("DIFFER", "MISSING", "EXTRA") if counts.get(k)) or "drift details unavailable"
 
-LIMIT = 1900
-content = header
-shown = 0
-for line in lines:
-    if len(content) + len(line) + 1 > LIMIT:
-        break
-    content += "\n" + line
-    shown += 1
-if shown < len(lines):
-    content += f"\n… {len(lines) - shown} more (see gate output)"
+def clean_item(line: str) -> str:
+    parts = line.split()
+    if not parts:
+        return "UNKNOWN"
+    status = parts[0]
+    path = parts[1] if len(parts) > 1 else "unknown"
+    return f"**{status}** {path}"
 
+items = [clean_item(line) for line in lines[:10]]
+if len(lines) > 10:
+    items.append(f"+ {len(lines) - 10} more in gate stdout/log")
+
+payload = {
+    "allowed_mentions": {"parse": []},
+    "embeds": [{
+        "title": "AFS Drift Gate · Attention",
+        "description": "Runtime differs from the watched source set.",
+        "color": 0xED4245,
+        "fields": [
+            {"name": "Status", "value": "Unexpected drift detected"},
+            {"name": "Summary", "value": summary},
+            {"name": "Top items", "value": "\n".join(items) if items else "No item detail available"},
+            {"name": "Action", "value": "Review before deploy/reseed. Raw hash details stay in the gate output/log."},
+        ],
+        "footer": {"text": "READ ONLY · Drift check · No deploy or restart action"},
+    }],
+}
 request = urllib.request.Request(
     url,
-    data=json.dumps({"content": content}).encode(),
+    data=json.dumps(payload).encode(),
     headers={"Content-Type": "application/json"},
 )
 try:

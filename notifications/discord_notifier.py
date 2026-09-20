@@ -51,7 +51,7 @@ def notify_discord(
     if not _should_notify(result, config.discord_notify_decisions):
         return NotificationResult(sent=False, reason="decision_filtered")
 
-    body = json.dumps({"content": _format_message(payload, result)}).encode("utf-8")
+    body = json.dumps(_discord_payload(payload, result)).encode("utf-8")
     headers = {"Content-Type": "application/json"}
     sender = transport or _post_json
 
@@ -242,6 +242,125 @@ def _decision_reason_line(result: dict) -> Optional[str]:
             reason = ", ".join(str(item) for item in failed)
     return f"Why: {reason}" if reason else None
 
+
+
+def _truncate(value: str, limit: int = 900) -> str:
+    text = str(value or "")
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 35)] + "\n… Full details in the journal/artifact."
+
+
+def _line_join(lines: list[str], *, empty: str = "None") -> str:
+    filtered = [line for line in lines if line]
+    return "\n".join(filtered) if filtered else empty
+
+
+def _discord_payload(payload: AlertPayload, result: dict) -> dict:
+    """Paper-collection-style Discord card for paper decisions.
+
+    Presentation only. It never changes the decision result, risk state, broker
+    state, journal state, or execution path. The old plain text formatter remains
+    available for CLI dry-runs and tests that inspect exact content.
+    """
+    decision = result.get("decision") or "UNKNOWN"
+    context = result.get("context") or {}
+    risk = result.get("risk") or {}
+    fill = result.get("fill") or {}
+    candidate = result.get("candidate") or {}
+    confluence = result.get("confluence") or {}
+    symbol = context.get("instrument") or payload.ticker
+    session = context.get("session") or "unknown_session"
+    session_label = "New York Open" if session == "new_york" else str(session).replace("_", " ").title()
+    bar_time = _format_bar_time(payload.timestamp)
+    ref_line = _reference_price_line(result.get("live_quote"))
+    color = 0xED4245 if "REJECT" in str(decision) or decision.startswith("BLOCKED") else (0x57F287 if decision == "TRADE" else 0xF0B232)
+
+    fields: list[dict] = [
+        {"name": "Decision", "value": f"**{decision}**", "inline": True},
+        {"name": "Instrument", "value": f"{symbol} · {session_label}", "inline": True},
+    ]
+    if ref_line:
+        fields.append({"name": "Reference", "value": ref_line, "inline": False})
+
+    if decision == "TRADE":
+        direction = fill.get("direction") or "?"
+        dir_icon = "🟢" if direction == "LONG" else "🔴"
+        strategy = fill.get("strategy") or "?"
+        score = confluence.get("score", "?")
+        grade = confluence.get("grade", "?")
+        setup_lines = [
+            f"{dir_icon} {symbol} {direction}",
+            f"{grade} setup · score {score}/10",
+            _strategy_label(str(strategy)),
+        ]
+        fields.append({"name": "Setup", "value": _line_join(setup_lines)})
+        fields.append({
+            "name": "Levels",
+            "value": (
+                f"Entry **{_format_price(fill.get('entry'))}**\n"
+                f"Stop **{_format_price(fill.get('stop'))}**\n"
+                f"Target **{_format_price(fill.get('target'))}**"
+            ),
+            "inline": True,
+        })
+        size_bits = []
+        contracts = fill.get("contracts")
+        if contracts is not None:
+            size_bits.append(f"{contracts} contract" + ("s" if contracts != 1 else ""))
+        rr = fill.get("rr_ratio")
+        size_bits.append(f"R:R {rr:.1f}" if rr is not None else "R:R ?")
+        if risk:
+            size_bits.append(_risk_line(risk))
+        fields.append({"name": "Risk", "value": "\n".join(size_bits), "inline": True})
+        factors = [f"✅ {item}" for item in (confluence.get("factors") or [])]
+        penalties = [f"⚠ {item}" for item in (confluence.get("penalties") or [])]
+        if factors or penalties:
+            fields.append({"name": "Confluence", "value": _truncate("\n".join(factors + penalties))})
+    else:
+        reason = _decision_reason_line(result)
+        if risk:
+            fields.append({"name": "Risk", "value": _risk_line(risk)})
+        if reason:
+            fields.append({"name": "Why", "value": reason.replace("Why: ", "", 1)})
+        if candidate:
+            direction = str(candidate.get("direction") or "?")
+            icon = "🟢" if direction == "LONG" else "🔴"
+            skipped = candidate.get("blocking_gate") or candidate.get("reject_code") or candidate.get("reject_reason") or "rejected"
+            fields.append({
+                "name": "Candidate skipped",
+                "value": (
+                    f"{icon} {candidate.get('symbol') or symbol} {direction}\n"
+                    f"Entry **{_format_price(candidate.get('entry'))}** · "
+                    f"Stop **{_format_price(candidate.get('stop'))}** · "
+                    f"Target **{_format_price(candidate.get('target'))}**\n"
+                    f"Skipped: {str(skipped).replace('_', ' ').lower()}"
+                ),
+            })
+
+    fields.append({
+        "name": "Bar context",
+        "value": f"Bar close **{_bar_close_label(payload, context)}**\nBar time {bar_time}",
+    })
+    resolution = result.get("resolution")
+    if resolution:
+        fields.append({"name": "Resolution", "value": str(resolution)})
+    for field in fields:
+        field["value"] = _truncate(field.get("value", ""))
+    prefix = "DISCORD SMOKE TEST · NOT JOURNALED" if result.get("smoke_test") else ""
+    description = f"{symbol} · {session_label}"
+    if prefix:
+        description = prefix + "\n" + description
+    return {
+        "allowed_mentions": {"parse": []},
+        "embeds": [{
+            "title": "Futures · Paper decision",
+            "description": description,
+            "color": color,
+            "fields": fields,
+            "footer": {"text": "READ ONLY · Paper decision · No Discord-driven execution"},
+        }],
+    }
 
 def _format_message(payload: AlertPayload, result: dict) -> str:
     decision = result.get("decision") or "UNKNOWN"

@@ -2468,7 +2468,30 @@ def maybe_interim(state: dict, tick: dict) -> None:
     state["interim_done"] = True
     state_append(EVENTS_FILE, json.dumps({"utc": iso(now_utc()), "kind": "INTERIM_AUDIT", "path": str(path)}) + "\n")
     log(f"INTERIM EVIDENCE AUDIT written: {path}")
-    notify(state, "DISCORD_ROUTE_DAILY_REPORT", f"INTERIM EVIDENCE AUDIT (2 weeks post-epoch, not a gate) written: {path} | " + "; ".join(f"{k}: {v['candidates']}c/{v['resolved_filled_economic']}f/{v['distinct_trading_days']}d" for k, v in pops.items()), "interim")
+    evidence_lines = []
+    for k, v in sorted(pops.items()):
+        evidence_lines.append(
+            f"**{k}** — {v['candidates']} candidates · "
+            f"{v['resolved_filled_economic']} resolved filled · "
+            f"{v['distinct_trading_days']} trading days"
+        )
+    status = "Not a gate decision · collection continues"
+    message = "\n".join([
+        "**Read-only daily pass**",
+        "",
+        "**Status**",
+        status,
+        "",
+        "**Evidence audit**",
+        "Two weeks post-epoch checkpoint",
+        *(evidence_lines or ["No populations available in the watcher tick"]),
+        "",
+        "**Action**",
+        "No rule change · no deploy · no restart",
+        "",
+        f"**Artifact**\n`{path}`",
+    ])
+    notify(state, "DISCORD_ROUTE_DAILY_REPORT", message, "interim")
 
 
 # ── one tick ─────────────────────────────────────────────────────────────────

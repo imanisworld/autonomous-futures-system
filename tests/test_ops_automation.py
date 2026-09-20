@@ -54,7 +54,8 @@ def test_health_format_contains_status_icon():
     checks = {"service_ok": True, "broker_reachable": True, "position_flat": True,
               "auth_state": "HEALTHY", "errors_today": 0, "disk_pct": 17.0}
     text = hd.format_digest(hd.evaluate_health(checks), checks, day_iso="2026-06-27")
-    assert "Box health — 2026-06-27: OK" in text
+    assert "Box health · 2026-06-27" in text
+    assert "**Status**\nOK" in text
     assert "\U0001F7E2" in text
 
 
