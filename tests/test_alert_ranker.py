@@ -491,19 +491,19 @@ def test_war_room_discord_payload_uses_triggered_template():
     embed = build_discord_payload(result)["embeds"][0]
     field_map = {field["name"]: field["value"] for field in embed["fields"]}
 
-    assert embed["title"] == "▲ NVDA CALL - MECHANICAL SETUP TRIGGERED"
-    assert "Mechanical setup status: TRIGGERED" in embed["description"]
-    assert field_map["Strat Combo"] == "2U-1-2U"
-    assert field_map["Timeframe"] == "15m"
-    assert field_map["FTFC"] == "Yes (UP)"
-    assert field_map["Watch Contract"] == "NVDA $950 Call - Jun 20"
-    assert field_map["Stop Level"] == "$940.00"
-    assert field_map["Target 1"] == "$965.00"
-    assert field_map["Target 2"] == "$975.00"
+    assert embed["title"] == "Options · SETUP TRIGGERED"
+    assert embed["description"] == "NVDA · CALL · Triggered"
+    assert "Strat 2U-1-2U" in field_map["Setup"]
+    assert "Timeframe 15m" in field_map["Setup"]
+    assert "FTFC Yes (UP)" in field_map["Setup"]
+    assert field_map["Contract"] == "NVDA $950 Call - Jun 20"
+    assert "Stop $940.00" in field_map["Levels"]
+    assert "Target 1 $965.00" in field_map["Levels"]
+    assert "Target 2 $975.00" in field_map["Levels"]
     assert field_map["Why"] == "Demand zone reclaim. Volume expanding. GEX flip at 950 cleared."
-    assert field_map["Context"] == "Multi-timeframe alignment confirmed. All gates passed."
-    assert "Premium Value" in field_map
-    assert "fair" in field_map["Premium Value"].lower() or "discount" in field_map["Premium Value"].lower() or "overpriced" in field_map["Premium Value"].lower()
+    assert "Trade authority" in field_map
+    assert "Liquidity / value" in field_map
+    assert "fair" in field_map["Liquidity / value"].lower() or "discount" in field_map["Liquidity / value"].lower() or "overpriced" in field_map["Liquidity / value"].lower()
     assert field_map["Risk"] == "Size for your account. Exit at stop - no exceptions."
 
 
@@ -513,8 +513,8 @@ def test_war_room_discord_payload_marks_forming_setup():
     embed = build_discord_payload(result)["embeds"][0]
     field_map = {field["name"]: field["value"] for field in embed["fields"]}
 
-    assert embed["title"] == "▲ QQQ CALL - SETUP FORMING"
-    assert "observational only" in embed["description"]
+    assert embed["title"] == "Options · SETUP FORMING"
+    assert "no entry permission" in field_map["Status"]
     assert field_map["Risk"] == "No entry. Wait for mechanical TRIGGERED setup and canonical contract/risk proof."
 
 
@@ -556,9 +556,9 @@ def test_strat_context_fields_support_aliases():
     embed = build_discord_payload(result)["embeds"][0]
     field_map = {field["name"]: field["value"] for field in embed["fields"]}
 
-    assert field_map["Strat Combo"] == "1-2-2 REV"
-    assert field_map["Timeframe"] == "15m / 30m / 1h"
-    assert field_map["FTFC"] == "Yes (UP)"
+    assert "Strat 1-2-2 REV" in field_map["Setup"]
+    assert "Timeframe 15m / 30m / 1h" in field_map["Setup"]
+    assert "FTFC Yes (UP)" in field_map["Setup"]
 
 
 

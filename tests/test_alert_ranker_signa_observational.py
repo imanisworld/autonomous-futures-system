@@ -91,14 +91,16 @@ def test_generic_discord_cannot_claim_confirmed_without_triggered_setup():
     assert "SETUP WATCHING" in embed["title"]
     assert "CONFIRMED" not in text
     assert "All gates passed" not in text
-    assert "not TRIGGERED" in embed["description"]
+    fields = {field["name"]: field["value"] for field in embed["fields"]}
+    assert "no entry permission" in fields["Status"]
 
 
 def test_triggered_setup_may_use_triggered_wording():
     payload = build_discord_payload(_discord_result(setup_status="TRIGGERED"))
     embed = payload["embeds"][0]
     assert "TRIGGERED" in embed["title"]
-    assert "Mechanical setup status: TRIGGERED" in embed["description"]
+    fields = {field["name"]: field["value"] for field in embed["fields"]}
+    assert "Mechanical setup TRIGGERED" in fields["Trade authority"]
 
 
 def test_signa_display_is_explicitly_observational():
