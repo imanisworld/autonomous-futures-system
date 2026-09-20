@@ -279,3 +279,22 @@ trade_authority=false
 ```
 
 The board is for review and research only. It does not create alerts, approve setups, alter scanner status, or write to risk/order/execution tables.
+
+## Setup report context display
+
+`GET /shadow-journal` and `GET /shadow-journal/{shadow_id}` now attach a `signa_context` array to each setup row.
+
+The attached context is pulled from `options_signa_context` by ticker and latest source. It is marked on both the response and row summaries as:
+
+```text
+context_only=true
+observation_only=true
+trade_authority=false
+```
+
+Dashboard impact:
+
+- the shadow ledger table includes a `Signa Context` column;
+- missing context renders as `Context only: none`;
+- available context is summarized as source plus non-authoritative fields such as direction, score, sentiment, call/put premium, flip, or gamma wall;
+- no context field can change setup status, risk status, contract choice, alert eligibility, or execution reachability.

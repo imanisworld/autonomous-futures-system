@@ -47,6 +47,8 @@ def test_dashboard_never_uses_signa_pivots_or_regime_as_gex():
     assert "const support = raw.gex_support_wall;" in html
     assert "const resistance = raw.gex_resistance_wall;" in html
     assert "const regime = raw.gex_regime || raw.gex_note || '-';" in html
+    assert "Signa Context" in html
+    assert "Context only:" in html
 
 
 def test_app_source_has_no_removed_auto_authority_or_default_gex_regime():

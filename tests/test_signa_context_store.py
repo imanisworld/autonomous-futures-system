@@ -225,3 +225,55 @@ def test_options_app_signa_context_board_route_is_context_only(tmp_path):
     assert body["context_only"] is True
     assert body["items"][0]["ticker"] == "SPY"
     assert body["items"][0]["sources"]["options_flow"]["direction"] == "LONG"
+
+
+def test_context_for_tickers_returns_context_only_rows(tmp_path):
+    store = SignaContextStore(tmp_path / "ctx.sqlite")
+    store.record({
+        "ticker": "SPY",
+        "source": "options_flow",
+        "direction": "LONG",
+        "callPremium": 1250000,
+        "data_as_of": "2026-09-20T13:00:00Z",
+    })
+    context = store.context_for_tickers(["SPY"])
+    row = context["SPY"][0]
+    assert row["source"] == "options_flow"
+    assert row["context_only"] is True
+    assert row["observation_only"] is True
+    assert row["trade_authority"] is False
+    assert row["fields"]["callPremium"] == 1250000
+
+
+def test_shadow_journal_reports_signa_context_without_authority(tmp_path):
+    from types import SimpleNamespace
+
+    from alert_ranker.scorer import ScoreResult
+    from alert_ranker.storage import ScanStorage
+
+    cfg = _config(tmp_path)
+    storage = ScanStorage(cfg.sqlite_path)
+    result = ScoreResult("SPY", "LONG", 8, "2-1-2", {"strat_pattern": 3}, {"setup_status": "TRIGGERED"})
+    scan_id = storage.record_scan(result, source="test", alert_sent=False, alert_suppression_reason="test")
+    shadow_id = storage.record_shadow_setup(result, scan_id=scan_id, setup_inputs={}, provider_snapshot={})
+    SignaContextStore(cfg.sqlite_path).record({
+        "ticker": "SPY",
+        "source": "gex",
+        "direction": "LONG",
+        "flip": 485,
+        "gamma_wall": 490,
+        "data_as_of": "2026-09-20T13:00:00Z",
+    })
+    app = create_app(config=cfg, scanner=SimpleNamespace(storage=storage))
+    client = TestClient(app)
+    response = client.get("/shadow-journal")
+    assert response.status_code == 200
+    body = response.json()
+    item = body["items"][0]
+    assert item["id"] == shadow_id
+    assert body["context_only"] is True
+    assert body["observation_only"] is True
+    assert body["trade_authority"] is False
+    assert item["signa_context"][0]["source"] == "gex"
+    assert item["signa_context"][0]["fields"]["flip"] == 485
+    assert item["signa_context"][0]["trade_authority"] is False
