@@ -71,18 +71,33 @@ No futures, strategy, risk-rule, Webull, broker, execution, scheduler, source-po
 
 ## Deployment state
 
-**BUILT / TESTED / NOT DEPLOYED.**
+**DEPLOYED / VERIFIED on options-scanner release `a0c34818faaad37b20d8c05249e8f5442d8d7141`.**
 
-The standing 2026-09-20 readiness ruling remains in force: no additional options-scanner deploy or restart before the first natural Monday RTH evidence window. Merging this infrastructure fix does not itself change the running scanner.
+PR #824 added the centralized RTH/session gate. PR #825 closed the remaining delivery-time race by re-checking the actual delivery clock at the final Discord boundary while preserving the original scan/decision timestamp for scoring, evidence, sanity checks, and dedupe.
 
-A later deployment must use the normal immutable options-scanner release process and prove:
+The production promotion used a curated options-only release based on the previously proven scanner release `c7798d4993d1ecfd872313cfc5c84da2cda6625d` plus the #824/#825 runtime/test delta. No broad `main` deployment was used.
 
-1. the intended release pin;
-2. production SQLite continuity;
-3. `order_supported=false` / no broker-order path;
-4. normal RTH alerts still eligible;
-5. a controlled out-of-session alert attempt is suppressed;
-6. futures service is not restarted.
+Pre-promotion proof:
+
+- curated diff: only `alert_ranker/discord.py`, `alert_ranker/scanner_legacy.py`, `alert_ranker/session_calendar.py` and their focused tests;
+- focused market-hours/webhook proof: **22 passed**;
+- broader options regression: **2,034 passed**;
+- immutable release integrity: **1,394/1,394 files**;
+- isolated options candidate boot: healthy, advisory-only, Public read-only, `order_supported=false`, account endpoints forbidden, temporary SQLite path.
+
+Production proof after the options-scanner-only restart:
+
+- running options cwd = `/root/afs-releases/a0c34818faaad37b20d8c05249e8f5442d8d7141`;
+- production SQLite path unchanged at `/root/afs-shared/logs/options_scanner.sqlite`;
+- pre/post counts unchanged: `scans=29,873`, `options_shadow_journal=9,362`, `options_contract_marks=2,511`, `options_selector_evidence=29`;
+- health remained healthy/advisory-only; scheduler running; Signa context scheduler still enabled;
+- Public provider remained read-only with `order_supported=false` and account endpoints forbidden;
+- release integrity passed **1,394/1,394** on the running release;
+- no-network deployed-release proof: **15:59 ET scan -> 16:01 ET delivery = `market_closed`, `sent=false`, zero HTTP requests**;
+- futures PID and cwd were unchanged; futures remained on `c7798d4993d1ecfd872313cfc5c84da2cda6625d`;
+- service-aware drift gate passed both immutable releases; repository-main differences remained informational only.
+
+Rollback backup of the prior scanner pin was preserved on the VPS. No `.env`, strategy, risk, source-policy, broker, execution, futures, or evidence-cohort setting changed.
 
 ## Safety rule
 
