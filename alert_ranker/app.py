@@ -42,6 +42,8 @@ from .rh_options import (
 from .lifecycle import classify_candidate
 from .scanner import OptionsScanner
 from .storage import ScanStorage
+from .signa_context_store import SignaContextStore
+from sources.signa_discovery import manual_context_record, manual_context_records_from_text
 
 
 SHADOW_OUTCOME_STATUSES = {
@@ -155,6 +157,58 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
     @app.get("/terminal")
     async def terminal() -> dict[str, Any]:
         return get_scanner().terminal_state()
+
+    def get_signa_context_store() -> SignaContextStore:
+        return SignaContextStore(cfg.sqlite_path)
+
+    @app.post("/signa/context/ingest")
+    async def signa_context_ingest(request: Request) -> dict[str, Any]:
+        body = await request.json()
+        if not isinstance(body, dict):
+            raise HTTPException(status_code=422, detail="body_must_be_object")
+        source = str(body.get("source") or "manual_discord")
+        rows: list[dict[str, Any]] = []
+        text = body.get("text")
+        if text is not None:
+            rows.extend(manual_context_records_from_text(str(text), default_source=source))
+        payload = body.get("payload")
+        if isinstance(payload, dict):
+            rows.append(manual_context_record(payload, default_source=source))
+        records = body.get("records")
+        if isinstance(records, list):
+            for item in records:
+                if isinstance(item, dict):
+                    rows.append(manual_context_record(item, default_source=source))
+        if not rows:
+            raise HTTPException(status_code=422, detail="no_context_rows")
+        store = get_signa_context_store()
+        ids = store.record_many(rows)
+        return {
+            "accepted": True,
+            "advisory_only": True,
+            "observation_only": True,
+            "trade_authority": False,
+            "inserted": len(ids),
+            "ids": ids,
+            "statuses": sorted({row.get("status", "SIGNA_CONTEXT") for row in rows}),
+        }
+
+    @app.get("/signa/context/recent")
+    async def signa_context_recent(
+        limit: int = 25,
+        ticker: str | None = None,
+        source: str | None = None,
+    ) -> dict[str, Any]:
+        store = get_signa_context_store()
+        return {
+            "advisory_only": True,
+            "observation_only": True,
+            "trade_authority": False,
+            "items": [
+                item.__dict__
+                for item in store.latest(limit=limit, ticker=ticker, source=source)
+            ],
+        }
 
     @app.get("/", response_class=HTMLResponse)
     @app.get("/dashboard", response_class=HTMLResponse)
