@@ -561,13 +561,13 @@ async def favicon():
 @app.get("/manifest.json", include_in_schema=False)
 async def pwa_manifest():
     return JSONResponse({
-        "name": "RiskSentinel",
-        "short_name": "RiskSentinel",
+        "name": "AFSVP",
+        "short_name": "AFSVP",
         "description": "Paper futures trading dashboard",
         "start_url": "/",
         "display": "standalone",
-        "background_color": "#050507",
-        "theme_color": "#00d5ff",
+        "background_color": "#131315",
+        "theme_color": "#e8875c",
         "icons": [
             {"src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png"},
             {"src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
@@ -3186,26 +3186,26 @@ _DASHBOARD_HTML = r"""<!doctype html>
       color-scheme: dark;
       --font-ui: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       --font-console: "JetBrains Mono", "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
-      --bg: #0b0a09;
-      --shell: #100f0e;
-      --shell2: #171411;
-      --panel: #1a1714;
-      --panel2: #15120f;
-      --panel3: #0f0d0b;
-      --line: #3a3028;
-      --line-soft: rgba(224, 168, 119, 0.16);
-      --text: #f6efe8;
-      --muted: #aa9b8d;
-      --muted2: #74675d;
-      --accent: #f39a68;
-      --brass: #cda46b;
-      --purple: var(--accent);
+      --bg: #131315;
+      --shell: #0b0b0c;
+      --shell2: #18181a;
+      --panel: #1f1f21;
+      --panel2: #1a1a1c;
+      --panel3: #151517;
+      --line: #2e2e31;
+      --line-soft: rgba(232, 135, 92, 0.16);
+      --text: #f5f3f0;
+      --muted: #a6a3a1;
+      --muted2: #7a7775;
+      --accent: #e8875c;
+      --brass: #9db0f5;
+      --purple: var(--brass);
       /* severity system */
-      --green: #00FF88;   /* pass / live / clear / fresh / profit */
-      --yellow: #FFB800;  /* warning / stale / watch / defend */
-      --red: #FF4444;     /* blocked / locked / loss / error */
-      --blue: #00d5ff;    /* info / paper / broker */
-      --gray: #8b90a6;    /* inactive / disabled / neutral */
+      --green: #5fd98a;   /* pass / live / clear / fresh / profit */
+      --yellow: #FFB800;  /* warning / stale / watch / defend — unchanged, still needs its own hue */
+      --red: #e8875c;     /* blocked / locked / loss / error — reuses brand-ember, see README */
+      --blue: #9db0f5;    /* info / paper / broker */
+      --gray: #8b90a6;    /* inactive / disabled / neutral — unchanged */
       --nav-h: 54px;
     }
     * { box-sizing: border-box; }
@@ -3213,8 +3213,8 @@ _DASHBOARD_HTML = r"""<!doctype html>
     body {
       min-height: 100vh;
       background:
-        radial-gradient(circle at 18% 6%, rgba(243,154,104,0.16), transparent 34%),
-        radial-gradient(circle at 86% 2%, rgba(92,112,255,0.09), transparent 30%),
+        radial-gradient(circle at 18% 6%, rgba(232,135,92,0.16), transparent 34%),
+        radial-gradient(circle at 86% 2%, rgba(157,176,245,0.12), transparent 30%),
         linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
         linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px),
         var(--bg);
@@ -3406,10 +3406,10 @@ _DASHBOARD_HTML = r"""<!doctype html>
     .posture-hero {
       position: relative;
       overflow: hidden;
-      border: 1px solid rgba(243,154,104,0.34);
+      border: 1px solid rgba(232,135,92,0.34);
       border-radius: 10px;
       background:
-        radial-gradient(circle at 82% 18%, rgba(243,154,104,0.24), transparent 34%),
+        radial-gradient(circle at 82% 18%, rgba(232,135,92,0.24), transparent 34%),
         linear-gradient(135deg, rgba(29,24,20,0.98), rgba(14,13,12,0.98));
       padding: 22px;
       margin-bottom: 12px;
@@ -3418,9 +3418,9 @@ _DASHBOARD_HTML = r"""<!doctype html>
       content: "";
       position: absolute;
       width: 260px; height: 260px; right: -120px; top: -150px;
-      border: 1px solid rgba(243,154,104,0.18);
+      border: 1px solid rgba(232,135,92,0.18);
       border-radius: 50%;
-      box-shadow: 0 0 70px rgba(243,154,104,0.10);
+      box-shadow: 0 0 70px rgba(232,135,92,0.10);
       pointer-events: none;
     }
     .eyebrow {
