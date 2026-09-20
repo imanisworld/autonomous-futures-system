@@ -525,3 +525,9 @@ Next:
    until then Day-N summaries are status, not evidence;
 8. treat the cross-instrument campaign as feed/evidence-quality proof for now; no population there
    is a strategy candidate.
+
+## 2026-09-20 risk-semantics reconciliation
+
+Current-main re-audit closed six stale defect reports without code changes: promotion fail-closed, zero-count campaign-arm visibility, normal PaperBroker/replay fill-setting parity, evidence-vs-execution status separation, daily reconciliation critical-failure semantics, and guarded Tradovate DEMO exact-account pinning are already implemented/tested.
+
+The remaining real defect was repaired locally: real-book `max_daily_loss: 150` is now a **fixed account/day realized-loss breaker**, not `$150 × contracts` based on the next setup. Position sizing/per-trade risk remains separate; the 30% global drawdown floor and max-three-trades/day rule are unchanged. Wide-stop isolated ledgers keep their own explicit $300/$600 daily limits and 20% drawdown floors. Focused risk verification: **150 passed**, plus `git diff --check` clean. No live authority or strategy/execution-route expansion follows from this repair.

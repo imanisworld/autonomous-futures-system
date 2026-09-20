@@ -622,17 +622,18 @@ class TestHetznerSafetyLayers:
         assert result.rejected
         assert result.failed_rule == "max_daily_loss"
 
-    def test_max_daily_loss_scales_with_contract_count(self, config, valid_trade_setup):
+    def test_max_daily_loss_is_fixed_account_cap_not_scaled_by_next_trade_contracts(self, config, valid_trade_setup):
         config.max_daily_loss = 150
         valid_trade_setup.contracts = 2
         engine = RiskEngine(config=config)
 
-        first_loss = engine.validate(valid_trade_setup, DailyState(realized_pnl_dollars=-150.0))
-        second_loss = engine.validate(valid_trade_setup, DailyState(realized_pnl_dollars=-300.0))
+        below_cap = engine.validate(valid_trade_setup, DailyState(realized_pnl_dollars=-149.99))
+        at_cap = engine.validate(valid_trade_setup, DailyState(realized_pnl_dollars=-150.0))
 
-        assert first_loss.approved
-        assert second_loss.rejected
-        assert second_loss.failed_rule == "max_daily_loss"
+        assert below_cap.approved
+        assert at_cap.rejected
+        assert at_cap.failed_rule == "max_daily_loss"
+        assert "fixed account/day max loss $150.00" in at_cap.reason
 
     def test_profit_protect_threshold_allows_risk_within_current_profit(self, config, valid_trade_setup):
         cfg = replace(config, daily_profit_protect_threshold=300)
