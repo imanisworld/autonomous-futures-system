@@ -53,6 +53,9 @@ NEVER_SAFE_FILES = frozenset({
 # into the live trading-decision code.
 SAFE_DIRECTORY_PREFIXES = (
     "tests/", "docs/", "research/",
+    # Static public marketing/status pages. Not imported by the futures
+    # webhook service and cannot affect signal, risk, or broker behavior.
+    "site/afsvp/",
     # Separate manual stock/ETF paper-advisory lane. Not imported by the
     # futures webhook service and cannot place a futures order.
     "stocks_advisory/", "data/stocks_advisory_paper_proof/",
@@ -137,6 +140,7 @@ SAFE_OPERATIONAL_FILES = frozenset({
 # so a change here can never remove their call to a sanitizer.
 APP_PY_SAFE_FUNCTIONS = frozenset({
     "_dashboard_payload",
+    "_dashboard_strategy_inventory",
     "_dashboard_init",
     "_render_dashboard",
     "_strategy_payload",
