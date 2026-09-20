@@ -46,8 +46,8 @@ This checklist is intentionally small and Phase-1 only.
 - [x] adapter has no submit/cancel/replace/live-routing capability
 - [x] official Webull SDK dependency is pinned to the proven 3.0.1 version
 - [x] options/Webull regression suite passed locally (2,002 tests)
-- [ ] PR #822 CI is green and the candidate is reviewed/merged
-- [ ] exact single-leg option preview is accepted by Webull sandbox
+- [x] PR #822 CI is green and the adapter is reviewed/merged at `08cc827`
+- [x] exact single-leg option preview is accepted by Webull sandbox (`AAPL 2026-12-18 $350 CALL`, qty 1, limit $1.00, `PREVIEW_READY`)
 - [ ] one controlled sandbox option order placement is proven locally
 - [ ] order-detail state transition is verified
 - [ ] cancel proof succeeds on an unfilled sandbox order

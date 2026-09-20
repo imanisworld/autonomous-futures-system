@@ -49,7 +49,7 @@ No broker auto-entry/order execution was added by this work.
 
 ## Webull sandbox paper-broker feasibility — 2026-09-20
 
-A separate **sandbox-only Webull options adapter** is now in candidate PR **#822** (`84b1475`). This work does not change the production scanner, V1 strategy rules, Polygon/source authority, or live-trading posture.
+A separate **sandbox-only Webull options adapter** is now merged in PR **#822** at `08cc827`. CI was green and the merged options/Webull regression proof is **2,002 passed**. This work does not change the production scanner, V1 strategy rules, Polygon/source authority, or live-trading posture.
 
 Verified against Webull sandbox:
 
@@ -62,9 +62,9 @@ Verified against Webull sandbox:
 - option-contract metadata discovery succeeds; the adapter proof returned 852 AAPL contracts;
 - official SDK `webull-openapi-python-sdk==3.0.1` is the pinned dependency.
 
-The candidate adapter can read sandbox account state, discover option contracts, and construct a broker preview request only after the existing options broker-boundary checks pass. It exposes **no place/cancel/replace/live-routing method**, and every preview result remains `submitted=false`, `executable=false`, with no broker order id.
+The merged adapter can read sandbox account state, discover option contracts, and construct a broker preview request only after the existing options broker-boundary checks pass. It exposes **no place/cancel/replace/live-routing method**, and every preview result remains `submitted=false`, `executable=false`, with no broker order id.
 
-**Still unproven / blocked from automation:** Webull server acceptance of the new option-preview request, paper option placement, order-state lifecycle, cancel/replace behavior, and fills. A controlled stock preview returned HTTP 200 during feasibility work, but that is not evidence for the option-preview path.
+**Option preview server acceptance is now proven.** A controlled sandbox preview for `AAPL 2026-12-18 $350 CALL`, `BUY_TO_OPEN`, quantity 1, limit `$1.00` returned `PREVIEW_READY`, estimated cost `$100.00`, estimated transaction fee `$0.05`, `executable=false`, `submitted=false`, and no broker order id. **Still unproven / blocked from automation:** paper option placement, order-state lifecycle, cancel/replace behavior, and fills.
 
 Polygon remains the market-data source. Webull quote/snapshot access previously returned `MARKET_DATA_NOT_SUBSCRIBED`; no Webull market-data purchase is required for this adapter phase. Do not cancel Polygon because Webull sandbox is reachable.
 
