@@ -1,23 +1,23 @@
 :root {
   color-scheme: dark;
-  --bg: #0b0a09;
-  --panel: #141210;
-  --panel2: #1b1713;
-  --text: #f6efe8;
-  --muted: #aa9b8d;
-  --accent: #f39a68;
-  --green: #00ff88;
+  --bg: #131315;
+  --panel: #1f1f21;
+  --panel2: #1a1a1c;
+  --text: #f5f3f0;
+  --muted: #a6a3a1;
+  --accent: #e8875c;
+  --green: #5fd98a;
   --yellow: #ffb800;
-  --red: #ff4444;
-  --border: rgba(224, 168, 119, 0.2);
+  --red: #e8875c;
+  --border: #2e2e31;
 }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; min-height: 100%; }
 body {
   background:
-    radial-gradient(circle at 18% 6%, rgba(243,154,104,0.16), transparent 34%),
-    radial-gradient(circle at 86% 2%, rgba(92,112,255,0.09), transparent 30%),
+    radial-gradient(circle at 18% 6%, rgba(232,135,92,0.16), transparent 34%),
+    radial-gradient(circle at 86% 2%, rgba(157,176,245,0.12), transparent 30%),
     linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px),
     var(--bg);
