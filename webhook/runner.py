@@ -33,6 +33,7 @@ from context.structural_regime import (
     observe_structured_range_candidates,
 )
 from context.live_direction import apply_live_direction
+from context.signa_futures_context import build_signa_futures_context
 from context.mnq_orb_reclaim_proof import (
     evaluate_mnq_orb_reclaim_proof,
     is_mnq_orb_reclaim_candidate,
@@ -2050,7 +2051,7 @@ def process_alert(
                 daily_state.strat_322_first_live_state
             ),
         }
-        journal_entry["context"] = _market_state_context(state)
+        journal_entry["context"] = _market_state_context(state, _decision_direction(decision))
         if shadow_candidates:
             journal_entry["shadow_candidates"] = shadow_candidates
         _annotate_candidate_locations(journal_entry, state)
@@ -2314,7 +2315,7 @@ def process_alert(
                 daily_state.strat_322_first_live_state
             ),
         }
-        journal_entry["context"] = _market_state_context(state)
+        journal_entry["context"] = _market_state_context(state, _decision_direction(decision))
         if shadow_candidates:
             journal_entry["shadow_candidates"] = shadow_candidates
         _annotate_candidate_locations(journal_entry, state)
@@ -2405,7 +2406,7 @@ def process_alert(
             daily_state.strat_322_first_live_state
         ),
     }
-    journal_entry["context"] = _market_state_context(state)
+    journal_entry["context"] = _market_state_context(state, _decision_direction(decision))
     if shadow_candidates:
         journal_entry["shadow_candidates"] = shadow_candidates
     _annotate_candidate_locations(journal_entry, state)
@@ -2748,7 +2749,7 @@ def process_alert(
                 daily_state.strat_322_first_live_state
             ),
         }
-        journal_entry["context"] = _market_state_context(state)
+        journal_entry["context"] = _market_state_context(state, _decision_direction(decision))
         journal.log_decision(
             journal_entry,
             {"result": "APPROVED"},
@@ -3486,7 +3487,14 @@ def _position_is_complete(pos: dict) -> bool:
     return all(pos.get(k) is not None for k in ("direction", "entry", "stop", "target"))
 
 
-def _market_state_context(state) -> dict:
+def _decision_direction(decision) -> str | None:
+    setup = getattr(decision, "setup", None)
+    if setup is not None and getattr(setup, "direction", None) is not None:
+        return setup.direction
+    return None
+
+
+def _market_state_context(state, futures_direction: str | None = None) -> dict:
     """Public, JSON-safe snapshot of the market state derived from the alert."""
     context = {
         "instrument": state.instrument,
@@ -3563,6 +3571,9 @@ def _market_state_context(state) -> dict:
             "daily_direction": state.signa.daily_direction if state.signa else None,
             "weekly_direction": state.signa.weekly_direction if state.signa else None,
         },
+        "signa_futures_context": build_signa_futures_context(
+            state, futures_direction=futures_direction
+        ),
         "icc": {
             "phase": state.icc.phase if state.icc else None,
             "entry_signal": state.icc.entry_signal if state.icc else None,
