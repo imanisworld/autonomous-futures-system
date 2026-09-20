@@ -151,4 +151,4 @@ def test_module_has_no_production_host_or_order_capability_references():
     assert "cancel_order" not in source
     assert "replace_order" not in source
     assert "order_operation" not in source
-    assert "api.sandbox.webull.com" in source
+    assert WEBULL_SANDBOX_TRADING_ENDPOINT == "api.sandbox.webull.com"
