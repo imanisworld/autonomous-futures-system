@@ -182,7 +182,7 @@ Supported direct sources:
 - `congress_flow`
 - `gex` as an explicit unresolved/error context row
 
-The route writes only to `options_signa_context`. It does not write to `scans`, `options_shadow_journal`, selector evidence, contract selection, or any execution/risk table. Every row remains observation-only and `trade_authority=false`.
+The route writes raw Signa responses first to the shared `signa_snapshots` table, then writes options-specific interpretation rows to `options_signa_context` with a `snapshot_id` reference. It does not write to `scans`, `options_shadow_journal`, selector evidence, contract selection, or any execution/risk table. Every row remains observation-only and `trade_authority=false`.
 
 Example request:
 
@@ -195,9 +195,9 @@ Example request:
 ```
 
 Use this route to create a richer evidence inbox, not to approve trades. Signa-originated rows still require separate Strat setup, trigger, invalidation, target, contract quality, and risk validation before anything can become actionable.
-## Shared Signa context cache / dedupe policy
+## Shared raw snapshot cache / dedupe policy
 
-Signa context is now stored as a shared read-only provider cache. Do not pull duplicate Signa data separately for options and futures. Options and future futures-context consumers should reuse the same `options_signa_context` provider row.
+Raw Signa responses are now stored in the shared `signa_snapshots` table before options-specific context rows are written. Do not pull duplicate Signa data separately for options and futures. Options and future futures-context consumers should reuse the same `snapshot_id` when they reference the same endpoint/symbol/timeframe/bucket.
 
 Shared proxy symbols:
 
@@ -210,13 +210,13 @@ Shared proxy symbols:
 - GLD for gold/metals context.
 - USO and XLE for crude/energy context.
 
-The dedupe identity is provider/source based, not lane based:
+The raw snapshot dedupe identity is provider/source based, not lane based:
 
 ```text
-symbol + source/endpoint + timeframe + data_as_of/provider_timestamp
+source + endpoint + symbol + timeframe + params_hash + snapshot_bucket
 ```
 
-If Signa does not supply `data_as_of` or a provider timestamp, storage falls back to a stable payload hash that excludes local `retrieved_at` and local insertion time. Repeated pulls of the same snapshot therefore resolve to the same `candidate_key` instead of creating duplicate rows.
+Options-specific rows retain their own `candidate_key`, but now also preserve `snapshot_id` and `snapshot_ref` so futures can later point to the same raw Signa evidence without pulling it again.
 
 Rows are tagged with consumers:
 
@@ -242,9 +242,9 @@ Behavior:
 
 - exits with `skipped=market_closed` outside NYSE regular market hours unless `--force` is supplied;
 - defaults to the options watchlist plus the shared proxy symbol set;
-- writes only to `options_signa_context`;
+- writes raw responses to `signa_snapshots` before options-specific rows go to `options_signa_context`;
 - keeps every row `observation_only=true` and `trade_authority=false`;
-- reports endpoint status, cache/backoff flags, requested rows, and stored unique row IDs;
+- reports endpoint status, cache/backoff flags, requested rows, raw `snapshot_ids`, and stored unique options context row IDs;
 - does not touch scanner candidates, `options_shadow_journal`, risk, contract selection, broker, order, or execution paths.
 
 Example manual run:
@@ -322,6 +322,6 @@ Behavior:
 
 - if disabled, no Signa pull job is registered;
 - if enabled, the job still skips outside NYSE regular market hours;
-- it writes only to `options_signa_context`;
+- it writes raw responses to `signa_snapshots` before options-specific rows go to `options_signa_context`;
 - rows remain `context_only`, `observation_only`, and `trade_authority=false`;
 - it does not create Discord alerts, setup candidates, contract selections, risk approvals, orders, or executions.
