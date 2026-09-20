@@ -8,9 +8,15 @@ This is the concise operator-facing source of truth for the futures system after
 
 Core rule remains: **No proof, no run.**
 
+## Update — 2026-09-20 operator-message deployment
+
+A later presentation/read-only release was deployed after the Signa v2 runtime noted below. Current futures-bot and options-scanner runtimes are now both pinned to **`c7798d4993d1ecfd872313cfc5c84da2cda6625d`**. Release integrity passed for **1,394/1,394 files** on both service paths. `futures-bot.service` and `options-scanner.service` restarted cleanly; `afs-watcher.service` remained active with watcher source matching the deployed release. Health proof after restart: futures `/health` returned `ok=true`, `live_trading_enabled=false`, `broker=tradovate`, and `webhook_secret_required=true`; options `/health` returned `status=healthy`, `advisory_only=true`, Public read-only provider, `order_supported=false`, `account_endpoints_forbidden=true`, scheduler running, and `signa_context_pull_enabled=true`.
+
+The deployed delta from the prior futures release `ed1212b2552f0bfd990d4f4f80d2e05dd5c3d22c` to `c7798d4` is presentation/read-only/reporting only: standardized Discord operator cards, options scanner card formatting, read-only Signa storage reporting, public terms/privacy wording, and related tests/docs. No files changed under `execution/`, `risk/`, `risk_rules`, broker routes, `webhook/runner`, `strategy/`, `config/`, or journal runtime paths. No strategy, risk, order, broker, or collector logic was changed by this deploy. The installed server drift gate remains `/root/bin/afs-drift-gate.sh`, matching `scripts/afs-server-drift-gate.sh`; it was not replaced by the non-server drift script.
+
 ## Verified deployed runtime
 
-Active futures runtime after the latest Signa v2 deployment:
+Previous Signa v2 deployment proof before the later operator-message deploy:
 
 - deployed release: `a02320268e26a05f56b159f03d3cf441e776ef46`;
 - release integrity: **1,390/1,390 files checked**;
@@ -33,7 +39,7 @@ Active futures runtime after the latest Signa v2 deployment:
 Live preflight is not armed with reason `preflight_failed:heartbeat_fresh`. This does not approve or block this context-only deployment because live trading remains disabled.
 
 
-Companion options-scanner note: later on 2026-09-20, the options scanner was promoted from its old service-specific release `58f1c50583d8bb747c0b221eabb75af376b10ecc` to `1fc0ad9c97d6daca02905058b14123135605c769` solely to run the conservative Signa scheduled context pull. That required an `options-scanner.service` restart. `futures-bot.service` was not restarted, futures release `a02320268e26a05f56b159f03d3cf441e776ef46` did not change, and the Signa context rows remain observation-only with `trade_authority=false`. First natural options RTH scheduled-cycle proof is still pending.
+Companion options-scanner note: later on 2026-09-20, the options scanner was first promoted from its old service-specific release `58f1c50583d8bb747c0b221eabb75af376b10ecc` to `1fc0ad9c97d6daca02905058b14123135605c769` solely to run the conservative Signa scheduled context pull. That earlier Signa enablement required an `options-scanner.service` restart while `futures-bot.service` stayed on `a02320268e26a05f56b159f03d3cf441e776ef46`. The scanner was subsequently promoted again to `c7798d4993d1ecfd872313cfc5c84da2cda6625d` for the presentation/read-only operator-message release, and the futures bot was also promoted to the same `c7798d4` release under the sanctioned release gate. Signa context rows remain observation-only with `trade_authority=false`. First natural options RTH scheduled-cycle proof is still pending.
 
 This release lineage includes:
 
