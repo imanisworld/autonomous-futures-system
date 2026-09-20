@@ -102,7 +102,12 @@ def test_signa_context_pull_config_defaults_off():
     assert cfg.signa_context_pull_interval_minutes == 15
     assert cfg.signa_context_pull_timeframe == "1d"
     assert cfg.signa_context_pull_symbols == []
-    assert "options_flow" in cfg.signa_context_pull_include
+    assert cfg.signa_context_pull_include == [
+        "scan", "action_card", "options_flow", "market_tide", "signal_index"
+    ]
+    assert "enhanced_signal" not in cfg.signa_context_pull_include
+    assert "dark_pool" not in cfg.signa_context_pull_include
+    assert "congress_flow" not in cfg.signa_context_pull_include
     assert cfg.signa_context_pull_include_shared_proxies is True
     assert cfg.signa_context_pull_symbol_limit == 50
 
@@ -201,3 +206,50 @@ def test_scheduled_signa_context_pull_uses_configured_read_only_inputs(tmp_path,
     assert captured["include"] == {"scan", "options_flow"}
     assert captured["symbols"][:2] == ["SPY", "NVDA"]
     assert "TLT" in captured["symbols"]
+
+
+def test_options_signa_context_cli_defaults_to_conservative_include():
+    from scripts.options_signa_context_pull import FULL_INCLUDE, parse_args
+
+    args = parse_args([])
+    default_include = {item.strip() for item in args.include.split(",") if item.strip()}
+
+    assert default_include == {"scan", "action_card", "options_flow", "market_tide", "signal_index"}
+    assert "enhanced_signal" not in default_include
+    assert "dark_pool" not in default_include
+    assert "congress_flow" not in default_include
+    assert {"enhanced_signal", "dark_pool", "congress_flow"}.issubset(set(FULL_INCLUDE))
+
+
+def test_options_signa_context_cli_can_request_full_include():
+    from scripts.options_signa_context_pull import FULL_INCLUDE, parse_args
+
+    args = parse_args(["--include-all"])
+
+    assert args.include_all is True
+    assert {"enhanced_signal", "dark_pool", "congress_flow"}.issubset(set(FULL_INCLUDE))
+
+
+def test_signa_context_pull_endpoint_default_is_conservative(tmp_path, monkeypatch):
+    import alert_ranker.app as app_module
+    from fastapi.testclient import TestClient
+
+    captured = {}
+
+    def fake_pull_context(**kwargs):
+        captured.update(kwargs)
+        return {"ok": True, "stored_rows": 0, "snapshot_rows": 0, "trade_authority": False}
+
+    monkeypatch.setattr(app_module, "pull_context", fake_pull_context)
+    cfg = _config(tmp_path)
+    app = app_module.create_app(config=cfg)
+    client = TestClient(app)
+
+    response = client.post("/signa/context/pull", json={"symbols": ["SPY"]})
+
+    assert response.status_code == 200
+    assert captured["include"] == {"scan", "action_card", "options_flow", "market_tide", "signal_index"}
+    assert "enhanced_signal" not in captured["include"]
+    assert "dark_pool" not in captured["include"]
+    assert "congress_flow" not in captured["include"]
+    assert response.json()["trade_authority"] is False

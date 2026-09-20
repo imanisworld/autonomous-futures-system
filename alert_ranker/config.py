@@ -10,6 +10,15 @@ from typing import Iterable
 from dotenv import load_dotenv
 
 
+DEFAULT_SIGNA_CONTEXT_PULL_INCLUDE: tuple[str, ...] = (
+    "scan",
+    "action_card",
+    "options_flow",
+    "market_tide",
+    "signal_index",
+)
+
+
 def _split_watchlist(value: str) -> list[str]:
     return [item.strip().upper() for item in value.split(",") if item.strip()]
 
@@ -106,10 +115,9 @@ class ScannerConfig:
     signa_context_pull_interval_minutes: int = 15
     signa_context_pull_timeframe: str = "1d"
     signa_context_pull_symbols: list[str] = field(default_factory=list)
-    signa_context_pull_include: list[str] = field(default_factory=lambda: [
-        "scan", "action_card", "enhanced_signal", "options_flow",
-        "dark_pool", "market_tide", "signal_index", "congress_flow",
-    ])
+    signa_context_pull_include: list[str] = field(
+        default_factory=lambda: list(DEFAULT_SIGNA_CONTEXT_PULL_INCLUDE)
+    )
     signa_context_pull_include_shared_proxies: bool = True
     signa_context_pull_symbol_limit: int = 50
     rh_bearer_token: str = ""
@@ -249,7 +257,7 @@ def load_config(environ: Iterable[tuple[str, str]] | None = None) -> ScannerConf
         signa_context_pull_symbols=_split_watchlist(env.get("OPTIONS_SIGNA_CONTEXT_PULL_SYMBOLS", "")),
         signa_context_pull_include=_split_csv(env.get(
             "OPTIONS_SIGNA_CONTEXT_PULL_INCLUDE",
-            "scan,action_card,enhanced_signal,options_flow,dark_pool,market_tide,signal_index,congress_flow",
+            ",".join(DEFAULT_SIGNA_CONTEXT_PULL_INCLUDE),
         )),
         signa_context_pull_include_shared_proxies=_as_bool(
             env.get("OPTIONS_SIGNA_CONTEXT_PULL_INCLUDE_SHARED_PROXIES"), True

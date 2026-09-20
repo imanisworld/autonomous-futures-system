@@ -356,3 +356,27 @@ stale_sources
 ```
 
 This prevents a ticker from looking complete when, for example, `dark_pool` failed or `enhanced_signal` timed out. These labels are presentation/evidence only; they do not affect scanner score, alert eligibility, contract choice, risk, or execution.
+
+## Conservative scheduled pull profile
+
+The scheduled Signa context pull defaults to a lighter source set before any VPS enablement:
+
+```text
+scan
+action_card
+options_flow
+market_tide
+signal_index
+```
+
+The heavier and less reliable endpoints remain available for explicit/manual pulls only:
+
+```text
+enhanced_signal
+dark_pool
+congress_flow
+```
+
+Operators can still request the full source set with an explicit include list or CLI `--include-all`. That is not the scheduled default because recent forced pulls showed repeated `dark_pool` HTTP 503 responses and `enhanced_signal` timeouts.
+
+This is still context-only. Reducing the default source set does not promote Signa to a trade gate, does not send alerts, and does not touch risk, broker, order, or execution paths.

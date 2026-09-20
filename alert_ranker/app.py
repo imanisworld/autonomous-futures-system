@@ -24,7 +24,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
 from .bar_context import create_bar_context
-from .config import ScannerConfig, _as_bool, load_config
+from .config import DEFAULT_SIGNA_CONTEXT_PULL_INCLUDE, ScannerConfig, _as_bool, load_config
 from .discord import DiscordAlerter
 from .market_data import build_provider_capabilities, create_market_data_client
 from .rh_client import RHClient
@@ -286,10 +286,7 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
         symbols = symbols[:20]
         if not symbols:
             raise HTTPException(status_code=422, detail="symbols_required")
-        include = set(body.get("include") or [
-            "scan", "action_card", "enhanced_signal", "options_flow",
-            "dark_pool", "market_tide", "signal_index", "congress_flow",
-        ])
+        include = set(body.get("include") or DEFAULT_SIGNA_CONTEXT_PULL_INCLUDE)
         timeframe = str(body.get("timeframe") or "1d")
         result = pull_context(
             cfg=cfg,
