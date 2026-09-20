@@ -391,6 +391,44 @@ def test_health_status_watchlist_and_webhook_endpoints_work(tmp_path):
         )
 
 
+def test_public_status_is_allowlisted_and_omits_operator_detail(tmp_path):
+    cfg = scanner_config(tmp_path)
+    app = create_app(cfg)
+
+    with TestClient(app) as client:
+        webhook = client.post("/webhook/alert", json=candidate_payload())
+        assert webhook.status_code == 200
+
+        response = client.get("/public/status")
+        assert response.status_code == 200
+        body = response.json()
+
+        assert body["public_safe"] is True
+        assert body["advisory_only"] is True
+        assert body["execution_authority"] is False
+        assert body["service"] == "options-scanner"
+        assert body["counts"]["watchlist"] == 1
+        assert body["counts"]["recent_scan_rows"] >= 1
+        assert body["signa"]["trade_authority"] is False
+        assert body["paper_policy"]["max_trade_planned_risk"] == 300.0
+        assert body["paper_policy"]["max_aggregate_open_planned_risk"] == 1000.0
+
+        # Public payload is an explicit allowlist. Do not leak the operator
+        # status object's rows, active aggregate risk, or scan identifiers.
+        assert {
+            "watchlist",
+            "latest",
+            "scans",
+            "database",
+            "provider_profile",
+            "market_data_error",
+        }.isdisjoint(body)
+        assert "aggregate_open_planned_risk" not in body["paper_policy"]
+        assert '"ticker"' not in response.text
+        assert '"contract"' not in response.text
+        assert "AAPL" not in response.text
+
+
 def test_scanner_dashboard_html_is_served(tmp_path):
     cfg = scanner_config(tmp_path)
     app = create_app(cfg)
