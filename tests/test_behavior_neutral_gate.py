@@ -36,6 +36,7 @@ def test_explicit_operational_files_pass_with_no_content_review():
         "tests/test_atomic_release_script.py",
         "docs/some-notes.md",
         "research/mnq_structural_level_5m.py",
+        "site/afsvp/index.html",
         ".gitignore",
     ])
     assert result.is_behavior_neutral
@@ -156,6 +157,13 @@ def test_app_py_decorator_only_change_on_safe_function_is_still_safe():
     assert ok
 
 
+
+def test_app_py_dashboard_strategy_inventory_helper_is_safe():
+    baseline = "def _dashboard_strategy_inventory():\n    return {'ok': False}\n"
+    candidate = "def _dashboard_strategy_inventory():\n    return {'ok': True, 'rows': []}\n"
+    ok, reasons = app_py_change_is_safe(baseline, candidate)
+    assert ok, reasons
+
 def test_app_py_module_level_constant_change_is_blocked():
     baseline = (
         "ALLOWED_IPS = ['1.2.3.4']\n"
@@ -227,6 +235,27 @@ def test_check_behavior_neutral_git_backed_safe_diff(temp_git_repo):
     assert result.is_behavior_neutral
     assert result.blocking_reasons == []
 
+
+
+def test_check_behavior_neutral_git_backed_public_afsvp_site_diff(temp_git_repo):
+    repo, run = temp_git_repo
+    (repo / "site" / "afsvp").mkdir(parents=True)
+    (repo / "site" / "afsvp" / "index.html").write_text("<h1>old</h1>\n")
+    run("add", ".")
+    run("commit", "-q", "-m", "baseline")
+    baseline_sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True, text=True
+    ).stdout.strip()
+
+    (repo / "site" / "afsvp" / "index.html").write_text("<h1>new</h1>\n")
+    run("add", ".")
+    run("commit", "-q", "-m", "site tweak")
+    candidate_sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True, text=True
+    ).stdout.strip()
+
+    result = check_behavior_neutral(str(repo), baseline_sha, candidate_sha)
+    assert result.is_behavior_neutral, result.blocking_reasons
 
 def test_check_behavior_neutral_git_backed_unsafe_diff(temp_git_repo):
     repo, run = temp_git_repo
