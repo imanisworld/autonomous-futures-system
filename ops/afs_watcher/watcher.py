@@ -625,6 +625,23 @@ def settle_baseline(state: dict, f: Findings, rt: dict, base: dict | None, resta
     log(f"baseline adopted after sanctioned release {RELEASE_SHA[:12]}: {summary}")
 
 
+def _is_webhook_process_line(line: str) -> bool:
+    """Return True only for the actual futures-bot uvicorn process.
+
+    pgrep -af can also return parent shell commands whose argument text
+    happens to contain the service ExecStart string during a deployment.
+    Count only the concrete python -m uvicorn webhook.app:app argv shape so
+    a sanctioned promote shell is never mistaken for a second webhook server.
+    """
+    parts = line.strip().split()
+    if len(parts) < 5 or not parts[0].isdigit():
+        return False
+    executable = os.path.basename(parts[1])
+    if not executable.startswith("python"):
+        return False
+    return parts[2:5] == ["-m", "uvicorn", "webhook.app:app"]
+
+
 def check_runtime(state: dict, f: Findings, tick: dict) -> None:
     rt: dict = {}
     tick["runtime"] = rt
@@ -697,7 +714,7 @@ def check_runtime(state: dict, f: Findings, tick: dict) -> None:
     if active_cands:
         f.add("BLOCKED", "deploy_candidate_running", f"deploy-candidate unit(s) running: {active_cands}")
     rc, out = run(["pgrep", "-af", "uvicorn webhook.app"])
-    procs = [l for l in out.splitlines() if l.strip()]
+    procs = [l for l in out.splitlines() if _is_webhook_process_line(l)]
     rt["webhook_processes"] = procs
     if len(procs) != 1:
         f.add("BLOCKED", "webhook_process_count", f"expected exactly 1 webhook process, found {len(procs)}", procs=procs)
