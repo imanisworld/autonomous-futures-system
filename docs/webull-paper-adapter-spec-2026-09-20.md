@@ -67,6 +67,21 @@ Any missing or unsafe value must produce a blocked state, not a fallback.
 
 ## Phase gates
 
+### Phase 0 implementation status
+
+Implemented as a pure configuration validator in this follow-up phase:
+
+- `integrations/webull_paper_config.py`;
+- `tests/test_webull_paper_config.py`;
+- no Webull SDK import;
+- no network calls;
+- no order objects;
+- secret values represented only as configured/not-configured booleans;
+- redacted summaries use `PRESENT_REDACTED` / `MISSING`;
+- default `WEBULL_API_ENABLED=false` means network calls remain blocked.
+
+This does not advance the system beyond Phase 0. Any read-only Webull probe still requires a separate reviewed PR.
+
 ### Phase 0 — Config presence only
 
 Allowed:
