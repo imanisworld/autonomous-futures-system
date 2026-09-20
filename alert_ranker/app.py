@@ -43,7 +43,12 @@ from .lifecycle import classify_candidate
 from .scanner import OptionsScanner
 from .storage import ScanStorage
 from .signa_context_store import SignaContextStore
-from sources.signa_discovery import manual_context_record, manual_context_records_from_text
+from sources.signa_discovery import (
+    SignaDiscoveryClient,
+    manual_context_record,
+    manual_context_records_from_text,
+    records_from_direct_response,
+)
 
 
 SHADOW_OUTCOME_STATUSES = {
@@ -208,6 +213,81 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
                 item.__dict__
                 for item in store.latest(limit=limit, ticker=ticker, source=source)
             ],
+        }
+
+    @app.post("/signa/context/pull")
+    async def signa_context_pull(request: Request) -> dict[str, Any]:
+        body = await request.json()
+        if not isinstance(body, dict):
+            raise HTTPException(status_code=422, detail="body_must_be_object")
+        if not cfg.signa_api_key_configured:
+            raise HTTPException(status_code=503, detail="signa_api_key_not_configured")
+        raw_symbols = body.get("symbols") or body.get("tickers") or cfg.watchlist[:5]
+        if isinstance(raw_symbols, str):
+            symbols = [item.strip().upper() for item in raw_symbols.split(",") if item.strip()]
+        elif isinstance(raw_symbols, list):
+            symbols = [str(item).strip().upper() for item in raw_symbols if str(item).strip()]
+        else:
+            raise HTTPException(status_code=422, detail="symbols_must_be_string_or_list")
+        symbols = symbols[:20]
+        if not symbols:
+            raise HTTPException(status_code=422, detail="symbols_required")
+        include = set(body.get("include") or [
+            "scan", "action_card", "enhanced_signal", "options_flow",
+            "dark_pool", "market_tide", "signal_index", "congress_flow",
+        ])
+        timeframe = str(body.get("timeframe") or "1d")
+        client = SignaDiscoveryClient(
+            base_url=cfg.signa_base_url,
+            timeout=cfg.signa_timeout_seconds,
+        )
+        rows: list[dict[str, Any]] = []
+        endpoint_results: list[dict[str, Any]] = []
+
+        def add_rows(source: str, response, symbol: str | None = None) -> None:
+            endpoint_results.append({
+                "source": source,
+                "symbol": symbol,
+                "endpoint": response.endpoint,
+                "ok": response.ok,
+                "status_code": response.status_code,
+                "error": response.error,
+                "cached": response.cached,
+                "backoff_active": response.backoff_active,
+            })
+            rows.extend(records_from_direct_response(source, response, symbol=symbol))
+
+        if "scan" in include:
+            add_rows("scan", client.scan(symbols=symbols, timeframe=timeframe))
+        if "signal_index" in include:
+            add_rows("signal_index", client.signal_index())
+        if "market_tide" in include:
+            add_rows("market_tide", client.market_tide())
+        for symbol in symbols:
+            if "action_card" in include:
+                add_rows("action_card", client.action_card(symbol, timeframe=timeframe), symbol)
+            if "enhanced_signal" in include:
+                add_rows("enhanced_signal", client.enhanced_signal(symbol, timeframe=timeframe), symbol)
+            if "options_flow" in include:
+                add_rows("options_flow", client.options_flow(symbol), symbol)
+            if "dark_pool" in include:
+                add_rows("dark_pool", client.dark_pool(symbol), symbol)
+            if "congress_flow" in include:
+                add_rows("congress_flow", client.congress_flow(symbol), symbol)
+            if "gex" in include:
+                add_rows("gex", client.gex(symbol), symbol)
+
+        store = get_signa_context_store()
+        ids = store.record_many(rows)
+        return {
+            "accepted": True,
+            "advisory_only": True,
+            "observation_only": True,
+            "trade_authority": False,
+            "symbols": symbols,
+            "inserted": len(ids),
+            "ids": ids,
+            "endpoint_results": endpoint_results,
         }
 
     @app.get("/", response_class=HTMLResponse)

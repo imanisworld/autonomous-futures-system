@@ -78,7 +78,7 @@ class SignaDiscoveryCandidate:
 class SignaDiscoveryResponse:
     ok: bool
     endpoint: str
-    payload: dict[str, Any] | None = None
+    payload: Any | None = None
     error: str | None = None
     status_code: int | None = None
     retrieved_at: str | None = None
@@ -232,6 +232,60 @@ def manual_context_records_from_text(text: str, *, default_source: str = "manual
     return records
 
 
+def context_record_from_response(
+    source: str,
+    response: "SignaDiscoveryResponse",
+    *,
+    symbol: str | None = None,
+) -> dict[str, Any]:
+    """Normalize one direct Signa response into a safe context evidence row."""
+    payload = response.payload if isinstance(response.payload, dict) else {}
+    row = dataset_candidate_tags(source, payload, symbol=symbol)
+    row.update(
+        {
+            "source": source,
+            "endpoint": response.endpoint,
+            "status": "SIGNA_CONTEXT" if response.ok else "SIGNA_CONTEXT_ERROR",
+            "retrieved_at": response.retrieved_at,
+            "request_ok": response.ok,
+            "http_status": response.status_code,
+            "error": response.error,
+            "cached": response.cached,
+            "backoff_active": response.backoff_active,
+        }
+    )
+    for key in (
+        "callPremium", "putPremium", "totalPremium", "netPremium", "callVolume",
+        "putVolume", "putCallRatio", "unusualActivity", "sentiment", "symbol",
+        "count", "call_pct", "put_pct", "call_premium", "put_premium", "row_count",
+        "signal", "confidence", "trade_count", "buy_count", "sell_count",
+        "recent_30d", "house_count", "senate_count",
+    ):
+        if key in payload:
+            row[key] = payload[key]
+    row["raw_summary"] = {
+        "top_level_fields": sorted(str(key) for key in payload.keys()),
+    }
+    return row
+
+
+def records_from_direct_response(
+    source: str,
+    response: "SignaDiscoveryResponse",
+    *,
+    symbol: str | None = None,
+) -> list[dict[str, Any]]:
+    """Convert direct Signa API responses into candidate/context rows."""
+    if not response.ok:
+        return [context_record_from_response(source, response, symbol=symbol)]
+    payload = response.payload if isinstance(response.payload, dict) else {}
+    if source == "scan":
+        return [candidate.to_record() for candidate in candidates_from_scan(payload, endpoint=response.endpoint, retrieved_at=response.retrieved_at)]
+    if source == "action_card":
+        return [candidate.to_record() for candidate in candidates_from_action_card(payload, endpoint=response.endpoint, retrieved_at=response.retrieved_at)]
+    return [context_record_from_response(source, response, symbol=symbol)]
+
+
 def _manual_blocks(text: str) -> list[str]:
     raw = str(text or "").strip()
     if not raw:
@@ -355,8 +409,10 @@ class SignaDiscoveryClient:
                 self._backoff_until[key] = now + _retry_after_seconds(response.headers.get("Retry-After"))
             response.raise_for_status()
             payload = response.json()
-            if not isinstance(payload, dict):
-                raise ValueError("payload_not_object")
+            if isinstance(payload, list):
+                payload = {"items": payload}
+            elif not isinstance(payload, dict):
+                payload = {"value": payload}
             out = SignaDiscoveryResponse(True, endpoint, payload=payload, status_code=response.status_code, retrieved_at=_utc_now())
             self._store(key, out)
             return out

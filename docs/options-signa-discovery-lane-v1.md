@@ -165,3 +165,33 @@ Rows are stored as:
 `alert_ranker/signa_context_store.py` owns the append-only SQLite table `options_signa_context`.
 
 This table is an evidence inbox only. It must not be used to mark a setup `TRIGGERED`, `ACTIVE`, `OPTIONS_PASS`, or `RISK_PASS` without a separate approved validator step and a new evidence cohort.
+
+## Direct pull route
+
+`POST /signa/context/pull` is a read-only ingestion route for proven Signa endpoints. It accepts `symbols`/`tickers`, optional `timeframe`, and optional `include` values.
+
+Supported direct sources:
+
+- `scan`
+- `action_card`
+- `enhanced_signal`
+- `options_flow`
+- `dark_pool`
+- `market_tide`
+- `signal_index`
+- `congress_flow`
+- `gex` as an explicit unresolved/error context row
+
+The route writes only to `options_signa_context`. It does not write to `scans`, `options_shadow_journal`, selector evidence, contract selection, or any execution/risk table. Every row remains observation-only and `trade_authority=false`.
+
+Example request:
+
+```json
+{
+  "symbols": ["SPY", "QQQ"],
+  "timeframe": "1d",
+  "include": ["scan", "action_card", "options_flow", "dark_pool", "market_tide"]
+}
+```
+
+Use this route to create a richer evidence inbox, not to approve trades. Signa-originated rows still require separate Strat setup, trigger, invalidation, target, contract quality, and risk validation before anything can become actionable.
