@@ -5,12 +5,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
 
 from .config import ScannerConfig
 from .paper_v1 import MAX_SANITY_DTE, POLICY_ID, dte_for
 from .scorer import ScoreResult
+from .session_calendar import us_equity_rth_state
 from .signa_v2_display import render_signa_v2
 from .storage import ScanStorage
 
@@ -59,6 +61,17 @@ class DiscordAlerter:
         sanity_reason = _contract_sanity_reason(result, now)
         if sanity_reason:
             return AlertDecision(False, sanity_reason)
+
+        # Final user-facing alert boundary: every path (scheduled, webhook, or
+        # manual) must still be inside the approved US-equity regular session.
+        # Scheduled scans already stop outside RTH; this closes the bypass where
+        # an externally triggered scan could otherwise post after close,
+        # pre-market, on weekends/holidays, or after an early close.
+        session_now = now or datetime.now(ZoneInfo(self.config.timezone))
+        session_state = us_equity_rth_state(session_now)
+        if not session_state.is_open:
+            return AlertDecision(False, session_state.reason)
+
         if not self.config.discord_webhook_url:
             return AlertDecision(False, "discord_not_configured")
         if self.storage.recent_alert_exists(

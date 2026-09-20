@@ -141,9 +141,73 @@ def test_discord_sends_only_when_score_is_at_least_seven(tmp_path):
     high = score_setup(setup_payload())
     low = score_setup(setup_payload(pattern="N/A", volume_ratio=1.0, iv_rank=60))
 
+    now = datetime(2026, 5, 26, 10, 0, tzinfo=ZoneInfo("America/New_York"))
+
     async def run():
-        assert (await alerter.send_if_eligible(low)).sent is False
-        assert (await alerter.send_if_eligible(high)).sent is True
+        assert (await alerter.send_if_eligible(low, now=now)).sent is False
+        assert (await alerter.send_if_eligible(high, now=now)).sent is True
+
+    asyncio.run(run())
+    assert len(sent) == 1
+
+
+def test_discord_blocks_alerts_outside_approved_rth(tmp_path):
+    sent = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return httpx.Response(204)
+
+    cfg = scanner_config(tmp_path, webhook_url="https://discord.test/webhook")
+    storage = ScanStorage(cfg.sqlite_path)
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    alerter = DiscordAlerter(cfg, storage, client=client)
+
+    open_time = datetime(2026, 5, 26, 10, 0, tzinfo=ZoneInfo("America/New_York"))
+    premarket = open_time.replace(hour=9, minute=29)
+    after_close = open_time.replace(hour=16, minute=0)
+    weekend = datetime(2026, 5, 30, 10, 0, tzinfo=ZoneInfo("America/New_York"))
+    holiday = datetime(2026, 11, 26, 10, 0, tzinfo=ZoneInfo("America/New_York"))
+    result = score_setup(setup_payload(), now=open_time)
+
+    async def run():
+        before = await alerter.send_if_eligible(result, now=premarket)
+        closed = await alerter.send_if_eligible(result, now=after_close)
+        saturday = await alerter.send_if_eligible(result, now=weekend)
+        thanksgiving = await alerter.send_if_eligible(result, now=holiday)
+
+        assert before == AlertDecision(False, "market_not_open")
+        assert closed == AlertDecision(False, "market_closed")
+        assert saturday == AlertDecision(False, "market_closed")
+        assert thanksgiving == AlertDecision(False, "market_closed")
+
+    from alert_ranker.discord import AlertDecision
+    asyncio.run(run())
+    assert sent == []
+
+
+def test_discord_honors_early_close_boundary(tmp_path):
+    sent = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return httpx.Response(204)
+
+    cfg = scanner_config(tmp_path, webhook_url="https://discord.test/webhook")
+    storage = ScanStorage(cfg.sqlite_path)
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    alerter = DiscordAlerter(cfg, storage, client=client)
+
+    before_close = datetime(2025, 11, 28, 12, 59, tzinfo=ZoneInfo("America/New_York"))
+    at_close = datetime(2025, 11, 28, 13, 0, tzinfo=ZoneInfo("America/New_York"))
+    result = score_setup(setup_payload(), now=before_close)
+
+    async def run():
+        before = await alerter.send_if_eligible(result, now=before_close)
+        closed = await alerter.send_if_eligible(result, now=at_close)
+        assert before.sent is True
+        assert closed.sent is False
+        assert closed.reason == "market_closed"
 
     asyncio.run(run())
     assert len(sent) == 1

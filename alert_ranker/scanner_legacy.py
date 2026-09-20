@@ -34,7 +34,7 @@ from .paper_v1 import (
     entry_late_reason,
     remaining_reward_to_risk,
 )
-from .session_calendar import EXCHANGE_TIMEZONE, nyse_session_for
+from .session_calendar import us_equity_rth_state
 from .scorer import ScoreResult, is_ny_open, score_setup
 from .storage import ScanStorage
 from sources.signa_client import SignaClient
@@ -72,14 +72,8 @@ class OptionsScanner:
         self.last_skip_reason: str | None = None
 
     def is_market_hours(self, now: datetime | None = None) -> bool:
-        exchange_now = (now or datetime.now(ZoneInfo(self.config.timezone))).astimezone(
-            ZoneInfo(EXCHANGE_TIMEZONE)
-        )
-        session = nyse_session_for(exchange_now.date())
-        if session is None:
-            return False
-        current = exchange_now.astimezone(timezone.utc)
-        return session.open <= current < session.close
+        current = now or datetime.now(ZoneInfo(self.config.timezone))
+        return us_equity_rth_state(current).is_open
 
     async def scan_watchlist(
         self,
