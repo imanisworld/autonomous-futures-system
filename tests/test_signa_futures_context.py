@@ -198,3 +198,54 @@ def test_stale_shared_snapshot_is_recorded_without_blocking(tmp_path):
     assert record["status"] == "ERROR"
     assert record["observations"][0]["error"] == "snapshot_stale"
     assert record["trade_authorized"] is False
+
+
+def test_shared_snapshot_reader_prefers_ok_action_card_over_newer_error(tmp_path):
+    db = tmp_path / "options.sqlite"
+    store = SignaSnapshotStore(db)
+    store.record_snapshot(
+        endpoint="/api/v1/enhanced-signal",
+        symbol="QQQ",
+        timeframe="1d",
+        params={"symbol": "QQQ", "timeframe": "1d"},
+        retrieved_at="2026-09-20T14:10:00Z",
+        payload={"error": "ReadTimeout"},
+        status="ERROR",
+    )
+    ok = store.record_snapshot(
+        endpoint="/api/v1/signals/QQQ",
+        symbol="QQQ",
+        timeframe="1d",
+        params={"symbol": "QQQ", "timeframe": "1d"},
+        retrieved_at="2026-09-20T14:00:00Z",
+        payload={
+            "data": {
+                "signal": {
+                    "symbol": "QQQ",
+                    "timeframe": "1d",
+                    "direction": "bullish",
+                    "grade": "A",
+                    "score": 88,
+                    "confidence": 81,
+                }
+            }
+        },
+        status="OK",
+    )
+
+    record = build_signa_futures_context(
+        SimpleNamespace(instrument="MNQ", signa=None),
+        futures_direction="LONG",
+        timeframe="1d",
+        snapshot_db_path=db,
+        now="2026-09-20T14:15:00Z",
+    )
+
+    assert record["snapshot_status"] == "OK"
+    assert record["snapshot_ids"] == [ok.snapshot_id]
+    assert record["primary_bias"] == "LONG"
+    assert record["aligned_with_trade_direction"] is True
+    assert record["observations"][0]["grade"] == "A"
+    assert record["gate_authoritative"] is False
+    assert record["trade_authorized"] is False
+    assert record["execution_authority"] is False

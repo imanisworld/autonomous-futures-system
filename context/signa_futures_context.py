@@ -261,7 +261,10 @@ def _observations_from_snapshot_db(
                     "SELECT snapshot_id, source, endpoint, symbol, timeframe, params_hash, "
                     "snapshot_bucket, retrieved_at, data_as_of, status, http_status, payload_json "
                     "FROM signa_snapshots WHERE symbol = ? AND timeframe = ? "
-                    "ORDER BY retrieved_at DESC, id DESC LIMIT 1",
+                    "ORDER BY "
+                    "CASE WHEN upper(status) = 'OK' THEN 0 ELSE 1 END, "
+                    "CASE WHEN source = 'action_card' OR endpoint LIKE '/api/v1/signals/%' THEN 0 ELSE 1 END, "
+                    "retrieved_at DESC, id DESC LIMIT 1",
                     (proxy, str(timeframe).lower()),
                 ).fetchone()
                 if row is None:
