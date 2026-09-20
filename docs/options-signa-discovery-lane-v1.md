@@ -233,3 +233,26 @@ Rows are tagged with consumers:
 
 This remains observation-only and does not grant trade, risk, broker, order, or execution authority. The `futures` consumer tag is metadata only; no futures runtime is wired by this branch.
 
+
+## Read-only pull entrypoint
+
+`scripts/options_signa_context_pull.py` is the scheduled-pull entrypoint, but this branch does not install a timer or start a daemon.
+
+Behavior:
+
+- exits with `skipped=market_closed` outside NYSE regular market hours unless `--force` is supplied;
+- defaults to the options watchlist plus the shared proxy symbol set;
+- writes only to `options_signa_context`;
+- keeps every row `observation_only=true` and `trade_authority=false`;
+- reports endpoint status, cache/backoff flags, requested rows, and stored unique row IDs;
+- does not touch scanner candidates, `options_shadow_journal`, risk, contract selection, broker, order, or execution paths.
+
+Example manual run:
+
+```bash
+python3 scripts/options_signa_context_pull.py \
+  --symbols SPY,QQQ,NVDA \
+  --timeframe 1d
+```
+
+Use `--include-gex` only when you intentionally want explicit unresolved-GEX context rows recorded. No standalone GEX endpoint is proven yet.
