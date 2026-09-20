@@ -1,6 +1,6 @@
 # Options — Current State Handoff
 
-_As of 2026-09-18. This is the single current-state authority for the options lane._
+_As of 2026-09-20. This is the single current-state authority for the options lane._
 
 Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`; the read-only coverage evidence lane (observer, reducer, outcome study, after-close collector) is described in `docs/options-coverage-observer.md`.
 
@@ -354,6 +354,23 @@ The options lane is at a deliberate evidence-collection stop point for the weeke
 - do not delete or alter unrelated concurrent futures worktrees/branches as options cleanup.
 
 A read-only state audit is appropriate before the next operator session; any defect/drift should be reported precisely before changing code, services, cadence, thresholds, source policy, V1, risk, broker, or order state.
+
+### Weekend readiness refresh — 2026-09-20
+
+The pre-Monday host/reboot audit is complete. This was maintenance and verification only; it did **not** change options strategy logic, scanner policy, risk, cadence, source policy, broker/order state, or the frozen `122-IEX-E1` research epoch.
+
+- VPS maintenance completed and the host rebooted cleanly. `/var/run/reboot-required` is absent; only `python3-software-properties` and `software-properties-common` remained upgradeable at the final audit, neither an options runtime blocker.
+- `futures-bot.service`, `options-scanner.service`, and `options-122-prospective.timer` are all enabled and active after reboot. The 1-2-2 timer still targets **2026-09-21 13:00 UTC / 09:00 ET**; 09:00-09:29 is reconciliation-only and natural RTH evidence begins at 09:30 ET.
+- Scanner `/health` returned healthy/advisory-only with Public read-only market data, `order_supported=false`, paper/order support disabled, account endpoints forbidden, scheduler running, and the unchanged SQLite path. SQLite `PRAGMA quick_check` returned `ok`.
+- The options scanner remains pinned to immutable release `58f1c50583d8bb747c0b221eabb75af376b10ecc`; release verification passed **1,073/1,073 files**, fingerprint `c8aeeabb53b863a102eb0d27c04e1d8fbbafa0d5f787655a3886e3cf0de37313`, with no missing, mismatched, unreadable, or extra runtime files.
+- The 1-2-2 collector remains pinned to immutable release `36e73f1981850b66b043d849ce877c15bd1ab3e7`; release verification passed **1,346/1,346 files**, fingerprint `e1627de58dc4791bb85157182668d132c91f790e83029361e5f0809b40f6a61a`, with no missing, mismatched, unreadable, or extra runtime files.
+- Post-reboot provider checks succeeded for the frozen historical probe window: Alpaca IEX returned **115** AAPL trades and delayed SIP returned **1,953**. Public authentication/market-data access also worked; the weekend SPY snapshot was correctly stale, 31 expirations were returned, and an empty first-expiration chain on Sunday was not treated as a defect because Friday RTH already proved the production selector path with 29/29 captured selector-evidence rows.
+- The prior `cloud-init-hotplugd.service` failure cleared after reboot; no failed systemd units remained at the final audit.
+- Shared cleanup in #790 fixed futures-watcher startup readiness, immutable-release audit semantics, live-box wording, and a futures P&L alias. The immutable-release audit improvement is shared infrastructure; inspection found **no analogous options startup/watchdog defect requiring an options runtime patch**. #791 is futures-only closed-market alert suppression.
+- The five-closed-ACTIVE-trade postmortem is now merged in **#789** as `docs/options-active-v1-trade-postmortem-2026-09-19.md`. It documents two true structural failures, one structural win with negative option translation, two positive translations, and the repeated first-observed-below-trigger pattern. The sample is too small to justify a trigger-hold/reclaim rule change; that remains a pre-registered follow-up question, not a Monday patch.
+- Repository cleanup completed after #789: `main` was clean/synchronized and no options worktree or open PR remained at the audit point.
+
+**Readiness ruling:** no additional options deploy, restart, threshold change, source-policy change, or V1 rule change is justified before Monday. The next legitimate evidence is the first natural RTH `122-IEX-E1` causal row plus continued untouched V1 collection.
 
 ## Next action
 
