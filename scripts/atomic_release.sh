@@ -265,11 +265,29 @@ promote_release() {
       mv -f \"\$tmp\" \"\$hist\"
     fi
     echo \"  release history: \$(grep -c . \"\$hist\" 2>/dev/null || echo 0) entries\"
-    # The watcher resolves and pins the live release at process start. A
-    # sanctioned futures-bot promotion therefore must re-arm the read-only
-    # watcher after activation/integrity succeed or monitoring remains pinned
-    # to the previous release and reports false BLOCKED findings.
+    # The watcher runs from a persistent shared source directory so it can
+    # survive release pruning/reboots. Before re-arming it, synchronize that
+    # source from the immutable release we just verified. The existing watcher
+    # continues running its /tmp copy until restart, so these copies cannot
+    # mutate the currently executing watcher mid-tick. Secrets/backups in the
+    # shared directory are untouched.
     if systemctl cat afs-watcher.service >/dev/null 2>&1; then
+      watcher_src='$CURRENT/ops/afs_watcher'
+      watcher_dest=\$(systemctl show afs-watcher.service -p WorkingDirectory --value)
+      test -n "\$watcher_dest"
+      test -d "\$watcher_dest"
+      for watcher_file in watcher.py watcher_memory_guard.py run_ro.sh supervisor.sh bootstrap_tmp_state.sh; do
+        test -f "\$watcher_src/\$watcher_file"
+        cp -f "\$watcher_src/\$watcher_file" "\$watcher_dest/\$watcher_file"
+        cmp -s "\$watcher_src/\$watcher_file" "\$watcher_dest/\$watcher_file"
+      done
+      if test -f "\$watcher_src/watcher_triage.py"; then
+        cp -f "\$watcher_src/watcher_triage.py" "\$watcher_dest/watcher_triage.py"
+        cmp -s "\$watcher_src/watcher_triage.py" "\$watcher_dest/watcher_triage.py"
+      else
+        rm -f "\$watcher_dest/watcher_triage.py"
+      fi
+      chmod 700 "\$watcher_dest"/*.sh
       systemctl restart afs-watcher.service
       sleep 2
       systemctl is-active afs-watcher.service
@@ -310,9 +328,25 @@ rollback_release() {
     curl -fsS http://127.0.0.1:8000/health
     PYTHONPATH='$CURRENT' '$CURRENT/.venv/bin/python' \
       -m ops.release_integrity --repo-root '$CURRENT'
-    # Rollback changes the same release pins/link as promotion; re-arm the
-    # read-only watcher for the restored release as well.
+    # Rollback changes the same release pins/link as promotion. Restore the
+    # persistent watcher source from that verified release before re-arming it.
     if systemctl cat afs-watcher.service >/dev/null 2>&1; then
+      watcher_src='$CURRENT/ops/afs_watcher'
+      watcher_dest=\$(systemctl show afs-watcher.service -p WorkingDirectory --value)
+      test -n "\$watcher_dest"
+      test -d "\$watcher_dest"
+      for watcher_file in watcher.py watcher_memory_guard.py run_ro.sh supervisor.sh bootstrap_tmp_state.sh; do
+        test -f "\$watcher_src/\$watcher_file"
+        cp -f "\$watcher_src/\$watcher_file" "\$watcher_dest/\$watcher_file"
+        cmp -s "\$watcher_src/\$watcher_file" "\$watcher_dest/\$watcher_file"
+      done
+      if test -f "\$watcher_src/watcher_triage.py"; then
+        cp -f "\$watcher_src/watcher_triage.py" "\$watcher_dest/watcher_triage.py"
+        cmp -s "\$watcher_src/watcher_triage.py" "\$watcher_dest/watcher_triage.py"
+      else
+        rm -f "\$watcher_dest/watcher_triage.py"
+      fi
+      chmod 700 "\$watcher_dest"/*.sh
       systemctl restart afs-watcher.service
       sleep 2
       systemctl is-active afs-watcher.service
