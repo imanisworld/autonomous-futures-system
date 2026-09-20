@@ -88,7 +88,7 @@ daily_limits:
   # MES 1-2-2 had one post-loss second trade and it won. In inactive 2-1-2
   # sensitivity, a 2-loss stop removed profitable recovery trades in both H1/H2.
   max_consecutive_losses: 9999      # deliberately off; every entry still needs a fresh valid signal
-  max_daily_loss: 150              # KEPT — base daily loss cap; scales × trade contracts (1c $150, 2c $300 …) so the balance-keyed ladder isn't halted by one normal loss. Hard survival floor is max_drawdown_percent.
+  max_daily_loss: 150              # Fixed real-book account/day realized-loss cap; NEVER scales with the next setup's contracts. Position size is governed separately. Hard survival floor is max_drawdown_percent.
   daily_profit_protect_threshold: 0 # off (was already 0)
   max_drawdown_percent: 0.30       # hard global account survival floor (stop if 30% from peak)
   circuit_breaker_losses: 0        # was 2 — circuit breaker OFF

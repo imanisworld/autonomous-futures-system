@@ -729,20 +729,25 @@ class RiskEngine:
     def _check_daily_loss_limit(
         self, setup: TradeSetup, daily_state: DailyState
     ) -> Optional[RiskResult]:
-        """Stop entries once realized daily P&L reaches the contract-adjusted loss cap."""
+        """Stop entries once realized daily P&L reaches the fixed account/day loss cap.
+
+        ``max_daily_loss`` is an account-level daily breaker.  Position size is
+        constrained independently by the sizing/per-trade risk gates; the next
+        setup's contract quantity must not enlarge an already-consumed daily
+        loss budget.
+        """
         base_max_loss = float(getattr(self.config, "max_daily_loss", 0) or 0)
         if base_max_loss <= 0:
             return None
 
-        contracts = max(1, int(setup.contracts or 1))
-        max_loss = abs(base_max_loss) * contracts
+        max_loss = abs(base_max_loss)
         if daily_state.realized_pnl_dollars <= -abs(max_loss):
             return RiskResult(
                 result="REJECTED",
                 failed_rule="max_daily_loss",
                 reason=(
                     f"Daily loss limit reached: ${daily_state.realized_pnl_dollars:.2f} "
-                    f"realized P&L (max loss ${max_loss:.2f} for {contracts}c)."
+                    f"realized P&L (fixed account/day max loss ${max_loss:.2f})."
                 ),
             )
         return None

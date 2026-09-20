@@ -163,3 +163,11 @@ Do not restart:
 Cleanup snapshot immediately before this audit: local/origin `main` were clean at audit base `3fbd20c`, there were no open PRs, completed temporary futures worktrees were pruned, and the recovered pre-clean local work remains anchored on branch `recovery/pre-clean-main-20260918-post754` at `fe4da8d0`.
 
 No live expansion.
+
+## 2026-09-20 safety-defect reconciliation
+
+A current-main source audit supersedes the earlier open-defect queue. Six reported defects were already repaired and covered by current implementation/tests: promotion-gate fail-closed semantics; configured campaign arms remaining visible at zero candidates; normal PaperBroker/replay fill-setting parity; evidence classification being separate from execution authority/status; daily reconciliation failing on critical non-trade-chain blockers; and exact-account pinning/fail-closed selection for the guarded Tradovate DEMO route.
+
+One real semantic defect remained: `max_daily_loss` was multiplied by the contract quantity of the *next proposed setup*. That allowed a larger next order to enlarge an already-consumed daily account-loss allowance. The 2026-09-20 repair makes the real-book `max_daily_loss: 150` a fixed account/day realized-loss breaker. Contract quantity remains governed independently by sizing/per-trade risk controls. The 30% global drawdown survival floor and three-trades/day ceiling are unchanged. Isolated wide-stop evidence ledgers retain their explicit lane-scoped $300/$600 daily limits and 20% drawdown floors; they do not mutate the real-book rule.
+
+Focused verification after the repair: `tests/test_risk_engine.py`, `tests/test_runner_budget_observation.py`, and `tests/test_wide_stop_ledger_paper.py` — **150 passed**; `git diff --check` passed. This is a safety semantics correction only: no strategy parameter, stop/target/R:R rule, instrument universe, broker route, live-trading authority, or wide-stop ledger policy was changed.
