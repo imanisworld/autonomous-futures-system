@@ -505,12 +505,8 @@ def _is_ancestor(root: Path, tip: str, target: str) -> bool | None:
     return result.returncode == 0 if result.returncode in (0, 1) else None
 
 
-def _content_preserved(root: Path, tip: str, target: str, base_ref: str) -> bool | None:
-    """Compare every path changed by the branch, including deletes and modes.
-
-    Unrelated main changes do not defeat a squash match. A differing path is
-    not proof of loss: a merged PR can also preserve it in main's history.
-    """
+def _changed_paths(root: Path, tip: str, base_ref: str) -> list[str] | None:
+    """Return paths changed by ``tip`` from its merge-base with ``base_ref``."""
     base, error = run_git(["merge-base", base_ref, tip], cwd=root)
     if error or not base:
         return None
@@ -520,13 +516,28 @@ def _content_preserved(root: Path, tip: str, target: str, base_ref: str) -> bool
     )
     if error or paths is None:
         return None
-    changed = [p for p in paths.split("\0") if p]
+    return [p for p in paths.split("\0") if p]
+
+
+def _paths_equal(root: Path, tip: str, target: str, changed: list[str]) -> bool | None:
     if not changed:
         return True
     result = run_git_result(
         ["diff", "--no-ext-diff", "--no-textconv", "--quiet", tip, target, "--", *changed], cwd=root,
     )
     return result.returncode == 0 if result.returncode in (0, 1) else None
+
+
+def _content_preserved(root: Path, tip: str, target: str, base_ref: str) -> bool | None:
+    """Compare every path changed by the branch, including deletes and modes.
+
+    Unrelated main changes do not defeat a squash match. A differing path is
+    not proof of loss: a merged PR can also preserve it in main's history.
+    """
+    changed = _changed_paths(root, tip, base_ref)
+    if changed is None:
+        return None
+    return _paths_equal(root, tip, target, changed)
 
 
 def _patch_identity(root: Path, diff_args: list[str]) -> str | None:
@@ -597,13 +608,19 @@ def _content_twin_on_other_origin_branch(
     never reported as "no twin found": the caller must leave preservation
     unproven rather than escalate on an unfinished check.
     """
+    # The source tip and base do not change while scanning candidate twins.
+    # Compute the changed-path set once instead of repeating merge-base + diff
+    # for every origin branch.  Candidate comparison semantics are unchanged.
+    changed = _changed_paths(root, tip, base_ref)
+    if changed is None:
+        return None, True
     comparison_failed = False
     for ref in sorted(tips):
         if not ref.startswith("refs/remotes/origin/") or ref == own_ref or ref.endswith("/HEAD"):
             continue
         if remote_ref and ref == f"refs/remotes/{remote_ref}":
             continue  # main is already covered by the caller's own comparison
-        match = _content_preserved(root, tip, tips[ref], base_ref)
+        match = _paths_equal(root, tip, tips[ref], changed)
         if match is True:
             return ref, comparison_failed
         if match is None:
