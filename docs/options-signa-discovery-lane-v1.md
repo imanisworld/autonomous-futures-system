@@ -195,3 +195,26 @@ Example request:
 ```
 
 Use this route to create a richer evidence inbox, not to approve trades. Signa-originated rows still require separate Strat setup, trigger, invalidation, target, contract quality, and risk validation before anything can become actionable.
+## Backlog: shared Signa context cache / dedupe policy
+
+Do not pull duplicate Signa data separately for options and futures. Signa should become a shared read-only provider cache with options and futures as consumers.
+
+Shared proxy symbols:
+
+- SPY for options market context and MES/ES futures proxy.
+- QQQ for options market context and MNQ/NQ futures proxy.
+- IWM for options market context and M2K/RTY futures proxy.
+- DIA for options market context and MYM/YM futures proxy.
+- VIX, SVXY, UVXY for volatility regime.
+- TLT for rates/risk context.
+- GLD for gold/metals context.
+- USO and XLE for crude/energy context.
+
+The dedupe identity should be provider/source based, not lane based:
+
+```text
+symbol + source/endpoint + timeframe + data_as_of/provider_timestamp
+```
+
+A shared row may be tagged with consumers such as `options`, `futures`, or `shared_proxy`, but the provider pull should happen once. This remains observation-only and must not grant trade, risk, broker, order, or execution authority.
+
