@@ -319,15 +319,25 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
         normalized_status = status.upper() if status else None
         if normalized_status and normalized_status not in SHADOW_OUTCOME_STATUSES:
             raise HTTPException(status_code=400, detail="unsupported_shadow_status")
+        shadow_items = get_scanner().storage.latest_shadow_setups(
+            limit=bounded_limit,
+            ticker=ticker,
+            status=normalized_status,
+        )
+        context_by_ticker = get_signa_context_store().context_for_tickers(
+            [item.ticker for item in shadow_items]
+        )
         return {
             "advisory_only": True,
+            "context_only": True,
+            "observation_only": True,
+            "trade_authority": False,
             "items": [
-                item.__dict__
-                for item in get_scanner().storage.latest_shadow_setups(
-                    limit=bounded_limit,
-                    ticker=ticker,
-                    status=normalized_status,
-                )
+                {
+                    **item.__dict__,
+                    "signa_context": context_by_ticker.get(item.ticker, []),
+                }
+                for item in shadow_items
             ],
         }
 
@@ -349,7 +359,16 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
         entry = get_scanner().storage.get_shadow_setup(shadow_id)
         if entry is None:
             raise HTTPException(status_code=404, detail="shadow_setup_not_found")
-        return {"advisory_only": True, "item": entry.__dict__}
+        return {
+            "advisory_only": True,
+            "context_only": True,
+            "observation_only": True,
+            "trade_authority": False,
+            "item": {
+                **entry.__dict__,
+                "signa_context": get_signa_context_store().context_for_ticker(entry.ticker),
+            },
+        }
 
     @app.patch("/shadow-journal/{shadow_id}/outcome")
     async def update_shadow_outcome(shadow_id: int, request: Request) -> dict[str, Any]:
@@ -893,6 +912,25 @@ def _render_scanner_dashboard() -> str:
       latestScansEl.innerHTML = renderTable(['Symbol', 'Score', 'Pattern', 'Contract', 'Alert', 'Time'], rows, 'No scans recorded.');
     }
 
+    function signaSetupContextText(context) {
+      const rows = context || [];
+      if (!rows.length) return 'Context only: none';
+      return 'Context only: ' + rows.slice(0, 3).map(row => {
+        const fields = row.fields || {};
+        const extras = [];
+        if (row.direction) extras.push(row.direction);
+        if (fields.score !== undefined) extras.push('score ' + fields.score);
+        if (fields.sentiment !== undefined) extras.push(fields.sentiment);
+        if (fields.callPremium !== undefined) extras.push('calls $' + fields.callPremium);
+        if (fields.putPremium !== undefined) extras.push('puts $' + fields.putPremium);
+        if (fields.flip !== undefined) extras.push('flip ' + fields.flip);
+        if (fields.gamma_wall !== undefined) extras.push('wall ' + fields.gamma_wall);
+        if (fields.gammaWall !== undefined) extras.push('wall ' + fields.gammaWall);
+        const suffix = extras.length ? ' (' + extras.join(', ') + ')' : '';
+        return row.source + suffix;
+      }).join(' · ');
+    }
+
     function renderShadow(items) {
       const rows = (items || []).map(item => {
         const ticket = item.selected_contract || {};
@@ -903,11 +941,12 @@ def _render_scanner_dashboard() -> str:
           '<td><strong>#' + esc(item.id) + ' ' + esc(item.ticker) + '</strong><br>' + esc(item.direction) + '</td>' +
           '<td><span class="' + scoreClass(item.score) + '">' + esc(item.score) + '</span></td>' +
           '<td>' + esc(contract || item.pattern) + '</td>' +
+          '<td>' + esc(signaSetupContextText(item.signa_context)) + '</td>' +
           '<td class="num">' + esc(outcome.pnl_dollars !== undefined ? money(outcome.pnl_dollars) : '-') + '</td>' +
           '<td class="num">' + esc((item.timestamp || '').replace('T', ' ').slice(0, 19)) + '</td>' +
         '</tr>';
       });
-      shadowLedgerEl.innerHTML = renderTable(['Status', 'Idea', 'Score', 'Contract', 'P&L', 'Time'], rows, 'No shadow ledger rows.');
+      shadowLedgerEl.innerHTML = renderTable(['Status', 'Idea', 'Score', 'Contract', 'Signa Context', 'P&L', 'Time'], rows, 'No shadow ledger rows.');
     }
 
     function renderSigna(data) {

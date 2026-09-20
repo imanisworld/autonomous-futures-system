@@ -143,6 +143,34 @@ class SignaContextStore:
         return [self._stored_from_row(row) for row in rows]
 
 
+    def context_for_tickers(self, tickers: list[str], *, limit_per_ticker: int = 6) -> dict[str, list[dict[str, Any]]]:
+        """Latest context-only rows keyed by ticker for setup/report display.
+
+        This is a presentation helper only. It returns evidence summaries from
+        the shared provider cache and never writes to the scanner, journal,
+        risk, broker, order, or execution paths.
+        """
+        symbols = sorted({str(ticker).upper().strip() for ticker in tickers if str(ticker).strip()})
+        if not symbols:
+            return {}
+        bounded = max(1, min(int(limit_per_ticker), 10))
+        out: dict[str, list[dict[str, Any]]] = {}
+        for symbol in symbols:
+            seen_sources: set[str] = set()
+            rows: list[dict[str, Any]] = []
+            for item in self.latest(limit=50, ticker=symbol):
+                if item.source in seen_sources:
+                    continue
+                seen_sources.add(item.source)
+                rows.append(self._summary(item))
+                if len(rows) >= bounded:
+                    break
+            out[symbol] = rows
+        return out
+
+    def context_for_ticker(self, ticker: str, *, limit: int = 6) -> list[dict[str, Any]]:
+        return self.context_for_tickers([ticker], limit_per_ticker=limit).get(ticker.upper(), [])
+
     def board(self, *, limit: int = 200) -> list[dict[str, Any]]:
         """Latest context-only board grouped by ticker and source."""
         grouped: dict[str, dict[str, Any]] = {}
@@ -177,6 +205,37 @@ class SignaContextStore:
             entry["consumers"] = sorted(entry["consumers"])
             out.append(entry)
         return sorted(out, key=lambda row: row["ticker"])
+
+    def _summary(self, item: StoredSignaContext) -> dict[str, Any]:
+        payload = item.payload
+        fields = {
+            key: payload[key]
+            for key in (
+                "grade", "score", "confidence", "sentiment", "count",
+                "callPremium", "putPremium", "totalPremium", "netPremium",
+                "callVolume", "putVolume", "putCallRatio",
+                "gamma_wall", "gammaWall", "flip", "zero_gamma", "zeroGamma",
+                "support", "resistance", "call_pct", "put_pct", "row_count",
+                "signal", "trade_count", "buy_count", "sell_count",
+            )
+            if key in payload
+        }
+        return {
+            "source": item.source,
+            "status": item.status,
+            "direction": item.direction,
+            "timestamp": item.timestamp,
+            "endpoint": item.endpoint,
+            "timeframe": item.timeframe,
+            "data_as_of": item.data_as_of,
+            "provider_timestamp": item.provider_timestamp,
+            "candidate_key": item.candidate_key,
+            "context_only": True,
+            "observation_only": True,
+            "trade_authority": False,
+            "consumers": list(item.consumers),
+            "fields": fields,
+        }
 
     def _normalized_payload(self, payload: dict[str, Any], *, timestamp: datetime | None = None) -> dict[str, Any]:
         if not isinstance(payload, dict):
