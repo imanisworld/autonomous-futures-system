@@ -1,6 +1,6 @@
 # STRATEGY INVENTORY
 **Autonomous Futures System — Master Reference**
-*Evidence classifications reconciled through 2026-09-20; edge-decomposition audit verdicts applied 2026-09-07 with the 4HR trigger-timing correction and #798/#799 observation lanes below.*
+*Evidence classifications reconciled through 2026-09-20; edge-decomposition audit verdicts applied 2026-09-07 with the 4HR trigger-timing correction and #798/#799/#807 observation lanes below.*
 
 ---
 
@@ -33,7 +33,7 @@ Verdict taxonomy:
 
 > **Runtime boundary (2026-09-01):** strategy verdicts below are evidence classifications. They do not prove the current VPS service, environment pins, enabled concepts, feeds, or broker account routing. Those remain box-side facts to verify separately.
 
-> **Observation-lane update (2026-09-20):** #798 adds read-only 4HR 4H 2→2 continuation treatment tagging to natural 1m 4HR observer events. #799 adds read-only Signa futures context tagging to futures journal context. Both are segmentation metadata only: no strategy replacement, paper-fill authority, DEMO authority, live authority, Signa entry gate, risk change, stop/target change, or broker route was added.
+> **Observation-lane update (2026-09-20):** #798 adds read-only 4HR 4H 2→2 continuation treatment tagging to natural 1m 4HR observer events. #799 adds read-only Signa futures context tagging to futures journal context. #807 upgrades that futures context to v2 by referencing shared Signa snapshots (`snapshot_ids`, `snapshot_refs`, `snapshot_status`) when available. These are segmentation metadata only: no strategy replacement, paper-fill authority, DEMO authority, live authority, Signa entry gate, risk change, stop/target change, or broker route was added.
 
 > **Edge decomposition audit (2026-09-07, PR #483, `docs/edge-decomposition-audit-2026-09-07.md`):** every lane below marked with a *Primary failure stage* was pushed through one standardized waterfall — raw signal → next-bar time-exit control → documented bracket (plan-price vs resting fill) → structural `RiskEngine` gates → isolated `ReplayEngine` (floors off / frozen) → production IOC at 1/2/3 ticks — after reproducing the #334/#340/#366/#372 binding baselines to the cent. The lanes split into three families by *entry style*:
 > 1. **Close-confirmed level predicates** (ORB Reclaim MNQ/MES, ORB Breakout, VWAP Hold): `SIGNAL_NOT_DIRECTIONAL`. Next-bar-open control ≈ $0 or negative; every historical positive was a plan-price fill artifact (plan − resting-order delta +$20.7k / +$9.8k / +$23.0k / +$102.9k). Gates admit 79–96% and the admitted set is still negative. Nothing here is being removed by the risk architecture.

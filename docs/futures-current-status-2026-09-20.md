@@ -1,6 +1,6 @@
 # Futures Current Status — 2026-09-20
 
-This is the concise operator-facing source of truth for the futures system after the 2026-09-20 4HR continuation and Signa futures-context work. Historical audit documents remain evidence records; where an older summary conflicts with this file, this file governs current status unless a later dated document explicitly supersedes it.
+This is the concise operator-facing source of truth for the futures system after the 2026-09-20 4HR continuation, Signa shared snapshot, and Futures Signa Context v2 work. Historical audit documents remain evidence records; where an older summary conflicts with this file, this file governs current status unless a later dated document explicitly supersedes it.
 
 ## Verdict
 
@@ -10,31 +10,41 @@ Core rule remains: **No proof, no run.**
 
 ## Verified deployed runtime
 
-Active futures runtime after the latest documentation pass:
+Active futures runtime after the latest Signa v2 deployment:
 
-- deployed release: `98c360da26619407408dbd2bc435540ea37a310e`;
-- release integrity: **1,377/1,377 files checked**;
+- deployed release: `a02320268e26a05f56b159f03d3cf441e776ef46`;
+- release integrity: **1,390/1,390 files checked**;
 - `LIVE_TRADING_ENABLED=false`;
+- `BROKER=tradovate`;
 - `TRADOVATE_ENV=demo`;
 - `SCHEDULE_MODE=always_on_shadow`;
 - `MAX_CONTRACTS_HARD_CAP=1`;
-- `SIGNA_API_ENABLED=true`;
-- broker flatness before/after promotion: **0 open positions / 0 working orders**;
-- watcher active, futures service active, options scanner active;
+- broker position: **null**;
+- broker account open P&L: **0.0**;
+- live preflight: **not armed**;
+- positions readable: **0 position rows**;
+- orders readable: **0 order rows**;
+- no open positions: **true**;
+- no working orders: **true**;
+- watcher active and futures service active;
 - deploy lock absent after promotion;
-- watcher has no BLOCKED findings;
-- known non-blocking watcher warning remains: `post_epoch_spans_releases`.
+- failed systemd units: **0**.
 
-This release includes:
+Live preflight is not armed with reason `preflight_failed:heartbeat_fresh`. This does not approve or block this context-only deployment because live trading remains disabled.
+
+This release lineage includes:
 
 - #798 `780b5ea` — 4HR continuation treatment tag in the 1m observer evidence;
-- #799 `98c360d` — read-only Signa futures context lane.
+- #799 `98c360d` — read-only Signa futures context lane v1;
+- #803 `a7e0c16` — shared Signa snapshot store;
+- #805 `4550d22` — options Signa pulls write raw snapshots first;
+- #807 `a023202` — Futures Signa Context Lane v2 reads shared snapshots.
 
 ## What changed on 2026-09-20
 
 ### 1. 4HR 4H 2→2 continuation treatment tagging — #798
 
-The 4HR 1m observer now records read-only treatment metadata for every natural eligible 4HR 1m touch:
+The 4HR 1m observer records read-only treatment metadata for every natural eligible 4HR 1m touch:
 
 - definition: `completed_et_wall_clock_4h_sequence_v1`;
 - treatment: `4hr_prearmed_4h22_continuation_v1`;
@@ -64,15 +74,27 @@ Interpretation:
 - the active completed-5m IOC8 paper path did not cleanly inherit the improvement;
 - no paper-fill authority, DEMO authority, live authority, strategy replacement, stop change, target change or risk-rule change was added.
 
-### 2. Signa Futures Context Lane v1 — #799
+### 2. Shared Signa snapshot path — #803 / #805
 
-The futures journal context now includes `context.signa_futures_context`.
+Signa raw responses now have a shared snapshot layer:
+
+- raw snapshots are stored in `signa_snapshots`;
+- each snapshot has a deterministic `snapshot_id`;
+- options-specific context rows can reference the shared `snapshot_id`;
+- futures context can later reference the same `snapshot_id` instead of pulling QQQ/SPY/VIX/TLT again.
+
+This prevents duplicate pulls and mismatched timestamps between options and futures. It does not create trading authority.
+
+### 3. Futures Signa Context Lane v2 — #807
+
+The futures journal context now includes `context.signa_futures_context` with shared snapshot references when available.
 
 Purpose:
 
 - regime/context tagging;
 - confirmation/conflict tagging;
-- research segmentation.
+- research segmentation;
+- shared `snapshot_id` attribution back to `signa_snapshots`.
 
 It is **not** a trade trigger and not a validator.
 
@@ -88,7 +110,17 @@ Proxy mapping:
 | MCL / CL | USO + XLE |
 | MBT | BTC |
 
-The lane also plans for broader regime proxies `TLT` and `VIX`, but v1 does not fetch new futures-path Signa data from them. It normalizes Signa data already present on the alert/state.
+The lane also recognizes broader regime proxies such as `TLT` and `VIX` for shared snapshot collection/segmentation.
+
+New v2 fields include:
+
+- `schema_version = signa_futures_context_v2`;
+- `snapshot_ids`;
+- `snapshot_refs`;
+- `snapshot_status`;
+- per-observation `snapshot_id`;
+- per-observation `snapshot_ref`;
+- per-observation `snapshot_age_seconds`.
 
 Possible tags include:
 
@@ -113,9 +145,10 @@ Authority boundaries:
 - `gate_authoritative=false`;
 - `broker_evaluated=false`;
 - `risk_evaluated=false`;
-- `trade_authorized=false`.
+- `trade_authorized=false`;
+- `execution_authority=false`.
 
-It does **not** enter, block, rank, resize or reroute futures trades.
+It does **not** enter, block, rank, resize or reroute futures trades. The futures runtime reads the shared snapshot database in read-only mode only. It does not call Signa, create the database, create tables, or mutate options data.
 
 ## Current lane posture
 
@@ -123,7 +156,8 @@ It does **not** enter, block, rank, resize or reroute futures trades.
 |---|---|
 | MNQ 4HR broad control | Paper evidence + guarded Tradovate DEMO evidence route remains the only DEMO-approved lane |
 | MNQ 4HR 4H 2→2 continuation | Observation metadata only; no paper-fill, DEMO or live authority |
-| Signa Futures Context v1 | Journal context only; no execution authority |
+| Signa shared snapshots | Shared raw evidence layer; no trade authority |
+| Futures Signa Context v2 | Journal context + shared snapshot references only; no execution authority |
 | 3-2-2 First Live | Evidence/paper-only; not DEMO-approved |
 | Daily 2-2 | Paper only; completed-close architecture remains separate from broken true-touch variant |
 | Miyagi | Parked / replay fixed / thin sample; no deployment action |
@@ -153,19 +187,40 @@ For #799:
 - promotion gate passed;
 - deployed release integrity passed.
 
+For #803 / #805 / #807:
+
+- shared snapshot store PR #803 merged as `a7e0c16`;
+- options shared-snapshot consumer PR #805 merged as `4550d22`;
+- futures shared-snapshot consumer PR #807 merged/deployed as `a023202`;
+- futures Signa context tests: **9 passed**;
+- Signa-related tests: **175 passed**;
+- runner/context tests: **51 passed**;
+- local full repo suite: **6,355 passed**;
+- GitHub PR checks passed;
+- post-merge main CI and CodeQL passed;
+- immutable release integrity: **1,390/1,390**;
+- candidate verified under PaperBroker-isolated posture;
+- deployed release integrity passed.
+
 ## Required next step
 
-Collect natural evidence. Do **not** add another strategy/filter/route merely because the metadata exists.
+Seed or verify the shared snapshot store with a controlled read-only Signa pull for the proxy set:
 
-For the next natural 4HR event, audit:
+```text
+QQQ, SPY, IWM, DIA, TLT, VIX, GLD, USO, XLE
+```
+
+Then wait for the next natural futures setup and confirm the journal row includes:
 
 1. 4HR arm exists before touch;
 2. true 1m touch is timestamped;
 3. completed-1H stop anchor is causal;
-4. 4H continuation tag is present and correct;
-5. Signa futures context tag is present/missing/partial as expected;
-6. no fill/risk/execution authority leaks from observer metadata;
-7. broad control and treatment subset can be compared later without double-counting.
+4. 4H continuation tag is present and correct when applicable;
+5. `context.signa_futures_context.snapshot_ids` is present when a fresh shared snapshot exists;
+6. `context.signa_futures_context.snapshot_refs` is present when a fresh shared snapshot exists;
+7. `context.signa_futures_context.snapshot_status` correctly reports OK, missing, stale, or partial;
+8. no fill/risk/execution authority leaks from observer metadata;
+9. broad control and treatment subset can be compared later without double-counting.
 
 ## Do not touch
 
