@@ -11,6 +11,7 @@ Expected public routes:
 - `/` — landing page
 - `/privacy/` — privacy policy
 - `/terms/` — terms and conditions
+- `/status/` — public status-boundary explainer
 
 ## Safety boundary
 
@@ -20,7 +21,7 @@ The domain routing should remain separated:
 
 - `afsvp.com` and `www.afsvp.com` — static site only
 - `hooks.afsvp.com` — TradingView webhook only, ultimately forwarding the approved webhook path to `127.0.0.1:8000`
-- `status.afsvp.com` — approved read-only status routes only
+- `status.afsvp.com` — approved read-only status routes only, such as the sanitized options-scanner `/public/status` endpoint
 
 Do not expose ports `8000` or `8010` directly to the public internet.
 

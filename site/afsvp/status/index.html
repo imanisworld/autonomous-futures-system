@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="AFSVP public status boundary and read-only status routes.">
+  <title>Status — AFSVP</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main>
+    <div class="kicker">AFSVP</div>
+    <h1 style="font-size:clamp(2.5rem,8vw,4.5rem)">Status</h1>
+    <p class="lead">Public status surfaces are intentionally narrow, read-only, and separate from private operator dashboards.</p>
+
+    <section class="grid two">
+      <article class="card accent">
+        <h2>Public status</h2>
+        <p>The approved public status surface may expose only sanitized service posture: advisory-only mode, scheduler health, read-only market-data posture, and aggregate recent counts.</p>
+      </article>
+      <article class="card stop">
+        <h2>Never public</h2>
+        <p>Broker credentials, account state, execution controls, trading journals, raw scan rows, contracts, tickers, Signa payloads, database paths, and localhost ports must remain private.</p>
+      </article>
+    </section>
+
+    <section class="card">
+      <h2>Service separation</h2>
+      <p><strong>afsvp.com</strong> is the static public website. <strong>status.afsvp.com</strong> is reserved for approved read-only status routes. <strong>hooks.afsvp.com</strong> is reserved for authenticated TradingView webhook ingestion.</p>
+      <p><a href="/">Return to AFSVP</a></p>
+    </section>
+  </main>
+  <footer>
+    <a href="/status/">Status</a>
+    <a href="/privacy/">Privacy</a>
+    <a href="/terms/">Terms</a>
+    <span>© 2026 AFSVP</span>
+  </footer>
+</body>
+</html>
