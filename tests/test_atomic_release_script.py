@@ -119,6 +119,22 @@ def test_promotion_enforces_release_integrity_on_service_start():
     assert "'Environment=RELEASE_INTEGRITY_ENFORCED=true'" in text
 
 
+def test_promote_and_rollback_rearm_readonly_watcher_after_release_verification():
+    text = SCRIPT.read_text()
+    promote = text.split("promote_release() {", 1)[1].split("rollback_release() {", 1)[0]
+    rollback = text.split("rollback_release() {", 1)[1].split(
+        "# Guarded so tests can", 1
+    )[0]
+
+    for block in (promote, rollback):
+        assert "systemctl cat afs-watcher.service" in block
+        assert "systemctl restart afs-watcher.service" in block
+        assert "systemctl is-active afs-watcher.service" in block
+        assert block.index("systemctl restart afs-watcher.service") > block.index(
+            "-m ops.release_integrity --repo-root '$CURRENT'"
+        )
+
+
 def test_rollback_restores_previous_release_proof_pins_and_verifies_integrity():
     text = SCRIPT.read_text()
     assert "prev_fp=" in text

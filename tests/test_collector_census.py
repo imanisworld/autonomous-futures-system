@@ -91,6 +91,43 @@ def test_cme_heartbeat_absence_fails_again_after_session_reopens(tmp_path):
     assert check(collector, tmp_path, monday_utc)["status"] == ABSENT
 
 
+def _write_options_scan_db(path, timestamp: str) -> None:
+    conn = sqlite3.connect(path)
+    conn.execute("CREATE TABLE scans (id INTEGER, timestamp TEXT)")
+    conn.execute("INSERT INTO scans VALUES (?, ?)", (1, timestamp))
+    conn.commit()
+    conn.close()
+
+
+def test_options_scans_are_off_session_on_weekend(tmp_path):
+    _write_options_scan_db(tmp_path / "options_scanner.sqlite", "2026-09-18T19:55:00+00:00")
+    sunday = datetime(2026, 9, 20, 14, 0, tzinfo=timezone.utc)
+    collector = next(c for c in COLLECTORS if c.name == "options scans")
+    assert check(collector, tmp_path, sunday)["status"] == OFF_SESSION
+
+
+def test_options_scans_fail_again_during_regular_session(tmp_path):
+    _write_options_scan_db(tmp_path / "options_scanner.sqlite", "2026-09-18T19:55:00+00:00")
+    monday = datetime(2026, 9, 21, 14, 0, tzinfo=timezone.utc)
+    collector = next(c for c in COLLECTORS if c.name == "options scans")
+    assert check(collector, tmp_path, monday)["status"] == DEAD
+
+
+def test_options_scans_respect_us_equity_holiday_and_early_close(tmp_path):
+    _write_options_scan_db(tmp_path / "options_scanner.sqlite", "2026-11-25T20:00:00+00:00")
+    collector = next(c for c in COLLECTORS if c.name == "options scans")
+
+    thanksgiving = datetime(2026, 11, 26, 15, 0, tzinfo=timezone.utc)
+    assert check(collector, tmp_path, thanksgiving)["status"] == OFF_SESSION
+
+    early_close_after = datetime(2026, 11, 27, 19, 0, tzinfo=timezone.utc)
+    assert check(collector, tmp_path, early_close_after)["status"] == OFF_SESSION
+
+
+def test_disabled_options_companion_is_not_registered_as_live_collector():
+    assert "options companion" not in {c.name for c in COLLECTORS}
+
+
 @pytest.mark.parametrize("column", ["timestamp", "ts", "created_at", "observed_at"])
 def test_sqlite_time_column_is_discovered(tmp_path, column):
     db = tmp_path / "x.sqlite"

@@ -27,7 +27,7 @@ import json
 import sqlite3
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime, time, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 from typing import Any, Callable
@@ -78,7 +78,7 @@ class Collector:
     target: str
     max_age_minutes: int
     note: str = ""
-    session: str = ""  # "" | "cme_equity"
+    session: str = ""  # "" | "cme_equity" | "us_equity"
     # sqlite_table only
     table: str = ""
     time_columns: tuple[str, ...] = ("timestamp", "ts", "created_at", "observed_at")
@@ -138,6 +138,7 @@ COLLECTORS: tuple[Collector, ...] = (
         "options_scanner.sqlite",
         30,
         table="scans",
+        session="us_equity",
     ),
     Collector(
         "options shadow journal",
@@ -146,14 +147,12 @@ COLLECTORS: tuple[Collector, ...] = (
         1440,
         table="options_shadow_journal",
         note="OPEN-gated; silence here also means zero eligible candidates",
+        session="us_equity",
     ),
-    Collector(
-        "options companion",
-        "sqlite_table",
-        "options_companion.sqlite",
-        10080,
-        table="options_companion",
-    ),
+    # options_companion is intentionally disabled in the current system.
+    # Its historical SQLite file remains for review/weekly reporting, but there
+    # is no producer to monitor. If that lane is ever explicitly re-enabled,
+    # re-register it here as part of that activation change.
     # --- scheduled reports ----------------------------------------------
     Collector("health digest", "file", "health_digest_latest.json", 1560),
     Collector("proof backup", "file", "proof_backup.log", 1560),
@@ -195,6 +194,88 @@ def _cme_equity_session_open(now: datetime) -> bool:
     if weekday == 4 and clock >= time(17, 0):
         return False
     return not (time(17, 0) <= clock < time(18, 0))
+
+
+def _observed_fixed_holiday(year: int, month: int, day: int) -> date:
+    holiday = date(year, month, day)
+    if holiday.weekday() == 5:
+        return holiday - timedelta(days=1)
+    if holiday.weekday() == 6:
+        return holiday + timedelta(days=1)
+    return holiday
+
+
+def _easter_sunday(year: int) -> date:
+    # Meeus/Jones/Butcher Gregorian Easter; mirrors the scanner calendar.
+    a = year % 19
+    b, c = divmod(year, 100)
+    d, e = divmod(b, 4)
+    f, g = divmod(b + 8, 25)
+    h = (a * 19 + b - d - g + 15) % 30
+    i, k = divmod(c, 4)
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    month, day = divmod(h + l - 7 * m + 114, 31)
+    return date(year, month, day + 1)
+
+
+def _nth_weekday(year: int, month: int, weekday: int, occurrence: int) -> date:
+    first = date(year, month, 1)
+    return first + timedelta(days=(weekday - first.weekday()) % 7 + 7 * (occurrence - 1))
+
+
+def _last_weekday(year: int, month: int, weekday: int) -> date:
+    next_month = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
+    candidate = next_month - timedelta(days=1)
+    return candidate - timedelta(days=(candidate.weekday() - weekday) % 7)
+
+
+def _us_equity_closed_days(year: int) -> set[date]:
+    closed = {
+        _observed_fixed_holiday(year, 1, 1),
+        _nth_weekday(year, 1, 0, 3),
+        _nth_weekday(year, 2, 0, 3),
+        _easter_sunday(year) - timedelta(days=2),
+        _last_weekday(year, 5, 0),
+        _observed_fixed_holiday(year, 7, 4),
+        _nth_weekday(year, 9, 0, 1),
+        _nth_weekday(year, 11, 3, 4),
+        _observed_fixed_holiday(year, 12, 25),
+    }
+    if year >= 2022:
+        closed.add(_observed_fixed_holiday(year, 6, 19))
+    return closed
+
+
+def _us_equity_session_open(now: datetime) -> bool:
+    """NYSE regular-session clock used by the options scanner census.
+
+    This stays stdlib-only so the standalone census keeps working in the
+    pinned paper-report copy. Holiday and early-close rules mirror the scanner
+    session calendar.
+    """
+    local = now.astimezone(_ET)
+    day = local.date()
+    if day.weekday() >= 5 or day in _us_equity_closed_days(day.year):
+        return False
+
+    close = time(16, 0)
+    thanksgiving = _nth_weekday(day.year, 11, 3, 4)
+    if day == thanksgiving + timedelta(days=1):
+        close = time(13, 0)
+
+    christmas = date(day.year, 12, 25)
+    christmas_eve = christmas - timedelta(days=2) if christmas.weekday() == 6 else christmas - timedelta(days=1)
+    if day == christmas_eve:
+        close = time(13, 0)
+
+    independence = date(day.year, 7, 4)
+    independence_eve = independence - timedelta(days=2) if independence.weekday() == 6 else independence - timedelta(days=1)
+    if day == independence_eve:
+        close = time(13, 0)
+
+    clock = local.timetz().replace(tzinfo=None)
+    return time(9, 30) <= clock < close
 
 
 def _classify(age: float | None, limit: int) -> str:
@@ -310,11 +391,12 @@ def check(collector: Collector, log_dir: Path, now: datetime) -> dict[str, Any]:
 
     age = _age_minutes(last, now) if last else None
     status = _classify(age, collector.max_age_minutes)
-    if (
-        collector.session == "cme_equity"
-        and status != FRESH
-        and not _cme_equity_session_open(now)
-    ):
+    session_closed = (
+        collector.session == "cme_equity" and not _cme_equity_session_open(now)
+    ) or (
+        collector.session == "us_equity" and not _us_equity_session_open(now)
+    )
+    if collector.session and status != FRESH and session_closed:
         status = OFF_SESSION
     return {
         "name": collector.name,
