@@ -3048,86 +3048,6 @@ def _format_generated_age(value: str) -> str:
 _FUTURES_UNIVERSE = ["MES", "MNQ", "MGC", "MCL"]
 
 
-def _dashboard_strategy_inventory() -> dict:
-    """Read the canonical strategy inventory for display only.
-
-    The dashboard never promotes, enables, or disables a strategy from this
-    data. Missing/unparseable inventory fails visibly to UNKNOWN.
-    """
-    source = "docs/strategy-rules/Strategy_Inventory.md"
-    path = Path(__file__).resolve().parents[1] / source
-    try:
-        from ops.project_check.daily import _parse_strategy_inventory
-        rows, error = _parse_strategy_inventory(path)
-    except Exception:  # presentation must never affect trading/runtime startup
-        return {"ok": False, "source": source, "rows": [], "error": "inventory unavailable"}
-    if error:
-        return {"ok": False, "source": source, "rows": [], "error": "inventory unavailable"}
-
-    def classification(verdict: str) -> str:
-        upper = (verdict or "").upper()
-        # Order matters: some wide-stop rows are promising evidence while also
-        # saying BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS.
-        for label in (
-            "PROMISING BUT UNPROVEN", "PAPER PROOF", "VALIDATED",
-            "RESEARCH ONLY", "RETIRE", "WAIT", "BROKEN", "OVERFIT", "UNSAFE",
-        ):
-            if label in upper:
-                return label
-        return "UNKNOWN"
-
-    def posture(verdict: str, cls: str) -> str:
-        upper = (verdict or "").upper()
-        labels = []
-        if "PARKED" in upper:
-            labels.append("PARKED")
-        if "PAPER" in upper:
-            labels.append("PAPER")
-        if "GUARDED DEMO" in upper:
-            labels.append("GUARDED DEMO")
-        if "OBSERVATION ONLY" in upper:
-            labels.append("OBSERVATION ONLY")
-        if not labels:
-            if cls in {"BROKEN", "RETIRE", "UNSAFE"}:
-                labels.append("INACTIVE")
-            elif cls == "RESEARCH ONLY":
-                labels.append("RESEARCH ONLY")
-            elif cls == "WAIT":
-                labels.append("WAIT")
-            else:
-                labels.append("UNKNOWN")
-        return " / ".join(dict.fromkeys(labels))
-
-    def authority(verdict: str, cls: str) -> str:
-        upper = (verdict or "").upper()
-        if (
-            "CURRENT SYSTEM RISK CONSTRAINTS" in upper
-            or "CURRENT-ACCOUNT" in upper
-            or "NOT EXECUTABLE UNDER CURRENT REAL-ACCOUNT RISK" in upper
-        ):
-            return "CURRENT-ACCOUNT INCOMPATIBLE"
-        if cls in {"BROKEN", "RETIRE", "UNSAFE"}:
-            return "NO EXECUTION AUTHORITY"
-        if cls == "VALIDATED":
-            return "RUNTIME AUTHORITY SEPARATE"
-        if cls == "UNKNOWN":
-            return "UNKNOWN"
-        return "NO LIVE AUTHORITY"
-
-    display_rows = []
-    for row in rows:
-        verdict = str(row.get("verdict") or "UNKNOWN")
-        cls = classification(verdict)
-        display_rows.append({
-            "name": str(row.get("name") or "Unknown strategy"),
-            "classification": cls,
-            "posture": posture(verdict, cls),
-            "authority": authority(verdict, cls),
-            "verdict": verdict,
-        })
-    return {"ok": True, "source": source, "rows": display_rows, "error": None}
-
-
 def _dashboard_init(status: dict) -> dict:
     """Assemble the JSON view-model the client renders every tab from."""
     committee = _load_committee_panel(_config.log_dir)
@@ -3139,6 +3059,86 @@ def _dashboard_init(status: dict) -> dict:
         for s in _FUTURES_UNIVERSE
     ]
     universe_missing = [s for s in required if s not in allowed]
+    def strategy_inventory() -> dict:
+        """Read the canonical strategy inventory for display only.
+
+        The dashboard never promotes, enables, or disables a strategy from this
+        data. Missing/unparseable inventory fails visibly to UNKNOWN.
+        """
+        source = "docs/strategy-rules/Strategy_Inventory.md"
+        path = Path(__file__).resolve().parents[1] / source
+        try:
+            from ops.project_check.daily import _parse_strategy_inventory
+            rows, error = _parse_strategy_inventory(path)
+        except Exception:  # presentation must never affect trading/runtime startup
+            return {"ok": False, "source": source, "rows": [], "error": "inventory unavailable"}
+        if error:
+            return {"ok": False, "source": source, "rows": [], "error": "inventory unavailable"}
+
+        def classification(verdict: str) -> str:
+            upper = (verdict or "").upper()
+            # Order matters: some wide-stop rows are promising evidence while also
+            # saying BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS.
+            for label in (
+                "PROMISING BUT UNPROVEN", "PAPER PROOF", "VALIDATED",
+                "RESEARCH ONLY", "RETIRE", "WAIT", "BROKEN", "OVERFIT", "UNSAFE",
+            ):
+                if label in upper:
+                    return label
+            return "UNKNOWN"
+
+        def posture(verdict: str, cls: str) -> str:
+            upper = (verdict or "").upper()
+            labels = []
+            if "PARKED" in upper:
+                labels.append("PARKED")
+            if "PAPER" in upper:
+                labels.append("PAPER")
+            if "GUARDED DEMO" in upper:
+                labels.append("GUARDED DEMO")
+            if "OBSERVATION ONLY" in upper:
+                labels.append("OBSERVATION ONLY")
+            if not labels:
+                if cls in {"BROKEN", "RETIRE", "UNSAFE"}:
+                    labels.append("INACTIVE")
+                elif cls == "RESEARCH ONLY":
+                    labels.append("RESEARCH ONLY")
+                elif cls == "WAIT":
+                    labels.append("WAIT")
+                else:
+                    labels.append("UNKNOWN")
+            return " / ".join(dict.fromkeys(labels))
+
+        def authority(verdict: str, cls: str) -> str:
+            upper = (verdict or "").upper()
+            if (
+                "CURRENT SYSTEM RISK CONSTRAINTS" in upper
+                or "CURRENT-ACCOUNT" in upper
+                or "NOT EXECUTABLE UNDER CURRENT REAL-ACCOUNT RISK" in upper
+            ):
+                return "CURRENT-ACCOUNT INCOMPATIBLE"
+            if cls in {"BROKEN", "RETIRE", "UNSAFE"}:
+                return "NO EXECUTION AUTHORITY"
+            if cls == "VALIDATED":
+                return "RUNTIME AUTHORITY SEPARATE"
+            if cls == "UNKNOWN":
+                return "UNKNOWN"
+            return "NO LIVE AUTHORITY"
+
+        display_rows = []
+        for row in rows:
+            verdict = str(row.get("verdict") or "UNKNOWN")
+            cls = classification(verdict)
+            display_rows.append({
+                "name": str(row.get("name") or "Unknown strategy"),
+                "classification": cls,
+                "posture": posture(verdict, cls),
+                "authority": authority(verdict, cls),
+                "verdict": verdict,
+            })
+        return {"ok": True, "source": source, "rows": display_rows, "error": None}
+
+
     return {
         "today": status,
         "committee": committee,
@@ -3155,7 +3155,7 @@ def _dashboard_init(status: dict) -> dict:
         "tradovate_env": os.getenv("TRADOVATE_ENV", "").strip().lower(),
         "paper_mode": bool(status.get("paper_mode", True)),
         "live_trading_enabled": bool(status.get("live_trading_enabled")),
-        "strategy_inventory": _dashboard_strategy_inventory(),
+        "strategy_inventory": strategy_inventory(),
         "max_drawdown_pct": round(float(getattr(_config, "max_drawdown_percent", 0.10)) * 100, 2),
         "poll_seconds": 30,
         # Monitor-only mode: when False the UI renders NO manual execution controls.

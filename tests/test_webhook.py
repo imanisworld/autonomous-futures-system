@@ -1472,10 +1472,11 @@ def test_fastapi_dashboard_endpoint():
     assert "SIMULATED" in resp.text
 
 
-def test_dashboard_strategy_inventory_keeps_evidence_and_authority_separate():
+def test_dashboard_strategy_inventory_keeps_evidence_and_authority_separate(monkeypatch, tmp_path):
     import webhook.app as app_module
 
-    inventory = app_module._dashboard_strategy_inventory()
+    _isolate_app_logs(monkeypatch, tmp_path)
+    inventory = app_module._dashboard_init({"paper_mode": True, "live_trading_enabled": False})["strategy_inventory"]
     assert inventory["ok"] is True
     assert inventory["source"] == "docs/strategy-rules/Strategy_Inventory.md"
     assert inventory["rows"]

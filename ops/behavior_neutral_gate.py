@@ -140,7 +140,6 @@ SAFE_OPERATIONAL_FILES = frozenset({
 # so a change here can never remove their call to a sanitizer.
 APP_PY_SAFE_FUNCTIONS = frozenset({
     "_dashboard_payload",
-    "_dashboard_strategy_inventory",
     "_dashboard_init",
     "_render_dashboard",
     "_strategy_payload",
