@@ -1,12 +1,10 @@
-"""FastAPI app and scheduler lifecycle for the options scanner.
+"""FastAPI app and scheduler lifecycle for the advisory options scanner.
 
-TEST-ONLY. This advisory options scanner is NOT part of the live futures
-deployment (the production service runs ``uvicorn webhook.app:app`` and never
-imports this module). It is advisory-only — it can place no broker orders — and
-its endpoints are unauthenticated, so it must not be exposed in production. The
-launch path is gated behind ``OPTIONS_SCANNER_ENABLED=true`` (default off): the
-served ``app`` is inert and ``run()`` refuses unless the flag is set in a test
-environment.
+The service has no broker order-submission authority and binds to localhost.
+Production exposure is controlled by the reverse proxy: operator endpoints stay
+protected, while ``/public/status`` is an explicit allowlist-only summary for the
+public Vantage Point UI. The module-level launch path remains gated behind
+``OPTIONS_SCANNER_ENABLED=true`` (default off).
 """
 
 from __future__ import annotations
@@ -194,6 +192,69 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
     @app.get("/status")
     async def status() -> dict[str, Any]:
         return get_scanner().status()
+
+    @app.get("/public/status")
+    async def public_status() -> dict[str, Any]:
+        """Return an allowlisted read-only summary safe for the public UI.
+
+        Do not add tickers, contracts, raw scan rows, Signa payloads, database
+        paths, provider errors, aggregate active risk, account state, or broker
+        identifiers here. Private operator detail remains on the authenticated
+        endpoints behind nginx.
+        """
+        scanner_status = get_scanner().status()
+        health_status = await health()
+        provider = health_status.get("provider_profile") or {}
+        latest = scanner_status.get("latest") or []
+        signa_rows = scanner_status.get("signa") or []
+        policy = scanner_status.get("paper_policy") or {}
+
+        return {
+            "public_safe": True,
+            "status": health_status.get("status"),
+            "service": "options-scanner",
+            "advisory_only": True,
+            "execution_authority": False,
+            "scheduler_running": bool(health_status.get("scheduler_running")),
+            "market_data": {
+                "provider": health_status.get("market_data_provider"),
+                "configured": bool(health_status.get("market_data_configured")),
+                "read_only": bool(provider.get("read_only")),
+                "order_supported": bool(provider.get("order_supported")),
+                "account_endpoints_forbidden": bool(
+                    provider.get("account_endpoints_forbidden")
+                ),
+            },
+            "last_run_at": scanner_status.get("last_run_at"),
+            "last_skip_reason": scanner_status.get("last_skip_reason"),
+            "counts": {
+                "watchlist": len(scanner_status.get("watchlist") or []),
+                "recent_scan_rows": len(scanner_status.get("scans") or []),
+                "recent_alerts_sent": sum(
+                    1 for row in latest if row.get("alert_sent") is True
+                ),
+                "recent_alerts_suppressed": sum(
+                    1
+                    for row in latest
+                    if row.get("alert_sent") is False
+                    and bool(row.get("alert_suppression_reason"))
+                ),
+                "recent_signa_context_rows": len(signa_rows),
+            },
+            "paper_policy": {
+                "id": policy.get("id"),
+                "max_trade_planned_risk": policy.get("max_trade_planned_risk"),
+                "max_aggregate_open_planned_risk": policy.get(
+                    "max_aggregate_open_planned_risk"
+                ),
+            },
+            "signa": {
+                "context_pull_enabled": bool(
+                    health_status.get("signa_context_pull_enabled")
+                ),
+                "trade_authority": False,
+            },
+        }
 
     @app.get("/watchlist")
     async def watchlist() -> dict[str, Any]:
