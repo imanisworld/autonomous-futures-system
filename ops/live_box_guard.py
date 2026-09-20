@@ -392,7 +392,9 @@ def live_box_drift_report(
     if status == "ok":
         summary = (
             f"Live box guard verified branch {branch}, commit {_short(commit)}, "
-            f"risk_rules {_short(config_sha)}, and evidence journal {journal_path}."
+            f"risk_rules {_short(config_sha)}, and evidence journal directory {log_path}. "
+            f"Today's expected journal path is {journal_path}; file existence/content is "
+            "reported separately by journal/session checks."
         )
     elif (missing_pins or unpinned_overrides or security_warn) and not mismatches and not dirty_problem:
         bits = []

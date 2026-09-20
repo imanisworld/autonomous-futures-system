@@ -331,3 +331,47 @@ def test_guard_identity_unavailable_without_git_or_manifest(tmp_path):
     report = live_box_drift_report(repo_root=tmp_path, log_dir=tmp_path)
     assert report["identity_source"] == "unavailable"
     assert report["branch"] is None and report["commit"] is None
+
+
+
+
+def test_ok_summary_does_not_claim_daily_journal_file_was_verified(tmp_path, monkeypatch):
+    from ops.live_box_guard import live_box_drift_report
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "risk_rules.yaml").write_text("x: 1\n", encoding="utf-8")
+    log_dir = tmp_path / "shared-logs"
+    log_dir.mkdir()
+
+    monkeypatch.setattr("ops.live_box_guard.PROOF_CRITICAL_RUNTIME_OVERRIDES", ())
+    monkeypatch.setenv("WEBHOOK_SECRET", "primary-secret")
+    monkeypatch.setenv("TRADINGVIEW_WEBHOOK_SECRET_NEXT", "next-secret")
+    monkeypatch.setenv("EXPECTED_LIVE_BRANCH", "main")
+    monkeypatch.setenv("EXPECTED_LIVE_COMMIT", "a" * 40)
+    monkeypatch.setenv(
+        "EXPECTED_RISK_RULES_SHA256",
+        __import__("hashlib").sha256(b"x: 1\n").hexdigest(),
+    )
+    monkeypatch.setenv("EXPECTED_LIVE_REPO_ROOT", str(repo))
+    monkeypatch.setenv("EXPECTED_RUNTIME_JOURNAL_DIR", str(log_dir))
+    monkeypatch.setenv("EXPECTED_RUNTIME_EVIDENCE_SOURCE", "shared_runtime_log_dir")
+    monkeypatch.setenv("RUNTIME_EVIDENCE_SOURCE", "shared_runtime_log_dir")
+
+    manifest = {
+        "repo": {"branch": "main", "commit": "a" * 40},
+        "fingerprint_sha256": "f" * 64,
+    }
+    (repo / "release_manifest.json").write_text(
+        __import__("json").dumps(manifest), encoding="utf-8"
+    )
+
+    report = live_box_drift_report(
+        repo_root=repo,
+        risk_rules_path=repo / "risk_rules.yaml",
+        log_dir=log_dir,
+    )
+
+    assert report["status"] == "ok"
+    assert "evidence journal directory" in report["summary"]
+    assert "Today's expected journal path is" in report["summary"]
