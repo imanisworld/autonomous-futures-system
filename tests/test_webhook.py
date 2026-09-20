@@ -1472,6 +1472,47 @@ def test_fastapi_dashboard_endpoint():
     assert "SIMULATED" in resp.text
 
 
+def test_dashboard_strategy_inventory_keeps_evidence_and_authority_separate():
+    import webhook.app as app_module
+
+    inventory = app_module._dashboard_strategy_inventory()
+    assert inventory["ok"] is True
+    assert inventory["source"] == "docs/strategy-rules/Strategy_Inventory.md"
+    assert inventory["rows"]
+
+    combined = [
+        row for row in inventory["rows"]
+        if "PROMISING BUT UNPROVEN" in row["verdict"].upper()
+        and "CURRENT SYSTEM RISK CONSTRAINTS" in row["verdict"].upper()
+    ]
+    assert combined, "expected at least one promising-evidence/current-risk-incompatible row"
+    assert all(row["classification"] == "PROMISING BUT UNPROVEN" for row in combined)
+    assert all(row["authority"] == "CURRENT-ACCOUNT INCOMPATIBLE" for row in combined)
+
+    inactive = [
+        row for row in inventory["rows"]
+        if row["classification"] in {"BROKEN", "RETIRE", "UNSAFE"}
+    ]
+    assert inactive
+    assert all(row["authority"] == "NO EXECUTION AUTHORITY" for row in inactive)
+
+
+def test_dashboard_contains_warm_operator_posture_and_strategy_matrix():
+    try:
+        from fastapi.testclient import TestClient
+        from webhook.app import app
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    body = TestClient(app).get("/").text
+    assert "AFSVP" in body
+    assert "[ SYSTEM POSTURE ]" in body
+    assert "Protect the account. Prove the edge." in body
+    assert "Strategy Evidence / Execution Matrix" in body
+    assert "strategy_inventory" in body
+    assert "Evidence classification comes from the canonical Strategy Inventory" in body
+
+
 def test_fastapi_status_today_endpoint():
     try:
         from fastapi.testclient import TestClient

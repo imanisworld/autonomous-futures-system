@@ -3048,6 +3048,86 @@ def _format_generated_age(value: str) -> str:
 _FUTURES_UNIVERSE = ["MES", "MNQ", "MGC", "MCL"]
 
 
+def _dashboard_strategy_inventory() -> dict:
+    """Read the canonical strategy inventory for display only.
+
+    The dashboard never promotes, enables, or disables a strategy from this
+    data. Missing/unparseable inventory fails visibly to UNKNOWN.
+    """
+    source = "docs/strategy-rules/Strategy_Inventory.md"
+    path = Path(__file__).resolve().parents[1] / source
+    try:
+        from ops.project_check.daily import _parse_strategy_inventory
+        rows, error = _parse_strategy_inventory(path)
+    except Exception:  # presentation must never affect trading/runtime startup
+        return {"ok": False, "source": source, "rows": [], "error": "inventory unavailable"}
+    if error:
+        return {"ok": False, "source": source, "rows": [], "error": "inventory unavailable"}
+
+    def classification(verdict: str) -> str:
+        upper = (verdict or "").upper()
+        # Order matters: some wide-stop rows are promising evidence while also
+        # saying BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS.
+        for label in (
+            "PROMISING BUT UNPROVEN", "PAPER PROOF", "VALIDATED",
+            "RESEARCH ONLY", "RETIRE", "WAIT", "BROKEN", "OVERFIT", "UNSAFE",
+        ):
+            if label in upper:
+                return label
+        return "UNKNOWN"
+
+    def posture(verdict: str, cls: str) -> str:
+        upper = (verdict or "").upper()
+        labels = []
+        if "PARKED" in upper:
+            labels.append("PARKED")
+        if "PAPER" in upper:
+            labels.append("PAPER")
+        if "GUARDED DEMO" in upper:
+            labels.append("GUARDED DEMO")
+        if "OBSERVATION ONLY" in upper:
+            labels.append("OBSERVATION ONLY")
+        if not labels:
+            if cls in {"BROKEN", "RETIRE", "UNSAFE"}:
+                labels.append("INACTIVE")
+            elif cls == "RESEARCH ONLY":
+                labels.append("RESEARCH ONLY")
+            elif cls == "WAIT":
+                labels.append("WAIT")
+            else:
+                labels.append("UNKNOWN")
+        return " / ".join(dict.fromkeys(labels))
+
+    def authority(verdict: str, cls: str) -> str:
+        upper = (verdict or "").upper()
+        if (
+            "CURRENT SYSTEM RISK CONSTRAINTS" in upper
+            or "CURRENT-ACCOUNT" in upper
+            or "NOT EXECUTABLE UNDER CURRENT REAL-ACCOUNT RISK" in upper
+        ):
+            return "CURRENT-ACCOUNT INCOMPATIBLE"
+        if cls in {"BROKEN", "RETIRE", "UNSAFE"}:
+            return "NO EXECUTION AUTHORITY"
+        if cls == "VALIDATED":
+            return "RUNTIME AUTHORITY SEPARATE"
+        if cls == "UNKNOWN":
+            return "UNKNOWN"
+        return "NO LIVE AUTHORITY"
+
+    display_rows = []
+    for row in rows:
+        verdict = str(row.get("verdict") or "UNKNOWN")
+        cls = classification(verdict)
+        display_rows.append({
+            "name": str(row.get("name") or "Unknown strategy"),
+            "classification": cls,
+            "posture": posture(verdict, cls),
+            "authority": authority(verdict, cls),
+            "verdict": verdict,
+        })
+    return {"ok": True, "source": source, "rows": display_rows, "error": None}
+
+
 def _dashboard_init(status: dict) -> dict:
     """Assemble the JSON view-model the client renders every tab from."""
     committee = _load_committee_panel(_config.log_dir)
@@ -3075,6 +3155,7 @@ def _dashboard_init(status: dict) -> dict:
         "tradovate_env": os.getenv("TRADOVATE_ENV", "").strip().lower(),
         "paper_mode": bool(status.get("paper_mode", True)),
         "live_trading_enabled": bool(status.get("live_trading_enabled")),
+        "strategy_inventory": _dashboard_strategy_inventory(),
         "max_drawdown_pct": round(float(getattr(_config, "max_drawdown_percent", 0.10)) * 100, 2),
         "poll_seconds": 30,
         # Monitor-only mode: when False the UI renders NO manual execution controls.
@@ -3099,24 +3180,26 @@ _DASHBOARD_HTML = r"""<!doctype html>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;650;750;850&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
-  <title>RiskSentinel Backend Console</title>
+  <title>RiskSentinel AFSVP Console</title>
   <style>
     :root {
       color-scheme: dark;
       --font-ui: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       --font-console: "JetBrains Mono", "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
-      --bg: #05060d;
-      --shell: #080a14;
-      --shell2: #101427;
-      --panel: #171a2d;
-      --panel2: #111527;
-      --panel3: #0d1020;
-      --line: #2b3458;
-      --line-soft: rgba(126, 138, 185, 0.18);
-      --text: #f3f5ff;
-      --muted: #8d94b3;
-      --muted2: #626b8f;
-      --purple: #9a68ff;
+      --bg: #0b0a09;
+      --shell: #100f0e;
+      --shell2: #171411;
+      --panel: #1a1714;
+      --panel2: #15120f;
+      --panel3: #0f0d0b;
+      --line: #3a3028;
+      --line-soft: rgba(224, 168, 119, 0.16);
+      --text: #f6efe8;
+      --muted: #aa9b8d;
+      --muted2: #74675d;
+      --accent: #f39a68;
+      --brass: #cda46b;
+      --purple: var(--accent);
       /* severity system */
       --green: #00FF88;   /* pass / live / clear / fresh / profit */
       --yellow: #FFB800;  /* warning / stale / watch / defend */
@@ -3129,7 +3212,13 @@ _DASHBOARD_HTML = r"""<!doctype html>
     html, body { margin: 0; }
     body {
       min-height: 100vh;
-      background: var(--bg);
+      background:
+        radial-gradient(circle at 18% 6%, rgba(243,154,104,0.16), transparent 34%),
+        radial-gradient(circle at 86% 2%, rgba(92,112,255,0.09), transparent 30%),
+        linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px),
+        var(--bg);
+      background-size: auto, auto, 32px 32px, 32px 32px, auto;
       color: var(--text);
       font-family: var(--font-ui);
       -webkit-text-size-adjust: 100%;
@@ -3147,9 +3236,9 @@ _DASHBOARD_HTML = r"""<!doctype html>
       width: min(1156px, calc(100% - 24px));
       margin: 10px auto 0;
       border: 1px solid var(--line-soft);
-      border-radius: 18px;
+      border-radius: 10px;
       overflow: hidden;
-      background: var(--shell);
+      background: rgba(16,15,14,0.96);
       box-shadow: 0 18px 40px rgba(0,0,0,0.32);
     }
     .mode-tabs {
@@ -3163,7 +3252,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
       position: relative;
       height: 68px;
       border: 1px solid var(--line);
-      border-radius: 18px;
+      border-radius: 8px;
       background: var(--panel2);
       color: var(--muted2);
       font: inherit;
@@ -3233,8 +3322,8 @@ _DASHBOARD_HTML = r"""<!doctype html>
       width: 76px;
       height: 76px;
       border: 1px solid var(--line);
-      border-radius: 18px;
-      background: #171c35;
+      border-radius: 8px;
+      background: #211a16;
       color: #aab4d4;
       font-size: 33px;
       cursor: pointer;
@@ -3313,6 +3402,71 @@ _DASHBOARD_HTML = r"""<!doctype html>
       font-size: 12px; font-weight: 800;
     }
     .mood { margin-top: 10px; color: var(--muted); font-size: 14px; line-height: 1.45; }
+
+    .posture-hero {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid rgba(243,154,104,0.34);
+      border-radius: 10px;
+      background:
+        radial-gradient(circle at 82% 18%, rgba(243,154,104,0.24), transparent 34%),
+        linear-gradient(135deg, rgba(29,24,20,0.98), rgba(14,13,12,0.98));
+      padding: 22px;
+      margin-bottom: 12px;
+    }
+    .posture-hero::after {
+      content: "";
+      position: absolute;
+      width: 260px; height: 260px; right: -120px; top: -150px;
+      border: 1px solid rgba(243,154,104,0.18);
+      border-radius: 50%;
+      box-shadow: 0 0 70px rgba(243,154,104,0.10);
+      pointer-events: none;
+    }
+    .eyebrow {
+      color: var(--accent); font-family: var(--font-console); font-size: 11px;
+      font-weight: 900; letter-spacing: 0.16em; text-transform: uppercase;
+    }
+    .posture-title { margin-top: 8px; font-size: clamp(28px, 5vw, 52px); line-height: 0.98; max-width: 760px; }
+    .posture-copy { margin-top: 10px; color: var(--muted); max-width: 760px; font-size: 13px; line-height: 1.55; }
+    .posture-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; margin-top: 20px; }
+    .posture-cell {
+      min-height: 94px; border: 1px solid var(--line-soft); border-radius: 8px;
+      background: rgba(8,7,6,0.44); padding: 12px;
+    }
+    .posture-cell label {
+      display: block; color: var(--muted); font-family: var(--font-console);
+      font-size: 9px; font-weight: 900; letter-spacing: 0.12em; text-transform: uppercase;
+    }
+    .posture-cell strong { display: block; margin-top: 10px; font-family: var(--font-console); font-size: 15px; line-height: 1.3; }
+    .strategy-evidence-head { display:flex; justify-content:space-between; gap:12px; align-items:flex-end; margin-bottom:10px; }
+    .strategy-evidence-head p { color:var(--muted); font-size:12px; line-height:1.45; max-width:720px; }
+    .strategy-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+    .strategy-card {
+      border:1px solid var(--line-soft); border-radius:8px; padding:12px;
+      background:linear-gradient(145deg, rgba(31,26,22,.84), rgba(15,13,11,.9));
+      min-width:0;
+    }
+    .strategy-card h3 { font-family:var(--font-console); font-size:13px; line-height:1.35; }
+    .strategy-meta { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; margin-top:10px; }
+    .strategy-meta div { border-top:1px solid var(--line-soft); padding-top:7px; min-width:0; }
+    .strategy-meta label { display:block; color:var(--muted); font-family:var(--font-console); font-size:8px; letter-spacing:.08em; text-transform:uppercase; }
+    .strategy-meta strong { display:block; margin-top:4px; font-family:var(--font-console); font-size:10px; line-height:1.35; overflow-wrap:anywhere; }
+    .strategy-verdict { margin-top:9px; color:var(--muted); font-size:11px; line-height:1.45; overflow-wrap:anywhere; }
+    .strategy-source { margin-top:10px; color:var(--muted2); font-family:var(--font-console); font-size:9px; }
+    .ledger-list { margin-top:10px; border:1px solid var(--line-soft); border-radius:8px; overflow:hidden; background:rgba(8,7,6,.34); }
+    .ledger-row { display:grid; grid-template-columns:1fr auto; gap:12px; padding:9px 11px; border-top:1px solid var(--line-soft); font-family:var(--font-console); font-size:11px; }
+    .ledger-row:first-child { border-top:0; }
+    .ledger-row span:first-child { color:var(--muted); }
+    .ledger-row strong { font-size:11px; }
+    @media (max-width: 760px) {
+      .posture-grid { grid-template-columns:1fr 1fr; }
+      .strategy-grid { grid-template-columns:1fr; }
+    }
+    @media (max-width: 460px) {
+      .posture-grid { grid-template-columns:1fr; }
+      .strategy-meta { grid-template-columns:1fr; }
+    }
 
     .monitorbar {
       margin: 8px 12px 0; padding: 9px 12px; border-radius: 10px;
@@ -3733,8 +3887,8 @@ _DASHBOARD_HTML = r"""<!doctype html>
     </div>
     <header class="appbar">
       <div>
-        <div class="brand-title"><span class="afs">AFS</span><span class="slash">/</span>Backend Console</div>
-        <div class="brand-sub">Autonomous Futures System · Backend SAT · Paper Mode</div>
+        <div class="brand-title"><span class="afs">AFSVP</span><span class="slash">/</span>Evidence Console</div>
+        <div class="brand-sub">Autonomous Futures System · Operator Evidence &amp; Safety</div>
       </div>
       <div class="app-actions">
         <span class="live-chip">CONSOLE ONLINE</span>
@@ -3745,7 +3899,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
     <div class="alertbar" id="alertbar" hidden></div>
     <div class="shadowbar" id="shadowbar" hidden></div>
     <div class="monitorbar" id="monitorbar" hidden></div>
-    <div class="sandbox-banner">SAT / BACKEND CONSOLE <span class="soft">read-only regression surface · not the operator app</span></div>
+    <div class="sandbox-banner">OPERATOR EVIDENCE CONSOLE <span class="soft">runtime posture and strategy evidence are intentionally separate</span></div>
     <main>
       <section class="tab active" id="tab-home"></section>
       <section class="tab" id="tab-futures"></section>
@@ -4075,6 +4229,62 @@ _DASHBOARD_HTML = r"""<!doctype html>
         '<span class="muted">' + esc(sub) + '</span></div></div>';
     }
 
+    function inventoryTone(cls) {
+      if (cls === 'VALIDATED' || cls === 'PAPER PROOF') return 'green';
+      if (cls === 'PROMISING BUT UNPROVEN' || cls === 'WAIT') return 'yellow';
+      if (cls === 'BROKEN' || cls === 'RETIRE' || cls === 'UNSAFE') return 'red';
+      return 'gray';
+    }
+    function renderSystemPosture() {
+      var today = state.today || {};
+      var em = execMode();
+      var diag = (today.diagnostics || {}).overall_status || 'unknown';
+      var ready = today.evidence_readiness || {};
+      var summary = ready.summary || {};
+      var inv = INIT.strategy_inventory || {};
+      var rows = inv.rows || [];
+      var validated = rows.filter(function (r) { return r.classification === 'VALIDATED'; }).length;
+      var liveOff = !INIT.live_trading_enabled;
+      var evidenceWord = (num(summary.collecting) > 0 || num(summary.ready_for_review) > 0) ? 'COLLECTING' : 'WAITING';
+      var infra = String(diag).toUpperCase();
+      var infraClass = diag === 'ok' ? 'green' : (diag === 'error' ? 'red' : 'yellow');
+      var promotion = validated ? (validated + ' VALIDATED · REVIEW REQUIRED') : 'NONE · NO VALIDATED STRATEGY';
+      return '<section class="posture-hero">' +
+        '<div class="eyebrow">[ SYSTEM POSTURE ]</div>' +
+        '<h1 class="posture-title">Protect the account. Prove the edge.</h1>' +
+        '<p class="posture-copy">Runtime safety, evidence maturity, and strategy executability are shown as separate facts. A promising strategy is never presented as live authority.</p>' +
+        '<div class="posture-grid">' +
+          '<div class="posture-cell"><label>Execution Environment</label><strong class="' + (em.key === 'LIVE' ? 'red' : 'yellow') + '">' + esc(em.word) + ' · ' + (liveOff ? 'LIVE OFF' : 'LIVE ENABLED') + '</strong></div>' +
+          '<div class="posture-cell"><label>Broker</label><strong>' + esc((INIT.broker || 'PAPER') + ((INIT.tradovate_env || '') ? ' · ' + INIT.tradovate_env.toUpperCase() : '')) + '</strong></div>' +
+          '<div class="posture-cell"><label>Infrastructure</label><strong class="' + infraClass + '">' + esc(infra) + '</strong></div>' +
+          '<div class="posture-cell"><label>Evidence / Promotion</label><strong>' + esc(evidenceWord) + '<br>' + esc(promotion) + '</strong></div>' +
+        '</div></section>';
+    }
+    function renderStrategyMatrix() {
+      var inv = INIT.strategy_inventory || {};
+      if (!inv.ok) {
+        return '<div class="panel accent-yellow"><h2>Strategy Evidence</h2><p class="muted" style="margin-top:8px;font-size:12px;">UNKNOWN — canonical strategy inventory is unavailable. No strategy status inferred.</p></div>';
+      }
+      var rows = inv.rows || [];
+      var cards = rows.map(function (r) {
+        var tone = inventoryTone(r.classification);
+        return '<article class="strategy-card">' +
+          '<h3>' + esc(r.name) + '</h3>' +
+          '<div class="strategy-meta">' +
+            '<div><label>Evidence</label><strong class="' + tone + '">' + esc(r.classification) + '</strong></div>' +
+            '<div><label>Inventory Posture</label><strong>' + esc(r.posture) + '</strong></div>' +
+            '<div><label>Authority / Risk</label><strong>' + esc(r.authority) + '</strong></div>' +
+          '</div>' +
+          '<div class="strategy-verdict">' + esc(r.verdict) + '</div>' +
+        '</article>';
+      }).join('');
+      return '<div class="panel"><div class="strategy-evidence-head"><div><h2>Strategy Evidence / Execution Matrix</h2>' +
+        '<p>Evidence classification comes from the canonical Strategy Inventory. Inventory posture is descriptive only; actual runtime mode remains governed separately by configuration and safety gates.</p></div>' +
+        '<span class="source-pill pulled">CANONICAL</span></div>' +
+        '<div class="strategy-grid">' + cards + '</div>' +
+        '<div class="strategy-source">SOURCE: ' + esc(inv.source || 'Strategy_Inventory.md') + '</div></div>';
+    }
+
     // ── HOME ───────────────────────────────────────────────────────────
     function renderHome() {
       var today = state.today;
@@ -4094,8 +4304,9 @@ _DASHBOARD_HTML = r"""<!doctype html>
         html += '<div class="hero"><div class="hero-top"><h1>Backend Console</h1><div class="badges"><span class="badge gray">Loading</span></div></div>' +
           '<div class="metric-grid"><div class="metric"><div class="skeleton line"></div></div><div class="metric"><div class="skeleton short"></div></div></div></div>';
       }
+      html += renderSystemPosture();
       html += '<div class="hero">' +
-        '<div class="hero-top"><h1>Backend Console</h1><div class="badges">' +
+        '<div class="hero-top"><h1>Today · Runtime</h1><div class="badges">' +
         '<span class="badge green">🟢 CONSOLE ONLINE</span>' +
         '<span class="badge ' + (RISK_COLOR[risk] || 'gray') + '">' + esc(clearLabel) + '</span>' +
         '<span class="badge blue">' + modeLabel() + '</span>' +
@@ -4158,8 +4369,20 @@ _DASHBOARD_HTML = r"""<!doctype html>
           kv('7D P&L', pnl7 ? money(pnl7) : emptyValue('No realized P&L yet')) +
           '</dl><p class="placeholder" style="margin-top:8px;font-size:12px;">No realized P&L yet — chart hidden until there is history.</p></div>';
       }
-      return '<div class="panel"><h2>Equity Curve <span class="muted" id="chart-range" style="font-size:11px;font-weight:400;"></span></h2>' +
-        '<canvas id="pnl-chart" class="chart" style="height:140px;"></canvas></div>';
+      var recent = hist.slice(-7).reverse();
+      var ledger = recent.map(function (d) {
+        var value = num(d.realized_pnl_dollars);
+        return '<div class="ledger-row"><span>' + esc(d.date || '—') + '</span><strong class="' +
+          (value < 0 ? 'red' : (value > 0 ? 'green' : 'gray')) + '">' + money(value) + '</strong></div>';
+      }).join('');
+      return '<div class="panel"><h2>P&amp;L Ledger <span class="source-pill pulled">Journal only</span></h2>' +
+        '<dl class="kv">' +
+          kv('Today', money(today.today_pnl_dollars)) +
+          kv('7D realized', money(pnl7)) +
+          kv('Recorded days', esc(recent.length)) +
+        '</dl>' +
+        '<div class="ledger-list">' + ledger + '</div>' +
+        '<p class="muted" style="margin-top:9px;font-size:11px;">No decorative equity curve — this surface shows recorded journal values only.</p></div>';
     }
 
     // ── FUTURES ────────────────────────────────────────────────────────
@@ -4261,6 +4484,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
 
       html += '<div class="futures-layout"><div class="futures-main">';
       html += futuresOverview(fr);
+      html += renderStrategyMatrix();
       html += '<div class="instrument-grid">' +
         instrumentCard('MES', today) +
         instrumentCard('MNQ', today) +
