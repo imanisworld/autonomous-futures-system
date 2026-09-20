@@ -10,13 +10,14 @@ scan_watchlist_strat_212() or evaluate_strat_212(), and nothing here
 imports execution, broker systems, webhook, alert_ranker,
 options_companion, or risk/risk_engine.py.
 
-One narrow, deliberate exception to "no network calls": polygon_historical.py
-is a read-only STOCK-aggregates (candle) client only -- never an options
-chain, never a quote, never a streaming connection, and never wired into
-the scanner or any fixture auto-generation. It exists solely so a real
-historical candle sequence can be pulled manually to reconstruct a
-validation fixture. Every other module in this package remains pure
-translation logic with no I/O of its own.
+Two narrow, deliberate networked adapters exist:
+- polygon_historical.py is a read-only STOCK-aggregates client used for
+  historical validation fixtures.
+- webull_sandbox.py is sandbox/paper-only and exposes read-only account
+  inspection, option-contract discovery, and broker preview. It has no
+  submission/cancel/replace/live-routing capability.
+
+Neither adapter is wired into scanner decisions or automatic execution.
 """
 
 from __future__ import annotations
@@ -33,6 +34,15 @@ from .polygon_historical import (
     fetch_stock_aggregates,
 )
 from .row_builder import build_watchlist_row_from_adapter_data
+from .webull_sandbox import (
+    WebullSandboxAccountSnapshot,
+    WebullSandboxContractDiscovery,
+    WebullSandboxOptionContract,
+    WebullSandboxPreviewResult,
+    discover_sandbox_option_contracts,
+    preview_sandbox_option_order,
+    read_sandbox_individual_cash_account,
+)
 
 __all__ = [
     "AdapterCandle",
@@ -43,4 +53,11 @@ __all__ = [
     "PolygonHistoricalClient",
     "PolygonHistoricalError",
     "fetch_stock_aggregates",
+    "WebullSandboxAccountSnapshot",
+    "WebullSandboxContractDiscovery",
+    "WebullSandboxOptionContract",
+    "WebullSandboxPreviewResult",
+    "discover_sandbox_option_contracts",
+    "preview_sandbox_option_order",
+    "read_sandbox_individual_cash_account",
 ]
