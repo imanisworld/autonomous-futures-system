@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="AFSVP mark">
+  <defs>
+    <clipPath id="frame"><rect x="0" y="0" width="512" height="512" rx="112" ry="112"/></clipPath>
+    <radialGradient id="periwinkleGlow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#b7c4f8" stop-opacity="0.85"/>
+      <stop offset="35%" stop-color="#8093ea" stop-opacity="0.55"/>
+      <stop offset="70%" stop-color="#8093ea" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#8093ea" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="emberGlow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#ffc79c" stop-opacity="0.9"/>
+      <stop offset="35%" stop-color="#e8875c" stop-opacity="0.6"/>
+      <stop offset="70%" stop-color="#e8875c" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#e8875c" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="soften" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="34"/>
+    </filter>
+    <filter id="softenSmall" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="20"/>
+    </filter>
+  </defs>
+
+  <g clip-path="url(#frame)">
+    <rect x="0" y="0" width="512" height="512" fill="#0a0a0b"/>
+
+    <!-- one continuous glow field: cool source blended into warm source, screen-composited so they melt together rather than reading as two spheres -->
+    <g style="isolation:isolate">
+      <circle cx="196" cy="230" r="240" fill="url(#periwinkleGlow)" filter="url(#soften)" style="mix-blend-mode:screen"/>
+      <circle cx="322" cy="304" r="210" fill="url(#emberGlow)" filter="url(#soften)" style="mix-blend-mode:screen"/>
+      <circle cx="270" cy="270" r="120" fill="url(#emberGlow)" filter="url(#softenSmall)" style="mix-blend-mode:screen" opacity="0.7"/>
+    </g>
+
+    <!-- fine trend threads sweeping the whole frame, low opacity, behind nothing else -->
+    <path d="M -20 300 C 120 270, 260 150, 540 40" stroke="#f5f3f0" stroke-opacity="0.16" stroke-width="1.25" fill="none"/>
+    <path d="M -20 400 C 160 360, 300 210, 540 130" stroke="#f5f3f0" stroke-opacity="0.10" stroke-width="1.25" fill="none"/>
+
+    <!-- subtle grain to match the reference's textured light -->
+    <rect x="0" y="0" width="512" height="512" fill="#ffffff" opacity="0.02"/>
+  </g>
+</svg>
