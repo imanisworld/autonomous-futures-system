@@ -32,6 +32,9 @@ Active futures runtime after the latest Signa v2 deployment:
 
 Live preflight is not armed with reason `preflight_failed:heartbeat_fresh`. This does not approve or block this context-only deployment because live trading remains disabled.
 
+
+Companion options-scanner note: later on 2026-09-20, the options scanner was promoted from its old service-specific release `58f1c50583d8bb747c0b221eabb75af376b10ecc` to `1fc0ad9c97d6daca02905058b14123135605c769` solely to run the conservative Signa scheduled context pull. That required an `options-scanner.service` restart. `futures-bot.service` was not restarted, futures release `a02320268e26a05f56b159f03d3cf441e776ef46` did not change, and the Signa context rows remain observation-only with `trade_authority=false`. First natural options RTH scheduled-cycle proof is still pending.
+
 This release lineage includes:
 
 - #798 `780b5ea` — 4HR continuation treatment tag in the 1m observer evidence;
