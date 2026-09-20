@@ -1300,10 +1300,16 @@ def test_no_telemetry_at_all_while_the_lane_is_on_also_fails_closed(tmp_path, mo
 
 
 def test_legacy_webhook_alerting_is_unchanged_with_the_lane_off(tmp_path):
-    """D: the same webhook alerts exactly as it always did when the lane is off."""
+    """D: the same webhook alerts during RTH when the lane is off."""
     _, _, scanner = make_scanner(
         tmp_path, None, discord_webhook_url="https://discord.invalid/webhook"
     )
+    original_send = scanner.discord.send_if_eligible
+
+    async def send_during_rth(result, now=None):
+        return await original_send(result, now=now, delivery_now=NOW)
+
+    scanner.discord.send_if_eligible = send_during_rth
     outcome = asyncio.run(
         scanner.scan_ticker("AAPL", source="webhook", context=_WEBHOOK_STRUCTURE, now=NOW)
     )
@@ -1311,3 +1317,24 @@ def test_legacy_webhook_alerting_is_unchanged_with_the_lane_off(tmp_path):
     assert outcome.result.score >= scanner.config.alert_threshold
     assert outcome.alert_sent is True
     assert outcome.alert_suppression_reason == ""
+
+
+def test_webhook_scan_crossing_close_is_suppressed_at_delivery(tmp_path):
+    """A 15:59 webhook scan cannot post after the 16:00 regular close."""
+    _, _, scanner = make_scanner(
+        tmp_path, None, discord_webhook_url="https://discord.invalid/webhook"
+    )
+    scan_now = NOW.astimezone(NY).replace(hour=15, minute=59)
+    delivery_now = NOW.astimezone(NY).replace(hour=16, minute=1)
+    original_send = scanner.discord.send_if_eligible
+
+    async def send_after_close(result, now=None):
+        return await original_send(result, now=now, delivery_now=delivery_now)
+
+    scanner.discord.send_if_eligible = send_after_close
+    outcome = asyncio.run(
+        scanner.scan_ticker("AAPL", source="webhook", context=_WEBHOOK_STRUCTURE, now=scan_now)
+    )
+    assert outcome.result.score >= scanner.config.alert_threshold
+    assert outcome.alert_sent is False
+    assert outcome.alert_suppression_reason == "market_closed"

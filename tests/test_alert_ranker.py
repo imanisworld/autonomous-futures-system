@@ -144,8 +144,8 @@ def test_discord_sends_only_when_score_is_at_least_seven(tmp_path):
     now = datetime(2026, 5, 26, 10, 0, tzinfo=ZoneInfo("America/New_York"))
 
     async def run():
-        assert (await alerter.send_if_eligible(low, now=now)).sent is False
-        assert (await alerter.send_if_eligible(high, now=now)).sent is True
+        assert (await alerter.send_if_eligible(low, now=now, delivery_now=now)).sent is False
+        assert (await alerter.send_if_eligible(high, now=now, delivery_now=now)).sent is True
 
     asyncio.run(run())
     assert len(sent) == 1
@@ -171,15 +171,44 @@ def test_discord_blocks_alerts_outside_approved_rth(tmp_path):
     result = score_setup(setup_payload(), now=open_time)
 
     async def run():
-        before = await alerter.send_if_eligible(result, now=premarket)
-        closed = await alerter.send_if_eligible(result, now=after_close)
-        saturday = await alerter.send_if_eligible(result, now=weekend)
-        thanksgiving = await alerter.send_if_eligible(result, now=holiday)
+        before = await alerter.send_if_eligible(result, now=premarket, delivery_now=premarket)
+        closed = await alerter.send_if_eligible(result, now=after_close, delivery_now=after_close)
+        saturday = await alerter.send_if_eligible(result, now=weekend, delivery_now=weekend)
+        thanksgiving = await alerter.send_if_eligible(result, now=holiday, delivery_now=holiday)
 
         assert before == AlertDecision(False, "market_not_open")
         assert closed == AlertDecision(False, "market_closed")
         assert saturday == AlertDecision(False, "market_closed")
         assert thanksgiving == AlertDecision(False, "market_closed")
+
+    from alert_ranker.discord import AlertDecision
+    asyncio.run(run())
+    assert sent == []
+
+
+def test_discord_blocks_when_scan_crosses_regular_close(tmp_path):
+    sent = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return httpx.Response(204)
+
+    cfg = scanner_config(tmp_path, webhook_url="https://discord.test/webhook")
+    storage = ScanStorage(cfg.sqlite_path)
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    alerter = DiscordAlerter(cfg, storage, client=client)
+
+    scan_now = datetime(2026, 5, 26, 15, 59, tzinfo=ZoneInfo("America/New_York"))
+    delivery_now = datetime(2026, 5, 26, 16, 1, tzinfo=ZoneInfo("America/New_York"))
+    result = score_setup(setup_payload(), now=scan_now)
+
+    async def run():
+        decision = await alerter.send_if_eligible(
+            result,
+            now=scan_now,
+            delivery_now=delivery_now,
+        )
+        assert decision == AlertDecision(False, "market_closed")
 
     from alert_ranker.discord import AlertDecision
     asyncio.run(run())
@@ -203,8 +232,8 @@ def test_discord_honors_early_close_boundary(tmp_path):
     result = score_setup(setup_payload(), now=before_close)
 
     async def run():
-        before = await alerter.send_if_eligible(result, now=before_close)
-        closed = await alerter.send_if_eligible(result, now=at_close)
+        before = await alerter.send_if_eligible(result, now=before_close, delivery_now=before_close)
+        closed = await alerter.send_if_eligible(result, now=at_close, delivery_now=at_close)
         assert before.sent is True
         assert closed.sent is False
         assert closed.reason == "market_closed"
@@ -228,7 +257,7 @@ def test_duplicate_discord_alerts_suppressed_for_30_minutes(tmp_path):
     result = score_setup(setup_payload(), now=now)
 
     async def run():
-        first = await alerter.send_if_eligible(result, now=now)
+        first = await alerter.send_if_eligible(result, now=now, delivery_now=now)
         storage.record_scan(
             result,
             source="test",
@@ -236,7 +265,7 @@ def test_duplicate_discord_alerts_suppressed_for_30_minutes(tmp_path):
             alert_suppression_reason="",
             timestamp=now,
         )
-        second = await alerter.send_if_eligible(result, now=now + timedelta(minutes=10))
+        second = await alerter.send_if_eligible(result, now=now + timedelta(minutes=10), delivery_now=now + timedelta(minutes=10))
         assert first.sent is True
         assert second.sent is False
         assert second.reason == "duplicate_30m"
