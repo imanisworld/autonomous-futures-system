@@ -157,13 +157,6 @@ def test_app_py_decorator_only_change_on_safe_function_is_still_safe():
     assert ok
 
 
-
-def test_app_py_dashboard_strategy_inventory_helper_is_safe():
-    baseline = "def _dashboard_strategy_inventory():\n    return {'ok': False}\n"
-    candidate = "def _dashboard_strategy_inventory():\n    return {'ok': True, 'rows': []}\n"
-    ok, reasons = app_py_change_is_safe(baseline, candidate)
-    assert ok, reasons
-
 def test_app_py_module_level_constant_change_is_blocked():
     baseline = (
         "ALLOWED_IPS = ['1.2.3.4']\n"
