@@ -42,6 +42,21 @@ def _seed_completed_8am_hour(log_dir):
         record_five_min(bar, log_dir, for_date=DAY)
 
 
+def _seed_4h_continuation_context(log_dir):
+    rows = [
+        (datetime(2026, 6, 1, 16, 0, tzinfo=ET), 19700.0, 19500.0),
+        (datetime(2026, 6, 1, 20, 0, tzinfo=ET), 19800.0, 19600.0),
+        (datetime(2026, 6, 2, 0, 0, tzinfo=ET), 19900.0, 19700.0),
+        (datetime(2026, 6, 2, 4, 0, tzinfo=ET), 20000.0, 19800.0),
+    ]
+    for ts, high, low in rows:
+        record_five_min(
+            _payload(ts, tf="5m", o=(high + low) / 2, h=high, l=low, c=(high + low) / 2),
+            log_dir,
+            for_date=ts.date(),
+        )
+
+
 def _enable_4hr(config):
     if "strat_4hr_retrigger" not in config.enabled_concepts:
         config.enabled_concepts = [*config.enabled_concepts, "strat_4hr_retrigger"]
@@ -129,6 +144,33 @@ def test_armed_touch_uses_prior_completed_one_hour(monkeypatch, tmp_path, config
     assert event["stop_bar_ts"].startswith("2026-06-02T08:00:00")
     assert event["target"] == 20200.0
     assert event["paper_entry_1tick"] == 20000.25
+    assert event["four_hour_treatment"]["treatment_eligible"] is None
+
+
+def test_touch_records_causal_4h_continuation_treatment(monkeypatch, tmp_path, config):
+    monkeypatch.setenv("ONE_MIN_TRIGGER_ENABLED", "true")
+    monkeypatch.setenv("WIDE_STOP_LEDGER_MODE", "observe_only")
+    _enable_4hr(config)
+    log_dir = str(tmp_path)
+    _seed_4h_continuation_context(log_dir)
+    _seed_completed_8am_hour(log_dir)
+    _arm_4hr(log_dir)
+
+    result = process_alert(
+        _payload(datetime(2026, 6, 2, 9, 31, tzinfo=ET)),
+        config=config,
+        log_dir=log_dir,
+        for_date=DAY,
+    )
+    treatment = result["one_min_trigger"]["four_hour_treatment"]
+    assert treatment["status"] == "OK"
+    assert treatment["sequence"] == "strat_22_continuation"
+    assert treatment["treatment_eligible"] is True
+    assert treatment["definition"] == "completed_et_wall_clock_4h_sequence_v1"
+    assert result["fill"] is None
+    assert result["execution_reachable"] is False
+
+
 def test_touch_is_deduped_per_armed_setup(monkeypatch, tmp_path, config):
     monkeypatch.setenv("ONE_MIN_TRIGGER_ENABLED", "true")
     monkeypatch.setenv("WIDE_STOP_LEDGER_MODE", "observe_only")

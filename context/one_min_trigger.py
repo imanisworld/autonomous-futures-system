@@ -18,6 +18,7 @@ from zoneinfo import ZoneInfo
 from config.futures_contracts import contract_root, optional_tick_size
 from context.bar_history import _parse_dt
 from context.five_min_feed import recent_five_min
+from context.four_hr_continuation_attribution import completed_four_hour_sequence_context
 from context.one_min_feed import (
     ONE_MIN_LANE,
     is_one_min,
@@ -65,6 +66,15 @@ def _claim_once(log_dir: str, arm_key: str) -> bool:
 def _append_evidence(log_dir: str, day: date, event: dict) -> None:
     with open(_evidence_path(log_dir, day), "a", encoding="utf-8") as handle:
         handle.write(json.dumps(event, separators=(",", ":"), default=str) + "\n")
+
+
+def _four_hour_treatment_context(
+    *, log_dir: str, bar_open: datetime, for_date=None
+) -> dict:
+    bars = recent_five_min(
+        INSTRUMENT, log_dir, 3000, for_date=for_date, lookback_days=10
+    )
+    return completed_four_hour_sequence_context(bars, bar_open)
 
 
 def _fully_completed_one_hour_stop(
@@ -125,6 +135,9 @@ def evaluate_armed_4hr_touch(payload, log_dir: str, for_date=None) -> Optional[d
     if not touched:
         return None
 
+    treatment_context = _four_hour_treatment_context(
+        log_dir=log_dir, bar_open=bar_open, for_date=day
+    )
     stop, stop_bar_ts = _fully_completed_one_hour_stop(
         log_dir=log_dir, direction=direction, bar_open=bar_open, for_date=day
     )
@@ -137,6 +150,7 @@ def evaluate_armed_4hr_touch(payload, log_dir: str, for_date=None) -> Optional[d
             "bar_ts": bar_open.isoformat(),
             "direction": direction,
             "trigger": trigger,
+            "four_hour_treatment": treatment_context,
         }
         _append_evidence(log_dir, day, event)
         return event
@@ -164,6 +178,7 @@ def evaluate_armed_4hr_touch(payload, log_dir: str, for_date=None) -> Optional[d
             "fill_reference": fill_reference,
             "stop": stop,
             "target": target,
+            "four_hour_treatment": treatment_context,
         }
         _append_evidence(log_dir, day, event)
         return event
@@ -174,6 +189,7 @@ def evaluate_armed_4hr_touch(payload, log_dir: str, for_date=None) -> Optional[d
             "strategy": STRATEGY,
             "bar_ts": bar_open.isoformat(),
             "arm_key": arm_key,
+            "four_hour_treatment": treatment_context,
         }
 
     tick = optional_tick_size(INSTRUMENT)
@@ -204,6 +220,7 @@ def evaluate_armed_4hr_touch(payload, log_dir: str, for_date=None) -> Optional[d
         ),
         "arm_key": arm_key,
         "source_state": state,
+        "four_hour_treatment": treatment_context,
     }
     _append_evidence(log_dir, day, event)
     return event

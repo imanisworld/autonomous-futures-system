@@ -39,6 +39,11 @@ def test_4hr_touch_persists_actual_response_safety_fields(tmp_path):
         "arm_key": "arm-4hr",
         "trade_authorized": False,
         "external_broker": False,
+        "four_hour_treatment": {
+            "definition": "completed_et_wall_clock_4h_sequence_v1",
+            "sequence": "strat_22_continuation",
+            "treatment_eligible": True,
+        },
     }
     out = append_observer_response_audit(
         str(tmp_path),
@@ -64,6 +69,7 @@ def test_4hr_touch_persists_actual_response_safety_fields(tmp_path):
         "resolution": None,
     }
     assert row["one_min_trigger"]["arm_key"] == "arm-4hr"
+    assert row["one_min_trigger"]["four_hour_treatment"]["treatment_eligible"] is True
 
 
 def test_322_arm_persists_five_min_context_response(tmp_path):
