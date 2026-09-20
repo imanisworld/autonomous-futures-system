@@ -298,3 +298,30 @@ Dashboard impact:
 - missing context renders as `Context only: none`;
 - available context is summarized as source plus non-authoritative fields such as direction, score, sentiment, call/put premium, flip, or gamma wall;
 - no context field can change setup status, risk status, contract choice, alert eligibility, or execution reachability.
+
+## Disabled scheduled pull wiring
+
+The app now has optional scheduler wiring for the same read-only Signa context pull path. It is disabled by default and requires an explicit flag:
+
+```bash
+OPTIONS_SIGNA_CONTEXT_PULL_ENABLED=true
+```
+
+Optional controls:
+
+```bash
+OPTIONS_SIGNA_CONTEXT_PULL_INTERVAL_MINUTES=15
+OPTIONS_SIGNA_CONTEXT_PULL_TIMEFRAME=1d
+OPTIONS_SIGNA_CONTEXT_PULL_SYMBOLS=SPY,QQQ,NVDA
+OPTIONS_SIGNA_CONTEXT_PULL_INCLUDE=scan,action_card,enhanced_signal,options_flow,dark_pool,market_tide,signal_index,congress_flow
+OPTIONS_SIGNA_CONTEXT_PULL_INCLUDE_SHARED_PROXIES=true
+OPTIONS_SIGNA_CONTEXT_PULL_SYMBOL_LIMIT=50
+```
+
+Behavior:
+
+- if disabled, no Signa pull job is registered;
+- if enabled, the job still skips outside NYSE regular market hours;
+- it writes only to `options_signa_context`;
+- rows remain `context_only`, `observation_only`, and `trade_authority=false`;
+- it does not create Discord alerts, setup candidates, contract selections, risk approvals, orders, or executions.

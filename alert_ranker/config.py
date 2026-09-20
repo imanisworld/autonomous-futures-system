@@ -14,6 +14,10 @@ def _split_watchlist(value: str) -> list[str]:
     return [item.strip().upper() for item in value.split(",") if item.strip()]
 
 
+def _split_csv(value: str) -> list[str]:
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
 def _as_bool(value: str | None, default: bool = False) -> bool:
     if value is None:
         return default
@@ -98,6 +102,16 @@ class ScannerConfig:
     signa_base_url: str = "https://app.getsigna.ai"
     signa_timeout_seconds: float = 3.0
     signa_symbol_map: dict[str, str] = field(default_factory=dict)
+    signa_context_pull_enabled: bool = False
+    signa_context_pull_interval_minutes: int = 15
+    signa_context_pull_timeframe: str = "1d"
+    signa_context_pull_symbols: list[str] = field(default_factory=list)
+    signa_context_pull_include: list[str] = field(default_factory=lambda: [
+        "scan", "action_card", "enhanced_signal", "options_flow",
+        "dark_pool", "market_tide", "signal_index", "congress_flow",
+    ])
+    signa_context_pull_include_shared_proxies: bool = True
+    signa_context_pull_symbol_limit: int = 50
     rh_bearer_token: str = ""
     rh_refresh_token: str = ""
     rh_auto_check_interval_minutes: int = 15
@@ -229,6 +243,18 @@ def load_config(environ: Iterable[tuple[str, str]] | None = None) -> ScannerConf
         signa_base_url=env.get("SIGNA_BASE_URL", "https://app.getsigna.ai").strip().rstrip("/"),
         signa_timeout_seconds=_as_float(env.get("SIGNA_TIMEOUT_SECONDS"), 3.0),
         signa_symbol_map=_symbol_map(env.get("SIGNA_SYMBOL_MAP")),
+        signa_context_pull_enabled=_as_bool(env.get("OPTIONS_SIGNA_CONTEXT_PULL_ENABLED"), False),
+        signa_context_pull_interval_minutes=_as_int(env.get("OPTIONS_SIGNA_CONTEXT_PULL_INTERVAL_MINUTES"), 15),
+        signa_context_pull_timeframe=env.get("OPTIONS_SIGNA_CONTEXT_PULL_TIMEFRAME", "1d").strip() or "1d",
+        signa_context_pull_symbols=_split_watchlist(env.get("OPTIONS_SIGNA_CONTEXT_PULL_SYMBOLS", "")),
+        signa_context_pull_include=_split_csv(env.get(
+            "OPTIONS_SIGNA_CONTEXT_PULL_INCLUDE",
+            "scan,action_card,enhanced_signal,options_flow,dark_pool,market_tide,signal_index,congress_flow",
+        )),
+        signa_context_pull_include_shared_proxies=_as_bool(
+            env.get("OPTIONS_SIGNA_CONTEXT_PULL_INCLUDE_SHARED_PROXIES"), True
+        ),
+        signa_context_pull_symbol_limit=_as_int(env.get("OPTIONS_SIGNA_CONTEXT_PULL_SYMBOL_LIMIT"), 50),
         rh_bearer_token=env.get("RH_BEARER_TOKEN", "").strip(),
         rh_refresh_token=env.get("RH_REFRESH_TOKEN", "").strip(),
         rh_auto_check_interval_minutes=_as_int(env.get("RH_AUTO_CHECK_INTERVAL_MINUTES"), 15),

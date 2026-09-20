@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import os
 import json
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -49,6 +50,36 @@ from sources.signa_discovery import (
     manual_context_records_from_text,
     records_from_direct_response,
 )
+from scripts.options_signa_context_pull import build_symbols, market_is_open, pull_context
+
+
+def run_scheduled_signa_context_pull(
+    cfg: ScannerConfig, *, now: datetime | None = None
+) -> dict[str, Any]:
+    """Run one read-only Signa context pull iteration when explicitly enabled.
+
+    This helper writes only to the shared Signa context cache through
+    ``pull_context``. It has no scanner, alert, risk, broker, order, or
+    execution authority.
+    """
+    if not cfg.signa_context_pull_enabled:
+        return {"ok": True, "skipped": "disabled", "stored_rows": 0}
+    current = now or datetime.now(timezone.utc)
+    if not market_is_open(current):
+        return {"ok": True, "skipped": "market_closed", "stored_rows": 0}
+    base_symbols = cfg.signa_context_pull_symbols or cfg.watchlist
+    symbols = build_symbols(
+        base_symbols,
+        include_shared_proxies=cfg.signa_context_pull_include_shared_proxies,
+        limit=cfg.signa_context_pull_symbol_limit,
+    )
+    return pull_context(
+        cfg=cfg,
+        symbols=symbols,
+        include=set(cfg.signa_context_pull_include),
+        timeframe=cfg.signa_context_pull_timeframe,
+        now=current,
+    )
 
 
 SHADOW_OUTCOME_STATUSES = {
@@ -113,6 +144,16 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
                     max_instances=1,
                     coalesce=True,
                 )
+            if cfg.signa_context_pull_enabled:
+                scheduler.add_job(
+                    lambda: run_scheduled_signa_context_pull(cfg),
+                    "interval",
+                    minutes=cfg.signa_context_pull_interval_minutes,
+                    id="options-signa-context-pull",
+                    replace_existing=True,
+                    max_instances=1,
+                    coalesce=True,
+                )
             scheduler.start()
             app_state["scheduler"] = scheduler
             try:
@@ -149,6 +190,7 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
             "market_data_error": market_data_error,
             "provider_profile": provider_profile,
             "tastytrade_configured": cfg.tastytrade_configured,
+            "signa_context_pull_enabled": cfg.signa_context_pull_enabled,
         }
 
     @app.get("/status")
