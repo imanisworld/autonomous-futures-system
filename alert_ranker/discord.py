@@ -44,7 +44,13 @@ class DiscordAlerter:
         if self._client and self._owns_client:
             await self._client.aclose()
 
-    async def send_if_eligible(self, result: ScoreResult, now: datetime | None = None) -> AlertDecision:
+    async def send_if_eligible(
+        self,
+        result: ScoreResult,
+        now: datetime | None = None,
+        *,
+        delivery_now: datetime | None = None,
+    ) -> AlertDecision:
         trade_proof_reason = _trade_proof_block_reason(result)
         if trade_proof_reason:
             # Paper evidence is allowed to continue collecting after the causal
@@ -82,6 +88,15 @@ class DiscordAlerter:
             now=now,
         ):
             return AlertDecision(False, "duplicate_30m")
+
+        # Re-check at the actual delivery boundary. ``now`` is the scan/decision
+        # timestamp and must remain stable for scoring, contract sanity, dedupe,
+        # and evidence. A scan that began inside RTH must not be allowed to post
+        # after the exchange has closed while the scan was still running.
+        actual_delivery = delivery_now or datetime.now(ZoneInfo(self.config.timezone))
+        delivery_state = us_equity_rth_state(actual_delivery)
+        if not delivery_state.is_open:
+            return AlertDecision(False, delivery_state.reason)
 
         if self._client is None:
             self._client = httpx.AsyncClient(timeout=10)
