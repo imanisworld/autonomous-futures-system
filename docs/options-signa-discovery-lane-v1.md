@@ -256,3 +256,26 @@ python3 scripts/options_signa_context_pull.py \
 ```
 
 Use `--include-gex` only when you intentionally want explicit unresolved-GEX context rows recorded. No standalone GEX endpoint is proven yet.
+
+## Context board/report
+
+`GET /signa/context/board` returns a grouped context-only board from the shared Signa cache.
+
+It groups latest rows by ticker and source, then shows:
+
+- source status and direction;
+- endpoint;
+- timeframe;
+- `data_as_of` / provider timestamp;
+- candidate key;
+- consumers such as `options`, `shared_proxy`, and `futures`.
+
+The response is marked:
+
+```text
+context_only=true
+observation_only=true
+trade_authority=false
+```
+
+The board is for review and research only. It does not create alerts, approve setups, alter scanner status, or write to risk/order/execution tables.

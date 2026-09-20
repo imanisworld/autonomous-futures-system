@@ -142,6 +142,42 @@ class SignaContextStore:
             ).fetchall()
         return [self._stored_from_row(row) for row in rows]
 
+
+    def board(self, *, limit: int = 200) -> list[dict[str, Any]]:
+        """Latest context-only board grouped by ticker and source."""
+        grouped: dict[str, dict[str, Any]] = {}
+        for item in self.latest(limit=limit):
+            ticker = item.ticker or "MARKET"
+            entry = grouped.setdefault(
+                ticker,
+                {
+                    "ticker": ticker,
+                    "context_only": True,
+                    "trade_authority": False,
+                    "consumers": set(),
+                    "sources": {},
+                },
+            )
+            entry["consumers"].update(item.consumers)
+            if item.source in entry["sources"]:
+                continue
+            entry["sources"][item.source] = {
+                "timestamp": item.timestamp,
+                "status": item.status,
+                "direction": item.direction,
+                "endpoint": item.endpoint,
+                "timeframe": item.timeframe,
+                "data_as_of": item.data_as_of,
+                "provider_timestamp": item.provider_timestamp,
+                "candidate_key": item.candidate_key,
+                "payload_summary": item.payload.get("raw_summary", {}),
+            }
+        out: list[dict[str, Any]] = []
+        for entry in grouped.values():
+            entry["consumers"] = sorted(entry["consumers"])
+            out.append(entry)
+        return sorted(out, key=lambda row: row["ticker"])
+
     def _normalized_payload(self, payload: dict[str, Any], *, timestamp: datetime | None = None) -> dict[str, Any]:
         if not isinstance(payload, dict):
             raise TypeError("signa context payload must be an object")

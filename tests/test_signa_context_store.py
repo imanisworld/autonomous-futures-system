@@ -194,3 +194,34 @@ def test_context_store_records_new_provider_snapshot_when_data_changes(tmp_path)
     assert len(latest) == 2
     assert {item.data_as_of for item in latest} == {"2026-09-20T00:00:00Z", "2026-09-21T00:00:00Z"}
     assert all(item.consumers == ("options",) for item in latest)
+
+
+def test_context_board_groups_latest_context_by_ticker_and_source(tmp_path):
+    store = SignaContextStore(tmp_path / "ctx.sqlite")
+    store.record({"ticker": "SPY", "source": "options_flow", "direction": "LONG", "data_as_of": "2026-09-20T13:00:00Z"})
+    store.record({"ticker": "SPY", "source": "dark_pool", "direction": "SHORT", "data_as_of": "2026-09-20T13:00:00Z"})
+    store.record({"ticker": "NVDA", "source": "action_card", "direction": "LONG", "data_as_of": "2026-09-20T00:00:00Z"})
+    board = store.board(limit=20)
+    by_ticker = {row["ticker"]: row for row in board}
+    assert set(by_ticker["SPY"]["sources"]) == {"options_flow", "dark_pool"}
+    assert by_ticker["SPY"]["context_only"] is True
+    assert by_ticker["SPY"]["trade_authority"] is False
+    assert set(by_ticker["SPY"]["consumers"]) == {"options", "shared_proxy", "futures"}
+    assert by_ticker["NVDA"]["consumers"] == ["options"]
+
+
+def test_options_app_signa_context_board_route_is_context_only(tmp_path):
+    app = create_app(config=_config(tmp_path))
+    client = TestClient(app)
+    response = client.post(
+        "/signa/context/ingest",
+        json={"text": "ticker: SPY\nsource: options_flow\ndirection: bullish\ncount: 4"},
+    )
+    assert response.status_code == 200
+    board = client.get("/signa/context/board")
+    assert board.status_code == 200
+    body = board.json()
+    assert body["trade_authority"] is False
+    assert body["context_only"] is True
+    assert body["items"][0]["ticker"] == "SPY"
+    assert body["items"][0]["sources"]["options_flow"]["direction"] == "LONG"

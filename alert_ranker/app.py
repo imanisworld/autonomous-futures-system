@@ -215,6 +215,17 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
             ],
         }
 
+    @app.get("/signa/context/board")
+    async def signa_context_board(limit: int = 200) -> dict[str, Any]:
+        store = get_signa_context_store()
+        return {
+            "advisory_only": True,
+            "context_only": True,
+            "observation_only": True,
+            "trade_authority": False,
+            "items": store.board(limit=limit),
+        }
+
     @app.post("/signa/context/pull")
     async def signa_context_pull(request: Request) -> dict[str, Any]:
         body = await request.json()
