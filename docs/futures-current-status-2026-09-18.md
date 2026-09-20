@@ -1,5 +1,8 @@
 # Futures Current Status — 2026-09-18
 
+> **Superseded for current status (2026-09-20):** read `docs/futures-current-status-2026-09-20.md` first. This file is retained as the 2026-09-18 operator snapshot.
+
+
 This is the concise operator-facing source of truth for the futures system as of the end of the 2026-09-18 work session. Historical audit documents remain evidence records; where an older summary conflicts with this file, this file governs current status unless a later dated document explicitly supersedes it.
 
 ## Verdict
