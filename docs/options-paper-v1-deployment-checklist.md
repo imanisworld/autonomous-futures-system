@@ -4,7 +4,7 @@ This is the operational gate for starting the first `OPTIONS_PAPER_V1` evidence 
 
 Options-ready baseline: **`9d008a0dcdcb69270d80b663c678b4522f27ebb6`** with **4,921 passed / 7 skipped / 2 warnings**. If `main` advances before deployment, verify the deployed commit still contains this options baseline and has green CI.
 
-**Current state (2026-09-18): original V1 deployment gate is complete and evidence epochs 1 and 2 are recorded. The active options scanner is now independently pinned to service-specific release `3b9770d8fed4ad1825cc325bab536ffea618a94e`. Options entry/target/risk behaviour remains frozen; do not infer that repository `main` is deployed.**
+**Current state (2026-09-20): original V1 deployment gate is complete and evidence epochs 1 and 2 are recorded. The active options scanner is independently pinned to service-specific release `a0c34818faaad37b20d8c05249e8f5442d8d7141`. The latest promotion adds only the #824/#825 RTH alert-delivery safety guard; options entry/target/risk/selector behaviour remains frozen. Do not infer that repository `main` is deployed.**
 
 | | |
 |---|---|
