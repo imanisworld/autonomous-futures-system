@@ -3494,6 +3494,19 @@ def _decision_direction(decision) -> str | None:
     return None
 
 
+def _shared_signa_snapshot_db_path() -> str | None:
+    """Return shared Signa snapshot DB path only when it already exists.
+
+    This is read-only context plumbing. It must not create the options DB or make
+    Signa/network calls from the futures runtime.
+    """
+    try:
+        path = Path(options_companion_sqlite_path())
+        return str(path) if path.exists() else None
+    except Exception:  # noqa: BLE001 - context lookup must fail soft
+        return None
+
+
 def _market_state_context(state, futures_direction: str | None = None) -> dict:
     """Public, JSON-safe snapshot of the market state derived from the alert."""
     context = {
@@ -3572,7 +3585,10 @@ def _market_state_context(state, futures_direction: str | None = None) -> dict:
             "weekly_direction": state.signa.weekly_direction if state.signa else None,
         },
         "signa_futures_context": build_signa_futures_context(
-            state, futures_direction=futures_direction
+            state,
+            futures_direction=futures_direction,
+            snapshot_db_path=_shared_signa_snapshot_db_path(),
+            now=state.timestamp,
         ),
         "icc": {
             "phase": state.icc.phase if state.icc else None,
