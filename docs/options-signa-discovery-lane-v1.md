@@ -313,7 +313,7 @@ Optional controls:
 OPTIONS_SIGNA_CONTEXT_PULL_INTERVAL_MINUTES=15
 OPTIONS_SIGNA_CONTEXT_PULL_TIMEFRAME=1d
 OPTIONS_SIGNA_CONTEXT_PULL_SYMBOLS=SPY,QQQ,NVDA
-OPTIONS_SIGNA_CONTEXT_PULL_INCLUDE=scan,action_card,enhanced_signal,options_flow,dark_pool,market_tide,signal_index,congress_flow
+OPTIONS_SIGNA_CONTEXT_PULL_INCLUDE=scan,action_card,options_flow,market_tide,signal_index
 OPTIONS_SIGNA_CONTEXT_PULL_INCLUDE_SHARED_PROXIES=true
 OPTIONS_SIGNA_CONTEXT_PULL_SYMBOL_LIMIT=50
 ```
@@ -359,7 +359,7 @@ This prevents a ticker from looking complete when, for example, `dark_pool` fail
 
 ## Conservative scheduled pull profile
 
-The scheduled Signa context pull defaults to a lighter source set before any VPS enablement:
+The scheduled Signa context pull defaults to a lighter source set. This default is the VPS-enabled profile as of 2026-09-20:
 
 ```text
 scan
@@ -380,3 +380,21 @@ congress_flow
 Operators can still request the full source set with an explicit include list or CLI `--include-all`. That is not the scheduled default because recent forced pulls showed repeated `dark_pool` HTTP 503 responses and `enhanced_signal` timeouts.
 
 This is still context-only. Reducing the default source set does not promote Signa to a trade gate, does not send alerts, and does not touch risk, broker, order, or execution paths.
+
+## VPS runtime enablement — 2026-09-20
+
+The conservative scheduled Signa pull is now enabled on the VPS through `options-scanner.service`, but the proof level is limited:
+
+- options scanner release pin changed from `58f1c50583d8bb747c0b221eabb75af376b10ecc` to `1fc0ad9c97d6daca02905058b14123135605c769`;
+- this was a service-specific options-scanner release promotion, not a futures release;
+- `options-scanner.service` was restarted for the new release/env to take effect;
+- `futures-bot.service` was not restarted;
+- `/health` reported scheduler running, `signa_context_pull_enabled=true`, Public read-only provider, `order_supported=false`, and account endpoints forbidden;
+- the production SQLite path remained `/root/afs-shared/logs/options_scanner.sqlite`;
+- because enablement occurred outside RTH, the natural scheduled job correctly returned `market_closed`;
+- one forced conservative pull succeeded with 13 endpoint attempts, 0 failures, 17 stored rows, `observation_only=true`, and `trade_authority=false`.
+
+This is not complete Monday proof. The remaining gate is the first natural market-hours scheduled cycle. Until that is observed, the correct status is **enabled and smoke-proven, natural RTH scheduled-cycle proof pending**.
+
+No Signa context row has trade authority. The scheduler can populate context rows only; it cannot approve setups, change risk, reserve capital, select contracts, send alerts, or create execution intent.
+
