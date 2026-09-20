@@ -4,7 +4,7 @@
 
 APPROVE as passive infrastructure only.
 
-This is a shared read/cache layer for Signa response snapshots. It does not call Signa, does not alter options/futures decisions, and does not attach itself to runtime consumers yet.
+This is a shared read/cache layer for Signa response snapshots. It does not call Signa and does not alter options/futures decisions. Later 2026-09-20 work wired options and futures consumers to reference this store while preserving observation-only authority boundaries.
 
 ## Purpose
 
@@ -30,15 +30,17 @@ Implemented:
   - `observation_only=True`
   - `trade_authority=False`
 
-Not implemented in v1:
+Not implemented in the store itself:
 
 - no network/API calls
-- no scheduled collector
-- no options route refactor
-- no futures journal attachment change
 - no Signa-based gating
 - no scanner/risk/broker/execution imports
 - no deployment requirement by itself
+
+Later consumers now use the store:
+
+- #805 routes options Signa pulls through `signa_snapshots` before `options_signa_context`;
+- #807 lets futures `context.signa_futures_context` reference shared snapshots in read-only mode.
 
 ## Snapshot identity
 
@@ -55,19 +57,23 @@ snapshot_bucket
 
 That means if options and futures both request the same QQQ action-card snapshot in the same bucket, they should reuse the same row.
 
-## Intended next steps
+## Completed follow-on work
 
-1. Refactor the options Signa discovery branch to write raw Signa responses into `signa_snapshots` first, then write options-specific interpretation rows separately.
-2. Build Futures Signa Context Lane v2 as a consumer of shared snapshots, not as a separate Signa puller.
-3. Start with overlapping futures proxies:
+1. #805 refactored options Signa pulls to write raw responses into `signa_snapshots` first, then write options-specific interpretation rows separately.
+2. #807 built Futures Signa Context Lane v2 as a consumer of shared snapshots, not as a separate Signa puller.
+3. The overlapping futures proxy set remains the correct initial set:
    - MNQ/NQ → QQQ
    - MES/ES → SPY
    - rates context → TLT
    - volatility context → VIX
-4. Preserve separate interpretation layers:
-   - options writes options context rows
-   - futures writes futures context rows
-   - both may reference the same `snapshot_id`
+4. Interpretation remains separate:
+   - options writes options context rows;
+   - futures writes futures context rows;
+   - both may reference the same `snapshot_id`.
+
+## Current next step
+
+Seed or verify the shared snapshot store with a controlled read-only Signa pull for the overlapping proxy set, then audit the first future natural futures setup for v2 `snapshot_ids`, `snapshot_refs`, and correct `snapshot_status`.
 
 ## Safety ruling
 
