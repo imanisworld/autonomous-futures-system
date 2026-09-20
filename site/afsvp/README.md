@@ -13,6 +13,8 @@ Expected public routes:
 - `/terms/` — terms and conditions
 - `/status/` — public status-boundary explainer
 
+Use `docs/afsvp-public-deployment-smoke-test.md` as the deployment and smoke-test checklist before routing or public-host changes.
+
 ## Safety boundary
 
 This directory contains static public content only. It must not expose broker credentials, trading journals, execution controls, `/gate`, environment variables, or localhost application ports.
