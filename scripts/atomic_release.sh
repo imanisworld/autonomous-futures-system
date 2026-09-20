@@ -265,6 +265,15 @@ promote_release() {
       mv -f \"\$tmp\" \"\$hist\"
     fi
     echo \"  release history: \$(grep -c . \"\$hist\" 2>/dev/null || echo 0) entries\"
+    # The watcher resolves and pins the live release at process start. A
+    # sanctioned futures-bot promotion therefore must re-arm the read-only
+    # watcher after activation/integrity succeed or monitoring remains pinned
+    # to the previous release and reports false BLOCKED findings.
+    if systemctl cat afs-watcher.service >/dev/null 2>&1; then
+      systemctl restart afs-watcher.service
+      sleep 2
+      systemctl is-active afs-watcher.service
+    fi
   "
 }
 
@@ -301,6 +310,13 @@ rollback_release() {
     curl -fsS http://127.0.0.1:8000/health
     PYTHONPATH='$CURRENT' '$CURRENT/.venv/bin/python' \
       -m ops.release_integrity --repo-root '$CURRENT'
+    # Rollback changes the same release pins/link as promotion; re-arm the
+    # read-only watcher for the restored release as well.
+    if systemctl cat afs-watcher.service >/dev/null 2>&1; then
+      systemctl restart afs-watcher.service
+      sleep 2
+      systemctl is-active afs-watcher.service
+    fi
   "
 }
 
