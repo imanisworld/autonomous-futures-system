@@ -257,3 +257,80 @@ def test_shadow_journal_reports_signa_context_without_authority(tmp_path):
     assert item["signa_context"][0]["source"] == "gex"
     assert item["signa_context"][0]["fields"]["flip"] == 485
     assert item["signa_context"][0]["trade_authority"] is False
+
+
+def test_context_board_marks_latest_errors_and_stale_fallback(tmp_path):
+    store = SignaContextStore(tmp_path / "ctx.sqlite")
+    store.record({
+        "ticker": "SPY",
+        "source": "enhanced_signal",
+        "direction": "LONG",
+        "score": 80,
+        "data_as_of": "2026-09-20T13:00:00Z",
+    })
+    store.record({
+        "ticker": "SPY",
+        "source": "enhanced_signal",
+        "endpoint": "/api/v1/enhanced-signal",
+        "status": "SIGNA_CONTEXT_ERROR",
+        "request_ok": False,
+        "error": "ReadTimeout",
+        "http_status": None,
+        "data_as_of": "2026-09-20T13:05:00Z",
+    })
+    row = {item["ticker"]: item for item in store.board(limit=20)}["SPY"]
+    source = row["sources"]["enhanced_signal"]
+    assert source["healthy"] is False
+    assert source["error"] == "ReadTimeout"
+    assert source["stale_fallback"] is True
+    assert source["fields"]["score"] == 80
+
+
+def test_context_board_exposes_missing_error_and_stale_sources(tmp_path):
+    store = SignaContextStore(tmp_path / "ctx.sqlite")
+    store.record({
+        "ticker": "SPY",
+        "source": "scan",
+        "direction": "LONG",
+        "data_as_of": "2026-09-20T13:00:00Z",
+    })
+    store.record({
+        "ticker": "SPY",
+        "source": "dark_pool",
+        "status": "SIGNA_CONTEXT_ERROR",
+        "request_ok": False,
+        "error": "http_503",
+        "http_status": 503,
+        "data_as_of": "2026-09-20T13:00:00Z",
+    })
+    [row] = store.board(limit=20)
+    assert "action_card" in row["missing_sources"]
+    assert "enhanced_signal" in row["missing_sources"]
+    assert row["error_sources"] == ["dark_pool"]
+    assert row["stale_sources"] == []
+    assert row["sources"]["dark_pool"]["fields"]["http_status"] == 503
+
+
+def test_context_for_tickers_preserves_error_with_fallback_for_reports(tmp_path):
+    store = SignaContextStore(tmp_path / "ctx.sqlite")
+    store.record({
+        "ticker": "QQQ",
+        "source": "options_flow",
+        "direction": "LONG",
+        "callPremium": 2500000,
+        "data_as_of": "2026-09-20T13:00:00Z",
+    })
+    store.record({
+        "ticker": "QQQ",
+        "source": "options_flow",
+        "status": "SIGNA_CONTEXT_ERROR",
+        "request_ok": False,
+        "error": "backoff_active",
+        "backoff_active": True,
+        "data_as_of": "2026-09-20T13:05:00Z",
+    })
+    [row] = store.context_for_ticker("QQQ")
+    assert row["healthy"] is False
+    assert row["stale_fallback"] is True
+    assert row["backoff_active"] is True
+    assert row["fields"]["callPremium"] == 2500000
