@@ -140,6 +140,28 @@ def test_format_reports_show_zero_activity_and_health():
     assert "**Options scans** — stale" in o
 
 
+def test_off_session_collectors_are_healthy_not_attention():
+    census = {
+        "collectors": [
+            {"name": "futures journal", "status": "OFF_SESSION"},
+            {"name": "options scans", "status": "OFF_SESSION"},
+        ]
+    }
+    futures_field, futures_warn = report._collector_health(
+        census, options=False, end=date(2026, 9, 20)
+    )
+    options_field, options_warn = report._collector_health(
+        census, options=True, end=date(2026, 9, 20)
+    )
+
+    assert futures_warn is False
+    assert options_warn is False
+    assert futures_field["name"] == "✓ Collector health"
+    assert options_field["name"] == "✓ Collector health"
+    assert "off session" in futures_field["value"]
+    assert "off session" in options_field["value"]
+
+
 def test_post_discord_uses_only_supplied_url(monkeypatch):
     seen = {}
 

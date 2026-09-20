@@ -348,7 +348,7 @@ def _collector_health(census: dict[str, Any], *, options: bool, end: date) -> tu
     collectors = census.get("collectors")
     chosen = [item for item in collectors if isinstance(item, dict)
               and str(item.get("name") or "").startswith("options ") == options] if isinstance(collectors, list) else []
-    healthy = {"FRESH", "FRESH_AT_CLOSE", "QUIET_BY_DESIGN"}
+    healthy = {"FRESH", "FRESH_AT_CLOSE", "QUIET_BY_DESIGN", "OFF_SESSION"}
     statuses = [(item, *_effective_status(item, session_end=end)) for item in chosen]
     attention = [(item, status, note) for item, status, note in statuses if status not in healthy]
     counts = Counter(status for _, status, _ in statuses)
