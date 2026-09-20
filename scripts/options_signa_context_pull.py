@@ -12,13 +12,14 @@ import sys
 from datetime import datetime, timezone
 from typing import Iterable, Sequence
 
-from alert_ranker.config import ScannerConfig, load_config
+from alert_ranker.config import DEFAULT_SIGNA_CONTEXT_PULL_INCLUDE, ScannerConfig, load_config
 from alert_ranker.session_calendar import nyse_session_for
 from alert_ranker.signa_context_store import SHARED_PROXY_SYMBOLS, SignaContextStore
 from sources.signa_discovery import SignaDiscoveryClient, SignaDiscoveryResponse, records_from_direct_response
 from sources.signa_snapshot_store import SignaSnapshotStore
 
-DEFAULT_INCLUDE = (
+DEFAULT_INCLUDE = tuple(DEFAULT_SIGNA_CONTEXT_PULL_INCLUDE)
+FULL_INCLUDE = (
     "scan",
     "action_card",
     "enhanced_signal",
@@ -198,6 +199,11 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument("--symbols", default="", help="Comma-separated symbols. Defaults to OPTIONS_SCANNER_WATCHLIST.")
     parser.add_argument("--timeframe", default="1d")
     parser.add_argument("--include", default=",".join(DEFAULT_INCLUDE))
+    parser.add_argument(
+        "--include-all",
+        action="store_true",
+        help="Include heavier/less reliable endpoints: enhanced_signal, dark_pool, congress_flow.",
+    )
     parser.add_argument("--limit", type=int, default=50)
     parser.add_argument("--no-shared-proxies", action="store_true")
     parser.add_argument("--include-gex", action="store_true", help="Record explicit unresolved GEX context rows.")
@@ -215,7 +221,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     base_symbols = [s for s in args.symbols.split(",") if s.strip()] if args.symbols else cfg.watchlist
     symbols = build_symbols(base_symbols, include_shared_proxies=not args.no_shared_proxies, limit=args.limit)
-    include = {item.strip() for item in args.include.split(",") if item.strip()}
+    include = set(FULL_INCLUDE if args.include_all else (item.strip() for item in args.include.split(",") if item.strip()))
     if args.include_gex:
         include.add("gex")
     result = pull_context(cfg=cfg, symbols=symbols, include=include, timeframe=args.timeframe, now=now)
