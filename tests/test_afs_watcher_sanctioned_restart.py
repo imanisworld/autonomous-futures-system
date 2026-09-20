@@ -132,7 +132,11 @@ def _tick(tmp_path: Path, monkeypatch, *, baseline, props: str, cwd: str | None 
         if cmd[:2] == ["systemctl", "list-units"]:
             return 0, ""
         if cmd[:2] == ["pgrep", "-af"]:
-            return 0, "".join(f"{int(NEW_PID) + i} uvicorn webhook.app\n" for i in range(webhook_procs))
+            return 0, "".join(
+                f"{int(NEW_PID) + i} /root/autonomous-futures-system/.venv/bin/python "
+                "-m uvicorn webhook.app:app --host 127.0.0.1 --port 8000\n"
+                for i in range(webhook_procs)
+            )
         if cmd and cmd[0] == "journalctl":
             return 0, ""
         raise AssertionError(f"unexpected command: {cmd}")
@@ -329,3 +333,17 @@ def test_shipped_source_passes_the_watcher_static_selfcheck():
     failing test. Regression for the 2026-09-06 install of #465, whose docstring
     mentioned a service restart command verbatim."""
     w.static_selfcheck()
+
+
+def test_webhook_process_filter_ignores_deploy_shell_that_mentions_uvicorn():
+    real = (
+        "127554 /root/autonomous-futures-system/.venv/bin/python "
+        "-m uvicorn webhook.app:app --host 127.0.0.1 --port 8000"
+    )
+    deploy_shell = (
+        "127486 bash -c set -e; ExecStart=/root/autonomous-futures-system/.venv/bin/python "
+        "-m uvicorn webhook.app:app --host 127.0.0.1 --port 8000"
+    )
+
+    assert w._is_webhook_process_line(real) is True
+    assert w._is_webhook_process_line(deploy_shell) is False
