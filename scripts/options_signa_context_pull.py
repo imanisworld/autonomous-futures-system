@@ -15,7 +15,8 @@ from typing import Iterable, Sequence
 from alert_ranker.config import ScannerConfig, load_config
 from alert_ranker.session_calendar import nyse_session_for
 from alert_ranker.signa_context_store import SHARED_PROXY_SYMBOLS, SignaContextStore
-from sources.signa_discovery import SignaDiscoveryClient, records_from_direct_response
+from sources.signa_discovery import SignaDiscoveryClient, SignaDiscoveryResponse, records_from_direct_response
+from sources.signa_snapshot_store import SignaSnapshotStore
 
 DEFAULT_INCLUDE = (
     "scan",
@@ -60,10 +61,23 @@ def pull_context(
     if not cfg.signa_api_key_configured:
         return {"ok": False, "error": "signa_api_key_not_configured", "stored_rows": 0}
     signa = client or SignaDiscoveryClient(base_url=cfg.signa_base_url, timeout=cfg.signa_timeout_seconds)
+    context_store = SignaContextStore(cfg.sqlite_path)
+    snapshot_store = SignaSnapshotStore(cfg.sqlite_path)
     rows: list[dict[str, object]] = []
     endpoint_results: list[dict[str, object]] = []
+    snapshot_ids: list[str] = []
 
-    def add_rows(source: str, response, symbol: str | None = None) -> None:
+    def add_rows(source: str, response: SignaDiscoveryResponse, symbol: str | None = None) -> None:
+        snapshot = _record_shared_snapshot(
+            snapshot_store,
+            source=source,
+            response=response,
+            symbol=symbol,
+            symbols=symbols,
+            timeframe=timeframe,
+            now=now,
+        )
+        snapshot_ids.append(snapshot.snapshot_id)
         endpoint_results.append(
             {
                 "source": source,
@@ -74,9 +88,13 @@ def pull_context(
                 "error": response.error,
                 "cached": response.cached,
                 "backoff_active": response.backoff_active,
+                "snapshot_id": snapshot.snapshot_id,
             }
         )
-        rows.extend(records_from_direct_response(source, response, symbol=symbol))
+        for row in records_from_direct_response(source, response, symbol=symbol):
+            row["snapshot_id"] = snapshot.snapshot_id
+            row["snapshot_ref"] = snapshot.to_reference()
+            rows.append(row)
 
     if "scan" in include:
         add_rows("scan", signa.scan(symbols=symbols, timeframe=timeframe))
@@ -99,8 +117,7 @@ def pull_context(
         if "gex" in include:
             add_rows("gex", signa.gex(symbol), symbol)
 
-    store = SignaContextStore(cfg.sqlite_path)
-    ids = store.record_many(rows, timestamp=now)
+    ids = context_store.record_many(rows, timestamp=now)
     return {
         "ok": True,
         "advisory_only": True,
@@ -109,9 +126,71 @@ def pull_context(
         "symbols": list(symbols),
         "requested_rows": len(rows),
         "stored_rows": len(set(ids)),
+        "snapshot_rows": len(set(snapshot_ids)),
         "ids": ids,
+        "snapshot_ids": snapshot_ids,
         "endpoint_results": endpoint_results,
     }
+
+
+def _record_shared_snapshot(
+    store: SignaSnapshotStore,
+    *,
+    source: str,
+    response: SignaDiscoveryResponse,
+    symbol: str | None,
+    symbols: Sequence[str],
+    timeframe: str,
+    now: datetime,
+):
+    payload = response.payload if isinstance(response.payload, dict) else {}
+    snapshot_payload = dict(payload)
+    if not response.ok:
+        snapshot_payload.setdefault("error", response.error)
+    snapshot_symbol = _snapshot_symbol(source, symbol=symbol, symbols=symbols)
+    params = _snapshot_params(source, symbol=symbol, symbols=symbols, timeframe=timeframe)
+    return store.record_snapshot(
+        endpoint=response.endpoint or source,
+        symbol=snapshot_symbol,
+        payload=snapshot_payload,
+        source="signa",
+        timeframe=timeframe if _source_uses_timeframe(source) else None,
+        params=params,
+        retrieved_at=now,
+        data_as_of=_payload_time(snapshot_payload),
+        status="OK" if response.ok else "ERROR",
+        http_status=response.status_code,
+    )
+
+
+def _snapshot_symbol(source: str, *, symbol: str | None, symbols: Sequence[str]) -> str:
+    if symbol:
+        return symbol
+    if source == "scan":
+        return ",".join(sorted({str(item).upper() for item in symbols})) or "MULTI"
+    return "MARKET"
+
+
+def _snapshot_params(source: str, *, symbol: str | None, symbols: Sequence[str], timeframe: str) -> dict[str, object]:
+    if source == "scan":
+        return {"symbols": sorted({str(item).upper() for item in symbols}), "timeframe": timeframe}
+    if source in {"action_card", "enhanced_signal"}:
+        return {"symbol": str(symbol or "").upper(), "timeframe": timeframe}
+    if symbol:
+        return {"symbol": str(symbol).upper()}
+    return {}
+
+
+def _source_uses_timeframe(source: str) -> bool:
+    return source in {"scan", "action_card", "enhanced_signal"}
+
+
+def _payload_time(payload: dict[str, object]) -> object | None:
+    for key in ("data_as_of", "as_of", "provider_timestamp", "provider_ts", "server_time", "updated_at", "last_updated", "timestamp"):
+        value = payload.get(key)
+        if value:
+            return value
+    return None
 
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:

@@ -6,6 +6,7 @@ from alert_ranker.session_calendar import nyse_session_for
 from alert_ranker.signa_context_store import SignaContextStore
 from scripts.options_signa_context_pull import build_symbols, market_is_open, pull_context
 from sources.signa_discovery import SignaDiscoveryResponse
+from sources.signa_snapshot_store import SignaSnapshotStore
 
 
 def _config(tmp_path: Path) -> ScannerConfig:
@@ -77,10 +78,18 @@ def test_pull_context_writes_observation_only_rows_and_reuses_shared_cache(tmp_p
 
     assert first["ok"] is True
     assert second["ok"] is True
+    assert first["snapshot_rows"] == 3
+    assert len(first["snapshot_ids"]) == 3
+    snapshot_store = SignaSnapshotStore(cfg.sqlite_path)
+    snapshots = snapshot_store.latest(limit=20)
+    assert len(snapshots) == 3  # scan, market tide, action card; second pull deduped same bucket
+    assert all(item.observation_only is True and item.trade_authority is False for item in snapshots)
+    assert any(item.symbol == "SPY" and item.endpoint == "api/v1/signals/spy" for item in snapshots)
     store = SignaContextStore(cfg.sqlite_path)
     latest = store.latest(limit=20, ticker="SPY")
     assert len(latest) == 2  # scan candidate + action card; second pull deduped same provider snapshots
     assert all(item.trade_authority is False for item in latest)
+    assert all(item.payload.get("snapshot_id") for item in latest)
     assert any(set(item.consumers) == {"options", "shared_proxy", "futures"} for item in latest)
 
 
