@@ -128,11 +128,17 @@ def test_promote_and_rollback_rearm_readonly_watcher_after_release_verification(
 
     for block in (promote, rollback):
         assert "systemctl cat afs-watcher.service" in block
+        assert "watcher_src='$CURRENT/ops/afs_watcher'" in block
+        assert "systemctl show afs-watcher.service -p WorkingDirectory --value" in block
+        assert "watcher_memory_guard.py run_ro.sh supervisor.sh bootstrap_tmp_state.sh" in block
+        assert "cmp -s" in block
+        assert "watcher_triage.py" in block
         assert "systemctl restart afs-watcher.service" in block
         assert "systemctl is-active afs-watcher.service" in block
-        assert block.index("systemctl restart afs-watcher.service") > block.index(
-            "-m ops.release_integrity --repo-root '$CURRENT'"
-        )
+        integrity_at = block.index("-m ops.release_integrity --repo-root '$CURRENT'")
+        sync_at = block.index("watcher_src='$CURRENT/ops/afs_watcher'")
+        restart_at = block.index("systemctl restart afs-watcher.service")
+        assert integrity_at < sync_at < restart_at
 
 
 def test_rollback_restores_previous_release_proof_pins_and_verifies_integrity():
@@ -233,5 +239,21 @@ def test_promote_appends_durable_release_history_after_verification():
     # The record carries sha, UTC timestamp and release dir, like the other path.
     assert "'%s %s %s\\n' '$sha'" in promote
     assert "date -u +%Y-%m-%dT%H:%M:%SZ" in promote
-    # Nothing here may delete or rewrite existing rows.
-    assert "rm -f" not in promote.split("release_history.txt", 1)[1]
+    # Nothing in the durable-history update block may delete or rewrite rows.
+    history_tail = promote.split("release_history.txt", 1)[1]
+    history_block = history_tail.split(
+        "# The watcher runs from a persistent shared source directory", 1
+    )[0]
+    assert "rm -f" not in history_block
+
+
+def test_watcher_sync_does_not_touch_persistent_secret_or_backup_files():
+    text = SCRIPT.read_text()
+    promote = text.split("promote_release() {", 1)[1].split("rollback_release() {", 1)[0]
+    rollback = text.split("rollback_release() {", 1)[1].split(
+        "# Guarded so tests can", 1
+    )[0]
+    for block in (promote, rollback):
+        assert ".triage_key" not in block
+        assert "watcher.py.bak" not in block
+        assert "rm -rf" not in block
