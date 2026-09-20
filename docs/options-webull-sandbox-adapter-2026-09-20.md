@@ -6,7 +6,7 @@ This note records the verified Webull sandbox/paper boundary for the options sys
 
 ## Current ruling
 
-**SANDBOX FEASIBILITY PROVEN THROUGH READ-ONLY ACCOUNT/CONTRACT ACCESS; BROKER OPTION PREVIEW IMPLEMENTED BUT SERVER ACCEPTANCE NOT YET PROVEN; ORDER SUBMISSION REMAINS DISABLED.**
+**SANDBOX FEASIBILITY AND BROKER OPTION PREVIEW SERVER ACCEPTANCE ARE PROVEN; ORDER SUBMISSION REMAINS DISABLED AND UNPROVEN.**
 
 Webull is not an execution authority for the production options scanner. The current production options lane remains advisory/paper evidence only.
 
@@ -34,7 +34,6 @@ No full account identifier, token, app key, or app secret is persisted in projec
 
 The following are **not** proven:
 
-- Webull server acceptance of the new options preview adapter request;
 - sandbox paper option order placement;
 - order detail lifecycle after placement;
 - sandbox cancel/replace behavior;
@@ -42,9 +41,9 @@ The following are **not** proven:
 - options quote quality, bid/ask, IV, Greeks, volume or open interest from Webull;
 - any live-broker capability.
 
-A prior stock preview call against sandbox returned HTTP 200 during feasibility work, but that does not prove the options preview path.
+The options preview path is now separately proven. A controlled sandbox preview for `AAPL 2026-12-18 $350 CALL`, `BUY_TO_OPEN`, quantity 1, limit `$1.00` returned `PREVIEW_READY`, `currency=USD`, estimated cost `$100.00`, estimated transaction fee `$0.05`, `executable=false`, `submitted=false`, and no broker order id. No order was placed.
 
-The final option-preview network call and paper placement/cancel proof were not completed from the remote execution environment. Treat them as open gates, not Webull failures.
+Paper placement/cancel proof remains open.
 
 ## Adapter candidate
 
@@ -98,7 +97,7 @@ Webull quote/snapshot access previously returned `MARKET_DATA_NOT_SUBSCRIBED`. N
 All of the following must pass before Webull may become a Phase-2 paper execution adapter:
 
 1. **Complete:** PR #822 merged at `08cc827` with green CI.
-2. Exact options preview request accepted by Webull sandbox.
+2. **Complete:** exact options preview request accepted by Webull sandbox (`PREVIEW_READY`; no submission).
 3. One controlled sandbox paper option order is placed locally against the intended paper account.
 4. Order detail proves the expected state transition.
 5. Cancel proof succeeds for an unfilled order.

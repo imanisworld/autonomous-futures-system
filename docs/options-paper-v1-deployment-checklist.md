@@ -67,7 +67,7 @@ Current verified boundary as of 2026-09-20:
 - option-contract metadata discovery: proven;
 - stock-order preview feasibility: HTTP 200 in isolated sandbox testing;
 - options preview adapter: merged in PR #822 at `08cc827`; post-merge regression 2,002 passed;
-- options preview server acceptance: **not yet proven**;
+- options preview server acceptance: **proven** on `AAPL 2026-12-18 $350 CALL`, qty 1, limit `$1.00`; response `PREVIEW_READY`, estimated cost `$100.00`, estimated fee `$0.05`, `submitted=false`, no broker order id;
 - paper option placement/cancel/fill: **not proven**;
 - live Webull execution: **out of scope**.
 
