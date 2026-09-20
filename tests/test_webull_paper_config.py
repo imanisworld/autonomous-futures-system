@@ -101,3 +101,36 @@ def test_webull_config_module_does_not_import_webull_sdk(monkeypatch):
     module.load_webull_paper_config(BASE_ENV)
 
     assert "webull" not in sys.modules
+
+def test_webull_missing_live_flag_fails_closed():
+    env = dict(BASE_ENV)
+    env.pop("WEBULL_LIVE_TRADING_ENABLED")
+    config = load_webull_paper_config(env)
+    assert config.paper_only_safe is False
+    assert config.network_calls_allowed is False
+    assert "WEBULL_LIVE_TRADING_ENABLED must be explicitly true or false" in config.errors
+
+
+def test_webull_unknown_live_flag_fails_closed():
+    env = dict(BASE_ENV, WEBULL_LIVE_TRADING_ENABLED="maybe")
+    config = load_webull_paper_config(env)
+    assert config.paper_only_safe is False
+    assert config.network_calls_allowed is False
+    assert "WEBULL_LIVE_TRADING_ENABLED must be explicitly true or false" in config.errors
+
+
+def test_webull_missing_api_flag_fails_closed():
+    env = dict(BASE_ENV)
+    env.pop("WEBULL_API_ENABLED")
+    config = load_webull_paper_config(env)
+    assert config.paper_only_safe is False
+    assert "WEBULL_API_ENABLED must be explicitly true or false" in config.errors
+
+
+def test_webull_credentials_required_even_when_api_disabled():
+    env = dict(BASE_ENV, WEBULL_APP_KEY="", WEBULL_APP_SECRET="")
+    config = load_webull_paper_config(env)
+    assert config.paper_only_safe is False
+    assert config.network_calls_allowed is False
+    assert "WEBULL_APP_KEY must be configured" in config.errors
+    assert "WEBULL_APP_SECRET must be configured" in config.errors

@@ -18,7 +18,7 @@ import os
 from typing import Mapping
 
 
-_FALSE_VALUES = {"", "0", "false", "no", "off", "disabled"}
+_FALSE_VALUES = {"0", "false", "no", "off", "disabled"}
 _TRUE_VALUES = {"1", "true", "yes", "on", "enabled"}
 _SECRET_ENV_NAMES = frozenset({"WEBULL_APP_KEY", "WEBULL_APP_SECRET"})
 
@@ -27,13 +27,14 @@ def _env_value(env: Mapping[str, str], name: str) -> str:
     return str(env.get(name, "") or "").strip()
 
 
-def _env_bool(env: Mapping[str, str], name: str, default: bool) -> bool:
+def _env_bool(env: Mapping[str, str], name: str, default: bool) -> tuple[bool, bool]:
+    """Return (value, valid_explicit_boolean). Missing/unknown is invalid."""
     raw = _env_value(env, name).lower()
     if raw in _TRUE_VALUES:
-        return True
+        return True, True
     if raw in _FALSE_VALUES:
-        return False
-    return bool(default)
+        return False, True
+    return bool(default), False
 
 
 @dataclass(frozen=True)
@@ -100,23 +101,41 @@ def load_webull_paper_config(env: Mapping[str, str] | None = None) -> WebullPape
 
     source = os.environ if env is None else env
     trading_mode = _env_value(source, "WEBULL_TRADING_MODE").lower()
-    live_trading_enabled = _env_bool(source, "WEBULL_LIVE_TRADING_ENABLED", False)
-    api_enabled = _env_bool(source, "WEBULL_API_ENABLED", False)
-    paper_trading_enabled = _env_bool(source, "WEBULL_PAPER_TRADING_ENABLED", False)
+    live_trading_enabled, live_flag_valid = _env_bool(
+        source, "WEBULL_LIVE_TRADING_ENABLED", False
+    )
+    api_enabled, api_flag_valid = _env_bool(source, "WEBULL_API_ENABLED", False)
+    paper_trading_enabled, paper_flag_valid = _env_bool(
+        source, "WEBULL_PAPER_TRADING_ENABLED", False
+    )
     app_key_configured = bool(_env_value(source, "WEBULL_APP_KEY"))
     app_secret_configured = bool(_env_value(source, "WEBULL_APP_SECRET"))
 
     errors: list[str] = []
     if trading_mode != "paper":
         errors.append("WEBULL_TRADING_MODE must equal paper")
-    if live_trading_enabled:
+    if not live_flag_valid:
+        errors.append("WEBULL_LIVE_TRADING_ENABLED must be explicitly true or false")
+    elif live_trading_enabled:
         errors.append("WEBULL_LIVE_TRADING_ENABLED must be false")
-    if not paper_trading_enabled:
+    if not api_flag_valid:
+        errors.append("WEBULL_API_ENABLED must be explicitly true or false")
+    if not paper_flag_valid:
+        errors.append("WEBULL_PAPER_TRADING_ENABLED must be explicitly true or false")
+    elif not paper_trading_enabled:
         errors.append("WEBULL_PAPER_TRADING_ENABLED must be true")
-    if api_enabled and not app_key_configured:
-        errors.append("WEBULL_API_ENABLED requires WEBULL_APP_KEY to be configured")
-    if api_enabled and not app_secret_configured:
-        errors.append("WEBULL_API_ENABLED requires WEBULL_APP_SECRET to be configured")
+    if not app_key_configured:
+        errors.append(
+            "WEBULL_API_ENABLED requires WEBULL_APP_KEY to be configured"
+            if api_enabled
+            else "WEBULL_APP_KEY must be configured"
+        )
+    if not app_secret_configured:
+        errors.append(
+            "WEBULL_API_ENABLED requires WEBULL_APP_SECRET to be configured"
+            if api_enabled
+            else "WEBULL_APP_SECRET must be configured"
+        )
 
     return WebullPaperConfig(
         app_key_configured=app_key_configured,

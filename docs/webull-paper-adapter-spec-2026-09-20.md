@@ -107,6 +107,18 @@ Exit criteria:
 
 ### Phase 1 — Read-only paper/account probe
 
+Implementation status:
+
+- `integrations/webull_paper_probe.py` uses only the official sandbox Trading API host `api.sandbox.webull.com`;
+- it calls only the account-list GET through the narrow account client;
+- it returns account count only and never returns/logs account identifiers;
+- live mode, ambiguous config, disabled API, missing credentials, SDK absence, auth failure, and unknown response schemas fail closed;
+- no order-capable client is imported;
+- live-account credentials or live-account 2FA must not be disabled or repurposed for this probe;
+- no live endpoint is present in the module.
+
+The operator must still obtain/use a Webull Sandbox Trading API application/test account before any real probe is attempted. A normal/live Webull account is not evidence that sandbox access is configured.
+
 Allowed only after Phase 0:
 
 - authenticate against the documented paper/sandbox context only;
