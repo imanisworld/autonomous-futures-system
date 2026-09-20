@@ -1,0 +1,165 @@
+{
+  "completed_5m_ioc8_current_code": {
+    "active_300tick_rr1_treatment": {
+      "candidates": 13,
+      "fills": 5,
+      "h1": -51.46,
+      "h2": 35.56,
+      "net": -15.9,
+      "pf": 0.927
+    },
+    "research_400tick_rr1_treatment": {
+      "candidates": 16,
+      "fills": 7,
+      "h1": -152.44,
+      "h2": 772.58,
+      "net": 620.14,
+      "pf": 3.833
+    }
+  },
+  "control": "all corrected causal pre-armed 4HR touches",
+  "corrected_prearmed": {
+    "complement": {
+      "1_tick": {
+        "fills": 51,
+        "h1": 362.5,
+        "h2": -392.48,
+        "losses": 27,
+        "net": -29.98,
+        "pf": 0.991,
+        "wins": 24
+      },
+      "3_tick": {
+        "fills": 51,
+        "h1": 325.5,
+        "h2": -433.48,
+        "losses": 27,
+        "net": -107.98,
+        "pf": 0.968,
+        "wins": 24
+      }
+    },
+    "control": {
+      "1_tick": {
+        "fills": 80,
+        "h1": 861.8,
+        "h2": 552.8,
+        "losses": 40,
+        "max_dd": 863.78,
+        "net": 1414.6,
+        "pf": 1.299,
+        "wins": 40
+      },
+      "2_tick": {
+        "fills": 80,
+        "h1": 832.3,
+        "h2": 522.3,
+        "losses": 40,
+        "net": 1354.6,
+        "pf": 1.284,
+        "wins": 40
+      },
+      "3_tick": {
+        "fills": 80,
+        "h1": 802.8,
+        "h2": 491.8,
+        "losses": 40,
+        "net": 1294.6,
+        "pf": 1.269,
+        "wins": 40
+      }
+    },
+    "treatment": {
+      "1_tick": {
+        "fills": 29,
+        "h1": 683.28,
+        "h2": 761.3,
+        "losses": 13,
+        "max_dd": 326.94,
+        "net": 1444.58,
+        "pf": 2.032,
+        "top3_month_share_pct": 93.7,
+        "wins": 16
+      },
+      "2_tick": {
+        "fills": 29,
+        "h1": 673.28,
+        "h2": 750.3,
+        "losses": 13,
+        "net": 1423.58,
+        "pf": 2.008,
+        "wins": 16
+      },
+      "3_tick": {
+        "fills": 29,
+        "h1": 663.28,
+        "h2": 739.3,
+        "losses": 13,
+        "net": 1402.58,
+        "pf": 1.984,
+        "top3_month_share_pct": 95.9,
+        "wins": 16
+      }
+    }
+  },
+  "decision": {
+    "demo_authority": false,
+    "deploy_as": "one_min_observer_metadata_only",
+    "live_authority": false,
+    "paper_fill_authority": false,
+    "reason": "Treatment survives corrected pre-armed timing but does not have stable completed-5m IOC8 halves; collect prospectively on the pre-armed 1m mechanism without changing control execution."
+  },
+  "generated_at": "2026-09-20",
+  "instrument": "MNQ",
+  "parity": {
+    "cme_session_18_anchor": {
+      "matches": 25,
+      "treatment_overlap": 14,
+      "treatment_total": 29
+    },
+    "completed_et_wall_clock_4h": {
+      "matches": 80,
+      "treatment_overlap": 29,
+      "treatment_total": 29
+    },
+    "historical_tags": 80,
+    "utc_fixed_4h": {
+      "matches": 62,
+      "treatment_overlap": 26,
+      "treatment_total": 29
+    }
+  },
+  "risk_cells_corrected_prearmed": {
+    "active_300tick_rr1_treatment": {
+      "h1_1tick": 119.64,
+      "h2_1tick": -60.86,
+      "h2_3tick": -72.86,
+      "n": 14,
+      "net_1tick": 58.78,
+      "net_3tick": 34.78,
+      "pf_1tick": 1.068,
+      "pf_3tick": 1.04
+    },
+    "research_400tick_rr1_treatment": {
+      "h1_1tick": 509.66,
+      "h2_1tick": 452.68,
+      "n": 17,
+      "net_1tick": 962.34,
+      "pf_1tick": 2.121,
+      "top3_month_share_pct": 92.6
+    }
+  },
+  "source_artifacts": {
+    "continuation_tags": {
+      "path": "scripts/4hr_compression_zone_attribution_2026-09-18.json",
+      "sha256": "282a9f9feb2185a97218be28a9fc49fc50ded7ae3479705e7776d24463356494"
+    },
+    "prearmed_touch": {
+      "path": "scripts/4hr_prearmed_touch_ab_2026-09-18.json",
+      "sha256": "e19671fc9c5402aa96ba20f2fd29e0c1fc6d129b1bca88aef2f8331b76da074e"
+    }
+  },
+  "status": "AUDIT_ONLY_OBSERVATION_TREATMENT_APPROVED",
+  "strategy": "strat_4hr_retrigger",
+  "treatment": "subset where completed ET-wall-clock 4H sequence is strat_22_continuation"
+}
