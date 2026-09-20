@@ -1,8 +1,9 @@
-"""Read-only storage for options Signa/manual context evidence.
+"""Read-only storage for shared Signa/manual context evidence.
 
 This module records discovery/context rows only. It has no scanner, strategy,
 risk, broker, order, or execution authority and never promotes rows into the
-options shadow journal.
+options shadow journal. The table is intentionally a shared provider cache so
+options and future futures-context consumers can reuse the same Signa pull.
 """
 from __future__ import annotations
 
@@ -13,6 +14,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+SHARED_PROXY_SYMBOLS = {"SPY", "QQQ", "IWM", "DIA", "VIX", "SVXY", "UVXY", "TLT", "GLD", "USO", "XLE"}
 
 
 @dataclass(frozen=True)
@@ -28,6 +31,10 @@ class StoredSignaContext:
     observation_only: bool
     trade_authority: bool
     payload: dict[str, Any]
+    timeframe: str | None = None
+    data_as_of: str | None = None
+    provider_timestamp: str | None = None
+    consumers: tuple[str, ...] = ()
 
 
 class SignaContextStore:
@@ -53,10 +60,15 @@ class SignaContextStore:
                     candidate_key TEXT NOT NULL UNIQUE,
                     observation_only INTEGER NOT NULL,
                     trade_authority INTEGER NOT NULL,
-                    payload_json TEXT NOT NULL
+                    payload_json TEXT NOT NULL,
+                    timeframe TEXT,
+                    data_as_of TEXT,
+                    provider_timestamp TEXT,
+                    consumers_json TEXT NOT NULL DEFAULT '[]'
                 )
                 """
             )
+            self._migrate_columns(conn)
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_options_signa_context_symbol "
                 "ON options_signa_context (ticker, timestamp, id)"
@@ -64,6 +76,10 @@ class SignaContextStore:
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_options_signa_context_source "
                 "ON options_signa_context (source, timestamp, id)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_options_signa_context_provider_key "
+                "ON options_signa_context (ticker, source, endpoint, timeframe, data_as_of, provider_timestamp)"
             )
 
     def record(self, payload: dict[str, Any], *, timestamp: datetime | None = None) -> int:
@@ -73,8 +89,9 @@ class SignaContextStore:
                 """
                 INSERT OR IGNORE INTO options_signa_context (
                     timestamp, ticker, source, endpoint, direction, status,
-                    candidate_key, observation_only, trade_authority, payload_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    candidate_key, observation_only, trade_authority, payload_json,
+                    timeframe, data_as_of, provider_timestamp, consumers_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     row["timestamp"],
@@ -87,6 +104,10 @@ class SignaContextStore:
                     1,
                     0,
                     json.dumps(row, sort_keys=True, separators=(",", ":")),
+                    row.get("timeframe"),
+                    row.get("data_as_of"),
+                    row.get("provider_timestamp"),
+                    json.dumps(row.get("consumers", []), sort_keys=True, separators=(",", ":")),
                 ),
             )
             if cursor.lastrowid:
@@ -114,7 +135,8 @@ class SignaContextStore:
         with self._connect() as conn:
             rows = conn.execute(
                 "SELECT id, timestamp, ticker, source, endpoint, direction, status, "
-                "candidate_key, observation_only, trade_authority, payload_json "
+                "candidate_key, observation_only, trade_authority, payload_json, "
+                "timeframe, data_as_of, provider_timestamp, consumers_json "
                 f"FROM options_signa_context{where} ORDER BY id DESC LIMIT ?",
                 (*params, bounded),
             ).fetchall()
@@ -129,30 +151,44 @@ class SignaContextStore:
         if ticker is not None:
             row["ticker"] = str(ticker).upper().strip() or None
         row["source"] = str(row.get("source") or "manual").strip() or "manual"
-        row["endpoint"] = row.get("endpoint")
-        row["direction"] = row.get("direction")
+        row["endpoint"] = _none_if_blank(row.get("endpoint"))
+        row["direction"] = _none_if_blank(row.get("direction"))
         row["status"] = str(row.get("status") or "SIGNA_CONTEXT").upper()
         row["timestamp"] = str(row.get("timestamp") or stamp)
+        row["timeframe"] = _none_if_blank(row.get("timeframe") or row.get("tf"))
+        row["data_as_of"] = _none_if_blank(row.get("data_as_of") or row.get("as_of"))
+        row["provider_timestamp"] = _none_if_blank(
+            row.get("provider_timestamp")
+            or row.get("provider_ts")
+            or row.get("server_time")
+            or row.get("source_timestamp")
+        )
+        row["consumers"] = _normalize_consumers(row.get("consumers"), row.get("ticker"))
         row["observation_only"] = True
         row["trade_authority"] = False
         row["candidate_key"] = str(row.get("candidate_key") or self._candidate_key(row))
         return row
 
     def _candidate_key(self, row: dict[str, Any]) -> str:
+        # Shared provider-cache identity. This intentionally omits retrieved_at
+        # and local timestamp so the same provider snapshot pulled by options
+        # and futures is stored once.
+        provider_marker = row.get("data_as_of") or row.get("provider_timestamp")
+        if provider_marker is None:
+            provider_marker = _stable_payload_hash(row)
         basis = {
             "ticker": row.get("ticker"),
             "source": row.get("source"),
             "endpoint": row.get("endpoint"),
-            "direction": row.get("direction"),
-            "status": row.get("status"),
-            "timestamp": row.get("timestamp"),
-            "payload": row,
+            "timeframe": row.get("timeframe"),
+            "provider_marker": provider_marker,
         }
         blob = json.dumps(basis, sort_keys=True, separators=(",", ":"), default=str).encode()
         return hashlib.sha256(blob).hexdigest()[:24]
 
     def _stored_from_row(self, row: sqlite3.Row) -> StoredSignaContext:
         payload = json.loads(row[10])
+        consumers = tuple(json.loads(row[14] or "[]"))
         return StoredSignaContext(
             id=int(row[0]),
             timestamp=str(row[1]),
@@ -165,9 +201,53 @@ class SignaContextStore:
             observation_only=bool(row[8]),
             trade_authority=bool(row[9]),
             payload=payload,
+            timeframe=row[11],
+            data_as_of=row[12],
+            provider_timestamp=row[13],
+            consumers=consumers,
         )
+
+    def _migrate_columns(self, conn: sqlite3.Connection) -> None:
+        existing = {row[1] for row in conn.execute("PRAGMA table_info(options_signa_context)")}
+        migrations = {
+            "timeframe": "ALTER TABLE options_signa_context ADD COLUMN timeframe TEXT",
+            "data_as_of": "ALTER TABLE options_signa_context ADD COLUMN data_as_of TEXT",
+            "provider_timestamp": "ALTER TABLE options_signa_context ADD COLUMN provider_timestamp TEXT",
+            "consumers_json": "ALTER TABLE options_signa_context ADD COLUMN consumers_json TEXT NOT NULL DEFAULT '[]'",
+        }
+        for column, sql in migrations.items():
+            if column not in existing:
+                conn.execute(sql)
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.path)
         conn.row_factory = sqlite3.Row
         return conn
+
+
+def _none_if_blank(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _normalize_consumers(value: Any, ticker: Any) -> list[str]:
+    if isinstance(value, str):
+        raw = [part.strip() for part in value.split(",")]
+    elif isinstance(value, (list, tuple, set)):
+        raw = [str(part).strip() for part in value]
+    else:
+        raw = []
+    consumers = {item for item in raw if item}
+    consumers.add("options")
+    if ticker and str(ticker).upper().strip() in SHARED_PROXY_SYMBOLS:
+        consumers.update({"shared_proxy", "futures"})
+    return sorted(consumers)
+
+
+def _stable_payload_hash(row: dict[str, Any]) -> str:
+    excluded = {"timestamp", "retrieved_at", "candidate_key", "consumers"}
+    stable = {key: value for key, value in row.items() if key not in excluded}
+    blob = json.dumps(stable, sort_keys=True, separators=(",", ":"), default=str).encode()
+    return hashlib.sha256(blob).hexdigest()[:24]

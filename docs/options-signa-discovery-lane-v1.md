@@ -195,9 +195,9 @@ Example request:
 ```
 
 Use this route to create a richer evidence inbox, not to approve trades. Signa-originated rows still require separate Strat setup, trigger, invalidation, target, contract quality, and risk validation before anything can become actionable.
-## Backlog: shared Signa context cache / dedupe policy
+## Shared Signa context cache / dedupe policy
 
-Do not pull duplicate Signa data separately for options and futures. Signa should become a shared read-only provider cache with options and futures as consumers.
+Signa context is now stored as a shared read-only provider cache. Do not pull duplicate Signa data separately for options and futures. Options and future futures-context consumers should reuse the same `options_signa_context` provider row.
 
 Shared proxy symbols:
 
@@ -210,11 +210,26 @@ Shared proxy symbols:
 - GLD for gold/metals context.
 - USO and XLE for crude/energy context.
 
-The dedupe identity should be provider/source based, not lane based:
+The dedupe identity is provider/source based, not lane based:
 
 ```text
 symbol + source/endpoint + timeframe + data_as_of/provider_timestamp
 ```
 
-A shared row may be tagged with consumers such as `options`, `futures`, or `shared_proxy`, but the provider pull should happen once. This remains observation-only and must not grant trade, risk, broker, order, or execution authority.
+If Signa does not supply `data_as_of` or a provider timestamp, storage falls back to a stable payload hash that excludes local `retrieved_at` and local insertion time. Repeated pulls of the same snapshot therefore resolve to the same `candidate_key` instead of creating duplicate rows.
+
+Rows are tagged with consumers:
+
+- ordinary symbols: `options`
+- shared proxy symbols: `options`, `shared_proxy`, `futures`
+
+`POST /signa/context/pull` can include the shared proxy list by setting:
+
+```json
+{
+  "include_shared_proxies": true
+}
+```
+
+This remains observation-only and does not grant trade, risk, broker, order, or execution authority. The `futures` consumer tag is metadata only; no futures runtime is wired by this branch.
 

@@ -140,3 +140,57 @@ def test_direct_signa_pull_requires_key(tmp_path):
     client = TestClient(app)
     response = client.post("/signa/context/pull", json={"symbols": ["SPY"]})
     assert response.status_code == 503
+
+
+def test_context_store_dedupes_shared_provider_snapshot_across_consumers(tmp_path):
+    store = SignaContextStore(tmp_path / "ctx.sqlite")
+    first = store.record({
+        "ticker": "SPY",
+        "source": "action_card",
+        "endpoint": "/api/v1/signals/SPY",
+        "timeframe": "1d",
+        "data_as_of": "2026-09-20T00:00:00Z",
+        "retrieved_at": "2026-09-20T13:00:00Z",
+        "direction": "LONG",
+    })
+    second = store.record({
+        "ticker": "SPY",
+        "source": "action_card",
+        "endpoint": "/api/v1/signals/SPY",
+        "timeframe": "1d",
+        "data_as_of": "2026-09-20T00:00:00Z",
+        "retrieved_at": "2026-09-20T13:05:00Z",
+        "direction": "LONG",
+    })
+    latest = store.latest(limit=10, ticker="SPY")
+    assert second == first
+    assert len(latest) == 1
+    assert latest[0].timeframe == "1d"
+    assert latest[0].data_as_of == "2026-09-20T00:00:00Z"
+    assert set(latest[0].consumers) == {"options", "shared_proxy", "futures"}
+    assert latest[0].trade_authority is False
+
+
+def test_context_store_records_new_provider_snapshot_when_data_changes(tmp_path):
+    store = SignaContextStore(tmp_path / "ctx.sqlite")
+    a = store.record({
+        "ticker": "NVDA",
+        "source": "enhanced_signal",
+        "endpoint": "/api/v1/enhanced-signal",
+        "timeframe": "1d",
+        "data_as_of": "2026-09-20T00:00:00Z",
+        "score": 70,
+    })
+    b = store.record({
+        "ticker": "NVDA",
+        "source": "enhanced_signal",
+        "endpoint": "/api/v1/enhanced-signal",
+        "timeframe": "1d",
+        "data_as_of": "2026-09-21T00:00:00Z",
+        "score": 72,
+    })
+    latest = store.latest(limit=10, ticker="NVDA")
+    assert a != b
+    assert len(latest) == 2
+    assert {item.data_as_of for item in latest} == {"2026-09-20T00:00:00Z", "2026-09-21T00:00:00Z"}
+    assert all(item.consumers == ("options",) for item in latest)

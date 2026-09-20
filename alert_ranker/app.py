@@ -42,7 +42,7 @@ from .rh_options import (
 from .lifecycle import classify_candidate
 from .scanner import OptionsScanner
 from .storage import ScanStorage
-from .signa_context_store import SignaContextStore
+from .signa_context_store import SHARED_PROXY_SYMBOLS, SignaContextStore
 from sources.signa_discovery import (
     SignaDiscoveryClient,
     manual_context_record,
@@ -229,6 +229,9 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
             symbols = [str(item).strip().upper() for item in raw_symbols if str(item).strip()]
         else:
             raise HTTPException(status_code=422, detail="symbols_must_be_string_or_list")
+        if body.get("include_shared_proxies"):
+            merged = list(dict.fromkeys([*symbols, *sorted(SHARED_PROXY_SYMBOLS)]))
+            symbols = merged
         symbols = symbols[:20]
         if not symbols:
             raise HTTPException(status_code=422, detail="symbols_required")
