@@ -16,6 +16,10 @@ from pathlib import Path
 from typing import Any
 
 SHARED_PROXY_SYMBOLS = {"SPY", "QQQ", "IWM", "DIA", "VIX", "SVXY", "UVXY", "TLT", "GLD", "USO", "XLE"}
+EXPECTED_TICKER_SOURCES = ("scan", "action_card", "enhanced_signal", "options_flow", "dark_pool")
+EXPECTED_MARKET_SOURCES = ("market_tide", "signal_index")
+GOOD_CONTEXT_STATUSES = {"SIGNA_CONTEXT", "SIGNA_CANDIDATE"}
+
 
 
 @dataclass(frozen=True)
@@ -158,11 +162,14 @@ class SignaContextStore:
         for symbol in symbols:
             seen_sources: set[str] = set()
             rows: list[dict[str, Any]] = []
-            for item in self.latest(limit=50, ticker=symbol):
+            items = self.latest(limit=50, ticker=symbol)
+            fallback_by_key = self._good_fallbacks(items)
+            for item in items:
                 if item.source in seen_sources:
                     continue
                 seen_sources.add(item.source)
-                rows.append(self._summary(item))
+                key = (item.ticker or "MARKET", item.source)
+                rows.append(self._summary(item, fallback=fallback_by_key.get(key)))
                 if len(rows) >= bounded:
                     break
             out[symbol] = rows
@@ -172,15 +179,23 @@ class SignaContextStore:
         return self.context_for_tickers([ticker], limit_per_ticker=limit).get(ticker.upper(), [])
 
     def board(self, *, limit: int = 200) -> list[dict[str, Any]]:
-        """Latest context-only board grouped by ticker and source."""
+        """Latest context-only board grouped by ticker and source.
+
+        Partial Signa failures remain visible. If the newest row for a
+        ticker/source is an error but an older good row exists, the board keeps
+        the error status and marks the displayed fields as a stale fallback.
+        """
         grouped: dict[str, dict[str, Any]] = {}
-        for item in self.latest(limit=limit):
+        items = self.latest(limit=limit)
+        fallback_by_key = self._good_fallbacks(items)
+        for item in items:
             ticker = item.ticker or "MARKET"
             entry = grouped.setdefault(
                 ticker,
                 {
                     "ticker": ticker,
                     "context_only": True,
+                    "observation_only": True,
                     "trade_authority": False,
                     "consumers": set(),
                     "sources": {},
@@ -189,27 +204,45 @@ class SignaContextStore:
             entry["consumers"].update(item.consumers)
             if item.source in entry["sources"]:
                 continue
-            entry["sources"][item.source] = {
-                "timestamp": item.timestamp,
-                "status": item.status,
-                "direction": item.direction,
-                "endpoint": item.endpoint,
-                "timeframe": item.timeframe,
-                "data_as_of": item.data_as_of,
-                "provider_timestamp": item.provider_timestamp,
-                "candidate_key": item.candidate_key,
-                "payload_summary": item.payload.get("raw_summary", {}),
-            }
+            key = (ticker, item.source)
+            entry["sources"][item.source] = self._summary(
+                item, fallback=fallback_by_key.get(key)
+            )
         out: list[dict[str, Any]] = []
         for entry in grouped.values():
             entry["consumers"] = sorted(entry["consumers"])
+            expected = EXPECTED_MARKET_SOURCES if entry["ticker"] == "MARKET" else EXPECTED_TICKER_SOURCES
+            present = set(entry["sources"])
+            entry["expected_sources"] = list(expected)
+            entry["missing_sources"] = [source for source in expected if source not in present]
+            entry["error_sources"] = [
+                source for source, data in entry["sources"].items() if data.get("healthy") is False
+            ]
+            entry["stale_sources"] = [
+                source for source, data in entry["sources"].items() if data.get("stale_fallback") is True
+            ]
             out.append(entry)
         return sorted(out, key=lambda row: row["ticker"])
 
-    def _summary(self, item: StoredSignaContext) -> dict[str, Any]:
+    def _good_fallbacks(self, items: list[StoredSignaContext]) -> dict[tuple[str, str], StoredSignaContext]:
+        fallback: dict[tuple[str, str], StoredSignaContext] = {}
+        for item in items:
+            if not _is_good_context(item):
+                continue
+            key = (item.ticker or "MARKET", item.source)
+            fallback.setdefault(key, item)
+        return fallback
+
+    def _summary(
+        self,
+        item: StoredSignaContext,
+        *,
+        fallback: StoredSignaContext | None = None,
+    ) -> dict[str, Any]:
         payload = item.payload
+        source_payload = fallback.payload if fallback is not None and not _is_good_context(item) else payload
         fields = {
-            key: payload[key]
+            key: source_payload[key]
             for key in (
                 "grade", "score", "confidence", "sentiment", "count",
                 "callPremium", "putPremium", "totalPremium", "netPremium",
@@ -218,12 +251,26 @@ class SignaContextStore:
                 "support", "resistance", "call_pct", "put_pct", "row_count",
                 "signal", "trade_count", "buy_count", "sell_count",
             )
-            if key in payload
+            if key in source_payload
         }
-        return {
+        error = payload.get("error")
+        http_status = payload.get("http_status")
+        request_ok = payload.get("request_ok")
+        cached = bool(payload.get("cached"))
+        backoff_active = bool(payload.get("backoff_active"))
+        healthy = _is_good_context(item) and request_ok is not False
+        if error is not None:
+            fields["error"] = error
+        if http_status is not None:
+            fields["http_status"] = http_status
+        if cached:
+            fields["cached"] = True
+        if backoff_active:
+            fields["backoff_active"] = True
+        summary = {
             "source": item.source,
             "status": item.status,
-            "direction": item.direction,
+            "direction": fallback.direction if fallback is not None and not healthy else item.direction,
             "timestamp": item.timestamp,
             "endpoint": item.endpoint,
             "timeframe": item.timeframe,
@@ -233,9 +280,21 @@ class SignaContextStore:
             "context_only": True,
             "observation_only": True,
             "trade_authority": False,
+            "healthy": healthy,
+            "error": error,
+            "http_status": http_status,
+            "request_ok": request_ok,
+            "cached": cached,
+            "backoff_active": backoff_active,
+            "stale_fallback": fallback is not None and not healthy,
             "consumers": list(item.consumers),
             "fields": fields,
         }
+        if fallback is not None and not healthy:
+            summary["fallback_timestamp"] = fallback.timestamp
+            summary["fallback_data_as_of"] = fallback.data_as_of
+            summary["fallback_candidate_key"] = fallback.candidate_key
+        return summary
 
     def _normalized_payload(self, payload: dict[str, Any], *, timestamp: datetime | None = None) -> dict[str, Any]:
         if not isinstance(payload, dict):
@@ -318,6 +377,14 @@ class SignaContextStore:
         conn = sqlite3.connect(self.path)
         conn.row_factory = sqlite3.Row
         return conn
+
+
+def _is_good_context(item: StoredSignaContext) -> bool:
+    if item.status not in GOOD_CONTEXT_STATUSES:
+        return False
+    if item.payload.get("request_ok") is False:
+        return False
+    return True
 
 
 def _none_if_blank(value: Any) -> str | None:

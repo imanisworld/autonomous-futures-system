@@ -325,3 +325,34 @@ Behavior:
 - it writes raw responses to `signa_snapshots` before options-specific rows go to `options_signa_context`;
 - rows remain `context_only`, `observation_only`, and `trade_authority=false`;
 - it does not create Discord alerts, setup candidates, contract selections, risk approvals, orders, or executions.
+
+## Partial failure and stale context display
+
+Signa endpoint failures are now represented explicitly instead of being hidden by older rows.
+
+When a pull fails for a ticker/source, the context row is stored with:
+
+```text
+status=SIGNA_CONTEXT_ERROR
+request_ok=false
+error=<provider or HTTP error>
+trade_authority=false
+```
+
+The board/report keeps the latest error visible. If an older successful row exists for the same ticker/source, the display may carry its fields as a stale fallback, but it marks:
+
+```text
+healthy=false
+stale_fallback=true
+```
+
+Grouped board rows now also expose:
+
+```text
+expected_sources
+missing_sources
+error_sources
+stale_sources
+```
+
+This prevents a ticker from looking complete when, for example, `dark_pool` failed or `enhanced_signal` timed out. These labels are presentation/evidence only; they do not affect scanner score, alert eligibility, contract choice, risk, or execution.

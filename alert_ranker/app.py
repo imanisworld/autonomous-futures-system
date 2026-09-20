@@ -922,10 +922,14 @@ def _render_scanner_dashboard() -> str:
 
     function signaSetupContextText(context) {
       const rows = context || [];
-      if (!rows.length) return 'Context only: none';
-      return 'Context only: ' + rows.slice(0, 3).map(row => {
+      if (!rows.length) return 'Context only: missing';
+      return 'Context only: ' + rows.slice(0, 4).map(row => {
         const fields = row.fields || {};
         const extras = [];
+        if (row.healthy === false) extras.push(row.error ? 'ERROR ' + row.error : 'ERROR');
+        if (row.backoff_active || fields.backoff_active) extras.push('backoff');
+        if (row.cached || fields.cached) extras.push('cached');
+        if (row.stale_fallback) extras.push('STALE fallback');
         if (row.direction) extras.push(row.direction);
         if (fields.score !== undefined) extras.push('score ' + fields.score);
         if (fields.sentiment !== undefined) extras.push(fields.sentiment);
@@ -934,6 +938,7 @@ def _render_scanner_dashboard() -> str:
         if (fields.flip !== undefined) extras.push('flip ' + fields.flip);
         if (fields.gamma_wall !== undefined) extras.push('wall ' + fields.gamma_wall);
         if (fields.gammaWall !== undefined) extras.push('wall ' + fields.gammaWall);
+        if (fields.http_status !== undefined) extras.push('HTTP ' + fields.http_status);
         const suffix = extras.length ? ' (' + extras.join(', ') + ')' : '';
         return row.source + suffix;
       }).join(' · ');
