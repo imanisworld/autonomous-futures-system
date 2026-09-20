@@ -358,7 +358,7 @@ def futures_discord_payload(
         if isinstance(item, dict) and not str(item.get("name") or "").startswith("options ")
     ] if isinstance(census.get("collectors"), list) else []
     statuses = [(item, _effective_status(item, session_end=end)[0]) for item in collectors]
-    healthy = {"FRESH", "FRESH_AT_CLOSE", "QUIET_BY_DESIGN"}
+    healthy = {"FRESH", "FRESH_AT_CLOSE", "QUIET_BY_DESIGN", "OFF_SESSION"}
     attention = [(item, status) for item, status in statuses if status not in healthy]
     health_counts = Counter(status for _, status in statuses)
     health = " · ".join(f"{count} {_display_name(status).lower()}" for status, count in sorted(health_counts.items()))
