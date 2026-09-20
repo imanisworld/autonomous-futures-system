@@ -92,48 +92,122 @@ def build_discord_payload(result: ScoreResult) -> dict[str, Any]:
     iv_label = "unknown"
     if isinstance(iv_rank, (int, float)):
         iv_label = "cheap" if iv_rank < 30 else "neutral" if iv_rank <= 50 else "expensive"
-    direction = "LONG (calls)" if result.direction == "LONG" else "SHORT (puts)"
     side = "CALL" if result.direction == "LONG" else "PUT"
     state = _alert_state(result)
-    color = 3066993 if result.direction == "LONG" else 15158332
-    fields = [
-        {"name": "Direction", "value": direction, "inline": True},
-        {"name": "Scanner Score", "value": f"{result.score}/10", "inline": True},
-        {"name": "Pattern", "value": result.pattern or "N/A", "inline": True},
-        {"name": "Strat Combo", "value": _strat_combo_text(result), "inline": True},
-        {"name": "Timeframe", "value": _timeframe_text(result), "inline": True},
-        {"name": "FTFC", "value": _ftfc_text(result), "inline": True},
-        {"name": "Watch Contract", "value": _contract_text(result, side), "inline": True},
-        {"name": "Spot Price", "value": _money_text(raw.get("price")), "inline": True},
-        {"name": "Stop Level", "value": _money_text(raw.get("stop") or raw.get("stop_level")), "inline": True},
-        {"name": "Target 1", "value": _money_text(raw.get("target_1") or raw.get("target")), "inline": True},
-        {"name": "Target 2", "value": _money_text(raw.get("target_2")), "inline": True},
-        {"name": "Volume", "value": _ratio_text(volume_ratio), "inline": True},
-        {"name": "IV Rank", "value": _iv_text(iv_rank, iv_label), "inline": True},
-        {"name": "Premium Value", "value": _premium_value_text(result), "inline": True},
+    color = 0x57F287 if result.direction == "LONG" else 0xED4245
+
+    setup_status = "Watching"
+    if state == "forming":
+        setup_status = "Forming"
+    elif state in {"confirmed", "golden"}:
+        setup_status = "Triggered"
+    title = "Options · SETUP " + setup_status.upper()
+
+    fields: list[dict[str, Any]] = [
+        {"name": "Status", "value": _status_text(result, side, state), "inline": False},
+        {"name": "Setup", "value": _setup_card_text(result), "inline": True},
+        {"name": "Context", "value": _context_card_text(result, session), "inline": True},
+        {"name": "Contract", "value": _contract_card_text(result, side), "inline": True},
+        {"name": "Levels", "value": _levels_card_text(result), "inline": True},
+        {"name": "Liquidity / value", "value": _liquidity_card_text(result, volume_ratio, iv_rank, iv_label), "inline": True},
         {"name": "Signa Context", "value": _signa_text(result), "inline": True},
-        {"name": "VWAP", "value": _pass_fail(result.components.get("vwap")), "inline": True},
-        {"name": "Trend", "value": _pass_fail(result.components.get("trend")), "inline": True},
         {"name": "Why", "value": _why_text(result, session), "inline": False},
-        {"name": "Context", "value": _edge_text(result), "inline": False},
         {"name": "Risk", "value": _risk_text(result), "inline": False},
     ]
+    if _mechanically_triggered(result):
+        fields.insert(8, {"name": "Trade authority", "value": "Mechanical setup TRIGGERED · still requires contract/risk validation before action", "inline": False})
+    else:
+        fields.insert(8, {"name": "Trade authority", "value": "WAIT · observational only · no entry permission", "inline": False})
+
+    fields = [field for field in fields if field["value"] != "N/A"]
+    for field in fields:
+        field["value"] = _discord_field_text(field["value"])
     return {
+        "allowed_mentions": {"parse": []},
         "embeds": [
             {
-                "title": _alert_title(result, side, state),
-                "description": _alert_description(result, side, state),
+                "title": title,
+                "description": f"{result.ticker} · {side} · {setup_status}",
                 "color": color,
-                "fields": [field for field in fields if field["value"] != "N/A"],
+                "fields": fields,
                 "footer": {
-                    "text": (
-                        "Signal Engine - "
-                        f"{session} - Advisory only, independent research required"
-                    )
+                    "text": "READ ONLY · Options advisory · No scanner/Signa-driven execution"
                 },
             }
-        ]
+        ],
     }
+
+
+def _discord_field_text(value: Any, limit: int = 900) -> str:
+    text = str(value or "")
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 34)] + "\n… Full detail in scanner evidence."
+
+
+def _status_text(result: ScoreResult, side: str, state: str) -> str:
+    if state in {"forming", "watching"}:
+        label = "FORMING" if state == "forming" else "WATCHING"
+        return f"**{label}** · no entry permission\nScanner score **{result.score}/10** · {result.ticker} {side}"
+    label = "MECHANICAL SETUP TRIGGERED" if state == "golden" else "SETUP TRIGGERED"
+    return f"**{label}**\nScanner score **{result.score}/10** · {result.ticker} {side}"
+
+
+def _setup_card_text(result: ScoreResult) -> str:
+    lines = []
+    if result.pattern:
+        lines.append(result.pattern)
+    combo = _strat_combo_text(result)
+    if combo != "N/A":
+        lines.append(f"Strat {combo}")
+    tf = _timeframe_text(result)
+    if tf != "N/A":
+        lines.append(f"Timeframe {tf}")
+    ftfc = _ftfc_text(result)
+    if ftfc != "N/A":
+        lines.append(f"FTFC {ftfc}")
+    return "\n".join(lines) if lines else "No setup metadata"
+
+
+def _context_card_text(result: ScoreResult, session: str) -> str:
+    raw = result.raw
+    pieces = [f"Session {session}"]
+    if raw.get("price") is not None:
+        pieces.append(f"Spot {_money_text(raw.get('price'))}")
+    pieces.append(f"VWAP {_pass_fail(result.components.get('vwap'))}")
+    pieces.append(f"Trend {_pass_fail(result.components.get('trend'))}")
+    return "\n".join(pieces)
+
+
+def _contract_card_text(result: ScoreResult, side: str) -> str:
+    return _contract_text(result, side)
+
+
+def _levels_card_text(result: ScoreResult) -> str:
+    raw = result.raw
+    lines = []
+    stop = _money_text(raw.get("stop") or raw.get("stop_level"))
+    target_1 = _money_text(raw.get("target_1") or raw.get("target"))
+    target_2 = _money_text(raw.get("target_2"))
+    if stop != "N/A":
+        lines.append(f"Stop {stop}")
+    if target_1 != "N/A":
+        lines.append(f"Target 1 {target_1}")
+    if target_2 != "N/A":
+        lines.append(f"Target 2 {target_2}")
+    return "\n".join(lines) if lines else "No levels supplied"
+
+
+def _liquidity_card_text(result: ScoreResult, volume_ratio: Any, iv_rank: Any, iv_label: str) -> str:
+    lines = []
+    volume = _ratio_text(volume_ratio)
+    if volume != "N/A":
+        lines.append(f"Volume {volume}")
+    lines.append(f"IV {_iv_text(iv_rank, iv_label)}")
+    premium = _premium_value_text(result)
+    if premium != "N/A":
+        lines.append(f"Premium {premium}")
+    return "\n".join(lines) if lines else "No liquidity/value metadata"
 
 
 def _trade_proof_block_reason(result: ScoreResult) -> str:
