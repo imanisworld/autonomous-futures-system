@@ -3,20 +3,64 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="AFSVP — automated futures system research and paper-trading infrastructure.">
+  <meta name="description" content="AFSVP — Phase 1 advisory, monitoring, replay, and paper/demo research infrastructure for futures and options systems.">
   <title>AFSVP</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
   <main>
     <section class="hero">
-      <div class="kicker">Automated Futures System</div>
+      <div class="kicker">Automated Futures System · Vantage Point</div>
       <h1>AFSVP</h1>
-      <p class="lead">Rule-driven futures research, monitoring, replay testing, and paper-trading infrastructure.</p>
-      <div class="card">
-        <strong>Current posture</strong>
-        <p>Research and paper/demo operation. No public brokerage or investment-advisory service is offered through this site.</p>
+      <p class="lead">Research, monitoring, replay testing, alert validation, and paper/demo infrastructure for rules-based trading systems.</p>
+      <div class="status-card">
+        <span class="status-pill">Phase 1</span>
+        <div>
+          <strong>Current posture: advisory and evidence collection only</strong>
+          <p>No public brokerage, investment-advisory, trade-execution, or order-submission service is offered through this site.</p>
+        </div>
       </div>
+    </section>
+
+    <section class="grid two">
+      <article class="card">
+        <h2>What this is</h2>
+        <p>AFSVP is private research and operator infrastructure for testing market-alert quality, paper/demo behavior, strategy evidence, and system reliability before any broader capability is trusted.</p>
+      </article>
+      <article class="card">
+        <h2>What this is not</h2>
+        <p>This site does not provide recommendations, accept trades, expose execution controls, offer brokerage access, or make any claim that a strategy is profitable or approved for live use.</p>
+      </article>
+    </section>
+
+    <section>
+      <h2>Operating boundary</h2>
+      <div class="matrix">
+        <div><span>Known defects</span><strong>Fix after verification</strong></div>
+        <div><span>Uncertain rules</span><strong>Measure before changing</strong></div>
+        <div><span>Unavailable data</span><strong>Marked blocked</strong></div>
+        <div><span>Unproven capability</span><strong>Not activated</strong></div>
+      </div>
+    </section>
+
+    <section class="grid three">
+      <article class="card accent">
+        <h2>Enabled</h2>
+        <p>Read-only public information, static policies, private operator monitoring, replay/audit evidence, and paper/demo research workflows.</p>
+      </article>
+      <article class="card warn">
+        <h2>Measured</h2>
+        <p>Strategy candidates, alert quality, feed freshness, paper/demo behavior, and evidence lanes are treated as data collection until proven.</p>
+      </article>
+      <article class="card stop">
+        <h2>Disabled</h2>
+        <p>Public order submission, visitor accounts, public trade forms, live broker controls, and unproven live/extended-hours capability remain off.</p>
+      </article>
+    </section>
+
+    <section class="card">
+      <h2>Public surface</h2>
+      <p>The public domain is intentionally static. Internal dashboards, credentials, journals, order controls, raw webhook payloads, and localhost application ports must remain private.</p>
     </section>
   </main>
   <footer>
