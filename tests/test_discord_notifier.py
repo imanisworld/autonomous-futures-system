@@ -113,8 +113,12 @@ def test_discord_notification_sends_paper_decision(config):
     assert result.sent is True
     assert sent["url"] == "https://discord.example/webhook"
     assert sent["headers"]["Content-Type"] == "application/json"
-    assert "Vantage Point paper decision: TRADE" in sent["body"]["content"]
-    assert "MNQ" in sent["body"]["content"]
+    assert sent["body"]["allowed_mentions"] == {"parse": []}
+    card = sent["body"]["embeds"][0]
+    assert card["title"] == "Futures · Paper decision"
+    assert any(field["name"] == "Decision" and "TRADE" in field["value"] for field in card["fields"])
+    assert "MNQ" in card["description"]
+    assert card["footer"]["text"] == "READ ONLY · Paper decision · No Discord-driven execution"
 
 
 def test_smoke_test_payload_is_synthetic_paper_decision():

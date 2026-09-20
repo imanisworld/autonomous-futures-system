@@ -161,21 +161,26 @@ def evaluate_health(checks: dict) -> dict:
 
 def format_digest(verdict: dict, checks: dict, *, day_iso: str) -> str:
     icon = {"OK": "\U0001F7E2", "WARN": "\U0001F7E1", "ALERT": "\U0001F534"}[verdict["status"]]
-    if verdict["status"] == "OK":
-        head = f"{icon} **Box health — {day_iso}: OK**"
-    else:
-        head = f"{icon} **Box health — {day_iso}: {verdict['status']}** — " + "; ".join(verdict["problems"])
-    detail = (
-        f"service {'up' if checks.get('service_ok') else 'DOWN'} · "
-        f"auth {checks.get('auth_state') or '?'} · "
-        f"{'flat' if checks.get('position_flat') else 'position open' if checks.get('position_flat') is False else 'pos ?'} · "
-        f"errors {checks.get('errors_today', '?')} · "
-        f"disk {checks.get('disk_pct'):.0f}%" if isinstance(checks.get("disk_pct"), (int, float)) else "disk ?"
-    )
-    line = head + "\n" + detail
+    position = "flat" if checks.get("position_flat") else "position open" if checks.get("position_flat") is False else "position unknown"
+    disk = f"{checks.get('disk_pct'):.0f}%" if isinstance(checks.get("disk_pct"), (int, float)) else "unknown"
+    lines = [
+        f"{icon} **Box health · {day_iso}**",
+        "",
+        "**Status**",
+        verdict["status"],
+        "",
+        "**Runtime**",
+        f"Service {'up' if checks.get('service_ok') else 'DOWN'} · auth {checks.get('auth_state') or '?'} · {position}",
+        "",
+        "**Safety checks**",
+        f"Errors today {checks.get('errors_today', '?')} · disk {disk}",
+    ]
+    if verdict["problems"]:
+        lines.extend(["", "**Attention**", "\n".join(f"- {item}" for item in verdict["problems"])])
     if verdict["notes"]:
-        line += " · " + "; ".join(verdict["notes"])
-    return line
+        lines.extend(["", "**Notes**", "\n".join(f"- {item}" for item in verdict["notes"])])
+    lines.extend(["", "READ ONLY · Daily health check · No restart or execution action"])
+    return "\n".join(lines)
 
 
 # ── I/O (fail-soft) ────────────────────────────────────────────────────────
