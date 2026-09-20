@@ -14,6 +14,10 @@ A later presentation/read-only release was deployed after the Signa v2 runtime n
 
 The deployed delta from the prior futures release `ed1212b2552f0bfd990d4f4f80d2e05dd5c3d22c` to `c7798d4` is presentation/read-only/reporting only: standardized Discord operator cards, options scanner card formatting, read-only Signa storage reporting, public terms/privacy wording, and related tests/docs. No files changed under `execution/`, `risk/`, `risk_rules`, broker routes, `webhook/runner`, `strategy/`, `config/`, or journal runtime paths. No strategy, risk, order, broker, or collector logic was changed by this deploy. The installed server drift gate remains `/root/bin/afs-drift-gate.sh`, matching `scripts/afs-server-drift-gate.sh`; it was not replaced by the non-server drift script.
 
+## Backlog / not active — Market Hours v2
+
+Nasdaq/NYSE extended-equity-session changes are now a tracked infrastructure backlog item, not an active strategy change. The next safe step is spec-only: centralize market-hours/session labeling, keep RTH as the default authority, separate overnight/premarket/after-hours evidence cohorts, suppress alerts outside explicitly approved sessions, and require provider/liquidity/slippage proof before any overnight equity session can influence alerts, scoring, risk, or entries. No runtime change, futures rule change, risk change, order change, or deploy is authorized by this backlog item.
+
 ## Verified deployed runtime
 
 Previous Signa v2 deployment proof before the later operator-message deploy:

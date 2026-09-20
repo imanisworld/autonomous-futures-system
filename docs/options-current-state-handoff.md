@@ -379,7 +379,9 @@ The pre-Monday host/reboot audit is complete. This was maintenance and verificat
 
 ## Next action
 
-There are now four separate evidence tracks and they must not be conflated:
+There are now four separate evidence tracks and one infrastructure backlog item; they must not be conflated:
+
+**Backlog / not active:** Market Hours v2 / Extended Equity Session Readiness. Nasdaq/NYSE extended-equity-session changes should be handled as calendar/session infrastructure first, not as a strategy signal. Spec-only next step: centralize session labels and market-hours rules, preserve RTH as the default authority, keep any overnight/pre-market/after-hours rows in separate observation-only cohorts, suppress alerts outside explicitly approved sessions, and require provider/liquidity/slippage proof before any overnight session can affect alerts, scoring, risk, or entries. No runtime change, scanner rule change, Signa authority change, or deploy is authorized by this backlog item.
 
 1. **Running V1 scanner:** selector-evidence/replay now runs on scanner release `1fc0ad9c97d6daca02905058b14123135605c769` because the Signa context scheduler enablement required a new options-scanner release pin. Continue natural V1 collection without tuning. Do not treat Signa context rows as trade authority. The next Signa-specific gate is first natural Monday RTH scheduled-pull proof.
 2. **1-2-2 prospective causal evidence:** epoch `122-IEX-E1` is now deployed/scheduled observation-only on release `36e73f1981850b66b043d849ce877c15bd1ab3e7`. Policy is frozen at 60s cadence, 120s IEX-trigger-to-selector capture limit, and delayed SIP reconciliation after 16 minutes. The next gate is the first natural RTH `ARMED -> IEX reversal -> selector capture <=120s -> production replay parity -> delayed SIP reconciliation` row. Do not tune after seeing outcomes. Strategy stop/target/runner remain unresolved, so this lane is not yet expectancy-capable.
