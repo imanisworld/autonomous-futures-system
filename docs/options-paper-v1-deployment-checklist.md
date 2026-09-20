@@ -161,9 +161,9 @@ Confirm the report reads the same smoke data without mutation and exposes:
 - setup/timeframe sample counts and uncertainty ranges;
 - all three friction views: recorded executable, fee stress, fee + 1c/share slippage stress.
 
-## Prospective selector-evidence v3 deployment — prepared, not deployed
+## Historical selector-evidence v3 deployment record — superseded by deployed V1 scanner
 
-This is a separate evidence-only service update; it is **not** a new strategy/policy cohort.
+This section records the pre-deployment candidate/proof for selector-evidence v3. It is **historical**, not a pending deployment task. The running V1 scanner now includes selector-evidence/replay capability; current release/status authority is `docs/options-current-state-handoff.md`. This evidence-only work did **not** create a new strategy/policy cohort.
 
 Prepared exact candidate: `5c14577cf2b71270bd714ee5b3b783bab4d7b12f` on `release/options-selector-evidence-v3` (tracked by #716).
 
