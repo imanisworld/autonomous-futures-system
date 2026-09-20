@@ -15,9 +15,12 @@ from datetime import datetime, timezone
 import os
 from typing import Any, Callable, Mapping, Protocol
 
-from integrations.webull_paper_config import load_webull_paper_config
+from integrations.webull_paper_config import (
+    WEBULL_SANDBOX_HOST,
+    load_webull_paper_config,
+)
 
-WEBULL_SANDBOX_TRADING_ENDPOINT = "api.sandbox.webull.com"
+WEBULL_SANDBOX_TRADING_ENDPOINT = WEBULL_SANDBOX_HOST
 WEBULL_REGION = "us"
 
 
@@ -110,7 +113,7 @@ def probe_webull_sandbox_accounts(
     """Perform one read-only account-list call against Webull sandbox.
 
     Refuses before SDK import/client creation unless Phase 0 config is
-    paper-only safe and WEBULL_API_ENABLED=true.
+    paper-only safe and WEBULL_SANDBOX_API_ENABLED=true.
     """
     source = os.environ if env is None else env
     now = observed_at or _utc_now()
@@ -118,13 +121,13 @@ def probe_webull_sandbox_accounts(
 
     if not config.paper_only_safe:
         return _blocked("phase0_config_invalid", now)
-    if not config.api_enabled:
+    if not config.sandbox_api_enabled:
         return _blocked("api_disabled", now)
     if not config.network_calls_allowed:
         return _blocked("network_not_allowed", now)
 
-    app_key = str(source.get("WEBULL_APP_KEY", "") or "").strip()
-    app_secret = str(source.get("WEBULL_APP_SECRET", "") or "").strip()
+    app_key = str(source.get("WEBULL_SANDBOX_APP_KEY", "") or "").strip()
+    app_secret = str(source.get("WEBULL_SANDBOX_APP_SECRET", "") or "").strip()
     factory = account_client_factory or _official_account_client
     try:
         account_client = factory(app_key, app_secret)

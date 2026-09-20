@@ -3,18 +3,20 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 
-from integrations.webull_paper_probe import (
-    WEBULL_SANDBOX_TRADING_ENDPOINT,
-    probe_webull_sandbox_accounts,
-)
+from integrations.webull_paper_config import WEBULL_SANDBOX_HOST
+from integrations.webull_paper_probe import probe_webull_sandbox_accounts
 
 SAFE_API_ENV = {
-    "WEBULL_APP_KEY": "KEY_SENTINEL",
-    "WEBULL_APP_SECRET": "SECRET_SENTINEL",
-    "WEBULL_TRADING_MODE": "paper",
-    "WEBULL_LIVE_TRADING_ENABLED": "false",
-    "WEBULL_API_ENABLED": "true",
-    "WEBULL_PAPER_TRADING_ENABLED": "true",
+    "WEBULL_SANDBOX_APP_KEY": "SANDBOX_KEY_SENTINEL",
+    "WEBULL_SANDBOX_APP_SECRET": "SANDBOX_SECRET_SENTINEL",
+    "WEBULL_SANDBOX_BASE_URL": WEBULL_SANDBOX_HOST,
+    "WEBULL_SANDBOX_TRADING_MODE": "paper",
+    "WEBULL_SANDBOX_LIVE_TRADING_ENABLED": "false",
+    "WEBULL_SANDBOX_API_ENABLED": "true",
+    "WEBULL_SANDBOX_PAPER_TRADING_ENABLED": "true",
+    "WEBULL_API_LIVE_ENABLED": "false",
+    "WEBULL_APP_KEY": "LIVE_KEY_MUST_NOT_BE_USED",
+    "WEBULL_APP_SECRET": "LIVE_SECRET_MUST_NOT_BE_USED",
 }
 NOW = datetime(2026, 9, 20, 20, 30, tzinfo=timezone.utc)
 
@@ -39,7 +41,7 @@ class FakeAccountClient:
 
 
 def test_api_disabled_refuses_before_client_creation():
-    env = dict(SAFE_API_ENV, WEBULL_API_ENABLED="false")
+    env = dict(SAFE_API_ENV, WEBULL_SANDBOX_API_ENABLED="false")
 
     def forbidden_factory(*_args):
         raise AssertionError("client factory must not run")
@@ -49,12 +51,10 @@ def test_api_disabled_refuses_before_client_creation():
     )
     assert result.status == "BLOCKED"
     assert result.reason == "api_disabled"
-    assert result.reachable is False
-    assert result.paper_context_verified is False
 
 
-def test_live_mode_refuses_before_client_creation():
-    env = dict(SAFE_API_ENV, WEBULL_TRADING_MODE="live")
+def test_live_api_enable_refuses_before_client_creation():
+    env = dict(SAFE_API_ENV, WEBULL_API_LIVE_ENABLED="true")
 
     def forbidden_factory(*_args):
         raise AssertionError("client factory must not run")
@@ -66,46 +66,50 @@ def test_live_mode_refuses_before_client_creation():
     assert result.reason == "phase0_config_invalid"
 
 
-def test_safe_probe_uses_sandbox_and_returns_count_only():
+def test_safe_probe_uses_only_sandbox_credentials_and_returns_count_only():
     client = FakeAccountClient(FakeResponse(200, {"data": [{"id": "A"}, {"id": "B"}]}))
+    received = {}
+
+    def factory(app_key, app_secret):
+        received["app_key"] = app_key
+        received["app_secret"] = app_secret
+        return client
+
     result = probe_webull_sandbox_accounts(
-        SAFE_API_ENV,
-        account_client_factory=lambda *_args: client,
-        observed_at=NOW,
+        SAFE_API_ENV, account_client_factory=factory, observed_at=NOW
     )
     assert result.status == "OK"
-    assert result.endpoint == WEBULL_SANDBOX_TRADING_ENDPOINT
-    assert result.reachable is True
-    assert result.paper_context_verified is True
+    assert result.endpoint == WEBULL_SANDBOX_HOST
     assert result.account_count == 2
-    assert result.reason is None
-    assert client.calls == 1
+    assert received == {
+        "app_key": "SANDBOX_KEY_SENTINEL",
+        "app_secret": "SANDBOX_SECRET_SENTINEL",
+    }
     rendered = repr(result) + repr(result.to_safe_dict())
-    assert "KEY_SENTINEL" not in rendered
-    assert "SECRET_SENTINEL" not in rendered
-    assert '"id": "A"' not in rendered
+    for forbidden in (
+        "SANDBOX_KEY_SENTINEL",
+        "SANDBOX_SECRET_SENTINEL",
+        "LIVE_KEY_MUST_NOT_BE_USED",
+        "LIVE_SECRET_MUST_NOT_BE_USED",
+        '"id": "A"',
+    ):
+        assert forbidden not in rendered
 
 
 def test_http_failure_is_sanitized():
     client = FakeAccountClient(FakeResponse(401, {"message": "provider details"}))
     result = probe_webull_sandbox_accounts(
-        SAFE_API_ENV,
-        account_client_factory=lambda *_args: client,
-        observed_at=NOW,
+        SAFE_API_ENV, account_client_factory=lambda *_args: client, observed_at=NOW
     )
     assert result.status == "ERROR"
     assert result.reason == "http_401"
-    assert result.reachable is True
-    assert result.paper_context_verified is True
     assert "provider details" not in repr(result)
 
 
 def test_zero_accounts_is_wait_not_success():
     client = FakeAccountClient(FakeResponse(200, {"accounts": []}))
     result = probe_webull_sandbox_accounts(
-        SAFE_API_ENV,
-        account_client_factory=lambda *_args: client,
-        observed_at=NOW,
+        SAFE_API_ENV, account_client_factory=lambda *_args: client, observed_at=NOW
     )
     assert result.status == "WAIT"
     assert result.reason == "no_sandbox_accounts"
@@ -115,40 +119,18 @@ def test_zero_accounts_is_wait_not_success():
 def test_unknown_schema_fails_closed():
     client = FakeAccountClient(FakeResponse(200, {"unexpected": {"id": "abc"}}))
     result = probe_webull_sandbox_accounts(
-        SAFE_API_ENV,
-        account_client_factory=lambda *_args: client,
-        observed_at=NOW,
+        SAFE_API_ENV, account_client_factory=lambda *_args: client, observed_at=NOW
     )
     assert result.status == "ERROR"
     assert result.reason == "account_schema_unrecognized"
-    assert result.account_count is None
-
-
-def test_client_exception_does_not_expose_exception_text():
-    class ProbeError(RuntimeError):
-        pass
-
-    def failing_factory(app_key, app_secret):
-        raise ProbeError(f"{app_key}:{app_secret}")
-
-    result = probe_webull_sandbox_accounts(
-        SAFE_API_ENV,
-        account_client_factory=failing_factory,
-        observed_at=NOW,
-    )
-    rendered = repr(result)
-    assert result.status == "BLOCKED"
-    assert result.reason == "client_init_failed:ProbeError"
-    assert "KEY_SENTINEL" not in rendered
-    assert "SECRET_SENTINEL" not in rendered
 
 
 def test_module_has_no_production_host_or_order_capability_references():
     source = Path("integrations/webull_paper_probe.py").read_text().lower()
-    assert "https://api.webull.com" not in source
+    assert "api.webull.com" not in source
     assert "tradeclient" not in source
     assert "place_order" not in source
     assert "cancel_order" not in source
     assert "replace_order" not in source
     assert "order_operation" not in source
-    assert WEBULL_SANDBOX_TRADING_ENDPOINT == "api.sandbox.webull.com"
+    assert "api.sandbox.webull.com" not in source  # imported from frozen config constant

@@ -47,21 +47,25 @@ The adapter must fail closed unless all required paper-only flags are explicitly
 Required variables:
 
 ```env
-WEBULL_APP_KEY=<present>
-WEBULL_APP_SECRET=<present>
-WEBULL_TRADING_MODE=paper
-WEBULL_LIVE_TRADING_ENABLED=false
-WEBULL_API_ENABLED=false
-WEBULL_PAPER_TRADING_ENABLED=true
+WEBULL_SANDBOX_APP_KEY=<present>
+WEBULL_SANDBOX_APP_SECRET=<present>
+WEBULL_SANDBOX_BASE_URL=api.sandbox.webull.com
+WEBULL_SANDBOX_TRADING_MODE=paper
+WEBULL_SANDBOX_LIVE_TRADING_ENABLED=false
+WEBULL_SANDBOX_API_ENABLED=false
+WEBULL_SANDBOX_PAPER_TRADING_ENABLED=true
+WEBULL_API_LIVE_ENABLED=false
 ```
 
 Interpretation:
 
-- `WEBULL_APP_KEY` and `WEBULL_APP_SECRET` may exist locally, but must never be logged, printed, committed, or copied into docs.
-- `WEBULL_TRADING_MODE` must equal `paper`.
-- `WEBULL_LIVE_TRADING_ENABLED` must equal `false`.
-- `WEBULL_API_ENABLED=false` is the default safe state. It allows configuration to exist without permitting calls.
-- `WEBULL_PAPER_TRADING_ENABLED=true` indicates the operator intends Webull to be a paper-only candidate, not an active submitter.
+- sandbox credentials use only `WEBULL_SANDBOX_APP_KEY` and `WEBULL_SANDBOX_APP_SECRET`; generic/live credentials must never satisfy the sandbox validator.
+- `WEBULL_SANDBOX_BASE_URL` must equal `api.sandbox.webull.com`.
+- `WEBULL_SANDBOX_TRADING_MODE` must equal `paper`.
+- `WEBULL_SANDBOX_LIVE_TRADING_ENABLED` must equal `false`.
+- `WEBULL_SANDBOX_API_ENABLED=false` is the default safe state.
+- `WEBULL_SANDBOX_PAPER_TRADING_ENABLED=true` marks the sandbox as the intended paper target.
+- `WEBULL_API_LIVE_ENABLED=false` is an independent live kill switch and is required even for sandbox probing.
 
 Any missing or unsafe value must produce a blocked state, not a fallback.
 
@@ -78,7 +82,7 @@ Implemented as a pure configuration validator in this follow-up phase:
 - no order objects;
 - secret values represented only as configured/not-configured booleans;
 - redacted summaries use `PRESENT_REDACTED` / `MISSING`;
-- default `WEBULL_API_ENABLED=false` means network calls remain blocked.
+- default `WEBULL_SANDBOX_API_ENABLED=false` means network calls remain blocked.
 
 This does not advance the system beyond Phase 0. Any read-only Webull probe still requires a separate reviewed PR.
 
@@ -250,12 +254,13 @@ DUPLICATE_MIRROR_BLOCKED
 
 Minimum test set:
 
-1. `WEBULL_TRADING_MODE=live` blocks before network call.
-2. `WEBULL_LIVE_TRADING_ENABLED=true` blocks before network call.
-3. missing app key blocks.
-4. missing app secret blocks.
-5. `WEBULL_API_ENABLED=false` blocks all network calls.
-6. `WEBULL_PAPER_TRADING_ENABLED=false` blocks mirror submit.
+1. `WEBULL_SANDBOX_TRADING_MODE=live` blocks before network call.
+2. `WEBULL_SANDBOX_LIVE_TRADING_ENABLED=true` blocks before network call.
+3. `WEBULL_API_LIVE_ENABLED=true` blocks before network call.
+4. missing sandbox app key blocks.
+5. missing sandbox app secret blocks.
+6. `WEBULL_SANDBOX_API_ENABLED=false` blocks all network calls.
+7. `WEBULL_SANDBOX_PAPER_TRADING_ENABLED=false` blocks mirror submit.
 7. missing stop blocks mirror object creation.
 8. duplicate `journal_trade_id` blocks duplicate mirror submission.
 9. broker-symbol mapping mismatch blocks.
@@ -280,8 +285,8 @@ redacted_order_id=<last4-or-hash-only>
 Forbidden logs:
 
 ```text
-WEBULL_APP_KEY
-WEBULL_APP_SECRET
+WEBULL_SANDBOX_APP_KEY
+WEBULL_SANDBOX_APP_SECRET
 access tokens
 refresh tokens
 full account numbers
@@ -307,24 +312,26 @@ Before any VPS deployment involving Webull:
 
 As of this spec:
 
-- local Webull credentials may be present;
-- desired local mode is paper;
-- Webull live trading must remain disabled;
-- Webull API calls are not approved;
-- no adapter exists;
+- separate sandbox credentials may be present;
+- sandbox host is fixed to `api.sandbox.webull.com`;
+- sandbox mode is paper;
+- live Webull API must remain disabled;
+- sandbox API calls remain disabled until the Phase 1 probe is explicitly run;
+- the Phase 1 adapter is read-only account-list only;
 - no order submission is approved;
 - Public is not the paper-trading path and should remain disabled unless under separate read-only audit.
 
 ## Safe next implementation after this spec
 
-The smallest safe code change, if explicitly approved later, is **Phase 0 config validation only**:
+The current next gate is **Phase 1 read-only sandbox connectivity proof**:
 
-- a pure config parser;
-- no Webull SDK import required;
-- no network;
-- no order objects;
+- sandbox credentials only;
+- fixed sandbox host only;
+- account-list GET only;
+- sanitized account count only;
+- no order-capable client;
 - no strategy/risk/execution path changes;
-- tests for fail-closed flags and secret redaction.
+- any ambiguity fails closed.
 
 Classification remains:
 
