@@ -478,9 +478,11 @@ def test_twin_search_ignores_origin_branches_with_different_content(evidence_rep
 
 def test_failed_twin_comparison_is_unproven_not_a_blocker(evidence_repo: Path, monkeypatch) -> None:
     _rebased_twin_repo(evidence_repo)
-    monkeypatch.setattr(gitutil, "_content_preserved", lambda root, tip, target, base_ref: (
-        False if target == base_ref else None
-    ))
+    main_tip = _sha(evidence_repo, "refs/remotes/origin/main")
+    monkeypatch.setattr(
+        gitutil, "_paths_equal",
+        lambda root, tip, target, changed: False if target == main_tip else None,
+    )
     row = _branch_report(evidence_repo)
     assert row["content_twin_origin_ref"] is None
     assert row["classification"] == "UNKNOWN"
