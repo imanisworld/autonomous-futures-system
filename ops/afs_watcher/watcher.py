@@ -2492,6 +2492,33 @@ def tick_once(state: dict) -> dict:
     return tick
 
 
+STARTUP_API_GRACE_SECONDS = 30
+STARTUP_API_POLL_SECONDS = 1
+
+
+def wait_for_status_api_ready(
+    *,
+    grace_seconds: float = STARTUP_API_GRACE_SECONDS,
+    poll_seconds: float = STARTUP_API_POLL_SECONDS,
+) -> bool:
+    """Bounded startup gate for the local futures status API.
+
+    systemd can report futures-bot active before uvicorn has bound port 8000.
+    Waiting here avoids manufacturing a false CRITICAL/BLOCKED first tick after
+    a sanctioned reboot/deploy. This never masks a persistent outage: once the
+    grace window expires, the normal tick runs and the existing fail-closed
+    status_api_unreachable finding is emitted unchanged.
+    """
+    deadline = time.monotonic() + max(0.0, float(grace_seconds))
+    while True:
+        payload, _err = http_get_json("/health", timeout=2)
+        if payload is not None and payload.get("ok") is True:
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(max(0.01, min(float(poll_seconds), deadline - time.monotonic())))
+
+
 def sleep_until_next_slot() -> None:
     now = time.time()
     slot = (int(now) // TICK_SECONDS + 1) * TICK_SECONDS + TICK_OFFSET
@@ -2518,6 +2545,14 @@ def main(argv: list[str]) -> int:
         return 3
     state = load_state()
     log(f"watcher start pid={os.getpid()} release={RELEASE_SHA[:12]} epoch={iso(EPOCH)} interim_at={iso(INTERIM_AT)} cadence={TICK_SECONDS}s state={STATE_DIR}")
+    if "--once" not in argv:
+        if wait_for_status_api_ready():
+            log("startup readiness: futures status API /health is ready")
+        else:
+            log(
+                f"WARN startup readiness: futures status API did not become ready "
+                f"within {STARTUP_API_GRACE_SECONDS}s; first tick will enforce normal fail-closed checks"
+            )
     if "--once" in argv:
         t = tick_once(state)
         print(json.dumps({"verdict": t["verdict"], "blocked": t["open_blockers"], "findings": [(x["level"], x["key"], x["summary"]) for x in t["findings"]]}, indent=1))

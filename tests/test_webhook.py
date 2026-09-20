@@ -2755,3 +2755,20 @@ def test_fastapi_alert_endpoint_accepts_good_secret_via_header(monkeypatch, tmp_
     )
     assert resp.status_code == 200
     assert resp.json()["ok"] is True
+
+
+
+
+def test_status_today_exposes_explicit_cumulative_pnl_alias(monkeypatch, tmp_path):
+    try:
+        from fastapi.testclient import TestClient
+        from webhook.app import app
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    _isolate_app_logs(monkeypatch, tmp_path)
+    payload = TestClient(app).get("/status/today").json()
+
+    assert "cumulative_realized_pnl_dollars" in payload
+    assert payload["cumulative_realized_pnl_dollars"] == payload["realized_pnl_dollars"]
+    assert "today_pnl_dollars" in payload

@@ -269,3 +269,49 @@ def test_main_sync_line_keeps_both_directions_of_a_divergence() -> None:
     assert behind == "BEHIND (ahead 0, behind 5)"
     unknown = _main_sync({"state": "UNKNOWN", "ahead": None, "behind": None, "reason": "rev-list failed"})
     assert unknown == "UNKNOWN (rev-list failed)"
+
+
+def test_verified_immutable_release_makes_git_preservation_not_applicable(tmp_path: Path, monkeypatch) -> None:
+    release = tmp_path / "release"
+    release.mkdir()
+    report = {
+        "ok": True,
+        "release_branch": "main",
+        "release_commit": "a" * 40,
+        "files_checked": 100,
+        "problems": [],
+    }
+    monkeypatch.setattr("ops.project_check.daily.verify_release", lambda repo_root: report)
+
+    hygiene = _repo_hygiene(release)
+
+    assert hygiene["mode"] == "immutable_release"
+    assert hygiene["repo_preservation_applicable"] is False
+    assert hygiene["unverified_enumerations"] == []
+    blockers = _overall_blockers(
+        hygiene=hygiene,
+        runtime={"live_box_drift": {"status": "ok"}, "risk_rules_load_error": None},
+        strategy_drift={"checked": True, "drift_findings": []},
+        trade_chain={"status": "PASS"},
+    )
+    assert not any(b["code"] == "REPO_PRESERVATION_UNVERIFIED" for b in blockers)
+
+
+def test_unverified_manifest_does_not_bypass_git_preservation_blocker(tmp_path: Path, monkeypatch) -> None:
+    release = tmp_path / "release"
+    release.mkdir()
+    monkeypatch.setattr(
+        "ops.project_check.daily.verify_release",
+        lambda repo_root: {"ok": False, "problems": ["hash mismatch"]},
+    )
+
+    hygiene = _repo_hygiene(release)
+
+    assert hygiene["unverified_enumerations"]
+    blockers = _overall_blockers(
+        hygiene=hygiene,
+        runtime={"live_box_drift": {"status": "ok"}, "risk_rules_load_error": None},
+        strategy_drift={"checked": True, "drift_findings": []},
+        trade_chain={"status": "PASS"},
+    )
+    assert any(b["code"] == "REPO_PRESERVATION_UNVERIFIED" for b in blockers)
