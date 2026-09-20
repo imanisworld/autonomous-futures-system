@@ -12,6 +12,8 @@
                  gate validator over an explicit evidence-facts file (see
                  ops/project_check/promotion.py's module docstring for the
                  schema). Read-only.
+  proof-lanes    Read-only MNQ proof-lane mode/wiring/activity status for
+                 inverse ORB, ORB reclaim, and 2-2 reversal.
   daily          Daily Reconciliation + Trade Chain Integrity: repo/PR/branch
                  hygiene, evidence preservation, deployed state, strategy
                  source-of-truth drift, and trade-chain accounting since the
@@ -31,6 +33,7 @@ Usage:
   python3 scripts/project_check.py session-start [--json]
   python3 scripts/project_check.py precommit [--json]
   python3 scripts/project_check.py promotion --strategy <name> [--evidence-file path.json] [--json]
+  python3 scripts/project_check.py proof-lanes [--journal-dir logs] [--json]
   python3 scripts/project_check.py daily [--journal-dir logs] [--advance-checkpoint] [--json]
 """
 from __future__ import annotations
@@ -46,6 +49,7 @@ if str(ROOT) not in sys.path:
 
 from ops.project_check.daily import build_daily_report
 from ops.project_check.preflight import build_ownership_preflight_report
+from ops.project_check.proof_lanes import build_proof_lane_status, format_proof_lane_status
 from ops.project_check.promotion import build_promotion_report
 from ops.project_check.session import build_precommit_report, build_session_start_report
 
@@ -233,6 +237,18 @@ def _cmd_promotion(args: argparse.Namespace) -> int:
     return 0 if report.get("gate_pass") else 1
 
 
+def _cmd_proof_lanes(args: argparse.Namespace) -> int:
+    report = build_proof_lane_status(
+        repo_root=ROOT,
+        log_dir=args.journal_dir,
+    )
+    if args.json:
+        _print_json(report)
+    else:
+        print(format_proof_lane_status(report))
+    return 0
+
+
 def _cmd_daily(args: argparse.Namespace) -> int:
     report = build_daily_report(
         repo_root=ROOT,
@@ -313,6 +329,14 @@ def main(argv: list[str] | None = None) -> int:
     p_promotion.add_argument("--evidence-file", type=Path, default=None)
     p_promotion.add_argument("--json", action="store_true")
     p_promotion.set_defaults(func=_cmd_promotion)
+
+    p_proof = sub.add_parser(
+        "proof-lanes",
+        help="Read-only MNQ inverse-ORB / ORB-reclaim / 2-2 proof-lane status",
+    )
+    p_proof.add_argument("--journal-dir", default="logs")
+    p_proof.add_argument("--json", action="store_true")
+    p_proof.set_defaults(func=_cmd_proof_lanes)
 
     p_daily = sub.add_parser("daily", help="Daily reconciliation + trade chain integrity")
     p_daily.add_argument("--journal-dir", default="logs")
