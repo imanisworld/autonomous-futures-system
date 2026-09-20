@@ -220,6 +220,27 @@ def test_provider_failure_leaves_candidate_open(tmp_path):
     assert counts == {"checked": 1, "resolved": 0}
     assert storage.get_shadow_setup(outcome.shadow_id).status == "OPEN"
 
+def test_webhook_scan_after_close_records_but_cannot_alert(tmp_path):
+    scanner, storage = make_scanner(tmp_path)
+    after_close = OPEN_TIME.replace(hour=16, minute=1)
+    context = {
+        "pattern": "2-2 reversal",
+        "price": 101.0,
+        "vwap": 100.0,
+        "ema20": 99.0,
+        "volume_ratio": 1.3,
+        "iv_rank": 25.0,
+    }
+
+    outcome = scan(scanner, context, now=after_close)
+
+    assert outcome.alert_sent is False
+    assert outcome.alert_suppression_reason == "market_closed"
+    latest = storage.latest(limit=1)[0]
+    assert latest.alert_sent is False
+    assert latest.alert_suppression_reason == "market_closed"
+
+
 def test_nyse_calendar_closes_holidays_and_early_close_days(tmp_path):
     scanner, _storage = make_scanner(tmp_path)
 

@@ -22,6 +22,7 @@ import httpx
 
 __all__ = [
     "Session",
+    "MarketSessionState",
     "SessionCalendar",
     "StaticSessionCalendar",
     "AlpacaSessionCalendar",
@@ -30,6 +31,7 @@ __all__ = [
     "REGULAR_CLOSE",
     "calendar_url",
     "nyse_session_for",
+    "us_equity_rth_state",
 ]
 
 EXCHANGE_TIMEZONE = "America/New_York"
@@ -58,6 +60,15 @@ class Session:
     @property
     def minutes(self) -> int:
         return int((self.close - self.open).total_seconds() // 60)
+
+
+@dataclass(frozen=True)
+class MarketSessionState:
+    """Fail-closed US-equity RTH status for one instant."""
+
+    is_open: bool
+    reason: str
+    session: Session | None = None
 
 
 class SessionCalendar(Protocol):
@@ -151,6 +162,30 @@ def nyse_session_for(day: date) -> Session | None:
     close_local = datetime.combine(day, close, tzinfo=tz)
     return Session(day, open_local.astimezone(timezone.utc), close_local.astimezone(timezone.utc), close < REGULAR_CLOSE)
 
+
+def us_equity_rth_state(moment: datetime) -> MarketSessionState:
+    """Return whether ``moment`` is inside the approved US-equity RTH session.
+
+    This is the centralized alert/scanner session authority. It intentionally
+    treats 09:30-16:00 ET (or the calendar early close) as the only approved
+    alert window even when a particular option venue may quote later.
+
+    Unknown/naive timestamps fail closed instead of assuming a timezone.
+    """
+    if moment.tzinfo is None or moment.utcoffset() is None:
+        return MarketSessionState(False, "market_session_unknown")
+
+    exchange_now = moment.astimezone(ZoneInfo(EXCHANGE_TIMEZONE))
+    session = nyse_session_for(exchange_now.date())
+    if session is None:
+        return MarketSessionState(False, "market_closed")
+
+    current = moment.astimezone(timezone.utc)
+    if current < session.open:
+        return MarketSessionState(False, "market_not_open", session)
+    if current >= session.close:
+        return MarketSessionState(False, "market_closed", session)
+    return MarketSessionState(True, "", session)
 
 
 def calendar_url(base_url: str) -> str:
