@@ -72,6 +72,21 @@ Purpose: broader opening-range structure, fixed before outcomes.
 No other stop/target cell may be added after results are seen and described as
 pre-registered.
 
+
+### Pre-run mechanics amendment — futures tick grid
+
+Added before the first geometry result was produced: every simulated protective
+price must be valid on the instrument's 0.25-point futures tick grid.
+
+For this LONG-only study the normalization is deliberately conservative:
+
+- stop: round **down** to the nearest valid tick (never tighten the structural stop);
+- target: round **down** to the nearest valid tick (never increase modeled reward).
+
+Decision opens and trigger OHLC are expected to already be exchange-tick aligned; the
+runner asserts/normalizes only the derived stop/target coordinates. This amendment is
+mechanical execution realism, not a new outcome-selected geometry cell.
+
 ## Risk feasibility
 
 The study reports, but does not silently discard, stop widths against current global
