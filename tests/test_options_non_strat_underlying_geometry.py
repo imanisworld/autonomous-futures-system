@@ -6,10 +6,12 @@ from alert_ranker.causal_bars import Bar
 from research.options_non_strat_underlying_geometry import (
     Candidate,
     GEOMETRIES,
+    collect_candidates,
     geometry_prices,
     gate_family,
     simulate,
 )
+from alert_ranker.session_calendar import nyse_session_for
 
 
 BASE = datetime(2026, 6, 15, 14, 0, tzinfo=timezone.utc)
@@ -161,3 +163,42 @@ def test_gate_requires_stress_strength_in_both_halves_and_low_concentration():
     bad = gate_family(report, family, geometry)
     assert bad["passes"] is False
     assert "H2:stress_mean_or_pf" in bad["reasons"]
+
+def _full_session(session, base_price: float) -> list[Bar]:
+    bars = []
+    for i in range(session.minutes // 5):
+        px = base_price + i * 0.01
+        bars.append(
+            Bar(
+                start=session.open + timedelta(minutes=5 * i),
+                open=px,
+                high=px + 0.05,
+                low=px - 0.05,
+                close=px + 0.01,
+                volume=1000.0,
+                vwap=px,
+            )
+        )
+    return bars
+
+
+def test_missing_immediate_prior_session_does_not_fall_back_to_stale_day():
+    s1 = nyse_session_for(datetime(2026, 6, 15).date())
+    s2 = nyse_session_for(datetime(2026, 6, 16).date())
+    s3 = nyse_session_for(datetime(2026, 6, 17).date())
+    assert s1 and s2 and s3
+
+    # Day 2 is intentionally absent. Day 3 must fail closed instead of using
+    # Day 1 as a stale previous-day high/low source.
+    bars = [*_full_session(s1, 100.0), *_full_session(s3, 102.0)]
+    candidates, skipped = collect_candidates(
+        "AAPL",
+        bars,
+        [s1, s2, s3],
+        study_start=s3.date,
+        study_end=s3.date,
+        spy_bars=None,
+        qqq_bars=None,
+    )
+    assert candidates == []
+    assert skipped["no_prior"] == 1
