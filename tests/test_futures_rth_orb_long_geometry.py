@@ -204,9 +204,14 @@ def test_preregistered_gate_requires_cross_instrument_stress_and_halves():
             },
         }
     }
-    assert pass_rule(report, geometry)["passes"] is True
+    good = pass_rule(report, geometry)
+    assert good["numeric_pass"] is True
+    assert good["passes"] is False
+    assert good["classification"] == "WAIT"
+    assert good["manual_gate_remaining"] == "identity_and_causality_audit"
 
     report["instruments"]["MES"]["cells"][f"{geometry}:stress"]["halves"]["H2"]["net"] = -1.0
     result = pass_rule(report, geometry)
+    assert result["numeric_pass"] is False
     assert result["passes"] is False
     assert "MES:H2:stress_net_not_positive" in result["reasons"]
