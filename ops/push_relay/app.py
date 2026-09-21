@@ -22,6 +22,8 @@ Env:  PUSH_RELAY_STATE_DIR   (default /root/afs-shared/push-relay)
       PUSH_RELAY_POLL_SEC    (default 60)
       PUSH_RELAY_VAPID_SUBJECT (default mailto:ops@afsvp.com)
       PUSH_RELAY_WATCH       (default 1; set 0 to disable the poller)
+      PUSH_RELAY_DAILY_ET    (default 16:15; HH:MM America/New_York for the
+                              daily close summary; empty to disable)
 """
 
 from __future__ import annotations
@@ -32,7 +34,9 @@ import logging
 import os
 import time
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 from typing import Any, Mapping, Optional
 
 from fastapi import FastAPI, HTTPException, Request
@@ -45,6 +49,8 @@ STATUS_BASE = os.environ.get("PUSH_RELAY_STATUS_BASE", "http://127.0.0.1:8000").
 POLL_SEC = max(15, int(os.environ.get("PUSH_RELAY_POLL_SEC", "60") or "60"))
 VAPID_SUBJECT = os.environ.get("PUSH_RELAY_VAPID_SUBJECT", "mailto:ops@afsvp.com")
 WATCH = os.environ.get("PUSH_RELAY_WATCH", "1") not in ("0", "false", "no", "off")
+DAILY_ET = (os.environ.get("PUSH_RELAY_DAILY_ET", "16:15") or "").strip()
+ET = ZoneInfo("America/New_York")
 OFFLINE_AFTER_FAILURES = 3
 MAX_SUBSCRIPTIONS = 50
 
@@ -237,6 +243,45 @@ def diff_events(prev: Mapping[str, Any] | None, curr: Mapping[str, Any]) -> list
     return events
 
 
+# ─── Daily close summary (pure) ──────────────────────────────────────────────
+
+def daily_summary(today: Mapping[str, Any]) -> Event:
+    """One line for the day: trades, W/L, P&L, top blocker, open position."""
+    trades = int(today.get("trade_count") or 0)
+    wins = int(today.get("wins") or 0)
+    losses = int(today.get("losses") or 0)
+    pnl = _money(today.get("realized_pnl_dollars"))
+    parts = [f"{trades} trade{'s' if trades != 1 else ''}"]
+    if trades:
+        parts.append(f"{wins}W-{losses}L")
+    parts.append(f"P&L {pnl}")
+    reasons = today.get("top_no_trade_reasons")
+    if not trades and isinstance(reasons, list) and reasons:
+        top = reasons[0] if isinstance(reasons[0], dict) else {}
+        reason = str(top.get("reason") or "").strip()
+        if reason:
+            parts.append(f"top block: {reason[:60]}")
+    pos = today.get("open_position") if isinstance(today.get("open_position"), dict) else None
+    if pos:
+        parts.append(f"open {pos.get('instrument')} {pos.get('direction')}")
+    return Event(title=f"Close · {today.get('date') or 'today'}", body=" · ".join(parts), tag="daily", url="/journal")
+
+
+def daily_due(now_et: datetime, last_sent_date: str | None, at: str = DAILY_ET) -> bool:
+    """True once per ET calendar day, on/after `at` (HH:MM), weekdays only."""
+    if not at:
+        return False
+    try:
+        hh, mm = (int(x) for x in at.split(":", 1))
+    except ValueError:
+        return False
+    if now_et.weekday() >= 5:
+        return False
+    if (now_et.hour, now_et.minute) < (hh, mm):
+        return False
+    return now_et.strftime("%Y-%m-%d") != (last_sent_date or "")
+
+
 # ─── App ─────────────────────────────────────────────────────────────────────
 
 app = FastAPI(title="AFSVP push relay", docs_url=None, redoc_url=None, openapi_url=None)
@@ -342,7 +387,20 @@ async def _json_body(request: Request) -> Any:
 
 # ─── Watcher ─────────────────────────────────────────────────────────────────
 
-_watch_state: dict[str, Any] = {"online": None, "failures": 0, "sig": None}
+_watch_state: dict[str, Any] = {"online": None, "failures": 0, "sig": None, "daily_sent": None}
+_DAILY_MARK = STATE_DIR / "daily_sent.txt"
+
+
+def _load_daily_mark() -> str | None:
+    try:
+        return _DAILY_MARK.read_text().strip() or None
+    except FileNotFoundError:
+        return None
+
+
+def _save_daily_mark(day: str) -> None:
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    _DAILY_MARK.write_text(day)
 
 
 async def _fetch_today() -> dict[str, Any] | None:
@@ -369,6 +427,12 @@ async def _tick() -> None:
         for ev in diff_events(st.get("sig"), sig):
             await asyncio.to_thread(broadcast, ev)
         st["sig"] = sig
+        now_et = datetime.now(ET)
+        if daily_due(now_et, st.get("daily_sent")):
+            day = now_et.strftime("%Y-%m-%d")
+            st["daily_sent"] = day
+            _save_daily_mark(day)
+            await asyncio.to_thread(broadcast, daily_summary(today))
     except Exception as exc:
         st["failures"] += 1
         logger.warning("status poll failed (%d): %s", st["failures"], type(exc).__name__)
@@ -388,6 +452,7 @@ async def _startup() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     store()
     vapid()
+    _watch_state["daily_sent"] = _load_daily_mark()
     if WATCH:
         asyncio.create_task(_watch_loop())
         logger.info("watching %s every %ds; %d subscriptions", STATUS_BASE, POLL_SEC, len(store()))

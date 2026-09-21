@@ -5,7 +5,9 @@ notifications for app.afsvp.com. It never talks to a broker and never touches
 the bot process; it only reads `/status/today`.
 
 **Events:** position opened · position closed (WIN/LOSS + P&L) · trade resolved ·
-daily loss lock · backend down / back online · test.
+daily loss lock · backend down / back online · test · **daily close summary**
+(weekdays at `PUSH_RELAY_DAILY_ET`, default 16:15 ET: trades, W/L, P&L, top
+blocker, open position; once per day, catches up if the relay was down).
 
 ## Endpoints (proxied at `https://app.afsvp.com/push/`)
 

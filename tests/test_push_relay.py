@@ -3,7 +3,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from ops.push_relay.app import Event, SubscriptionStore, diff_events, signature
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+from ops.push_relay.app import Event, SubscriptionStore, daily_due, daily_summary, diff_events, signature
+
+ET = ZoneInfo("America/New_York")
 
 
 def today(**over):
@@ -101,3 +106,30 @@ def test_relay_never_imports_bot_or_broker_code():
 def test_event_is_frozen_and_defaults_url():
     e = Event(title="t", body="b", tag="x")
     assert e.url == "/"
+
+
+def test_daily_summary_lines():
+    e = daily_summary(today(trade_count=3, wins=2, losses=1, realized_pnl_dollars=94.0))
+    assert e.title == "Close · 2026-09-21"
+    assert e.body == "3 trades · 2W-1L · P&L +$94.00"
+    assert e.tag == "daily" and e.url == "/journal"
+
+    quiet = daily_summary(today(top_no_trade_reasons=[{"reason": "Market condition is RANGE_BOUND, not TRENDING.", "count": 5}]))
+    assert quiet.body.startswith("0 trades · P&L $0.00 · top block: Market condition is RANGE_BOUND")
+
+    held = daily_summary(today(trade_count=1, has_open_position=True, open_position={"instrument": "MNQ", "direction": "LONG"}))
+    assert held.body.endswith("open MNQ LONG")
+
+
+def test_daily_due_once_per_weekday_after_time():
+    mon_early = datetime(2026, 9, 21, 16, 0, tzinfo=ET)
+    mon_late = datetime(2026, 9, 21, 16, 15, tzinfo=ET)
+    mon_later = datetime(2026, 9, 21, 22, 0, tzinfo=ET)
+    sat = datetime(2026, 9, 26, 17, 0, tzinfo=ET)
+    assert daily_due(mon_early, None, "16:15") is False
+    assert daily_due(mon_late, None, "16:15") is True
+    assert daily_due(mon_later, "2026-09-21", "16:15") is False   # already sent today
+    assert daily_due(mon_later, "2026-09-18", "16:15") is True    # relay was down at 16:15 → catch up
+    assert daily_due(sat, None, "16:15") is False
+    assert daily_due(mon_late, None, "") is False
+    assert daily_due(mon_late, None, "bad") is False
