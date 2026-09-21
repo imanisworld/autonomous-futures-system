@@ -34,6 +34,7 @@ from strategy.strat_classifier import (
     TWO_UP,
     StratBar,
     classify_bar,
+    classify_sequence,
 )
 
 STUDY_ID = "STRAT_REFERENCE_212_REVERSAL"
@@ -63,6 +64,10 @@ class Event:
     inside_start: str
     parent_type: str
     inside_type: str
+    source_c_start: str | None
+    source_c_type: str | None
+    afs_classifier_sequence: str | None
+    afs_classifier_direction: str | None
     direction: str
     boundary_high: float
     boundary_low: float
@@ -195,6 +200,19 @@ def observe_candidate(
         key=lambda b: b.start_utc,
     )
 
+    source_c: Bar | None = None
+    source_c_type: str | None = None
+    afs_classifier_sequence: str | None = None
+    afs_classifier_direction: str | None = None
+    if _is_exact_5m_window(watched, start=watch_start, count=WATCH_BARS_5M):
+        built = build_session_timeframe(watched, MINUTE_5, HOUR_1, watch_start)
+        if len(built) == 1:
+            source_c = built[0]
+            source_c_type = _classify(source_c, inside)
+            afs_context = classify_sequence(parent_type, INSIDE_BAR, source_c_type)
+            afs_classifier_sequence = afs_context.strat_sequence
+            afs_classifier_direction = afs_context.strat_direction
+
     trigger_bar: Bar | None = None
     ambiguous = False
     opposite_first = False
@@ -228,6 +246,10 @@ def observe_candidate(
             inside_start=inside.start_utc.isoformat(),
             parent_type=parent_type,
             inside_type=INSIDE_BAR,
+            source_c_start=source_c.start_utc.isoformat() if source_c is not None else None,
+            source_c_type=source_c_type,
+            afs_classifier_sequence=afs_classifier_sequence,
+            afs_classifier_direction=afs_classifier_direction,
             direction=direction,
             boundary_high=float(inside.high),
             boundary_low=float(inside.low),
@@ -248,7 +270,11 @@ def observe_candidate(
             watch_window_complete=True,
             ftfc_state=FTFC_UNAVAILABLE,
             afs_ema_trend_state="UNAVAILABLE",
-            afs_comparison_status="UNAVAILABLE_NOT_WIRED",
+            afs_comparison_status=(
+                "CLASSIFIER_ONLY_EXECUTABLE_PATH_NOT_COMPARED"
+                if source_c is not None
+                else "UNAVAILABLE_INCOMPLETE_SOURCE_C"
+            ),
             half=_half(day, midpoint),
         )
 
@@ -308,6 +334,10 @@ def observe_candidate(
         inside_start=inside.start_utc.isoformat(),
         parent_type=parent_type,
         inside_type=INSIDE_BAR,
+        source_c_start=source_c.start_utc.isoformat() if source_c is not None else None,
+        source_c_type=source_c_type,
+        afs_classifier_sequence=afs_classifier_sequence,
+        afs_classifier_direction=afs_classifier_direction,
         direction=direction,
         boundary_high=float(inside.high),
         boundary_low=float(inside.low),
@@ -332,7 +362,11 @@ def observe_candidate(
         watch_window_complete=True,
         ftfc_state=FTFC_UNAVAILABLE,
         afs_ema_trend_state="UNAVAILABLE",
-        afs_comparison_status="UNAVAILABLE_NOT_WIRED",
+        afs_comparison_status=(
+            "CLASSIFIER_ONLY_EXECUTABLE_PATH_NOT_COMPARED"
+            if source_c is not None
+            else "UNAVAILABLE_INCOMPLETE_SOURCE_C"
+        ),
         half=_half(day, midpoint),
     )
 
