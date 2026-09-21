@@ -224,3 +224,12 @@ The structural code can be reviewed and unit-tested without local historical dat
 - the historical MNQ/MES run and output audit are completed.
 
 No production strategy, risk, execution, broker, scanner, scheduler, or alert path is modified by this lane.
+
+
+### Trigger-bar excursion causality
+
+A later static audit found another causal boundary before historical execution: the first runner included the full 5-minute trigger bar in MAE/MFE. Because the trigger happens somewhere inside that bar, its high/low cannot be ordered relative to the trigger from OHLC alone. The reference runner now excludes the trigger bar from excursion statistics. Structural trigger/failure/magnitude detection may still use the bar conservatively, but MAE/MFE begin with the first subsequent 5-minute bar. If the event terminates inside the trigger bar, excursion values remain unavailable.
+
+### Same-event AFS diagnostic boundary
+
+The runner can safely compute the shared AFS classifier's completed-bar-C sequence/direction on an exact 60-minute watch window. That is now recorded as classifier-only diagnostic evidence. It is deliberately not treated as proof that the executable futures `strat_212` path would trade the event: the audited executable path is continuation-only and runtime gates/timeframe context have not been reproduced in this research runner.
