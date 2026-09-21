@@ -1,4 +1,4 @@
-"""Literal TheStrat 60m 2-1-2 reversal reference study v0.1.
+"""TheStrat 60m 2-1-2 reversal reference-translation study v0.1.
 
 Research only. No broker, execution, risk, scanner, scheduler, or alert imports.
 
@@ -404,6 +404,7 @@ def summarize(
         ],
         "instrument": instrument,
         "source_timeframe": "60m_RTH_session_aligned",
+        "population_scope": "A_B_C_same_RTH_session_only",
         "source_alignment_status": "EXPLICIT_AFS_TRANSLATION_NOT_PUBLIC_CANONICAL",
         "trigger_resolution": "5m",
         "trigger_watch_window": "immediately_following_60m_source_bar_only",
@@ -429,8 +430,8 @@ def to_markdown(report: dict[str, Any]) -> str:
     o = report["overall"]
     return (
         f"# {report['study_id']} {report['study_version']} — {report['instrument']}\n\n"
-        f"RESEARCH ONLY. 60m RTH session-aligned source bars; 5m causal trigger resolution; "
-        f"next-source-bar watch only.\n\n"
+        f"RESEARCH ONLY. 60m RTH session-aligned source bars; same-session A/B/C only; "
+        f"5m causal trigger resolution; next-source-bar watch only.\n\n"
         f"Sessions: {report['first_session']} → {report['last_session']} · midpoint {report['midpoint_date']}\n\n"
         f"Candidates {o['candidates']} · triggered {o['triggered']} · pre-trigger ambiguous {o['ambiguous']} · "
         f"opposite-first {o['opposite_boundary_first']} · post-trigger failure {o['structural_failure_after_trigger']} · "
