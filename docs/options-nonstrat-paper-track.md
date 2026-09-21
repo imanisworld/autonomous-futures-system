@@ -98,6 +98,20 @@ It records:
 The journal has no update/delete path and stores no broker credentials, account
 ids or tokens.
 
+## Geometry rule registry (fail-closed)
+
+`options_manager/non_strat_paper_track.py::GEOMETRY_RULES` maps a
+`geometry_rule_id` to the `docs/` file that freezes its stop/target
+definition. **It is empty in `nst-v0.1`.** `prepare_non_strat_paper_candidate`
+returns `DATA_BLOCKED / geometry_rule_not_registered` for every plan until a
+prereg adds an entry, so a paper ticket can never carry self-declared
+provenance. Tests register a throwaway rule and remove it; runtime code never
+registers anything.
+
+Adding a rule is a trading-path change under the post-freeze rule: prereg
+with fixed thresholds → ≥ 5 ns-v0.1 sessions of evidence → staged rollback
+(delete the journal file, unwire) → explicit operator GO.
+
 ## Logged real-trade fixtures
 
 Logged real-trade coverage is intentionally isolated in PR #874 rather than

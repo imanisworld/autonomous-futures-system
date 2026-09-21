@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 import ast
 from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
@@ -13,8 +15,20 @@ from options_manager.non_strat_paper_track import (
     WEBULL_BLOCK_REASON,
     NonStratPaperPlan,
     prepare_non_strat_paper_candidate,
+    register_geometry_rule,
     simulate_non_strat_round_trip,
+    unregister_geometry_rule,
 )
+
+
+@pytest.fixture(autouse=True)
+def _throwaway_geometry_rule():
+    """nst-v0.1 ships with NO registered rules; tests register one and remove it."""
+    register_geometry_rule("PDH_RECLAIM_LONG:v1", "tests/throwaway (not a prereg)")
+    try:
+        yield
+    finally:
+        unregister_geometry_rule("PDH_RECLAIM_LONG:v1")
 
 
 NOW = datetime.now(timezone.utc)
@@ -157,6 +171,14 @@ def test_forward_paper_requires_geometry_provenance_and_decision_time_quote():
     assert missing_rule.status == "DATA_BLOCKED"
     assert missing_rule.reason == "geometry_rule_id_missing"
 
+    # A rule id that nobody pre-registered is refused, whatever it says.
+    unregistered = prepare_non_strat_paper_candidate(
+        _plan(geometry_rule_id="LOOKS_OFFICIAL:v9"),
+        _config(),
+    )
+    assert unregistered.status == "DATA_BLOCKED"
+    assert unregistered.reason == "geometry_rule_not_registered"
+
     missing_refs = prepare_non_strat_paper_candidate(
         _plan(source_references=()),
         _config(),
@@ -215,10 +237,12 @@ def test_missing_exact_contract_evidence_is_data_blocked():
 
 
 def test_existing_risk_and_contract_quality_gates_still_have_authority():
+    # The risk gate runs first and owns the $3 premium cap; a $3.50 contract
+    # dies there, before contract quality is ever consulted.
     too_expensive = _plan(entry_snapshot=_snapshot(bid=3.4, ask=3.5))
     result = prepare_non_strat_paper_candidate(too_expensive, _config())
     assert result.status == "REJECTED"
-    assert result.reason.startswith("contract_quality:")
+    assert result.reason.startswith("risk_gate:premium_cap")
 
     too_wide = _plan(entry_snapshot=_snapshot(bid=0.50, ask=1.50))
     result = prepare_non_strat_paper_candidate(too_wide, _config())
@@ -235,7 +259,7 @@ def test_internal_round_trip_uses_exact_same_contract():
     assert result.result.simulated_entry_price == 1.10
     assert result.result.simulated_exit_price == 1.50
     assert result.result.simulated_contracts == 1
-    assert result.result.simulated_net_pnl == 40.0
+    assert result.result.simulated_net_pnl == pytest.approx(40.0)
 
     wrong_contract = _snapshot(contract_symbol="AAPL_OTHER_CALL", bid=1.5, ask=1.6)
     rejected = simulate_non_strat_round_trip(prepared, wrong_contract, _config())
@@ -262,3 +286,12 @@ def test_module_has_no_webull_submit_or_execution_import():
     assert not any("webull_sandbox_paper_orders" in module for module in modules)
     assert not any(module == "execution" or module.startswith("execution.") for module in modules)
     assert "submit_sandbox_paper_option_order" not in source
+
+def test_nst_v0_1_ships_with_no_registered_geometry_rules():
+    from options_manager import non_strat_paper_track as track
+
+    unregister_geometry_rule("PDH_RECLAIM_LONG:v1")
+    assert track.GEOMETRY_RULES == {}
+    blocked = prepare_non_strat_paper_candidate(_plan(), _config())
+    assert blocked.status == "DATA_BLOCKED"
+    assert blocked.reason == "geometry_rule_not_registered"

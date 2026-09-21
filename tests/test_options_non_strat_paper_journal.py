@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 import sqlite3
@@ -11,8 +13,20 @@ from options_manager.non_strat_paper_journal import NonStratPaperJournal
 from options_manager.non_strat_paper_track import (
     NonStratPaperPlan,
     prepare_non_strat_paper_candidate,
+    register_geometry_rule,
     simulate_non_strat_round_trip,
+    unregister_geometry_rule,
 )
+
+
+@pytest.fixture(autouse=True)
+def _throwaway_geometry_rule():
+    """nst-v0.1 ships with NO registered rules; tests register one and remove it."""
+    register_geometry_rule("PDH_RECLAIM_LONG:v1", "tests/throwaway (not a prereg)")
+    try:
+        yield
+    finally:
+        unregister_geometry_rule("PDH_RECLAIM_LONG:v1")
 
 
 NOW = datetime.now(timezone.utc)
@@ -154,7 +168,7 @@ def test_round_trip_requires_preparation_row_and_is_append_only(tmp_path):
            FROM non_strat_paper_results"""
     ).fetchone()
     conn.close()
-    assert row == (1.1, 1.5, 40.0)
+    assert row == pytest.approx((1.1, 1.5, 40.0))
 
 
 def test_journal_source_has_no_update_delete_or_secret_fields():
