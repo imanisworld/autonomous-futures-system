@@ -86,7 +86,7 @@ No P&L claim. Measure:
 - same-5m-bar resolution ambiguity;
 - next-source-bar watch-window unresolved.
 
-For MAE/MFE, the measurement horizon ends at the first of: magnitude hit, post-trigger structural failure, ambiguous same-5m resolution, or the end of the one-source-bar watch window. Price action after that terminal event must not contaminate excursion statistics.
+For MAE/MFE, the full 5-minute **trigger bar is excluded** because its high/low cannot be ordered relative to the intrabar trigger. Excursion measurement begins with the first subsequent 5-minute bar and ends at the first of: magnitude hit, post-trigger structural failure, ambiguous same-5m resolution, or the end of the one-source-bar watch window. If the structural outcome terminates inside the trigger bar, MAE/MFE are reported as unavailable rather than fabricated from unordered OHLC. Price action after the terminal event must not contaminate excursion statistics.
 
 This layer answers whether the documented structural move exists.
 
