@@ -73,6 +73,7 @@ class Event:
     time_to_magnitude_minutes: int | None
     mae_points: float | None
     mfe_points: float | None
+    trigger_bar_excursion_excluded: bool
     watch_window_unresolved: bool
     half: str
 
@@ -228,6 +229,7 @@ def observe_candidate(
             time_to_magnitude_minutes=None,
             mae_points=None,
             mfe_points=None,
+            trigger_bar_excursion_excluded=False,
             watch_window_unresolved=not (ambiguous or opposite_first),
             half=_half(day, midpoint),
         )
@@ -259,12 +261,17 @@ def observe_candidate(
             magnitude_bar = bar
             break
 
+    # The trigger occurs somewhere inside trigger_bar. Full trigger-bar high/low
+    # cannot be causally assigned to the post-trigger path, so excursion starts
+    # on the first subsequent 5m bar. Structural terminal-state detection above
+    # still uses the trigger bar conservatively.
+    excursion_slice = resolution_slice[1:]
     if direction == "LONG":
-        favorable = [max(0.0, bar.high - trigger_price) for bar in resolution_slice]
-        adverse = [max(0.0, trigger_price - bar.low) for bar in resolution_slice]
+        favorable = [max(0.0, bar.high - trigger_price) for bar in excursion_slice]
+        adverse = [max(0.0, trigger_price - bar.low) for bar in excursion_slice]
     else:
-        favorable = [max(0.0, trigger_price - bar.low) for bar in resolution_slice]
-        adverse = [max(0.0, bar.high - trigger_price) for bar in resolution_slice]
+        favorable = [max(0.0, trigger_price - bar.low) for bar in excursion_slice]
+        adverse = [max(0.0, bar.high - trigger_price) for bar in excursion_slice]
 
     minutes = None
     if magnitude_bar is not None:
@@ -293,6 +300,7 @@ def observe_candidate(
         time_to_magnitude_minutes=minutes,
         mae_points=max(adverse) if adverse else None,
         mfe_points=max(favorable) if favorable else None,
+        trigger_bar_excursion_excluded=True,
         watch_window_unresolved=(
             magnitude_bar is None
             and not structural_failure
@@ -402,6 +410,9 @@ def _bucket(events: Sequence[Event]) -> dict[str, Any]:
             for e in reached
             if e.time_to_magnitude_minutes is not None
         ),
+        "trigger_bar_excursion_excluded": sum(
+            e.trigger_bar_excursion_excluded for e in triggered
+        ),
         "median_mae_points": _median(
             e.mae_points for e in triggered if e.mae_points is not None
         ),
@@ -436,7 +447,8 @@ def summarize(
         "source_alignment_status": "EXPLICIT_AFS_TRANSLATION_NOT_PUBLIC_CANONICAL",
         "trigger_resolution": "5m",
         "trigger_watch_window": "immediately_following_60m_source_bar_only",
-        "excursion_horizon": "trigger_to_first_structural_terminal_event",
+        "excursion_horizon": "first_5m_bar_after_trigger_to_first_structural_terminal_event",
+        "trigger_bar_excursion_policy": "EXCLUDE_UNORDERED_TRIGGER_BAR_OHLC",
         "first_session": days[0].isoformat(),
         "last_session": days[-1].isoformat(),
         "midpoint_date": midpoint.isoformat(),
@@ -467,7 +479,8 @@ def to_markdown(report: dict[str, Any]) -> str:
         f"magnitude reached {o['magnitude_reached']} · hit rate among triggers {o['magnitude_hit_rate_triggered']}\n\n"
         f"Median time to magnitude {o['median_time_to_magnitude_minutes']} min · "
         f"median MAE {o['median_mae_points']} pts · median MFE {o['median_mfe_points']} pts\n\n"
-        "MAE/MFE stop at the first structural terminal event; later price action is excluded.\n\n"
+        "MAE/MFE exclude the unordered trigger-bar OHLC and stop at the first structural terminal event; "
+        "later price action is excluded.\n\n"
         "Study is incomplete: FTFC data capability, AFS EMA side-by-side, execution overlays, "
         "a frozen cost model, and external source-alignment canonicality remain outstanding. "
         "No P&L, PF, fixed-R target, "
