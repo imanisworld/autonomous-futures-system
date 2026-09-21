@@ -198,13 +198,13 @@ class SignaV2Client:
         if cached is not None:
             return cached
 
-        failed_cached = self._failed_cached(symbol, timeframe)
-        if failed_cached is not None:
-            return failed_cached
-
         shared = self._shared_snapshot(symbol, timeframe)
         if shared is not None:
             return shared
+
+        failed_cached = self._failed_cached(symbol, timeframe)
+        if failed_cached is not None:
+            return failed_cached
 
         if account_backoff_remaining(
             self.base_url,
