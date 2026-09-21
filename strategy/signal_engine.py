@@ -393,6 +393,27 @@ class DecisionEngine:
         # ── Market condition scoring ──────────────────────────────────────────
         condition = self._score_market_condition(state)
 
+        # ── Executable-set check ──────────────────────────────────────────────
+        # If enabled_concepts minus disabled_concepts_per_instrument[inst] is
+        # empty, no gate below can ever produce a trade. Say so here, once the
+        # label is scored (so market_condition is still journaled), instead of
+        # letting the market-condition / TRENDING / regime gates take the blame
+        # bar after bar. Pure reporting: nothing downstream changes.
+        if not self._executable_concepts(state):
+            return DecisionOutput(
+                timestamp=now,
+                instrument=state.instrument,
+                session=state.session,
+                decision="NO_TRADE",
+                market_condition=condition,
+                reason=(
+                    f"No enabled strategy for {state.instrument}: every concept in "
+                    f"enabled_concepts is disabled for this instrument."
+                ),
+                failed_gates=["NO_ENABLED_STRATEGY"],
+                confidence_score=0,
+            )
+
         if condition in self.config.non_tradable_states:
             return DecisionOutput(
                 timestamp=now,
@@ -1712,12 +1733,15 @@ class DecisionEngine:
         candidates = self.collect_strategy_candidates(state, "", daily_state)
         return candidates[0] if candidates else None
 
-    def _iter_enabled_setups(
-        self,
-        state: MarketState,
-        daily_state: Optional[DailyState] = None,
-    ):
-        enabled = self.config.enabled_concepts
+    def _executable_concepts(self, state: MarketState) -> list[str]:
+        """Concepts that can actually fire for this state's instrument/lane.
+
+        enabled_concepts, narrowed to the 5-minute-native strategies on the
+        canonical 4HR lane, minus disabled_concepts_per_instrument[instrument].
+        Shared by the executable-set gate in ``evaluate`` and by
+        ``_iter_enabled_setups`` so the two can never disagree.
+        """
+        enabled = list(self.config.enabled_concepts)
         if state.canonical_4hr_only:
             # The established 5-minute lane is entry authority only.  Only
             # the 5-minute-native strategies may originate directly from it;
@@ -1726,6 +1750,17 @@ class DecisionEngine:
                 name for name in enabled
                 if name in self._FIVE_MINUTE_NATIVE_STRATEGIES
             ]
+        instrument_disabled = set(
+            self.config.disabled_concepts_per_instrument.get(state.instrument, [])
+        )
+        return [name for name in enabled if name not in instrument_disabled]
+
+    def _iter_enabled_setups(
+        self,
+        state: MarketState,
+        daily_state: Optional[DailyState] = None,
+    ):
+        enabled = self._executable_concepts(state)
         instrument_disabled = set(
             self.config.disabled_concepts_per_instrument.get(state.instrument, [])
         )

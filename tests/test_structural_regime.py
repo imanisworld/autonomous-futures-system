@@ -108,7 +108,16 @@ def test_runner_journals_structural_fields_without_reaching_risk_or_broker(
 
     monkeypatch.setattr(runner, "RiskEngine", _RiskMustNotBeConstructed)
     monkeypatch.setattr(runner.PaperBroker, "execute_bracket", _broker_must_not_execute)
-    cfg = replace(load_config(), max_staleness_seconds=0)  # disabled: historical fixture timestamps (same as conftest)
+    # max_staleness_seconds=0: historical fixture timestamps (same as conftest).
+    # Pin a non-empty executable set: the repo risk_rules leave MNQ with no
+    # enabled concept, which now short-circuits to NO_ENABLED_STRATEGY before
+    # the TRENDING gate this test is about.
+    cfg = replace(
+        load_config(),
+        max_staleness_seconds=0,
+        enabled_concepts=["pdl_reclaim"],
+        disabled_concepts_per_instrument={},
+    )
     day = date(2026, 5, 23)
     log_dir = str(tmp_path / "logs")
     payload = _base_payload(market_condition="RANGE_BOUND", trend_strength="MODERATE")

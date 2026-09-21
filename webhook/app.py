@@ -4197,6 +4197,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
       SESSION_WINDOW: 'Session window restricted',
       NY_SESSION_WINDOW: 'Outside NY session window',
       MARKET_CONDITION_NOT_TRADABLE: 'Market condition not tradable',
+      NO_ENABLED_STRATEGY: 'No enabled strategy for this instrument',
       REGIME_RESTRICTED: 'Regime restricted',
       TREND_STRENGTH: 'Trend strength below required',
       TREND_WEAK: 'Trend strength weak'
