@@ -224,6 +224,9 @@ def test_submit_previews_then_places_single_leg_and_uses_ticket_as_client_order_
     order = orders[0]
     assert order["client_order_id"] == "ticket-123"
     assert order["order_type"] == "LIMIT" and order["side"] == "BUY"
+    assert order["position_intent"] == "BUY_TO_OPEN"
+    assert order["instrument_type"] == "OPTION"
+    assert order["market"] == "US" and order["symbol"] == "AAPL"
     assert order["option_strategy"] == "SINGLE" and order["time_in_force"] == "DAY"
     leg = order["legs"][0]
     assert leg["instrument_type"] == "OPTION" and leg["market"] == "US"
