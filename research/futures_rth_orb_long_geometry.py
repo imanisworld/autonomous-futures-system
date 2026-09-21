@@ -208,6 +208,12 @@ def collect_candidates(instrument: str) -> tuple[list[Candidate], dict[str, int]
     return out, skipped
 
 
+def _floor_to_tick(value: float, tick: float) -> float:
+    """Conservative LONG-side tick normalization for derived order prices."""
+    units = math.floor((float(value) + 1e-10) / float(tick))
+    return round(units * float(tick), 10)
+
+
 def geometry_prices(
     candidate: Candidate,
     decision_open: float,
@@ -225,10 +231,16 @@ def geometry_prices(
         rr = 2.0
     else:
         raise ValueError(f"unknown geometry {geometry!r}")
+    # Derived futures order coordinates must be exchange-tick valid. For a
+    # LONG-only study, round the stop and target down: farther/wider stop and
+    # no extra modeled reward.
+    stop = _floor_to_tick(stop, tick)
     risk = decision_open - stop
     if risk <= 0:
         return stop, float("nan")
-    target = decision_open + rr * risk
+    target = _floor_to_tick(decision_open + rr * risk, tick)
+    if target <= decision_open:
+        return stop, float("nan")
     return stop, target
 
 
