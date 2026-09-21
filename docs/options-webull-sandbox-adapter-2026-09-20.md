@@ -127,3 +127,17 @@ Gates (all fail closed): sandbox host + paper mode + both live flags false; `liv
 Intended use: a **mirror lane** — each internal paper entry/exit is also submitted to the sandbox and the broker order id / fill is logged beside the internal row. The internal shadow journal remains the evidence of record; broker paper fills are optimistic and must not replace it.
 
 Status: **nothing imports this module at runtime** (test-enforced), no box config, no release. Real sandbox placement/cancel/fill lifecycle remains **UNPROVEN** until a controlled proof run; that proof, the scanner wiring, the release, and the `.env` keys are post-2026-09-30 items.
+
+### Proof attempt #1 — 2026-09-21 01:38–01:47Z (laptop, sandbox only, nothing placed)
+
+Through `webull_sandbox_paper_orders` against the real sandbox:
+
+| Stage | Result |
+|---|---|
+| auth + single INDIVIDUAL_CASH account | OK |
+| contract discovery | OK — AAPL 424 calls, XSP 345, SPX 476, SPXW none |
+| broker preview (qty 1, limit $0.05) | 200 — AAPL cost $5.00 / fee $0.05; XSP fee $0.55; SPX fee $1.12 |
+| place | **417 `OPENAPI_OPTION_CAN_NOT_TRADING_FOR_NON_TRADING_HOURS`** for equity and index options alike |
+| detail / cancel | not reached — still UNPROVEN |
+
+The sandbox accepts option orders **8:00 a.m.–4:00 p.m. ET on trading days only** (Webull OpenAPI rule; Cboe SPX/XSP global hours do not apply). #847 maps such broker 4xx replies to `REJECTED broker:<CODE>` instead of a generic error. Re-run the proof during those hours to close place → detail → cancel → detail.
