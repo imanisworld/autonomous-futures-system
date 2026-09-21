@@ -368,6 +368,12 @@ def live_box_drift_report(
     )
     observed_account_id = _env("TRADOVATE_EXPECTED_ACCOUNT_ID")
     expected_account_id = _env(EXPECTED_TRADOVATE_ACCOUNT_ID_ENV)
+    account_identity_required = (
+        str(_env("BROKER") or "").strip().lower() == "tradovate"
+        or str(_env("WIDE_STOP_LEDGER_EXECUTION_ROUTE") or "").strip().lower()
+        == "tradovate_demo"
+        or observed_account_id is not None
+    )
     account_identity_matches = (
         observed_account_id is not None
         and expected_account_id is not None
@@ -390,10 +396,12 @@ def live_box_drift_report(
             name="tradovate_expected_account_identity",
             observed="<configured>" if observed_account_id is not None else None,
             expected="<configured>" if expected_account_id is not None else None,
-            ok=account_identity_matches,
-            required=True,
+            ok=(not account_identity_required) or account_identity_matches,
+            required=account_identity_required,
             detail=(
-                "matches"
+                "not required for non-Tradovate routing"
+                if not account_identity_required
+                else "matches"
                 if account_identity_matches
                 else "missing or mismatched account routing identity"
             ),
@@ -475,9 +483,10 @@ def live_box_drift_report(
         "unpinned_runtime_overrides": unpinned_overrides,
         "security_runtime": security_runtime,
         "tradovate_account_identity": {
+            "required": account_identity_required,
             "observed_configured": observed_account_id is not None,
             "expected_configured": expected_account_id is not None,
-            "matches": account_identity_matches,
+            "matches": account_identity_matches if account_identity_required else None,
             "redaction": "Raw Tradovate account identifiers are intentionally omitted.",
         },
         "missing_pins": missing_pins,
