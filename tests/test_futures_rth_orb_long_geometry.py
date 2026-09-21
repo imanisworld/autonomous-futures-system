@@ -36,6 +36,7 @@ def _candidate(instrument: str = "MES") -> Candidate:
         episode_id="2026-09-18:MES:ORB_BREAKOUT_LONG:LONG:1",
         trigger_bar_start=BASE.isoformat(),
         trigger_idx=0,
+        trigger_prev_close=99.9,
         trigger_close=100.5,
         trigger_low=99.5,
         orb_high=100.0,
@@ -64,6 +65,39 @@ def test_frozen_geometries_are_structural_and_target_from_decision_open():
         "G2_TRIGGER_LOW",
         "G3_ORB_MIDPOINT",
     }
+
+
+def test_legacy_payload_identity_requires_an_actual_cross():
+    cand = _candidate()
+    bars = [
+        _bar(0, o=99.8, h=101.0, l=99.2, c=100.5),
+        _bar(1, o=101.0, h=102.0, l=100.5, c=101.5),
+    ]
+    crossed = simulate_candidate(
+        cand,
+        bars,
+        geometry="G2_TRIGGER_LOW",
+        slippage_label="base",
+        slippage_ticks=1.0,
+    )
+    assert crossed.legacy_boundary_same_bar is True
+
+    # Same trigger close above the payload ORB is not a crossing if the prior
+    # close was already above it.
+    stale = Candidate(
+        **{
+            **cand.__dict__,
+            "trigger_prev_close": 100.25,
+        }
+    )
+    not_crossed = simulate_candidate(
+        stale,
+        bars,
+        geometry="G2_TRIGGER_LOW",
+        slippage_label="base",
+        slippage_ticks=1.0,
+    )
+    assert not_crossed.legacy_boundary_same_bar is False
 
 
 def test_entry_uses_next_bar_open_not_trigger_close():
