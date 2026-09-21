@@ -297,9 +297,10 @@ def test_pull_context_reuses_fresh_shared_action_card_without_provider_call(tmp_
 
     assert result["ok"] is True
     assert result["provider_healthy"] is True
-    assert result["provider_requests_total"] == 1
-    assert result["provider_requests_ok"] == 1
-    assert result["provider_requests_failed"] == 0
+    assert result["provider_results_total"] == 1
+    assert result["provider_results_ok"] == 1
+    assert result["provider_results_failed"] == 0
+    assert result["provider_network_attempts"] == 0
     assert result["endpoint_results"][0]["cached"] is True
     assert result["trade_authority"] is False
 
@@ -329,8 +330,9 @@ def test_pull_context_separates_storage_success_from_provider_failure(tmp_path):
 
     assert result["ok"] is True
     assert result["provider_healthy"] is False
-    assert result["provider_requests_total"] == 1
-    assert result["provider_requests_ok"] == 0
-    assert result["provider_requests_failed"] == 1
+    assert result["provider_results_total"] == 1
+    assert result["provider_results_ok"] == 0
+    assert result["provider_results_failed"] == 1
+    assert result["provider_network_attempts"] == 1
     assert result["stored_rows"] == 1
     assert result["trade_authority"] is False
