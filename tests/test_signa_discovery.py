@@ -157,3 +157,57 @@ def test_client_uses_confirmed_options_flow_paths_and_gex_unresolved():
         "/api/options-flow/tide",
         "/api/options-flow/congress",
     ]
+
+
+def test_429_opens_shared_account_circuit_across_discovery_clients():
+    from sources.signa_request_budget import clear_account_backoff
+
+    base_url = "https://app.getsigna.ai"
+    api_key = "shared-budget-test"
+    clock_now = [1000.0]
+    clock = lambda: clock_now[0]
+    first_calls = []
+    second_calls = []
+
+    def first_handler(request):
+        first_calls.append(request.url.path)
+        return httpx.Response(429, headers={"Retry-After": "120"}, json={"error": "rate"})
+
+    def second_handler(request):
+        second_calls.append(request.url.path)
+        return httpx.Response(200, json={"ok": True})
+
+    clear_account_backoff(base_url, api_key)
+    first_http = httpx.Client(transport=httpx.MockTransport(first_handler), base_url=base_url)
+    second_http = httpx.Client(transport=httpx.MockTransport(second_handler), base_url=base_url)
+    try:
+        first = SignaDiscoveryClient(
+            api_key=api_key,
+            base_url=base_url,
+            client=first_http,
+            cache_ttl_seconds=0,
+            clock=clock,
+        )
+        second = SignaDiscoveryClient(
+            api_key=api_key,
+            base_url=base_url,
+            client=second_http,
+            cache_ttl_seconds=0,
+            clock=clock,
+        )
+
+        limited = first.signal_index()
+        blocked = second.action_card("SPY")
+        clock_now[0] += 121
+        recovered = second.action_card("SPY")
+    finally:
+        first_http.close()
+        second_http.close()
+        clear_account_backoff(base_url, api_key)
+
+    assert limited.error == "http_429"
+    assert blocked.error == "account_backoff_active"
+    assert blocked.backoff_active is True
+    assert first_calls == ["/api/v1/signal-index"]
+    assert second_calls == ["/api/v1/signals/SPY"]
+    assert recovered.ok is True
