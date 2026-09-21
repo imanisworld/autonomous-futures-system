@@ -107,13 +107,26 @@ If `ENTRY_BAR_FAILURE` cannot be applied causally at order time, report it obser
 
 Any P&L overlay must:
 - enter no earlier than the causal trigger;
-- apply adverse slippage and commission assumptions already standardized by the futures research harness;
+- use an explicitly frozen commission + slippage contract;
 - use stop-first handling when stop and magnitude/target are both touched inside a bar with unknown path;
 - reject impossible/wrong-side brackets;
 - use exactly 1 contract for comparability;
 - remain paper/research only.
 
-Base and stress costs must be reported separately.
+### Cost-model gate
+
+The repository does **not** currently contain one universal research cost standard. Existing studies use different assumptions (including $1.24, $1.48, and $5.00 round-turn commission values, with differing slippage conventions). Therefore this study must not silently inherit whichever script is convenient.
+
+Before Layer B is run, one cost contract must be frozen in this preregistration with:
+- round-turn commission per contract;
+- whether slippage is charged on entry, exit, or both;
+- base adverse slippage ticks;
+- stress adverse slippage ticks;
+- MNQ/MES tick value source.
+
+Until that contract is frozen, Layer B expectancy/PF/drawdown is **WAIT** and must not be produced.
+
+Base and stress costs must be reported separately once the cost-model gate is resolved.
 
 ## FTFC
 
