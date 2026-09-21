@@ -218,6 +218,19 @@ def _complete_evidence(tmp_path: Path) -> dict:
             "sample_requirement_pre_registered": True,
             "required_resolved_fills_per_cell": 30,
             "minimum_resolved_fills_in_required_cells": 40,
+            "required_cell_dimensions": ["instrument", "direction"],
+            "cells": [
+                {
+                    "cell_id": "MNQ_LONG",
+                    "required": True,
+                    "resolved_fills": 40,
+                },
+                {
+                    "cell_id": "MNQ_SHORT",
+                    "required": True,
+                    "resolved_fills": 40,
+                },
+            ],
             "drawdown_within_pre_registered_limit": True,
             "concentration_check_pass": True,
             "session_filters_respected": True,
@@ -539,3 +552,54 @@ def test_two_and_three_tick_stress_are_both_required(tmp_path: Path, monkeypatch
 
     assert report["gate_pass"] is False
     assert any("3-tick" in blocker for blocker in report["blockers"])
+
+
+def test_validation_requires_explicit_required_cell_dimensions_and_cells(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _pin_runtime_head_and_diff(monkeypatch)
+    payload = _complete_evidence(tmp_path)
+    payload["validation"].pop("required_cell_dimensions")
+    payload["validation"].pop("cells")
+    evidence = _write_evidence(tmp_path, payload)
+
+    report = build_demo_qualification_report(
+        strategy="example", repo_root=tmp_path, evidence_path=evidence
+    )
+
+    assert report["gate_pass"] is False
+    assert any("required_cell_dimensions" in blocker for blocker in report["blockers"])
+    assert any("validation.cells" in blocker for blocker in report["blockers"])
+
+
+def test_each_required_validation_cell_must_meet_fill_floor(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _pin_runtime_head_and_diff(monkeypatch)
+    payload = _complete_evidence(tmp_path)
+    payload["validation"]["cells"][1]["resolved_fills"] = 29
+    payload["validation"]["minimum_resolved_fills_in_required_cells"] = 29
+    evidence = _write_evidence(tmp_path, payload)
+
+    report = build_demo_qualification_report(
+        strategy="example", repo_root=tmp_path, evidence_path=evidence
+    )
+
+    assert report["gate_pass"] is False
+    assert any("MNQ_SHORT" in blocker and "below required 30" in blocker for blocker in report["blockers"])
+
+
+def test_claimed_minimum_must_match_enumerated_required_cells(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _pin_runtime_head_and_diff(monkeypatch)
+    payload = _complete_evidence(tmp_path)
+    payload["validation"]["minimum_resolved_fills_in_required_cells"] = 55
+    evidence = _write_evidence(tmp_path, payload)
+
+    report = build_demo_qualification_report(
+        strategy="example", repo_root=tmp_path, evidence_path=evidence
+    )
+
+    assert report["gate_pass"] is False
+    assert any("does not match the enumerated required-cell minimum 40" in blocker for blocker in report["blockers"])
