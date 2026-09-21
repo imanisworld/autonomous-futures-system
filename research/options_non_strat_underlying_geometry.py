@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
 import math
 import os
@@ -45,6 +46,7 @@ INDEX_SYMBOLS = ("SPY", "QQQ")
 GEOMETRIES = ("O1_EVENT_LEVEL", "O2_TRIGGER_BAR")
 SLIPPAGE = {"base": 0.01, "stress": 0.03}
 PRICE_TICK = 0.01
+FROZEN_UNIVERSE_BLOB_SHA = "5a2eaf442c910012faddfc69bcd1c2a696f46d08"
 
 
 @dataclass(frozen=True)
@@ -96,6 +98,13 @@ class GeometryRow:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+def _git_blob_sha(path: Path) -> str:
+    """Return the Git blob SHA-1 for the exact on-disk universe bytes."""
+    data = path.read_bytes()
+    header = f"blob {len(data)}\0".encode("ascii")
+    return hashlib.sha1(header + data).hexdigest()
 
 
 def sessions_between(start: date, end: date) -> list[Session]:
@@ -564,6 +573,15 @@ async def run(args: argparse.Namespace) -> int:
         )
 
     universe_path = Path(args.universe) if args.universe else DEFAULT_UNIVERSE
+    debug_population = bool(args.universe or args.symbols)
+    if not debug_population:
+        observed_sha = _git_blob_sha(universe_path)
+        if observed_sha != FROZEN_UNIVERSE_BLOB_SHA:
+            raise SystemExit(
+                "ong-v0.1 frozen universe changed: "
+                f"expected {FROZEN_UNIVERSE_BLOB_SHA}, got {observed_sha}"
+            )
+
     universe = load_universe(universe_path)
     if args.symbols:
         requested = [s.strip().upper() for s in args.symbols.split(",") if s.strip()]
@@ -646,6 +664,8 @@ async def run(args: argparse.Namespace) -> int:
         "range": [start.isoformat(), end.isoformat()],
         "split": split.isoformat(),
         "universe_source": str(universe_path),
+        "universe_blob_sha": _git_blob_sha(universe_path),
+        "population_mode": "DEBUG_OVERRIDE" if debug_population else "FROZEN_150",
         "symbols_requested": len(requested),
         "symbols_with_candidates": sum(bool(rows) for rows in candidates_by_symbol.values()),
         "provider_error_windows": provider_errors,
@@ -671,6 +691,16 @@ async def run(args: argparse.Namespace) -> int:
         for family in families
         for geometry in GEOMETRIES
     ]
+    if debug_population:
+        report["gate"] = [
+            {
+                **gate,
+                "passes": False,
+                "classification": "DEBUG_ONLY",
+                "reasons": ["debug_population_override", *gate["reasons"]],
+            }
+            for gate in report["gate"]
+        ]
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
