@@ -28,6 +28,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from alert_ranker.causal_bars import Bar, HOUR_1, MINUTE_5, build_session_timeframe
+from config.futures_contracts import tick_size as contract_tick_size
 from research.futures_non_strat_coverage import roll_excluded_sessions
 from strategy.strat_classifier import (
     INSIDE_BAR,
@@ -74,8 +75,12 @@ class Event:
     boundary_low: float
     trigger_time: str | None
     trigger_price: float | None
+    trigger_price_role: str
+    minimum_strict_break_price: float
     ambiguous: bool
     magnitude: float
+    magnitude_distance_from_min_break_points: float
+    magnitude_executable_from_min_break: bool
     magnitude_reached: bool
     opposite_boundary_first: bool
     structural_failure_after_trigger: bool
@@ -189,6 +194,17 @@ def observe_candidate(
 
     direction = "SHORT" if parent_type == TWO_UP else "LONG"
     magnitude = float(parent.low if direction == "SHORT" else parent.high)
+    tick = contract_tick_size(instrument)
+    boundary = float(inside.high if direction == "LONG" else inside.low)
+    minimum_strict_break_price = (
+        boundary + tick if direction == "LONG" else boundary - tick
+    )
+    magnitude_distance_from_min_break = (
+        magnitude - minimum_strict_break_price
+        if direction == "LONG"
+        else minimum_strict_break_price - magnitude
+    )
+    magnitude_executable_from_min_break = magnitude_distance_from_min_break > 0
     event_id = (
         f"{STUDY_VERSION}:{instrument}:{day.isoformat()}:"
         f"{inside.start_utc.isoformat()}:{direction}"
@@ -259,8 +275,12 @@ def observe_candidate(
             boundary_low=float(inside.low),
             trigger_time=None,
             trigger_price=None,
+            trigger_price_role="STRUCTURAL_BOUNDARY_NOT_EXECUTABLE_FILL",
+            minimum_strict_break_price=minimum_strict_break_price,
             ambiguous=ambiguous,
             magnitude=magnitude,
+            magnitude_distance_from_min_break_points=magnitude_distance_from_min_break,
+            magnitude_executable_from_min_break=magnitude_executable_from_min_break,
             magnitude_reached=False,
             opposite_boundary_first=opposite_first,
             structural_failure_after_trigger=False,
@@ -347,8 +367,12 @@ def observe_candidate(
         boundary_low=float(inside.low),
         trigger_time=trigger_bar.start_utc.isoformat(),
         trigger_price=trigger_price,
+        trigger_price_role="STRUCTURAL_BOUNDARY_NOT_EXECUTABLE_FILL",
+        minimum_strict_break_price=minimum_strict_break_price,
         ambiguous=False,
         magnitude=magnitude,
+        magnitude_distance_from_min_break_points=magnitude_distance_from_min_break,
+        magnitude_executable_from_min_break=magnitude_executable_from_min_break,
         magnitude_reached=magnitude_bar is not None,
         opposite_boundary_first=False,
         structural_failure_after_trigger=structural_failure,
@@ -503,6 +527,9 @@ def _bucket(events: Sequence[Event]) -> dict[str, Any]:
         "resolution_ambiguous": sum(e.resolution_ambiguous for e in events),
         "watch_window_unresolved": sum(e.watch_window_unresolved for e in events),
         "magnitude_reached": len(reached),
+        "magnitude_executable_from_min_break": sum(
+            e.magnitude_executable_from_min_break for e in triggered
+        ),
         "magnitude_hit_rate_triggered": round(len(reached) / len(triggered), 4)
         if triggered
         else None,
@@ -560,6 +587,8 @@ def summarize(
         "roll_policy": "existing_futures_research_third_friday_week_plus_next_session_excluded",
         "source_alignment_status": "EXPLICIT_AFS_TRANSLATION_NOT_PUBLIC_CANONICAL",
         "trigger_resolution": "5m",
+        "trigger_price_role": "STRUCTURAL_BOUNDARY_NOT_EXECUTABLE_FILL",
+        "execution_entry_floor": "one_contract_tick_beyond_boundary_before_slippage",
         "trigger_watch_window": "immediately_following_60m_source_bar_only",
         "excursion_horizon": "first_5m_bar_after_trigger_to_first_structural_terminal_event",
         "trigger_bar_excursion_policy": "EXCLUDE_UNORDERED_TRIGGER_BAR_OHLC",
