@@ -155,12 +155,18 @@ def pull_context(
     ids = context_store.record_many(rows, timestamp=now)
     provider_ok = sum(1 for item in endpoint_results if item.get("ok") is True)
     provider_failed = len(endpoint_results) - provider_ok
+    provider_network_attempts = sum(
+        1
+        for item in endpoint_results
+        if not item.get("cached") and not item.get("backoff_active")
+    )
     return {
         "ok": True,
         "provider_healthy": provider_failed == 0,
-        "provider_requests_total": len(endpoint_results),
-        "provider_requests_ok": provider_ok,
-        "provider_requests_failed": provider_failed,
+        "provider_results_total": len(endpoint_results),
+        "provider_results_ok": provider_ok,
+        "provider_results_failed": provider_failed,
+        "provider_network_attempts": provider_network_attempts,
         "advisory_only": True,
         "observation_only": True,
         "trade_authority": False,
