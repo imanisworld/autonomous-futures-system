@@ -52,11 +52,20 @@ def is_ny_open(now: datetime, tz_name: str = "America/New_York") -> bool:
     )
 
 
+DAILY_SETUP_TIMEFRAME = "1D"
+DAILY_MARKET_ALIGNMENT_POINTS = 4  # replaces the two 2-point intraday checks
+
+
+def is_daily_setup(data: dict[str, Any]) -> bool:
+    return str(data.get("setup_timeframe") or "").strip().upper() == DAILY_SETUP_TIMEFRAME
+
+
 def score_setup(data: dict[str, Any], now: datetime | None = None) -> ScoreResult:
     now = now or datetime.now(ZoneInfo("America/New_York"))
     ticker = str(data.get("ticker") or "").upper()
     pattern = str(data.get("pattern") or "N/A")
     direction = str(data.get("direction") or "").upper() or direction_from_data(data)
+    daily = is_daily_setup(data)
 
     price = _num(data.get("price"))
     vwap = _num(data.get("vwap"))
@@ -86,10 +95,19 @@ def score_setup(data: dict[str, Any], now: datetime | None = None) -> ScoreResul
         # absence of a component for an unrecorded scoring path.
         return ScoreResult(ticker, "UNKNOWN", 0, pattern, {"signa": 0}, dict(data), reason)
 
+    # A Daily setup is confirmed by its own lane (mechanical daily trigger +
+    # SPY/QQQ daily-trend alignment, see multisetup_scanner Daily promotion),
+    # not by where the underlying sits against the 30-minute VWAP / EMA20 at
+    # scan time. Applying the intraday checks to Daily rows vetoed 30 of 64
+    # promoted Daily setups since 2026-09-08 on sub-0.1% intraday wobbles
+    # (e.g. SPY 758.97 vs VWAP 759.44). For Daily rows the intraday readings
+    # are still recorded (0 points, informational) and the market-alignment
+    # verdict carries the same 4 points the two intraday checks are worth.
+    market_aligned = str(data.get("setup_market_status") or "").upper() == "VALID"
     components = {
         "strat_pattern": 3 if pattern and pattern.upper() != "N/A" else 0,
-        "vwap": 2 if vwap_pass else 0,
-        "trend": 2 if trend_pass else 0,
+        "vwap": 0 if daily else (2 if vwap_pass else 0),
+        "trend": 0 if daily else (2 if trend_pass else 0),
         "volume": 2 if volume_ratio is not None and volume_ratio > 1.2 else 0,
         "iv_rank": 0,
         "premium_value": 0,
@@ -99,6 +117,10 @@ def score_setup(data: dict[str, Any], now: datetime | None = None) -> ScoreResul
         "signa": 0,
         "session": 1 if is_ny_open(now) else 0,
     }
+    if daily:
+        components["market_alignment"] = (
+            DAILY_MARKET_ALIGNMENT_POINTS if market_aligned else 0
+        )
     if iv_rank is not None:
         if iv_rank < 30:
             components["iv_rank"] = 2
@@ -113,10 +135,17 @@ def score_setup(data: dict[str, Any], now: datetime | None = None) -> ScoreResul
         enriched["option_value_verdict"] = valuation.verdict
         enriched["option_value_reason"] = valuation.reason
 
-    if not vwap_pass:
-        return ScoreResult(ticker, direction, 0, pattern, components, enriched, "against_vwap")
-    if not trend_pass:
-        return ScoreResult(ticker, direction, 0, pattern, components, enriched, "against_trend")
+    if daily:
+        enriched["intraday_filters_applied"] = False
+        if not market_aligned:
+            return ScoreResult(
+                ticker, direction, 0, pattern, components, enriched, "against_market"
+            )
+    else:
+        if not vwap_pass:
+            return ScoreResult(ticker, direction, 0, pattern, components, enriched, "against_vwap")
+        if not trend_pass:
+            return ScoreResult(ticker, direction, 0, pattern, components, enriched, "against_trend")
 
     score = max(0, min(10, sum(components.values())))
     return ScoreResult(ticker, direction, score, pattern, components, enriched, "")
