@@ -233,3 +233,14 @@ A later static audit found another causal boundary before historical execution: 
 ### Same-event AFS diagnostic boundary
 
 The runner can safely compute the shared AFS classifier's completed-bar-C sequence/direction on an exact 60-minute watch window. That is now recorded as classifier-only diagnostic evidence. It is deliberately not treated as proof that the executable futures `strat_212` path would trade the event: the audited executable path is continuation-only and runtime gates/timeframe context have not been reproduced in this research runner.
+
+
+### Session, roll, and executable-trigger hardening
+
+Further pre-result audit tightened three research boundaries:
+
+- Whole-session eligibility now requires exactly 78 unique contiguous RTH 5-minute starts. Early-close/partial sessions fail closed, and the existing futures-research roll exclusion helper is applied from the full dated-file calendar so its “next session” rule cannot drift when a file is incomplete.
+- The structural trigger boundary is no longer allowed to masquerade as an executable futures fill. The event records the boundary separately from the minimum strict-break price one contract tick beyond it, plus whether the parent magnitude is still on the executable side of that minimum price.
+- `ENTRY_BAR_FAILURE` cannot be an executable v0.1 stop using only completed 5-minute OHLC because the completed trigger-bar opposite extreme is unknowable at the intrabar trigger instant. It is observational-only. `INSIDE_FAR_SIDE` is the only execution-overlay stop still eligible after the separate cost-model gate is frozen.
+
+These changes were frozen before any MNQ/MES historical result was generated.
