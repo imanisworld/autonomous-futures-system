@@ -55,7 +55,7 @@ a:hover { color: var(--accent); }
 .card { padding: 22px; }
 .card.accent { border-color: rgba(95,217,138,.34); }
 .card.warn { border-color: rgba(255,184,0,.4); }
-.card.stop { border-color: rgba(232,135,92,.36); }
+.card.stop { border-color: rgba(239,106,106,.36); }
 section { margin-top: 22px; }
 .matrix { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
 .matrix div { padding: 16px; min-height: 118px; }
