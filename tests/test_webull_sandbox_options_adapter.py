@@ -313,7 +313,11 @@ def test_preview_builds_single_leg_sandbox_request_and_stays_non_submitted():
     assert order["combo_type"] == "NORMAL"
     assert order["order_type"] == "LIMIT"
     assert order["option_strategy"] == "SINGLE"
+    assert order["instrument_type"] == "OPTION"
+    assert order["market"] == "US"
+    assert order["symbol"] == "AAPL"
     assert order["side"] == "BUY"
+    assert order["position_intent"] == "BUY_TO_OPEN"
     assert order["quantity"] == "1"
     assert order["limit_price"] == "1.0000"
     leg = order["legs"][0]
