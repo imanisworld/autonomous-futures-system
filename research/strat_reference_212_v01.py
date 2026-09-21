@@ -201,11 +201,14 @@ def observe_candidate(
         key=lambda b: b.start_utc,
     )
 
+    watch_complete = _is_exact_5m_window(
+        watched, start=watch_start, count=WATCH_BARS_5M
+    )
     source_c: Bar | None = None
     source_c_type: str | None = None
     afs_classifier_sequence: str | None = None
     afs_classifier_direction: str | None = None
-    if _is_exact_5m_window(watched, start=watch_start, count=WATCH_BARS_5M):
+    if watch_complete:
         built = build_session_timeframe(watched, MINUTE_5, HOUR_1, watch_start)
         if len(built) == 1:
             source_c = built[0]
@@ -267,8 +270,8 @@ def observe_candidate(
             mfe_points=None,
             trigger_bar_excursion_excluded=False,
             watch_window_unresolved=not (ambiguous or opposite_first),
-            data_complete=True,
-            watch_window_complete=True,
+            data_complete=watch_complete,
+            watch_window_complete=watch_complete,
             ftfc_state=FTFC_UNAVAILABLE,
             afs_ema_trend_state="UNAVAILABLE",
             afs_comparison_status=(
@@ -359,8 +362,8 @@ def observe_candidate(
             and not structural_failure
             and not resolution_ambiguous
         ),
-        data_complete=True,
-        watch_window_complete=True,
+        data_complete=watch_complete,
+        watch_window_complete=watch_complete,
         ftfc_state=FTFC_UNAVAILABLE,
         afs_ema_trend_state="UNAVAILABLE",
         afs_comparison_status=(
