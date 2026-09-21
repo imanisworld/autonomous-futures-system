@@ -1,0 +1,14 @@
+[Unit]
+Description=Archive watcher tmpfs evidence every 5 minutes
+
+[Timer]
+# tmpfs is lost on reboot; a 5-minute cadence bounds the loss window to one
+# tick's worth of events. Nothing to catch up after a boot (the source is empty),
+# so Persistent is deliberately off.
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=30s
+Unit=afs-watcher-archive.service
+
+[Install]
+WantedBy=timers.target

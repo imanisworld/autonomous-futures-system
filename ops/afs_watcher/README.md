@@ -49,3 +49,19 @@ same state file. It does not start the service. Re-running it on a box where
 the unit is already installed is idempotent, but the running watcher keeps
 executing the old `/tmp/afs_watcher/watcher.py` until
 `systemctl restart afs-watcher.service` (bootstrap re-copies on start).
+
+## Evidence archive (`archive_events.py`, `afs-watcher-archive.timer`)
+
+`/tmp/afs_watcher` is tmpfs and the watcher runs with `/root` remounted
+read-only, so the watcher's own `events.jsonl` (every BLOCKED raise,
+REBASELINED adoption, DAILY verdict) and the snapshots BLOCKED rows point at
+could never reach durable storage — on 2026-09-21 the file only reached back
+to the last reboot and the 2026-09-14 feed outage had no on-box evidence
+left. `archive_events.py` runs from a host-side 5-minute systemd timer,
+reads `/tmp/afs_watcher` only, appends lines it has not archived yet to
+`/root/afs-shared/afs_watcher_archive/events.jsonl` (dedupe by exact line —
+every row carries its own UTC stamp) and copies unseen snapshots alongside.
+It never writes under `/tmp`, never signals the watcher, and is not part of
+`afs-watcher.service`. Loss window after an abrupt reboot is at most one
+interval. Install with `install_events_archive.sh` (root, on the box; safe
+while the watcher is running).
