@@ -402,7 +402,10 @@ def run_instrument(instrument: str) -> dict[str, Any]:
     if not complete_days:
         raise SystemExit(f"no complete sessions for {instrument}")
 
-    roll_excluded = roll_excluded_sessions(complete_days)
+    # Match the existing futures research helper exactly: derive roll
+    # exclusions from the full dated-file calendar, not only complete sessions,
+    # so "next session" cannot drift when a dated file is incomplete.
+    roll_excluded = roll_excluded_sessions(sorted(files))
     days = [day for day in complete_days if day not in roll_excluded]
     skipped["roll_excluded"] = len(roll_excluded & set(complete_days))
     if not days:
