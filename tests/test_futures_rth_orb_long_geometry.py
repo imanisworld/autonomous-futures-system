@@ -6,6 +6,8 @@ from alert_ranker.causal_bars import Bar
 from research.futures_rth_orb_long_geometry import (
     Candidate,
     GEOMETRIES,
+    TradeRow,
+    build_report,
     geometry_prices,
     pass_rule,
     simulate_candidate,
@@ -120,6 +122,58 @@ def test_research_sim_hard_disables_webull_mirror(monkeypatch):
     import os
 
     assert os.environ["WEBULL_FUTURES_MIRROR_ENABLED"] == "false"
+
+
+def test_report_keeps_raw_and_risk_feasible_views_separate():
+    def row(*, episode: str, over_cap: bool, pnl: float) -> TradeRow:
+        return TradeRow(
+            instrument="MNQ",
+            session_date="2026-01-15",
+            half="H1",
+            episode_id=episode,
+            geometry="G1_CANONICAL_OFFSET",
+            slippage_label="base",
+            slippage_ticks=1.0,
+            trigger_bar_start=BASE.isoformat(),
+            trigger_close=100.5,
+            decision_open=101.0,
+            fill_entry=101.25,
+            orb_high=100.0,
+            orb_low=96.0,
+            stop=90.0 if over_cap else 98.0,
+            target=108.0,
+            stop_ticks=200.0 if over_cap else 12.0,
+            over_stop_cap=over_cap,
+            detachment_ticks=4.0,
+            status="RESOLVED",
+            result="WIN" if pnl > 0 else "LOSS",
+            exit_reason="TARGET_HIT" if pnl > 0 else "STOP_HIT",
+            exit_price=102.0,
+            gross_pnl=pnl + 1.24,
+            net_pnl=pnl,
+            bars_held=1,
+            payload_orb_high=100.0,
+            payload_orb_equal=True,
+            legacy_boundary_same_bar=True,
+        )
+
+    rows = [
+        row(episode="keep", over_cap=False, pnl=10.0),
+        row(episode="drop-secondary-only", over_cap=True, pnl=-50.0),
+    ]
+    meta = {
+        "MNQ": {"candidates": 2, "skipped": {}},
+        "MES": {"candidates": 2, "skipped": {}},
+    }
+    # Duplicate the same synthetic rows into both instruments only to exercise
+    # report structure; the primary/raw gate still reads raw cells.
+    report = build_report({"MNQ": rows, "MES": rows}, meta)
+    raw = report["instruments"]["MNQ"]["cells"]["G1_CANONICAL_OFFSET:base"]
+    feasible = report["instruments"]["MNQ"]["risk_feasible_cells"]["G1_CANONICAL_OFFSET:base"]
+    assert raw["resolved"] == 2
+    assert raw["net"] == -40.0
+    assert feasible["resolved"] == 1
+    assert feasible["net"] == 10.0
 
 
 def _cell(*, h1_n=120, h2_n=120, h1_net=100.0, h2_net=100.0, h1_pf=1.2, h2_pf=1.2, month=0.3):
