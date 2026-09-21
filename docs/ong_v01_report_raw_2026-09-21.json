@@ -1,0 +1,4132 @@
+{
+  "families": {
+    "ORB_BREAKOUT_LONG": {
+      "cells": {
+        "O1_EVENT_LEVEL:base": {
+          "alignment": {
+            "aligned": 8702,
+            "unaligned": 10176,
+            "unknown": 1504
+          },
+          "bracket_invalid": 806,
+          "eod_exits": 266,
+          "episodes": 20382,
+          "halves": {
+            "H1": {
+              "mean_r": -0.38787,
+              "median_r": -1.07547,
+              "n": 10758,
+              "net_r": -4172.73286,
+              "pf": 0.58335
+            },
+            "H2": {
+              "mean_r": -0.46954,
+              "median_r": -1.08696,
+              "n": 8474,
+              "net_r": -3978.90405,
+              "pf": 0.51805
+            }
+          },
+          "level_distance_median": 0.11,
+          "level_distance_p90": 0.67,
+          "max_drawdown_r": 8153.6012,
+          "mean_r": -0.42386,
+          "median_r": -1.08,
+          "net_r": -8151.63691,
+          "no_next_bar": 344,
+          "pf": 0.55384,
+          "resolved": 19232,
+          "sessions": 116,
+          "stop_exits": 13610,
+          "symbols": 148,
+          "target_exits": 5356,
+          "top_positive_ticker_share": 0.41771
+        },
+        "O1_EVENT_LEVEL:stress": {
+          "alignment": {
+            "aligned": 8702,
+            "unaligned": 10176,
+            "unknown": 1504
+          },
+          "bracket_invalid": 1580,
+          "eod_exits": 266,
+          "episodes": 20382,
+          "halves": {
+            "H1": {
+              "mean_r": -0.76066,
+              "median_r": -1.21429,
+              "n": 10356,
+              "net_r": -7877.39251,
+              "pf": 0.39024
+            },
+            "H2": {
+              "mean_r": -0.85439,
+              "median_r": -1.2449,
+              "n": 8102,
+              "net_r": -6922.2402,
+              "pf": 0.34592
+            }
+          },
+          "level_distance_median": 0.11,
+          "level_distance_p90": 0.67,
+          "max_drawdown_r": 14801.52557,
+          "mean_r": -0.8018,
+          "median_r": -1.22642,
+          "net_r": -14799.63271,
+          "no_next_bar": 344,
+          "pf": 0.37029,
+          "resolved": 18458,
+          "sessions": 116,
+          "stop_exits": 12982,
+          "symbols": 148,
+          "target_exits": 5210,
+          "top_positive_ticker_share": null
+        },
+        "O2_TRIGGER_BAR:base": {
+          "alignment": {
+            "aligned": 8702,
+            "unaligned": 10176,
+            "unknown": 1504
+          },
+          "bracket_invalid": 20,
+          "eod_exits": 1294,
+          "episodes": 20382,
+          "halves": {
+            "H1": {
+              "mean_r": -0.07526,
+              "median_r": -1.02222,
+              "n": 11179,
+              "net_r": -841.29335,
+              "pf": 0.89293
+            },
+            "H2": {
+              "mean_r": -0.16105,
+              "median_r": -1.02735,
+              "n": 8839,
+              "net_r": -1423.50678,
+              "pf": 0.78182
+            }
+          },
+          "level_distance_median": 0.11,
+          "level_distance_p90": 0.67,
+          "max_drawdown_r": 2393.95438,
+          "mean_r": -0.11314,
+          "median_r": -1.02448,
+          "net_r": -2264.80013,
+          "no_next_bar": 344,
+          "pf": 0.84253,
+          "resolved": 20018,
+          "sessions": 116,
+          "stop_exits": 12812,
+          "symbols": 148,
+          "target_exits": 5912,
+          "top_positive_ticker_share": 0.09316
+        },
+        "O2_TRIGGER_BAR:stress": {
+          "alignment": {
+            "aligned": 8702,
+            "unaligned": 10176,
+            "unknown": 1504
+          },
+          "bracket_invalid": 42,
+          "eod_exits": 1294,
+          "episodes": 20382,
+          "halves": {
+            "H1": {
+              "mean_r": -0.24757,
+              "median_r": -1.06679,
+              "n": 11162,
+              "net_r": -2763.35182,
+              "pf": 0.7048
+            },
+            "H2": {
+              "mean_r": -0.35126,
+              "median_r": -1.08236,
+              "n": 8834,
+              "net_r": -3103.06187,
+              "pf": 0.60563
+            }
+          },
+          "level_distance_median": 0.11,
+          "level_distance_p90": 0.67,
+          "max_drawdown_r": 5894.79028,
+          "mean_r": -0.29338,
+          "median_r": -1.07407,
+          "net_r": -5866.41369,
+          "no_next_bar": 344,
+          "pf": 0.65951,
+          "resolved": 19996,
+          "sessions": 116,
+          "stop_exits": 12800,
+          "symbols": 148,
+          "target_exits": 5902,
+          "top_positive_ticker_share": 0.16173
+        }
+      }
+    },
+    "ORB_BREAKOUT_SHORT": {
+      "cells": {
+        "O1_EVENT_LEVEL:base": {
+          "alignment": {
+            "aligned": 6186,
+            "unaligned": 12362,
+            "unknown": 1475
+          },
+          "bracket_invalid": 875,
+          "eod_exits": 264,
+          "episodes": 20023,
+          "halves": {
+            "H1": {
+              "mean_r": -0.42326,
+              "median_r": -1.08333,
+              "n": 9576,
+              "net_r": -4053.16538,
+              "pf": 0.55686
+            },
+            "H2": {
+              "mean_r": -0.41135,
+              "median_r": -1.07843,
+              "n": 9171,
+              "net_r": -3772.48679,
+              "pf": 0.56468
+            }
+          },
+          "level_distance_median": 0.1025,
+          "level_distance_p90": 0.64,
+          "max_drawdown_r": 7829.58353,
+          "mean_r": -0.41743,
+          "median_r": -1.08,
+          "net_r": -7825.65218,
+          "no_next_bar": 401,
+          "pf": 0.56066,
+          "resolved": 18747,
+          "sessions": 116,
+          "stop_exits": 13159,
+          "symbols": 148,
+          "target_exits": 5324,
+          "top_positive_ticker_share": 0.48305
+        },
+        "O1_EVENT_LEVEL:stress": {
+          "alignment": {
+            "aligned": 6186,
+            "unaligned": 12362,
+            "unknown": 1475
+          },
+          "bracket_invalid": 1733,
+          "eod_exits": 264,
+          "episodes": 20023,
+          "halves": {
+            "H1": {
+              "mean_r": -0.80313,
+              "median_r": -1.22222,
+              "n": 9131,
+              "net_r": -7333.39537,
+              "pf": 0.37129
+            },
+            "H2": {
+              "mean_r": -0.78673,
+              "median_r": -1.2221,
+              "n": 8758,
+              "net_r": -6890.22313,
+              "pf": 0.37594
+            }
+          },
+          "level_distance_median": 0.1025,
+          "level_distance_p90": 0.64,
+          "max_drawdown_r": 14225.53963,
+          "mean_r": -0.7951,
+          "median_r": -1.22222,
+          "net_r": -14223.6185,
+          "no_next_bar": 401,
+          "pf": 0.37355,
+          "resolved": 17889,
+          "sessions": 116,
+          "stop_exits": 12451,
+          "symbols": 148,
+          "target_exits": 5174,
+          "top_positive_ticker_share": null
+        },
+        "O2_TRIGGER_BAR:base": {
+          "alignment": {
+            "aligned": 6186,
+            "unaligned": 12362,
+            "unknown": 1475
+          },
+          "bracket_invalid": 32,
+          "eod_exits": 1353,
+          "episodes": 20023,
+          "halves": {
+            "H1": {
+              "mean_r": -0.08518,
+              "median_r": -1.02312,
+              "n": 9960,
+              "net_r": -848.39009,
+              "pf": 0.88019
+            },
+            "H2": {
+              "mean_r": -0.09194,
+              "median_r": -1.02381,
+              "n": 9630,
+              "net_r": -885.41988,
+              "pf": 0.87035
+            }
+          },
+          "level_distance_median": 0.1025,
+          "level_distance_p90": 0.64,
+          "max_drawdown_r": 1756.25253,
+          "mean_r": -0.0885,
+          "median_r": -1.02339,
+          "net_r": -1733.80998,
+          "no_next_bar": 401,
+          "pf": 0.87536,
+          "resolved": 19590,
+          "sessions": 116,
+          "stop_exits": 12272,
+          "symbols": 148,
+          "target_exits": 5965,
+          "top_positive_ticker_share": 0.09004
+        },
+        "O2_TRIGGER_BAR:stress": {
+          "alignment": {
+            "aligned": 6186,
+            "unaligned": 12362,
+            "unknown": 1475
+          },
+          "bracket_invalid": 54,
+          "eod_exits": 1353,
+          "episodes": 20023,
+          "halves": {
+            "H1": {
+              "mean_r": -0.27612,
+              "median_r": -1.06977,
+              "n": 9951,
+              "net_r": -2747.68097,
+              "pf": 0.67947
+            },
+            "H2": {
+              "mean_r": -0.28157,
+              "median_r": -1.07229,
+              "n": 9617,
+              "net_r": -2707.87406,
+              "pf": 0.67175
+            }
+          },
+          "level_distance_median": 0.1025,
+          "level_distance_p90": 0.64,
+          "max_drawdown_r": 5468.85924,
+          "mean_r": -0.2788,
+          "median_r": -1.07059,
+          "net_r": -5455.55504,
+          "no_next_bar": 401,
+          "pf": 0.67568,
+          "resolved": 19568,
+          "sessions": 116,
+          "stop_exits": 12253,
+          "symbols": 148,
+          "target_exits": 5962,
+          "top_positive_ticker_share": 0.15809
+        }
+      }
+    },
+    "ORB_BREAK_RETEST_LONG": {
+      "cells": {
+        "O1_EVENT_LEVEL:base": {
+          "alignment": {
+            "aligned": 3596,
+            "unaligned": 4290,
+            "unknown": 660
+          },
+          "bracket_invalid": 356,
+          "eod_exits": 103,
+          "episodes": 8546,
+          "halves": {
+            "H1": {
+              "mean_r": -0.4286,
+              "median_r": -1.08511,
+              "n": 4522,
+              "net_r": -1938.14899,
+              "pf": 0.54999
+            },
+            "H2": {
+              "mean_r": -0.44998,
+              "median_r": -1.09468,
+              "n": 3528,
+              "net_r": -1587.52863,
+              "pf": 0.53527
+            }
+          },
+          "level_distance_median": 0.1,
+          "level_distance_p90": 0.58,
+          "max_drawdown_r": 3534.7386,
+          "mean_r": -0.43797,
+          "median_r": -1.08696,
+          "net_r": -3525.67762,
+          "no_next_bar": 140,
+          "pf": 0.54348,
+          "resolved": 8050,
+          "sessions": 116,
+          "stop_exits": 5702,
+          "symbols": 148,
+          "target_exits": 2245,
+          "top_positive_ticker_share": 0.66491
+        },
+        "O1_EVENT_LEVEL:stress": {
+          "alignment": {
+            "aligned": 3596,
+            "unaligned": 4290,
+            "unknown": 660
+          },
+          "bracket_invalid": 711,
+          "eod_exits": 103,
+          "episodes": 8546,
+          "halves": {
+            "H1": {
+              "mean_r": -0.81586,
+              "median_r": -1.2372,
+              "n": 4330,
+              "net_r": -3532.65467,
+              "pf": 0.36401
+            },
+            "H2": {
+              "mean_r": -0.84861,
+              "median_r": -1.25532,
+              "n": 3365,
+              "net_r": -2855.5746,
+              "pf": 0.34895
+            }
+          },
+          "level_distance_median": 0.1,
+          "level_distance_p90": 0.58,
+          "max_drawdown_r": 6392.60081,
+          "mean_r": -0.83018,
+          "median_r": -1.2449,
+          "net_r": -6388.22927,
+          "no_next_bar": 140,
+          "pf": 0.35737,
+          "resolved": 7695,
+          "sessions": 116,
+          "stop_exits": 5417,
+          "symbols": 148,
+          "target_exits": 2175,
+          "top_positive_ticker_share": 0.85029
+        },
+        "O2_TRIGGER_BAR:base": {
+          "alignment": {
+            "aligned": 3596,
+            "unaligned": 4290,
+            "unknown": 660
+          },
+          "bracket_invalid": 65,
+          "eod_exits": 206,
+          "episodes": 8546,
+          "halves": {
+            "H1": {
+              "mean_r": -0.19459,
+              "median_r": -1.04348,
+              "n": 4677,
+              "net_r": -910.08485,
+              "pf": 0.75697
+            },
+            "H2": {
+              "mean_r": -0.23349,
+              "median_r": -1.05352,
+              "n": 3664,
+              "net_r": -855.49323,
+              "pf": 0.71541
+            }
+          },
+          "level_distance_median": 0.1,
+          "level_distance_p90": 0.58,
+          "max_drawdown_r": 1788.23498,
+          "mean_r": -0.21167,
+          "median_r": -1.04762,
+          "net_r": -1765.57808,
+          "no_next_bar": 140,
+          "pf": 0.73846,
+          "resolved": 8341,
+          "sessions": 116,
+          "stop_exits": 5557,
+          "symbols": 148,
+          "target_exits": 2578,
+          "top_positive_ticker_share": 0.07723
+        },
+        "O2_TRIGGER_BAR:stress": {
+          "alignment": {
+            "aligned": 3596,
+            "unaligned": 4290,
+            "unknown": 660
+          },
+          "bracket_invalid": 169,
+          "eod_exits": 206,
+          "episodes": 8546,
+          "halves": {
+            "H1": {
+              "mean_r": -0.47904,
+              "median_r": -1.12766,
+              "n": 4625,
+              "net_r": -2215.56032,
+              "pf": 0.53575
+            },
+            "H2": {
+              "mean_r": -0.53834,
+              "median_r": -1.15792,
+              "n": 3612,
+              "net_r": -1944.46959,
+              "pf": 0.49636
+            }
+          },
+          "level_distance_median": 0.1,
+          "level_distance_p90": 0.58,
+          "max_drawdown_r": 4169.04772,
+          "mean_r": -0.50504,
+          "median_r": -1.14118,
+          "net_r": -4160.02991,
+          "no_next_bar": 140,
+          "pf": 0.51813,
+          "resolved": 8237,
+          "sessions": 116,
+          "stop_exits": 5479,
+          "symbols": 148,
+          "target_exits": 2552,
+          "top_positive_ticker_share": 0.20451
+        }
+      }
+    },
+    "ORB_BREAK_RETEST_SHORT": {
+      "cells": {
+        "O1_EVENT_LEVEL:base": {
+          "alignment": {
+            "aligned": 2433,
+            "unaligned": 5320,
+            "unknown": 617
+          },
+          "bracket_invalid": 339,
+          "eod_exits": 132,
+          "episodes": 8370,
+          "halves": {
+            "H1": {
+              "mean_r": -0.40369,
+              "median_r": -1.0833,
+              "n": 4047,
+              "net_r": -1633.74452,
+              "pf": 0.57521
+            },
+            "H2": {
+              "mean_r": -0.39074,
+              "median_r": -1.08,
+              "n": 3819,
+              "net_r": -1492.25057,
+              "pf": 0.58536
+            }
+          },
+          "level_distance_median": 0.1,
+          "level_distance_p90": 0.62,
+          "max_drawdown_r": 3134.74653,
+          "mean_r": -0.39741,
+          "median_r": -1.08163,
+          "net_r": -3125.99509,
+          "no_next_bar": 165,
+          "pf": 0.58012,
+          "resolved": 7866,
+          "sessions": 116,
+          "stop_exits": 5419,
+          "symbols": 148,
+          "target_exits": 2315,
+          "top_positive_ticker_share": 0.21397
+        },
+        "O1_EVENT_LEVEL:stress": {
+          "alignment": {
+            "aligned": 2433,
+            "unaligned": 5320,
+            "unknown": 617
+          },
+          "bracket_invalid": 748,
+          "eod_exits": 132,
+          "episodes": 8370,
+          "halves": {
+            "H1": {
+              "mean_r": -0.80415,
+              "median_r": -1.22637,
+              "n": 3830,
+              "net_r": -3079.88576,
+              "pf": 0.37599
+            },
+            "H2": {
+              "mean_r": -0.78703,
+              "median_r": -1.22642,
+              "n": 3627,
+              "net_r": -2854.55194,
+              "pf": 0.38434
+            }
+          },
+          "level_distance_median": 0.1,
+          "level_distance_p90": 0.62,
+          "max_drawdown_r": 5940.69201,
+          "mean_r": -0.79582,
+          "median_r": -1.22642,
+          "net_r": -5934.4377,
+          "no_next_bar": 165,
+          "pf": 0.38003,
+          "resolved": 7457,
+          "sessions": 116,
+          "stop_exits": 5103,
+          "symbols": 148,
+          "target_exits": 2222,
+          "top_positive_ticker_share": 0.50087
+        },
+        "O2_TRIGGER_BAR:base": {
+          "alignment": {
+            "aligned": 2433,
+            "unaligned": 5320,
+            "unknown": 617
+          },
+          "bracket_invalid": 58,
+          "eod_exits": 218,
+          "episodes": 8370,
+          "halves": {
+            "H1": {
+              "mean_r": -0.18664,
+              "median_r": -1.04598,
+              "n": 4176,
+              "net_r": -779.41622,
+              "pf": 0.76764
+            },
+            "H2": {
+              "mean_r": -0.18669,
+              "median_r": -1.04494,
+              "n": 3971,
+              "net_r": -741.36267,
+              "pf": 0.76742
+            }
+          },
+          "level_distance_median": 0.1,
+          "level_distance_p90": 0.62,
+          "max_drawdown_r": 1540.78216,
+          "mean_r": -0.18667,
+          "median_r": -1.04545,
+          "net_r": -1520.77889,
+          "no_next_bar": 165,
+          "pf": 0.76753,
+          "resolved": 8147,
+          "sessions": 116,
+          "stop_exits": 5323,
+          "symbols": 148,
+          "target_exits": 2606,
+          "top_positive_ticker_share": 0.09758
+        },
+        "O2_TRIGGER_BAR:stress": {
+          "alignment": {
+            "aligned": 2433,
+            "unaligned": 5320,
+            "unknown": 617
+          },
+          "bracket_invalid": 168,
+          "eod_exits": 218,
+          "episodes": 8370,
+          "halves": {
+            "H1": {
+              "mean_r": -0.48684,
+              "median_r": -1.13636,
+              "n": 4117,
+              "net_r": -2004.32954,
+              "pf": 0.53469
+            },
+            "H2": {
+              "mean_r": -0.49992,
+              "median_r": -1.13421,
+              "n": 3920,
+              "net_r": -1959.6746,
+              "pf": 0.5263
+            }
+          },
+          "level_distance_median": 0.1,
+          "level_distance_p90": 0.62,
+          "max_drawdown_r": 3970.49682,
+          "mean_r": -0.49322,
+          "median_r": -1.13483,
+          "net_r": -3964.00414,
+          "no_next_bar": 165,
+          "pf": 0.53058,
+          "resolved": 8037,
+          "sessions": 116,
+          "stop_exits": 5243,
+          "symbols": 148,
+          "target_exits": 2576,
+          "top_positive_ticker_share": 0.18627
+        }
+      }
+    },
+    "ORB_REJECTION_LONG": {
+      "cells": {
+        "O1_EVENT_LEVEL:base": {
+          "alignment": {
+            "aligned": 4379,
+            "unaligned": 7797,
+            "unknown": 1002
+          },
+          "bracket_invalid": 545,
+          "eod_exits": 194,
+          "episodes": 13178,
+          "halves": {
+            "H1": {
+              "mean_r": -0.39932,
+              "median_r": -1.08,
+              "n": 6375,
+              "net_r": -2545.69086,
+              "pf": 0.57578
+            },
+            "H2": {
+              "mean_r": -0.46334,
+              "median_r": -1.08696,
+              "n": 6025,
+              "net_r": -2791.65131,
+              "pf": 0.52504
+            }
+          },
+          "level_distance_median": 0.105,
+          "level_distance_p90": 0.65,
+          "max_drawdown_r": 5337.34216,
+          "mean_r": -0.43043,
+          "median_r": -1.08333,
+          "net_r": -5337.34216,
+          "no_next_bar": 233,
+          "pf": 0.55067,
+          "resolved": 12400,
+          "sessions": 116,
+          "stop_exits": 8717,
+          "symbols": 148,
+          "target_exits": 3489,
+          "top_positive_ticker_share": 0.30972
+        },
+        "O1_EVENT_LEVEL:stress": {
+          "alignment": {
+            "aligned": 4379,
+            "unaligned": 7797,
+            "unknown": 1002
+          },
+          "bracket_invalid": 1163,
+          "eod_exits": 194,
+          "episodes": 13178,
+          "halves": {
+            "H1": {
+              "mean_r": -0.78045,
+              "median_r": -1.21818,
+              "n": 6087,
+              "net_r": -4750.59461,
+              "pf": 0.38101
+            },
+            "H2": {
+              "mean_r": -0.83848,
+              "median_r": -1.24,
+              "n": 5695,
+              "net_r": -4775.15639,
+              "pf": 0.3537
+            }
+          },
+          "level_distance_median": 0.105,
+          "level_distance_p90": 0.65,
+          "max_drawdown_r": 9525.751,
+          "mean_r": -0.8085,
+          "median_r": -1.23077,
+          "net_r": -9525.751,
+          "no_next_bar": 233,
+          "pf": 0.36762,
+          "resolved": 11782,
+          "sessions": 116,
+          "stop_exits": 8217,
+          "symbols": 148,
+          "target_exits": 3371,
+          "top_positive_ticker_share": 1.0
+        },
+        "O2_TRIGGER_BAR:base": {
+          "alignment": {
+            "aligned": 4379,
+            "unaligned": 7797,
+            "unknown": 1002
+          },
+          "bracket_invalid": 92,
+          "eod_exits": 384,
+          "episodes": 13178,
+          "halves": {
+            "H1": {
+              "mean_r": -0.19997,
+              "median_r": -1.04348,
+              "n": 6590,
+              "net_r": -1317.82693,
+              "pf": 0.74905
+            },
+            "H2": {
+              "mean_r": -0.23274,
+              "median_r": -1.04651,
+              "n": 6263,
+              "net_r": -1457.64295,
+              "pf": 0.71246
+            }
+          },
+          "level_distance_median": 0.105,
+          "level_distance_p90": 0.65,
+          "max_drawdown_r": 2790.03475,
+          "mean_r": -0.21594,
+          "median_r": -1.04494,
+          "net_r": -2775.46988,
+          "no_next_bar": 233,
+          "pf": 0.73108,
+          "resolved": 12853,
+          "sessions": 116,
+          "stop_exits": 8603,
+          "symbols": 148,
+          "target_exits": 3866,
+          "top_positive_ticker_share": 0.16874
+        },
+        "O2_TRIGGER_BAR:stress": {
+          "alignment": {
+            "aligned": 4379,
+            "unaligned": 7797,
+            "unknown": 1002
+          },
+          "bracket_invalid": 172,
+          "eod_exits": 384,
+          "episodes": 13178,
+          "halves": {
+            "H1": {
+              "mean_r": -0.48422,
+              "median_r": -1.12951,
+              "n": 6547,
+              "net_r": -3170.21644,
+              "pf": 0.52891
+            },
+            "H2": {
+              "mean_r": -0.52353,
+              "median_r": -1.13819,
+              "n": 6226,
+              "net_r": -3259.50561,
+              "pf": 0.49987
+            }
+          },
+          "level_distance_median": 0.105,
+          "level_distance_p90": 0.65,
+          "max_drawdown_r": 6435.03517,
+          "mean_r": -0.50338,
+          "median_r": -1.13333,
+          "net_r": -6429.72206,
+          "no_next_bar": 233,
+          "pf": 0.51462,
+          "resolved": 12773,
+          "sessions": 116,
+          "stop_exits": 8535,
+          "symbols": 148,
+          "target_exits": 3854,
+          "top_positive_ticker_share": 0.33263
+        }
+      }
+    },
+    "ORB_REJECTION_SHORT": {
+      "cells": {
+        "O1_EVENT_LEVEL:base": {
+          "alignment": {
+            "aligned": 2944,
+            "unaligned": 9362,
+            "unknown": 945
+          },
+          "bracket_invalid": 577,
+          "eod_exits": 186,
+          "episodes": 13251,
+          "halves": {
+            "H1": {
+              "mean_r": -0.44133,
+              "median_r": -1.08,
+              "n": 6872,
+              "net_r": -3032.80554,
+              "pf": 0.54018
+            },
+            "H2": {
+              "mean_r": -0.42638,
+              "median_r": -1.08,
+              "n": 5558,
+              "net_r": -2369.8012,
+              "pf": 0.55192
+            }
+          },
+          "level_distance_median": 0.105,
+          "level_distance_p90": 0.7,
+          "max_drawdown_r": 5403.69075,
+          "mean_r": -0.43464,
+          "median_r": -1.08,
+          "net_r": -5402.60674,
+          "no_next_bar": 244,
+          "pf": 0.5454,
+          "resolved": 12430,
+          "sessions": 116,
+          "stop_exits": 8797,
+          "symbols": 148,
+          "target_exits": 3447,
+          "top_positive_ticker_share": 0.80331
+        },
+        "O1_EVENT_LEVEL:stress": {
+          "alignment": {
+            "aligned": 2944,
+            "unaligned": 9362,
+            "unknown": 945
+          },
+          "bracket_invalid": 1154,
+          "eod_exits": 185,
+          "episodes": 13251,
+          "halves": {
+            "H1": {
+              "mean_r": -0.79803,
+              "median_r": -1.21429,
+              "n": 6566,
+              "net_r": -5239.86595,
+              "pf": 0.36839
+            },
+            "H2": {
+              "mean_r": -0.80047,
+              "median_r": -1.22222,
+              "n": 5287,
+              "net_r": -4232.07017,
+              "pf": 0.36939
+            }
+          },
+          "level_distance_median": 0.105,
+          "level_distance_p90": 0.7,
+          "max_drawdown_r": 9471.93612,
+          "mean_r": -0.79912,
+          "median_r": -1.22222,
+          "net_r": -9471.93612,
+          "no_next_bar": 244,
+          "pf": 0.36884,
+          "resolved": 11853,
+          "sessions": 116,
+          "stop_exits": 8320,
+          "symbols": 148,
+          "target_exits": 3348,
+          "top_positive_ticker_share": 1.0
+        },
+        "O2_TRIGGER_BAR:base": {
+          "alignment": {
+            "aligned": 2944,
+            "unaligned": 9362,
+            "unknown": 945
+          },
+          "bracket_invalid": 83,
+          "eod_exits": 331,
+          "episodes": 13251,
+          "halves": {
+            "H1": {
+              "mean_r": -0.21788,
+              "median_r": -1.04396,
+              "n": 7158,
+              "net_r": -1559.582,
+              "pf": 0.72872
+            },
+            "H2": {
+              "mean_r": -0.1796,
+              "median_r": -1.04444,
+              "n": 5766,
+              "net_r": -1035.59663,
+              "pf": 0.77227
+            }
+          },
+          "level_distance_median": 0.105,
+          "level_distance_p90": 0.7,
+          "max_drawdown_r": 2605.22893,
+          "mean_r": -0.2008,
+          "median_r": -1.04444,
+          "net_r": -2595.17864,
+          "no_next_bar": 244,
+          "pf": 0.74795,
+          "resolved": 12924,
+          "sessions": 116,
+          "stop_exits": 8646,
+          "symbols": 148,
+          "target_exits": 3947,
+          "top_positive_ticker_share": 0.11986
+        },
+        "O2_TRIGGER_BAR:stress": {
+          "alignment": {
+            "aligned": 2944,
+            "unaligned": 9362,
+            "unknown": 945
+          },
+          "bracket_invalid": 152,
+          "eod_exits": 331,
+          "episodes": 13251,
+          "halves": {
+            "H1": {
+              "mean_r": -0.48841,
+              "median_r": -1.13046,
+              "n": 7113,
+              "net_r": -3474.06217,
+              "pf": 0.52384
+            },
+            "H2": {
+              "mean_r": -0.46167,
+              "median_r": -1.13333,
+              "n": 5742,
+              "net_r": -2650.88974,
+              "pf": 0.5466
+            }
+          },
+          "level_distance_median": 0.105,
+          "level_distance_p90": 0.7,
+          "max_drawdown_r": 6126.05131,
+          "mean_r": -0.47646,
+          "median_r": -1.13187,
+          "net_r": -6124.95191,
+          "no_next_bar": 244,
+          "pf": 0.53396,
+          "resolved": 12855,
+          "sessions": 116,
+          "stop_exits": 8586,
+          "symbols": 148,
+          "target_exits": 3938,
+          "top_positive_ticker_share": 0.3065
+        }
+      }
+    },
+    "PDH_BREAK_RETEST_LONG": {
+      "cells": {
+        "O1_EVENT_LEVEL:base": {
+          "alignment": {
+            "aligned": 2145,
+            "unaligned": 2932,
+            "unknown": 370
+          },
+          "bracket_invalid": 245,
+          "eod_exits": 97,
+          "episodes": 5447,
+          "halves": {
+            "H1": {
+              "mean_r": -0.3842,
+              "median_r": -1.07273,
+              "n": 2811,
+              "net_r": -1079.9786,
+              "pf": 0.58821
+            },
+            "H2": {
+              "mean_r": -0.4514,
+              "median_r": -1.09091,
+              "n": 2294,
+              "net_r": -1035.51414,
+              "pf": 0.52723
+            }
+          },
+          "level_distance_median": 0.11,
+          "level_distance_p90": 0.7105,
+          "max_drawdown_r": 2135.65017,
+          "mean_r": -0.4144,
+          "median_r": -1.08,
+          "net_r": -2115.49274,
+          "no_next_bar": 97,
+          "pf": 0.56046,
+          "resolved": 5105,
+          "sessions": 116,
+          "stop_exits": 3577,
+          "symbols": 148,
+          "target_exits": 1431,
+          "top_positive_ticker_share": 0.37671
+        },
+        "O1_EVENT_LEVEL:stress": {
+          "alignment": {
+            "aligned": 2145,
+            "unaligned": 2932,
+            "unknown": 370
+          },
+          "bracket_invalid": 486,
+          "eod_exits": 97,
+          "episodes": 5447,
+          "halves": {
+            "H1": {
+              "mean_r": -0.73531,
+              "median_r": -1.19672,
+              "n": 2675,
+              "net_r": -1966.94384,
+              "pf": 0.40128
+            },
+            "H2": {
+              "mean_r": -0.83331,
+              "median_r": -1.25,
+              "n": 2189,
+              "net_r": -1824.10755,
+              "pf": 0.34836
+            }
+          },
+          "level_distance_median": 0.11,
+          "level_distance_p90": 0.7105,
+          "max_drawdown_r": 3801.75244,
+          "mean_r": -0.77941,
+          "median_r": -1.22222,
+          "net_r": -3791.05139,
+          "no_next_bar": 97,
+          "pf": 0.37693,
+          "resolved": 4864,
+          "sessions": 116,
+          "stop_exits": 3382,
+          "symbols": 148,
+          "target_exits": 1385,
+          "top_positive_ticker_share": 0.91572
+        },
+        "O2_TRIGGER_BAR:base": {
+          "alignment": {
+            "aligned": 2145,
+            "unaligned": 2932,
+            "unknown": 370
+          },
+          "bracket_invalid": 45,
+          "eod_exits": 156,
+          "episodes": 5447,
+          "halves": {
+            "H1": {
+              "mean_r": -0.20967,
+              "median_r": -1.04255,
+              "n": 2925,
+              "net_r": -613.29437,
+              "pf": 0.7404
+            },
+            "H2": {
+              "mean_r": -0.25242,
+              "median_r": -1.04791,
+              "n": 2380,
+              "net_r": -600.76777,
+              "pf": 0.69305
+            }
+          },
+          "level_distance_median": 0.11,
+          "level_distance_p90": 0.7105,
+          "max_drawdown_r": 1230.74565,
+          "mean_r": -0.22885,
+          "median_r": -1.04444,
+          "net_r": -1214.06214,
+          "no_next_bar": 97,
+          "pf": 0.71895,
+          "resolved": 5305,
+          "sessions": 116,
+          "stop_exits": 3550,
+          "symbols": 148,
+          "target_exits": 1599,
+          "top_positive_ticker_share": 0.13592
+        },
+        "O2_TRIGGER_BAR:stress": {
+          "alignment": {
+            "aligned": 2145,
+            "unaligned": 2932,
+            "unknown": 370
+          },
+          "bracket_invalid": 120,
+          "eod_exits": 156,
+          "episodes": 5447,
+          "halves": {
+            "H1": {
+              "mean_r": -0.5057,
+              "median_r": -1.12632,
+              "n": 2886,
+              "net_r": -1459.43782,
+              "pf": 0.51967
+            },
+            "H2": {
+              "mean_r": -0.53068,
+              "median_r": -1.13953,
+              "n": 2344,
+              "net_r": -1243.92343,
+              "pf": 0.49322
+            }
+          },
+          "level_distance_median": 0.11,
+          "level_distance_p90": 0.7105,
+          "max_drawdown_r": 2715.96558,
+          "mean_r": -0.5169,
+          "median_r": -1.13043,
+          "net_r": -2703.36125,
+          "no_next_bar": 97,
+          "pf": 0.50785,
+          "resolved": 5230,
+          "sessions": 116,
+          "stop_exits": 3497,
+          "symbols": 148,
+          "target_exits": 1577,
+          "top_positive_ticker_share": 0.27946
+        }
+      }
+    },
+    "PDH_RECLAIM_LONG": {
+      "cells": {
+        "O1_EVENT_LEVEL:base": {
+          "alignment": {
+            "aligned": 5070,
+            "unaligned": 6868,
+            "unknown": 886
+          },
+          "bracket_invalid": 531,
+          "eod_exits": 196,
+          "episodes": 12824,
+          "halves": {
+            "H1": {
+              "mean_r": -0.35352,
+              "median_r": -1.06897,
+              "n": 6717,
+              "net_r": -2374.61697,
+              "pf": 0.61558
+            },
+            "H2": {
+              "mean_r": -0.43491,
+              "median_r": -1.07551,
+              "n": 5378,
+              "net_r": -2338.9212,
+              "pf": 0.5405
+            }
+          },
+          "level_distance_median": 0.12,
+          "level_distance_p90": 0.745,
+          "max_drawdown_r": 4720.13626,
+          "mean_r": -0.38971,
+          "median_r": -1.07143,
+          "net_r": -4713.53817,
+          "no_next_bar": 198,
+          "pf": 0.58166,
+          "resolved": 12095,
+          "sessions": 116,
+          "stop_exits": 8446,
+          "symbols": 148,
+          "target_exits": 3453,
+          "top_positive_ticker_share": 0.55141
+        },
+        "O1_EVENT_LEVEL:stress": {
+          "alignment": {
+            "aligned": 5070,
+            "unaligned": 6868,
+            "unknown": 886
+          },
+          "bracket_invalid": 1017,
+          "eod_exits": 196,
+          "episodes": 12824,
+          "halves": {
+            "H1": {
+              "mean_r": -0.70979,
+              "median_r": -1.19023,
+              "n": 6440,
+              "net_r": -4571.06114,
+              "pf": 0.41996
+            },
+            "H2": {
+              "mean_r": -0.78469,
+              "median_r": -1.21053,
+              "n": 5169,
+              "net_r": -4056.08178,
+              "pf": 0.3691
+            }
+          },
+          "level_distance_median": 0.12,
+          "level_distance_p90": 0.745,
+          "max_drawdown_r": 8630.07232,
+          "mean_r": -0.74314,
+          "median_r": -1.2,
+          "net_r": -8627.14292,
+          "no_next_bar": 198,
+          "pf": 0.39711,
+          "resolved": 11609,
+          "sessions": 116,
+          "stop_exits": 8035,
+          "symbols": 148,
+          "target_exits": 3378,
+          "top_positive_ticker_share": 0.95951
+        },
+        "O2_TRIGGER_BAR:base": {
+          "alignment": {
+            "aligned": 5070,
+            "unaligned": 6868,
+            "unknown": 886
+          },
+          "bracket_invalid": 27,
+          "eod_exits": 971,
+          "episodes": 12824,
+          "halves": {
+            "H1": {
+              "mean_r": -0.04838,
+              "median_r": -1.01905,
+              "n": 7002,
+              "net_r": -338.74708,
+              "pf": 0.92984
+            },
+            "H2": {
+              "mean_r": -0.17386,
+              "median_r": -1.025,
+              "n": 5597,
+              "net_r": -973.11695,
+              "pf": 0.76269
+            }
+          },
+          "level_distance_median": 0.12,
+          "level_distance_p90": 0.745,
+          "max_drawdown_r": 1352.75089,
+          "mean_r": -0.10412,
+          "median_r": -1.02198,
+          "net_r": -1311.86403,
+          "no_next_bar": 198,
+          "pf": 0.85307,
+          "resolved": 12599,
+          "sessions": 116,
+          "stop_exits": 7949,
+          "symbols": 148,
+          "target_exits": 3679,
+          "top_positive_ticker_share": 0.08575
+        },
+        "O2_TRIGGER_BAR:stress": {
+          "alignment": {
+            "aligned": 5070,
+            "unaligned": 6868,
+            "unknown": 886
+          },
+          "bracket_invalid": 43,
+          "eod_exits": 971,
+          "episodes": 12824,
+          "halves": {
+            "H1": {
+              "mean_r": -0.22276,
+              "median_r": -1.05776,
+              "n": 6994,
+              "net_r": -1557.9768,
+              "pf": 0.7309
+            },
+            "H2": {
+              "mean_r": -0.34601,
+              "median_r": -1.07547,
+              "n": 5589,
+              "net_r": -1933.82613,
+              "pf": 0.60226
+            }
+          },
+          "level_distance_median": 0.12,
+          "level_distance_p90": 0.745,
+          "max_drawdown_r": 3512.08459,
+          "mean_r": -0.2775,
+          "median_r": -1.06594,
+          "net_r": -3491.80294,
+          "no_next_bar": 198,
+          "pf": 0.67218,
+          "resolved": 12583,
+          "sessions": 116,
+          "stop_exits": 7936,
+          "symbols": 148,
+          "target_exits": 3676,
+          "top_positive_ticker_share": 0.1238
+        }
+      }
+    },
+    "PDH_REJECTION_SHORT": {
+      "cells": {
+        "O1_EVENT_LEVEL:base": {
+          "alignment": {
+            "aligned": 1850,
+            "unaligned": 5974,
+            "unknown": 626
+          },
+          "bracket_invalid": 428,
+          "eod_exits": 111,
+          "episodes": 8450,
+          "halves": {
+            "H1": {
+              "mean_r": -0.47124,
+              "median_r": -1.09091,
+              "n": 4266,
+              "net_r": -2010.30803,
+              "pf": 0.51838
+            },
+            "H2": {
+              "mean_r": -0.41265,
+              "median_r": -1.08,
+              "n": 3598,
+              "net_r": -1484.70045,
+              "pf": 0.56065
+            }
+          },
+          "level_distance_median": 0.11,
+          "level_distance_p90": 0.7,
+          "max_drawdown_r": 3495.00848,
+          "mean_r": -0.44443,
+          "median_r": -1.08696,
+          "net_r": -3495.00848,
+          "no_next_bar": 158,
+          "pf": 0.53729,
+          "resolved": 7864,
+          "sessions": 116,
+          "stop_exits": 5604,
+          "symbols": 148,
+          "target_exits": 2149,
+          "top_positive_ticker_share": 0.25719
+        },
+        "O1_EVENT_LEVEL:stress": {
+          "alignment": {
+            "aligned": 1850,
+            "unaligned": 5974,
+            "unknown": 626
+          },
+          "bracket_invalid": 754,
+          "eod_exits": 111,
+          "episodes": 8450,
+          "halves": {
+            "H1": {
+              "mean_r": -0.84095,
+              "median_r": -1.25,
+              "n": 4069,
+              "net_r": -3421.83478,
+              "pf": 0.35425
+            },
+            "H2": {
+              "mean_r": -0.79353,
+              "median_r": -1.22642,
+              "n": 3469,
+              "net_r": -2752.753,
+              "pf": 0.37241
+            }
+          },
+          "level_distance_median": 0.11,
+          "level_distance_p90": 0.7,
+          "max_drawdown_r": 6174.58778,
+          "mean_r": -0.81913,
+          "median_r": -1.24,
+          "net_r": -6174.58778,
+          "no_next_bar": 158,
+          "pf": 0.36248,
+          "resolved": 7538,
+          "sessions": 116,
+          "stop_exits": 5332,
+          "symbols": 148,
+          "target_exits": 2095,
+          "top_positive_ticker_share": 1.0
+        },
+        "O2_TRIGGER_BAR:base": {
+          "alignment": {
+            "aligned": 1850,
+            "unaligned": 5974,
+            "unknown": 626
+          },
+          "bracket_invalid": 89,
+          "eod_exits": 229,
+          "episodes": 8450,
+          "halves": {
+            "H1": {
+              "mean_r": -0.20844,
+              "median_r": -1.04255,
+              "n": 4424,
+              "net_r": -922.11931,
+              "pf": 0.73798
+            },
+            "H2": {
+              "mean_r": -0.1661,
+              "median_r": -1.04082,
+              "n": 3779,
+              "net_r": -627.7084,
+              "pf": 0.78774
+            }
+          },
+          "level_distance_median": 0.11,
+          "level_distance_p90": 0.7,
+          "max_drawdown_r": 1554.49858,
+          "mean_r": -0.18893,
+          "median_r": -1.04167,
+          "net_r": -1549.82771,
+          "no_next_bar": 158,
+          "pf": 0.7607,
+          "resolved": 8203,
+          "sessions": 116,
+          "stop_exits": 5454,
+          "symbols": 148,
+          "target_exits": 2520,
+          "top_positive_ticker_share": 0.09711
+        },
+        "O2_TRIGGER_BAR:stress": {
+          "alignment": {
+            "aligned": 1850,
+            "unaligned": 5974,
+            "unknown": 626
+          },
+          "bracket_invalid": 137,
+          "eod_exits": 229,
+          "episodes": 8450,
+          "halves": {
+            "H1": {
+              "mean_r": -0.48767,
+              "median_r": -1.12766,
+              "n": 4407,
+              "net_r": -2149.14681,
+              "pf": 0.52367
+            },
+            "H2": {
+              "mean_r": -0.41417,
+              "median_r": -1.12245,
+              "n": 3748,
+              "net_r": -1552.29088,
+              "pf": 0.57818
+            }
+          },
+          "level_distance_median": 0.11,
+          "level_distance_p90": 0.7,
+          "max_drawdown_r": 3702.6877,
+          "mean_r": -0.45389,
+          "median_r": -1.125,
+          "net_r": -3701.4377,
+          "no_next_bar": 158,
+          "pf": 0.54816,
+          "resolved": 8155,
+          "sessions": 116,
+          "stop_exits": 5412,
+          "symbols": 148,
+          "target_exits": 2514,
+          "top_positive_ticker_share": 0.24868
+        }
+      }
+    },
+    "PDL_BREAK_RETEST_SHORT": {
+      "cells": {
+        "O1_EVENT_LEVEL:base": {
+          "alignment": {
+            "aligned": 1478,
+            "unaligned": 3439,
+            "unknown": 335
+          },
+          "bracket_invalid": 226,
+          "eod_exits": 64,
+          "episodes": 5252,
+          "halves": {
+            "H1": {
+              "mean_r": -0.43759,
+              "median_r": -1.08696,
+              "n": 2500,
+              "net_r": -1093.9805,
+              "pf": 0.5497
+            },
+            "H2": {
+              "mean_r": -0.39936,
+              "median_r": -1.07843,
+              "n": 2407,
+              "net_r": -961.25353,
+              "pf": 0.57484
+            }
+          },
+          "level_distance_median": 0.1,
+          "level_distance_p90": 0.63,
+          "max_drawdown_r": 2057.82895,
+          "mean_r": -0.41884,
+          "median_r": -1.08333,
+          "net_r": -2055.23404,
+          "no_next_bar": 119,
+          "pf": 0.56182,
+          "resolved": 4907,
+          "sessions": 116,
+          "stop_exits": 3432,
+          "symbols": 148,
+          "target_exits": 1411,
+          "top_positive_ticker_share": 0.15645
+        },
+        "O1_EVENT_LEVEL:stress": {
+          "alignment": {
+            "aligned": 1478,
+            "unaligned": 3439,
+            "unknown": 335
+          },
+          "bracket_invalid": 483,
+          "eod_exits": 63,
+          "episodes": 5252,
+          "halves": {
+            "H1": {
+              "mean_r": -0.82471,
+              "median_r": -1.24,
+              "n": 2361,
+              "net_r": -1947.13196,
+              "pf": 0.3653
+            },
+            "H2": {
+              "mean_r": -0.77422,
+              "median_r": -1.22222,
+              "n": 2289,
+              "net_r": -1772.1969,
+              "pf": 0.38126
+            }
+          },
+          "level_distance_median": 0.1,
+          "level_distance_p90": 0.63,
+          "max_drawdown_r": 3720.95387,
+          "mean_r": -0.79986,
+          "median_r": -1.23077,
+          "net_r": -3719.32887,
+          "no_next_bar": 119,
+          "pf": 0.37301,
+          "resolved": 4650,
+          "sessions": 116,
+          "stop_exits": 3231,
+          "symbols": 148,
+          "target_exits": 1356,
+          "top_positive_ticker_share": 0.28857
+        },
+        "O2_TRIGGER_BAR:base": {
+          "alignment": {
+            "aligned": 1478,
+            "unaligned": 3439,
+            "unknown": 335
+          },
+          "bracket_invalid": 39,
+          "eod_exits": 121,
+          "episodes": 5252,
+          "halves": {
+            "H1": {
+              "mean_r": -0.18475,
+              "median_r": -1.04255,
+              "n": 2597,
+              "net_r": -479.80748,
+              "pf": 0.77083
+            },
+            "H2": {
+              "mean_r": -0.20074,
+              "median_r": -1.04124,
+              "n": 2497,
+              "net_r": -501.24873,
+              "pf": 0.75146
+            }
+          },
+          "level_distance_median": 0.1,
+          "level_distance_p90": 0.63,
+          "max_drawdown_r": 991.21867,
+          "mean_r": -0.19259,
+          "median_r": -1.04167,
+          "net_r": -981.05621,
+          "no_next_bar": 119,
+          "pf": 0.76133,
+          "resolved": 5094,
+          "sessions": 116,
+          "stop_exits": 3351,
+          "symbols": 148,
+          "target_exits": 1622,
+          "top_positive_ticker_share": 0.09163
+        },
+        "O2_TRIGGER_BAR:stress": {
+          "alignment": {
+            "aligned": 1478,
+            "unaligned": 3439,
+            "unknown": 335
+          },
+          "bracket_invalid": 120,
+          "eod_exits": 120,
+          "episodes": 5252,
+          "halves": {
+            "H1": {
+              "mean_r": -0.47799,
+              "median_r": -1.125,
+              "n": 2555,
+              "net_r": -1221.26811,
+              "pf": 0.54115
+            },
+            "H2": {
+              "mean_r": -0.48816,
+              "median_r": -1.12245,
+              "n": 2458,
+              "net_r": -1199.89492,
+              "pf": 0.52882
+            }
+          },
+          "level_distance_median": 0.1,
+          "level_distance_p90": 0.63,
+          "max_drawdown_r": 2428.05268,
+          "mean_r": -0.48298,
+          "median_r": -1.125,
+          "net_r": -2421.16302,
+          "no_next_bar": 119,
+          "pf": 0.53512,
+          "resolved": 5013,
+          "sessions": 116,
+          "stop_exits": 3287,
+          "symbols": 148,
+          "target_exits": 1606,
+          "top_positive_ticker_share": 0.17248
+        }
+      }
+    },
+    "PDL_RECLAIM_SHORT": {
+      "cells": {
+        "O1_EVENT_LEVEL:base": {
+          "alignment": {
+            "aligned": 3745,
+            "unaligned": 8091,
+            "unknown": 825
+          },
+          "bracket_invalid": 528,
+          "eod_exits": 188,
+          "episodes": 12661,
+          "halves": {
+            "H1": {
+              "mean_r": -0.40102,
+              "median_r": -1.07407,
+              "n": 6139,
+              "net_r": -2461.83831,
+              "pf": 0.57328
+            },
+            "H2": {
+              "mean_r": -0.37232,
+              "median_r": -1.07496,
+              "n": 5789,
+              "net_r": -2155.38531,
+              "pf": 0.59761
+            }
+          },
+          "level_distance_median": 0.11,
+          "level_distance_p90": 0.735,
+          "max_drawdown_r": 4632.55472,
+          "mean_r": -0.38709,
+          "median_r": -1.07407,
+          "net_r": -4617.22361,
+          "no_next_bar": 205,
+          "pf": 0.58499,
+          "resolved": 11928,
+          "sessions": 116,
+          "stop_exits": 8279,
+          "symbols": 148,
+          "target_exits": 3461,
+          "top_positive_ticker_share": 0.28804
+        },
+        "O1_EVENT_LEVEL:stress": {
+          "alignment": {
+            "aligned": 3745,
+            "unaligned": 8091,
+            "unknown": 825
+          },
+          "bracket_invalid": 1043,
+          "eod_exits": 188,
+          "episodes": 12661,
+          "halves": {
+            "H1": {
+              "mean_r": -0.7709,
+              "median_r": -1.20401,
+              "n": 5870,
+              "net_r": -4525.16797,
+              "pf": 0.38586
+            },
+            "H2": {
+              "mean_r": -0.75355,
+              "median_r": -1.21053,
+              "n": 5543,
+              "net_r": -4176.92157,
+              "pf": 0.39524
+            }
+          },
+          "level_distance_median": 0.11,
+          "level_distance_p90": 0.735,
+          "max_drawdown_r": 8713.5255,
+          "mean_r": -0.76247,
+          "median_r": -1.2069,
+          "net_r": -8702.08954,
+          "no_next_bar": 205,
+          "pf": 0.3904,
+          "resolved": 11413,
+          "sessions": 116,
+          "stop_exits": 7875,
+          "symbols": 148,
+          "target_exits": 3350,
+          "top_positive_ticker_share": 0.65425
+        },
+        "O2_TRIGGER_BAR:base": {
+          "alignment": {
+            "aligned": 3745,
+            "unaligned": 8091,
+            "unknown": 825
+          },
+          "bracket_invalid": 20,
+          "eod_exits": 1012,
+          "episodes": 12661,
+          "halves": {
+            "H1": {
+              "mean_r": -0.07305,
+              "median_r": -1.01923,
+              "n": 6394,
+              "net_r": -467.09845,
+              "pf": 0.89555
+            },
+            "H2": {
+              "mean_r": -0.10885,
+              "median_r": -1.02151,
+              "n": 6042,
+              "net_r": -657.68212,
+              "pf": 0.84642
+            }
+          },
+          "level_distance_median": 0.11,
+          "level_distance_p90": 0.735,
+          "max_drawdown_r": 1151.50301,
+          "mean_r": -0.09045,
+          "median_r": -1.02,
+          "net_r": -1124.78057,
+          "no_next_bar": 205,
+          "pf": 0.87152,
+          "resolved": 12436,
+          "sessions": 116,
+          "stop_exits": 7721,
+          "symbols": 148,
+          "target_exits": 3703,
+          "top_positive_ticker_share": 0.09355
+        },
+        "O2_TRIGGER_BAR:stress": {
+          "alignment": {
+            "aligned": 3745,
+            "unaligned": 8091,
+            "unknown": 825
+          },
+          "bracket_invalid": 42,
+          "eod_exits": 1012,
+          "episodes": 12661,
+          "halves": {
+            "H1": {
+              "mean_r": -0.25003,
+              "median_r": -1.05769,
+              "n": 6382,
+              "net_r": -1595.6757,
+              "pf": 0.7014
+            },
+            "H2": {
+              "mean_r": -0.29678,
+              "median_r": -1.06528,
+              "n": 6032,
+              "net_r": -1790.20125,
+              "pf": 0.65386
+            }
+          },
+          "level_distance_median": 0.11,
+          "level_distance_p90": 0.735,
+          "max_drawdown_r": 3410.09356,
+          "mean_r": -0.27275,
+          "median_r": -1.06076,
+          "net_r": -3385.87695,
+          "no_next_bar": 205,
+          "pf": 0.67802,
+          "resolved": 12414,
+          "sessions": 116,
+          "stop_exits": 7703,
+          "symbols": 148,
+          "target_exits": 3699,
+          "top_positive_ticker_share": 0.15804
+        }
+      }
+    },
+    "PDL_REJECTION_LONG": {
+      "cells": {
+        "O1_EVENT_LEVEL:base": {
+          "alignment": {
+            "aligned": 2673,
+            "unaligned": 5040,
+            "unknown": 632
+          },
+          "bracket_invalid": 357,
+          "eod_exits": 133,
+          "episodes": 8345,
+          "halves": {
+            "H1": {
+              "mean_r": -0.40585,
+              "median_r": -1.07407,
+              "n": 3988,
+              "net_r": -1618.54418,
+              "pf": 0.56795
+            },
+            "H2": {
+              "mean_r": -0.42455,
+              "median_r": -1.0762,
+              "n": 3842,
+              "net_r": -1631.13297,
+              "pf": 0.5507
+            }
+          },
+          "level_distance_median": 0.11,
+          "level_distance_p90": 0.7457,
+          "max_drawdown_r": 3268.23176,
+          "mean_r": -0.41503,
+          "median_r": -1.07526,
+          "net_r": -3249.67716,
+          "no_next_bar": 158,
+          "pf": 0.55946,
+          "resolved": 7830,
+          "sessions": 116,
+          "stop_exits": 5512,
+          "symbols": 148,
+          "target_exits": 2185,
+          "top_positive_ticker_share": 0.45192
+        },
+        "O1_EVENT_LEVEL:stress": {
+          "alignment": {
+            "aligned": 2673,
+            "unaligned": 5040,
+            "unknown": 632
+          },
+          "bracket_invalid": 690,
+          "eod_exits": 133,
+          "episodes": 8345,
+          "halves": {
+            "H1": {
+              "mean_r": -0.78806,
+              "median_r": -1.20743,
+              "n": 3832,
+              "net_r": -3019.83038,
+              "pf": 0.37836
+            },
+            "H2": {
+              "mean_r": -0.79967,
+              "median_r": -1.21429,
+              "n": 3665,
+              "net_r": -2930.7771,
+              "pf": 0.36713
+            }
+          },
+          "level_distance_median": 0.11,
+          "level_distance_p90": 0.7457,
+          "max_drawdown_r": 5960.13447,
+          "mean_r": -0.79373,
+          "median_r": -1.21429,
+          "net_r": -5950.60748,
+          "no_next_bar": 158,
+          "pf": 0.37288,
+          "resolved": 7497,
+          "sessions": 116,
+          "stop_exits": 5251,
+          "symbols": 148,
+          "target_exits": 2113,
+          "top_positive_ticker_share": 0.65136
+        },
+        "O2_TRIGGER_BAR:base": {
+          "alignment": {
+            "aligned": 2673,
+            "unaligned": 5040,
+            "unknown": 632
+          },
+          "bracket_invalid": 58,
+          "eod_exits": 287,
+          "episodes": 8345,
+          "halves": {
+            "H1": {
+              "mean_r": -0.17092,
+              "median_r": -1.03954,
+              "n": 4135,
+              "net_r": -706.75612,
+              "pf": 0.78119
+            },
+            "H2": {
+              "mean_r": -0.21364,
+              "median_r": -1.03922,
+              "n": 3994,
+              "net_r": -853.2858,
+              "pf": 0.73129
+            }
+          },
+          "level_distance_median": 0.11,
+          "level_distance_p90": 0.7457,
+          "max_drawdown_r": 1580.35097,
+          "mean_r": -0.19191,
+          "median_r": -1.03922,
+          "net_r": -1560.04192,
+          "no_next_bar": 158,
+          "pf": 0.75645,
+          "resolved": 8129,
+          "sessions": 116,
+          "stop_exits": 5385,
+          "symbols": 148,
+          "target_exits": 2457,
+          "top_positive_ticker_share": 0.07042
+        },
+        "O2_TRIGGER_BAR:stress": {
+          "alignment": {
+            "aligned": 2673,
+            "unaligned": 5040,
+            "unknown": 632
+          },
+          "bracket_invalid": 102,
+          "eod_exits": 287,
+          "episodes": 8345,
+          "halves": {
+            "H1": {
+              "mean_r": -0.44335,
+              "median_r": -1.11874,
+              "n": 4117,
+              "net_r": -1825.26022,
+              "pf": 0.55815
+            },
+            "H2": {
+              "mean_r": -0.48833,
+              "median_r": -1.11765,
+              "n": 3968,
+              "net_r": -1937.68948,
+              "pf": 0.52154
+            }
+          },
+          "level_distance_median": 0.11,
+          "level_distance_p90": 0.7457,
+          "max_drawdown_r": 3775.87683,
+          "mean_r": -0.46542,
+          "median_r": -1.11765,
+          "net_r": -3762.9497,
+          "no_next_bar": 158,
+          "pf": 0.54003,
+          "resolved": 8085,
+          "sessions": 116,
+          "stop_exits": 5351,
+          "symbols": 148,
+          "target_exits": 2447,
+          "top_positive_ticker_share": 0.08753
+        }
+      }
+    },
+    "VWAP_FAILED_RECLAIM_SHORT": {
+      "cells": {
+        "O1_EVENT_LEVEL:base": {
+          "alignment": {
+            "aligned": 3709,
+            "unaligned": 10111,
+            "unknown": 1100
+          },
+          "bracket_invalid": 716,
+          "eod_exits": 177,
+          "episodes": 14920,
+          "halves": {
+            "H1": {
+              "mean_r": -0.39465,
+              "median_r": -1.07314,
+              "n": 7055,
+              "net_r": -2784.22734,
+              "pf": 0.58285
+            },
+            "H2": {
+              "mean_r": -0.38135,
+              "median_r": -1.06964,
+              "n": 6894,
+              "net_r": -2629.05291,
+              "pf": 0.59078
+            }
+          },
+          "level_distance_median": 0.1137,
+          "level_distance_p90": 0.7127,
+          "max_drawdown_r": 5414.21108,
+          "mean_r": -0.38808,
+          "median_r": -1.07151,
+          "net_r": -5413.28026,
+          "no_next_bar": 255,
+          "pf": 0.58674,
+          "resolved": 13949,
+          "sessions": 116,
+          "stop_exits": 9672,
+          "symbols": 148,
+          "target_exits": 4100,
+          "top_positive_ticker_share": 0.39998
+        },
+        "O1_EVENT_LEVEL:stress": {
+          "alignment": {
+            "aligned": 3709,
+            "unaligned": 10111,
+            "unknown": 1100
+          },
+          "bracket_invalid": 1322,
+          "eod_exits": 177,
+          "episodes": 14920,
+          "halves": {
+            "H1": {
+              "mean_r": -0.75505,
+              "median_r": -1.1984,
+              "n": 6733,
+              "net_r": -5083.73426,
+              "pf": 0.39619
+            },
+            "H2": {
+              "mean_r": -0.74172,
+              "median_r": -1.19458,
+              "n": 6610,
+              "net_r": -4902.75174,
+              "pf": 0.3994
+            }
+          },
+          "level_distance_median": 0.1137,
+          "level_distance_p90": 0.7127,
+          "max_drawdown_r": 9987.27848,
+          "mean_r": -0.74844,
+          "median_r": -1.1964,
+          "net_r": -9986.486,
+          "no_next_bar": 255,
+          "pf": 0.39777,
+          "resolved": 13343,
+          "sessions": 116,
+          "stop_exits": 9192,
+          "symbols": 148,
+          "target_exits": 3974,
+          "top_positive_ticker_share": 1.0
+        },
+        "O2_TRIGGER_BAR:base": {
+          "alignment": {
+            "aligned": 3709,
+            "unaligned": 10111,
+            "unknown": 1100
+          },
+          "bracket_invalid": 53,
+          "eod_exits": 652,
+          "episodes": 14920,
+          "halves": {
+            "H1": {
+              "mean_r": -0.07592,
+              "median_r": -1.02564,
+              "n": 7395,
+              "net_r": -561.43713,
+              "pf": 0.89504
+            },
+            "H2": {
+              "mean_r": -0.10844,
+              "median_r": -1.02656,
+              "n": 7217,
+              "net_r": -782.59082,
+              "pf": 0.85147
+            }
+          },
+          "level_distance_median": 0.1137,
+          "level_distance_p90": 0.7127,
+          "max_drawdown_r": 1363.78748,
+          "mean_r": -0.09198,
+          "median_r": -1.02614,
+          "net_r": -1344.02794,
+          "no_next_bar": 255,
+          "pf": 0.87342,
+          "resolved": 14612,
+          "sessions": 116,
+          "stop_exits": 9332,
+          "symbols": 148,
+          "target_exits": 4628,
+          "top_positive_ticker_share": 0.0713
+        },
+        "O2_TRIGGER_BAR:stress": {
+          "alignment": {
+            "aligned": 3709,
+            "unaligned": 10111,
+            "unknown": 1100
+          },
+          "bracket_invalid": 96,
+          "eod_exits": 652,
+          "episodes": 14920,
+          "halves": {
+            "H1": {
+              "mean_r": -0.27486,
+              "median_r": -1.07693,
+              "n": 7379,
+              "net_r": -2028.20697,
+              "pf": 0.68762
+            },
+            "H2": {
+              "mean_r": -0.31011,
+              "median_r": -1.08,
+              "n": 7190,
+              "net_r": -2229.70784,
+              "pf": 0.65157
+            }
+          },
+          "level_distance_median": 0.1137,
+          "level_distance_p90": 0.7127,
+          "max_drawdown_r": 4261.90627,
+          "mean_r": -0.29226,
+          "median_r": -1.07843,
+          "net_r": -4257.91481,
+          "no_next_bar": 255,
+          "pf": 0.66973,
+          "resolved": 14569,
+          "sessions": 116,
+          "stop_exits": 9298,
+          "symbols": 148,
+          "target_exits": 4619,
+          "top_positive_ticker_share": 0.13269
+        }
+      }
+    },
+    "VWAP_RECLAIM_LONG": {
+      "cells": {
+        "O1_EVENT_LEVEL:base": {
+          "alignment": {
+            "aligned": 18603,
+            "unaligned": 28184,
+            "unknown": 3701
+          },
+          "bracket_invalid": 2413,
+          "eod_exits": 664,
+          "episodes": 50488,
+          "halves": {
+            "H1": {
+              "mean_r": -0.39438,
+              "median_r": -1.07352,
+              "n": 24823,
+              "net_r": -9789.74842,
+              "pf": 0.58144
+            },
+            "H2": {
+              "mean_r": -0.46123,
+              "median_r": -1.07942,
+              "n": 22428,
+              "net_r": -10344.54848,
+              "pf": 0.52743
+            }
+          },
+          "level_distance_median": 0.1103,
+          "level_distance_p90": 0.712,
+          "max_drawdown_r": 20141.21858,
+          "mean_r": -0.42611,
+          "median_r": -1.0762,
+          "net_r": -20134.29689,
+          "no_next_bar": 824,
+          "pf": 0.55533,
+          "resolved": 47251,
+          "sessions": 116,
+          "stop_exits": 33164,
+          "symbols": 148,
+          "target_exits": 13423,
+          "top_positive_ticker_share": null
+        },
+        "O1_EVENT_LEVEL:stress": {
+          "alignment": {
+            "aligned": 18603,
+            "unaligned": 28184,
+            "unknown": 3701
+          },
+          "bracket_invalid": 4633,
+          "eod_exits": 664,
+          "episodes": 50488,
+          "halves": {
+            "H1": {
+              "mean_r": -0.75057,
+              "median_r": -1.20336,
+              "n": 23702,
+              "net_r": -17790.1282,
+              "pf": 0.39667
+            },
+            "H2": {
+              "mean_r": -0.8289,
+              "median_r": -1.21951,
+              "n": 21329,
+              "net_r": -17679.65558,
+              "pf": 0.35696
+            }
+          },
+          "level_distance_median": 0.1103,
+          "level_distance_p90": 0.712,
+          "max_drawdown_r": 35475.98609,
+          "mean_r": -0.78767,
+          "median_r": -1.21157,
+          "net_r": -35469.78378,
+          "no_next_bar": 824,
+          "pf": 0.37751,
+          "resolved": 45031,
+          "sessions": 116,
+          "stop_exits": 31394,
+          "symbols": 148,
+          "target_exits": 12973,
+          "top_positive_ticker_share": null
+        },
+        "O2_TRIGGER_BAR:base": {
+          "alignment": {
+            "aligned": 18603,
+            "unaligned": 28184,
+            "unknown": 3701
+          },
+          "bracket_invalid": 123,
+          "eod_exits": 3441,
+          "episodes": 50488,
+          "halves": {
+            "H1": {
+              "mean_r": -0.07053,
+              "median_r": -1.02128,
+              "n": 25982,
+              "net_r": -1832.5327,
+              "pf": 0.89918
+            },
+            "H2": {
+              "mean_r": -0.13806,
+              "median_r": -1.02394,
+              "n": 23559,
+              "net_r": -3252.58161,
+              "pf": 0.81043
+            }
+          },
+          "level_distance_median": 0.1103,
+          "level_distance_p90": 0.712,
+          "max_drawdown_r": 5511.85634,
+          "mean_r": -0.10264,
+          "median_r": -1.02247,
+          "net_r": -5085.11431,
+          "no_next_bar": 824,
+          "pf": 0.85609,
+          "resolved": 49541,
+          "sessions": 116,
+          "stop_exits": 31351,
+          "symbols": 148,
+          "target_exits": 14749,
+          "top_positive_ticker_share": 0.07681
+        },
+        "O2_TRIGGER_BAR:stress": {
+          "alignment": {
+            "aligned": 18603,
+            "unaligned": 28184,
+            "unknown": 3701
+          },
+          "bracket_invalid": 198,
+          "eod_exits": 3441,
+          "episodes": 50488,
+          "halves": {
+            "H1": {
+              "mean_r": -0.24383,
+              "median_r": -1.06452,
+              "n": 25941,
+              "net_r": -6325.3134,
+              "pf": 0.70841
+            },
+            "H2": {
+              "mean_r": -0.32325,
+              "median_r": -1.07229,
+              "n": 23525,
+              "net_r": -7604.39945,
+              "pf": 0.63132
+            }
+          },
+          "level_distance_median": 0.1103,
+          "level_distance_p90": 0.712,
+          "max_drawdown_r": 14015.46465,
+          "mean_r": -0.2816,
+          "median_r": -1.06815,
+          "net_r": -13929.71285,
+          "no_next_bar": 824,
+          "pf": 0.67083,
+          "resolved": 49466,
+          "sessions": 116,
+          "stop_exits": 31296,
+          "symbols": 148,
+          "target_exits": 14729,
+          "top_positive_ticker_share": 0.14698
+        }
+      }
+    },
+    "VWAP_TEST_HOLD_LONG": {
+      "cells": {
+        "O1_EVENT_LEVEL:base": {
+          "alignment": {
+            "aligned": 12788,
+            "unaligned": 21248,
+            "unknown": 2644
+          },
+          "bracket_invalid": 1616,
+          "eod_exits": 610,
+          "episodes": 36680,
+          "halves": {
+            "H1": {
+              "mean_r": -0.39752,
+              "median_r": -1.06759,
+              "n": 18128,
+              "net_r": -7206.24413,
+              "pf": 0.57627
+            },
+            "H2": {
+              "mean_r": -0.43779,
+              "median_r": -1.07313,
+              "n": 16253,
+              "net_r": -7115.36347,
+              "pf": 0.54359
+            }
+          },
+          "level_distance_median": 0.1206,
+          "level_distance_p90": 0.8302,
+          "max_drawdown_r": 14323.53723,
+          "mean_r": -0.41656,
+          "median_r": -1.07006,
+          "net_r": -14321.6076,
+          "no_next_bar": 683,
+          "pf": 0.56064,
+          "resolved": 34381,
+          "sessions": 116,
+          "stop_exits": 24100,
+          "symbols": 148,
+          "target_exits": 9671,
+          "top_positive_ticker_share": 0.62719
+        },
+        "O1_EVENT_LEVEL:stress": {
+          "alignment": {
+            "aligned": 12788,
+            "unaligned": 21248,
+            "unknown": 2644
+          },
+          "bracket_invalid": 3121,
+          "eod_exits": 610,
+          "episodes": 36680,
+          "halves": {
+            "H1": {
+              "mean_r": -0.73297,
+              "median_r": -1.18632,
+              "n": 17367,
+              "net_r": -12729.51103,
+              "pf": 0.40154
+            },
+            "H2": {
+              "mean_r": -0.78933,
+              "median_r": -1.20125,
+              "n": 15509,
+              "net_r": -12241.74865,
+              "pf": 0.37271
+            }
+          },
+          "level_distance_median": 0.1206,
+          "level_distance_p90": 0.8302,
+          "max_drawdown_r": 24973.04857,
+          "mean_r": -0.75956,
+          "median_r": -1.19281,
+          "net_r": -24971.25967,
+          "no_next_bar": 683,
+          "pf": 0.38775,
+          "resolved": 32876,
+          "sessions": 116,
+          "stop_exits": 22865,
+          "symbols": 148,
+          "target_exits": 9401,
+          "top_positive_ticker_share": 0.66193
+        },
+        "O2_TRIGGER_BAR:base": {
+          "alignment": {
+            "aligned": 12788,
+            "unaligned": 21248,
+            "unknown": 2644
+          },
+          "bracket_invalid": 283,
+          "eod_exits": 1182,
+          "episodes": 36680,
+          "halves": {
+            "H1": {
+              "mean_r": -0.18684,
+              "median_r": -1.03704,
+              "n": 18819,
+              "net_r": -3516.13355,
+              "pf": 0.76342
+            },
+            "H2": {
+              "mean_r": -0.2116,
+              "median_r": -1.0396,
+              "n": 16895,
+              "net_r": -3575.00226,
+              "pf": 0.73586
+            }
+          },
+          "level_distance_median": 0.1206,
+          "level_distance_p90": 0.8302,
+          "max_drawdown_r": 7104.80208,
+          "mean_r": -0.19855,
+          "median_r": -1.03846,
+          "net_r": -7091.13581,
+          "no_next_bar": 683,
+          "pf": 0.75028,
+          "resolved": 35714,
+          "sessions": 116,
+          "stop_exits": 23678,
+          "symbols": 148,
+          "target_exits": 10854,
+          "top_positive_ticker_share": 0.14551
+        },
+        "O2_TRIGGER_BAR:stress": {
+          "alignment": {
+            "aligned": 12788,
+            "unaligned": 21248,
+            "unknown": 2644
+          },
+          "bracket_invalid": 654,
+          "eod_exits": 1182,
+          "episodes": 36680,
+          "halves": {
+            "H1": {
+              "mean_r": -0.44901,
+              "median_r": -1.11009,
+              "n": 18627,
+              "net_r": -8363.77275,
+              "pf": 0.55378
+            },
+            "H2": {
+              "mean_r": -0.48025,
+              "median_r": -1.11765,
+              "n": 16716,
+              "net_r": -8027.81904,
+              "pf": 0.5293
+            }
+          },
+          "level_distance_median": 0.1206,
+          "level_distance_p90": 0.8302,
+          "max_drawdown_r": 16397.06038,
+          "mean_r": -0.46379,
+          "median_r": -1.11321,
+          "net_r": -16391.59178,
+          "no_next_bar": 683,
+          "pf": 0.54212,
+          "resolved": 35343,
+          "sessions": 116,
+          "stop_exits": 23386,
+          "symbols": 148,
+          "target_exits": 10775,
+          "top_positive_ticker_share": 0.38735
+        }
+      }
+    },
+    "VWAP_TEST_HOLD_SHORT": {
+      "cells": {
+        "O1_EVENT_LEVEL:base": {
+          "alignment": {
+            "aligned": 8670,
+            "unaligned": 24829,
+            "unknown": 2697
+          },
+          "bracket_invalid": 1693,
+          "eod_exits": 578,
+          "episodes": 36196,
+          "halves": {
+            "H1": {
+              "mean_r": -0.41217,
+              "median_r": -1.06802,
+              "n": 17850,
+              "net_r": -7357.21476,
+              "pf": 0.56389
+            },
+            "H2": {
+              "mean_r": -0.40615,
+              "median_r": -1.07064,
+              "n": 16003,
+              "net_r": -6499.62814,
+              "pf": 0.57312
+            }
+          },
+          "level_distance_median": 0.1179,
+          "level_distance_p90": 0.7936,
+          "max_drawdown_r": 13863.60515,
+          "mean_r": -0.40932,
+          "median_r": -1.06929,
+          "net_r": -13856.8429,
+          "no_next_bar": 650,
+          "pf": 0.56827,
+          "resolved": 33853,
+          "sessions": 116,
+          "stop_exits": 23582,
+          "symbols": 148,
+          "target_exits": 9693,
+          "top_positive_ticker_share": null
+        },
+        "O1_EVENT_LEVEL:stress": {
+          "alignment": {
+            "aligned": 8670,
+            "unaligned": 24829,
+            "unknown": 2697
+          },
+          "bracket_invalid": 3271,
+          "eod_exits": 578,
+          "episodes": 36196,
+          "halves": {
+            "H1": {
+              "mean_r": -0.76266,
+              "median_r": -1.18674,
+              "n": 17077,
+              "net_r": -13023.86334,
+              "pf": 0.38574
+            },
+            "H2": {
+              "mean_r": -0.74535,
+              "median_r": -1.19208,
+              "n": 15198,
+              "net_r": -11327.76154,
+              "pf": 0.39753
+            }
+          },
+          "level_distance_median": 0.1179,
+          "level_distance_p90": 0.7936,
+          "max_drawdown_r": 24356.35124,
+          "mean_r": -0.7545,
+          "median_r": -1.1896,
+          "net_r": -24351.62487,
+          "no_next_bar": 650,
+          "pf": 0.39128,
+          "resolved": 32275,
+          "sessions": 116,
+          "stop_exits": 22318,
+          "symbols": 148,
+          "target_exits": 9379,
+          "top_positive_ticker_share": null
+        },
+        "O2_TRIGGER_BAR:base": {
+          "alignment": {
+            "aligned": 8670,
+            "unaligned": 24829,
+            "unknown": 2697
+          },
+          "bracket_invalid": 270,
+          "eod_exits": 1082,
+          "episodes": 36196,
+          "halves": {
+            "H1": {
+              "mean_r": -0.20206,
+              "median_r": -1.03704,
+              "n": 18593,
+              "net_r": -3756.96193,
+              "pf": 0.74617
+            },
+            "H2": {
+              "mean_r": -0.19484,
+              "median_r": -1.03941,
+              "n": 16683,
+              "net_r": -3250.54656,
+              "pf": 0.75575
+            }
+          },
+          "level_distance_median": 0.1179,
+          "level_distance_p90": 0.7936,
+          "max_drawdown_r": 7022.29576,
+          "mean_r": -0.19865,
+          "median_r": -1.03846,
+          "net_r": -7007.50848,
+          "no_next_bar": 650,
+          "pf": 0.75071,
+          "resolved": 35276,
+          "sessions": 116,
+          "stop_exits": 23399,
+          "symbols": 148,
+          "target_exits": 10795,
+          "top_positive_ticker_share": 0.21021
+        },
+        "O2_TRIGGER_BAR:stress": {
+          "alignment": {
+            "aligned": 8670,
+            "unaligned": 24829,
+            "unknown": 2697
+          },
+          "bracket_invalid": 705,
+          "eod_exits": 1082,
+          "episodes": 36196,
+          "halves": {
+            "H1": {
+              "mean_r": -0.46222,
+              "median_r": -1.10909,
+              "n": 18391,
+              "net_r": -8500.66346,
+              "pf": 0.54099
+            },
+            "H2": {
+              "mean_r": -0.46534,
+              "median_r": -1.11562,
+              "n": 16450,
+              "net_r": -7654.87347,
+              "pf": 0.5425
+            }
+          },
+          "level_distance_median": 0.1179,
+          "level_distance_p90": 0.7936,
+          "max_drawdown_r": 16157.66043,
+          "mean_r": -0.46369,
+          "median_r": -1.11321,
+          "net_r": -16155.53694,
+          "no_next_bar": 650,
+          "pf": 0.54171,
+          "resolved": 34841,
+          "sessions": 116,
+          "stop_exits": 23065,
+          "symbols": 148,
+          "target_exits": 10694,
+          "top_positive_ticker_share": 0.67115
+        }
+      }
+    }
+  },
+  "gate": [
+    {
+      "classification": "WAIT",
+      "family": "ORB_BREAKOUT_LONG",
+      "geometry": "O1_EVENT_LEVEL",
+      "manual_gate_remaining": null,
+      "numeric_pass": false,
+      "passes": false,
+      "reasons": [
+        "H1:stress_mean_or_pf",
+        "H2:stress_mean_or_pf",
+        "base_total_not_positive",
+        "stress_total_not_positive",
+        "ticker_concentration"
+      ]
+    },
+    {
+      "classification": "WAIT",
+      "family": "ORB_BREAKOUT_LONG",
+      "geometry": "O2_TRIGGER_BAR",
+      "manual_gate_remaining": null,
+      "numeric_pass": false,
+      "passes": false,
+      "reasons": [
+        "H1:stress_mean_or_pf",
+        "H2:stress_mean_or_pf",
+        "base_total_not_positive",
+        "stress_total_not_positive"
+      ]
+    },
+    {
+      "classification": "WAIT",
+      "family": "ORB_BREAKOUT_SHORT",
+      "geometry": "O1_EVENT_LEVEL",
+      "manual_gate_remaining": null,
+      "numeric_pass": false,
+      "passes": false,
+      "reasons": [
+        "H1:stress_mean_or_pf",
+        "H2:stress_mean_or_pf",
+        "base_total_not_positive",
+        "stress_total_not_positive",
+        "ticker_concentration"
+      ]
+    },
+    {
+      "classification": "WAIT",
+      "family": "ORB_BREAKOUT_SHORT",
+      "geometry": "O2_TRIGGER_BAR",
+      "manual_gate_remaining": null,
+      "numeric_pass": false,
+      "passes": false,
+      "reasons": [
+        "H1:stress_mean_or_pf",
+        "H2:stress_mean_or_pf",
+        "base_total_not_positive",
+        "stress_total_not_positive"
+      ]
+    },
+    {
+      "classification": "WAIT",
+      "family": "ORB_BREAK_RETEST_LONG",
+      "geometry": "O1_EVENT_LEVEL",
+      "manual_gate_remaining": null,
+      "numeric_pass": false,
+      "passes": false,
+      "reasons": [
+        "H1:stress_mean_or_pf",
+        "H2:stress_mean_or_pf",
+        "base_total_not_positive",
+        "stress_total_not_positive",
+        "ticker_concentration"
+      ]
+    },
+    {
+      "classification": "WAIT",
+      "family": "ORB_BREAK_RETEST_LONG",
+      "geometry": "O2_TRIGGER_BAR",
+      "manual_gate_remaining": null,
+      "numeric_pass": false,
+      "passes": false,
+      "reasons": [
+        "H1:stress_mean_or_pf",
+        "H2:stress_mean_or_pf",
+        "base_total_not_positive",
+        "stress_total_not_positive"
+      ]
+    },
+    {
+      "classification": "WAIT",
+      "family": "ORB_BREAK_RETEST_SHORT",
+      "geometry": "O1_EVENT_LEVEL",
+      "manual_gate_remaining": null,
+      "numeric_pass": false,
+      "passes": false,
+      "reasons": [
+        "H1:stress_mean_or_pf",
+        "H2:stress_mean_or_pf",
+        "base_total_not_positive",
+        "stress_total_not_positive",
+        "ticker_concentration"
+      ]
+    },
+    {
+      "classification": "WAIT",
+      "family": "ORB_BREAK_RETEST_SHORT",
+      "geometry": "O2_TRIGGER_BAR",
+      "manual_gate_remaining": null,
+      "numeric_pass": false,
+      "passes": false,
+      "reasons": [
+        "H1:stress_mean_or_pf",
+        "H2:stress_mean_or_pf",
+        "base_total_not_positive",
+        "stress_total_not_positive"
+      ]
+    },
+    {
+      "classification": "WAIT",
+      "family": "ORB_REJECTION_LONG",
+      "geometry": "O1_EVENT_LEVEL",
+      "manual_gate_remaining": null,
+      "numeric_pass": false,
+      "passes": false,
+      "reasons": [
+        "H1:stress_mean_or_pf",
+        "H2:stress_mean_or_pf",
+        "base_total_not_positive",
+        "stress_total_not_positive",
+        "ticker_concentration"
+      ]
+    },
+    {
+      "classification": "WAIT",
+      "family": "ORB_REJECTION_LONG",
+      "geometry": "O2_TRIGGER_BAR",
+      "manual_gate_remaining": null,
+      "numeric_pass": false,
+      "passes": false,
+      "reasons": [
+        "H1:stress_mean_or_pf",
+        "H2:stress_mean_or_pf",
+        "base_total_not_positive",
+        "stress_total_not_positive",
+        "ticker_concentration"
+      ]
+    },
+    {
+      "classification": "WAIT",
+      "family": "ORB_REJECTION_SHORT",
+      "geometry": "O1_EVENT_LEVEL",
+      "manual_gate_remaining": null,
+      "numeric_pass": false,
+      "passes": false,
+      "reasons": [
+        "H1:stress_mean_or_pf",
+        "H2:stress_mean_or_pf",
+        "base_total_not_positive",
+        "stress_total_not_positive",
+        "ticker_concentration"
+      ]
+    },
+    {
+      "classification": "WAIT",
+      "family": "ORB_REJECTION_SHORT",
+      "geometry": "O2_TRIGGER_BAR",
+      "manual_gate_remaining": null,
+      "numeric_pass": false,
+      "passes": false,
+      "reasons": [
+        "H1:stress_mean_or_pf",
+        "H2:stress_mean_or_pf",
+        "base_total_not_positive",
+        "stress_total_not_positive",
+        "ticker_concentration"
+      ]
+    },
+    {
+      "classification": "WAIT",
+      "family": "PDH_BREAK_RETEST_LONG",
+      "geometry": "O1_EVENT_LEVEL",
+      "manual_gate_remaining": null,
+      "numeric_pass": false,
+      "passes": false,
+      "reasons": [
+        "H1:stress_mean_or_pf",
+        "H2:stress_mean_or_pf",
+        "base_total_not_positive",
+        "stress_total_not_positive",
+        "ticker_concentration"
+      ]
+    },
+    {
+      "classification": "WAIT",
+      "family": "PDH_BREAK_RETEST_LONG",
+      "geometry": "O2_TRIGGER_BAR",
+      "manual_gate_remaining": null,
+      "numeric_pass": false,
+      "passes": false,
+      "reasons": [
+        "H1:stress_mean_or_pf",
+        "H2:stress_mean_or_pf",
+        "base_total_not_positive",
+        "stress_total_not_positive"
+      ]
+    },
+    {
+      "classification": "WAIT",
+      "family": "PDH_RECLAIM_LONG",
+      "geometry": "O1_EVENT_LEVEL",
+      "manual_gate_remaining": null,
+      "numeric_pass": false,
+      "passes": false,
+      "reasons": [
+        "H1:stress_mean_or_pf",
+        "H2:stress_mean_or_pf",
+        "base_total_not_positive",
+        "stress_total_not_positive",
+        "ticker_concentration"
+      ]
+    },
+    {
+      "classification": "WAIT",
+      "family": "PDH_RECLAIM_LONG",
+      "geometry": "O2_TRIGGER_BAR",
+      "manual_gate_remaining": null,
+      "numeric_pass": false,
+      "passes": false,
+      "reasons": [
+        "H1:stress_mean_or_pf",
+        "H2:stress_mean_or_pf",
+        "base_total_not_positive",
+        "stress_total_not_positive"
+      ]
+    },
+    {
+      "classification": "WAIT",
+      "family": "PDH_REJECTION_SHORT",
+      "geometry": "O1_EVENT_LEVEL",
+      "manual_gate_remaining": null,
+      "numeric_pass": false,
+      "passes": false,
+      "reasons": [
+        "H1:stress_mean_or_pf",
+        "H2:stress_mean_or_pf",
+        "base_total_not_positive",
+        "stress_total_not_positive",
+        "ticker_concentration"
+      ]
+    },
+    {
+      "classification": "WAIT",
+      "family": "PDH_REJECTION_SHORT",
+      "geometry": "O2_TRIGGER_BAR",
+      "manual_gate_remaining": null,
+      "numeric_pass": false,
+      "passes": false,
+      "reasons": [
+        "H1:stress_mean_or_pf",
+        "H2:stress_mean_or_pf",
+        "base_total_not_positive",
+        "stress_total_not_positive"
+      ]
+    },
+    {
+      "classification": "WAIT",
+      "family": "PDL_BREAK_RETEST_SHORT",
+      "geometry": "O1_EVENT_LEVEL",
+      "manual_gate_remaining": null,
+      "numeric_pass": false,
+      "passes": false,
+      "reasons": [
+        "H1:stress_mean_or_pf",
+        "H2:stress_mean_or_pf",
+        "base_total_not_positive",
+        "stress_total_not_positive"
+      ]
+    },
+    {
+      "classification": "WAIT",
+      "family": "PDL_BREAK_RETEST_SHORT",
+      "geometry": "O2_TRIGGER_BAR",
+      "manual_gate_remaining": null,
+      "numeric_pass": false,
+      "passes": false,
+      "reasons": [
+        "H1:stress_mean_or_pf",
+        "H2:stress_mean_or_pf",
+        "base_total_not_positive",
+        "stress_total_not_positive"
+      ]
+    },
+    {
+      "classification": "WAIT",
+      "family": "PDL_RECLAIM_SHORT",
+      "geometry": "O1_EVENT_LEVEL",
+      "manual_gate_remaining": null,
+      "numeric_pass": false,
+      "passes": false,
+      "reasons": [
+        "H1:stress_mean_or_pf",
+        "H2:stress_mean_or_pf",
+        "base_total_not_positive",
+        "stress_total_not_positive",
+        "ticker_concentration"
+      ]
+    },
+    {
+      "classification": "WAIT",
+      "family": "PDL_RECLAIM_SHORT",
+      "geometry": "O2_TRIGGER_BAR",
+      "manual_gate_remaining": null,
+      "numeric_pass": false,
+      "passes": false,
+      "reasons": [
+        "H1:stress_mean_or_pf",
+        "H2:stress_mean_or_pf",
+        "base_total_not_positive",
+        "stress_total_not_positive"
+      ]
+    },
+    {
+      "classification": "WAIT",
+      "family": "PDL_REJECTION_LONG",
+      "geometry": "O1_EVENT_LEVEL",
+      "manual_gate_remaining": null,
+      "numeric_pass": false,
+      "passes": false,
+      "reasons": [
+        "H1:stress_mean_or_pf",
+        "H2:stress_mean_or_pf",
+        "base_total_not_positive",
+        "stress_total_not_positive",
+        "ticker_concentration"
+      ]
+    },
+    {
+      "classification": "WAIT",
+      "family": "PDL_REJECTION_LONG",
+      "geometry": "O2_TRIGGER_BAR",
+      "manual_gate_remaining": null,
+      "numeric_pass": false,
+      "passes": false,
+      "reasons": [
+        "H1:stress_mean_or_pf",
+        "H2:stress_mean_or_pf",
+        "base_total_not_positive",
+        "stress_total_not_positive"
+      ]
+    },
+    {
+      "classification": "WAIT",
+      "family": "VWAP_FAILED_RECLAIM_SHORT",
+      "geometry": "O1_EVENT_LEVEL",
+      "manual_gate_remaining": null,
+      "numeric_pass": false,
+      "passes": false,
+      "reasons": [
+        "H1:stress_mean_or_pf",
+        "H2:stress_mean_or_pf",
+        "base_total_not_positive",
+        "stress_total_not_positive",
+        "ticker_concentration"
+      ]
+    },
+    {
+      "classification": "WAIT",
+      "family": "VWAP_FAILED_RECLAIM_SHORT",
+      "geometry": "O2_TRIGGER_BAR",
+      "manual_gate_remaining": null,
+      "numeric_pass": false,
+      "passes": false,
+      "reasons": [
+        "H1:stress_mean_or_pf",
+        "H2:stress_mean_or_pf",
+        "base_total_not_positive",
+        "stress_total_not_positive"
+      ]
+    },
+    {
+      "classification": "WAIT",
+      "family": "VWAP_RECLAIM_LONG",
+      "geometry": "O1_EVENT_LEVEL",
+      "manual_gate_remaining": null,
+      "numeric_pass": false,
+      "passes": false,
+      "reasons": [
+        "H1:stress_mean_or_pf",
+        "H2:stress_mean_or_pf",
+        "base_total_not_positive",
+        "stress_total_not_positive",
+        "ticker_concentration"
+      ]
+    },
+    {
+      "classification": "WAIT",
+      "family": "VWAP_RECLAIM_LONG",
+      "geometry": "O2_TRIGGER_BAR",
+      "manual_gate_remaining": null,
+      "numeric_pass": false,
+      "passes": false,
+      "reasons": [
+        "H1:stress_mean_or_pf",
+        "H2:stress_mean_or_pf",
+        "base_total_not_positive",
+        "stress_total_not_positive"
+      ]
+    },
+    {
+      "classification": "WAIT",
+      "family": "VWAP_TEST_HOLD_LONG",
+      "geometry": "O1_EVENT_LEVEL",
+      "manual_gate_remaining": null,
+      "numeric_pass": false,
+      "passes": false,
+      "reasons": [
+        "H1:stress_mean_or_pf",
+        "H2:stress_mean_or_pf",
+        "base_total_not_positive",
+        "stress_total_not_positive",
+        "ticker_concentration"
+      ]
+    },
+    {
+      "classification": "WAIT",
+      "family": "VWAP_TEST_HOLD_LONG",
+      "geometry": "O2_TRIGGER_BAR",
+      "manual_gate_remaining": null,
+      "numeric_pass": false,
+      "passes": false,
+      "reasons": [
+        "H1:stress_mean_or_pf",
+        "H2:stress_mean_or_pf",
+        "base_total_not_positive",
+        "stress_total_not_positive",
+        "ticker_concentration"
+      ]
+    },
+    {
+      "classification": "WAIT",
+      "family": "VWAP_TEST_HOLD_SHORT",
+      "geometry": "O1_EVENT_LEVEL",
+      "manual_gate_remaining": null,
+      "numeric_pass": false,
+      "passes": false,
+      "reasons": [
+        "H1:stress_mean_or_pf",
+        "H2:stress_mean_or_pf",
+        "base_total_not_positive",
+        "stress_total_not_positive",
+        "ticker_concentration"
+      ]
+    },
+    {
+      "classification": "WAIT",
+      "family": "VWAP_TEST_HOLD_SHORT",
+      "geometry": "O2_TRIGGER_BAR",
+      "manual_gate_remaining": null,
+      "numeric_pass": false,
+      "passes": false,
+      "reasons": [
+        "H1:stress_mean_or_pf",
+        "H2:stress_mean_or_pf",
+        "base_total_not_positive",
+        "stress_total_not_positive",
+        "ticker_concentration"
+      ]
+    }
+  ],
+  "population_mode": "FROZEN_150",
+  "provider_error_windows": {
+    "AAPL": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "ABNB": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "ADBE": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "AMD": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "AMZN": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "APLD": [
+      "2026-07-29:provider_error:rate_limited_after_retries"
+    ],
+    "AVGO": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "CMCSA": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "CRM": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "CRWD": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "CSCO": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "DASH": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "DDOG": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "DIA": [
+      "2026-07-29:provider_error:rate_limited_after_retries"
+    ],
+    "DIS": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "GLD": [
+      "2026-07-29:provider_error:rate_limited_after_retries"
+    ],
+    "GOOG": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "GOOGL": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "HIMS": [
+      "2026-07-29:provider_error:rate_limited_after_retries"
+    ],
+    "IBM": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "INTC": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "IREN": [
+      "2026-07-29:provider_error:rate_limited_after_retries"
+    ],
+    "IWM": [
+      "2026-07-29:provider_error:rate_limited_after_retries"
+    ],
+    "JD": [
+      "2026-07-29:provider_error:rate_limited_after_retries"
+    ],
+    "MA": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "MARA": [
+      "2026-07-29:provider_error:rate_limited_after_retries"
+    ],
+    "META": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "MSFT": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "MSTR": [
+      "2026-07-29:provider_error:rate_limited_after_retries"
+    ],
+    "MU": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "NET": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "NFLX": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "NOW": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "NVDA": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "O": [
+      "2026-07-29:provider_error:rate_limited_after_retries"
+    ],
+    "ORCL": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "PANW": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "PLTR": [
+      "2026-07-29:provider_error:rate_limited_after_retries"
+    ],
+    "PYPL": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "QCOM": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "QQQ": [
+      "2026-07-29:provider_error:rate_limited_after_retries"
+    ],
+    "RIOT": [
+      "2026-07-29:provider_error:rate_limited_after_retries"
+    ],
+    "SE": [
+      "2026-07-29:provider_error:rate_limited_after_retries"
+    ],
+    "SHOP": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "SMH": [
+      "2026-07-29:provider_error:rate_limited_after_retries"
+    ],
+    "SNOW": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "SPG": [
+      "2026-07-29:provider_error:rate_limited_after_retries"
+    ],
+    "SPOT": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "SPY": [
+      "2026-07-29:provider_error:rate_limited_after_retries"
+    ],
+    "SQ": [
+      "2026-03-25:missing_symbol:SQ",
+      "2026-04-08:missing_symbol:SQ",
+      "2026-04-22:missing_symbol:SQ",
+      "2026-05-06:missing_symbol:SQ",
+      "2026-05-20:missing_symbol:SQ",
+      "2026-06-03:missing_symbol:SQ",
+      "2026-06-17:missing_symbol:SQ",
+      "2026-07-01:missing_symbol:SQ",
+      "2026-07-15:missing_symbol:SQ",
+      "2026-07-29:missing_symbol:SQ",
+      "2026-08-12:missing_symbol:SQ",
+      "2026-08-26:missing_symbol:SQ",
+      "2026-09-09:missing_symbol:SQ"
+    ],
+    "T": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "TE": [
+      "2026-07-29:provider_error:rate_limited_after_retries"
+    ],
+    "TLT": [
+      "2026-07-29:provider_error:rate_limited_after_retries"
+    ],
+    "TMUS": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "TXN": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "UBER": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "V": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "VIX": [
+      "2026-03-25:missing_symbol:VIX",
+      "2026-04-08:missing_symbol:VIX",
+      "2026-04-22:missing_symbol:VIX",
+      "2026-05-06:missing_symbol:VIX",
+      "2026-05-20:missing_symbol:VIX",
+      "2026-06-03:missing_symbol:VIX",
+      "2026-06-17:missing_symbol:VIX",
+      "2026-07-01:missing_symbol:VIX",
+      "2026-07-15:missing_symbol:VIX",
+      "2026-07-29:missing_symbol:VIX",
+      "2026-08-12:missing_symbol:VIX",
+      "2026-08-26:missing_symbol:VIX",
+      "2026-09-09:missing_symbol:VIX"
+    ],
+    "VZ": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ],
+    "XLB": [
+      "2026-07-29:provider_error:rate_limited_after_retries"
+    ],
+    "XLE": [
+      "2026-07-29:provider_error:rate_limited_after_retries"
+    ],
+    "XLF": [
+      "2026-07-29:provider_error:rate_limited_after_retries"
+    ],
+    "XLI": [
+      "2026-07-29:provider_error:rate_limited_after_retries"
+    ],
+    "XLK": [
+      "2026-07-29:provider_error:rate_limited_after_retries"
+    ],
+    "XLP": [
+      "2026-07-29:provider_error:rate_limited_after_retries"
+    ],
+    "XLRE": [
+      "2026-07-29:provider_error:rate_limited_after_retries"
+    ],
+    "XLU": [
+      "2026-07-29:provider_error:rate_limited_after_retries"
+    ],
+    "XLV": [
+      "2026-07-29:provider_error:rate_limited_after_retries"
+    ],
+    "XLY": [
+      "2026-07-29:provider_error:rate_limited_after_retries"
+    ],
+    "ZS": [
+      "2026-06-03:provider_error:rate_limited_after_retries",
+      "2026-07-15:provider_error:rate_limited_after_retries"
+    ]
+  },
+  "range": [
+    "2026-04-01",
+    "2026-09-18"
+  ],
+  "skipped_by_symbol": {
+    "AAPL": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "ABBV": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "ABNB": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "ABT": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "ADBE": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "AEP": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "AMD": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "AMGN": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "AMT": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "AMZN": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "APD": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "APLD": {
+      "incomplete": 0,
+      "missing": 11,
+      "no_prior": 2
+    },
+    "AVGO": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "AXP": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "BA": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "BAC": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "BKNG": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "BLK": {
+      "incomplete": 1,
+      "missing": 1,
+      "no_prior": 2
+    },
+    "C": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "CAT": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "CMCSA": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "CMG": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "COIN": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "COP": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "COST": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "CRM": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "CRWD": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "CSCO": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "CVX": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "D": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "DASH": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "DDOG": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "DE": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "DHR": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "DIA": {
+      "incomplete": 0,
+      "missing": 11,
+      "no_prior": 2
+    },
+    "DIS": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "DOW": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "DUK": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "DVA": {
+      "incomplete": 56,
+      "missing": 1,
+      "no_prior": 27
+    },
+    "EQIX": {
+      "incomplete": 17,
+      "missing": 1,
+      "no_prior": 14
+    },
+    "ETN": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "F": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "FCX": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "FDX": {
+      "incomplete": 1,
+      "missing": 1,
+      "no_prior": 2
+    },
+    "GE": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "GILD": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "GLD": {
+      "incomplete": 0,
+      "missing": 11,
+      "no_prior": 2
+    },
+    "GM": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "GOOG": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "GOOGL": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "GS": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "HD": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "HIMS": {
+      "incomplete": 0,
+      "missing": 11,
+      "no_prior": 2
+    },
+    "HON": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "HUBB": {
+      "incomplete": 4,
+      "missing": 1,
+      "no_prior": 4
+    },
+    "IBM": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "INTC": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "IREN": {
+      "incomplete": 0,
+      "missing": 11,
+      "no_prior": 2
+    },
+    "ISRG": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "IWM": {
+      "incomplete": 0,
+      "missing": 11,
+      "no_prior": 2
+    },
+    "JD": {
+      "incomplete": 0,
+      "missing": 11,
+      "no_prior": 2
+    },
+    "JNJ": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "JPM": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "KO": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "LIN": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "LLY": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "LMT": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "LOW": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "LULU": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "MA": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "MAR": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "MARA": {
+      "incomplete": 0,
+      "missing": 11,
+      "no_prior": 2
+    },
+    "MCD": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "MDLZ": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "META": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "MO": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "MRK": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "MS": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "MSFT": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "MSTR": {
+      "incomplete": 0,
+      "missing": 11,
+      "no_prior": 2
+    },
+    "MU": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "NEE": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "NEM": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "NET": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "NFLX": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "NKE": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "NOW": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "NUE": {
+      "incomplete": 1,
+      "missing": 1,
+      "no_prior": 2
+    },
+    "NVDA": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "O": {
+      "incomplete": 0,
+      "missing": 11,
+      "no_prior": 2
+    },
+    "ODFL": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "ORCL": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "OXY": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "PANW": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "PEP": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "PFE": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "PG": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "PLD": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "PLTR": {
+      "incomplete": 0,
+      "missing": 11,
+      "no_prior": 2
+    },
+    "PM": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "PYPL": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "QCOM": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "QQQ": {
+      "incomplete": 0,
+      "missing": 11,
+      "no_prior": 2
+    },
+    "RIOT": {
+      "incomplete": 0,
+      "missing": 11,
+      "no_prior": 2
+    },
+    "RIVN": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "RTX": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "SBUX": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "SCHW": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "SE": {
+      "incomplete": 0,
+      "missing": 11,
+      "no_prior": 2
+    },
+    "SHOP": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "SLB": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "SMH": {
+      "incomplete": 0,
+      "missing": 11,
+      "no_prior": 2
+    },
+    "SNOW": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "SO": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "SOFI": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "SPG": {
+      "incomplete": 3,
+      "missing": 11,
+      "no_prior": 4
+    },
+    "SPOT": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "SPY": {
+      "incomplete": 0,
+      "missing": 11,
+      "no_prior": 2
+    },
+    "SQ": {
+      "missing_all": 1
+    },
+    "T": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "TDY": {
+      "incomplete": 52,
+      "missing": 1,
+      "no_prior": 23
+    },
+    "TE": {
+      "incomplete": 0,
+      "missing": 11,
+      "no_prior": 2
+    },
+    "TGT": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "TJX": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "TLT": {
+      "incomplete": 0,
+      "missing": 11,
+      "no_prior": 2
+    },
+    "TMO": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "TMUS": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "TSLA": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "TXN": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "UBER": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "UNH": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "UNP": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "UPS": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "V": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "VIX": {
+      "missing_all": 1
+    },
+    "VZ": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    },
+    "WFC": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "WMT": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "XLB": {
+      "incomplete": 0,
+      "missing": 11,
+      "no_prior": 2
+    },
+    "XLE": {
+      "incomplete": 0,
+      "missing": 11,
+      "no_prior": 2
+    },
+    "XLF": {
+      "incomplete": 0,
+      "missing": 11,
+      "no_prior": 2
+    },
+    "XLI": {
+      "incomplete": 0,
+      "missing": 11,
+      "no_prior": 2
+    },
+    "XLK": {
+      "incomplete": 0,
+      "missing": 11,
+      "no_prior": 2
+    },
+    "XLP": {
+      "incomplete": 0,
+      "missing": 11,
+      "no_prior": 2
+    },
+    "XLRE": {
+      "incomplete": 0,
+      "missing": 11,
+      "no_prior": 2
+    },
+    "XLU": {
+      "incomplete": 0,
+      "missing": 11,
+      "no_prior": 2
+    },
+    "XLV": {
+      "incomplete": 0,
+      "missing": 11,
+      "no_prior": 2
+    },
+    "XLY": {
+      "incomplete": 0,
+      "missing": 11,
+      "no_prior": 2
+    },
+    "XOM": {
+      "incomplete": 0,
+      "missing": 1,
+      "no_prior": 1
+    },
+    "ZS": {
+      "incomplete": 0,
+      "missing": 21,
+      "no_prior": 3
+    }
+  },
+  "split": "2026-07-01",
+  "study_id": "OPTIONS_NON_STRAT_UNDERLYING_GEOMETRY",
+  "study_version": "ong-v0.1",
+  "symbols_requested": 150,
+  "symbols_with_candidates": 148,
+  "universe_blob_sha": "5a2eaf442c910012faddfc69bcd1c2a696f46d08",
+  "universe_source": "/Users/djb.a.e/MAINVSCODE/autonomous-futures-system/research/coverage/options_watchlist_150.csv"
+}
