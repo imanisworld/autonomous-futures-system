@@ -42,12 +42,29 @@ Among aligned-but-thin 15m bars, the subset where the last 5 one-minute bars'
 volume exceeds the first 10 one-minute bars' volume (of the same 15m bar) is net
 positive after costs.
 
+**H4 — Fast label for fast triggers (coupling test; added 2026-09-21 05:30Z,
+before any forward data was examined).**
+If entries ever move to the 1m trigger lanes, the label available at trigger
+time is the *last closed* 15m bar's — up to 14 minutes stale. H4 asks whether a
+regime read that updates at trigger speed does better than carrying the stale
+15m label. Population: MNQ triggers logged by the observation-only 1m lanes
+(#723 4HR trigger, #749 3-2-2 First Live observer). Each trigger is scored
+two ways — (a) "carry": the 15m Pine label of the last closed bar; (b) "fast":
+the fast-regime score from `research-fast-regime-from-5m-2026-09-21.md` §"Fast-
+regime score" (six 5m bars ending at the last 5m close before the trigger;
+score ≥ 3 and direction agrees ⇒ TRENDING). That score is adopted verbatim —
+no re-tuning. The comparison is between the two *filters*, not between fast
+and slow entry: does gating 1m triggers on (b) beat gating them on (a)?
+
 ## 3. Data (forward only)
 
 - Candidates: `cross_instrument_observation_v1.jsonl` CANDIDATE/OUTCOME rows,
   MNQ, `signal_timestamp > 2026-09-21T04:50:00Z`, all shadow families.
 - Bars: `logs/bars_MNQ_*.jsonl` (15m) for EMA/`rel_vol` reconstruction;
   `logs/tf1m/bars_MNQ_*.jsonl` (1m, collected since 09-18) for H3.
+- 1m-lane triggers for H4: the observer lanes' own evidence files
+  (`logs/…` written by #723/#749), joined to `logs/tf5m/bars_MNQ_*.jsonl` for
+  the fast score and to the 15m journal for the carried label.
 - Costs: `execution/forward_evidence_campaign.py` constants
   (`SLIPPAGE_TICKS=1.0`, `COMMISSION_DOLLARS=1.48`), 1 contract.
 - Resolution: the campaign's own OUTCOME resolver (stop-first ties). No new
@@ -60,14 +77,18 @@ positive after costs.
 | H1 | MNQ demo-eligible setups (label TRENDING, regime FULL) inside the window vs. outside, same weeks | ≥ 6 Sundays **and** ≥ 20 inside-window rows | inside-window net $ ≤ 0 **and** removing them raises weekly net $ in ≥ 4 of 6 weeks | otherwise |
 | H2 | Rows admitted by H2 only (EMA aligned, `rel_vol < 0.80`, session-relative ≥ 0.80) | ≥ 30 rows | net $ > 0 after costs **and** win-rate ≥ TRENDING bucket's same-period win-rate | otherwise |
 | H3 | Aligned-but-thin rows with 1m acceleration | ≥ 30 rows | net $ > 0 after costs **and** win-rate ≥ TRENDING bucket's | otherwise |
+| H4 | 1m-lane MNQ triggers, scored under filter (a) carry-15m vs (b) fast-5m | ≥ 40 triggers **and** ≥ 15 where (a) and (b) disagree | on the disagreement set, (b)-admitted net $ > (a)-admitted net $ **and** (b)-admitted net $ > 0 | otherwise |
 
 - One look, at the first weekly gate-report run after the minimum n is met.
   No interim peeks that inform a decision. The daily 22:20Z gate line may
   continue to print aggregate counts; it does not score H1–H3.
-- Multiple-comparison note: three hypotheses, one look each. If exactly one of
-  H2/H3 passes at the margin, treat as PROVISIONAL and require a second,
+- Multiple-comparison note: four hypotheses, one look each. If exactly one of
+  H2/H3/H4 passes at the margin, treat as PROVISIONAL and require a second,
   non-overlapping sample of equal size before any proposal.
-- A PASS on H2 or H3 does **not** authorize a change; it authorizes a proposal
+- H4 is a *coupling* result: a PASS means "if 1m entries are ever enabled,
+  they must carry the fast label, not the 15m one." It says nothing about
+  whether 1m entries should be enabled — that is the 1m lanes' own question.
+- A PASS on H2, H3 or H4 does **not** authorize a change; it authorizes a proposal
   for the post-09-30 review with the numbers attached.
 
 ## 5. What is NOT allowed
@@ -77,6 +98,7 @@ positive after costs.
 - Scoring on any row with `signal_timestamp` before registration time.
 - Changing the cost constants, the resolver, or the label formula mid-study.
 - Using the demo ledger (mixed-era, mixed-sizing) as the scoring series.
+- Re-tuning the fast-regime score (weights, threshold, bar count) for H4.
 
 ## 6. Outcome (to be filled once, at the look)
 
@@ -85,6 +107,7 @@ positive after costs.
 | H1 | | | | | | |
 | H2 | | | | | | |
 | H3 | | | | | | |
+| H4 | | | | | | |
 
 ## 7. Ownership
 
