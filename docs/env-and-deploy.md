@@ -115,7 +115,10 @@ to the process working directory independently of `LOG_DIR`.
 - **Pin live-box expectations before validation.** Set `EXPECTED_LIVE_BRANCH`,
   `EXPECTED_LIVE_COMMIT`, `EXPECTED_RISK_RULES_SHA256`,
   `EXPECTED_LIVE_REPO_ROOT`, and `EXPECTED_RUNTIME_JOURNAL_DIR` on the active
-  box after config freeze. Pin active proof-critical environment overrides as
+  box after config freeze. When Tradovate routing is active, also set
+  `EXPECTED_TRADOVATE_ACCOUNT_ID` to the same approved numeric account id as
+  `TRADOVATE_EXPECTED_ACCOUNT_ID`; the drift report compares them but never
+  emits either raw value. Pin active proof-critical environment overrides as
   `EXPECTED_PROOF_<NAME>=<value>`; use `<unset>` to assert that an override
   remains absent. Then check `python3 scripts/doctor.py --strict` or
   `/status/diagnostics` before `/admin/live-preflight/run`.
