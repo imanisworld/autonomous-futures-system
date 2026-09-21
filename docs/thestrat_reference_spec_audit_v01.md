@@ -206,6 +206,15 @@ The research runner currently constructs 60-minute bars as RTH session-aligned b
 
 No historical result should be generalized to every 60-minute futures implementation without preserving that alignment label. Clock-aligned, ETH, 4HR, or Daily variants remain separate experiments.
 
+### Cost-model audit
+
+Layer B cannot honestly claim to inherit a single standardized futures-research cost model. Repo evidence is inconsistent:
+- recent `fng-v0.1` uses `COMMISSION_RT=1.24` with base/stress slippage cells of 1/2 ticks through PaperBroker;
+- other research/evidence scripts use $1.48 round-turn commission;
+- the older 1-2-2 stop study and some stress tooling use $5.00 round-turn commission.
+
+The preregistration now fails closed on this instead of saying costs are already standardized. A single commission/slippage contract must be frozen before any execution-overlay expectancy/PF/drawdown is produced.
+
 ### Current completion state
 
 The structural code can be reviewed and unit-tested without local historical data. The study itself remains incomplete until:
