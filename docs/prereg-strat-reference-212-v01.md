@@ -185,6 +185,7 @@ Per event:
 - instrument;
 - source timeframe;
 - bar A/B timestamps and types;
+- completed bar C timestamp/type when the full next-source-bar window is available;
 - frozen trigger high/low;
 - trigger timestamp;
 - trigger direction;
@@ -201,6 +202,8 @@ Per event:
 - watch-window unresolved Y/N;
 - FTFC state;
 - AFS EMA-trend state;
+- shared AFS classifier sequence/direction on completed bar C, when available;
+- explicit status showing whether the executable AFS path has actually been compared;
 - session;
 - H1/H2;
 - data-completeness flags;
@@ -229,6 +232,8 @@ On the same event IDs, report whether the current AFS classifier/path would:
 - use a different stop;
 - use a different target;
 - block due to EMA trend or another gate.
+
+The shared classifier comparison may be computed from completed A/B/C bars without invoking executable logic. That **does not** prove the current executable futures path would have generated the same trade, because the existing futures `strat_212` implementation is continuation-only and may operate under different runtime context/gates. Report classifier-only evidence separately from executable-path evidence and leave the latter unavailable until actually reproduced.
 
 This is diagnostic only. Do not alter existing executable modules during v0.1.
 
