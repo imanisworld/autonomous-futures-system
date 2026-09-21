@@ -2399,7 +2399,7 @@ def test_status_history_realized_pnl_is_daily_not_cumulative(monkeypatch):
             "win_rate": 100.0 if offset == 1 else 0.0,
         }
 
-    monkeypatch.setattr(appmod, "_dashboard_payload", fake_payload)
+    monkeypatch.setattr(appmod, "_daily_summary_payload", fake_payload)
 
     client = TestClient(appmod.app)
     days = client.get("/status/history?days=7").json()["days"]
@@ -2814,3 +2814,57 @@ def test_status_today_exposes_explicit_cumulative_pnl_alias(monkeypatch, tmp_pat
     assert "cumulative_realized_pnl_dollars" in payload
     assert payload["cumulative_realized_pnl_dollars"] == payload["realized_pnl_dollars"]
     assert "today_pnl_dollars" in payload
+
+
+def test_status_history_does_not_build_diagnostics_or_block_event_loop(monkeypatch):
+    """Regression for the 2026-09-21 stall: /status/history?days=90 held the
+    event loop ~46s (TradingView webhook posts → 499 for 30 min, bars lost).
+
+    Root cause: history called the full `_dashboard_payload` per day, which
+    rebuilds `_diagnostics_payload` (uncached evidence-file parse + git
+    subprocesses) although history only reports journal summary fields — and
+    did so inline in an `async def`, so nothing else could run.
+
+    Contract: history must (1) never call `_diagnostics_payload`, and (2) run its
+    blocking work off the loop, so an unrelated request completes while a slow
+    history is in flight.
+    """
+    import threading
+    import time as _time
+
+    try:
+        from fastapi.testclient import TestClient
+        import webhook.app as appmod
+    except ImportError:
+        pytest.skip("fastapi[testclient] not installed")
+
+    def boom(*_a, **_k):
+        raise AssertionError("/status/history must not build diagnostics")
+
+    monkeypatch.setattr(appmod, "_diagnostics_payload", boom)
+
+    # Make each per-day summary slow, on purpose, to expose loop blocking.
+    real_summary = appmod._daily_summary_payload
+
+    def slow_summary(for_date):
+        _time.sleep(0.15)
+        return real_summary(for_date)
+
+    monkeypatch.setattr(appmod, "_daily_summary_payload", slow_summary)
+
+    client = TestClient(appmod.app)
+    done = {}
+
+    def run_history():
+        done["history"] = client.get("/status/history?days=10").status_code
+
+    t = threading.Thread(target=run_history)
+    t.start()
+    _time.sleep(0.2)  # history is now mid-flight (~1.5s total)
+    t0 = _time.monotonic()
+    assert client.get("/health").status_code == 200
+    health_latency = _time.monotonic() - t0
+    t.join(timeout=10)
+
+    assert done.get("history") == 200
+    assert health_latency < 0.5, f"/health blocked {health_latency:.2f}s behind /status/history"
