@@ -122,3 +122,71 @@ Inputs are on the box (`journal_2026-08-*.jsonl`, `journal_2026-09-*.jsonl`,
 Full script and the resolved rows (`sun_res.json`) are in the 2026-09-21 session
 scratchpad; re-running the snippet above against the same files reproduces the
 tables exactly.
+
+---
+
+## Addendum (2026-09-21 04:20Z) — "Would we know it was trending sooner?" No: the trend was known; the volume filter said no, and the volume filter is right on the tape
+
+### What the label actually does
+
+`market_condition` is Pine-exact (`tradingview/risksentinel_context.pine`,
+reconstructed in `scripts/pine_market_condition.py`):
+
+```
+rel_vol = volume / sma(volume, 20)
+DEAD        if rel_vol < 0.40
+CHOPPY      if range_ratio < 0.40 or rel_vol < 0.60
+TRENDING    if EMA stack fully ordered (close>ema9>ema21>ema55, or the mirror) AND rel_vol >= 0.80
+RANGE_BOUND otherwise
+```
+
+### Tonight, bar by bar (MNQ 15m, reconstructed from the box's own bars)
+
+| Bar (Z) | EMA trend | rel_vol | Label |
+|---|---|---|---|
+| 22:00 | UP | 0.83 | TRENDING → blocked by regime gate (`REGIME_NOT_FULL`) |
+| 22:15 – 22:45 | UP | 0.50 – 0.62 | CHOPPY / RANGE_BOUND |
+| 23:00 – 23:45 | UP | 0.29 – 0.40 | DEAD (price making new highs) |
+| 00:30 | UP | 0.75 | RANGE_BOUND |
+| 01:00 | UP | 1.10 | TRENDING → blocked by regime gate |
+
+The EMA stack was UP on every bar. The label moved only because `rel_vol` did,
+and the 20-bar volume average at a Sunday reopen is dominated by Friday RTH
+bars, so ordinary Sunday-evening volume reads as "thin" by construction. This
+is not trend-detection lag; it is a session-blind volume denominator.
+
+### Does that mean the volume filter cost us? Tested on the tape
+
+All MNQ shadow OUTCOME rows since the 2026-09-16 epoch, split by the EMA-stack
+state at the signal bar (same reconstruction, 1 contract gross):
+
+| Bucket at signal bar | n | Wins | Win % | Gross $ |
+|---|---|---|---|---|
+| Label TRENDING (EMA aligned, rel_vol ≥ 0.80) | 67 | 26 | 39% | **+360** |
+| **Not TRENDING but EMA aligned with the trade (volume was the only blocker)** | 30 | 6 | 20% | **−690** |
+| Not TRENDING, EMA sideways | 69 | 24 | 35% | +59 |
+| Not TRENDING, EMA against the trade | 11 | 3 | 27% | −5 |
+
+The "trending-but-thin" bucket — exactly tonight's situation — is the worst
+bucket on the tape. By family inside it: `strat_22_continuation` 4/12 (+$4),
+`impulse_first_pullback` 2/10 (−$202), `strat_22_reversal` 0/5 (−$278).
+
+### Conclusions
+
+1. **No rule for RANGE_BOUND.** Sideways is flat; there is nothing to harvest.
+2. **Nothing to "detect sooner."** The trend was detected; the volume filter
+   is what blocked, and on the tape it is the most valuable part of the label.
+3. **Do not make the volume denominator session-aware without forward
+   evidence.** It would loosen the exact filter that has been protecting the
+   ledger; tonight is the one night in five weeks that loosening would have paid.
+4. Both TRENDING and non-TRENDING setups lost inside the Sunday-reopen window
+   (main doc). The only candidate rule that survives all of the above is a
+   *tightening*: no new entries Sun 22:00Z – Mon 01:00Z. Pre-register before
+   testing; post-09-30.
+
+Reproduction: `bars_MNQ_*.jsonl` (15m) → EMA 9/21/55 on closes, `rel_vol` =
+volume / mean(last 20 volumes incl. current); join to
+`cross_instrument_observation_v1.jsonl` OUTCOME rows on `signal_timestamp`.
+Self-computed EMAs are SMA-seeded from the first available bar (2026-08-02),
+so they carry the `RECONSTRUCTED_UNVALIDATED_INIT` caveat from
+`pine_market_condition.py`; 60+ bars of warm-up precede every row used.
