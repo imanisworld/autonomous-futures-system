@@ -1,4 +1,12 @@
-# AFSVP nginx hardening proposal — 2026-09-21 (NOT APPLIED)
+# AFSVP nginx hardening — 2026-09-21 (APPLIED 01:25Z, operator GO)
+
+**Status:** sections A, B, C applied to both vhosts 2026-09-21 01:25Z via
+`nginx -t && systemctl reload nginx` (no app restart). Pre-change backup:
+`/root/afs-shared/backups/nginx_20260921T012517Z/`. Verify block below
+returned the expected codes; TradingView posts continued 200 after reload.
+App host CSP is report-only. Section D (hooks cert) NOT done.
+
+Rollback: `cp /root/afs-shared/backups/nginx_20260921T012517Z/*.conf /etc/nginx/sites-enabled/ && nginx -t && systemctl reload nginx`.
 
 Companion to `docs/afsvp-public-surface-audit-2026-09-21.md`. Server config,
 not page copy. Requires operator GO; changes `/etc/nginx/sites-enabled/*` on

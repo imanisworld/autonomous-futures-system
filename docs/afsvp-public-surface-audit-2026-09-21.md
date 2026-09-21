@@ -36,7 +36,7 @@ alert_ranker release `a0c34818`.
 - Broker vendor (Tradovate), demo-account equity, account balance/peak, drawdown %, daily-loss cap, max trades/day, per-instrument decision history, and **VPS filesystem paths** (`/root/afs-shared/logs/...`, `/root/afs-backups/...`) from `/status/today` and `/status/diagnostics`.
 - No secrets, tokens, keys, or Discord URLs found in the bundle (`grep` for `EXPO_PUBLIC_`, `token`, `secret`, `api_key` → only library internals).
 
-## 3. Blockers (must fix before any "authentication required" claim is published)
+## 3. Blockers — **B1, B2, B4 CLOSED 2026-09-21 01:25Z** (nginx re-gated + headers; see headers doc)
 
 **B1 — `app.afsvp.com/status/**` is fully public.**
 Cause: `/etc/nginx/sites-enabled/afsvp-app.conf` has `auth_basic off` on
