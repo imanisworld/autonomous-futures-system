@@ -1,0 +1,11 @@
+[Unit]
+Description=AFS watcher evidence archive (copies tmpfs events.jsonl + snapshots to persistent disk; read-only w.r.t. the watcher)
+# Independent of afs-watcher.service: reads /tmp/afs_watcher only, never signals or restarts it.
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 __AFS_WATCHER_SRC__/archive_events.py --src /tmp/afs_watcher --dst /root/afs-shared/afs_watcher_archive
+Nice=10
+NoNewPrivileges=true
+StandardOutput=journal
+StandardError=journal
