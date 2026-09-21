@@ -53,10 +53,12 @@ class DiscordAlerter:
     ) -> AlertDecision:
         trade_proof_reason = _trade_proof_block_reason(result)
         if trade_proof_reason:
-            # Paper evidence is allowed to continue collecting after the causal
-            # setup bridge proves structure/targets/market alignment. User-facing
-            # alerts are stricter: an explicit incomplete trade-proof marker can
-            # never be overridden by scanner score, Signa, or contract quality.
+            # An explicit NEGATIVE trade-proof verdict can never be overridden
+            # by scanner score, Signa, or contract quality. INCOMPLETE is not a
+            # verdict: it only records which optional checks (event risk, flip
+            # context) have no implementation yet, and is surfaced in the alert
+            # body instead (see _unchecked_text). Blocking on it made every
+            # alert unreachable from #526 (2026-09-08) onward.
             return AlertDecision(False, trade_proof_reason)
         if result.score < self.config.alert_threshold:
             # The scorer already knows why it could not score (missing feed
@@ -141,6 +143,7 @@ def build_discord_payload(result: ScoreResult) -> dict[str, Any]:
         {"name": "Signa Context", "value": _signa_text(result), "inline": True},
         {"name": "Why", "value": _why_text(result, session), "inline": False},
         {"name": "Risk", "value": _risk_text(result), "inline": False},
+        {"name": "Unchecked", "value": _unchecked_text(result), "inline": False},
     ]
     if _mechanically_triggered(result):
         fields.insert(8, {"name": "Trade authority", "value": "Mechanical setup TRIGGERED · still requires contract/risk validation before action", "inline": False})
@@ -238,13 +241,36 @@ def _liquidity_card_text(result: ScoreResult, volume_ratio: Any, iv_rank: Any, i
     return "\n".join(lines) if lines else "No liquidity/value metadata"
 
 
+# Trade-proof statuses that do NOT block a user-facing alert. VALID is a pass;
+# INCOMPLETE only names optional checks that have no implementation yet
+# (event_risk_unavailable; flip_context_unavailable) and is rendered as a
+# caveat in the alert body. Anything else (FAILED, BLOCKED, INVALID, ...) is an
+# explicit negative verdict and stays fail-closed.
+_TRADE_PROOF_NON_BLOCKING = frozenset({"", "VALID", "INCOMPLETE"})
+
+
 def _trade_proof_block_reason(result: ScoreResult) -> str:
     raw = result.raw
     status = str(raw.get("trade_proof_status") or "").strip().upper()
-    if not status or status == "VALID":
+    if status in _TRADE_PROOF_NON_BLOCKING:
         return ""
     reason = str(raw.get("trade_proof_reason") or "unspecified").strip()
     return f"trade_proof_{status.lower()}:{reason}"
+
+
+def _unchecked_text(result: ScoreResult) -> str:
+    """Checks the trade proof could not run, shown so the reader knows what
+    the alert did NOT verify. Empty (dropped) when the proof is VALID."""
+    raw = result.raw
+    status = str(raw.get("trade_proof_status") or "").strip().upper()
+    if status != "INCOMPLETE":
+        return "N/A"
+    items = [
+        part.strip().replace("_unavailable", "").replace("_", " ")
+        for part in str(raw.get("trade_proof_reason") or "").split(";")
+        if part.strip()
+    ]
+    return "Not checked: " + ", ".join(items) if items else "Not checked: trade proof incomplete"
 
 
 def _mechanically_triggered(result: ScoreResult) -> bool:
