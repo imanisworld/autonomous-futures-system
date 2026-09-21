@@ -104,3 +104,87 @@ Required comparison outputs:
 ## Guardrail
 
 The existing futures audit says completed strategy work should not be blindly redone and that changing timeframe is a new variant. This reference study therefore does not overwrite historical 4HR/3-2-2/Miyagi/Transition conclusions. It answers a narrower question: **were prior AFS Strat tests faithful to the now-frozen public methodology, and does a literal reference implementation produce materially different evidence?**
+
+
+## Detailed repo audit — pass 2
+
+### Futures executable 2-1-2
+`strategy/strat_212_122.py` is not a literal implementation of the full documented 2-1-2 family.
+
+Verified behavior:
+- It arms only when a completed inside bar follows a directional 2.
+- For `strat_212`, direction is forced to match that first directional 2. Therefore this executable path is **continuation-only**.
+- It watches exactly the next bar.
+- Trigger is one tick beyond the inside-bar boundary.
+- Stop is the opposite side of the inside bar.
+- Target is hard-coded at 2R.
+- Gap-aware causal fill logic and pessimistic same-bar stop-first handling are explicit and conservative.
+
+Reference difference:
+- documented 2-1-2 includes both continuation and reversal branches;
+- documented reversal magnitude is the far extreme of the original directional 2;
+- documented continuation objective is structural/measured-move, not fixed 2R;
+- the current executable path has no documented FTFC state.
+
+Classification: **PARTIAL / DIFFERENT**. Sequence timing is causal and useful; geometry and context are VP-specific.
+
+### Options 2-1-2
+`options_manager/strategies/strat_212.py` is also continuation-only. It delegates sequence identity to the shared classifier, but entry/invalidation/targets are caller-supplied or derived from the generic level finder. This is advisory-only and should not be described as a literal TheStrat 2-1-2 implementation without separately proving the structural target/context inputs.
+
+Classification: **PARTIAL / DIFFERENT**.
+
+### Existing trigger-time research
+`alert_ranker/trigger_time.py` is much closer to the public methodology than the executable futures 2-1-2 path:
+- precursor boundaries are frozen before the watched bar;
+- the first lower-timeframe strict break is resolved causally;
+- 2-1-2 continuation and reversal are distinguished by break direction relative to the parent 2;
+- ambiguous same-lower-bar two-sided breaks fail to `AMBIGUOUS`.
+
+`alert_ranker/trigger_geometry.py` already contains a source-oriented geometry layer:
+- 2-1-2 reversal target = parent 2 far extreme;
+- 2-1-2 continuation target deliberately unresolved;
+- 3-1-2 reversal target = parent 3 far extreme;
+- 3-2 direct setup = no own magnitude / HTF target required;
+- unresolved stop rules are left unresolved instead of silently inheriting generic geometry.
+
+This is important: the repo already contains building blocks for a literal reference study. We should reuse these pure research primitives where appropriate instead of creating a second competing definition.
+
+### 60M 3-2-2 First Live
+`strategy/strat_322_first_live.py` is a separate operator-specific 60M setup with exact clock windows:
+- MNQ only;
+- completed 7AM/8AM/9AM 60m bars;
+- 8AM must be outside relative to 7AM;
+- 9AM must be directional relative to 8AM;
+- entry watches 10:00-11:00 ET at 5m granularity for the opposite 9AM boundary;
+- stop = opposite side of 9AM bar;
+- target = corresponding 8AM outside-bar extreme.
+
+This path is causal at the implemented 5m resolution, but it is an operator-specific timed 3-2-2 variant. It should not be conflated with every generic public 3-2-2 setup.
+
+Classification: **SEPARATE VARIANT / DO NOT REWRITE FROM THIS AUDIT**.
+
+### Trend / FTFC
+`context/trend.py` is explicitly an EMA-stack trend classifier shared by live and replay. That parity is good, but it is not TheStrat FTFC.
+
+Therefore:
+- do not rename or reinterpret the EMA-stack classifier as FTFC;
+- a reference study must compute FTFC separately from aligned timeframe opens;
+- first pass should report FTFC as a stratification variable rather than use it as an exclusion filter, so we can see whether it adds information without selection bias.
+
+### Existing completed-audit boundary
+This audit does not invalidate the existing 4HR, timed 3-2-2, Miyagi, Transition, ORB, or inverse-ORB work. Those are separate strategies/variants. The narrower correction is terminology and experimental scope: prior fixed-R Strat sequence tests are evidence about those **AFS implementations**, not automatically evidence about a literal public-methodology replication.
+
+## Decision after pass 2
+
+A new reference runner is justified, but it should be built from the existing causal observer primitives rather than modifying executable strategy modules.
+
+First reference population: **2-1-2 reversal only**.
+
+Reason:
+1. objective sequence identity;
+2. causal inside-bar trigger;
+3. objective structural magnitude from the parent directional 2;
+4. both LONG and SHORT mirrors;
+5. no need to invent a continuation target before its rule is fully frozen.
+
+The study must remain research-only and cannot promote a strategy directly.
