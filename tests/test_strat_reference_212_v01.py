@@ -48,6 +48,10 @@ def test_bullish_reversal_uses_inside_high_and_parent_high_magnitude():
     )
     assert event.direction == "LONG"
     assert event.trigger_price == 10
+    assert event.trigger_price_role == "STRUCTURAL_BOUNDARY_NOT_EXECUTABLE_FILL"
+    assert event.minimum_strict_break_price == pytest.approx(10.25)
+    assert event.magnitude_distance_from_min_break_points == pytest.approx(0.75)
+    assert event.magnitude_executable_from_min_break is True
     assert event.magnitude == 11
     assert event.magnitude_reached is True
     assert event.structural_failure_after_trigger is False
@@ -313,3 +317,22 @@ def test_descriptive_quantiles_are_frozen_and_deterministic():
         "p75": 30.0,
         "p90": 36.0,
     }
+
+
+def test_equal_parent_and_inside_magnitude_is_structural_only_not_executable_target():
+    parent = b(0, 10, 10.25, 8, 9)
+    inside = b(60, 9, 10.25, 8.5, 9.5)
+    watch = [b(120, 9.5, 10.5, 9.0, 10.25)]
+    event = observe_candidate(
+        instrument="MNQ",
+        day=date(2026, 1, 5),
+        parent=parent,
+        inside=inside,
+        parent_type=TWO_DOWN,
+        watch=watch,
+        midpoint=date(2026, 1, 1),
+    )
+    assert event.trigger_time is not None
+    assert event.minimum_strict_break_price == pytest.approx(10.5)
+    assert event.magnitude == pytest.approx(10.25)
+    assert event.magnitude_executable_from_min_break is False
