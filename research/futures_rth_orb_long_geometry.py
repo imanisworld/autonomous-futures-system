@@ -56,6 +56,7 @@ class Candidate:
     episode_id: str
     trigger_bar_start: str
     trigger_idx: int
+    trigger_prev_close: float | None
     trigger_close: float
     trigger_low: float
     orb_high: float
@@ -194,6 +195,9 @@ def collect_candidates(instrument: str) -> tuple[list[Candidate], dict[str, int]
                     episode_id=episode_id,
                     trigger_bar_start=event_start,
                     trigger_idx=bar_idx,
+                    trigger_prev_close=(
+                        float(bars[bar_idx - 1].close) if bar_idx > 0 else None
+                    ),
                     trigger_close=float(trigger.close),
                     trigger_low=float(trigger.low),
                     orb_high=float(orb_high),
@@ -254,7 +258,11 @@ def simulate_candidate(
     legacy_same_bar = (
         None
         if candidate.payload_orb_high is None
-        else candidate.trigger_close > candidate.payload_orb_high
+        or candidate.trigger_prev_close is None
+        else (
+            candidate.trigger_prev_close <= candidate.payload_orb_high
+            and candidate.trigger_close > candidate.payload_orb_high
+        )
     )
 
     next_idx = candidate.trigger_idx + 1
