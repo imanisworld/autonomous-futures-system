@@ -232,22 +232,22 @@ def _path_requires_gate(path: str) -> bool:
 def _gate_html(next_path: str, error: bool) -> str:
     safe_next = next_path if next_path.startswith("/") else "/"
     err = (
-        '<p style="color:#FF4D5A;margin:0 0 14px">Wrong code — try again.</p>'
+        '<p style="color:#ef6a6a;margin:0 0 14px">Wrong code — try again.</p>'
         if error else ""
     )
     return f"""<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Vantage Point · Enter code</title></head>
-<body style="margin:0;background:#070706;color:#F2EEE6;font-family:-apple-system,Segoe UI,Roboto,sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center">
-<form method="post" action="/gate" style="background:#141312;border:1px solid #35312A;border-radius:10px;padding:28px;width:280px">
-<div style="font-size:15px;color:#F0B85A;font-weight:600;margin-bottom:4px">Vantage Point</div>
-<div style="font-size:12px;color:#AAA294;margin-bottom:18px">Enter access code to continue</div>
+<body style="margin:0;background:#131315;color:#f5f3f0;font-family:-apple-system,Segoe UI,Roboto,sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center">
+<form method="post" action="/gate" style="background:#1f1f21;border:1px solid #2e2e31;border-radius:10px;padding:28px;width:280px">
+<div style="font-size:15px;color:#e8875c;font-weight:600;margin-bottom:4px">Vantage Point</div>
+<div style="font-size:12px;color:#a6a3a1;margin-bottom:18px">Enter access code to continue</div>
 {err}
 <input type="hidden" name="next" value="{safe_next}">
 <input name="code" type="password" autofocus autocomplete="off"
- style="width:100%;box-sizing:border-box;padding:11px;background:#242018;border:1px solid #35312A;border-radius:7px;color:#F2EEE6;font-size:15px;margin-bottom:14px">
+ style="width:100%;box-sizing:border-box;padding:11px;background:#0b0b0c;border:1px solid #2e2e31;border-radius:7px;color:#f5f3f0;font-size:15px;margin-bottom:14px">
 <button type="submit"
- style="width:100%;padding:11px;background:#F0B85A;color:#070706;border:0;border-radius:7px;font-size:15px;font-weight:600;cursor:pointer">Enter</button>
+ style="width:100%;padding:11px;background:#e8875c;color:#131315;border:0;border-radius:7px;font-size:15px;font-weight:600;cursor:pointer">Enter</button>
 </form></body></html>"""
 
 
@@ -3203,7 +3203,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
       /* severity system */
       --green: #5fd98a;   /* pass / live / clear / fresh / profit */
       --yellow: #FFB800;  /* warning / stale / watch / defend */
-      --red: #e8875c;     /* blocked / locked / loss / error (brand-ember) */
+      --red: #ef6a6a;     /* blocked / locked / loss / error */
       --blue: #9db0f5;    /* info / paper / broker */
       --gray: #8b90a6;    /* inactive / disabled / neutral */
       --nav-h: 54px;
