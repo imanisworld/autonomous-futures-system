@@ -405,6 +405,9 @@ class SignaDiscoveryClient:
         params = {k: v for k, v in (params or {}).items() if v is not None}
         key = _cache_key(endpoint, params)
         now = self._clock()
+        cached = self._cached(key)
+        if cached is not None:
+            return cached
         if account_backoff_remaining(
             self.base_url,
             self.api_key,
@@ -419,9 +422,6 @@ class SignaDiscoveryClient:
             )
         if self._backoff_until.get(key, 0.0) > now:
             return SignaDiscoveryResponse(False, endpoint, error="backoff_active", retrieved_at=_utc_now(), backoff_active=True)
-        cached = self._cached(key)
-        if cached is not None:
-            return cached
         if not self.configured:
             return SignaDiscoveryResponse(False, endpoint, error="missing_api_key", retrieved_at=_utc_now())
         close_client = self._client is None
