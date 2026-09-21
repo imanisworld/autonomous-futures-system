@@ -9,6 +9,7 @@ from research.strat_reference_212_v01 import (
     FTFC_UNAVAILABLE,
     FTFC_UP,
     _is_exact_5m_window,
+    _quantile_block,
     classify_ftfc,
     observe_candidate,
 )
@@ -302,3 +303,13 @@ def test_complete_source_c_reports_shared_classifier_reversal_diagnostic():
     assert event.afs_classifier_sequence == "strat_212_reversal"
     assert event.afs_classifier_direction == "LONG"
     assert event.afs_comparison_status == "CLASSIFIER_ONLY_EXECUTABLE_PATH_NOT_COMPARED"
+
+
+def test_descriptive_quantiles_are_frozen_and_deterministic():
+    assert _quantile_block([0, 10, 20, 30, 40]) == {
+        "n": 5,
+        "p25": 10.0,
+        "p50": 20.0,
+        "p75": 30.0,
+        "p90": 36.0,
+    }
