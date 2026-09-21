@@ -846,7 +846,71 @@ def _check_validation(evidence: dict[str, Any], blockers: list[str]) -> dict[str
             "validation.minimum_resolved_fills_in_required_cells="
             f"{minimum_cell} is below the pre-registered per-cell requirement {required_per_cell}"
         )
-    return validation
+
+    # The contract is per required validation cell, so a single claimed minimum
+    # cannot prove the population. Enumerate the required dimensions/cells and
+    # mechanically check every required cell's resolved-fill count.
+    dimensions = validation.get("required_cell_dimensions")
+    if not isinstance(dimensions, list) or not dimensions or any(
+        not isinstance(item, str) or not item.strip() for item in dimensions
+    ):
+        blockers.append(
+            "validation.required_cell_dimensions must be a non-empty list of dimension names"
+        )
+
+    cells = validation.get("cells")
+    if not isinstance(cells, list) or not cells:
+        blockers.append("validation.cells must contain per-cell evidence")
+        cells = []
+
+    required_cells = 0
+    observed_minimum: int | None = None
+    for idx, cell in enumerate(cells):
+        if not isinstance(cell, dict):
+            blockers.append(f"validation.cells[{idx}] must be an object")
+            continue
+        if cell.get("required") is not True:
+            continue
+        required_cells += 1
+        cell_id = str(cell.get("cell_id") or f"index_{idx}").strip()
+        resolved = _as_int(cell.get("resolved_fills"))
+        if resolved is None or resolved < 0:
+            blockers.append(
+                f"validation cell {cell_id} resolved_fills must be a non-negative integer"
+            )
+            continue
+        observed_minimum = (
+            resolved if observed_minimum is None else min(observed_minimum, resolved)
+        )
+        need = (
+            required_per_cell
+            if required_per_cell is not None
+            and required_per_cell >= MIN_RESOLVED_FILLS_PER_CELL
+            else MIN_RESOLVED_FILLS_PER_CELL
+        )
+        if resolved < need:
+            blockers.append(
+                f"validation cell {cell_id} has {resolved} resolved fills, below required {need}"
+            )
+
+    if required_cells == 0:
+        blockers.append("validation.cells contains no required validation cells")
+
+    if (
+        minimum_cell is not None
+        and observed_minimum is not None
+        and minimum_cell != observed_minimum
+    ):
+        blockers.append(
+            "validation.minimum_resolved_fills_in_required_cells does not match "
+            f"the enumerated required-cell minimum {observed_minimum}"
+        )
+
+    return {
+        **validation,
+        "required_cell_count": required_cells,
+        "observed_required_cell_minimum": observed_minimum,
+    }
 
 
 def _check_golden_parity(evidence: dict[str, Any], blockers: list[str]) -> dict[str, Any]:
