@@ -6,7 +6,7 @@
 
 ## Question
 
-When implemented from the frozen public-methodology reference rather than the existing AFS continuation/fixed-2R geometry, does a literal 2-1-2 **reversal** population show reproducible evidence on MNQ/MES?
+When implemented from the frozen public-methodology reference, with futures-specific translation choices stated explicitly rather than hidden, does a 2-1-2 **reversal** reference population show reproducible evidence on MNQ/MES?
 
 This is not a test of every TheStrat setup and is not a promotion study.
 
@@ -157,6 +157,8 @@ Reason:
 ### Futures bar-alignment translation
 
 The public reference does not establish one unique futures-session alignment for a 60-minute candle. The current research harness therefore labels its first implementation explicitly as **RTH session-aligned 60m, anchored at 09:30 ET**. That is an AFS research translation, not a claim that the public methodology mandates this futures alignment.
+
+v0.1 also limits A/B/C construction to bars inside the **same RTH session**. It does not silently bridge the overnight/session gap or the dropped final partial RTH bucket. Consequently this first population is narrower than every possible 60-minute futures 2-1-2; the report must state `A_B_C_same_RTH_session_only`. Cross-session continuity is a separate preregistered variant.
 
 The existing timed 3-2-2 implementation uses clock-specific 7AM/8AM/9AM bars and is a separate variant; it must not be used as silent proof that 09:30 RTH session alignment is canonical.
 
