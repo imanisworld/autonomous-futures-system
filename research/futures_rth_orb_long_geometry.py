@@ -474,10 +474,18 @@ def pass_rule(report: dict[str, Any], geometry: str) -> dict[str, Any]:
         share = base["top_positive_month_share"]
         if share is None or share >= 0.60:
             reasons.append(f"{instrument}:month_concentration")
+    numeric_pass = not reasons
     return {
         "geometry": geometry,
-        "passes": not reasons,
-        "classification": "PROMISING_BUT_UNPROVEN" if not reasons else "WAIT",
+        "numeric_pass": numeric_pass,
+        # Final classification stays WAIT until a human/auditor confirms the
+        # population identity and causal mechanics against raw rows. The
+        # prereg explicitly requires that non-numeric gate too.
+        "passes": False,
+        "classification": "WAIT",
+        "manual_gate_remaining": (
+            "identity_and_causality_audit" if numeric_pass else None
+        ),
         "reasons": reasons,
     }
 
@@ -594,9 +602,11 @@ def to_markdown(report: dict[str, Any]) -> str:
         lines.append("")
     lines += ["## Pre-registered gate", ""]
     for gate in report["gate"]:
+        detail = "; ".join(gate["reasons"])
+        if gate.get("numeric_pass"):
+            detail = "numeric gate passed; manual identity/causality audit still required"
         lines.append(
-            f"- {gate['geometry']}: **{gate['classification']}** — "
-            + ("PASS" if gate["passes"] else "; ".join(gate["reasons"]))
+            f"- {gate['geometry']}: **{gate['classification']}** — {detail}"
         )
     return "\n".join(lines) + "\n"
 
