@@ -272,6 +272,35 @@ def test_submit_fails_closed_when_cash_account_ambiguous():
     assert [c[0] for c in client.calls] == ["accounts"]
 
 
+class FakeServerException(Exception):
+    """Shape of the SDK's ServerException: error_code + http_status attrs."""
+    def __init__(self, code, http_status):
+        super().__init__(f"HTTP Status: {http_status}, Code: {code}")
+        self.error_code = code
+        self.http_status = http_status
+
+
+def test_submit_maps_broker_4xx_exception_to_clean_rejection_not_unknown_outcome():
+    # Observed on the real sandbox 2026-09-21 (outside 8:00-16:00 ET):
+    exc = FakeServerException("OPENAPI_OPTION_CAN_NOT_TRADING_FOR_NON_TRADING_HOURS", 417)
+    client = FakeClient(raise_on_place=exc)
+    factory, _ = factory_for(client)
+    result = submit_sandbox_paper_option_order(preview_request(), submit_config(), SAFE_ENV, client_factory=factory)
+    assert result.status == "REJECTED"
+    assert result.reason == "place_broker:OPENAPI_OPTION_CAN_NOT_TRADING_FOR_NON_TRADING_HOURS"
+    assert result.submitted is False and result.broker_order_id is None
+    assert "placement_outcome_unknown_check_order_detail" not in result.warnings
+    assert result.estimated_cost == 100.0  # preview data still reported
+
+
+def test_submit_keeps_unknown_outcome_warning_for_broker_5xx():
+    client = FakeClient(raise_on_place=FakeServerException("INTERNAL", 500))
+    factory, _ = factory_for(client)
+    result = submit_sandbox_paper_option_order(preview_request(), submit_config(), SAFE_ENV, client_factory=factory)
+    assert result.status == "ERROR"
+    assert "placement_outcome_unknown_check_order_detail" in result.warnings
+
+
 # ─── cancel / detail ─────────────────────────────────────────────────────────
 
 def test_cancel_requires_submit_opt_in_and_targets_client_order_id():
