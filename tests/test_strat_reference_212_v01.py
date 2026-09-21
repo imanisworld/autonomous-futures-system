@@ -280,3 +280,25 @@ def test_trigger_bar_terminal_event_has_no_causally_ordered_excursion():
     assert event.mae_points is None
     assert event.mfe_points is None
     assert event.trigger_bar_excursion_excluded is True
+
+
+def test_complete_source_c_reports_shared_classifier_reversal_diagnostic():
+    parent = b(0, 10, 11, 8, 9)
+    inside = b(60, 9, 10, 8.5, 9.5)
+    watch = [
+        b(120 + 5 * i, 9.5, 10.2 if i == 0 else 10.5, 9.0, 10.1)
+        for i in range(12)
+    ]
+    event = observe_candidate(
+        instrument="MNQ",
+        day=date(2026, 1, 5),
+        parent=parent,
+        inside=inside,
+        parent_type=TWO_DOWN,
+        watch=watch,
+        midpoint=date(2026, 1, 1),
+    )
+    assert event.source_c_type == TWO_UP
+    assert event.afs_classifier_sequence == "strat_212_reversal"
+    assert event.afs_classifier_direction == "LONG"
+    assert event.afs_comparison_status == "CLASSIFIER_ONLY_EXECUTABLE_PATH_NOT_COMPARED"
