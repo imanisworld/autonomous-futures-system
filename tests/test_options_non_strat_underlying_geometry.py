@@ -5,7 +5,10 @@ from datetime import datetime, timedelta, timezone
 from alert_ranker.causal_bars import Bar
 from research.options_non_strat_underlying_geometry import (
     Candidate,
+    FROZEN_UNIVERSE_BLOB_SHA,
     GEOMETRIES,
+    _git_blob_sha,
+    apply_population_mode,
     collect_candidates,
     geometry_prices,
     gate_family,
@@ -46,6 +49,31 @@ def _candidate(direction="LONG", level=100.0) -> Candidate:
         trigger_close=100.4 if direction == "LONG" else 99.6,
         market_aligned=True,
     )
+
+
+def test_frozen_universe_blob_identity_matches_preregistered_file():
+    from research.options_non_strat_underlying_geometry import DEFAULT_UNIVERSE
+
+    assert _git_blob_sha(DEFAULT_UNIVERSE) == FROZEN_UNIVERSE_BLOB_SHA
+
+
+def test_debug_population_can_never_emit_a_promotion_pass():
+    gates = [
+        {
+            "family": "PDH_RECLAIM_LONG",
+            "geometry": "O1_EVENT_LEVEL",
+            "passes": True,
+            "classification": "PROMISING_BUT_UNPROVEN",
+            "reasons": [],
+        }
+    ]
+    official = apply_population_mode(gates, debug_population=False)
+    assert official[0]["passes"] is True
+
+    debug = apply_population_mode(gates, debug_population=True)
+    assert debug[0]["passes"] is False
+    assert debug[0]["classification"] == "DEBUG_ONLY"
+    assert debug[0]["reasons"][0] == "debug_population_override"
 
 
 def test_geometry_is_frozen_to_level_or_trigger_bar():
