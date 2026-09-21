@@ -47,6 +47,8 @@ Trigger event:
 - LONG = first strict trade above bar B high;
 - SHORT = first strict trade below bar B low.
 
+For reporting, `trigger_price` is the frozen **structural boundary** (bar B high/low), not an executable fill assumption. Because MNQ/MES trade on a 0.25-point grid, the minimum feasible strict-break price is one contract tick beyond that boundary. Record that value separately as `minimum_strict_break_price`. Any later execution overlay must begin from at least that strict-break price before applying its frozen adverse-fill assumption; it may not treat the boundary itself as a filled futures price.
+
 Use lower-timeframe bars available in the existing corpus to identify the first causal break. If both boundaries are first crossed within the same lowest-resolution bar and ordering cannot be established, classify `AMBIGUOUS` and do not credit a directional trigger.
 
 Do not wait for the source-timeframe breakout candle to close and then backfill an earlier entry.
@@ -106,7 +108,7 @@ If `ENTRY_BAR_FAILURE` cannot be applied causally at order time, report it obser
 ## Fill realism
 
 Any P&L overlay must:
-- enter no earlier than the causal trigger;
+- enter no earlier than the causal trigger and never model a fill at the structural boundary itself;
 - use an explicitly frozen commission + slippage contract;
 - use stop-first handling when stop and magnitude/target are both touched inside a bar with unknown path;
 - reject impossible/wrong-side brackets;
@@ -194,9 +196,12 @@ Per event:
 - frozen trigger high/low;
 - trigger timestamp;
 - trigger direction;
-- trigger price;
+- structural trigger-boundary price and role;
+- minimum strict-break price from the contract tick grid;
 - ambiguous flag;
 - parent magnitude;
+- structural-magnitude distance from the minimum strict-break price;
+- whether the magnitude remains on the executable side of that minimum strict-break price;
 - magnitude reached Y/N;
 - time to magnitude;
 - MAE;
