@@ -4,7 +4,7 @@
 
 This study asks whether the published futures intraday-momentum effect is reproducible in the existing MNQ/MES replay corpus with causal 5-minute timing and current research cost assumptions.
 
-Source motivation: Baltas, Karyampas, and Panagiotou (JFE 2021) report that the return during the rest of the day predicts the final 30-minute futures return in the same direction across more than 60 futures markets. This repository study is a replication/screening exercise, not a claim that the paper's result automatically transfers to MNQ/MES.
+Source motivation: Guido Baltussen, Zhi Da, Sten Lammers, and Martin Martens (JFE 2021) report that the return during the rest of the day predicts the final 30-minute futures return in the same direction across more than 60 futures markets. This repository study is a replication/screening exercise, not a claim that the paper's result automatically transfers to MNQ/MES.
 
 Nothing here authorizes strategy promotion, a paper lane, Webull mirroring, risk-rule changes, alerts, or broker execution.
 
