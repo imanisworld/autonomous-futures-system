@@ -188,3 +188,30 @@ Reason:
 5. no need to invent a continuation target before its rule is fully frozen.
 
 The study must remain research-only and cannot promote a strategy directly.
+
+
+## Reference-runner static audit — pass 3
+
+Before any historical run, the first structural runner was audited against the frozen preregistration. Three outcome-sensitive defects were found and corrected while the study still has no historical results:
+
+1. **Watch-window drift:** the first draft could keep a 2-1-2 precursor armed through all remaining 5-minute bars in the RTH session. A 2-1-2 requires the immediately following source bar. The runner now bounds trigger evidence to exactly the next 60-minute source-bar window and fails closed when that 5-minute window is incomplete.
+2. **Post-trigger structural failure:** the first draft could continue crediting a later parent-magnitude hit after price had already broken the opposite inside-bar boundary. The runner now stops at the first post-trigger structural terminal event. If structural failure occurs before magnitude, magnitude is not credited. If failure and magnitude are first observed in the same 5-minute bar and order is unknowable, the resolution is marked ambiguous and magnitude is not credited.
+3. **Excursion contamination:** the first draft measured MAE/MFE through every remaining watched bar even after magnitude was already reached. The runner now measures excursion only from trigger through the first terminal structural event, preventing post-resolution price action from changing the result.
+
+A pure FTFC classifier has also been added for the documented UP/DOWN/CONFLICT rule, with missing required opens returning `UNAVAILABLE`. This does **not** prove the local replay corpus can reconstruct monthly/weekly/daily/current-60m opens; data plumbing remains unverified without the local corpus.
+
+### Source-bar alignment boundary
+
+The research runner currently constructs 60-minute bars as RTH session-aligned buckets anchored at 09:30 ET. The public reference does not establish that as the uniquely canonical futures alignment, while the existing timed 3-2-2 implementation uses separate clock-specific 7AM/8AM/9AM bars. The preregistration therefore now labels 09:30 RTH alignment as an explicit AFS research translation rather than public doctrine.
+
+No historical result should be generalized to every 60-minute futures implementation without preserving that alignment label. Clock-aligned, ETH, 4HR, or Daily variants remain separate experiments.
+
+### Current completion state
+
+The structural code can be reviewed and unit-tested without local historical data. The study itself remains incomplete until:
+- FTFC data capability is proven on the actual replay corpus;
+- AFS EMA trend is recorded side-by-side on the same events;
+- preregistered execution overlays are implemented only after the frozen structural population exists;
+- the historical MNQ/MES run and output audit are completed.
+
+No production strategy, risk, execution, broker, scanner, scheduler, or alert path is modified by this lane.
