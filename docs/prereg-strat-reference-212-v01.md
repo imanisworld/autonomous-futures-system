@@ -139,6 +139,26 @@ Standard reference state at trigger:
 - DOWN if below all four;
 - CONFLICT otherwise.
 
+### Frozen futures reconstruction
+
+The local replay-corpus capability audit completed before the historical reference run:
+- MNQ and MES each contain 500 CME trade days;
+- 499/500 have the exact 18:00 ET trade-day opening bar;
+- 103/104 Monday-started weeks have a reconstructable weekly open;
+- 23/24 months have a reconstructable monthly open;
+- 487/487 complete 78-bar RTH sessions contain every required RTH 60-minute boundary open;
+- the only systematic period-open failure is the initial partial July 2024 corpus boundary.
+
+Therefore v0.1 reconstructs:
+- daily open = exact 18:00 ET opening bar of the CME trade day using the shared `cme_trading_day` identity;
+- weekly open = exact daily open of the first observed CME trade day in the Monday-started week;
+- monthly open = exact daily open of the first observed CME trade day in the calendar month;
+- current 60m open = first 5-minute bar open of the active 09:30-anchored RTH 60-minute source bucket.
+
+If any required open is unavailable, FTFC is `UNAVAILABLE`; the event is retained because v0.1 does not filter by FTFC.
+
+Because the exact intrabar first trade beyond the trigger boundary is not recoverable from 5-minute OHLC, FTFC's trigger-time price input is frozen to the **minimum strict-break price** (one contract tick beyond the structural boundary). This is a deterministic futures translation used for stratification only, not an executable fill claim.
+
 **v0.1 does not filter candidates by FTFC.** It reports results stratified by FTFC state.
 
 Reason: filtering now would add a new selection gate before we know whether it contributes information.
