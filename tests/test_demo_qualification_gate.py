@@ -170,6 +170,9 @@ def _complete_evidence(tmp_path: Path) -> dict:
             "contract_qty": 1,
             "commission_slippage_assumptions": "$1.48 round turn, 1 adverse tick baseline",
         },
+        "runtime_parity": {
+            "replay_live_logic_confirmed": True,
+        },
         "stated_classification": "PROMISING BUT UNPROVEN",
         "change_scope": {
             "base_sha": "base123",
