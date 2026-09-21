@@ -251,6 +251,8 @@ def _safety_caps(
     accounting: dict[str, Any],
     execution: dict[str, Any],
     execution_context: dict[str, Any],
+    runtime_parity: dict[str, Any],
+    execution_context_claimed: dict[str, Any],
     stated_classification: str | None,
 ) -> dict[str, Any]:
     blockers: list[str] = []
