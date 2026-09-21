@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="How AFSVP handles security and how to report a vulnerability.">
+  <title>Security — AFSVP</title>
+  <link rel="icon" type="image/svg+xml" href="/afsvp-mark.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;650;750;850&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main>
+    <div class="kicker">AFSVP</div>
+    <h1 style="font-size:clamp(2.5rem,8vw,4.5rem)">Security</h1>
+    <p>Effective September 21, 2026.</p>
+
+    <h2>What we do</h2>
+    <ul>
+      <li><strong>HTTPS only.</strong> Plain-HTTP requests are redirected to HTTPS.</li>
+      <li><strong>Authentication for private areas.</strong> Operator dashboards, journals, and controls require authentication. The public site is static and holds no private data.</li>
+      <li><strong>Least privilege.</strong> Public hosts serve only the routes they need; internal services listen on localhost and are reached only through the reverse proxy.</li>
+      <li><strong>No secrets in frontend code.</strong> API keys, broker credentials, and webhook secrets live only on the server. The published frontend bundle was last checked for leaked secrets on September 21, 2026.</li>
+      <li><strong>Authenticated, rate-limited webhooks.</strong> Inbound alert traffic must carry a shared secret and is rate-limited per client.</li>
+      <li><strong>Logging and monitoring.</strong> Access logs, rejected requests, and system-health checks are monitored for abuse and errors.</li>
+      <li><strong>Paper/demo posture.</strong> The system currently operates in paper, demo, and observation modes. No public route places live orders.</li>
+    </ul>
+    <p>We do not claim penetration testing, third-party audits, or any compliance certification. We do not run a bug bounty program.</p>
+
+    <h2>Reporting a vulnerability</h2>
+    <p>If you believe you have found a security issue, please report it privately. Do not open a public issue.</p>
+    <ul>
+      <li>GitHub private report: <a href="https://github.com/imanisworld/autonomous-futures-system/security/advisories/new">Report a vulnerability</a></li>
+      <li>Machine-readable contact: <a href="/.well-known/security.txt">/.well-known/security.txt</a></li>
+    </ul>
+    <p>Include a description, the affected URL or component, reproduction steps that do not use real credentials, and the impact you believe it has. We will acknowledge reports as quickly as we can. There is no monetary reward.</p>
+
+    <h2>Testing boundaries</h2>
+    <p>Good-faith research against publicly reachable pages is welcome, within these limits. You do <strong>not</strong> have permission to:</p>
+    <ul>
+      <li>perform destructive actions or modify data;</li>
+      <li>run denial-of-service, load, or stress testing;</li>
+      <li>use social engineering, phishing, or physical attacks;</li>
+      <li>touch broker, order, execution, or webhook paths, or send forged alert traffic;</li>
+      <li>exfiltrate, retain, or publish data you were not meant to see — stop and report as soon as you realize you have access;</li>
+      <li>attack third-party providers (hosting, GitHub, Google Fonts, Discord).</li>
+    </ul>
+    <p>Activity outside these limits is a violation of the <a href="/terms/">Terms</a> and may be reported.</p>
+
+    <p><a href="/">Return to AFSVP</a></p>
+  </main>
+  <footer>
+    <a href="/status/">Status</a>
+    <a href="/privacy/">Privacy</a>
+    <a href="/terms/">Terms</a>
+    <a href="/security/">Security</a>
+    <span>© 2026 AFSVP</span>
+  </footer>
+</body>
+</html>
