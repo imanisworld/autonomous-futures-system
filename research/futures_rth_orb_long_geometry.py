@@ -507,9 +507,21 @@ def build_report(all_rows: dict[str, list[TradeRow]], meta: dict[str, Any]) -> d
             unique.setdefault(row.episode_id, row)
         identity_rows = list(unique.values())
         with_payload = [r for r in identity_rows if r.payload_orb_high is not None]
+        risk_feasible_cells: dict[str, Any] = {}
+        for geometry in GEOMETRIES:
+            for label in SLIPPAGE_CELLS:
+                selected = [
+                    r for r in rows
+                    if r.geometry == geometry
+                    and r.slippage_label == label
+                    and r.over_stop_cap is False
+                ]
+                risk_feasible_cells[f"{geometry}:{label}"] = summarize_cell(selected)
+
         report["instruments"][instrument] = {
             **meta[instrument],
             "cells": cells,
+            "risk_feasible_cells": risk_feasible_cells,
             "identity": {
                 "events": len(identity_rows),
                 "payload_orb_available": len(with_payload),
@@ -561,6 +573,23 @@ def to_markdown(report: dict[str, Any]) -> str:
                     f"{h1['n']}/{h1['net']}/{h1['pf']} | "
                     f"{h2['n']}/{h2['net']}/{h2['pf']} | "
                     f"{cell['top_positive_month_share']} |"
+                )
+        lines += [
+            "",
+            "### Risk-feasible view (secondary; raw gate remains authoritative)",
+            "",
+            "| cell | n | net | exp | PF | maxDD | H1 n/net/PF | H2 n/net/PF |",
+            "|---|---:|---:|---:|---:|---:|---|---|",
+        ]
+        for geometry in GEOMETRIES:
+            for label in SLIPPAGE_CELLS:
+                cell = block["risk_feasible_cells"][f"{geometry}:{label}"]
+                h1, h2 = cell["halves"]["H1"], cell["halves"]["H2"]
+                lines.append(
+                    f"| {geometry}:{label} | {cell['resolved']} | {cell['net']} | "
+                    f"{cell['expectancy']} | {cell['pf']} | {cell['max_drawdown']} | "
+                    f"{h1['n']}/{h1['net']}/{h1['pf']} | "
+                    f"{h2['n']}/{h2['net']}/{h2['pf']} |"
                 )
         lines.append("")
     lines += ["## Pre-registered gate", ""]
