@@ -15,7 +15,12 @@ from typing import Iterable, Sequence
 from alert_ranker.config import DEFAULT_SIGNA_CONTEXT_PULL_INCLUDE, ScannerConfig, load_config
 from alert_ranker.session_calendar import nyse_session_for
 from alert_ranker.signa_context_store import SHARED_PROXY_SYMBOLS, SignaContextStore
-from sources.signa_discovery import SignaDiscoveryClient, SignaDiscoveryResponse, records_from_direct_response
+from sources.signa_discovery import (
+    DEFAULT_CACHE_TTL_SECONDS,
+    SignaDiscoveryClient,
+    SignaDiscoveryResponse,
+    records_from_direct_response,
+)
 from sources.signa_snapshot_store import SignaSnapshotStore
 
 DEFAULT_INCLUDE = tuple(DEFAULT_SIGNA_CONTEXT_PULL_INCLUDE)
@@ -68,8 +73,14 @@ def pull_context(
     endpoint_results: list[dict[str, object]] = []
     snapshot_ids: list[str] = []
 
-    def add_rows(source: str, response: SignaDiscoveryResponse, symbol: str | None = None) -> None:
-        snapshot = _record_shared_snapshot(
+    def add_rows(
+        source: str,
+        response: SignaDiscoveryResponse,
+        symbol: str | None = None,
+        *,
+        snapshot=None,
+    ) -> None:
+        snapshot = snapshot or _record_shared_snapshot(
             snapshot_store,
             source=source,
             response=response,
@@ -106,7 +117,30 @@ def pull_context(
 
     for symbol in symbols:
         if "action_card" in include:
-            add_rows("action_card", signa.action_card(symbol, timeframe=timeframe), symbol)
+            shared = snapshot_store.find_fresh(
+                endpoint=f"/api/v1/signals/{symbol}",
+                symbol=symbol,
+                timeframe=timeframe,
+                params={"symbol": symbol, "timeframe": timeframe},
+                max_age_seconds=DEFAULT_CACHE_TTL_SECONDS,
+                now=now,
+            )
+            if shared is not None:
+                add_rows(
+                    "action_card",
+                    SignaDiscoveryResponse(
+                        True,
+                        f"/api/v1/signals/{symbol}",
+                        payload=shared.payload,
+                        status_code=shared.http_status,
+                        retrieved_at=shared.retrieved_at,
+                        cached=True,
+                    ),
+                    symbol,
+                    snapshot=shared,
+                )
+            else:
+                add_rows("action_card", signa.action_card(symbol, timeframe=timeframe), symbol)
         if "enhanced_signal" in include:
             add_rows("enhanced_signal", signa.enhanced_signal(symbol, timeframe=timeframe), symbol)
         if "options_flow" in include:
@@ -119,8 +153,14 @@ def pull_context(
             add_rows("gex", signa.gex(symbol), symbol)
 
     ids = context_store.record_many(rows, timestamp=now)
+    provider_ok = sum(1 for item in endpoint_results if item.get("ok") is True)
+    provider_failed = len(endpoint_results) - provider_ok
     return {
         "ok": True,
+        "provider_healthy": provider_failed == 0,
+        "provider_requests_total": len(endpoint_results),
+        "provider_requests_ok": provider_ok,
+        "provider_requests_failed": provider_failed,
         "advisory_only": True,
         "observation_only": True,
         "trade_authority": False,
