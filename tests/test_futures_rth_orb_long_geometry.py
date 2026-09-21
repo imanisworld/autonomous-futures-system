@@ -100,6 +100,22 @@ def test_legacy_payload_identity_requires_an_actual_cross():
     assert not_crossed.legacy_boundary_same_bar is False
 
 
+def test_derived_futures_prices_are_conservatively_tick_aligned():
+    cand = Candidate(
+        **{
+            **_candidate().__dict__,
+            "orb_low": 96.25,  # midpoint makes G3 structural stop half-tick
+        }
+    )
+    stop, target = geometry_prices(cand, 101.25, "G3_ORB_MIDPOINT")
+    assert stop % 0.25 == 0.0
+    assert target % 0.25 == 0.0
+    # Raw midpoint stop would be 97.875; conservative LONG rounding is 97.75.
+    assert stop == 97.75
+    raw_target = 101.25 + 2.0 * (101.25 - 97.75)
+    assert target <= raw_target
+
+
 def test_entry_uses_next_bar_open_not_trigger_close():
     cand = _candidate()
     bars = [
