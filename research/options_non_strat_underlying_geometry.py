@@ -208,21 +208,32 @@ def collect_candidates(
             if sliced and _complete(sliced, session):
                 qqq_by_date[session.date] = sliced
 
-    ordered_days = sorted(complete_by_date)
+    session_days = [session.date for session in sessions]
     candidates: list[Candidate] = []
 
-    for idx, day in enumerate(ordered_days):
+    for idx, day in enumerate(session_days):
         if not (study_start <= day <= study_end):
             continue
+        current = complete_by_date.get(day)
+        if current is None:
+            continue
+        # Fail closed on the immediate prior market session. Never leap over an
+        # incomplete/missing day and silently turn a stale high/low into PDH/PDL.
         if idx == 0:
             skipped["no_prior"] += 1
             continue
+        prior_day = session_days[idx - 1]
+        prior = complete_by_date.get(prior_day)
+        if prior is None:
+            skipped["no_prior"] += 1
+            continue
 
-        prior_day = ordered_days[idx - 1]
-        current = complete_by_date[day]
-        prior = complete_by_date[prior_day]
-        history_days = ordered_days[max(0, idx - 4):idx]
-        history = [bar for hist_day in history_days for bar in complete_by_date[hist_day]]
+        history_days = session_days[max(0, idx - 4):idx]
+        history = [
+            bar
+            for hist_day in history_days
+            for bar in complete_by_date.get(hist_day, ())
+        ]
 
         spy_session = spy_by_date.get(day)
         qqq_session = qqq_by_date.get(day)
@@ -636,7 +647,7 @@ async def run(args: argparse.Namespace) -> int:
         "split": split.isoformat(),
         "universe_source": str(universe_path),
         "symbols_requested": len(requested),
-        "symbols_with_candidates": len(candidates_by_symbol),
+        "symbols_with_candidates": sum(bool(rows) for rows in candidates_by_symbol.values()),
         "provider_error_windows": provider_errors,
         "skipped_by_symbol": skipped_by_symbol,
         "families": {},
