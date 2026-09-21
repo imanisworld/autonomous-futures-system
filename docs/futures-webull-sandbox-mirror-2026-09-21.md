@@ -1,8 +1,11 @@
 # Futures paper-lane mirror → Webull sandbox (2026-09-21)
 
-**Status:** adapter merged, **unwired**. No runtime module imports it (test-guarded).
-Default off. No deploy required; nothing changes on the box until a separate,
-flag-gated wiring change ships after the freeze.
+**Status:** adapter merged and **wired through `execution/paper_mirror_hook.py`**
+(PaperBroker `execute_bracket` / `resolve_position` / `force_resolve`). Default
+off: with `WEBULL_FUTURES_MIRROR_ENABLED` unset the hook returns after one env
+read and never imports the mirror. When on, mirror calls run on a daemon thread
+(never block a bar) and results append to `<log_dir>/webull_mirror_<date>.jsonl`
+(operator-only; nothing reads it). No deploy until after the freeze.
 
 ## Why
 
@@ -65,8 +68,5 @@ WEBULL_FUTURES_MIRROR_MAX_CONTRACTS=1
 
 ## Not done yet
 
-- Wiring: call `mirror_entry` when a paper lane's `execute_bracket` fills and
-  `mirror_exit` when `resolve_position` returns an exited `Fill`; record the
-  mirror result on the journal row (evidence stays internal).
 - Reconciliation: compare mirror fills vs paper fills daily (report-only).
 - Release + `.env` keys on the box: after 2026-09-30.

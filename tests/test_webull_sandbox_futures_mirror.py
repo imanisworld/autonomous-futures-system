@@ -391,6 +391,8 @@ def test_cancel_maps_broker_rejection():
 
 # ─── isolation guards ────────────────────────────────────────────────────────
 
+# The only sanctioned bridge is execution/paper_mirror_hook.py, which imports
+# the mirror lazily and only when WEBULL_FUTURES_MIRROR_ENABLED is true.
 _RUNTIME_MODULES = (
     "webhook/app.py",
     "webhook/runner.py",
@@ -402,7 +404,7 @@ _RUNTIME_MODULES = (
 )
 
 
-def test_no_runtime_module_imports_the_mirror_lane():
+def test_no_runtime_module_imports_the_mirror_lane_directly():
     for rel in _RUNTIME_MODULES:
         path = Path(rel)
         if not path.exists():

@@ -29,6 +29,7 @@ from execution.broker_interface import (
     Fill,
     Position,
 )
+from execution import paper_mirror_hook
 from execution.no_fill_taxonomy import classify_no_fill_reason
 from execution.post_fill_validation import validate_post_fill
 from execution.trailing import compute_trailed_stop
@@ -144,6 +145,23 @@ class PaperBroker(BrokerInterface):
         )
 
     def execute_bracket(
+        self,
+        order: BracketOrder,
+        market_price: Optional[float] = None,
+        *,
+        paper_order_id: Optional[str] = None,
+    ) -> Fill:
+        """Simulate the bracket, then (flag-gated, fire-and-forget) mirror an
+        established entry to the Webull sandbox futures paper account. The
+        mirror never changes the returned Fill."""
+        fill = self._execute_bracket_impl(order, market_price, paper_order_id=paper_order_id)
+        try:
+            paper_mirror_hook.after_entry(order, fill, lane=self.get_broker_name())
+        except Exception:  # pragma: no cover - hook is defensive itself
+            pass
+        return fill
+
+    def _execute_bracket_impl(
         self,
         order: BracketOrder,
         market_price: Optional[float] = None,
@@ -472,6 +490,15 @@ class PaperBroker(BrokerInterface):
         return None
 
     def resolve_position(self, next_bar: NextBarOHLC) -> Optional[Fill]:
+        """Resolve, then (flag-gated, fire-and-forget) mirror a resolved exit."""
+        fill = self._resolve_position_impl(next_bar)
+        try:
+            paper_mirror_hook.after_exit(fill, lane=self.get_broker_name())
+        except Exception:  # pragma: no cover
+            pass
+        return fill
+
+    def _resolve_position_impl(self, next_bar: NextBarOHLC) -> Optional[Fill]:
         """
         Attempt to resolve an open paper position using next-bar OHLC data.
 
@@ -714,6 +741,15 @@ class PaperBroker(BrokerInterface):
         self._pending_stop_entry = None
 
     def force_resolve(self, result: str, exit_price: float) -> Optional[Fill]:
+        """Force-resolve, then (flag-gated, fire-and-forget) mirror the exit."""
+        fill = self._force_resolve_impl(result, exit_price)
+        try:
+            paper_mirror_hook.after_exit(fill, lane=self.get_broker_name())
+        except Exception:  # pragma: no cover
+            pass
+        return fill
+
+    def _force_resolve_impl(self, result: str, exit_price: float) -> Optional[Fill]:
         """
         Force-resolve an open position at a given price with a given result.
         Used in testing and edge-case handling.
