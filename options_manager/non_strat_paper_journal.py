@@ -83,7 +83,8 @@ CREATE TABLE IF NOT EXISTS non_strat_paper_results (
     simulated_net_pnl REAL,
     row_json TEXT NOT NULL,
     UNIQUE(track_version, ticket_id),
-    FOREIGN KEY(ticket_id) REFERENCES non_strat_paper_preparations(ticket_id)
+    FOREIGN KEY(track_version, ticket_id)
+        REFERENCES non_strat_paper_preparations(track_version, ticket_id)
 );
 """
 

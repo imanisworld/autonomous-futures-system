@@ -54,6 +54,27 @@ MAX_DECISION_LAG_SECONDS = 300
 MIN_REMAINING_RR = 1.0
 WEBULL_BLOCK_REASON = "webull_round_trip_lifecycle_unproven"
 
+# Pre-registered stop/target geometry rules, keyed by ``geometry_rule_id``.
+# EMPTY in nst-v0.1: no rule has been pre-registered, so every plan is
+# rejected with ``geometry_rule_not_registered`` until a prereg document
+# adds an entry here (id -> the docs/ path that freezes its definition).
+# A plan whose rule is not in this table is hindsight geometry with a label.
+# Tests register a throwaway rule via ``register_geometry_rule`` and remove
+# it again; runtime code never calls it.
+GEOMETRY_RULES: dict[str, str] = {}
+
+
+def register_geometry_rule(rule_id: str, definition_doc: str) -> None:
+    """Add a pre-registered geometry rule (for preregs and tests only)."""
+    key = (rule_id or "").strip()
+    if not key or not (definition_doc or "").strip():
+        raise ValueError("rule_id and definition_doc are required")
+    GEOMETRY_RULES[key] = definition_doc.strip()
+
+
+def unregister_geometry_rule(rule_id: str) -> None:
+    GEOMETRY_RULES.pop((rule_id or "").strip(), None)
+
 # OptionTradePacket's legacy Signa fields are required scalars. ns-v0.1 does
 # not source Signa/GEX. Use explicit unavailable sentinels that force warnings
 # rather than fabricating direction-aligned context.
@@ -201,6 +222,8 @@ def _input_reason(plan: NonStratPaperPlan) -> tuple[str | None, bool]:
         return "episode_id_missing", True
     if not plan.geometry_rule_id.strip():
         return "geometry_rule_id_missing", True
+    if plan.geometry_rule_id.strip() not in GEOMETRY_RULES:
+        return "geometry_rule_not_registered", True
     if not plan.source_references or any(
         not str(ref).strip() for ref in plan.source_references
     ):
@@ -469,6 +492,9 @@ __all__ = [
     "TRACK_ID",
     "TRACK_VERSION",
     "WEBULL_BLOCK_REASON",
+    "GEOMETRY_RULES",
+    "register_geometry_rule",
+    "unregister_geometry_rule",
     "NonStratPaperPlan",
     "NonStratPaperPreparation",
     "NonStratPaperRoundTrip",
