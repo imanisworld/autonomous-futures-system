@@ -113,7 +113,9 @@ Required:
 - chronological walk-forward passes;
 - sample requirement pre-registered before the validation result is inspected;
 - minimum pre-registered requirement is 30 resolved fills **per required validation cell**;
-- the least-populated required validation cell meets that requirement;
+- required validation dimensions and cells are explicitly enumerated;
+- every required cell's resolved-fill count is checked mechanically;
+- the claimed least-populated required-cell count must match the enumerated minimum and meet the requirement;
 - drawdown stays within the pre-registered limit;
 - concentration check passes;
 - session filters and direction-coverage requirements are respected.
@@ -258,6 +260,11 @@ Exit code:
     "sample_requirement_pre_registered": true,
     "required_resolved_fills_per_cell": 30,
     "minimum_resolved_fills_in_required_cells": 0,
+    "required_cell_dimensions": ["instrument", "direction"],
+    "cells": [
+      {"cell_id": "MNQ_LONG", "required": true, "resolved_fills": 0},
+      {"cell_id": "MNQ_SHORT", "required": true, "resolved_fills": 0}
+    ],
     "drawdown_within_pre_registered_limit": true,
     "concentration_check_pass": true,
     "session_filters_respected": true,
