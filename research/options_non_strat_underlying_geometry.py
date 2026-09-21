@@ -549,11 +549,21 @@ def gate_family(report: dict[str, Any], family: str, geometry: str) -> dict[str,
     if share is None or share >= 0.30:
         reasons.append("ticker_concentration")
 
+    numeric_pass = not reasons
     return {
         "family": family,
         "geometry": geometry,
-        "passes": not reasons,
-        "classification": "PROMISING_BUT_UNPROVEN" if not reasons else "WAIT",
+        "numeric_pass": numeric_pass,
+        # Underlying-history numbers cannot by themselves authorize an options
+        # paper geometry. Final posture stays WAIT until the raw-row/session
+        # audit and the separate forward option-contract proof are complete.
+        "passes": False,
+        "classification": "WAIT",
+        "manual_gate_remaining": (
+            "raw_row_session_audit_and_forward_contract_proof"
+            if numeric_pass
+            else None
+        ),
         "reasons": reasons,
     }
 
