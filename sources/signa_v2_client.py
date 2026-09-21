@@ -40,16 +40,6 @@ def cache_ttl_seconds_from_env() -> float:
         return DEFAULT_CACHE_TTL_SECONDS
 
 
-def failure_backoff_seconds_from_env() -> float:
-    raw = os.getenv("OPTIONS_SIGNA_V2_FAILURE_BACKOFF_SECONDS", "").strip()
-    if not raw:
-        return DEFAULT_FAILURE_BACKOFF_SECONDS
-    try:
-        return max(0.0, float(raw))
-    except ValueError:
-        return DEFAULT_FAILURE_BACKOFF_SECONDS
-
-
 class SignaV2Client:
     def __init__(
         self,
@@ -74,7 +64,7 @@ class SignaV2Client:
         self.failure_backoff_seconds = (
             max(0.0, float(failure_backoff_seconds))
             if failure_backoff_seconds is not None
-            else failure_backoff_seconds_from_env()
+            else DEFAULT_FAILURE_BACKOFF_SECONDS
         )
         self._snapshot_store = snapshot_store
         self._clock = clock
