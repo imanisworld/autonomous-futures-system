@@ -70,7 +70,10 @@ def test_dataset_tags_are_context_not_trade_authority():
 
 
 def test_client_caches_ok_responses_and_backs_off_429():
+    from sources.signa_request_budget import clear_account_backoff
+
     calls = []
+    api_key = "discovery-backoff-test"
 
     def handler(request):
         calls.append(str(request.url))
@@ -79,19 +82,24 @@ def test_client_caches_ok_responses_and_backs_off_429():
         return httpx.Response(429, headers={"Retry-After": "120"}, json={"error": "rate"})
 
     http = httpx.Client(transport=httpx.MockTransport(handler), base_url="https://app.getsigna.ai")
-    client = SignaDiscoveryClient(api_key="k", client=http, cache_ttl_seconds=1800, clock=lambda: 1000.0)
-    first = client.scan(["SPY", "QQQ"], limit=10)
-    second = client.scan(["SPY", "QQQ"], limit=10)
-    assert first.ok is True
-    assert second.cached is True
-    assert len(calls) == 1
+    clear_account_backoff("https://app.getsigna.ai", api_key)
+    try:
+        client = SignaDiscoveryClient(api_key=api_key, client=http, cache_ttl_seconds=1800, clock=lambda: 1000.0)
+        first = client.scan(["SPY", "QQQ"], limit=10)
+        second = client.scan(["SPY", "QQQ"], limit=10)
+        assert first.ok is True
+        assert second.cached is True
+        assert len(calls) == 1
 
-    client_no_cache = SignaDiscoveryClient(api_key="k", client=http, cache_ttl_seconds=0, clock=lambda: 1000.0)
-    third = client_no_cache.scan("SPY,QQQ", limit=20)
-    assert third.ok is False
-    assert third.error == "http_429"
-    fourth = client_no_cache.scan("SPY,QQQ", limit=20)
-    assert fourth.backoff_active is True
+        client_no_cache = SignaDiscoveryClient(api_key=api_key, client=http, cache_ttl_seconds=0, clock=lambda: 1000.0)
+        third = client_no_cache.scan("SPY,QQQ", limit=20)
+        assert third.ok is False
+        assert third.error == "http_429"
+        fourth = client_no_cache.scan("SPY,QQQ", limit=20)
+        assert fourth.backoff_active is True
+    finally:
+        http.close()
+        clear_account_backoff("https://app.getsigna.ai", api_key)
 
 
 def test_client_signal_index_endpoint():
