@@ -11,6 +11,7 @@ Nothing in this file touches a network or broker.
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -209,7 +210,7 @@ def test_market_conflict_keeps_mechanical_setup_non_triggered():
     assert "pattern" not in context.to_scanner_fields()
 
 
-def test_paper_v1_opens_evidence_row_but_discord_stays_fail_closed(tmp_path):
+def test_paper_v1_opens_evidence_row_and_alerts_with_unchecked_caveat(tmp_path):
     cfg = _config(tmp_path)
     storage = ScanStorage(cfg.sqlite_path)
     posts: list[httpx.Request] = []
@@ -218,7 +219,13 @@ def test_paper_v1_opens_evidence_row_but_discord_stays_fail_closed(tmp_path):
         posts.append(request)
         return httpx.Response(204)
 
-    discord = DiscordAlerter(
+    class _FixedDeliveryClock(DiscordAlerter):
+        # The delivery re-check reads the wall clock; pin it to the scan time
+        # so this test does not depend on when the suite runs.
+        async def send_if_eligible(self, result, now=None, *, delivery_now=None):
+            return await super().send_if_eligible(result, now=now, delivery_now=NOW)
+
+    discord = _FixedDeliveryClock(
         cfg,
         storage,
         client=httpx.AsyncClient(transport=httpx.MockTransport(discord_handler)),
@@ -246,14 +253,22 @@ def test_paper_v1_opens_evidence_row_but_discord_stays_fail_closed(tmp_path):
     assert outcome.result.raw["dte"] >= 45
     assert outcome.result.raw["target_1"] == 129.0
     assert outcome.result.raw["target_2"] == 133.0
-    assert outcome.alert_sent is False
-    assert outcome.alert_suppression_reason.startswith("trade_proof_incomplete:")
-    # Critical split: missing trade proof suppresses the user-facing alert but
-    # does not discard the fully specified paper evidence candidate.
+    # INCOMPLETE trade proof (event risk / flip context have no implementation)
+    # is a caveat, not a block: the alert goes out and names what it did not
+    # check. An explicit negative verdict still blocks (see test_alert_ranker).
+    assert outcome.result.raw["trade_proof_status"] == "INCOMPLETE"
+    assert outcome.alert_sent is True
+    assert outcome.alert_suppression_reason == ""
+    assert len(posts) == 1
+    payload = json.loads(posts[0].content)
+    unchecked = next(
+        field for field in payload["embeds"][0]["fields"] if field["name"] == "Unchecked"
+    )
+    assert "event risk" in unchecked["value"]
+    assert "flip context" in unchecked["value"]
     assert outcome.shadow_id > 0
     stored = storage.get_shadow_setup(outcome.shadow_id)
     assert stored is not None
     assert stored.status == "OPEN"
     assert stored.selected_contract["paper_policy_id"] == "OPTIONS_PAPER_V1"
     assert stored.selected_contract["target"] == 129.0
-    assert posts == []
