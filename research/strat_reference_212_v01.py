@@ -111,22 +111,6 @@ def _half(day: date, midpoint: date) -> str:
     return "H1" if day < midpoint else "H2"
 
 
-def _measure(
-    *,
-    instrument: str,
-    day: date,
-    parent: Bar,
-    inside: Bar,
-    lower: Sequence[Bar],
-    midpoint: date,
-) -> Event:
-    parent_type = _classify(parent, lower_parent_placeholder(parent)) if False else ""
-    # The caller supplies a parent known to be directional. Direction here is
-    # the documented reversal side, opposite the parent 2.
-    # parent_type is attached by the caller after construction.
-    raise AssertionError("_measure is not called directly")
-
-
 def observe_candidate(
     *,
     instrument: str,
