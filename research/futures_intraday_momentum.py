@@ -9,7 +9,7 @@ import random
 import statistics
 import sys
 from dataclasses import asdict, dataclass
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -35,6 +35,72 @@ NULL_PERMUTATIONS = 5000
 SIGNAL_BAR_INDEX = 71  # 15:25-15:30 ET
 ENTRY_BAR_INDEX = 72   # 15:30-15:35 ET
 EXIT_BAR_INDEX = 77    # 15:55-16:00 ET
+
+
+def _observed_fixed_holiday(year: int, month: int, day: int) -> date:
+    holiday = date(year, month, day)
+    if holiday.weekday() == 5:
+        return holiday - timedelta(days=1)
+    if holiday.weekday() == 6:
+        return holiday + timedelta(days=1)
+    return holiday
+
+
+def _easter_sunday(year: int) -> date:
+    """Return Gregorian Easter using the Meeus/Jones/Butcher algorithm."""
+    a = year % 19
+    b, c = divmod(year, 100)
+    d, e = divmod(b, 4)
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i, k = divmod(c, 4)
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    month, day = divmod(h + l - 7 * m + 114, 31)
+    return date(year, month, day + 1)
+
+
+def _nth_weekday(year: int, month: int, weekday: int, occurrence: int) -> date:
+    first = date(year, month, 1)
+    return first + timedelta(days=(weekday - first.weekday()) % 7 + 7 * (occurrence - 1))
+
+
+def _last_weekday(year: int, month: int, weekday: int) -> date:
+    next_month = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
+    candidate = next_month - timedelta(days=1)
+    return candidate - timedelta(days=(candidate.weekday() - weekday) % 7)
+
+
+def _is_expected_session(day: date) -> bool:
+    """Return whether a US-equity RTH session is expected on the given day.
+
+    Research-local on purpose: the shared session calendar currently has a
+    known Easter-calculation defect and must not contaminate this replication.
+    """
+    if day.weekday() >= 5:
+        return False
+    closed = {
+        _observed_fixed_holiday(day.year, 1, 1),
+        _nth_weekday(day.year, 1, 0, 3),
+        _nth_weekday(day.year, 2, 0, 3),
+        _easter_sunday(day.year) - timedelta(days=2),
+        _last_weekday(day.year, 5, 0),
+        _observed_fixed_holiday(day.year, 7, 4),
+        _nth_weekday(day.year, 9, 0, 1),
+        _nth_weekday(day.year, 11, 3, 4),
+        _observed_fixed_holiday(day.year, 12, 25),
+    }
+    if day.year >= 2022:
+        closed.add(_observed_fixed_holiday(day.year, 6, 19))
+    return day not in closed
+
+
+def _previous_expected_session(day: date) -> date:
+    candidate = day - timedelta(days=1)
+    while not _is_expected_session(candidate):
+        candidate -= timedelta(days=1)
+    return candidate
 
 
 @dataclass(frozen=True)
@@ -125,13 +191,10 @@ def collect_rows(instrument: str) -> tuple[list[TradeRow], dict[str, int]]:
         if day in excluded:
             skipped["roll"] += 1
             continue
-        # Fail closed on the immediate previous market-session file. Never
-        # leap over an incomplete day and silently use stale prior-close data.
-        if i == 0:
-            skipped["no_prior"] += 1
-            continue
-        prior_day = days[i - 1]
-        if prior_day in excluded or prior_day not in loaded:
+        # Fail closed on the immediately preceding expected exchange session.
+        # Never leap over an absent replay file and silently use stale prior-close data.
+        prior_day = _previous_expected_session(day)
+        if prior_day not in files or prior_day in excluded or prior_day not in loaded:
             skipped["no_prior"] += 1
             continue
         prior = loaded[prior_day]
