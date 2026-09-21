@@ -62,7 +62,7 @@ Each event stores:
 
 - cumulative session VWAP;
 - 5m EMA20 when enough causal history exists;
-- relative volume versus the prior 20 completed 5m bars when available;
+- relative volume versus the prior 20 completed **regular-session** 5m bars when available;
 - SPY and QQQ trend using their own cumulative VWAP + EMA20;
 - whether both index trends align with the event direction;
 - the earliest SIP visibility time (`bar close + 960s`).
@@ -70,6 +70,21 @@ Each event stores:
 These fields are **telemetry**. An event is not dropped because alignment,
 EMA, or relative volume is absent or adverse. That separation is intentional:
 first measure the raw population, then test filters without selection bias.
+
+## Known ns-v0.1 limits (frozen, not bugs to patch silently)
+
+- Context history is rebuilt from regular-session slices of the prior
+  sessions; pre-market and post-close provider bars are discarded. The 09:35
+  bar therefore has a VWAP but may have no EMA20/volume ratio until enough
+  RTH history exists.
+- Bar 0 (09:30) is never evaluated as an event bar, so a gap that opens
+  through PDH/PDL does not arm `*_BREAK_RETEST_*`; a later retest of that
+  level is not observed. A crossing needs a completed prior 5m bar on the
+  other side.
+- `VWAP_TEST_HOLD_*` compares the bar's low/high with the cumulative VWAP as
+  of the bar's **close**, not the VWAP at the moment of the extreme.
+- The `--sqlite` path is refused, by name and by schema, when it is the V1
+  scanner database (same guard as the Strat collector).
 
 ## Episodes
 
@@ -96,7 +111,7 @@ evidence, **not option expectancy** and not a promotion test.
 
 ## Explicitly blocked in `ns-v0.1`
 
-Generic "support hold" and "resistance rejection" are **not** implemented
+Generic "support hold", "resistance rejection" and "pullback + reclaim" are **not** implemented
 against guessed swing levels. The existing fixture language says those need a
 planned-level source. Until that source is frozen and reproducible, these
 families remain blocked rather than approximated.

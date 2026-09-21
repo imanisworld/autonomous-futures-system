@@ -240,3 +240,59 @@ def test_cli_is_bound_to_dedicated_observer_database():
     source = Path("scripts/options_non_strat_coverage.py").read_text()
     assert "options_non_strat_coverage.sqlite" in source
     assert "options_scanner.sqlite" not in source
+
+
+# --------------------------------------------------------------------------- #
+# CLI guards (review fixes on ns-v0.1)
+# --------------------------------------------------------------------------- #
+
+
+def _cli():
+    import importlib
+
+    return importlib.import_module("scripts.options_non_strat_coverage")
+
+
+def test_history_is_regular_session_bars_only():
+    """Pre-market and post-close provider bars must never seed context."""
+    from alert_ranker.session_calendar import nyse_session_for
+    from datetime import date
+
+    cli = _cli()
+    target = nyse_session_for(date(2026, 9, 18))
+    prior = nyse_session_for(date(2026, 9, 17))
+    assert target is not None and prior is not None
+    sessions = [prior, target]
+
+    def at(session, minutes):
+        return session.open.astimezone(timezone.utc) + timedelta(minutes=minutes)
+
+    bars = [
+        Bar(start=at(prior, -30), open=1, high=1, low=1, close=1, volume=1, vwap=1),   # pre-market
+        Bar(start=at(prior, 0), open=1, high=1, low=1, close=1, volume=1000, vwap=1),  # RTH
+        Bar(start=at(prior, 385), open=1, high=1, low=1, close=1, volume=1, vwap=1),   # 15:55 RTH, closes 16:00
+        Bar(start=at(prior, 390), open=1, high=1, low=1, close=1, volume=1, vwap=1),   # post-close
+        Bar(start=at(target, -5), open=1, high=1, low=1, close=1, volume=1, vwap=1),   # today's pre-market
+        Bar(start=at(target, 0), open=1, high=1, low=1, close=1, volume=1, vwap=1),    # today RTH (not history)
+    ]
+    history = cli._history_before(bars, sessions, target)
+    starts = [bar.start_utc for bar in history]
+    assert starts == [at(prior, 0), at(prior, 385)]
+
+
+def test_cli_refuses_v1_scanner_database_by_name_and_schema(tmp_path, capsys):
+    import sqlite3
+
+    cli = _cli()
+    assert cli._guard_sqlite(tmp_path / "options_scanner.sqlite") is False
+    assert "refusing sqlite path" in capsys.readouterr().err
+
+    shaped = tmp_path / "other.sqlite"
+    conn = sqlite3.connect(shaped)
+    conn.execute("CREATE TABLE scans (id INTEGER)")
+    conn.commit()
+    conn.close()
+    assert cli._guard_sqlite(shaped) is False
+
+    assert cli._guard_sqlite(tmp_path / "absent.sqlite") is True
+    assert cli.report_from_db(tmp_path / "options_scanner.sqlite", "2026-09-18") == 2
