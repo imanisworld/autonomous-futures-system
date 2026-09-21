@@ -70,6 +70,24 @@ positive after costs on forward data — i.e. the gate removes more profit than
 loss. Population is the *executable* candidate, not the observer family, to
 avoid the detector-boundary mismatch above.
 
+**H6 — 2-2 continuation, Asia session, EMA-aligned, 1.5R (added 2026-09-21
+05:30Z from the 313-day grid; the grid result is in-sample and is NOT scored).**
+In-sample motivation: 313-day replay grid (25,119 candidates × 7 exits × 3
+filters × 5 sessions, honest fill, proven costs): `strat_22_continuation`,
+session `asian`, EMA9/21/55 stack aligned with the trade direction with **no**
+`rel_vol` requirement, fixed 1.5R target → n=1,049, 47% W, +$9,208, PF 1.25,
+beating 200/200 random-direction permutations (null max 1.10). The live slice
+(all sessions, volume-filtered label, 2R) is nowhere near the top of the grid.
+H6: on forward data the same slice is net positive after costs.
+
+**H7 — 2-2 continuation, Sunday reopen, no filter, 1R (added 05:30Z).**
+In-sample: same grid, session `sunday_reopen` (Sun 22:00Z–Mon 01:00Z), no
+label/EMA filter, fixed 1R → n=139, 66% W, +$3,742, PF 1.75, beating 200/200
+permutations (null max 1.68, tighter). Supersedes the 8-Sunday journal study
+(n=9) that concluded the opposite. H7: on forward data the slice is net
+positive after costs. **H1 (Sunday no-entry) is now expected to FAIL; it stays
+registered and is scored honestly.**
+
 ## 3. Data (forward only)
 
 - Candidates: `cross_instrument_observation_v1.jsonl` CANDIDATE/OUTCOME rows,
@@ -84,6 +102,15 @@ avoid the detector-boundary mismatch above.
   is the regime gate (`failed_gates`/`reason` contains `REGIME`); geometry from
   the row's own `shadow_candidates` entry for that setup; resolved against
   `bars_MNQ_*.jsonl` with the campaign resolver rules.
+- H6/H7 population: `cross_instrument_observation_v1.jsonl` MNQ CANDIDATE rows
+  with `strategy == strat_22_continuation_observed`, `signal_timestamp` after
+  registration; session from the candidate's decision bar (`asian` per corpus
+  session rules; `sunday_reopen` = Sun 22:00Z–Mon 01:00Z); EMA alignment for
+  H6 computed from `bars_MNQ_*.jsonl` (close > ema9 > ema21 > ema55 for LONG,
+  mirrored for SHORT; EMAs on 15m closes with ≥60 bars warm-up). Outcomes
+  re-resolved at the registered target (1.5R / 1R) against the same bars with
+  the campaign's fill rules — the campaign's own 2R OUTCOME rows are NOT the
+  scoring series for H6/H7.
 - Costs: `execution/forward_evidence_campaign.py` constants
   (`SLIPPAGE_TICKS=1.0`, `COMMISSION_DOLLARS=1.48`), 1 contract.
 - Resolution: the campaign's own OUTCOME resolver (stop-first ties). No new
@@ -98,12 +125,17 @@ avoid the detector-boundary mismatch above.
 | H3 | Aligned-but-thin rows with 1m acceleration | ≥ 30 rows | net $ > 0 after costs **and** win-rate ≥ TRENDING bucket's | otherwise |
 | H4 | 1m-lane MNQ triggers, scored under filter (a) carry-15m vs (b) fast-5m | ≥ 40 triggers **and** ≥ 15 where (a) and (b) disagree | on the disagreement set, (b)-admitted net $ > (a)-admitted net $ **and** (b)-admitted net $ > 0 | otherwise |
 | H5 | TRENDING + executable setup, blocked only by regime gate | ≥ 25 rows | net $ > 0 after costs **and** win-rate ≥ 35% **and** max single-loss ≤ 1.5R | otherwise |
+| H6 | 2-2 con, asian, EMA-aligned (no rel_vol), fixed 1.5R | ≥ 80 rows | net $ > 0 after costs **and** PF ≥ 1.10 **and** win-rate ≥ 40% | otherwise |
+| H7 | 2-2 con, sunday_reopen, no filter, fixed 1R | ≥ 6 Sundays **and** ≥ 30 rows | net $ > 0 after costs **and** PF ≥ 1.20 **and** win-rate ≥ 55% | otherwise |
 
 - One look, at the first weekly gate-report run after the minimum n is met.
   No interim peeks that inform a decision. The daily 22:20Z gate line may
   continue to print aggregate counts; it does not score H1–H3.
-- Multiple-comparison note: five hypotheses, one look each. If exactly one of
-  H2/H3/H4/H5 passes at the margin, treat as PROVISIONAL and require a second,
+- Multiple-comparison note: seven hypotheses, one look each. H6/H7 were
+  selected as the top of a 1,253-cell grid, so their in-sample PF is inflated;
+  the forward thresholds above are deliberately below the in-sample values
+  (1.10 vs 1.25; 1.20 vs 1.75). If exactly one of H2/H3/H4/H5/H6/H7 passes at
+  the margin, treat as PROVISIONAL and require a second,
   non-overlapping sample of equal size before any proposal.
 - H4 is a *coupling* result: a PASS means "if 1m entries are ever enabled,
   they must carry the fast label, not the 15m one." It says nothing about
@@ -112,7 +144,14 @@ avoid the detector-boundary mismatch above.
   proposal to set `BLOCK_RESTRICTED_REGIME=false` (env) for MNQ only, with the
   demo lane as the first forward test — still a gate change, still post-09-30
   or an explicit operator ruling.
-- A PASS on H2, H3, H4 or H5 does **not** authorize a change; it authorizes a proposal
+- H6/H7 PASS authorizes a proposal for a **session-scoped rule** (Asia:
+  EMA-only condition + 1.5R; Sunday reopen: no condition gate + 1R) with the
+  demo lane as first live test — a runtime change (session-scoped gate
+  overrides + per-session R target), post-09-30 or explicit operator ruling.
+  Slippage sensitivity must be re-checked on live demo fills before any
+  live-money discussion: at 1R targets one extra tick per side moves PF
+  materially.
+- A PASS on H2, H3, H4, H5, H6 or H7 does **not** authorize a change; it authorizes a proposal
   for the post-09-30 review with the numbers attached.
 
 ## 5. What is NOT allowed
@@ -124,6 +163,9 @@ avoid the detector-boundary mismatch above.
 - Using the demo ledger (mixed-era, mixed-sizing) as the scoring series.
 - Re-tuning the fast-regime score (weights, threshold, bar count) for H4.
 - Scoring H5 on observer-family geometry instead of the executable setup.
+- Scoring H6/H7 on the campaign's 2R OUTCOME rows instead of re-resolving at
+  the registered target; changing the target, session boundary, or EMA
+  definition after registration; adding a filter to H7.
 
 ## 6. Outcome (to be filled once, at the look)
 
@@ -134,6 +176,8 @@ avoid the detector-boundary mismatch above.
 | H3 | | | | | | |
 | H4 | | | | | | |
 | H5 | | | | | | |
+| H6 | | | | | | |
+| H7 | | | | | | |
 
 ## 7. Ownership
 
