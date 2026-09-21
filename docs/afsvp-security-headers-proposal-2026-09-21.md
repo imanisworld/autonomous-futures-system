@@ -6,6 +6,12 @@
 returned the expected codes; TradingView posts continued 200 after reload.
 App host CSP is report-only. Section D (hooks cert) NOT done.
 
+**01:33Z update:** operator removed basic auth on ALL locations of both vhosts
+(single-operator posture, "will secure another way"). Headers/CSP/map-block
+stay. Backup before removal: `/root/afs-shared/backups/nginx_20260921T013202Z/`.
+The `vp` htpasswd entry still exists (reset 01:30Z) and can be re-attached
+by restoring `auth_basic`/`auth_basic_user_file` on `/status/` and `/scanner/`.
+
 Rollback: `cp /root/afs-shared/backups/nginx_20260921T012517Z/*.conf /etc/nginx/sites-enabled/ && nginx -t && systemctl reload nginx`.
 
 Companion to `docs/afsvp-public-surface-audit-2026-09-21.md`. Server config,

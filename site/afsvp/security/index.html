@@ -20,7 +20,7 @@
     <h2>What we do</h2>
     <ul>
       <li><strong>HTTPS only.</strong> Plain-HTTP requests are redirected to HTTPS.</li>
-      <li><strong>Authentication for private areas.</strong> Operator dashboards, journals, and controls require authentication. The public site is static and holds no private data.</li>
+      <li><strong>Single-operator posture.</strong> The application is run and used by one operator. Operator status views are currently reachable without a login while access controls are being reworked; they expose no credentials, order controls, or personal data about visitors. The public site is static.</li>
       <li><strong>Least privilege.</strong> Public hosts serve only the routes they need; internal services listen on localhost and are reached only through the reverse proxy.</li>
       <li><strong>No secrets in frontend code.</strong> API keys, broker credentials, and webhook secrets live only on the server. The published frontend bundle was last checked for leaked secrets on September 21, 2026.</li>
       <li><strong>Authenticated, rate-limited webhooks.</strong> Inbound alert traffic must carry a shared secret and is rate-limited per client.</li>
