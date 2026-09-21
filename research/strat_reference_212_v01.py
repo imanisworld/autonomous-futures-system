@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import statistics
 import sys
 from dataclasses import asdict, dataclass
@@ -119,6 +120,19 @@ def _half(day: date, midpoint: date) -> str:
     return "H1" if day < midpoint else "H2"
 
 
+def _is_exact_5m_window(
+    bars: Sequence[Bar],
+    *,
+    start: datetime,
+    count: int,
+) -> bool:
+    """True only for unique, contiguous 5m starts from the requested boundary."""
+    start_utc = start.astimezone(timezone.utc)
+    expected = [start_utc + MINUTE_5.delta * i for i in range(count)]
+    starts = [bar.start_utc for bar in sorted(bars, key=lambda b: b.start_utc)]
+    return len(starts) == count and len(set(starts)) == count and starts == expected
+
+
 def classify_ftfc(
     *,
     last_price: float,
@@ -133,6 +147,8 @@ def classify_ftfc(
         return FTFC_UNAVAILABLE
     required = tuple(float(value) for value in opens if value is not None)
     price = float(last_price)
+    if not math.isfinite(price) or any(not math.isfinite(value) for value in required):
+        return FTFC_UNAVAILABLE
     if all(price > value for value in required):
         return FTFC_UP
     if all(price < value for value in required):
@@ -292,11 +308,19 @@ def run_instrument(instrument: str) -> dict[str, Any]:
         raise SystemExit(f"no replay files under {REPLAY_ROOT / instrument}")
 
     loaded: dict[date, list[Bar]] = {}
-    skipped = {"incomplete_session": 0, "incomplete_watch_window": 0}
+    skipped = {
+        "incomplete_session": 0,
+        "misaligned_or_duplicate_session": 0,
+        "incomplete_watch_window": 0,
+    }
     for day, path in files.items():
         bars = _load(path)
         if len(bars) != RTH_BARS:
             skipped["incomplete_session"] += 1
+            continue
+        session_open = datetime.combine(day, RTH_OPEN, ET)
+        if not _is_exact_5m_window(bars, start=session_open, count=RTH_BARS):
+            skipped["misaligned_or_duplicate_session"] += 1
             continue
         loaded[day] = bars
 
@@ -329,7 +353,11 @@ def run_instrument(instrument: str) -> dict[str, Any]:
                 for bar in bars5
                 if watch_start <= bar.start_utc < watch_end
             ]
-            if len(watch) != WATCH_BARS_5M:
+            if not _is_exact_5m_window(
+                watch,
+                start=watch_start,
+                count=WATCH_BARS_5M,
+            ):
                 skipped["incomplete_watch_window"] += 1
                 continue
             events.append(
