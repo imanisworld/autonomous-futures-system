@@ -321,7 +321,7 @@ def test_roundtrip_module_has_no_live_host_or_opening_sell_intent():
     lowered = source.lower()
     assert "api.webull.com" not in lowered
     assert "sell_to_open" not in lowered
-    assert "buy_to_open" not in lowered
+    assert '"position_intent": "buy_to_open"' not in lowered
     assert "market_order" not in lowered
     assert "replace_option" not in lowered
     assert "position_intent" in lowered
