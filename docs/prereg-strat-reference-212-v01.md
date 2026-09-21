@@ -166,9 +166,14 @@ Before any historical result is treated as evidence about the broader public met
 
 ## Session rules
 
-Use the existing futures session calendar and record trigger session explicitly.
+v0.1 uses the same conservative whole-RTH eligibility convention already used by the futures research harness:
+- 09:30–16:00 ET RTH only;
+- exactly 78 unique, contiguous 5-minute bars are required;
+- holiday/early-close/partial sessions that do not supply the full 78-bar RTH window are ineligible rather than silently padded;
+- existing futures-research roll exclusions apply: Mon–Fri of the third-Friday week in Mar/Jun/Sep/Dec plus the next available session;
+- A/B/C must remain inside the same eligible RTH session.
 
-Do not add session exclusions based on outcome.
+Record the trigger session explicitly. Do not add session exclusions based on outcome.
 
 Any missing required bar or incomplete source bucket fails closed for that candidate. The immediately following 60-minute watch bucket must be complete at 5-minute resolution; a partial final RTH bucket is not eligible for directional credit.
 
