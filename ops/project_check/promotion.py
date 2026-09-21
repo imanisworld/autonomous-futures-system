@@ -236,6 +236,10 @@ def _execution_context_check(*, repo_root: Path, claimed: dict[str, Any]) -> dic
     return {
         "claimed": claimed,
         "live_verified": live_view,
+        "quantity_check_semantics": (
+            "cap_compatibility_only: claimed contract_qty is checked against configured caps; "
+            "this does not independently prove the submitted order quantity"
+        ),
         "mismatches": mismatches,
         "parity_ok": not mismatches,
     }
@@ -253,19 +257,38 @@ def _safety_caps(
     warnings: list[str] = []
 
     fills = execution.get("fills")
-    if fills == 0:
-        blockers.append("zero executable fills: cannot be classified VALIDATED")
-    elif fills is None:
-        warnings.append("fills count not supplied -- cannot confirm any executable fills occurred")
+    if fills is None:
+        blockers.append("fills count not supplied -- executable fills are unverified")
+    else:
+        try:
+            fills_value = int(fills)
+        except (TypeError, ValueError):
+            blockers.append(f"fills count is not an integer: {fills!r}")
+        else:
+            if fills_value <= 0:
+                blockers.append("zero executable fills: promotion proof requires at least one fill")
 
-    if accounting.get("identities_checkable") and accounting.get("all_checkable_identities_hold") is False:
+    # Both accounting identities are mandatory proof, not best-effort checks.
+    # A partial packet must never pass simply because the missing identity was
+    # skipped.
+    if accounting.get("identity_attempts") is None or accounting.get("identity_fills") is None:
+        blockers.append(
+            "execution accounting identities are incomplete -- both attempts=fill/cancel/reject "
+            "and fills=resolved/open must be checkable"
+        )
+    elif accounting.get("all_checkable_identities_hold") is not True:
         blockers.append(
             "execution accounting identity does not hold (attempts/fills/cancellations/"
             "rejects or fills/resolved/open) -- the counts are not internally consistent"
         )
 
-    if identity_parity.get("lookahead_or_partial_bar_dependency") is True:
-        blockers.append("lookahead or partial-bar dependency reported present")
+    # UNKNOWN is unsafe for promotion. These fields must be explicitly proven,
+    # rather than only blocking when an operator happened to write False.
+    if identity_parity.get("lookahead_or_partial_bar_dependency") is not False:
+        blockers.append(
+            "lookahead/partial-bar safety is unverified -- "
+            "lookahead_or_partial_bar_dependency must be explicitly false"
+        )
 
     for field in (
         "candidate_identity_parity",
@@ -274,8 +297,25 @@ def _safety_caps(
         "timeframe_parity",
         "causal_data_availability",
     ):
-        if identity_parity.get(field) is False:
-            blockers.append(f"identity/parity defect: {field} is False")
+        if identity_parity.get(field) is not True:
+            blockers.append(f"identity/parity proof missing or failed: {field} must be explicitly true")
+
+    if runtime_parity.get("replay_live_logic_confirmed") is not True:
+        blockers.append(
+            "replay/live logic parity is unverified -- "
+            "runtime_parity.replay_live_logic_confirmed must be explicitly true"
+        )
+
+    for field in (
+        "instrument",
+        "entry_fill_model",
+        "entry_tolerance_ticks",
+        "contract_qty",
+        "commission_slippage_assumptions",
+    ):
+        value = execution_context_claimed.get(field)
+        if value is None or (isinstance(value, str) and not value.strip()):
+            blockers.append(f"execution context proof missing: execution_context_claimed.{field}")
 
     if not execution_context.get("parity_ok", True):
         blockers.append(
@@ -294,8 +334,10 @@ def _safety_caps(
     if stated_classification is None:
         effective = "REQUIRES_OPERATOR_CLASSIFICATION"
 
-    if stated_classification is not None and stated_classification not in VALID_CLASSIFICATIONS:
-        warnings.append(
+    if stated_classification is None:
+        blockers.append("stated_classification is required for promotion proof")
+    elif stated_classification not in VALID_CLASSIFICATIONS:
+        blockers.append(
             f"stated_classification {stated_classification!r} is not one of {sorted(VALID_CLASSIFICATIONS)}"
         )
 
@@ -338,6 +380,8 @@ def build_promotion_report(
         accounting=accounting,
         execution=execution,
         execution_context=execution_context,
+        runtime_parity=runtime_parity,
+        execution_context_claimed=execution_context_claimed,
         stated_classification=stated_classification,
     )
 
