@@ -184,11 +184,16 @@ def test_gate_requires_stress_strength_in_both_halves_and_low_concentration():
         }
     }
     good = gate_family(report, family, geometry)
-    assert good["passes"] is True
-    assert good["classification"] == "PROMISING_BUT_UNPROVEN"
+    assert good["numeric_pass"] is True
+    assert good["passes"] is False
+    assert good["classification"] == "WAIT"
+    assert good["manual_gate_remaining"] == (
+        "raw_row_session_audit_and_forward_contract_proof"
+    )
 
     report["families"][family]["cells"][f"{geometry}:stress"]["halves"]["H2"]["pf"] = 1.0
     bad = gate_family(report, family, geometry)
+    assert bad["numeric_pass"] is False
     assert bad["passes"] is False
     assert "H2:stress_mean_or_pf" in bad["reasons"]
 
