@@ -8,6 +8,7 @@ from research.strat_reference_212_v01 import (
     FTFC_DOWN,
     FTFC_UNAVAILABLE,
     FTFC_UP,
+    _is_exact_5m_window,
     classify_ftfc,
     observe_candidate,
 )
@@ -228,4 +229,33 @@ def test_ftfc_missing_open_fails_closed():
         weekly_open=95,
         daily_open=96,
         current_60m_open=97,
+    ) == FTFC_UNAVAILABLE
+
+
+def test_exact_5m_window_rejects_gap_or_duplicate_start():
+    good = [b(120 + 5 * i, 10, 10.5, 9.5, 10) for i in range(12)]
+    start = BASE + timedelta(minutes=120)
+    assert _is_exact_5m_window(good, start=start, count=12) is True
+
+    gap = good[:5] + good[6:]
+    assert _is_exact_5m_window(gap, start=start, count=12) is False
+
+    duplicate = good[:-1] + [good[-2]]
+    assert _is_exact_5m_window(duplicate, start=start, count=12) is False
+
+
+def test_ftfc_non_finite_input_fails_closed():
+    assert classify_ftfc(
+        last_price=float("nan"),
+        monthly_open=95,
+        weekly_open=96,
+        daily_open=97,
+        current_60m_open=98,
+    ) == FTFC_UNAVAILABLE
+    assert classify_ftfc(
+        last_price=100,
+        monthly_open=95,
+        weekly_open=float("nan"),
+        daily_open=97,
+        current_60m_open=98,
     ) == FTFC_UNAVAILABLE
