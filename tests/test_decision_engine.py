@@ -466,8 +466,11 @@ class TestDecisionEngineMarketCondition:
     ):
         import dataclasses
 
+        # pdl_reclaim is enabled but cannot form in the ORB-reclaim fixture, so
+        # the executable set is non-empty (an empty set now short-circuits to
+        # NO_ENABLED_STRATEGY before this gate) while the candidate list is.
         engine = DecisionEngine(
-            config=dataclasses.replace(config, enabled_concepts=[])
+            config=dataclasses.replace(config, enabled_concepts=["pdl_reclaim"])
         )
         state = deepcopy(fresh_market_state)
         state.market_condition = "RANGE_BOUND"
