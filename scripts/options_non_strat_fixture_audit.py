@@ -103,6 +103,13 @@ def _complete(bars, session) -> bool:
     )
 
 
+def _history_before(bars, sessions) -> list:
+    history = []
+    for session in sessions:
+        history.extend(_session_slice(bars, session))
+    return history
+
+
 def _family_counts(events: Sequence[NonStratEvent]) -> dict[str, int]:
     counts: dict[str, int] = {}
     for event in events:
@@ -190,9 +197,12 @@ async def audit_candidate(
 
         spy_session = _session_slice(spy_bars, target)
         qqq_session = _session_slice(qqq_bars, target)
-        spy_history = [b for b in spy_bars if b.start_utc < target.open]
-        qqq_history = [b for b in qqq_bars if b.start_utc < target.open]
-        history = [b for b in ticker_bars if b.start_utc < target.open]
+        # Regular-session history only: provider bars are not RTH-filtered,
+        # and pre-market/post-close bars must never seed EMA20, relative
+        # volume or the SPY/QQQ trend (same rule as the observer CLI).
+        spy_history = _history_before(spy_bars, earlier)
+        qqq_history = _history_before(qqq_bars, earlier)
+        history = _history_before(ticker_bars, earlier)
 
         events.extend(
             observe_session(

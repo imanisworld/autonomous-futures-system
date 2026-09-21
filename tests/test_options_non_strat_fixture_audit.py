@@ -38,3 +38,21 @@ def test_spxw_is_explicitly_blocked_from_equity_bar_observer():
         "fixture_window_unknown",
         "index_option_fixture_not_equity_bar_observer",
     }
+
+
+def test_fixture_audit_history_is_regular_session_only():
+    from datetime import date, timedelta, timezone
+
+    from alert_ranker.causal_bars import Bar
+    from alert_ranker.session_calendar import nyse_session_for
+    from scripts.options_non_strat_fixture_audit import _history_before
+
+    prior = nyse_session_for(date(2026, 9, 17))
+    assert prior is not None
+    open_utc = prior.open.astimezone(timezone.utc)
+
+    def bar(minutes):
+        return Bar(start=open_utc + timedelta(minutes=minutes), open=1, high=1, low=1, close=1, volume=1, vwap=1)
+
+    bars = [bar(-30), bar(0), bar(385), bar(390)]  # pre-market, RTH, last RTH, post-close
+    assert [b.start_utc for b in _history_before(bars, [prior])] == [open_utc, open_utc + timedelta(minutes=385)]
