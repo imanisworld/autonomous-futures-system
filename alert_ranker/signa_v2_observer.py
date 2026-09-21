@@ -14,6 +14,7 @@ import asyncio
 import os
 from typing import Any
 
+from sources.signa_snapshot_store import SignaSnapshotStore
 from sources.signa_v2_client import SignaV2Client
 
 
@@ -64,9 +65,12 @@ def build_signa_v2_observer(base_cls):
             if client is None:
                 # Build once and keep it: the client's per-(symbol, timeframe)
                 # TTL cache only helps if it outlives a single scan.
+                sqlite_path = getattr(self.config, "sqlite_path", None)
+                snapshot_store = SignaSnapshotStore(sqlite_path) if sqlite_path else None
                 client = SignaV2Client(
                     base_url=getattr(self.config, "signa_base_url", "https://app.getsigna.ai"),
                     timeout=getattr(self.config, "signa_timeout_seconds", 3.0),
+                    snapshot_store=snapshot_store,
                 )
                 self._signa_v2_client = client
 

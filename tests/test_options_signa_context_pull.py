@@ -253,3 +253,86 @@ def test_signa_context_pull_endpoint_default_is_conservative(tmp_path, monkeypat
     assert "dark_pool" not in captured["include"]
     assert "congress_flow" not in captured["include"]
     assert response.json()["trade_authority"] is False
+
+
+def test_pull_context_reuses_fresh_shared_action_card_without_provider_call(tmp_path):
+    cfg = _config(tmp_path)
+    session = nyse_session_for(date(2026, 9, 18))
+    now = session.open + timedelta(minutes=30)
+    store = SignaSnapshotStore(cfg.sqlite_path)
+    store.record_snapshot(
+        endpoint="/api/v1/signals/SPY",
+        symbol="SPY",
+        timeframe="1d",
+        params={"symbol": "SPY", "timeframe": "1d"},
+        retrieved_at=now,
+        payload={
+            "success": True,
+            "data_as_of": "2026-09-18T00:00:00Z",
+            "data": {
+                "signal": {
+                    "symbol": "SPY",
+                    "timeframe": "1d",
+                    "direction": "bullish",
+                    "score": 80,
+                }
+            },
+        },
+        status="OK",
+        http_status=200,
+    )
+
+    class NoNetworkClient:
+        def action_card(self, *_args, **_kwargs):
+            raise AssertionError("fresh shared snapshot should prevent provider call")
+
+    result = pull_context(
+        cfg=cfg,
+        symbols=["SPY"],
+        include={"action_card"},
+        timeframe="1d",
+        now=now + timedelta(minutes=5),
+        client=NoNetworkClient(),
+    )
+
+    assert result["ok"] is True
+    assert result["provider_healthy"] is True
+    assert result["provider_results_total"] == 1
+    assert result["provider_results_ok"] == 1
+    assert result["provider_results_failed"] == 0
+    assert result["provider_network_attempts"] == 0
+    assert result["endpoint_results"][0]["cached"] is True
+    assert result["trade_authority"] is False
+
+
+def test_pull_context_separates_storage_success_from_provider_failure(tmp_path):
+    class ErrorClient:
+        def action_card(self, symbol, timeframe="1d"):
+            return SignaDiscoveryResponse(
+                False,
+                f"/api/v1/signals/{symbol}",
+                error="http_429",
+                status_code=429,
+                retrieved_at="2026-09-18T14:00:00+00:00",
+                backoff_active=False,
+            )
+
+    cfg = _config(tmp_path)
+    session = nyse_session_for(date(2026, 9, 18))
+    result = pull_context(
+        cfg=cfg,
+        symbols=["SPY"],
+        include={"action_card"},
+        timeframe="1d",
+        now=session.open + timedelta(minutes=30),
+        client=ErrorClient(),
+    )
+
+    assert result["ok"] is True
+    assert result["provider_healthy"] is False
+    assert result["provider_results_total"] == 1
+    assert result["provider_results_ok"] == 0
+    assert result["provider_results_failed"] == 1
+    assert result["provider_network_attempts"] == 1
+    assert result["stored_rows"] == 1
+    assert result["trade_authority"] is False
