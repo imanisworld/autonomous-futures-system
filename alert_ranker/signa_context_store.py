@@ -10,10 +10,11 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 SHARED_PROXY_SYMBOLS = {"SPY", "QQQ", "IWM", "DIA", "VIX", "SVXY", "UVXY", "TLT", "GLD", "USO", "XLE"}
 EXPECTED_TICKER_SOURCES = ("scan", "action_card", "enhanced_signal", "options_flow", "dark_pool")
@@ -373,10 +374,25 @@ class SignaContextStore:
             if column not in existing:
                 conn.execute(sql)
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
+        """Yield one transaction-scoped connection and always close it.
+
+        Same shape as ``ScanStorage._connect``: ``sqlite3.Connection``'s own
+        context manager commits/rolls back but never closes the descriptor.
+        ``context_for_tickers`` opens one connection per ticker on every
+        dashboard poll, so the bare-connection version leaked ~4 fds per
+        ``/shadow-journal`` request until the scanner hit its 1024 ulimit
+        (2026-09-21 07:55Z, 3.5h after release) and every scan failed with
+        ``unable to open database file`` for the rest of the session.
+        """
         conn = sqlite3.connect(self.path)
         conn.row_factory = sqlite3.Row
-        return conn
+        try:
+            with conn:
+                yield conn
+        finally:
+            conn.close()
 
 
 def _is_good_context(item: StoredSignaContext) -> bool:
