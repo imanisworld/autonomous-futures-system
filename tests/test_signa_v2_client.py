@@ -314,3 +314,55 @@ def test_fresh_shared_snapshot_overrides_cached_failure(tmp_path) -> None:
     assert recovered.ok is True
     assert recovered.cached is True
     assert len(seen) == 1
+
+
+def test_discovery_429_blocks_v2_provider_call_across_clients() -> None:
+    from sources.signa_discovery import SignaDiscoveryClient
+    from sources.signa_request_budget import clear_account_backoff
+
+    base_url = "https://app.getsigna.ai"
+    api_key = "cross-client-budget-test"
+    clock = _Clock()
+    discovery_calls: list[httpx.Request] = []
+    v2_calls: list[httpx.Request] = []
+
+    def discovery_handler(request: httpx.Request) -> httpx.Response:
+        discovery_calls.append(request)
+        return httpx.Response(429, headers={"Retry-After": "120"}, json={"error": "rate"})
+
+    def v2_handler(request: httpx.Request) -> httpx.Response:
+        v2_calls.append(request)
+        return httpx.Response(200, json=_card("AAPL", "1d"))
+
+    clear_account_backoff(base_url, api_key)
+    discovery_http = httpx.Client(base_url=base_url, transport=httpx.MockTransport(discovery_handler))
+    v2_http = httpx.Client(base_url=base_url, transport=httpx.MockTransport(v2_handler))
+    try:
+        discovery = SignaDiscoveryClient(
+            api_key=api_key,
+            base_url=base_url,
+            client=discovery_http,
+            cache_ttl_seconds=0,
+            clock=clock,
+        )
+        v2 = SignaV2Client(
+            api_key=api_key,
+            base_url=base_url,
+            client=v2_http,
+            cache_ttl_seconds=0,
+            failure_backoff_seconds=0,
+            clock=clock,
+        )
+
+        limited = discovery.signal_index()
+        blocked = v2.fetch_action_card("AAPL", "1d")
+    finally:
+        discovery_http.close()
+        v2_http.close()
+        clear_account_backoff(base_url, api_key)
+
+    assert limited.error == "http_429"
+    assert blocked.ok is False
+    assert blocked.error == "account_backoff_active"
+    assert len(discovery_calls) == 1
+    assert v2_calls == []
