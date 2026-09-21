@@ -145,6 +145,22 @@ def _resolve_account(client: _PaperOrderClientLike) -> tuple[str | None, str | N
     return _select_individual_cash_account(payload)
 
 
+def _broker_reject(exc: Exception) -> tuple[str, str] | None:
+    """Map an SDK ServerException (HTTP 4xx with a broker error code) to a
+    (status, reason). Returns None for transport/unknown failures."""
+    code = getattr(exc, "error_code", None)
+    http = getattr(exc, "http_status", None)
+    if not code:
+        return None
+    try:
+        http_i = int(http) if http is not None else None
+    except (TypeError, ValueError):
+        http_i = None
+    if http_i is not None and 400 <= http_i < 500:
+        return "REJECTED", f"broker:{code}"
+    return "ERROR", f"broker:{code}"
+
+
 def _broker_order_id(payload: Any) -> str | None:
     value = _first_scalar(payload, ("order_id", "broker_order_id", "orderId"))
     return str(value) if value is not None else None
@@ -243,6 +259,11 @@ def submit_sandbox_paper_option_order(
     try:
         preview = client.preview_option(account_id, orders)
     except Exception as exc:
+        mapped = _broker_reject(exc)
+        if mapped:
+            return WebullSandboxOrderResult(
+                status=mapped[0], ticket_id=ticket, client_order_id=client_order_id, reason=f"preview_{mapped[1]}",
+            )
         return WebullSandboxOrderResult(
             status="ERROR", ticket_id=ticket, client_order_id=client_order_id,
             reason=f"preview_request_failed:{type(exc).__name__}",
@@ -267,6 +288,13 @@ def submit_sandbox_paper_option_order(
     try:
         placed = client.place_option(account_id, orders)
     except Exception as exc:
+        mapped = _broker_reject(exc)
+        if mapped and mapped[0] == "REJECTED":
+            return WebullSandboxOrderResult(
+                status="REJECTED", ticket_id=ticket, client_order_id=client_order_id,
+                estimated_cost=estimated_cost, estimated_transaction_fee=estimated_fee,
+                reason=f"place_{mapped[1]}",
+            )
         return WebullSandboxOrderResult(
             status="ERROR", ticket_id=ticket, client_order_id=client_order_id,
             estimated_cost=estimated_cost, estimated_transaction_fee=estimated_fee,
@@ -329,6 +357,12 @@ def cancel_sandbox_paper_option_order(
     try:
         response = client.cancel_option(account_id, client_order_id)
     except Exception as exc:
+        mapped = _broker_reject(exc)
+        if mapped:
+            return WebullSandboxCancelResult(
+                status="REJECTED" if mapped[0] == "REJECTED" else "ERROR",
+                ticket_id=client_order_id, client_order_id=client_order_id, reason=f"cancel_{mapped[1]}",
+            )
         return WebullSandboxCancelResult(
             status="ERROR", ticket_id=client_order_id, client_order_id=client_order_id,
             reason=f"cancel_request_failed:{type(exc).__name__}",
@@ -380,6 +414,12 @@ def get_sandbox_paper_order_detail(
     try:
         response = client.get_order_detail(account_id, client_order_id)
     except Exception as exc:
+        mapped = _broker_reject(exc)
+        if mapped:
+            code = mapped[1]
+            if "NOT_FOUND" in code.upper() or "NOT_EXIST" in code.upper():
+                return WebullSandboxOrderDetail(status="NOT_FOUND", ticket_id=client_order_id, client_order_id=client_order_id, reason=code)
+            return WebullSandboxOrderDetail(status="ERROR", ticket_id=client_order_id, client_order_id=client_order_id, reason=f"detail_{code}")
         return WebullSandboxOrderDetail(
             status="ERROR", ticket_id=client_order_id, reason=f"detail_request_failed:{type(exc).__name__}"
         )
