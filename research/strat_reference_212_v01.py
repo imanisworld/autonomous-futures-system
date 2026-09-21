@@ -399,6 +399,7 @@ def summarize(
             "FTFC_DATA_CAPABILITY",
             "AFS_EMA_TREND_SIDE_BY_SIDE",
             "EXECUTION_OVERLAYS",
+            "COST_MODEL_CONTRACT",
             "SOURCE_ALIGNMENT_EXTERNAL_CANONICALITY",
         ],
         "instrument": instrument,
@@ -438,8 +439,9 @@ def to_markdown(report: dict[str, Any]) -> str:
         f"Median time to magnitude {o['median_time_to_magnitude_minutes']} min · "
         f"median MAE {o['median_mae_points']} pts · median MFE {o['median_mfe_points']} pts\n\n"
         "MAE/MFE stop at the first structural terminal event; later price action is excluded.\n\n"
-        "Study is incomplete: FTFC data capability, AFS EMA side-by-side, execution overlays, and "
-        "external source-alignment canonicality remain outstanding. No P&L, PF, fixed-R target, "
+        "Study is incomplete: FTFC data capability, AFS EMA side-by-side, execution overlays, "
+        "a frozen cost model, and external source-alignment canonicality remain outstanding. "
+        "No P&L, PF, fixed-R target, "
         "or promotion claim is produced by this structural pass.\n"
     )
 
