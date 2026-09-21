@@ -189,7 +189,8 @@ def test_excursions_stop_at_first_structural_terminal_event():
     )
     assert event.magnitude_reached is True
     assert event.mfe_points == pytest.approx(1.1)
-    assert event.mae_points == pytest.approx(1.0)
+    assert event.mae_points == pytest.approx(0.5)
+    assert event.trigger_bar_excursion_excluded is True
 
 
 def test_ftfc_is_up_only_when_price_is_above_all_required_opens():
@@ -259,3 +260,23 @@ def test_ftfc_non_finite_input_fails_closed():
         daily_open=97,
         current_60m_open=98,
     ) == FTFC_UNAVAILABLE
+
+
+def test_trigger_bar_terminal_event_has_no_causally_ordered_excursion():
+    parent = b(0, 10, 11, 8, 9)
+    inside = b(60, 9, 10, 8.5, 9.5)
+    watch = [b(120, 9.5, 11.1, 9.0, 11.0)]
+    event = observe_candidate(
+        instrument="MNQ",
+        day=date(2026, 1, 5),
+        parent=parent,
+        inside=inside,
+        parent_type=TWO_DOWN,
+        watch=watch,
+        midpoint=date(2026, 1, 1),
+    )
+    assert event.magnitude_reached is True
+    assert event.time_to_magnitude_minutes == 0
+    assert event.mae_points is None
+    assert event.mfe_points is None
+    assert event.trigger_bar_excursion_excluded is True
