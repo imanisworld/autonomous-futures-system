@@ -19,9 +19,12 @@ Two sub-lanes, each with ONE open position at a time, resolved independently:
 * ``asia``   (H6): decision bar ``session == "asian"`` and NOT inside the Sunday
              reopen window; candidate direction must equal the payload EMA
              trend (``trend.direction`` UP->LONG / DOWN->SHORT); the Pine
-             ``market_condition`` label is deliberately NOT consulted (the grid
-             found the ``rel_vol`` requirement costs money in Asia). Target is
-             re-anchored to **1.5R** from the candidate's own entry/stop.
+             ``market_condition`` label must NOT be CHOPPY or DEAD (TRENDING
+             and RANGE_BOUND both trade — the by-label split of the one-at-a-
+             time series showed RANGE_BOUND PF 1.42 / TRENDING 1.26 vs CHOPPY
+             0.83 / DEAD 0.89, so the TRENDING-only gate is wrong for this
+             cell and the CHOPPY/DEAD gate is right). Target is re-anchored to
+             **1.5R** from the candidate's own entry/stop.
 * ``sunday`` (H7): decision bar inside Sun 22:00Z <= ts < Mon 01:00Z (the first
              three hours of the CME Globex reopen); NO condition / EMA filter.
              Target re-anchored to **1.0R**.
@@ -109,6 +112,8 @@ SUNDAY_OPEN_HOUR_UTC = 22
 MONDAY_CLOSE_HOUR_UTC = 1
 
 _EMA_TO_SIDE = {"UP": "LONG", "DOWN": "SHORT"}
+# Asia sub-lane: labels that are NOT tradable (prereg H6 amendment 2026-09-21).
+ASIA_EXCLUDED_LABELS = frozenset({"CHOPPY", "DEAD"})
 MAX_SEEN_KEYS = 2000
 STATE_VERSION = 1
 _POSITION_REQUIRED = (
@@ -351,9 +356,16 @@ def reanchor_target(candidate: dict, target_r: float) -> float:
     return entry + target_r * risk if direction == "LONG" else entry - target_r * risk
 
 
+def asia_label_ok(context: dict) -> bool:
+    """TRENDING and RANGE_BOUND trade; CHOPPY / DEAD do not. Missing label -> not ok."""
+    label = str(context.get("market_condition") or "").upper()
+    return bool(label) and label not in ASIA_EXCLUDED_LABELS
+
+
 def lane_candidates(lane: str, context: dict, shadow_candidates: list[dict], day: str, seen: set[str]) -> list[dict]:
     """This bar's picks for one sub-lane. ``seen`` is MUTATED for every valid geometry."""
     side = ema_side(context) if lane == LANE_ASIA else None
+    asia_ok = asia_label_ok(context) if lane == LANE_ASIA else True
     picks: list[dict] = []
     for candidate in shadow_candidates or []:
         if str(candidate.get("strategy")) != STRATEGY or not valid_geometry(candidate):
@@ -363,7 +375,7 @@ def lane_candidates(lane: str, context: dict, shadow_candidates: list[dict], day
             continue
         seen.add(key)
         direction = str(candidate.get("direction")).upper()
-        if lane == LANE_ASIA and (side is None or direction != side):
+        if lane == LANE_ASIA and (not asia_ok or side is None or direction != side):
             continue
         picks.append({
             "candidate_key": key,

@@ -14,8 +14,8 @@ evidence file:
 
 | Sub-lane | Bars | Filter | Target | In-sample (grid) |
 |---|---|---|---|---|
-| `asia` (H6) | `session == asian`, not in the Sunday window | candidate direction == payload EMA trend (UP→LONG / DOWN→SHORT); **market-condition label ignored** | **1.5R** | n=1,049, 47% W, PF 1.25, +$9,208 |
-| `sunday` (H7) | Sun 22:00Z ≤ ts < Mon 01:00Z | **none** | **1.0R** | n=139, 66% W, PF 1.75, +$3,742 |
+| `asia` (H6) | `session == asian`, not in the Sunday window | candidate direction == payload EMA trend (UP→LONG / DOWN→SHORT); label **TRENDING or RANGE_BOUND** (CHOPPY / DEAD excluded) | **1.5R** | grid n=1,049 PF 1.25; one-at-a-time n=553 PF 1.20; by label RANGE_BOUND 1.42 / TRENDING 1.26 / CHOPPY 0.83 / DEAD 0.89 |
+| `sunday` (H7) | Sun 22:00Z ≤ ts < Mon 01:00Z | **none** | **1.0R** | grid n=139 PF 1.75; one-at-a-time n=85 PF 1.54 |
 
 Candidate source is the runner's existing observe-only `shadow_candidates`,
 strategy `strat_22_continuation_observed` only. Fill is the canonical
@@ -33,7 +33,7 @@ the decision the runner returns for the bar.
   advance / resolve functions; no second implementation).
 - `tests/test_session_22c_paper_lane.py` — 24 tests: default OFF + no I/O,
   exact-token activation, settings validation, proof pins, no broker import,
-  Sunday window boundaries and precedence, EMA filter + label ignored,
+  Sunday window boundaries and precedence, EMA filter + CHOPPY/DEAD exclusion,
   1.5R / 1.0R re-anchoring, family restriction, per-day/per-lane dedupe,
   independent sub-lane positions, busy skip, day-roll expiry, pre-epoch
   recording, wrong instrument/timeframe ignored, invalid state fails closed.

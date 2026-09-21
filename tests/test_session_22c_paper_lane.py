@@ -1,7 +1,8 @@
 """Session-scoped 2-2 continuation forward paper lane (prereg H6/H7, 2026-09-21).
 
 Proves: default OFF with no I/O; exact-token + epoch activation; settings
-validation; Asia sub-lane = EMA-aligned only, label ignored, 1.5R re-anchor;
+validation; Asia sub-lane = EMA-aligned, CHOPPY/DEAD excluded, RANGE_BOUND and
+TRENDING allowed, 1.5R re-anchor;
 Sunday sub-lane = window only, no filter, 1.0R re-anchor; Sunday precedence
 over Asia inside the window; one open position per sub-lane; day-roll expiry;
 per-day/per-lane geometry dedupe; runner hook inert by default; no broker route.
@@ -141,13 +142,17 @@ def test_reanchor_targets():
     assert lane.reanchor_target(short, 1.5) == 85.0
 
 
-def test_asia_requires_ema_alignment_and_ignores_label():
-    ctx_up = {"trend": {"direction": "UP"}, "market_condition": "DEAD"}
+def test_asia_requires_ema_alignment_and_excludes_choppy_dead():
+    ctx_up = {"trend": {"direction": "UP"}, "market_condition": "RANGE_BOUND"}
     ctx_down = {"trend": {"direction": "DOWN"}, "market_condition": "TRENDING"}
     ctx_side = {"trend": {"direction": "SIDEWAYS"}, "market_condition": "TRENDING"}
     assert [c["target"] for c in lane.lane_candidates("asia", ctx_up, [CAND], "d", set())] == [115.0]
     assert lane.lane_candidates("asia", ctx_down, [CAND], "d", set()) == []
     assert lane.lane_candidates("asia", ctx_side, [CAND], "d", set()) == []
+    for bad in ("CHOPPY", "DEAD", None):
+        assert lane.lane_candidates("asia", {**ctx_up, "market_condition": bad}, [CAND], "d", set()) == [], bad
+    for ok in ("TRENDING", "RANGE_BOUND"):
+        assert len(lane.lane_candidates("asia", {**ctx_up, "market_condition": ok}, [CAND], "d", set())) == 1, ok
 
 
 def test_sunday_has_no_filter_and_uses_1r():
@@ -158,13 +163,13 @@ def test_sunday_has_no_filter_and_uses_1r():
 
 def test_only_22_continuation_family():
     other = {**CAND, "strategy": "ema_pullback_trend"}
-    ctx = {"trend": {"direction": "UP"}}
+    ctx = {"trend": {"direction": "UP"}, "market_condition": "TRENDING"}
     assert lane.lane_candidates("asia", ctx, [other], "d", set()) == []
     assert lane.lane_candidates("sunday", ctx, [other], "d", set()) == []
 
 
 def test_dedupe_is_per_day_per_lane_and_ignores_target():
-    ctx = {"trend": {"direction": "UP"}}
+    ctx = {"trend": {"direction": "UP"}, "market_condition": "RANGE_BOUND"}
     seen: set = set()
     assert len(lane.lane_candidates("asia", ctx, [CAND], "d1", seen)) == 1
     assert lane.lane_candidates("asia", ctx, [{**CAND, "target": 150.0}], "d1", seen) == []  # same geometry
@@ -196,16 +201,17 @@ def test_asia_bar_with_wrong_ema_side_does_nothing(config, fresh_market_state, t
     assert out["events"] == [] and lane.load_state(tmp_path)["positions"]["asia"] is None
 
 
-def test_asia_ignores_market_condition_label(config, fresh_market_state, tmp_path):
+def test_asia_label_gate_at_runtime(config, fresh_market_state, tmp_path):
     cfg = _cfg(config)
-    for label in ("DEAD", "CHOPPY", "RANGE_BOUND", "TRENDING"):
+    for label, expect in (("DEAD", False), ("CHOPPY", False), ("RANGE_BOUND", True), ("TRENDING", True)):
         d = tmp_path / label
         lane.process_bar(state=_state(fresh_market_state, ASIA_TS, market_condition=label), cfg=cfg, log_dir=d, shadow_candidates=[CAND])
-        assert lane.load_state(d)["positions"]["asia"] is not None, label
+        assert (lane.load_state(d)["positions"]["asia"] is not None) is expect, label
 
 
 def test_sunday_bar_fills_at_1r_regardless_of_trend(config, fresh_market_state, tmp_path):
     cfg = _cfg(config)
+    # Sunday keeps NO filter: wrong-side EMA and a DEAD label still trade at 1R.
     lane.process_bar(state=_state(fresh_market_state, SUNDAY_TS, trend="DOWN", market_condition="DEAD"), cfg=cfg, log_dir=tmp_path, shadow_candidates=[CAND])
     st = lane.load_state(tmp_path)
     assert st["positions"]["sunday"] is not None and st["positions"]["asia"] is None
