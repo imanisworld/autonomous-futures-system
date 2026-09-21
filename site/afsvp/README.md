@@ -34,3 +34,14 @@ The futures application accepts alerts at `POST /webhook/alert`. After `hooks.af
 `https://hooks.afsvp.com/webhook/alert`
 
 Preserve the existing webhook authentication. The application prefers `X-Webhook-Secret` or a `secret` field in the JSON body; query-string secrets are deprecated because they can appear in access logs.
+
+## Security page and security.txt (added 2026-09-21)
+
+- `/security/` — what the site actually does, vulnerability reporting, testing boundaries
+- `/.well-known/security.txt` — RFC 9116 disclosure contact
+
+nginx must serve dotfile directories for `/.well-known/` (the default `try_files`
+does; do not add a `location ~ /\.` deny rule that would catch it). The Security
+page's "authentication for private areas" line is only true once the
+`app.afsvp.com` `/status/` and `/scanner/` locations are re-gated — see
+`docs/afsvp-public-surface-audit-2026-09-21.md` blockers B1/B2.
