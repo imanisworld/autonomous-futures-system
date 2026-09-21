@@ -18,7 +18,7 @@ import math
 import statistics
 import sys
 from dataclasses import asdict, dataclass
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 from zoneinfo import ZoneInfo
@@ -29,6 +29,7 @@ if str(ROOT) not in sys.path:
 
 from alert_ranker.causal_bars import Bar, HOUR_1, MINUTE_5, build_session_timeframe
 from config.futures_contracts import tick_size as contract_tick_size
+from context.cme_trading_day import cme_trading_day
 from research.futures_non_strat_coverage import roll_excluded_sessions
 from strategy.strat_classifier import (
     INSIDE_BAR,
@@ -93,6 +94,11 @@ class Event:
     data_complete: bool
     watch_window_complete: bool
     ftfc_state: str
+    ftfc_price_basis: str
+    monthly_open: float | None
+    weekly_open: float | None
+    daily_open: float | None
+    current_60m_open: float | None
     afs_ema_trend_state: str
     afs_comparison_status: str
     half: str
@@ -112,29 +118,83 @@ def _session_files(instrument: str) -> dict[date, Path]:
     return result
 
 
-def _load(path: Path) -> list[Bar]:
-    bars: list[Bar] = []
+def _load_rows(path: Path) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
     with path.open() as handle:
         for line in handle:
+            if not line.strip():
+                continue
             row = json.loads(line)
-            if row.get("session") != "new_york":
-                continue
-            ts = datetime.fromisoformat(row["timestamp"]).astimezone(timezone.utc)
-            local = ts.astimezone(ET).time()
-            if not (RTH_OPEN <= local < RTH_CLOSE):
-                continue
-            bars.append(
-                Bar(
-                    start=ts,
-                    open=float(row["open"]),
-                    high=float(row["high"]),
-                    low=float(row["low"]),
-                    close=float(row["close"]),
-                    volume=float(row.get("volume") or 0.0),
-                    vwap=float(row["vwap"]) if row.get("vwap") is not None else None,
-                )
+            ts = datetime.fromisoformat(str(row["timestamp"]).replace("Z", "+00:00"))
+            row["_timestamp_utc"] = ts.astimezone(timezone.utc)
+            rows.append(row)
+    return sorted(rows, key=lambda row: row["_timestamp_utc"])
+
+
+def _rth_bars(rows: Sequence[dict[str, Any]]) -> list[Bar]:
+    bars: list[Bar] = []
+    for row in rows:
+        if row.get("session") != "new_york":
+            continue
+        ts = row["_timestamp_utc"]
+        local = ts.astimezone(ET).time()
+        if not (RTH_OPEN <= local < RTH_CLOSE):
+            continue
+        bars.append(
+            Bar(
+                start=ts,
+                open=float(row["open"]),
+                high=float(row["high"]),
+                low=float(row["low"]),
+                close=float(row["close"]),
+                volume=float(row.get("volume") or 0.0),
+                vwap=float(row["vwap"]) if row.get("vwap") is not None else None,
             )
+        )
     return sorted(bars, key=lambda b: b.start_utc)
+
+
+def _ftfc_open_maps(
+    instrument: str,
+    rows: Sequence[dict[str, Any]],
+) -> tuple[
+    dict[date, float],
+    dict[date, float],
+    dict[tuple[int, int], float],
+]:
+    """Exact CME day/week/month opens; incomplete initial periods stay absent."""
+    first_by_trade_day: dict[date, dict[str, Any]] = {}
+    for row in rows:
+        ts = row["_timestamp_utc"]
+        td = cme_trading_day(ts, instrument)
+        first_by_trade_day.setdefault(td, row)
+
+    daily_open: dict[date, float] = {}
+    for td, row in first_by_trade_day.items():
+        local = row["_timestamp_utc"].astimezone(ET)
+        if local.hour == 18 and local.minute == 0:
+            daily_open[td] = float(row["open"])
+
+    week_days: dict[date, list[date]] = {}
+    month_days: dict[tuple[int, int], list[date]] = {}
+    for td in sorted(first_by_trade_day):
+        week = td - timedelta(days=td.weekday())
+        week_days.setdefault(week, []).append(td)
+        month_days.setdefault((td.year, td.month), []).append(td)
+
+    weekly_open: dict[date, float] = {}
+    for week, days in week_days.items():
+        first_td = min(days)
+        if first_td in daily_open:
+            weekly_open[week] = daily_open[first_td]
+
+    monthly_open: dict[tuple[int, int], float] = {}
+    for month, days in month_days.items():
+        first_td = min(days)
+        if first_td in daily_open:
+            monthly_open[month] = daily_open[first_td]
+
+    return daily_open, weekly_open, monthly_open
 
 
 def _half(day: date, midpoint: date) -> str:
@@ -186,6 +246,10 @@ def observe_candidate(
     parent_type: str,
     watch: Sequence[Bar],
     midpoint: date,
+    monthly_open: float | None = None,
+    weekly_open: float | None = None,
+    daily_open: float | None = None,
+    context_by_start: dict[datetime, dict[str, Any]] | None = None,
 ) -> Event:
     if parent_type not in {TWO_UP, TWO_DOWN}:
         raise ValueError("parent_type must be directional")
@@ -293,6 +357,11 @@ def observe_candidate(
             data_complete=watch_complete,
             watch_window_complete=watch_complete,
             ftfc_state=FTFC_UNAVAILABLE,
+            ftfc_price_basis="NOT_TRIGGERED",
+            monthly_open=monthly_open,
+            weekly_open=weekly_open,
+            daily_open=daily_open,
+            current_60m_open=float(watched[0].open) if watched else None,
             afs_ema_trend_state="UNAVAILABLE",
             afs_comparison_status=(
                 "CLASSIFIER_ONLY_EXECUTABLE_PATH_NOT_COMPARED"
@@ -301,6 +370,31 @@ def observe_candidate(
             ),
             half=_half(day, midpoint),
         )
+
+    current_60m_open = float(watched[0].open) if watched else None
+    ftfc_state = classify_ftfc(
+        last_price=minimum_strict_break_price,
+        monthly_open=monthly_open,
+        weekly_open=weekly_open,
+        daily_open=daily_open,
+        current_60m_open=current_60m_open,
+    )
+
+    trigger_context = (
+        context_by_start.get(trigger_bar.start_utc)
+        if context_by_start is not None
+        else None
+    )
+    if trigger_context is not None:
+        trend_direction = trigger_context.get("trend_direction")
+        trend_strength = trigger_context.get("trend_strength")
+        afs_ema_trend_state = (
+            f"{trend_direction}_{trend_strength}"
+            if trend_direction is not None and trend_strength is not None
+            else "UNAVAILABLE"
+        )
+    else:
+        afs_ema_trend_state = "UNAVAILABLE"
 
     after = [bar for bar in watched if bar.start_utc >= trigger_bar.start_utc]
     magnitude_bar: Bar | None = None
@@ -388,8 +482,13 @@ def observe_candidate(
         ),
         data_complete=watch_complete,
         watch_window_complete=watch_complete,
-        ftfc_state=FTFC_UNAVAILABLE,
-        afs_ema_trend_state="UNAVAILABLE",
+        ftfc_state=ftfc_state,
+        ftfc_price_basis="MINIMUM_STRICT_BREAK_PRICE",
+        monthly_open=monthly_open,
+        weekly_open=weekly_open,
+        daily_open=daily_open,
+        current_60m_open=current_60m_open,
+        afs_ema_trend_state=afs_ema_trend_state,
         afs_comparison_status=(
             "CLASSIFIER_ONLY_EXECUTABLE_PATH_NOT_COMPARED"
             if source_c is not None
@@ -404,7 +503,9 @@ def run_instrument(instrument: str) -> dict[str, Any]:
     if not files:
         raise SystemExit(f"no replay files under {REPLAY_ROOT / instrument}")
 
+    all_rows: list[dict[str, Any]] = []
     loaded: dict[date, list[Bar]] = {}
+    context_by_start: dict[datetime, dict[str, Any]] = {}
     skipped = {
         "incomplete_session": 0,
         "misaligned_or_duplicate_session": 0,
@@ -412,7 +513,11 @@ def run_instrument(instrument: str) -> dict[str, Any]:
         "incomplete_watch_window": 0,
     }
     for day, path in files.items():
-        bars = _load(path)
+        rows = _load_rows(path)
+        all_rows.extend(rows)
+        for row in rows:
+            context_by_start[row["_timestamp_utc"]] = row
+        bars = _rth_bars(rows)
         if len(bars) != RTH_BARS:
             skipped["incomplete_session"] += 1
             continue
@@ -425,6 +530,11 @@ def run_instrument(instrument: str) -> dict[str, Any]:
     complete_days = sorted(loaded)
     if not complete_days:
         raise SystemExit(f"no complete sessions for {instrument}")
+
+    all_rows.sort(key=lambda row: row["_timestamp_utc"])
+    daily_open_map, weekly_open_map, monthly_open_map = _ftfc_open_maps(
+        instrument, all_rows
+    )
 
     # Match the existing futures research helper exactly: derive roll
     # exclusions from the full dated-file calendar, not only complete sessions,
@@ -440,6 +550,12 @@ def run_instrument(instrument: str) -> dict[str, Any]:
     for day in days:
         bars5 = loaded[day]
         session_open = datetime.combine(day, RTH_OPEN, ET)
+        trade_day = cme_trading_day(session_open, instrument)
+        week = trade_day - timedelta(days=trade_day.weekday())
+        month = (trade_day.year, trade_day.month)
+        daily_open = daily_open_map.get(trade_day)
+        weekly_open = weekly_open_map.get(week)
+        monthly_open = monthly_open_map.get(month)
         hourly = build_session_timeframe(bars5, MINUTE_5, HOUR_1, session_open)
         # Only whole 60m source bars are emitted. The final 30m RTH fragment is
         # deliberately excluded by build_session_timeframe.
@@ -476,6 +592,10 @@ def run_instrument(instrument: str) -> dict[str, Any]:
                     parent_type=parent_type,
                     watch=watch,
                     midpoint=midpoint,
+                    monthly_open=monthly_open,
+                    weekly_open=weekly_open,
+                    daily_open=daily_open,
+                    context_by_start=context_by_start,
                 )
             )
 
@@ -533,6 +653,10 @@ def _bucket(events: Sequence[Event]) -> dict[str, Any]:
         "magnitude_hit_rate_triggered": round(len(reached) / len(triggered), 4)
         if triggered
         else None,
+        "ftfc_available": sum(e.ftfc_state != FTFC_UNAVAILABLE for e in triggered),
+        "afs_ema_available": sum(
+            e.afs_ema_trend_state != "UNAVAILABLE" for e in triggered
+        ),
         "median_time_to_magnitude_minutes": _median(
             e.time_to_magnitude_minutes
             for e in reached
@@ -574,8 +698,7 @@ def summarize(
         "research_only": True,
         "study_complete": False,
         "outstanding_before_final_interpretation": [
-            "FTFC_DATA_CAPABILITY",
-            "AFS_EMA_TREND_SIDE_BY_SIDE",
+            "LOCAL_EVENT_LEVEL_FTFC_EMA_RUN_AUDIT",
             "EXECUTION_OVERLAYS",
             "COST_MODEL_CONTRACT",
             "SOURCE_ALIGNMENT_EXTERNAL_CANONICALITY",
@@ -588,6 +711,8 @@ def summarize(
         "source_alignment_status": "EXPLICIT_AFS_TRANSLATION_NOT_PUBLIC_CANONICAL",
         "trigger_resolution": "5m",
         "trigger_price_role": "STRUCTURAL_BOUNDARY_NOT_EXECUTABLE_FILL",
+        "ftfc_price_basis": "MINIMUM_STRICT_BREAK_PRICE",
+        "ftfc_open_basis": "CME_18ET_DAY__MONDAY_WEEK__FIRST_TRADE_DAY_MONTH__RTH_60M",
         "execution_entry_floor": "one_contract_tick_beyond_boundary_before_slippage",
         "trigger_watch_window": "immediately_following_60m_source_bar_only",
         "excursion_horizon": "first_5m_bar_after_trigger_to_first_structural_terminal_event",
@@ -604,6 +729,14 @@ def summarize(
         "by_direction": {
             direction: _bucket([e for e in events if e.direction == direction])
             for direction in ("LONG", "SHORT")
+        },
+        "by_ftfc": {
+            state: _bucket([e for e in events if e.ftfc_state == state])
+            for state in (FTFC_UP, FTFC_DOWN, FTFC_CONFLICT, FTFC_UNAVAILABLE)
+        },
+        "by_afs_ema_trend": {
+            state: _bucket([e for e in events if e.afs_ema_trend_state == state])
+            for state in sorted({e.afs_ema_trend_state for e in events})
         },
         "events": [asdict(e) for e in events],
     }
@@ -624,7 +757,7 @@ def to_markdown(report: dict[str, Any]) -> str:
         f"median MAE {o['median_mae_points']} pts · median MFE {o['median_mfe_points']} pts\n\n"
         "MAE/MFE exclude the unordered trigger-bar OHLC and stop at the first structural terminal event; "
         "later price action is excluded.\n\n"
-        "Study is incomplete: FTFC data capability, AFS EMA side-by-side, execution overlays, "
+        "Study is incomplete: local event-level FTFC/EMA output audit, execution overlays, "
         "a frozen cost model, and external source-alignment canonicality remain outstanding. "
         "No P&L, PF, fixed-R target, "
         "or promotion claim is produced by this structural pass.\n"
