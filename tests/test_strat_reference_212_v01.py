@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 
 from alert_ranker.causal_bars import Bar
 from research.strat_reference_212_v01 import observe_candidate
