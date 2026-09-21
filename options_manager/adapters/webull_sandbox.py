@@ -470,7 +470,11 @@ def _preview_orders(request: OptionsBrokerPreviewRequest) -> list[dict[str, Any]
             "quantity": str(request.quantity),
             "limit_price": f"{request.limit_price:.4f}",
             "option_strategy": "SINGLE",
+            "instrument_type": "OPTION",
+            "market": "US",
+            "symbol": request.ticker,
             "side": "BUY",
+            "position_intent": "BUY_TO_OPEN",
             "time_in_force": "DAY",
             "entrust_type": "QTY",
             "legs": [

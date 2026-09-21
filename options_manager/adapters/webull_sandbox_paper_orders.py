@@ -25,6 +25,8 @@ host are not supported and not reachable from here.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import hashlib
+import math
 import os
 from typing import Any, Callable, Literal, Mapping, Protocol
 
@@ -37,6 +39,7 @@ from options_manager.config import OptionsManagerConfig
 from options_manager.adapters.webull_sandbox import (
     WEBULL_REGION,
     WEBULL_SANDBOX_BROKER,
+    WebullSandboxPreviewResult,
     _as_float,
     _config_block_reason,
     _credentials,
@@ -164,6 +167,52 @@ def _broker_reject(exc: Exception) -> tuple[str, str] | None:
 def _broker_order_id(payload: Any) -> str | None:
     value = _first_scalar(payload, ("order_id", "broker_order_id", "orderId"))
     return str(value) if value is not None else None
+
+
+def build_sandbox_close_ticket_id(entry_ticket_id: str) -> str:
+    """Deterministic <=32-char close id derived only from the entry ticket."""
+    raw = (entry_ticket_id or "").strip()
+    if not raw:
+        raise ValueError("entry_ticket_id is required")
+    return "cls-" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:28]
+
+
+def _close_orders(
+    entry_request: OptionsBrokerPreviewRequest,
+    *,
+    close_ticket_id: str,
+    limit_price: float,
+) -> list[dict[str, Any]]:
+    """Current Webull option schema for one SELL_TO_CLOSE DAY limit order."""
+    return [
+        {
+            "client_order_id": close_ticket_id,
+            "combo_type": "NORMAL",
+            "order_type": "LIMIT",
+            "quantity": str(entry_request.quantity),
+            "limit_price": f"{limit_price:.4f}",
+            "option_strategy": "SINGLE",
+            "instrument_type": "OPTION",
+            "market": "US",
+            "symbol": entry_request.ticker,
+            "side": "SELL",
+            "position_intent": "SELL_TO_CLOSE",
+            "time_in_force": "DAY",
+            "entrust_type": "QTY",
+            "legs": [
+                {
+                    "side": "SELL",
+                    "quantity": str(entry_request.quantity),
+                    "symbol": entry_request.ticker,
+                    "strike_price": f"{entry_request.contract_strike:g}",
+                    "option_expire_date": entry_request.contract_expiry.isoformat(),
+                    "instrument_type": "OPTION",
+                    "option_type": entry_request.direction,
+                    "market": "US",
+                }
+            ],
+        }
+    ]
 
 
 class _OfficialPaperOrderClient:
@@ -326,6 +375,169 @@ def submit_sandbox_paper_option_order(
     )
 
 
+def preview_sandbox_paper_option_close(
+    entry_request: OptionsBrokerPreviewRequest,
+    entry_detail: WebullSandboxOrderDetail,
+    limit_price: float,
+    options_config: OptionsManagerConfig,
+    env: Mapping[str, str] | None = None,
+    *,
+    preview_client_factory: PaperOrderClientFactory | None = None,
+) -> WebullSandboxPreviewResult:
+    """Preview a single-leg SELL_TO_CLOSE for a proven filled sandbox entry.
+
+    Preview only: no placement call exists in this function. It is the next
+    proof gate before any close-submit capability is considered.
+    """
+    source = os.environ if env is None else env
+    reason = _config_block_reason(source, options_config, require_real_preview=True)
+    entry_ticket = (entry_request.ticket_id or "").strip()
+    if reason:
+        return WebullSandboxPreviewResult(
+            preview_ready=False, status="BLOCKED", ticket_id=entry_ticket or None, reason=reason
+        )
+
+    boundary = validate_preview_boundary(entry_request, options_config)
+    if not boundary.preview_ready:
+        return WebullSandboxPreviewResult(
+            preview_ready=False,
+            status="REJECTED",
+            ticket_id=entry_ticket or None,
+            reason=f"entry_boundary:{boundary.failed_stage}:{boundary.reason}",
+        )
+
+    if (
+        entry_detail.status != "OK"
+        or entry_detail.order_state != "FILLED"
+        or not entry_detail.terminal
+    ):
+        return WebullSandboxPreviewResult(
+            preview_ready=False,
+            status="REJECTED",
+            ticket_id=entry_ticket or None,
+            reason="entry_not_proven_filled",
+        )
+    if (
+        entry_detail.ticket_id != entry_ticket
+        or entry_detail.client_order_id != entry_ticket
+    ):
+        return WebullSandboxPreviewResult(
+            preview_ready=False,
+            status="REJECTED",
+            ticket_id=entry_ticket or None,
+            reason="entry_detail_ticket_mismatch",
+        )
+    if entry_detail.filled_quantity != entry_request.quantity:
+        return WebullSandboxPreviewResult(
+            preview_ready=False,
+            status="REJECTED",
+            ticket_id=entry_ticket or None,
+            reason="entry_filled_quantity_mismatch",
+        )
+
+    try:
+        close_price = float(limit_price)
+    except (TypeError, ValueError):
+        close_price = float("nan")
+    if not math.isfinite(close_price) or close_price <= 0:
+        return WebullSandboxPreviewResult(
+            preview_ready=False,
+            status="REJECTED",
+            ticket_id=entry_ticket or None,
+            reason="close_limit_price_invalid",
+        )
+
+    close_ticket = build_sandbox_close_ticket_id(entry_ticket)
+    orders = _close_orders(
+        entry_request,
+        close_ticket_id=close_ticket,
+        limit_price=close_price,
+    )
+
+    key, secret = _credentials(source)
+    factory = preview_client_factory or _OfficialPaperOrderClient
+    try:
+        client = factory(key, secret)
+    except ImportError:
+        return WebullSandboxPreviewResult(
+            preview_ready=False, status="BLOCKED", ticket_id=close_ticket, reason="sdk_unavailable"
+        )
+    except Exception as exc:
+        return WebullSandboxPreviewResult(
+            preview_ready=False,
+            status="ERROR",
+            ticket_id=close_ticket,
+            reason=f"client_init_failed:{type(exc).__name__}",
+        )
+
+    account_id, select_reason = _resolve_account(client)
+    if select_reason or not account_id:
+        return WebullSandboxPreviewResult(
+            preview_ready=False,
+            status="ERROR",
+            ticket_id=close_ticket,
+            reason=select_reason or "sandbox_individual_cash_account_missing",
+        )
+
+    try:
+        preview = client.preview_option(account_id, orders)
+    except Exception as exc:
+        mapped = _broker_reject(exc)
+        if mapped:
+            return WebullSandboxPreviewResult(
+                preview_ready=False,
+                status="REJECTED" if mapped[0] == "REJECTED" else "ERROR",
+                ticket_id=close_ticket,
+                reason=f"close_preview_{mapped[1]}",
+            )
+        return WebullSandboxPreviewResult(
+            preview_ready=False,
+            status="ERROR",
+            ticket_id=close_ticket,
+            reason=f"close_preview_request_failed:{type(exc).__name__}",
+        )
+    if _status(preview) != 200:
+        return WebullSandboxPreviewResult(
+            preview_ready=False,
+            status="REJECTED",
+            ticket_id=close_ticket,
+            reason=f"close_preview_http_{_status(preview)}",
+        )
+    payload, err = _json(preview)
+    if err:
+        return WebullSandboxPreviewResult(
+            preview_ready=False,
+            status="ERROR",
+            ticket_id=close_ticket,
+            reason=f"close_preview_{err}",
+        )
+
+    return WebullSandboxPreviewResult(
+        preview_ready=True,
+        status="PREVIEW_READY",
+        ticket_id=close_ticket,
+        broker=WEBULL_SANDBOX_BROKER,
+        executable=False,
+        submitted=False,
+        broker_order_id=None,
+        currency=(
+            str(_first_scalar(payload, ("currency", "currency_code")))
+            if _first_scalar(payload, ("currency", "currency_code")) is not None
+            else None
+        ),
+        estimated_cost=_as_float(
+            _first_scalar(payload, ("estimated_cost", "estimated_notional", "order_value"))
+        ),
+        estimated_transaction_fee=_as_float(
+            _first_scalar(payload, ("estimated_transaction_fee", "estimated_fee", "transaction_fee"))
+        ),
+        warnings=(
+            "sandbox_paper_only",
+            "sell_to_close_preview_only_no_submission",
+        ),
+    )
+
+
 def cancel_sandbox_paper_option_order(
     ticket_id: str,
     options_config: OptionsManagerConfig,
@@ -459,7 +671,9 @@ __all__ = [
     "WebullSandboxCancelResult",
     "WebullSandboxOrderDetail",
     "WebullSandboxOrderResult",
+    "build_sandbox_close_ticket_id",
     "cancel_sandbox_paper_option_order",
     "get_sandbox_paper_order_detail",
+    "preview_sandbox_paper_option_close",
     "submit_sandbox_paper_option_order",
 ]

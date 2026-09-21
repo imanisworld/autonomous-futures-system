@@ -6,8 +6,11 @@ from pathlib import Path
 from integrations.webull_paper_config import WEBULL_SANDBOX_HOST
 from options_manager.adapters.webull_sandbox_paper_orders import (
     WEBULL_SANDBOX_BROKER,
+    WebullSandboxOrderDetail,
+    build_sandbox_close_ticket_id,
     cancel_sandbox_paper_option_order,
     get_sandbox_paper_order_detail,
+    preview_sandbox_paper_option_close,
     submit_sandbox_paper_option_order,
 )
 from options_manager.broker_boundary import OptionsBrokerPreviewRequest
@@ -224,6 +227,9 @@ def test_submit_previews_then_places_single_leg_and_uses_ticket_as_client_order_
     order = orders[0]
     assert order["client_order_id"] == "ticket-123"
     assert order["order_type"] == "LIMIT" and order["side"] == "BUY"
+    assert order["position_intent"] == "BUY_TO_OPEN"
+    assert order["instrument_type"] == "OPTION"
+    assert order["market"] == "US" and order["symbol"] == "AAPL"
     assert order["option_strategy"] == "SINGLE" and order["time_in_force"] == "DAY"
     leg = order["legs"][0]
     assert leg["instrument_type"] == "OPTION" and leg["market"] == "US"
@@ -299,6 +305,153 @@ def test_submit_keeps_unknown_outcome_warning_for_broker_5xx():
     result = submit_sandbox_paper_option_order(preview_request(), submit_config(), SAFE_ENV, client_factory=factory)
     assert result.status == "ERROR"
     assert "placement_outcome_unknown_check_order_detail" in result.warnings
+
+
+# ─── filled-entry SELL_TO_CLOSE preview only ─────────────────────────────────
+
+def _filled_entry_detail(**overrides):
+    values = dict(
+        status="OK",
+        ticket_id="ticket-123",
+        client_order_id="ticket-123",
+        broker_order_id="WB-SANDBOX-1",
+        order_state="FILLED",
+        terminal=True,
+        filled_quantity=1,
+        average_fill_price=0.98,
+        limit_price=1.0,
+        reason=None,
+    )
+    values.update(overrides)
+    return WebullSandboxOrderDetail(**values)
+
+
+def test_close_ticket_id_is_deterministic_and_within_webull_limit():
+    a = build_sandbox_close_ticket_id("ticket-123")
+    b = build_sandbox_close_ticket_id("ticket-123")
+    assert a == b
+    assert a.startswith("cls-")
+    assert len(a) == 32
+
+
+def test_close_preview_refuses_unfilled_entry_before_client_creation():
+    client = FakeClient()
+    factory, created = factory_for(client)
+    result = preview_sandbox_paper_option_close(
+        preview_request(),
+        _filled_entry_detail(order_state="WORKING", terminal=False, filled_quantity=0),
+        1.50,
+        submit_config(),
+        SAFE_ENV,
+        preview_client_factory=factory,
+    )
+    assert result.status == "REJECTED"
+    assert result.reason == "entry_not_proven_filled"
+    assert created == [] and client.calls == []
+
+
+def test_close_preview_refuses_entry_detail_identity_or_quantity_mismatch():
+    client = FakeClient()
+    factory, created = factory_for(client)
+    mismatch = preview_sandbox_paper_option_close(
+        preview_request(),
+        _filled_entry_detail(client_order_id="another-ticket"),
+        1.50,
+        submit_config(),
+        SAFE_ENV,
+        preview_client_factory=factory,
+    )
+    assert mismatch.status == "REJECTED"
+    assert mismatch.reason == "entry_detail_ticket_mismatch"
+
+    qty = preview_sandbox_paper_option_close(
+        preview_request(),
+        _filled_entry_detail(filled_quantity=2),
+        1.50,
+        submit_config(),
+        SAFE_ENV,
+        preview_client_factory=factory,
+    )
+    assert qty.status == "REJECTED"
+    assert qty.reason == "entry_filled_quantity_mismatch"
+    assert created == [] and client.calls == []
+
+
+def test_close_preview_builds_sell_to_close_day_order_and_never_places():
+    client = FakeClient(
+        preview=FakeResponse(
+            200,
+            {
+                "data": {
+                    "currency": "USD",
+                    "estimated_cost": "-150.00",
+                    "estimated_transaction_fee": "0.05",
+                }
+            },
+        )
+    )
+    factory, _ = factory_for(client)
+    result = preview_sandbox_paper_option_close(
+        preview_request(),
+        _filled_entry_detail(),
+        1.50,
+        submit_config(),
+        SAFE_ENV,
+        preview_client_factory=factory,
+    )
+    assert result.status == "PREVIEW_READY"
+    assert result.preview_ready is True
+    assert result.submitted is False
+    assert result.executable is False
+    assert result.broker == WEBULL_SANDBOX_BROKER
+    assert result.broker_order_id is None
+    assert result.ticket_id == build_sandbox_close_ticket_id("ticket-123")
+    assert [call[0] for call in client.calls] == ["accounts", "preview"]
+
+    _, account_id, orders = client.calls[1]
+    assert account_id == "paper-cash-id"
+    assert len(orders) == 1
+    order = orders[0]
+    assert order["client_order_id"] == result.ticket_id
+    assert order["side"] == "SELL"
+    assert order["position_intent"] == "SELL_TO_CLOSE"
+    assert order["order_type"] == "LIMIT"
+    assert order["time_in_force"] == "DAY"
+    assert order["instrument_type"] == "OPTION"
+    assert order["market"] == "US"
+    assert order["symbol"] == "AAPL"
+    assert order["limit_price"] == "1.5000"
+    assert order["quantity"] == "1"
+    assert order["legs"][0]["side"] == "SELL"
+    assert order["legs"][0]["option_type"] == "CALL"
+
+
+def test_close_preview_does_not_require_submit_opt_in_but_requires_preview_opt_in():
+    client = FakeClient()
+    factory, _ = factory_for(client)
+    result = preview_sandbox_paper_option_close(
+        preview_request(),
+        _filled_entry_detail(),
+        1.25,
+        submit_config(broker_boundary_allow_sandbox_paper_submit=False),
+        SAFE_ENV,
+        preview_client_factory=factory,
+    )
+    assert result.status == "PREVIEW_READY"
+
+    blocked_client = FakeClient()
+    blocked_factory, created = factory_for(blocked_client)
+    blocked = preview_sandbox_paper_option_close(
+        preview_request(),
+        _filled_entry_detail(),
+        1.25,
+        submit_config(broker_boundary_allow_real_preview=False),
+        SAFE_ENV,
+        preview_client_factory=blocked_factory,
+    )
+    assert blocked.status == "BLOCKED"
+    assert blocked.reason == "real_broker_preview_not_enabled"
+    assert created == [] and blocked_client.calls == []
 
 
 # ─── cancel / detail ─────────────────────────────────────────────────────────
