@@ -1,51 +1,36 @@
 {
   "policy_id": "OPTIONS_PAPER_V1",
-  "cohort": "V1-EPOCH-2",
-  "reason": "UNIVERSE_EXPANSION_6_TO_20",
-  "deployed_sha": "62546883dfffcf2c900bd632aa762d340a9d7956",
-  "release_dir": "/root/afs-releases/62546883dfff-20260916-062925",
-  "release_live_at": "2026-09-16T10:29:43Z",
-  "scanner_restart_at": "2026-09-16T16:42:45Z",
-  "first_clean_rth_cycle_at": "2026-09-16T16:47:46.550854Z",
-  "epoch_start": "2026-09-16T16:47:46.550854Z",
-  "epoch_rule": "deployed SHA + first clean market-hours cycle timestamp on the new universe; never the restart time",
+  "cohort": "V1-EPOCH-3",
+  "reason": "DAILY_SCORER_ALIGNMENT",
+  "deployed_sha": "aea0df01c0a90b14cd112e816b54cbbb1efa5bcb",
+  "release_dir": "/root/afs-releases/aea0df01c0a90b14cd112e816b54cbbb1efa5bcb",
+  "release_live_at": "2026-09-21T19:18:07Z",
+  "scanner_restart_at": "2026-09-21T19:18:00Z",
+  "first_clean_rth_cycle_at": "2026-09-21T19:23:01.426685+00:00",
+  "epoch_start": "2026-09-21T19:23:01.426685+00:00",
+  "epoch_rule": "deployed SHA + first fully clean (20/20, zero market_data_error) scheduled cycle timestamp on the fixed release; never the restart time",
   "universe": {
     "previous": ["AAPL", "MSFT", "NVDA", "TSLA", "SPY", "QQQ"],
     "current": ["AAPL", "MSFT", "NVDA", "TSLA", "SPY", "QQQ", "AMZN", "GOOGL", "PLTR", "INTC", "IWM", "TLT", "JPM", "BAC", "COIN", "XOM", "MRK", "WMT", "NFLX", "GE"],
     "config_path": "OPTIONS_SCANNER_WATCHLIST in /root/afs-shared/.env (only line changed; backup /root/afs-shared/.deploy-bak/pre-watchlist20-20260916T164245Z/)",
     "selection_note": "contract viability is evaluated every cycle by the unchanged V1 policy; the eight symbols with no V1-valid contract at the 14:21Z census were deliberately kept because viability moved intraday between the 13:38Z and 14:21Z snapshots"
   },
-  "unchanged_from_epoch_1": [
-    "setup families and setup authority",
-    "targets, entry rules, premium stop, underlying invalidation",
-    "max $300 planned risk per trade, $1,000 aggregate ACTIVE risk",
-    "DTE policy, 5-minute cadence, contract selection logic",
-    "Signa authority (observational only, scorer contribution 0)",
-    "Discord eligibility, broker/execution capability (advisory only, provider read-only)",
-    "futures services and coverage collector untouched"
-  ],
-  "deployed_sha_note": "the scanner restart loaded release 62546883 because the shared release symlink had been moved by a futures deployment (#588) earlier the same day; 899a524..62546883 adds only alert_ranker/coverage_* modules that the scanner never imports and the venv is byte-identical, so scanner behaviour equals epoch 1 while the deployed SHA differs",
-  "cohort_boundary": {
-    "scans_first_id": 21898,
-    "scans_last_excluded_id": 21897,
-    "options_shadow_journal_first_id": 9207,
-    "options_shadow_journal_last_excluded_id": 9206,
-    "open_rows_carried_across_boundary": "journal 9187, 9188, 9194, 9197 (ACTIVE SPY 1D, $296), 9203, 9205 were OPEN before the boundary and are resolved from the database by resolve_open_candidates; their outcomes belong to epoch 1",
-    "note": "rows with timestamp < epoch_start are epoch-1 (six-symbol) evidence; rows at or after it are epoch-2 (20-symbol) evidence"
+  "unchanged_from_epoch_2": ["setup families and setup authority", "targets, entry rules, premium stop, underlying invalidation", "max $300 planned risk per trade, $1,000 aggregate ACTIVE risk", "DTE policy, 5-minute cadence, contract selection logic", "Signa authority (observational only, scorer contribution 0)", "broker/execution capability (advisory only, provider read-only)", "futures services and coverage collector untouched", "options watchlist universe (20 symbols, epoch-2 config)"],
+  "scoring_change": {
+    "pr": 869,
+    "commit": "1157fcb1b38900a6e3321f4e3364c6ae342af1ac",
+    "summary": "Daily (setup_timeframe == 1D) setups now score on SPY/QQQ daily-trend alignment (setup_market_status == VALID -> +4 market_alignment) instead of the 30-minute VWAP/EMA20 checks (against_vwap/against_trend), which were vetoing 30 of 64 Daily rows that reached the Discord decision since 2026-09-08 on sub-0.1% intraday wobbles. 30-minute setup scoring is byte-for-byte unchanged. This changes Discord alert eligibility only -- OPTIONS_PAPER_V1 (paper_v1.py) never reads the scanner score, so no paper-policy, risk, or contract-selection rule changed."
   },
-  "activation_proof": {
-    "preflight_source_sha": "684bbf0620be46cbf89b8ebd78130022b9b83a8e",
-    "credentials": "isolated second Public secret (same account as production, verified) and second Signa key; production scanner stayed on set 1 throughout",
-    "core_capacity": "20/20 normalized-data builds in 24.9 s (p50 1.0 s, p95 2.0 s, max 4.0 s), 0 rate limits, 0 timeouts, 0 missing bars (14:19Z)",
-    "full_path_with_signa": "93.0 s, +68 s Signa increment; 3 legacy-Signa ReadTimeouts (3 s budget) which production's own six-symbol cycles were already showing on 29 of 60 rows that morning",
-    "contract_census": "20/20 chains in 7.3 s, 0 operational failures; V1-valid both sides NVDA, PLTR, INTC, IWM, TLT, NFLX; one side SPY, AMZN, GOOGL, JPM, COIN, MRK; none AAPL, MSFT, TSLA, QQQ, BAC, XOM, WMT, GE (14:21Z snapshot)",
-    "production_control": "six-symbol cycles at 14:17Z and 14:22Z completed 6/6 at 300 s cadence with no provider errors, 429s, missing bars, or restarts",
-    "legacy_signa_authority_audit": "scorer signa component fixed 0; no branch on signa_error/grade/score in scan, journal, or Discord eligibility paths at 899a524; SignaClient returns ok=False on any HTTP error within the 3 s timeout",
-    "first_live_cycles": "16:47:46Z: scans 21898-21945, 20/20 in 80 s insertion span, 0 market_data_error, 0 missing bars, bar context 20/20, 1 legacy Signa timeout (INTC), Signa v2 20/20; 16:52:46Z: 20/20 in 68 s, cadence gap 300 s, 0 errors, 7 legacy Signa timeouts; journal 9207-9213 written in the first cycle (ACTIVE IWM 1D $150 and MRK 1D $142.5; aggregate ACTIVE $588.5 of $1,000)",
-    "evidence_files": "box /root/afs-preflight/out-20260916/ (valid 14:19Z run) and /root/afs-preflight/out-20260916-1338-prebar/ (pre-bar run, archived); sidecar v1-preflight-20.provenance.json carries sha256 of scripts, modules and reports"
+  "deployed_sha_note": "This epoch's deployed_sha/release_live_at/scanner_restart_at describe the code actually running at epoch_start (aea0df0), not the first release that shipped the scoring change. Timeline: PR #869 (Daily scorer alignment) went live on scanner-only curated release dd3aa9d at 2026-09-21T04:21:21Z; #870 (dashboard readability, unrelated to scoring) followed on release 75b2687 at 04:26:32Z. A pre-existing SignaContextStore SQLite connection leak (introduced by #802, merged 2026-09-20, exposed once the #870 dashboard began polling /shadow-journal/status every minute) saturated the process's 1024-fd ulimit at 2026-09-21T07:55:46Z; every scheduled scan from then failed with 'unable to open database file' -- ZERO scans were recorded 2026-09-21T07:55Z-19:18Z. Two same-release restarts (pid 1164159 at 15:22Z, pid 1178028 at 17:22Z) temporarily cleared the fd count but did not fix the leak and were not treated as epoch starts. PR #888 fixed the leak (SignaContextStore._connect is now a closing contextmanager); scanner-only release aea0df0 (75b2687 + #888) deployed 19:18:07Z; fd count verified flat (15->15) over 50 synthetic /shadow-journal+/status polls and stayed flat (15->16) through the following 6 real scheduled cycles. epoch_start is the first of those clean cycles. Rows in the 07:55Z-19:18Z outage window simply do not exist; the boundary below is defined purely by timestamp, same convention as the epoch-1/epoch-2 boundary.",
+  "cohort_boundary": {
+    "scans_first_id": 32059,
+    "scans_last_excluded_id": 32058,
+    "options_shadow_journal_first_id": 9398,
+    "options_shadow_journal_last_excluded_id": 9397,
+    "note": "rows with timestamp < epoch_start are epoch-2 evidence (or fall inside the 07:55Z-19:18Z outage and do not exist); rows at or after it are epoch-3 evidence"
   },
   "fail_rule": "if the 20-symbol universe stops finishing inside the 5-minute cadence or provider/rate/data failures appear, add no symbols and revert to the last proven universe by restoring the backed-up watchlist line",
-  "cohort_change_rule": "any later change to setup, DTE, stop, target, filter, guard, floor, block, risk rules, or the universe starts a new cohort with a new epoch",
+  "cohort_change_rule": "any later change to setup, DTE, stop, target, filter, guard, floor, block, risk rules, the universe, or scanner scoring/eligibility logic starts a new cohort with a new epoch; a pure infra/reliability fix with no scan/alert/decision-path change (like #888) does not by itself require a new epoch, but is documented in deployed_sha_note when it coincides with one for a real rule change",
   "previous_epochs": [
     {
       "policy_id": "OPTIONS_PAPER_V1",
@@ -86,6 +71,57 @@
         "not_exercised_today": "checklist items needing an ACTIVE row (contract selection through diagnostic snapshots) - unchanged code proven on the 2026-09-09/10 smokes"
       },
       "cohort_change_rule": "any later change to setup, DTE, stop, target, filter, guard, floor, block, or risk rules starts a new cohort with a new epoch"
+    },
+    {
+      "policy_id": "OPTIONS_PAPER_V1",
+      "cohort": "V1-EPOCH-2",
+      "reason": "UNIVERSE_EXPANSION_6_TO_20",
+      "deployed_sha": "62546883dfffcf2c900bd632aa762d340a9d7956",
+      "release_dir": "/root/afs-releases/62546883dfff-20260916-062925",
+      "release_live_at": "2026-09-16T10:29:43Z",
+      "scanner_restart_at": "2026-09-16T16:42:45Z",
+      "first_clean_rth_cycle_at": "2026-09-16T16:47:46.550854Z",
+      "epoch_start": "2026-09-16T16:47:46.550854Z",
+      "epoch_rule": "deployed SHA + first clean market-hours cycle timestamp on the new universe; never the restart time",
+      "universe": {
+        "previous": ["AAPL", "MSFT", "NVDA", "TSLA", "SPY", "QQQ"],
+        "current": ["AAPL", "MSFT", "NVDA", "TSLA", "SPY", "QQQ", "AMZN", "GOOGL", "PLTR", "INTC", "IWM", "TLT", "JPM", "BAC", "COIN", "XOM", "MRK", "WMT", "NFLX", "GE"],
+        "config_path": "OPTIONS_SCANNER_WATCHLIST in /root/afs-shared/.env (only line changed; backup /root/afs-shared/.deploy-bak/pre-watchlist20-20260916T164245Z/)",
+        "selection_note": "contract viability is evaluated every cycle by the unchanged V1 policy; the eight symbols with no V1-valid contract at the 14:21Z census were deliberately kept because viability moved intraday between the 13:38Z and 14:21Z snapshots"
+      },
+      "unchanged_from_epoch_1": ["setup families and setup authority", "targets, entry rules, premium stop, underlying invalidation", "max $300 planned risk per trade, $1,000 aggregate ACTIVE risk", "DTE policy, 5-minute cadence, contract selection logic", "Signa authority (observational only, scorer contribution 0)", "Discord eligibility, broker/execution capability (advisory only, provider read-only)", "futures services and coverage collector untouched"],
+      "deployed_sha_note": "the scanner restart loaded release 62546883 because the shared release symlink had been moved by a futures deployment (#588) earlier the same day; 899a524..62546883 adds only alert_ranker/coverage_* modules that the scanner never imports and the venv is byte-identical, so scanner behaviour equals epoch 1 while the deployed SHA differs",
+      "cohort_boundary": {
+        "scans_first_id": 21898,
+        "scans_last_excluded_id": 21897,
+        "options_shadow_journal_first_id": 9207,
+        "options_shadow_journal_last_excluded_id": 9206,
+        "open_rows_carried_across_boundary": "journal 9187, 9188, 9194, 9197 (ACTIVE SPY 1D, $296), 9203, 9205 were OPEN before the boundary and are resolved from the database by resolve_open_candidates; their outcomes belong to epoch 1",
+        "note": "rows with timestamp < epoch_start are epoch-1 (six-symbol) evidence; rows at or after it are epoch-2 (20-symbol) evidence"
+      },
+      "activation_proof": {
+        "preflight_source_sha": "684bbf0620be46cbf89b8ebd78130022b9b83a8e",
+        "credentials": "isolated second Public secret (same account as production, verified) and second Signa key; production scanner stayed on set 1 throughout",
+        "core_capacity": "20/20 normalized-data builds in 24.9 s (p50 1.0 s, p95 2.0 s, max 4.0 s), 0 rate limits, 0 timeouts, 0 missing bars (14:19Z)",
+        "full_path_with_signa": "93.0 s, +68 s Signa increment; 3 legacy-Signa ReadTimeouts (3 s budget) which production's own six-symbol cycles were already showing on 29 of 60 rows that morning",
+        "contract_census": "20/20 chains in 7.3 s, 0 operational failures; V1-valid both sides NVDA, PLTR, INTC, IWM, TLT, NFLX; one side SPY, AMZN, GOOGL, JPM, COIN, MRK; none AAPL, MSFT, TSLA, QQQ, BAC, XOM, WMT, GE (14:21Z snapshot)",
+        "production_control": "six-symbol cycles at 14:17Z and 14:22Z completed 6/6 at 300 s cadence with no provider errors, 429s, missing bars, or restarts",
+        "legacy_signa_authority_audit": "scorer signa component fixed 0; no branch on signa_error/grade/score in scan, journal, or Discord eligibility paths at 899a524; SignaClient returns ok=False on any HTTP error within the 3 s timeout",
+        "first_live_cycles": "16:47:46Z: scans 21898-21945, 20/20 in 80 s insertion span, 0 market_data_error, 0 missing bars, bar context 20/20, 1 legacy Signa timeout (INTC), Signa v2 20/20; 16:52:46Z: 20/20 in 68 s, cadence gap 300 s, 0 errors, 7 legacy Signa timeouts; journal 9207-9213 written in the first cycle (ACTIVE IWM 1D $150 and MRK 1D $142.5; aggregate ACTIVE $588.5 of $1,000)",
+        "evidence_files": "box /root/afs-preflight/out-20260916/ (valid 14:19Z run) and /root/afs-preflight/out-20260916-1338-prebar/ (pre-bar run, archived); sidecar v1-preflight-20.provenance.json carries sha256 of scripts, modules and reports"
+      },
+      "fail_rule": "if the 20-symbol universe stops finishing inside the 5-minute cadence or provider/rate/data failures appear, add no symbols and revert to the last proven universe by restoring the backed-up watchlist line",
+      "cohort_change_rule": "any later change to setup, DTE, stop, target, filter, guard, floor, block, risk rules, or the universe starts a new cohort with a new epoch",
+      "rules_in_force": {
+        "late_entry_guard": "PR #570 - refuse ACTIVE entry when live price is past target_1, past invalidation, or leaves < OPTIONS_PAPER_V1_MIN_REMAINING_RR (default 1.0) reward per unit of risk",
+        "daily_lane_entry_timing": "PR #571 - session-hourly 2U/2D confirmation not required (OPTIONS_PAPER_V1_DAILY_REQUIRE_HOURLY=false); SPY/QQQ trend alignment still required",
+        "daily_lane_target_floor": "PR #571 - prior-day levels closer than OPTIONS_PAPER_V1_DAILY_MIN_TARGET_RR (default 1.0) R from the trigger are skipped; no level beyond the floor -> counterfactual only, no synthetic target",
+        "entry_late_episode_block": "PR #575 - an episode refused ENTRY_LATE at its first actionable opportunity can never become ACTIVE; the refusal is preserved as a COUNTERFACTUAL observer row (no ACTIVE risk, no alert); a new trigger level or a new episode bucket is a new episode",
+        "canonical_bar": "30Min completed bars with the SIP delay buffer (960 s); scans every 5 minutes; live quote evaluated for remaining reward/risk",
+        "risk": "max $300 planned risk per trade, $1,000 aggregate ACTIVE; 45+ DTE (14-44 exception); companion OFF",
+        "signa": "observational only, scorer contribution 0, OPTIONS_SIGNA_V2_TIMEFRAME=1h"
+      },
+      "epoch_end": "2026-09-21T19:23:01.426685+00:00"
     }
   ],
   "rules_in_force": {
