@@ -232,22 +232,22 @@ def _path_requires_gate(path: str) -> bool:
 def _gate_html(next_path: str, error: bool) -> str:
     safe_next = next_path if next_path.startswith("/") else "/"
     err = (
-        '<p style="color:#FF4D5A;margin:0 0 14px">Wrong code — try again.</p>'
+        '<p style="color:#ef6a6a;margin:0 0 14px">Wrong code — try again.</p>'
         if error else ""
     )
     return f"""<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Vantage Point · Enter code</title></head>
-<body style="margin:0;background:#070706;color:#F2EEE6;font-family:-apple-system,Segoe UI,Roboto,sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center">
-<form method="post" action="/gate" style="background:#141312;border:1px solid #35312A;border-radius:10px;padding:28px;width:280px">
-<div style="font-size:15px;color:#F0B85A;font-weight:600;margin-bottom:4px">Vantage Point</div>
-<div style="font-size:12px;color:#AAA294;margin-bottom:18px">Enter access code to continue</div>
+<body style="margin:0;background:#131315;color:#f5f3f0;font-family:-apple-system,Segoe UI,Roboto,sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center">
+<form method="post" action="/gate" style="background:#1f1f21;border:1px solid #2e2e31;border-radius:10px;padding:28px;width:280px">
+<div style="font-size:15px;color:#e8875c;font-weight:600;margin-bottom:4px">Vantage Point</div>
+<div style="font-size:12px;color:#a6a3a1;margin-bottom:18px">Enter access code to continue</div>
 {err}
 <input type="hidden" name="next" value="{safe_next}">
 <input name="code" type="password" autofocus autocomplete="off"
- style="width:100%;box-sizing:border-box;padding:11px;background:#242018;border:1px solid #35312A;border-radius:7px;color:#F2EEE6;font-size:15px;margin-bottom:14px">
+ style="width:100%;box-sizing:border-box;padding:11px;background:#0b0b0c;border:1px solid #2e2e31;border-radius:7px;color:#f5f3f0;font-size:15px;margin-bottom:14px">
 <button type="submit"
- style="width:100%;padding:11px;background:#F0B85A;color:#070706;border:0;border-radius:7px;font-size:15px;font-weight:600;cursor:pointer">Enter</button>
+ style="width:100%;padding:11px;background:#e8875c;color:#131315;border:0;border-radius:7px;font-size:15px;font-weight:600;cursor:pointer">Enter</button>
 </form></body></html>"""
 
 
@@ -561,13 +561,13 @@ async def favicon():
 @app.get("/manifest.json", include_in_schema=False)
 async def pwa_manifest():
     return JSONResponse({
-        "name": "RiskSentinel",
-        "short_name": "RiskSentinel",
+        "name": "AFSVP",
+        "short_name": "AFSVP",
         "description": "Paper futures trading dashboard",
         "start_url": "/",
         "display": "standalone",
-        "background_color": "#050507",
-        "theme_color": "#00d5ff",
+        "background_color": "#131315",
+        "theme_color": "#e8875c",
         "icons": [
             {"src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png"},
             {"src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
@@ -3186,25 +3186,25 @@ _DASHBOARD_HTML = r"""<!doctype html>
       color-scheme: dark;
       --font-ui: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       --font-console: "JetBrains Mono", "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
-      --bg: #0b0a09;
-      --shell: #100f0e;
-      --shell2: #171411;
-      --panel: #1a1714;
-      --panel2: #15120f;
-      --panel3: #0f0d0b;
-      --line: #3a3028;
-      --line-soft: rgba(224, 168, 119, 0.16);
-      --text: #f6efe8;
-      --muted: #aa9b8d;
-      --muted2: #74675d;
-      --accent: #f39a68;
-      --brass: #cda46b;
-      --purple: var(--accent);
+      --bg: #131315;
+      --shell: #0b0b0c;
+      --shell2: #18181a;
+      --panel: #1f1f21;
+      --panel2: #1a1a1c;
+      --panel3: #151517;
+      --line: #2e2e31;
+      --line-soft: rgba(232, 135, 92, 0.16);
+      --text: #f5f3f0;
+      --muted: #a6a3a1;
+      --muted2: #7a7775;
+      --accent: #e8875c;
+      --brass: #9db0f5;
+      --purple: var(--brass);
       /* severity system */
-      --green: #00FF88;   /* pass / live / clear / fresh / profit */
+      --green: #5fd98a;   /* pass / live / clear / fresh / profit */
       --yellow: #FFB800;  /* warning / stale / watch / defend */
-      --red: #FF4444;     /* blocked / locked / loss / error */
-      --blue: #00d5ff;    /* info / paper / broker */
+      --red: #ef6a6a;     /* blocked / locked / loss / error */
+      --blue: #9db0f5;    /* info / paper / broker */
       --gray: #8b90a6;    /* inactive / disabled / neutral */
       --nav-h: 54px;
     }
@@ -3213,8 +3213,8 @@ _DASHBOARD_HTML = r"""<!doctype html>
     body {
       min-height: 100vh;
       background:
-        radial-gradient(circle at 18% 6%, rgba(243,154,104,0.16), transparent 34%),
-        radial-gradient(circle at 86% 2%, rgba(92,112,255,0.09), transparent 30%),
+        radial-gradient(circle at 18% 6%, rgba(232,135,92,0.16), transparent 34%),
+        radial-gradient(circle at 86% 2%, rgba(157,176,245,0.12), transparent 30%),
         linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
         linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px),
         var(--bg);
