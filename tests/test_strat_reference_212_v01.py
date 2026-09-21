@@ -1,5 +1,7 @@
 from datetime import date, datetime, timedelta, timezone
 
+import pytest
+
 from alert_ranker.causal_bars import Bar
 from research.strat_reference_212_v01 import (
     FTFC_CONFLICT,
@@ -185,8 +187,8 @@ def test_excursions_stop_at_first_structural_terminal_event():
         midpoint=date(2026, 1, 1),
     )
     assert event.magnitude_reached is True
-    assert event.mfe_points == 1.1
-    assert event.mae_points == 1.0
+    assert event.mfe_points == pytest.approx(1.1)
+    assert event.mae_points == pytest.approx(1.0)
 
 
 def test_ftfc_is_up_only_when_price_is_above_all_required_opens():
