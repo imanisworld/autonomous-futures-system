@@ -88,6 +88,20 @@ permutations (null max 1.68, tighter). Supersedes the 8-Sunday journal study
 positive after costs. **H1 (Sunday no-entry) is now expected to FAIL; it stays
 registered and is scored honestly.**
 
+**Robustness note on H6/H7 (in-sample, other thread, 2026-09-21 ~05:50Z; NOT
+scored):** same corpus, simulator and costs, but ONE position at a time (what
+the lane can actually take), then split. H6: n=553 PF 1.20 +$4.3k (halves 1.35 /
+1.12; 8/13 months positive; +1 tick/side → PF 1.17) — real but thin and decaying
+in the second half, ≈ +$330/month/contract. H7: n=85 PF 1.54 +$1.9k (halves
+1.69 / 1.47; 10/13 months; +1 tick → 1.52) — the cleaner cell. H6+H7 as one
+book: n=625 PF 1.26 +$6.3k, max DD $1,145. NY 2-2 reversal (PF 0.95 → 1.63
+by half) is suspect and is deliberately NOT registered. The TRENDING-label 3R
+Asia cell drops to PF 1.11 one-at-a-time, reinforcing that the EMA-only
+version is the better one. Known limits: touch-based fills at the entry level;
+the EMA-aligned filter was chosen after seeing the grid. Expected forward
+volume ≈ 50 trades/month combined, so H6 reaches its floor in ~2 months and H7
+in ~6 Sundays. The forward thresholds in §4 are read against THESE numbers.
+
 ## 3. Data (forward only)
 
 - Candidates: `cross_instrument_observation_v1.jsonl` CANDIDATE/OUTCOME rows,

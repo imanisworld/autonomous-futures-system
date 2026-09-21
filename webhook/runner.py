@@ -1201,6 +1201,24 @@ def process_alert(
         except Exception:  # noqa: BLE001 — evidence must never affect trading
             logger.warning("asia_d_ema paper cohort skipped", exc_info=True)
 
+        # Session-scoped 2-2 continuation forward paper lane (prereg H6/H7).
+        # Same isolation contract as the cohort above: OFF by default, own
+        # files, PaperBroker only, never changes this result's decision.
+        try:
+            from context import session_22c_paper_lane as _s22c
+
+            _s22c_summary = _s22c.process_bar(
+                state=state,
+                cfg=cfg,
+                log_dir=log_dir,
+                shadow_candidates=shadow_candidates,
+                for_date=for_date,
+            )
+            if _s22c_summary is not None:
+                result["session_22c_lane"] = _s22c_summary
+        except Exception:  # noqa: BLE001 — evidence must never affect trading
+            logger.warning("session_22c paper lane skipped", exc_info=True)
+
     # Shadow candidate resolution: causally resolve PRIOR bars' journaled
     # observe-only candidates (shadow_setups + range_signal lanes) against the
     # bars ingested since, appending SHADOW_OUTCOME evidence rows. Runs AFTER

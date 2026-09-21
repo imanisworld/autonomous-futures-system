@@ -290,6 +290,36 @@ def _asia_entry(log_dir: Path, start: date, end: date) -> dict[str, Any]:
     }
 
 
+def _session_22c_entry(log_dir: Path, start: date, end: date) -> dict[str, Any]:
+    """Session-scoped 2-2 continuation paper lane (prereg H6/H7, 2026-09-21)."""
+    path = log_dir / "session_22c_lane" / "evidence.jsonl"
+    rows = _read_jsonl(path)
+    window = [row for row in rows if _in_window(row, start, end)]
+    days = {day.isoformat() for row in window if (day := _row_day(row))}
+    events = Counter(f"{row.get('lane')}:{_event_name(row)}" for row in window)
+    campaign = next((row.get("campaign_id") for row in rows if row.get("campaign_id")), None)
+    epoch = os.getenv("SESSION_22C_PAPER_EPOCH_START")
+    if not path.exists():
+        status = "NOT_STARTED"
+    elif window:
+        status = "COLLECTING"
+    else:
+        status = "QUIET_THIS_WEEK"
+    return {
+        "system": "futures",
+        "lane": "session_22c",
+        "status": status,
+        "evidence_n": len(rows),
+        "window_n": len(window),
+        "sessions_window": len(days),
+        "epoch": epoch or campaign,
+        "last_success": _last_timestamp(rows),
+        "review_threshold": "H6: >=80 asia rows, PF>=1.10, win>=40%; H7: >=6 Sundays & >=30 rows, PF>=1.20, win>=55% (docs/prereg-mnq-volume-label-and-sunday-reopen-2026-09-21.md)",
+        "threshold_status": "PREREGISTERED",
+        "note": "event rows this week: " + (", ".join(f"{k}={v}" for k, v in sorted(events.items())) or "none"),
+    }
+
+
 def _coverage_entry(coverage_dir: Path, start: date, end: date) -> dict[str, Any]:
     rows = _read_jsonl(coverage_dir / "ledger.jsonl")
     done = [row for row in rows if row.get("status") == "DONE" and row.get("session_date")]
@@ -381,6 +411,7 @@ def build_registry(
     entries.extend(_forward_entries(log_dir, census, start, end))
     entries.extend(_hypothetical_entries(census, start, end))
     entries.append(_asia_entry(log_dir, start, end))
+    entries.append(_session_22c_entry(log_dir, start, end))
     entries.append(_coverage_entry(coverage_dir, start, end))
     entries.extend(_family_entries(family_summary_path))
 
