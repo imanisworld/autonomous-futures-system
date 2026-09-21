@@ -158,7 +158,7 @@ Reason:
 
 The public reference does not establish one unique futures-session alignment for a 60-minute candle. The current research harness therefore labels its first implementation explicitly as **RTH session-aligned 60m, anchored at 09:30 ET**. That is an AFS research translation, not a claim that the public methodology mandates this futures alignment.
 
-v0.1 also limits A/B/C construction to bars inside the **same RTH session**. It does not silently bridge the overnight/session gap or the dropped final partial RTH bucket. Consequently this first population is narrower than every possible 60-minute futures 2-1-2; the report must state `A_B_C_same_RTH_session_only`. Cross-session continuity is a separate preregistered variant.
+v0.1 also limits A/B/C construction to bars inside the **same RTH session**. It does not silently bridge the overnight/session gap or the dropped final partial RTH bucket. Consequently this first population is narrower than every possible 60-minute futures 2-1-2; the report must state `A_B_C_same_RTH_session_only_full_RTH_non_roll`. Cross-session continuity is a separate preregistered variant.
 
 The existing timed 3-2-2 implementation uses clock-specific 7AM/8AM/9AM bars and is a separate variant; it must not be used as silent proof that 09:30 RTH session alignment is canonical.
 
@@ -218,8 +218,8 @@ Aggregate:
 - candidate count;
 - ambiguous rate;
 - magnitude-hit rate;
-- median/quantile time-to-magnitude;
-- MAE/MFE quantiles;
+- time-to-magnitude p25/p50/p75/p90 using deterministic linear interpolation on sorted observations;
+- MAE/MFE p25/p50/p75/p90 using the same deterministic linear interpolation;
 - results by MNQ/MES;
 - H1/H2;
 - LONG/SHORT;
