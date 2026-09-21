@@ -10,8 +10,10 @@ from research.futures_intraday_momentum import (
     ENTRY_BAR_INDEX,
     EXIT_BAR_INDEX,
     SIGNAL_BAR_INDEX,
+    _previous_expected_session,
     build_trade,
     build_report,
+    collect_rows,
 )
 
 
@@ -69,3 +71,26 @@ def test_report_never_promotes_to_paper_without_stop():
     report = build_report(by, {"MNQ": {}, "MES": {}})
     assert report["gate"]["passes_for_paper"] is False
     assert report["gate"]["classification"] in {"WAIT", "PROMISING BUT UNPROVEN"}
+
+def test_previous_expected_session_handles_good_friday_2026():
+    assert _previous_expected_session(date(2026, 4, 6)) == date(2026, 4, 2)
+
+
+def test_collect_rows_does_not_bridge_missing_market_session(monkeypatch):
+    friday = date(2026, 9, 11)
+    tuesday = date(2026, 9, 15)
+    files = {friday: "friday.csv", tuesday: "tuesday.csv"}
+
+    monkeypatch.setattr("research.futures_intraday_momentum.session_files", lambda instrument: files)
+    monkeypatch.setattr("research.futures_intraday_momentum.roll_excluded_sessions", lambda days: set())
+    monkeypatch.setattr(
+        "research.futures_intraday_momentum.load_rth_session",
+        lambda path: (_bars(101.0, 100.0, 101.0), {}),
+    )
+
+    rows, skipped = collect_rows("MES")
+
+    assert rows == []
+    assert skipped["no_prior"] == 2
+    # Tuesday must require Monday 2026-09-14; Friday cannot substitute for it.
+    assert _previous_expected_session(tuesday) == date(2026, 9, 14)
