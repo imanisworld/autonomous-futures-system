@@ -460,6 +460,32 @@ def _median(values: Iterable[float]) -> float | None:
     return round(statistics.median(values), 4) if values else None
 
 
+def _quantile(values: Iterable[float], q: float) -> float | None:
+    ordered = sorted(float(value) for value in values)
+    if not ordered:
+        return None
+    if not 0.0 <= q <= 1.0:
+        raise ValueError("q must be between 0 and 1")
+    if len(ordered) == 1:
+        return round(ordered[0], 4)
+    pos = (len(ordered) - 1) * q
+    lo = math.floor(pos)
+    hi = math.ceil(pos)
+    value = ordered[lo] if lo == hi else ordered[lo] + (ordered[hi] - ordered[lo]) * (pos - lo)
+    return round(value, 4)
+
+
+def _quantile_block(values: Iterable[float]) -> dict[str, float | int | None]:
+    materialized = list(values)
+    return {
+        "n": len(materialized),
+        "p25": _quantile(materialized, 0.25),
+        "p50": _quantile(materialized, 0.50),
+        "p75": _quantile(materialized, 0.75),
+        "p90": _quantile(materialized, 0.90),
+    }
+
+
 def _bucket(events: Sequence[Event]) -> dict[str, Any]:
     triggered = [e for e in events if e.trigger_time is not None]
     reached = [e for e in triggered if e.magnitude_reached]
@@ -482,13 +508,24 @@ def _bucket(events: Sequence[Event]) -> dict[str, Any]:
             for e in reached
             if e.time_to_magnitude_minutes is not None
         ),
+        "time_to_magnitude_minutes_quantiles": _quantile_block(
+            e.time_to_magnitude_minutes
+            for e in reached
+            if e.time_to_magnitude_minutes is not None
+        ),
         "trigger_bar_excursion_excluded": sum(
             e.trigger_bar_excursion_excluded for e in triggered
         ),
         "median_mae_points": _median(
             e.mae_points for e in triggered if e.mae_points is not None
         ),
+        "mae_points_quantiles": _quantile_block(
+            e.mae_points for e in triggered if e.mae_points is not None
+        ),
         "median_mfe_points": _median(
+            e.mfe_points for e in triggered if e.mfe_points is not None
+        ),
+        "mfe_points_quantiles": _quantile_block(
             e.mfe_points for e in triggered if e.mfe_points is not None
         ),
     }
