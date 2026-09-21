@@ -25,18 +25,18 @@ body {
   background-size: auto, auto, 32px 32px, 32px 32px, auto;
   color: var(--text);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  line-height: 1.6;
+  line-height: 1.45;
 }
 
-main { width: min(980px, calc(100% - 40px)); margin: 0 auto; padding: 88px 0 64px; }
-.hero { padding: 52px 0 36px; }
+main { width: min(980px, calc(100% - 40px)); margin: 0 auto; padding: 40px 0 32px; }
+.hero { padding: 16px 0 8px; }
 .brand { display: flex; align-items: center; gap: 14px; }
 .mark { width: 64px; height: 64px; border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
 .kicker { color: var(--accent); font-size: .78rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
-h1 { margin: .2rem 0 .6rem; font-size: clamp(3.4rem, 12vw, 7rem); line-height: .92; letter-spacing: -.06em; }
-h2 { margin: 0 0 .65rem; line-height: 1.2; font-size: 1rem; letter-spacing: .08em; text-transform: uppercase; }
-p, li { color: var(--muted); }
-.lead { max-width: 720px; font-size: clamp(1.08rem, 2.4vw, 1.45rem); }
+h1 { margin: .2rem 0 .4rem; font-size: clamp(2.6rem, 8vw, 4.5rem); line-height: .95; letter-spacing: -.05em; }
+h2 { margin: 0 0 .4rem; line-height: 1.2; font-size: 1rem; letter-spacing: .08em; text-transform: uppercase; }
+p, li { color: var(--muted); margin: .4rem 0; }
+.lead { max-width: 720px; font-size: clamp(1rem, 2vw, 1.15rem); }
 a { color: var(--text); text-underline-offset: 3px; }
 a:hover { color: var(--accent); }
 
@@ -46,21 +46,33 @@ a:hover { color: var(--accent); }
   background: rgba(31,31,33,.88);
   box-shadow: 0 18px 40px rgba(0,0,0,.22);
 }
-.status-card { display: flex; gap: 16px; align-items: flex-start; margin-top: 34px; padding: 22px; }
+.status-card { display: flex; gap: 14px; align-items: flex-start; margin-top: 16px; padding: 14px 16px; }
 .status-card strong { display:block; font-size: 1.02rem; }
 .status-pill { flex: 0 0 auto; color: #131315; background: var(--accent); border-radius: 999px; padding: 6px 10px; font-size: .72rem; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; }
-.grid { display: grid; gap: 14px; margin-top: 18px; }
+.grid { display: grid; gap: 10px; margin-top: 10px; }
 .two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.card { padding: 22px; }
+.card { padding: 14px 16px; }
 .card.accent { border-color: rgba(95,217,138,.34); }
 .card.warn { border-color: rgba(255,184,0,.4); }
 .card.stop { border-color: rgba(239,106,106,.36); }
-section { margin-top: 22px; }
-.matrix { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
-.matrix div { padding: 16px; min-height: 118px; }
+section { margin-top: 14px; }
+.matrix { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+.matrix div { padding: 12px 14px; }
 .matrix span { display:block; color: var(--muted); font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; }
-.matrix strong { display:block; margin-top: 12px; line-height:1.35; }
-footer { width: min(980px, calc(100% - 40px)); margin: 0 auto; padding: 24px 0 48px; border-top: 1px solid var(--border); color: var(--muted); font-size: .9rem; }
+.matrix strong { display:block; margin-top: 6px; line-height:1.3; }
+footer { width: min(980px, calc(100% - 40px)); margin: 0 auto; padding: 14px 0 24px; border-top: 1px solid var(--border); color: var(--muted); font-size: .9rem; }
 footer a { margin-right: 18px; }
-@media (max-width: 760px) { .two, .three, .matrix { grid-template-columns: 1fr; } .status-card { display:block; } .status-pill { display:inline-block; margin-bottom:12px; } }
+@media (max-width: 760px) { .two, .three, .matrix { grid-template-columns: repeat(2, minmax(0, 1fr)); } .status-card { display:block; } .status-pill { display:inline-block; margin-bottom:8px; } }
+@media (max-width: 480px) {
+  body { font-size: 14px; }
+  main { width: calc(100% - 28px); padding: 24px 0 20px; }
+  .two, .three { grid-template-columns: 1fr; }
+  .kicker { font-size: .66rem; letter-spacing: .12em; }
+  .mark { width: 44px; height: 44px; border-radius: 10px; }
+  .card, .status-card { padding: 12px 14px; }
+  .card h2, .status-card strong { font-size: .9rem; }
+  .card p, .status-card p { font-size: .9rem; margin: .25rem 0; }
+  .matrix div { padding: 10px 12px; }
+  .matrix strong { font-size: .85rem; }
+}
