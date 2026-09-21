@@ -931,7 +931,7 @@ async def status_today(request: Request) -> dict:
     """Return today's reconstructed daily state from the journal. Embedded
     latest_webhook/latest_webhooks are sanitized for callers without a valid
     site-gate session — see _sanitize_dashboard_payload."""
-    payload = _dashboard_payload(date.today())
+    payload = await asyncio.to_thread(_dashboard_payload, date.today())
     return _sanitize_dashboard_payload(payload, request)
 
 
@@ -1117,14 +1117,17 @@ async def status_evidence_readiness(
     return build_evidence_readiness(_config.log_dir, days=days, config=_config)
 
 
-@app.get("/status/history")
-async def status_history(days: int = Query(default=7, ge=1, le=90)) -> dict:
-    """Return recent read-only daily summaries from the journal."""
+def _status_history_blocking(days: int) -> dict:
+    """Per-day journal summaries. Uses the journal-only `_daily_summary_payload`,
+    NOT `_dashboard_payload`: the full payload rebuilds diagnostics (uncached
+    evidence-file parse + git subprocesses, ~0.5s) that history discards. At
+    days=90 that was ~46s — and it ran inline on the event loop, so TradingView
+    webhook posts got 499 for as long as a dashboard kept polling (2026-09-21)."""
     today = date.today()
     history = []
     for offset in range(days):
         day = today - timedelta(days=offset)
-        payload = _dashboard_payload(day)
+        payload = _daily_summary_payload(day)
         history.append(
             {
                 "date": payload["date"],
@@ -1149,6 +1152,14 @@ async def status_history(days: int = Query(default=7, ge=1, le=90)) -> dict:
             }
         )
     return {"days": history}
+
+
+@app.get("/status/history")
+async def status_history(days: int = Query(default=7, ge=1, le=90)) -> dict:
+    """Return recent read-only daily summaries from the journal. Blocking work
+    runs on a worker thread so a long history window can never stall the loop
+    that accepts webhooks."""
+    return await asyncio.to_thread(_status_history_blocking, days)
 
 
 # Short TTL cache so many clients (every Futures tab polls 2 instruments every
@@ -2702,6 +2713,34 @@ def _safe_live_preflight_status() -> dict:
     except Exception as exc:
         logger.exception("live_order_status failed: %s", exc)
         return {"ready": False, "reason": "unavailable", "armed": False}
+
+
+def _daily_summary_payload(for_date: date) -> dict:
+    """Journal-only subset of `_dashboard_payload` for one day: exactly the
+    fields /status/history reports. Reads only that day's journal (parsed once
+    and cached by JournalLogger) — no diagnostics, no evidence files, no git."""
+    journal = JournalLogger(log_dir=_config.log_dir)
+    daily_state = journal.get_daily_state(for_date)
+    summary = journal.get_summary(for_date)
+    wins = summary.get("wins", 0)
+    losses = summary.get("losses", 0)
+    resolved = wins + losses
+    win_rate = round((wins / resolved) * 100, 1) if resolved else 0.0
+    account_balance = journal.get_account_balance(_config.position_sizing.starting_balance, for_date)
+    realized_pnl = round(account_balance - _config.position_sizing.starting_balance, 2)
+    return {
+        "date": daily_state.date,
+        "trade_count": daily_state.trade_count,
+        "max_trades_per_day": _config.max_trades_per_day + int(getattr(_config, "bonus_trades_after_max", 0) or 0),
+        "consecutive_losses": daily_state.consecutive_losses,
+        "has_open_position": daily_state.has_open_position,
+        "no_trades": summary.get("no_trades", 0),
+        "wins": wins,
+        "losses": losses,
+        "win_rate": win_rate,
+        "realized_pnl_dollars": round(realized_pnl, 2),
+        "today_pnl_dollars": round(float(daily_state.realized_pnl_dollars or 0.0), 2),
+    }
 
 
 def _dashboard_payload(for_date: date) -> dict:
