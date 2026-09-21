@@ -205,8 +205,15 @@ def _context_card_text(result: ScoreResult, session: str) -> str:
     pieces = [f"Session {session}"]
     if raw.get("price") is not None:
         pieces.append(f"Spot {_money_text(raw.get('price'))}")
-    pieces.append(f"VWAP {_pass_fail(result.components.get('vwap'))}")
-    pieces.append(f"Trend {_pass_fail(result.components.get('trend'))}")
+    if "market_alignment" in result.components:
+        # Daily setup: intraday VWAP/EMA20 are informational only (not scored).
+        pieces.append(
+            f"SPY/QQQ alignment {_pass_fail(result.components.get('market_alignment'))}"
+        )
+        pieces.append("VWAP/Trend n/a (Daily setup; intraday filters not applied)")
+    else:
+        pieces.append(f"VWAP {_pass_fail(result.components.get('vwap'))}")
+        pieces.append(f"Trend {_pass_fail(result.components.get('trend'))}")
     return "\n".join(pieces)
 
 
@@ -347,6 +354,8 @@ def _why_text(result: ScoreResult, session: str) -> str:
         reasons.append("mechanical setup TRIGGERED")
     elif result.pattern and result.pattern.upper() != "N/A":
         reasons.append(f"{result.pattern} observed")
+    if result.components.get("market_alignment"):
+        reasons.append("SPY/QQQ daily trend aligned")
     if result.components.get("vwap"):
         reasons.append("VWAP aligned")
     if result.components.get("trend"):
