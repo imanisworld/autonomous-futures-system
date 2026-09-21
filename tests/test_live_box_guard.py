@@ -375,3 +375,52 @@ def test_ok_summary_does_not_claim_daily_journal_file_was_verified(tmp_path, mon
     assert report["status"] == "ok"
     assert "evidence journal directory" in report["summary"]
     assert "Today's expected journal path is" in report["summary"]
+
+
+def test_unpinned_wide_stop_demo_route_is_reported(monkeypatch, tmp_path):
+    from ops.live_box_guard import live_box_drift_report
+
+    monkeypatch.setenv("WIDE_STOP_LEDGER_EXECUTION_ROUTE", "tradovate_demo")
+    monkeypatch.delenv("EXPECTED_PROOF_WIDE_STOP_LEDGER_EXECUTION_ROUTE", raising=False)
+
+    report = live_box_drift_report(repo_root=tmp_path)
+
+    assert report["ok"] is False
+    assert "WIDE_STOP_LEDGER_EXECUTION_ROUTE" in report["unpinned_runtime_overrides"]
+
+
+def test_unpinned_wide_stop_demo_arm_is_reported(monkeypatch, tmp_path):
+    from ops.live_box_guard import live_box_drift_report
+
+    monkeypatch.setenv("WIDE_STOP_DEMO_EXECUTION_ENABLED", "true")
+    monkeypatch.delenv("EXPECTED_PROOF_WIDE_STOP_DEMO_EXECUTION_ENABLED", raising=False)
+
+    report = live_box_drift_report(repo_root=tmp_path)
+
+    assert report["ok"] is False
+    assert "WIDE_STOP_DEMO_EXECUTION_ENABLED" in report["unpinned_runtime_overrides"]
+
+
+def test_pinned_wide_stop_demo_route_and_arm_are_reconciled(monkeypatch, tmp_path):
+    from ops.live_box_guard import live_box_drift_report
+
+    monkeypatch.setenv("WIDE_STOP_LEDGER_EXECUTION_ROUTE", "tradovate_demo")
+    monkeypatch.setenv("EXPECTED_PROOF_WIDE_STOP_LEDGER_EXECUTION_ROUTE", "tradovate_demo")
+    monkeypatch.setenv("WIDE_STOP_DEMO_EXECUTION_ENABLED", "true")
+    monkeypatch.setenv("EXPECTED_PROOF_WIDE_STOP_DEMO_EXECUTION_ENABLED", "true")
+    monkeypatch.setenv("WIDE_STOP_DEMO_SESSIONS", "new_york")
+    monkeypatch.setenv("EXPECTED_PROOF_WIDE_STOP_DEMO_SESSIONS", "new_york")
+
+    report = live_box_drift_report(repo_root=tmp_path)
+
+    by_name = {
+        row["name"]: row
+        for row in report["proof_critical_runtime_overrides"]
+    }
+    for name in (
+        "WIDE_STOP_LEDGER_EXECUTION_ROUTE",
+        "WIDE_STOP_DEMO_EXECUTION_ENABLED",
+        "WIDE_STOP_DEMO_SESSIONS",
+    ):
+        assert by_name[name]["pinned"] is True
+        assert by_name[name]["ok"] is True

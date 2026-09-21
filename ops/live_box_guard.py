@@ -25,6 +25,13 @@ PROOF_CRITICAL_RUNTIME_OVERRIDES = (
     "TRADOVATE_ENV",
     "WIDE_STOP_LEDGER_MODE",
     "WIDE_STOP_LEDGER_EPOCH_START",
+    # External DEMO route ownership/arming is proof-critical. These values can
+    # change whether the wide-stop lane reaches Tradovate demo and which
+    # sessions are eligible, so an active override must be pinned just like
+    # the evidence mode/epoch.
+    "WIDE_STOP_LEDGER_EXECUTION_ROUTE",
+    "WIDE_STOP_DEMO_EXECUTION_ENABLED",
+    "WIDE_STOP_DEMO_SESSIONS",
     "DAILY_22_EPOCH_START",
     # Isolated MES 15m 1-2-2 forward-paper evidence lane. Paper-only by
     # construction, but proof-critical: the mode decides whether the lane

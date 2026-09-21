@@ -228,6 +228,9 @@ def test_both_lane_variables_are_proof_critical():
 
     assert "WIDE_STOP_LEDGER_MODE" in PROOF_CRITICAL_RUNTIME_OVERRIDES
     assert "WIDE_STOP_LEDGER_EPOCH_START" in PROOF_CRITICAL_RUNTIME_OVERRIDES
+    assert "WIDE_STOP_LEDGER_EXECUTION_ROUTE" in PROOF_CRITICAL_RUNTIME_OVERRIDES
+    assert "WIDE_STOP_DEMO_EXECUTION_ENABLED" in PROOF_CRITICAL_RUNTIME_OVERRIDES
+    assert "WIDE_STOP_DEMO_SESSIONS" in PROOF_CRITICAL_RUNTIME_OVERRIDES
 
 
 # ─────────────────── §6 build-step-1 offline expectation ────────────────────
