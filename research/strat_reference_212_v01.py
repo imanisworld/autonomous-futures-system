@@ -28,6 +28,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from alert_ranker.causal_bars import Bar, HOUR_1, MINUTE_5, build_session_timeframe
+from research.futures_non_strat_coverage import roll_excluded_sessions
 from strategy.strat_classifier import (
     INSIDE_BAR,
     TWO_DOWN,
@@ -241,7 +242,7 @@ def observe_candidate(
             session_date=day.isoformat(),
             session="RTH",
             source_timeframe="60m_RTH_session_aligned",
-            population_scope="A_B_C_same_RTH_session_only",
+            population_scope="A_B_C_same_RTH_session_only_full_RTH_non_roll",
             parent_start=parent.start_utc.isoformat(),
             inside_start=inside.start_utc.isoformat(),
             parent_type=parent_type,
@@ -329,7 +330,7 @@ def observe_candidate(
         session_date=day.isoformat(),
         session="RTH",
         source_timeframe="60m_RTH_session_aligned",
-        population_scope="A_B_C_same_RTH_session_only",
+        population_scope="A_B_C_same_RTH_session_only_full_RTH_non_roll",
         parent_start=parent.start_utc.isoformat(),
         inside_start=inside.start_utc.isoformat(),
         parent_type=parent_type,
@@ -380,6 +381,7 @@ def run_instrument(instrument: str) -> dict[str, Any]:
     skipped = {
         "incomplete_session": 0,
         "misaligned_or_duplicate_session": 0,
+        "roll_excluded": 0,
         "incomplete_watch_window": 0,
     }
     for day, path in files.items():
@@ -393,9 +395,15 @@ def run_instrument(instrument: str) -> dict[str, Any]:
             continue
         loaded[day] = bars
 
-    days = sorted(loaded)
-    if not days:
+    complete_days = sorted(loaded)
+    if not complete_days:
         raise SystemExit(f"no complete sessions for {instrument}")
+
+    roll_excluded = roll_excluded_sessions(complete_days)
+    days = [day for day in complete_days if day not in roll_excluded]
+    skipped["roll_excluded"] = len(roll_excluded & set(complete_days))
+    if not days:
+        raise SystemExit(f"no eligible non-roll sessions for {instrument}")
     midpoint = days[len(days) // 2]
 
     events: list[Event] = []
@@ -504,7 +512,9 @@ def summarize(
         ],
         "instrument": instrument,
         "source_timeframe": "60m_RTH_session_aligned",
-        "population_scope": "A_B_C_same_RTH_session_only",
+        "population_scope": "A_B_C_same_RTH_session_only_full_RTH_non_roll",
+        "session_eligibility": "78_exact_5m_RTH_bars_only_early_close_ineligible",
+        "roll_policy": "existing_futures_research_third_friday_week_plus_next_session_excluded",
         "source_alignment_status": "EXPLICIT_AFS_TRANSLATION_NOT_PUBLIC_CANONICAL",
         "trigger_resolution": "5m",
         "trigger_watch_window": "immediately_following_60m_source_bar_only",
