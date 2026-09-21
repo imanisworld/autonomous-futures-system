@@ -22,6 +22,8 @@ def _isolate_proof_runtime_overrides(monkeypatch):
     monkeypatch.delenv("ENABLE_MANUAL_EXECUTION_CONTROLS", raising=False)
     for name in WEBHOOK_SECRET_ENV_NAMES:
         monkeypatch.delenv(name, raising=False)
+    monkeypatch.delenv("TRADOVATE_EXPECTED_ACCOUNT_ID", raising=False)
+    monkeypatch.delenv("EXPECTED_TRADOVATE_ACCOUNT_ID", raising=False)
     monkeypatch.setenv("WEBHOOK_SECRET", "test-primary")
     monkeypatch.setenv("TRADINGVIEW_WEBHOOK_SECRET", "test-rotation")
 
@@ -210,6 +212,60 @@ def test_live_box_guard_can_pin_override_as_unset(monkeypatch, tmp_path):
     monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ", "16")
     drifted = live_box_drift_report(repo_root=repo, log_dir=repo / "logs")
     assert "runtime_override:ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ" in drifted["mismatches"]
+
+
+
+def test_tradovate_account_identity_pin_is_required_and_redacted(monkeypatch, tmp_path):
+    repo = _init_repo(tmp_path)
+    monkeypatch.setenv("TRADOVATE_EXPECTED_ACCOUNT_ID", "111111")
+
+    report = live_box_drift_report(repo_root=repo, log_dir=repo / "logs")
+
+    assert report["ok"] is False
+    assert "tradovate_expected_account_identity" in report["missing_pins"]
+    identity = report["tradovate_account_identity"]
+    assert identity["observed_configured"] is True
+    assert identity["expected_configured"] is False
+    assert identity["matches"] is False
+    rendered = repr(report)
+    assert "111111" not in rendered
+
+
+def test_tradovate_account_identity_mismatch_fails_closed_and_is_redacted(
+    monkeypatch, tmp_path
+):
+    repo = _init_repo(tmp_path)
+    monkeypatch.setenv("TRADOVATE_EXPECTED_ACCOUNT_ID", "111111")
+    monkeypatch.setenv("EXPECTED_TRADOVATE_ACCOUNT_ID", "222222")
+
+    report = live_box_drift_report(repo_root=repo, log_dir=repo / "logs")
+
+    assert report["ok"] is False
+    assert "tradovate_expected_account_identity" in report["mismatches"]
+    assert report["tradovate_account_identity"]["matches"] is False
+    rendered = repr(report)
+    assert "111111" not in rendered
+    assert "222222" not in rendered
+
+
+def test_tradovate_account_identity_matching_pin_reconciles_without_exposing_id(
+    monkeypatch, tmp_path
+):
+    repo = _init_repo(tmp_path)
+    monkeypatch.setenv("TRADOVATE_EXPECTED_ACCOUNT_ID", "111111")
+    monkeypatch.setenv("EXPECTED_TRADOVATE_ACCOUNT_ID", "111111")
+
+    report = live_box_drift_report(repo_root=repo, log_dir=repo / "logs")
+
+    comparison = next(
+        item for item in report["comparisons"]
+        if item["name"] == "tradovate_expected_account_identity"
+    )
+    assert comparison["ok"] is True
+    assert comparison["observed"] == "<configured>"
+    assert comparison["expected"] == "<configured>"
+    assert report["tradovate_account_identity"]["matches"] is True
+    assert "111111" not in repr(report)
 
 
 def test_execution_env_reads_are_classified_for_proof_guard():
