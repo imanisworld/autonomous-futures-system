@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
 
+import pytest
+
 from alert_ranker.causal_bars import Bar
 from research.futures_intraday_momentum import (
     COMMISSION_RT,
@@ -33,7 +35,7 @@ def test_signal_uses_completed_1525_bar_and_entry_uses_next_bar_open():
     row = build_trade("MES", date(2026, 9, 18), 100.0, bars, slippage_label="base", slippage_ticks=1.0)
     assert row is not None
     assert row.direction == "LONG"
-    assert row.rod_return == 0.01
+    assert row.rod_return == pytest.approx(0.01)
     assert row.decision_open == 102.0
     assert row.fill_entry == 102.25
 
@@ -45,7 +47,7 @@ def test_short_costs_are_adverse_on_both_entry_and_exit():
     assert row.direction == "SHORT"
     assert row.fill_entry == 97.75
     assert row.fill_exit == 97.25
-    assert row.net_pnl == (0.5 * 5.0) - COMMISSION_RT
+    assert row.net_pnl == pytest.approx((0.5 * 5.0) - COMMISSION_RT)
 
 
 def test_zero_signal_produces_no_trade():
