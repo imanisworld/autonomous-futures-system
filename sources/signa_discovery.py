@@ -19,6 +19,11 @@ from typing import Any
 import httpx
 
 from .signa_intelligence import parse_action_card, summarize_dataset
+from .signa_request_budget import (
+    account_backoff_remaining,
+    mark_account_rate_limited,
+    retry_after_seconds,
+)
 
 DEFAULT_BASE_URL = "https://app.getsigna.ai"
 DEFAULT_CACHE_TTL_SECONDS = 1800.0
@@ -400,6 +405,18 @@ class SignaDiscoveryClient:
         params = {k: v for k, v in (params or {}).items() if v is not None}
         key = _cache_key(endpoint, params)
         now = self._clock()
+        if account_backoff_remaining(
+            self.base_url,
+            self.api_key,
+            clock=self._clock,
+        ) > 0:
+            return SignaDiscoveryResponse(
+                False,
+                endpoint,
+                error="account_backoff_active",
+                retrieved_at=_utc_now(),
+                backoff_active=True,
+            )
         if self._backoff_until.get(key, 0.0) > now:
             return SignaDiscoveryResponse(False, endpoint, error="backoff_active", retrieved_at=_utc_now(), backoff_active=True)
         cached = self._cached(key)
@@ -412,7 +429,13 @@ class SignaDiscoveryClient:
         try:
             response = http.get(endpoint, params=params, headers={"Authorization": f"Bearer {self.api_key}"})
             if response.status_code == 429:
-                self._backoff_until[key] = now + _retry_after_seconds(response.headers.get("Retry-After"))
+                retry_seconds = mark_account_rate_limited(
+                    self.base_url,
+                    self.api_key,
+                    retry_after=response.headers.get("Retry-After"),
+                    clock=self._clock,
+                )
+                self._backoff_until[key] = now + retry_seconds
             response.raise_for_status()
             payload = response.json()
             if isinstance(payload, list):
@@ -466,10 +489,7 @@ def _items(payload: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _retry_after_seconds(value: str | None) -> float:
-    try:
-        return max(60.0, float(value)) if value is not None else 300.0
-    except ValueError:
-        return 300.0
+    return retry_after_seconds(value)
 
 
 def _utc_now() -> str:
