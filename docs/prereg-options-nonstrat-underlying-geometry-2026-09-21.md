@@ -21,6 +21,11 @@ submission, scanner alerts, or live execution.
   read-only historical bars client.
 - Universe: the existing frozen 150-name coverage watchlist
   `research/coverage/options_watchlist_150.csv`.
+- Frozen universe Git blob identity:
+  `5a2eaf442c910012faddfc69bcd1c2a696f46d08`. The official runner fails
+  closed if that file changes.
+- CLI `--symbols` or `--universe` overrides are debug-only. Their reports
+  can never emit a passing promotion classification.
 - Historical study range: **2026-04-01 through 2026-09-18**, inclusive.
 - Lookback transport begins 7 calendar days before the start solely to establish a
   prior complete RTH session.
