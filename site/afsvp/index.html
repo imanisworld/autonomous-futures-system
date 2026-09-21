@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="AFSVP — Phase 1 advisory, monitoring, replay, and paper/demo research infrastructure for futures and options systems.">
+  <meta name="description" content="AFSVP — Phase 1 advisory, monitoring, replay, and demo research infrastructure for futures and options systems.">
   <title>AFSVP</title>
   <link rel="icon" type="image/svg+xml" href="/afsvp-mark.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -19,7 +19,7 @@
         <div class="kicker">Automated Futures System · Vantage Point</div>
       </div>
       <h1>AFSVP</h1>
-      <p class="lead">Research, monitoring, replay testing, alert validation, and paper/demo infrastructure for rules-based trading systems.</p>
+      <p class="lead">Research, monitoring, replay testing, alert validation, and demo infrastructure for rules-based trading systems.</p>
       <p class="cta-row"><a class="cta" href="https://app.afsvp.com/">Open the app</a><a class="cta ghost" href="/status/">Status boundary</a></p>
       <div class="status-card">
         <span class="status-pill">Phase 1</span>
@@ -33,7 +33,7 @@
     <section class="grid two">
       <article class="card">
         <h2>What this is</h2>
-        <p>AFSVP is private research and operator infrastructure for testing market-alert quality, paper/demo behavior, strategy evidence, and system reliability before any broader capability is trusted.</p>
+        <p>AFSVP is private research and operator infrastructure for testing market-alert quality, demo behavior, strategy evidence, and system reliability before any broader capability is trusted.</p>
       </article>
       <article class="card">
         <h2>What this is not</h2>
@@ -51,14 +51,23 @@
       </div>
     </section>
 
+    <section>
+      <h2>How results are labelled</h2>
+      <div class="matrix">
+        <div><span>Demo</span><strong>The system took the trade. It passed every rule, was filled on a demo account with no real money, and counts toward the ledger and daily limits.</strong></div>
+        <div><span>Shadow</span><strong>The system saw a setup but a rule said no. It records what it would have done and scores it later. Nothing is placed and nothing counts.</strong></div>
+        <div><span>Live</span><strong>Real money. Not enabled.</strong></div>
+      </div>
+    </section>
+
     <section class="grid three">
       <article class="card accent">
         <h2>Enabled</h2>
-        <p>Read-only public information, static policies, private operator monitoring, replay/audit evidence, and paper/demo research workflows.</p>
+        <p>Read-only public information, static policies, private operator monitoring, replay/audit evidence, and demo research workflows.</p>
       </article>
       <article class="card warn">
         <h2>Measured</h2>
-        <p>Strategy candidates, alert quality, feed freshness, paper/demo behavior, and evidence lanes are treated as data collection until proven.</p>
+        <p>Strategy candidates, alert quality, feed freshness, demo behavior, and evidence lanes are treated as data collection until proven.</p>
       </article>
       <article class="card stop">
         <h2>Disabled</h2>
