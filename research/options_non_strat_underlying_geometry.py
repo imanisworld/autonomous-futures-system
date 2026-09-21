@@ -558,6 +558,22 @@ def gate_family(report: dict[str, Any], family: str, geometry: str) -> dict[str,
     }
 
 
+def apply_population_mode(
+    gates: Sequence[dict[str, Any]], *, debug_population: bool
+) -> list[dict[str, Any]]:
+    if not debug_population:
+        return [dict(gate) for gate in gates]
+    return [
+        {
+            **gate,
+            "passes": False,
+            "classification": "DEBUG_ONLY",
+            "reasons": ["debug_population_override", *gate["reasons"]],
+        }
+        for gate in gates
+    ]
+
+
 async def run(args: argparse.Namespace) -> int:
     start = date.fromisoformat(args.start)
     end = date.fromisoformat(args.end)
@@ -686,21 +702,14 @@ async def run(args: argparse.Namespace) -> int:
                 block["cells"][f"{geometry}:{label}"] = summarize_cell(selected)
         report["families"][family] = block
 
-    report["gate"] = [
-        gate_family(report, family, geometry)
-        for family in families
-        for geometry in GEOMETRIES
-    ]
-    if debug_population:
-        report["gate"] = [
-            {
-                **gate,
-                "passes": False,
-                "classification": "DEBUG_ONLY",
-                "reasons": ["debug_population_override", *gate["reasons"]],
-            }
-            for gate in report["gate"]
-        ]
+    report["gate"] = apply_population_mode(
+        [
+            gate_family(report, family, geometry)
+            for family in families
+            for geometry in GEOMETRIES
+        ],
+        debug_population=debug_population,
+    )
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
