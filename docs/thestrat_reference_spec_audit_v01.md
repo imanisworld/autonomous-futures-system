@@ -244,3 +244,35 @@ Further pre-result audit tightened three research boundaries:
 - `ENTRY_BAR_FAILURE` cannot be an executable v0.1 stop using only completed 5-minute OHLC because the completed trigger-bar opposite extreme is unknowable at the intrabar trigger instant. It is observational-only. `INSIDE_FAR_SIDE` is the only execution-overlay stop still eligible after the separate cost-model gate is frozen.
 
 These changes were frozen before any MNQ/MES historical result was generated.
+
+
+## Local FTFC / EMA capability proof — 2026-09-21
+
+The previously blocked local-corpus inspection was completed manually through the box terminal without changing the repo checkout.
+
+Verified for both MNQ and MES:
+- 621 dated replay files spanning 2024-07-02 through 2026-06-26;
+- ~140k unique 5-minute timestamps per instrument;
+- Asian, London, and New York sessions are present;
+- `ema_9`, `ema_21`, `ema_55`, `trend_direction`, and `trend_strength` are populated on 100% of rows;
+- 500 CME trade days exist, 499 with an exact 18:00 ET first bar;
+- 103 of 104 weeks have an exact reconstructable weekly open;
+- 23 of 24 months have an exact reconstructable monthly open;
+- the sole systematic day/week/month deficiency is the initial partial July 2024 corpus boundary;
+- 487 complete 78-bar RTH sessions exist, and all 487 contain each required 09:30-anchored RTH 60-minute boundary open;
+- event-level eligibility check found 467 fully FTFC-eligible complete RTH sessions and 20 complete RTH sessions blocked only by the initial July 2024 period-open deficiency.
+
+The broader corpus contains a small number of 10–60 minute gaps outside this whole-RTH requirement (MNQ 16, MES 20). No inference is made across those gaps. The reference runner therefore keeps exact-window checks and fail-closed missing-open handling.
+
+The older replay fields `ftfc_direction` / `ftfc_aligned` are not used for this reference study because they encode daily/4H/1H directional agreement, not last-price-vs-monthly/weekly/daily/current-60m-open FTFC.
+
+Result: **FTFC_DATA_CAPABILITY passes** for v0.1 with the initial partial July 2024 period explicitly unavailable. AFS EMA side-by-side context is also supported directly by the stored replay rows.
+
+The research runner is now wired to:
+- reconstruct CME daily/weekly/monthly opens from the exact 18:00 ET trade-day boundary;
+- use the active RTH 60-minute bucket open;
+- classify FTFC at the deterministic minimum strict-break price;
+- record the stored AFS EMA trend state at the trigger bar;
+- retain events with missing FTFC inputs as `UNAVAILABLE` rather than dropping them.
+
+A local event-level run is still required before those newly wired fields are accepted as reproduced output.
