@@ -336,3 +336,61 @@ def test_equal_parent_and_inside_magnitude_is_structural_only_not_executable_tar
     assert event.minimum_strict_break_price == pytest.approx(10.5)
     assert event.magnitude == pytest.approx(10.25)
     assert event.magnitude_executable_from_min_break is False
+
+
+def test_triggered_event_records_ftfc_and_afs_ema_side_by_side():
+    parent = b(0, 10, 11, 8, 9)
+    inside = b(60, 9, 10, 8.5, 9.5)
+    watch = [
+        b(120 + 5 * i, 9.5, 10.2 if i == 0 else 10.5, 9.0, 10.1)
+        for i in range(12)
+    ]
+    trigger_start = watch[0].start_utc
+    event = observe_candidate(
+        instrument="MNQ",
+        day=date(2026, 1, 5),
+        parent=parent,
+        inside=inside,
+        parent_type=TWO_DOWN,
+        watch=watch,
+        midpoint=date(2026, 1, 1),
+        monthly_open=9.0,
+        weekly_open=9.25,
+        daily_open=9.5,
+        context_by_start={
+            trigger_start: {
+                "trend_direction": "UP",
+                "trend_strength": "STRONG",
+            }
+        },
+    )
+    assert event.ftfc_state == FTFC_UP
+    assert event.ftfc_price_basis == "MINIMUM_STRICT_BREAK_PRICE"
+    assert event.monthly_open == pytest.approx(9.0)
+    assert event.weekly_open == pytest.approx(9.25)
+    assert event.daily_open == pytest.approx(9.5)
+    assert event.current_60m_open == pytest.approx(9.5)
+    assert event.afs_ema_trend_state == "UP_STRONG"
+
+
+def test_missing_period_open_keeps_triggered_ftfc_unavailable():
+    parent = b(0, 10, 11, 8, 9)
+    inside = b(60, 9, 10, 8.5, 9.5)
+    watch = [
+        b(120 + 5 * i, 9.5, 10.2 if i == 0 else 10.5, 9.0, 10.1)
+        for i in range(12)
+    ]
+    event = observe_candidate(
+        instrument="MES",
+        day=date(2024, 7, 2),
+        parent=parent,
+        inside=inside,
+        parent_type=TWO_DOWN,
+        watch=watch,
+        midpoint=date(2025, 1, 1),
+        monthly_open=None,
+        weekly_open=None,
+        daily_open=None,
+    )
+    assert event.trigger_time is not None
+    assert event.ftfc_state == FTFC_UNAVAILABLE
