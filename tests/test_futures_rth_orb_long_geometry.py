@@ -1,0 +1,158 @@
+from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+
+from alert_ranker.causal_bars import Bar
+from research.futures_rth_orb_long_geometry import (
+    Candidate,
+    GEOMETRIES,
+    geometry_prices,
+    pass_rule,
+    simulate_candidate,
+)
+
+
+BASE = datetime(2026, 9, 18, 14, 0, tzinfo=timezone.utc)
+
+
+def _bar(i: int, *, o: float, h: float, l: float, c: float) -> Bar:
+    return Bar(
+        start=BASE + timedelta(minutes=5 * i),
+        open=o,
+        high=h,
+        low=l,
+        close=c,
+        volume=1000.0,
+        vwap=c,
+    )
+
+
+def _candidate(instrument: str = "MES") -> Candidate:
+    return Candidate(
+        instrument=instrument,
+        session_date="2026-09-18",
+        episode_id="2026-09-18:MES:ORB_BREAKOUT_LONG:LONG:1",
+        trigger_bar_start=BASE.isoformat(),
+        trigger_idx=0,
+        trigger_close=100.5,
+        trigger_low=99.5,
+        orb_high=100.0,
+        orb_low=96.0,
+        payload_orb_high=100.0,
+    )
+
+
+def test_frozen_geometries_are_structural_and_target_from_decision_open():
+    cand = _candidate()
+    decision = 101.0
+
+    g1_stop, g1_target = geometry_prices(cand, decision, "G1_CANONICAL_OFFSET")
+    assert g1_stop == 96.0  # MES 16 ticks = 4 points
+    assert round(g1_target, 4) == 112.0  # 101 + 2.2 * 5
+
+    g2_stop, g2_target = geometry_prices(cand, decision, "G2_TRIGGER_LOW")
+    assert g2_stop == 99.25
+    assert g2_target == 104.5
+
+    g3_stop, g3_target = geometry_prices(cand, decision, "G3_ORB_MIDPOINT")
+    assert g3_stop == 97.75
+    assert g3_target == 107.5
+    assert set(GEOMETRIES) == {
+        "G1_CANONICAL_OFFSET",
+        "G2_TRIGGER_LOW",
+        "G3_ORB_MIDPOINT",
+    }
+
+
+def test_entry_uses_next_bar_open_not_trigger_close():
+    cand = _candidate()
+    bars = [
+        _bar(0, o=99.8, h=101.0, l=99.2, c=100.5),
+        _bar(1, o=102.0, h=103.0, l=101.0, c=102.5),
+    ]
+    row = simulate_candidate(
+        cand,
+        bars,
+        geometry="G2_TRIGGER_LOW",
+        slippage_label="base",
+        slippage_ticks=1.0,
+    )
+    assert row.decision_open == 102.0
+    assert row.fill_entry == 102.25
+    assert row.decision_open != cand.trigger_close
+    assert row.detachment_ticks == 8.0
+
+
+def test_same_entry_bar_straddle_is_pessimistic_stop_first():
+    cand = _candidate()
+    bars = [
+        _bar(0, o=99.5, h=101.0, l=99.0, c=100.5),
+        # G1 decision=100 -> stop=96, target=108.8; both hit after open.
+        _bar(1, o=100.0, h=110.0, l=95.0, c=101.0),
+    ]
+    row = simulate_candidate(
+        cand,
+        bars,
+        geometry="G1_CANONICAL_OFFSET",
+        slippage_label="base",
+        slippage_ticks=1.0,
+    )
+    assert row.status == "RESOLVED"
+    assert row.result == "LOSS"
+    assert row.exit_reason == "STOP_HIT"
+    assert row.bars_held == 0
+
+
+def test_research_sim_hard_disables_webull_mirror(monkeypatch):
+    monkeypatch.setenv("WEBULL_FUTURES_MIRROR_ENABLED", "true")
+    cand = _candidate()
+    bars = [
+        _bar(0, o=99.5, h=101.0, l=99.0, c=100.5),
+        _bar(1, o=100.0, h=101.0, l=99.0, c=100.0),
+    ]
+    simulate_candidate(
+        cand,
+        bars,
+        geometry="G2_TRIGGER_LOW",
+        slippage_label="base",
+        slippage_ticks=1.0,
+    )
+    import os
+
+    assert os.environ["WEBULL_FUTURES_MIRROR_ENABLED"] == "false"
+
+
+def _cell(*, h1_n=120, h2_n=120, h1_net=100.0, h2_net=100.0, h1_pf=1.2, h2_pf=1.2, month=0.3):
+    return {
+        "halves": {
+            "H1": {"n": h1_n, "net": h1_net, "pf": h1_pf},
+            "H2": {"n": h2_n, "net": h2_net, "pf": h2_pf},
+        },
+        "top_positive_month_share": month,
+    }
+
+
+def test_preregistered_gate_requires_cross_instrument_stress_and_halves():
+    geometry = "G1_CANONICAL_OFFSET"
+    report = {
+        "instruments": {
+            "MNQ": {
+                "cells": {
+                    f"{geometry}:base": _cell(),
+                    f"{geometry}:stress": _cell(h1_pf=1.0, h2_pf=1.0),
+                }
+            },
+            "MES": {
+                "cells": {
+                    f"{geometry}:base": _cell(),
+                    f"{geometry}:stress": _cell(h1_pf=1.0, h2_pf=1.0),
+                }
+            },
+        }
+    }
+    assert pass_rule(report, geometry)["passes"] is True
+
+    report["instruments"]["MES"]["cells"][f"{geometry}:stress"]["halves"]["H2"]["net"] = -1.0
+    result = pass_rule(report, geometry)
+    assert result["passes"] is False
+    assert "MES:H2:stress_net_not_positive" in result["reasons"]
