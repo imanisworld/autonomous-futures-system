@@ -1,0 +1,23 @@
+# /etc/systemd/system/afs-push-relay.service
+# Standalone Web Push relay for app.afsvp.com. Observes the futures-bot status
+# endpoints; never touches the bot. Own venv at /root/afs-shared/push-relay/venv.
+[Unit]
+Description=AFSVP web push relay (observer; pushes fills/position/backend events)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/afs-shared/push-relay/src
+Environment=PUSH_RELAY_STATE_DIR=/root/afs-shared/push-relay
+Environment=PUSH_RELAY_STATUS_BASE=http://127.0.0.1:8000
+Environment=PUSH_RELAY_POLL_SEC=60
+ExecStart=/root/afs-shared/push-relay/venv/bin/uvicorn ops.push_relay.app:app --host 127.0.0.1 --port 8020
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target
