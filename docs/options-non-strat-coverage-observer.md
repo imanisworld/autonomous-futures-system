@@ -184,6 +184,56 @@ an episode-level (not event-level) summary exist.
 4. **Gap-through-PDH/PDL opens** never arm break-retest (see limits above).
    Frequency unknown until several sessions are stored.
 
+## Five-session read — 2026-09-21 11:50Z (sessions 09-14 → 09-18, local store)
+
+Real (non-dry) runs into `logs/options_non_strat_coverage.sqlite` (local
+working tree `46e0834`; the box holds no copy). 09-18 was observed
+prospectively on 09-21 morning; 09-14 → 09-17 were **backfilled the same
+morning** under unchanged rules — retrospective rows, labelled here so they
+are never mistaken for a prospective epoch. 14,349 events / 12,547 episodes;
+145–147 of 150 symbols observable per session.
+
+Episode-level (first event per episode), median close return in bps:
+
+| family | episodes | 60m | EOD | MFE≥2×MAE | aligned n / 60m | unaligned n / 60m |
+|---|---:|---:|---:|---:|---|---|
+| ORB_BREAKOUT_LONG | 870 | −2.13 | −10.82 | 0.34 | 384 / −3.52 | 469 / 0.00 |
+| ORB_BREAKOUT_SHORT | 1106 | +0.62 | +4.14 | 0.38 | 468 / +3.03 | 617 / −1.66 |
+| ORB_BREAK_RETEST_LONG | 327 | −2.48 | −11.46 | 0.36 | 142 / −3.03 | 176 / −2.15 |
+| ORB_BREAK_RETEST_SHORT | 436 | −0.89 | −0.18 | 0.35 | 178 / +0.41 | 246 / −1.30 |
+| ORB_REJECTION_LONG | 673 | 0.00 | −5.75 | 0.37 | 185 / +2.33 | 473 / −1.52 |
+| ORB_REJECTION_SHORT | 508 | −3.69 | +4.85 | 0.34 | 125 / −1.91 | 368 / −3.99 |
+| PDH_BREAK_RETEST_LONG | 213 | −3.75 | −18.44 | 0.33 | 97 / −1.38 | 111 / −5.56 |
+| PDH_RECLAIM_LONG | 492 | −3.73 | −22.76 | 0.31 | 199 / −1.69 | 286 / −6.07 |
+| PDH_REJECTION_SHORT | 336 | +2.82 | +25.71 | 0.42 | 74 / +1.59 | 249 / +2.88 |
+| PDL_BREAK_RETEST_SHORT | 287 | −3.76 | +9.30 | 0.36 | 92 / +2.57 | 192 / −4.89 |
+| PDL_RECLAIM_SHORT | 699 | +1.38 | +13.16 | 0.37 | 245 / +4.86 | 442 / +0.09 |
+| PDL_REJECTION_LONG | 424 | −4.72 | −4.23 | 0.34 | 96 / −4.87 | 316 / −4.32 |
+| VWAP_FAILED_RECLAIM_SHORT | 671 | 0.00 | +13.60 | 0.34 | 177 / +2.65 | 484 / −2.32 |
+| VWAP_RECLAIM_LONG | 2290 | −1.28 | −16.13 | 0.35 | 864 / +1.14 | 1392 / −2.74 |
+| VWAP_TEST_HOLD_LONG | 1590 | −4.08 | −12.33 | 0.34 | 579 / −1.69 | 982 / −5.66 |
+| VWAP_TEST_HOLD_SHORT | 1625 | +0.94 | +11.14 | 0.38 | 411 / +2.70 | 1187 / +0.50 |
+
+**Read (coverage only, no candidate rule was pre-registered for options):**
+
+- On 09-18 alone every LONG family was positive and every SHORT family
+  adverse; across the five sessions the sign flips family-by-family. The
+  populations follow the week's tape; nothing here is separable from drift
+  without a per-session all-bar control (the futures record shows how) and
+  a much longer window.
+- SPY/QQQ-aligned episodes are better than unaligned ones for most families
+  in the direction of the family — but "aligned" means the index was already
+  moving that way at the trigger, so this is the same drift measured twice,
+  not a filter result. It is what a filter test would have to beat.
+- MFE ≥ 2×MAE share sits at 0.31–0.42 for every family: no family produces
+  asymmetric excursions on this tape.
+- `PDH_REJECTION_SHORT` (EOD +25.7, n=336) and `PDH_RECLAIM_LONG`
+  (EOD −22.8, n=492) are the largest magnitudes; both are one week of a
+  down-tape and are recorded, not promoted.
+
+Nothing in this section authorises a geometry rule, a paper ticket or a
+filter. Next read after 20 sessions, with a per-session all-bar control.
+
 ## Acceptance gate before any deployment
 
 1. Tests green.
