@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import ast
+from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
 
+from sources.signa_snapshot_store import SignaSnapshotStore
 from sources.signa_v2_client import SignaV2Client
 
 
@@ -198,18 +200,29 @@ def test_v2_client_refetches_after_ttl_and_keys_cache_by_symbol_and_timeframe() 
     assert refreshed.cached is False
 
 
-def test_v2_client_never_caches_failures() -> None:
+def test_v2_client_failure_backoff_prevents_retry_storm_and_expires() -> None:
     seen: list[httpx.Request] = []
-    http = _counting_client(seen, status=429)
+    clock = _Clock()
+    http = _counting_client(seen, status=500)
     try:
-        client = SignaV2Client(api_key="k", client=http, cache_ttl_seconds=1800)
+        client = SignaV2Client(
+            api_key="failure-cache-test",
+            client=http,
+            cache_ttl_seconds=1800,
+            failure_backoff_seconds=900,
+            clock=clock,
+        )
         first = client.fetch_action_card("AAPL", "1d")
+        clock.now += 300
         second = client.fetch_action_card("AAPL", "1d")
+        clock.now += 601
+        third = client.fetch_action_card("AAPL", "1d")
     finally:
         http.close()
 
-    assert first.ok is False and first.error == "http_429"
-    assert second.cached is False
+    assert first.ok is False and first.error == "http_500"
+    assert second.ok is False and second.cached is True
+    assert third.ok is False and third.cached is False
     assert len(seen) == 2
 
 
@@ -230,3 +243,42 @@ def test_v2_client_ttl_zero_disables_cache_and_env_sets_default(monkeypatch) -> 
     assert SignaV2Client(api_key="k").cache_ttl_seconds == 600.0
     monkeypatch.setenv("OPTIONS_SIGNA_V2_CACHE_TTL_SECONDS", "garbage")
     assert SignaV2Client(api_key="k").cache_ttl_seconds == 1800.0
+
+
+def test_v2_client_reuses_fresh_shared_action_card_snapshot(tmp_path) -> None:
+    store = SignaSnapshotStore(tmp_path / "signa.sqlite")
+    retrieved = datetime.now(timezone.utc).isoformat()
+    store.record_snapshot(
+        endpoint="/api/v1/signals/AAPL",
+        symbol="AAPL",
+        timeframe="1d",
+        params={"symbol": "AAPL", "timeframe": "1d"},
+        retrieved_at=retrieved,
+        payload=_card("AAPL", "1d"),
+        status="OK",
+        http_status=200,
+    )
+    seen: list[httpx.Request] = []
+    http = _counting_client(seen)
+    try:
+        client = SignaV2Client(
+            api_key="snapshot-reuse-test",
+            client=http,
+            snapshot_store=store,
+            cache_ttl_seconds=1800,
+        )
+        obs = client.fetch_action_card("AAPL", "1d")
+    finally:
+        http.close()
+
+    assert obs.ok is True
+    assert obs.cached is True
+    assert obs.symbol == "AAPL"
+    assert seen == []
+
+
+def test_v2_client_failure_backoff_env_default(monkeypatch) -> None:
+    monkeypatch.delenv("OPTIONS_SIGNA_V2_FAILURE_BACKOFF_SECONDS", raising=False)
+    assert SignaV2Client(api_key="failure-env-test").failure_backoff_seconds == 900.0
+    monkeypatch.setenv("OPTIONS_SIGNA_V2_FAILURE_BACKOFF_SECONDS", "1200")
+    assert SignaV2Client(api_key="failure-env-test").failure_backoff_seconds == 1200.0
