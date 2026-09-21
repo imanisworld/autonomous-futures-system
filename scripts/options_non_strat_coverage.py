@@ -29,6 +29,7 @@ if str(ROOT) not in sys.path:
 from alert_ranker.bar_provider import AlpacaBarProvider, CONSOLIDATED_FEED  # noqa: E402
 from alert_ranker.causal_bars import MINUTE_5, missing_bar_starts, session_bars  # noqa: E402
 from alert_ranker.config import resolve_alpaca_credentials  # noqa: E402
+from alert_ranker.coverage_collector import CollectorError, refuse_v1_database  # noqa: E402
 from alert_ranker.non_strat_coverage import (  # noqa: E402
     OBSERVER_ID,
     OBSERVER_VERSION,
@@ -130,8 +131,19 @@ def _complete(bars, session: Session) -> bool:
     )
 
 
-def _history_before(bars, session: Session):
-    return [bar for bar in bars if bar.start_utc < session.open]
+def _history_before(bars, sessions: Sequence[Session], target: Session):
+    """Regular-session 5m bars from every session before ``target``.
+
+    The provider does not filter extended hours, so history is rebuilt from
+    per-session slices: pre-market and post-close bars must never seed the
+    EMA20, the relative-volume baseline or the SPY/QQQ trend.
+    """
+    history = []
+    for session in sessions:
+        if session.date >= target.date:
+            continue
+        history.extend(_session_slice(bars, session))
+    return history
 
 
 def write_rows(
@@ -249,7 +261,19 @@ def print_summary(summary: dict[str, Any], observability: dict[str, str] | None 
         print(f"  {reason}")
 
 
+def _guard_sqlite(path: Path) -> bool:
+    """False (and a stderr line) when ``path`` is the V1 scanner database."""
+    try:
+        refuse_v1_database(path)
+    except CollectorError as exc:
+        print(f"refusing sqlite path: {exc}", file=sys.stderr)
+        return False
+    return True
+
+
 def report_from_db(path: Path, session_date: str) -> int:
+    if not _guard_sqlite(path):
+        return 2
     conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
     try:
         row = conn.execute(
@@ -286,6 +310,14 @@ async def run(args: argparse.Namespace) -> int:
         print("no prior NYSE session available in lookback", file=sys.stderr)
         return 2
     prior = prior_sessions[-1]
+
+    sqlite_path = Path(
+        args.sqlite
+        or os.environ.get("OPTIONS_NON_STRAT_COVERAGE_SQLITE_PATH")
+        or DEFAULT_SQLITE
+    )
+    if not args.dry_run and not _guard_sqlite(sqlite_path):
+        return 2
 
     if args.symbols:
         universe = [s.strip().upper() for s in args.symbols.split(",") if s.strip()]
@@ -342,7 +374,7 @@ async def run(args: argparse.Namespace) -> int:
         observability[symbol] = ""
         sliced[symbol] = target_bars
         prior_sliced[symbol] = prior_bars
-        history[symbol] = _history_before(all_bars, target)
+        history[symbol] = _history_before(all_bars, sessions, target)
 
     # Index context is metadata only, but if absent we record unknown alignment
     # rather than inventing it. A missing index does not erase the raw event.
@@ -388,11 +420,6 @@ async def run(args: argparse.Namespace) -> int:
         print("(dry run: nothing written)")
         return 0
 
-    sqlite_path = Path(
-        args.sqlite
-        or os.environ.get("OPTIONS_NON_STRAT_COVERAGE_SQLITE_PATH")
-        or DEFAULT_SQLITE
-    )
     sqlite_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(sqlite_path)
     try:
