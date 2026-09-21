@@ -1,8 +1,26 @@
 # Research item — "Would the 5m/1m feed tell us it's TRENDING sooner?" (2026-09-21)
 
-**Status: PREREGISTERED STUDY, NOT RUN. Evidence-only. No runtime, rule, or
-config change proposed here. Any gate change that comes out of it is a
-post-2026-09-30 item with its own GO.**
+**Status: SUPERSEDED 2026-09-21 04:40Z — DO NOT RUN.** The question was
+answered in parallel by the Sunday-reopen addendum (PR #860,
+`counterfactual-sunday-reopen-2026-09-21.md`): the label is not trend-lagged.
+Pine's TRENDING requires the EMA9/21/55 stack **and** `rel_vol ≥ 0.80`; on
+2026-09-20 the EMA stack was UP on every bar and only the volume term moved
+(session-blind 20-bar volume SMA). Its tape test shows the bucket this study
+would have admitted — EMA-aligned but volume-blocked — is the **worst** since
+09-16 (6/30, −$690, vs TRENDING +$360). The "fast regime" score below is an
+EMA-alignment proxy and would select that losing bucket earlier, not better.
+H1 is already refuted on the 15m tape; running it on 5m would be the same test
+twice. Kept for the record only.
+
+One factual correction to the addendum's note that no 1m bars exist: the box
+does hold `logs/tf1m/bars_*.jsonl` (1m OHLCV, all six roots, since
+2026-09-18 17:38Z) and the 1m alerts arrive live (`latest_webhooks` shows
+`timeframe: "1"`). They are an isolated observer lane and never inform regime —
+which is the point above, not a contradiction of it.
+
+---
+
+*Original preregistration (not run):*
 
 ## The operator's question
 
