@@ -115,6 +115,10 @@ class OptionsManagerConfig:
     # calls, no real preview, no order placement, no storage.
     broker_boundary_enabled: bool = True
     broker_boundary_allow_real_preview: bool = False
+    # Webull SANDBOX paper-order lane (options_manager/adapters/
+    # webull_sandbox_paper_orders.py). Default OFF. Even when ON, orders can
+    # only go to api.sandbox.webull.com in paper mode; live flags must be false.
+    broker_boundary_allow_sandbox_paper_submit: bool = False
     broker_boundary_max_contracts: int = 2
     broker_boundary_max_notional: float = 300.00
     broker_boundary_max_limit_price: float = 3.00
@@ -322,6 +326,10 @@ class OptionsManagerConfig:
             ),
             broker_boundary_allow_real_preview=_as_bool(
                 os.getenv("OPTIONS_MANAGER_BROKER_BOUNDARY_ALLOW_REAL_PREVIEW"),
+                default=False,
+            ),
+            broker_boundary_allow_sandbox_paper_submit=_as_bool(
+                os.getenv("OPTIONS_MANAGER_BROKER_BOUNDARY_ALLOW_SANDBOX_PAPER_SUBMIT"),
                 default=False,
             ),
             broker_boundary_max_contracts=_as_int(

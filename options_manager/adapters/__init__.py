@@ -13,6 +13,8 @@ options_companion, or risk/risk_engine.py.
 Two narrow, deliberate networked adapters exist:
 - polygon_historical.py is a read-only STOCK-aggregates client used for
   historical validation fixtures.
+- webull_sandbox_paper_orders.py is the ONLY submit/cancel path, sandbox+paper only,
+  double-opt-in (allow_real_preview AND allow_sandbox_paper_submit), unwired.
 - webull_sandbox.py is sandbox/paper-only and exposes read-only account
   inspection, option-contract discovery, and broker preview. It has no
   submission/cancel/replace/live-routing capability.
@@ -43,6 +45,14 @@ from .webull_sandbox import (
     preview_sandbox_option_order,
     read_sandbox_individual_cash_account,
 )
+from .webull_sandbox_paper_orders import (
+    WebullSandboxCancelResult,
+    WebullSandboxOrderDetail,
+    WebullSandboxOrderResult,
+    cancel_sandbox_paper_option_order,
+    get_sandbox_paper_order_detail,
+    submit_sandbox_paper_option_order,
+)
 
 __all__ = [
     "AdapterCandle",
@@ -57,6 +67,12 @@ __all__ = [
     "WebullSandboxContractDiscovery",
     "WebullSandboxOptionContract",
     "WebullSandboxPreviewResult",
+    "WebullSandboxCancelResult",
+    "WebullSandboxOrderDetail",
+    "WebullSandboxOrderResult",
+    "cancel_sandbox_paper_option_order",
+    "get_sandbox_paper_order_detail",
+    "submit_sandbox_paper_option_order",
     "discover_sandbox_option_contracts",
     "preview_sandbox_option_order",
     "read_sandbox_individual_cash_account",

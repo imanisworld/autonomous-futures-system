@@ -112,3 +112,18 @@ Until then, the adapter remains preview/read-only infrastructure.
 ## Safety rule
 
 **No proof, no trade.** Webull sandbox availability does not authorize automatic paper entry, and paper feasibility does not authorize live execution.
+
+
+## 2026-09-21 addendum — sandbox paper-order lane (code only, UNPROVEN on the network)
+
+`options_manager/adapters/webull_sandbox_paper_orders.py` adds, in a **separate module** so the preview adapter's no-submission guard test stays intact:
+
+- `submit_sandbox_paper_option_order(...)` — re-runs the broker boundary, resolves exactly one sandbox INDIVIDUAL_CASH account, runs a broker preview, then places ONE single-leg `BUY_TO_OPEN` LIMIT DAY order with `client_order_id == ticket_id` (idempotent per ticket).
+- `cancel_sandbox_paper_option_order(ticket_id, ...)` — cancel by client order id.
+- `get_sandbox_paper_order_detail(ticket_id, ...)` — read-only order lookup (state, fill qty, avg price); does not require the submit opt-in.
+
+Gates (all fail closed): sandbox host + paper mode + both live flags false; `live_options_trading_enabled=False`; `OPTIONS_MANAGER_BROKER_BOUNDARY_ALLOW_REAL_PREVIEW=true` **and** `OPTIONS_MANAGER_BROKER_BOUNDARY_ALLOW_SANDBOX_PAPER_SUBMIT=true` (new, default false). Stocks, multi-leg, SELL, market orders, replace and the live host are not reachable.
+
+Intended use: a **mirror lane** — each internal paper entry/exit is also submitted to the sandbox and the broker order id / fill is logged beside the internal row. The internal shadow journal remains the evidence of record; broker paper fills are optimistic and must not replace it.
+
+Status: **nothing imports this module at runtime** (test-enforced), no box config, no release. Real sandbox placement/cancel/fill lifecycle remains **UNPROVEN** until a controlled proof run; that proof, the scanner wiring, the release, and the `.env` keys are post-2026-09-30 items.
