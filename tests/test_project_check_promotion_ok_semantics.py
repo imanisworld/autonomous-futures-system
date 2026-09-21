@@ -16,6 +16,7 @@ def _pin_runtime(monkeypatch) -> None:
     monkeypatch.setenv("ENTRY_FILL_MODEL", "ioc_limit")
     monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ", "32")
     monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MES", "16")
+    monkeypatch.setenv("MAX_CONTRACTS_HARD_CAP", "1")
 
 
 def test_report_ok_is_false_when_hard_promotion_blocker_exists(tmp_path: Path, monkeypatch) -> None:
@@ -48,6 +49,14 @@ def test_report_ok_is_true_only_when_promotion_gate_passes(tmp_path: Path, monke
     evidence = _write_evidence(
         tmp_path,
         {
+            "identity_parity": {
+                "candidate_identity_parity": True,
+                "direction_parity": True,
+                "entry_stop_target_parity": True,
+                "timeframe_parity": True,
+                "causal_data_availability": True,
+                "lookahead_or_partial_bar_dependency": False,
+            },
             "execution": {
                 "entry_attempts": 1,
                 "fills": 1,
@@ -55,6 +64,16 @@ def test_report_ok_is_true_only_when_promotion_gate_passes(tmp_path: Path, monke
                 "rejects_or_known_no_fills": 0,
                 "resolved_outcomes": 1,
                 "legitimately_open": 0,
+            },
+            "runtime_parity": {
+                "replay_live_logic_confirmed": True,
+            },
+            "execution_context_claimed": {
+                "instrument": "MNQ",
+                "entry_fill_model": "ioc_limit",
+                "entry_tolerance_ticks": 32,
+                "contract_qty": 1,
+                "commission_slippage_assumptions": "commission + adverse slippage included",
             },
             "stated_classification": "WAIT",
         },

@@ -159,10 +159,11 @@ def test_execution_context_claimed_fill_model_mismatch_flagged(tmp_path: Path, m
     assert any("entry_fill_model" in m for m in report["execution_context"]["mismatches"])
 
 
-def test_invalid_stated_classification_is_a_warning(tmp_path: Path) -> None:
+def test_invalid_stated_classification_is_a_blocker(tmp_path: Path) -> None:
     evidence = _write_evidence(tmp_path, {"stated_classification": "TOTALLY_FINE"})
     report = build_promotion_report(strategy="x", repo_root=tmp_path, evidence_path=evidence)
-    assert any("not one of" in w for w in report["classification"]["warnings"])
+    assert report["gate_pass"] is False
+    assert any("not one of" in b for b in report["classification"]["blockers"])
 
 
 def test_gate_fails_when_blockers_exist_even_if_classification_is_promising(tmp_path: Path, monkeypatch) -> None:
@@ -274,3 +275,114 @@ def test_cli_returns_nonzero_when_promotion_gate_is_blocked(tmp_path: Path) -> N
         check=False,
     )
     assert proc.returncode == 1, proc.stdout + proc.stderr
+
+
+def _complete_promotion_evidence() -> dict:
+    return {
+        "identity_parity": {
+            "raw_candidate_count": 10,
+            "candidate_identity_parity": True,
+            "direction_parity": True,
+            "entry_stop_target_parity": True,
+            "timeframe_parity": True,
+            "causal_data_availability": True,
+            "lookahead_or_partial_bar_dependency": False,
+        },
+        "execution": {
+            "entry_attempts": 5,
+            "fills": 3,
+            "cancellations": 1,
+            "rejects_or_known_no_fills": 1,
+            "resolved_outcomes": 3,
+            "legitimately_open": 0,
+        },
+        "runtime_parity": {"replay_live_logic_confirmed": True},
+        "execution_context_claimed": {
+            "instrument": "MNQ",
+            "entry_fill_model": "ioc_limit",
+            "entry_tolerance_ticks": 32,
+            "contract_qty": 1,
+            "commission_slippage_assumptions": "commission + adverse slippage included",
+        },
+        "stated_classification": "PROMISING BUT UNPROVEN",
+    }
+
+
+def test_complete_required_proof_can_pass(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ", "32")
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MES", "16")
+    monkeypatch.setenv("ENTRY_FILL_MODEL", "ioc_limit")
+    monkeypatch.setenv("MAX_CONTRACTS_HARD_CAP", "1")
+    evidence = _write_evidence(tmp_path, _complete_promotion_evidence())
+    report = build_promotion_report(strategy="x", repo_root=tmp_path, evidence_path=evidence)
+    assert report["gate_pass"] is True, report["classification"]["blockers"]
+    assert report["promotion_eligible"] is True
+
+
+@pytest.mark.parametrize(
+    "section,field",
+    [
+        ("execution", "fills"),
+        ("identity_parity", "candidate_identity_parity"),
+        ("identity_parity", "direction_parity"),
+        ("identity_parity", "entry_stop_target_parity"),
+        ("identity_parity", "timeframe_parity"),
+        ("identity_parity", "causal_data_availability"),
+        ("identity_parity", "lookahead_or_partial_bar_dependency"),
+        ("runtime_parity", "replay_live_logic_confirmed"),
+        ("execution_context_claimed", "instrument"),
+        ("execution_context_claimed", "entry_fill_model"),
+        ("execution_context_claimed", "entry_tolerance_ticks"),
+        ("execution_context_claimed", "contract_qty"),
+        ("execution_context_claimed", "commission_slippage_assumptions"),
+    ],
+)
+def test_missing_required_promotion_proof_fails_closed(
+    tmp_path: Path, monkeypatch, section: str, field: str
+) -> None:
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ", "32")
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MES", "16")
+    monkeypatch.setenv("ENTRY_FILL_MODEL", "ioc_limit")
+    monkeypatch.setenv("MAX_CONTRACTS_HARD_CAP", "1")
+    payload = _complete_promotion_evidence()
+    del payload[section][field]
+    evidence = _write_evidence(tmp_path, payload)
+    report = build_promotion_report(strategy="x", repo_root=tmp_path, evidence_path=evidence)
+    assert report["gate_pass"] is False
+    assert report["classification"]["blockers"]
+
+
+def test_missing_accounting_identity_inputs_fail_closed(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ", "32")
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MES", "16")
+    monkeypatch.setenv("ENTRY_FILL_MODEL", "ioc_limit")
+    monkeypatch.setenv("MAX_CONTRACTS_HARD_CAP", "1")
+    payload = _complete_promotion_evidence()
+    del payload["execution"]["cancellations"]
+    evidence = _write_evidence(tmp_path, payload)
+    report = build_promotion_report(strategy="x", repo_root=tmp_path, evidence_path=evidence)
+    assert report["gate_pass"] is False
+    assert any("accounting identities are incomplete" in b for b in report["classification"]["blockers"])
+
+
+def test_runtime_parity_false_is_a_blocker(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ", "32")
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MES", "16")
+    monkeypatch.setenv("ENTRY_FILL_MODEL", "ioc_limit")
+    monkeypatch.setenv("MAX_CONTRACTS_HARD_CAP", "1")
+    payload = _complete_promotion_evidence()
+    payload["runtime_parity"]["replay_live_logic_confirmed"] = False
+    evidence = _write_evidence(tmp_path, payload)
+    report = build_promotion_report(strategy="x", repo_root=tmp_path, evidence_path=evidence)
+    assert report["gate_pass"] is False
+    assert any("replay/live logic parity" in b for b in report["classification"]["blockers"])
+
+
+def test_quantity_check_is_labeled_cap_compatibility_only(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ", "32")
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MES", "16")
+    monkeypatch.setenv("ENTRY_FILL_MODEL", "ioc_limit")
+    monkeypatch.setenv("MAX_CONTRACTS_HARD_CAP", "1")
+    evidence = _write_evidence(tmp_path, _complete_promotion_evidence())
+    report = build_promotion_report(strategy="x", repo_root=tmp_path, evidence_path=evidence)
+    assert "cap_compatibility_only" in report["execution_context"]["quantity_check_semantics"]
