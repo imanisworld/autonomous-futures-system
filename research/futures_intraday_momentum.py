@@ -118,16 +118,23 @@ def collect_rows(instrument: str) -> tuple[list[TradeRow], dict[str, int]]:
             continue
         loaded[day] = bars
 
-    complete = sorted(loaded)
     rows: list[TradeRow] = []
-    for i, day in enumerate(complete):
+    for i, day in enumerate(days):
+        if day not in loaded:
+            continue
         if day in excluded:
             skipped["roll"] += 1
             continue
-        if i == 0 or complete[i - 1] in excluded:
+        # Fail closed on the immediate previous market-session file. Never
+        # leap over an incomplete day and silently use stale prior-close data.
+        if i == 0:
             skipped["no_prior"] += 1
             continue
-        prior = loaded[complete[i - 1]]
+        prior_day = days[i - 1]
+        if prior_day in excluded or prior_day not in loaded:
+            skipped["no_prior"] += 1
+            continue
+        prior = loaded[prior_day]
         current = loaded[day]
         prior_close = float(prior[EXIT_BAR_INDEX].close)
         made = False
