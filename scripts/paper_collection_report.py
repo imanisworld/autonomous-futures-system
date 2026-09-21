@@ -247,6 +247,41 @@ def _effective_status(item: dict[str, Any], *, session_end: date) -> tuple[str, 
     return status, ""
 
 
+def _census_lines(census: dict[str, Any], *, options: bool, session_end: date) -> list[str]:
+    collectors = census.get("collectors")
+    if not isinstance(collectors, list):
+        return [f"collector census: {census.get('status', 'UNKNOWN')}"]
+    chosen: list[tuple[str, str, str]] = []
+    for item in collectors:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "")
+        is_options = name.startswith("options ")
+        if is_options != options:
+            continue
+        status, note = _effective_status(item, session_end=session_end)
+        chosen.append((name, status, note))
+    if not chosen:
+        return ["collector census: no matching collectors"]
+    counts = Counter(status for _, status, _ in chosen)
+    bad = [f"{name} ({note})" if note else name for name, status, note in chosen if status in {"STALE", "DEAD", "ABSENT"}]
+    line = "collector health: " + " · ".join(f"{k} {v}" for k, v in sorted(counts.items()))
+    if bad:
+        line += " · attention: " + ", ".join(bad[:8])
+        if len(bad) > 8:
+            line += f" (+{len(bad) - 8} more)"
+    quiet = [f"{name}: {note}" for name, status, note in chosen if status in {"QUIET_BY_DESIGN", "FRESH_AT_CLOSE"} and note]
+    return [line] + [f"census context: {q}" for q in quiet]
+
+
+def _top(counter: dict[str, int], limit: int = 5) -> str:
+    if not counter:
+        return "none"
+    return ", ".join(
+        f"{k}={v}" for k, v in sorted(counter.items(), key=lambda kv: (-kv[1], kv[0]))[:limit]
+    )
+
+
 _DISPLAY_NAMES = {
     "strat_22_continuation_observed": "2-2 continuation",
     "strat_22_reversal_observed": "2-2 reversal",
@@ -421,13 +456,13 @@ def options_discord_payload(
     if db_status != "OK":
         blockers.append(f"Scanner database: {_display_name(db_status)}. Check database availability and read access.")
     if db_status == "OK" and scans_status != "OK":
-        blockers.append(f"Scans table: {_display_name(scans_status)}. Check table and timestamp-column shape.")
+        blockers.append(f"Scans: window count unavailable ({_display_name(scans_status)}). Check table and timestamp-column shape.")
     if db_status == "OK" and journal_status != "OK":
-        blockers.append(f"Shadow journal table: {_display_name(journal_status)}. Check table and timestamp-column shape.")
+        blockers.append(f"Shadow journal: window count unavailable ({_display_name(journal_status)}). Check table and timestamp-column shape.")
     if scans_status == "OK" and scan_rows == 0:
-        warnings.append("No option scans in this report window. Check the session calendar and scanner logs.")
+        warnings.append("zero option scans in this report window. Check the session calendar and scanner logs.")
     if journal_status == "OK" and journal_rows == 0:
-        warnings.append("No shadow-journal rows in this report window. That can be valid only if no setups were recorded.")
+        warnings.append("zero shadow-journal rows in this report window. That can be valid only if no setups were recorded.")
 
     no_data = (
         db_status == "OK"
