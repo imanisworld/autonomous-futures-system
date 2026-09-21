@@ -42,6 +42,12 @@ ET = ZoneInfo("America/New_York")
 RTH_OPEN = time(9, 30)
 RTH_CLOSE = time(16, 0)
 RTH_BARS = 78
+WATCH_BARS_5M = 12
+
+FTFC_UP = "UP"
+FTFC_DOWN = "DOWN"
+FTFC_CONFLICT = "CONFLICT"
+FTFC_UNAVAILABLE = "UNAVAILABLE"
 
 
 @dataclass(frozen=True)
@@ -61,10 +67,12 @@ class Event:
     magnitude: float
     magnitude_reached: bool
     opposite_boundary_first: bool
+    structural_failure_after_trigger: bool
+    resolution_ambiguous: bool
     time_to_magnitude_minutes: int | None
     mae_points: float | None
     mfe_points: float | None
-    session_end_unresolved: bool
+    watch_window_unresolved: bool
     half: str
 
 
@@ -111,6 +119,27 @@ def _half(day: date, midpoint: date) -> str:
     return "H1" if day < midpoint else "H2"
 
 
+def classify_ftfc(
+    *,
+    last_price: float,
+    monthly_open: float | None,
+    weekly_open: float | None,
+    daily_open: float | None,
+    current_60m_open: float | None,
+) -> str:
+    """Pure FTFC state; missing required opens fail closed to UNAVAILABLE."""
+    opens = (monthly_open, weekly_open, daily_open, current_60m_open)
+    if any(value is None for value in opens):
+        return FTFC_UNAVAILABLE
+    required = tuple(float(value) for value in opens if value is not None)
+    price = float(last_price)
+    if all(price > value for value in required):
+        return FTFC_UP
+    if all(price < value for value in required):
+        return FTFC_DOWN
+    return FTFC_CONFLICT
+
+
 def observe_candidate(
     *,
     instrument: str,
@@ -133,12 +162,19 @@ def observe_candidate(
         f"{inside.start_utc.isoformat()}:{direction}"
     )
 
+    watch_start = inside.start_utc + HOUR_1.delta
+    watch_end = watch_start + HOUR_1.delta
+    watched = sorted(
+        (bar for bar in watch if watch_start <= bar.start_utc < watch_end),
+        key=lambda b: b.start_utc,
+    )
+
     trigger_bar: Bar | None = None
     ambiguous = False
     opposite_first = False
     trigger_price: float | None = None
 
-    for bar in sorted(watch, key=lambda b: b.start_utc):
+    for bar in watched:
         high_break = bar.high > inside.high
         low_break = bar.low < inside.low
         if high_break and low_break:
@@ -171,22 +207,48 @@ def observe_candidate(
             magnitude=magnitude,
             magnitude_reached=False,
             opposite_boundary_first=opposite_first,
+            structural_failure_after_trigger=False,
+            resolution_ambiguous=False,
             time_to_magnitude_minutes=None,
             mae_points=None,
             mfe_points=None,
-            session_end_unresolved=not (ambiguous or opposite_first),
+            watch_window_unresolved=not (ambiguous or opposite_first),
             half=_half(day, midpoint),
         )
 
-    after = [bar for bar in watch if bar.start_utc >= trigger_bar.start_utc]
+    after = [bar for bar in watched if bar.start_utc >= trigger_bar.start_utc]
+    magnitude_bar: Bar | None = None
+    structural_failure = False
+    resolution_ambiguous = False
+    resolution_slice: list[Bar] = []
+
+    for bar in after:
+        resolution_slice.append(bar)
+        if direction == "LONG":
+            magnitude_hit = bar.high >= magnitude
+            failure_hit = bar.low < inside.low
+        else:
+            magnitude_hit = bar.low <= magnitude
+            failure_hit = bar.high > inside.high
+
+        if magnitude_hit and failure_hit:
+            # Lowest available resolution cannot prove which happened first.
+            # Fail closed: do not credit the structural magnitude.
+            resolution_ambiguous = True
+            break
+        if failure_hit:
+            structural_failure = True
+            break
+        if magnitude_hit:
+            magnitude_bar = bar
+            break
+
     if direction == "LONG":
-        favorable = [bar.high - trigger_price for bar in after]
-        adverse = [trigger_price - bar.low for bar in after]
-        magnitude_bar = next((bar for bar in after if bar.high >= magnitude), None)
+        favorable = [max(0.0, bar.high - trigger_price) for bar in resolution_slice]
+        adverse = [max(0.0, trigger_price - bar.low) for bar in resolution_slice]
     else:
-        favorable = [trigger_price - bar.low for bar in after]
-        adverse = [bar.high - trigger_price for bar in after]
-        magnitude_bar = next((bar for bar in after if bar.low <= magnitude), None)
+        favorable = [max(0.0, trigger_price - bar.low) for bar in resolution_slice]
+        adverse = [max(0.0, bar.high - trigger_price) for bar in resolution_slice]
 
     minutes = None
     if magnitude_bar is not None:
@@ -210,10 +272,16 @@ def observe_candidate(
         magnitude=magnitude,
         magnitude_reached=magnitude_bar is not None,
         opposite_boundary_first=False,
+        structural_failure_after_trigger=structural_failure,
+        resolution_ambiguous=resolution_ambiguous,
         time_to_magnitude_minutes=minutes,
         mae_points=max(adverse) if adverse else None,
         mfe_points=max(favorable) if favorable else None,
-        session_end_unresolved=magnitude_bar is None,
+        watch_window_unresolved=(
+            magnitude_bar is None
+            and not structural_failure
+            and not resolution_ambiguous
+        ),
         half=_half(day, midpoint),
     )
 
@@ -224,7 +292,7 @@ def run_instrument(instrument: str) -> dict[str, Any]:
         raise SystemExit(f"no replay files under {REPLAY_ROOT / instrument}")
 
     loaded: dict[date, list[Bar]] = {}
-    skipped = {"incomplete_session": 0}
+    skipped = {"incomplete_session": 0, "incomplete_watch_window": 0}
     for day, path in files.items():
         bars = _load(path)
         if len(bars) != RTH_BARS:
@@ -255,8 +323,14 @@ def run_instrument(instrument: str) -> dict[str, Any]:
                 continue
 
             watch_start = inside.start_utc + HOUR_1.delta
-            watch = [bar for bar in bars5 if bar.start_utc >= watch_start]
-            if not watch:
+            watch_end = watch_start + HOUR_1.delta
+            watch = [
+                bar
+                for bar in bars5
+                if watch_start <= bar.start_utc < watch_end
+            ]
+            if len(watch) != WATCH_BARS_5M:
+                skipped["incomplete_watch_window"] += 1
                 continue
             events.append(
                 observe_candidate(
@@ -286,6 +360,11 @@ def _bucket(events: Sequence[Event]) -> dict[str, Any]:
         "triggered": len(triggered),
         "ambiguous": sum(e.ambiguous for e in events),
         "opposite_boundary_first": sum(e.opposite_boundary_first for e in events),
+        "structural_failure_after_trigger": sum(
+            e.structural_failure_after_trigger for e in events
+        ),
+        "resolution_ambiguous": sum(e.resolution_ambiguous for e in events),
+        "watch_window_unresolved": sum(e.watch_window_unresolved for e in events),
         "magnitude_reached": len(reached),
         "magnitude_hit_rate_triggered": round(len(reached) / len(triggered), 4)
         if triggered
@@ -315,9 +394,19 @@ def summarize(
         "study_id": STUDY_ID,
         "study_version": STUDY_VERSION,
         "research_only": True,
+        "study_complete": False,
+        "outstanding_before_final_interpretation": [
+            "FTFC_DATA_CAPABILITY",
+            "AFS_EMA_TREND_SIDE_BY_SIDE",
+            "EXECUTION_OVERLAYS",
+            "SOURCE_ALIGNMENT_EXTERNAL_CANONICALITY",
+        ],
         "instrument": instrument,
         "source_timeframe": "60m_RTH_session_aligned",
+        "source_alignment_status": "EXPLICIT_AFS_TRANSLATION_NOT_PUBLIC_CANONICAL",
         "trigger_resolution": "5m",
+        "trigger_watch_window": "immediately_following_60m_source_bar_only",
+        "excursion_horizon": "trigger_to_first_structural_terminal_event",
         "first_session": days[0].isoformat(),
         "last_session": days[-1].isoformat(),
         "midpoint_date": midpoint.isoformat(),
@@ -339,14 +428,19 @@ def to_markdown(report: dict[str, Any]) -> str:
     o = report["overall"]
     return (
         f"# {report['study_id']} {report['study_version']} — {report['instrument']}\n\n"
-        f"RESEARCH ONLY. 60m RTH session-aligned source bars; 5m causal trigger resolution.\n\n"
+        f"RESEARCH ONLY. 60m RTH session-aligned source bars; 5m causal trigger resolution; "
+        f"next-source-bar watch only.\n\n"
         f"Sessions: {report['first_session']} → {report['last_session']} · midpoint {report['midpoint_date']}\n\n"
-        f"Candidates {o['candidates']} · triggered {o['triggered']} · ambiguous {o['ambiguous']} · "
-        f"opposite-first {o['opposite_boundary_first']} · magnitude reached {o['magnitude_reached']} · "
-        f"hit rate among triggers {o['magnitude_hit_rate_triggered']}\n\n"
+        f"Candidates {o['candidates']} · triggered {o['triggered']} · pre-trigger ambiguous {o['ambiguous']} · "
+        f"opposite-first {o['opposite_boundary_first']} · post-trigger failure {o['structural_failure_after_trigger']} · "
+        f"resolution ambiguous {o['resolution_ambiguous']} · unresolved {o['watch_window_unresolved']} · "
+        f"magnitude reached {o['magnitude_reached']} · hit rate among triggers {o['magnitude_hit_rate_triggered']}\n\n"
         f"Median time to magnitude {o['median_time_to_magnitude_minutes']} min · "
         f"median MAE {o['median_mae_points']} pts · median MFE {o['median_mfe_points']} pts\n\n"
-        "No P&L, PF, fixed-R target, or promotion claim is produced by this first structural pass.\n"
+        "MAE/MFE stop at the first structural terminal event; later price action is excluded.\n\n"
+        "Study is incomplete: FTFC data capability, AFS EMA side-by-side, execution overlays, and "
+        "external source-alignment canonicality remain outstanding. No P&L, PF, fixed-R target, "
+        "or promotion claim is produced by this structural pass.\n"
     )
 
 
