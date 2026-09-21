@@ -37,6 +37,8 @@ Bar identity uses strict high/low breaks against the immediately prior bar.
 
 The inside bar must be complete before the trigger window begins.
 
+Bar C is the **immediately following 60-minute source bar only**. The setup does not remain armed across later source bars. If that next source bar completes without a valid reversal trigger, the candidate expires unresolved.
+
 ## Trigger timing
 
 The reference boundary is frozen at completion of bar B.
@@ -49,13 +51,17 @@ Use lower-timeframe bars available in the existing corpus to identify the first 
 
 Do not wait for the source-timeframe breakout candle to close and then backfill an earlier entry.
 
+The causal watch window is exactly one source bar: from bar B close through the end of the immediately following 60-minute bar. Lower-timeframe evidence outside that window must not trigger the candidate.
+
 ## Structural magnitude
 
 For reversal candidates only:
 - LONG magnitude = bar A high;
 - SHORT magnitude = bar A low.
 
-Primary market-structure outcome is whether magnitude is reached after trigger before structural failure / session termination.
+Primary market-structure outcome is whether magnitude is reached after trigger before structural failure / watch-window termination.
+
+Post-trigger structural failure is a strict break of the opposite inside-bar boundary. If magnitude and structural failure are both first observed within the same 5-minute bar and ordering is unknowable, classify the resolution as ambiguous and do **not** credit the magnitude hit.
 
 Do not replace this magnitude with 2R.
 
@@ -72,11 +78,15 @@ No P&L claim. Measure:
 - trigger count;
 - magnitude hit;
 - magnitude miss;
-- MAE from trigger;
-- MFE from trigger;
+- MAE from trigger through the first terminal structural event;
+- MFE from trigger through the first terminal structural event;
 - time to magnitude;
-- whether opposite inside-bar boundary is crossed first;
-- session-end unresolved.
+- whether opposite inside-bar boundary is crossed before trigger;
+- whether structural failure occurs after trigger before magnitude;
+- same-5m-bar resolution ambiguity;
+- next-source-bar watch-window unresolved.
+
+For MAE/MFE, the measurement horizon ends at the first of: magnitude hit, post-trigger structural failure, ambiguous same-5m resolution, or the end of the one-source-bar watch window. Price action after that terminal event must not contaminate excursion statistics.
 
 This layer answers whether the documented structural move exists.
 
@@ -131,7 +141,13 @@ Reason:
 - public docs specifically discuss 60m as a meaningful setup timeframe;
 - existing AFS timed 60m infrastructure makes identity auditing feasible.
 
-Any 4HR/Daily variant is a new preregistered experiment.
+### Futures bar-alignment translation
+
+The public reference does not establish one unique futures-session alignment for a 60-minute candle. The current research harness therefore labels its first implementation explicitly as **RTH session-aligned 60m, anchored at 09:30 ET**. That is an AFS research translation, not a claim that the public methodology mandates this futures alignment.
+
+The existing timed 3-2-2 implementation uses clock-specific 7AM/8AM/9AM bars and is a separate variant; it must not be used as silent proof that 09:30 RTH session alignment is canonical.
+
+Before any historical result is treated as evidence about the broader public method, the report must preserve the alignment label. A clock-aligned, ETH, 4HR, or Daily variant requires a new preregistered experiment rather than post-hoc substitution.
 
 ## Session rules
 
@@ -139,7 +155,7 @@ Use the existing futures session calendar and record trigger session explicitly.
 
 Do not add session exclusions based on outcome.
 
-Any missing required bar or incomplete source bucket fails closed for that candidate.
+Any missing required bar or incomplete source bucket fails closed for that candidate. The immediately following 60-minute watch bucket must be complete at 5-minute resolution; a partial final RTH bucket is not eligible for directional credit.
 
 ## Splits
 
@@ -165,6 +181,9 @@ Per event:
 - MAE;
 - MFE;
 - opposite boundary first Y/N;
+- post-trigger structural failure Y/N;
+- same-bar resolution ambiguity Y/N;
+- watch-window unresolved Y/N;
 - FTFC state;
 - AFS EMA-trend state;
 - session;
@@ -217,6 +236,7 @@ Stop the study and classify BROKEN/WAIT rather than patching results if:
 - trigger ordering requires unavailable intrabar data;
 - live/replay bar identity differs;
 - missing-data handling selectively drops losing-looking cases;
-- event IDs cannot be reproduced deterministically.
+- event IDs cannot be reproduced deterministically;
+- source-bar alignment cannot be stated explicitly enough to reproduce the candidate population.
 
 Any correction to the definition requires a new version before rerun.
