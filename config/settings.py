@@ -510,6 +510,13 @@ class SystemConfig:
     asia_d_ema_paper_mode: str = "off"
     asia_d_ema_paper_epoch_start: Optional[str] = None
 
+    # ── Session-scoped 2-2 continuation forward paper lane (prereg H6/H7, 2026-09-21) ──
+    # Isolated sibling lane; see context/session_22c_paper_lane.py. Default is
+    # explicitly OFF (no evaluation, no file I/O). Only the exact token
+    # "paper_sim" PLUS an offset-aware epoch activates it. PaperBroker only.
+    session_22c_paper_mode: str = "off"
+    session_22c_paper_epoch_start: Optional[str] = None
+
     # ── Wide-stop hypothetical-ledger paper lane (2026-09-07 spec, B+) ────
     # Isolated $4,000 / $6,000 HYPOTHETICAL ledgers for the parked wide-stop
     # family. Paper-only by construction: no demo or live value exists, and
@@ -848,6 +855,12 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         ).strip().lower(),
         asia_d_ema_paper_epoch_start=(
             os.getenv("ASIA_D_EMA_PAPER_EPOCH_START") or None
+        ),
+        session_22c_paper_mode=str(
+            os.getenv("SESSION_22C_PAPER_MODE", "off") or "off"
+        ).strip().lower(),
+        session_22c_paper_epoch_start=(
+            os.getenv("SESSION_22C_PAPER_EPOCH_START") or None
         ),
         wide_stop_ledger_mode=str(
             os.getenv("WIDE_STOP_LEDGER_MODE", "observe_only") or "observe_only"
@@ -1213,6 +1226,29 @@ def _validate_config(config: SystemConfig) -> None:
             ) from exc
         if _parsed_asia_epoch.tzinfo is None:
             raise ConfigError("ASIA_D_EMA_PAPER_EPOCH_START must include a UTC offset.")
+    _valid_22c_modes = {"off", "paper_sim"}
+    if config.session_22c_paper_mode not in _valid_22c_modes:
+        raise ConfigError(
+            "SESSION_22C_PAPER_MODE must be one of "
+            f"{sorted(_valid_22c_modes)} (got {config.session_22c_paper_mode!r}); "
+            "this lane is paper-only and defaults to off."
+        )
+    if config.session_22c_paper_mode == "paper_sim":
+        _22c_epoch = config.session_22c_paper_epoch_start
+        if not _22c_epoch:
+            raise ConfigError(
+                "SESSION_22C_PAPER_EPOCH_START is required when SESSION_22C_PAPER_MODE=paper_sim."
+            )
+        try:
+            _parsed_22c_epoch = datetime.fromisoformat(
+                str(_22c_epoch).replace("Z", "+00:00")
+            )
+        except ValueError as exc:
+            raise ConfigError(
+                "SESSION_22C_PAPER_EPOCH_START must be an ISO-8601 timestamp."
+            ) from exc
+        if _parsed_22c_epoch.tzinfo is None:
+            raise ConfigError("SESSION_22C_PAPER_EPOCH_START must include a UTC offset.")
     if (
         config.mnq_orb_breakout_inverse_mode != "observe_only"
         and config.mnq_orb_breakout_proof_mode != "observe_only"

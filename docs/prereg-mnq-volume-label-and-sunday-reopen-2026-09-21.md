@@ -70,8 +70,14 @@ positive after costs on forward data — i.e. the gate removes more profit than
 loss. Population is the *executable* candidate, not the observer family, to
 avoid the detector-boundary mismatch above.
 
-**H6 — 2-2 continuation, Asia session, EMA-aligned, 1.5R (added 2026-09-21
-05:30Z from the 313-day grid; the grid result is in-sample and is NOT scored).**
+**H6 — 2-2 continuation, Asia session, EMA-aligned, label not CHOPPY/DEAD,
+1.5R (added 2026-09-21 05:30Z from the 313-day grid; AMENDED ~06:00Z before
+any forward data was examined: the one-at-a-time series split by label gave
+RANGE_BOUND PF 1.42 / TRENDING 1.26 vs CHOPPY 0.83 / DEAD 0.89, so the H6
+population keeps the existing CHOPPY/DEAD exclusion and lets RANGE_BOUND and
+TRENDING through — i.e. the `rel_vol ≥ 0.80` TRENDING requirement is dropped
+but the low-volume DEAD/CHOPPY floor is kept. The grid result is in-sample and
+is NOT scored).**
 In-sample motivation: 313-day replay grid (25,119 candidates × 7 exits × 3
 filters × 5 sessions, honest fill, proven costs): `strat_22_continuation`,
 session `asian`, EMA9/21/55 stack aligned with the trade direction with **no**
@@ -87,6 +93,26 @@ permutations (null max 1.68, tighter). Supersedes the 8-Sunday journal study
 (n=9) that concluded the opposite. H7: on forward data the slice is net
 positive after costs. **H1 (Sunday no-entry) is now expected to FAIL; it stays
 registered and is scored honestly.**
+
+**Robustness note on H6/H7 (in-sample, other thread, 2026-09-21 ~05:50Z; NOT
+scored):** same corpus, simulator and costs, but ONE position at a time (what
+the lane can actually take), then split. H6: n=553 PF 1.20 +$4.3k (halves 1.35 /
+1.12; 8/13 months positive; +1 tick/side → PF 1.17) — real but thin and decaying
+in the second half, ≈ +$330/month/contract. H7: n=85 PF 1.54 +$1.9k (halves
+1.69 / 1.47; 10/13 months; +1 tick → 1.52) — the cleaner cell. H6+H7 as one
+book: n=625 PF 1.26 +$6.3k, max DD $1,145. NY 2-2 reversal (PF 0.95 → 1.63
+by half) is suspect and is deliberately NOT registered. The TRENDING-label 3R
+Asia cell drops to PF 1.11 one-at-a-time, reinforcing that the EMA-only
+version is the better one. Bootstrap: H6 5th-pct PF 1.01 (P(PF<1) ≈ 4%), H7 5th-pct 0.99 (≈ 5.5%) — real
+but a losing quarter is entirely possible; H6 ≈ $7.70/trade on one micro, one
+extra tick takes a third of it. Post-hoc slices NOT acted on: H6 Thursdays
+PF 0.84, 03:00/08:00 UTC negative, stops > 28 pts PF 1.24 vs smaller 1.09; H7
+long-biased 56L/29S, both sides positive. Combined book ≈ +$490/month, maxDD
+≈ $1,150, ~50 trades/month. Known limits: touch-based fills at the entry level;
+the EMA-aligned filter was chosen after seeing the grid; not testable here:
+fill realism, MES/M2K, a different year, 1m/5m triggers. Expected forward
+volume ≈ 50 trades/month combined, so H6 reaches its floor in ~2 months and H7
+in ~6 Sundays. The forward thresholds in §4 are read against THESE numbers.
 
 ## 3. Data (forward only)
 
@@ -125,7 +151,7 @@ registered and is scored honestly.**
 | H3 | Aligned-but-thin rows with 1m acceleration | ≥ 30 rows | net $ > 0 after costs **and** win-rate ≥ TRENDING bucket's | otherwise |
 | H4 | 1m-lane MNQ triggers, scored under filter (a) carry-15m vs (b) fast-5m | ≥ 40 triggers **and** ≥ 15 where (a) and (b) disagree | on the disagreement set, (b)-admitted net $ > (a)-admitted net $ **and** (b)-admitted net $ > 0 | otherwise |
 | H5 | TRENDING + executable setup, blocked only by regime gate | ≥ 25 rows | net $ > 0 after costs **and** win-rate ≥ 35% **and** max single-loss ≤ 1.5R | otherwise |
-| H6 | 2-2 con, asian, EMA-aligned (no rel_vol), fixed 1.5R | ≥ 80 rows | net $ > 0 after costs **and** PF ≥ 1.10 **and** win-rate ≥ 40% | otherwise |
+| H6 | 2-2 con, asian, EMA-aligned, label ∈ {TRENDING, RANGE_BOUND}, fixed 1.5R | ≥ 80 rows | net $ > 0 after costs **and** PF ≥ 1.10 **and** win-rate ≥ 40% | otherwise |
 | H7 | 2-2 con, sunday_reopen, no filter, fixed 1R | ≥ 6 Sundays **and** ≥ 30 rows | net $ > 0 after costs **and** PF ≥ 1.20 **and** win-rate ≥ 55% | otherwise |
 
 - One look, at the first weekly gate-report run after the minimum n is met.

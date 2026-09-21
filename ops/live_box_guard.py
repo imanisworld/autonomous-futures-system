@@ -38,6 +38,11 @@ PROOF_CRITICAL_RUNTIME_OVERRIDES = (
     # the epoch fixes its evidence identity.
     "ASIA_D_EMA_PAPER_MODE",
     "ASIA_D_EMA_PAPER_EPOCH_START",
+    # Session-scoped 2-2 continuation forward paper lane (prereg H6/H7,
+    # 2026-09-21). Same reasoning: mode decides whether it collects, epoch
+    # fixes its evidence identity.
+    "SESSION_22C_PAPER_MODE",
+    "SESSION_22C_PAPER_EPOCH_START",
     "STARTING_BALANCE",
     "REQUIRE_TRENDING_CONDITION",
     "VWAP_ENTRY_MAX_DISTANCE_TICKS",
