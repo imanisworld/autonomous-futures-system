@@ -254,7 +254,8 @@ def print_summary(summary: dict[str, Any], observability: dict[str, str] | None 
     ):
         print(
             f"  {family:28s} events={row['events']:4d} episodes={row['episodes']:4d} "
-            f"aligned={row['aligned']:4d} eod_mean_bps={row['eod_mean_close_return_bps']}"
+            f"aligned={row['aligned']:4d} eod_mean_bps={row['eod_mean_close_return_bps']} "
+            f"(n={row['eod_measured']}, events not episodes)"
         )
     print("[blocked_by_design]")
     for reason in summary["blocked_by_design"]:

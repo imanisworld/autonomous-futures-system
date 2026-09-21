@@ -144,6 +144,46 @@ coverage observer.
 No box install, timer or release activation is part of this PR. Those are
 separate operator actions after CI and a controlled dry-run prove the lane.
 
+## First proof run — 2026-09-21 (off-box, working tree `4cd83b1`, dry run)
+
+Gates 1–5 of the acceptance list below were exercised on the merge commit;
+gate 6 (sample review) was done for EBAY only. Nothing was written to any
+repo-tracked or box database.
+
+| gate | result |
+|---|---|
+| tests | 6512 passed / 7 skipped (`pytest -q`) |
+| isolation | diff = 4 files; not imported by the collector; scanner sqlite refused by name/schema |
+| `--dry-run --date 2026-09-18` (150-symbol universe, lookback 4) | 2766 events / 2414 episodes, 146/150 observable, 0 provider errors |
+| not observable | `SQ`, `VIX` (`missing_symbol`, same allow-list as cov-v0.1); `EQIX`, `TDY` (`target_session_incomplete` — a 5m interval with no SIP trades fails the symbol closed, as in cov-v0.1) |
+| determinism | `--date 2026-05-01 --symbols EBAY` run twice into a scratch sqlite: 22 rows both times, 0 duplicates (UNIQUE keys hold) |
+| logged-fixture check (EBAY, 04-30/05-01) | `COVERAGE_MATCH`: `PDL_REJECTION_LONG` 09:55 ET → `PDL_RECLAIM_SHORT` 10:00 → `PDL_BREAK_RETEST_SHORT` 10:05 → `PDL_REJECTION_LONG` 10:25 — the "~55-minute whipsaw" the fixture describes |
+
+**Read-only observations from that single session (not evidence):** every
+LONG family had a positive EOD mean and every SHORT family a negative one.
+That is one up-day, not a property of the families. Nothing here is compared
+to the null baseline (p95 PF 1.94) and nothing may be until ≥ 5 sessions and
+an episode-level (not event-level) summary exist.
+
+### Open doubts recorded at the first run
+
+1. **PDL identity vs the hand-logged fixture.** The observer's PDL for EBAY
+   on 04-30 is **100.09** (SIP regular-session low of 04-29). The fixture
+   inventory records **$100.20**. The 11¢ gap is a definition or feed
+   difference (extended-hours low, a different vendor, or a rounded chart
+   read) — not a code defect, but it means "PDL" in this lane and "PDL" in
+   the fixture language are not yet the same number. Resolve before any
+   fixture is used as a pass/fail oracle.
+2. **Event-level means double count contiguous episodes.** `summarize`
+   averages EOD return over events; a 3-bar `VWAP_TEST_HOLD` episode counts
+   three times. The CLI line now says so. An episode-level summary is an
+   ns-v0.2 change (new version, rows not pooled).
+3. **Thin names fail closed.** `EQIX`/`TDY` dropped for one empty 5m
+   interval. Correct under the whole-session rule, but coverage of illiquid
+   names is structurally lower; report it, do not relax it.
+4. **Gap-through-PDH/PDL opens** never arm break-retest (see limits above).
+   Frequency unknown until several sessions are stored.
+
 ## Acceptance gate before any deployment
 
 1. Tests green.
