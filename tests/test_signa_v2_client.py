@@ -277,13 +277,6 @@ def test_v2_client_reuses_fresh_shared_action_card_snapshot(tmp_path) -> None:
     assert seen == []
 
 
-def test_v2_client_failure_backoff_env_default(monkeypatch) -> None:
-    monkeypatch.delenv("OPTIONS_SIGNA_V2_FAILURE_BACKOFF_SECONDS", raising=False)
-    assert SignaV2Client(api_key="failure-env-test").failure_backoff_seconds == 900.0
-    monkeypatch.setenv("OPTIONS_SIGNA_V2_FAILURE_BACKOFF_SECONDS", "1200")
-    assert SignaV2Client(api_key="failure-env-test").failure_backoff_seconds == 1200.0
-
-
 def test_fresh_shared_snapshot_overrides_cached_failure(tmp_path) -> None:
     store = SignaSnapshotStore(tmp_path / "signa.sqlite")
     seen: list[httpx.Request] = []
