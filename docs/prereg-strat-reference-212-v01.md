@@ -97,13 +97,13 @@ Only after Layer A is generated from the frozen candidate population.
 
 Permitted preregistered overlays:
 1. `INSIDE_FAR_SIDE`: opposite side of inside bar.
-2. `ENTRY_BAR_FAILURE`: opposite extreme of the lowest-resolution trigger bar, only if causally knowable without lookahead.
+2. `ENTRY_BAR_FAILURE`: opposite extreme of the lowest-resolution trigger bar.
 
 These are experimental futures overlays, not claimed public doctrine.
 
 No parameter sweeps. No choosing the better stop after results.
 
-If `ENTRY_BAR_FAILURE` cannot be applied causally at order time, report it observationally only and do not use it for executable expectancy.
+With the frozen **5-minute OHLC trigger resolution**, the completed trigger-bar opposite extreme is not knowable at the intrabar trigger instant. Therefore `ENTRY_BAR_FAILURE` is preregistered as **observational-only in v0.1** and must not contribute executable expectancy/PF/drawdown. Only `INSIDE_FAR_SIDE` is eligible for the executable Layer B cell, and only after the cost-model gate is frozen. A future lower-resolution/order-path dataset would require a new version before changing that status.
 
 ## Fill realism
 
