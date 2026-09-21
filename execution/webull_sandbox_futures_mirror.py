@@ -431,6 +431,7 @@ def mirror_entry(
     order: BracketOrder,
     env: Mapping[str, str] | None = None,
     *,
+    source_id: str | None = None,
     today: date | None = None,
     client_factory: FuturesClientFactory | None = None,
 ) -> MirrorOrderResult:
@@ -448,7 +449,7 @@ def mirror_entry(
     return _submit(
         env=source,
         leg="entry",
-        source_id=order.client_order_id,
+        source_id=source_id or order.client_order_id,
         fallback_id=f"{order.instrument}:{order.strategy}:{order.entry}:{order.stop}",
         instrument=order.instrument,
         side=side,
