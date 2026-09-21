@@ -184,6 +184,23 @@ bucket on the tape. By family inside it: `strat_22_continuation` 4/12 (+$4),
    *tightening*: no new entries Sun 22:00Z – Mon 01:00Z. Pre-register before
    testing; post-09-30.
 
+### Does the tape reflect the rules as they run now?
+
+Yes for both inputs. The label is computed in Pine on TradingView, not on the
+box — no release changes it. The shadow setups: every box release from 09-16
+through `5c91602` and everything merged-but-unreleased on `main` was diffed
+against `strategies/`, `context/`, `webhook/runner.py`, `config/`,
+`risk_rules.yaml`, `scripts/pine_market_condition.py`, `tradingview/`,
+`execution/forward_evidence_campaign.py`: the changes in the window were the
+1m / 4HR / Daily lanes, Signa context (read-only), the #849 stall fix, the
+Webull mirror (flag off) and the push relay. None alter the 15m MNQ detectors
+or shadow geometry. The **demo ledger** (31 trades) is a different matter — it
+spans releases back to August with different gates and sizing, so it is not a
+clean like-for-like series; judge this week by the shadow/gate lines.
+
+1-minute bars: collected since the 09-18 release (#725) into `logs/tf1m/` for
+observation lanes only; not available for the 8-Sunday window, hence 15m here.
+
 Reproduction: `bars_MNQ_*.jsonl` (15m) → EMA 9/21/55 on closes, `rel_vol` =
 volume / mean(last 20 volumes incl. current); join to
 `cross_instrument_observation_v1.jsonl` OUTCOME rows on `signal_timestamp`.
