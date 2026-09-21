@@ -56,6 +56,20 @@ score ≥ 3 and direction agrees ⇒ TRENDING). That score is adopted verbatim �
 no re-tuning. The comparison is between the two *filters*, not between fast
 and slow entry: does gating 1m triggers on (b) beat gating them on (a)?
 
+**H5 — Regime gate (`BLOCK_RESTRICTED_REGIME=true`, reason `REGIME_NOT_FULL`)
+is blocking the profitable bucket (loosening; added 2026-09-21 06:05Z, before
+any forward data was examined).**
+Back-tape motivation (in-sample, not scored): of 67 MNQ shadow setups labelled
+TRENDING since 09-16, the live bot took **0**; 27 were blocked solely by the
+regime gate and resolved 11/27, **+$642 gross**; 20 were "no qualifying setup"
+(executable detector did not fire), −$182; 14 had the label flip by decision
+time, +$116. Tonight's 22:00Z and 01:00Z TRENDING bars were regime-blocked.
+H5: among MNQ setups that pass the market-condition rule (label TRENDING) and
+the executable detector, those the regime gate blocks (`RESTRICTED`) are net
+positive after costs on forward data — i.e. the gate removes more profit than
+loss. Population is the *executable* candidate, not the observer family, to
+avoid the detector-boundary mismatch above.
+
 ## 3. Data (forward only)
 
 - Candidates: `cross_instrument_observation_v1.jsonl` CANDIDATE/OUTCOME rows,
@@ -65,6 +79,11 @@ and slow entry: does gating 1m triggers on (b) beat gating them on (a)?
 - 1m-lane triggers for H4: the observer lanes' own evidence files
   (`logs/…` written by #723/#749), joined to `logs/tf5m/bars_MNQ_*.jsonl` for
   the fast score and to the 15m journal for the carried label.
+- H5 population: MNQ 15m journal decision rows where `market_condition ==
+  TRENDING`, the executable detector produced a setup, and the sole failed gate
+  is the regime gate (`failed_gates`/`reason` contains `REGIME`); geometry from
+  the row's own `shadow_candidates` entry for that setup; resolved against
+  `bars_MNQ_*.jsonl` with the campaign resolver rules.
 - Costs: `execution/forward_evidence_campaign.py` constants
   (`SLIPPAGE_TICKS=1.0`, `COMMISSION_DOLLARS=1.48`), 1 contract.
 - Resolution: the campaign's own OUTCOME resolver (stop-first ties). No new
@@ -78,17 +97,22 @@ and slow entry: does gating 1m triggers on (b) beat gating them on (a)?
 | H2 | Rows admitted by H2 only (EMA aligned, `rel_vol < 0.80`, session-relative ≥ 0.80) | ≥ 30 rows | net $ > 0 after costs **and** win-rate ≥ TRENDING bucket's same-period win-rate | otherwise |
 | H3 | Aligned-but-thin rows with 1m acceleration | ≥ 30 rows | net $ > 0 after costs **and** win-rate ≥ TRENDING bucket's | otherwise |
 | H4 | 1m-lane MNQ triggers, scored under filter (a) carry-15m vs (b) fast-5m | ≥ 40 triggers **and** ≥ 15 where (a) and (b) disagree | on the disagreement set, (b)-admitted net $ > (a)-admitted net $ **and** (b)-admitted net $ > 0 | otherwise |
+| H5 | TRENDING + executable setup, blocked only by regime gate | ≥ 25 rows | net $ > 0 after costs **and** win-rate ≥ 35% **and** max single-loss ≤ 1.5R | otherwise |
 
 - One look, at the first weekly gate-report run after the minimum n is met.
   No interim peeks that inform a decision. The daily 22:20Z gate line may
   continue to print aggregate counts; it does not score H1–H3.
-- Multiple-comparison note: four hypotheses, one look each. If exactly one of
-  H2/H3/H4 passes at the margin, treat as PROVISIONAL and require a second,
+- Multiple-comparison note: five hypotheses, one look each. If exactly one of
+  H2/H3/H4/H5 passes at the margin, treat as PROVISIONAL and require a second,
   non-overlapping sample of equal size before any proposal.
 - H4 is a *coupling* result: a PASS means "if 1m entries are ever enabled,
   they must carry the fast label, not the 15m one." It says nothing about
   whether 1m entries should be enabled — that is the 1m lanes' own question.
-- A PASS on H2, H3 or H4 does **not** authorize a change; it authorizes a proposal
+- H5 is the only loosening with back-tape support. A PASS authorizes a
+  proposal to set `BLOCK_RESTRICTED_REGIME=false` (env) for MNQ only, with the
+  demo lane as the first forward test — still a gate change, still post-09-30
+  or an explicit operator ruling.
+- A PASS on H2, H3, H4 or H5 does **not** authorize a change; it authorizes a proposal
   for the post-09-30 review with the numbers attached.
 
 ## 5. What is NOT allowed
@@ -99,6 +123,7 @@ and slow entry: does gating 1m triggers on (b) beat gating them on (a)?
 - Changing the cost constants, the resolver, or the label formula mid-study.
 - Using the demo ledger (mixed-era, mixed-sizing) as the scoring series.
 - Re-tuning the fast-regime score (weights, threshold, bar count) for H4.
+- Scoring H5 on observer-family geometry instead of the executable setup.
 
 ## 6. Outcome (to be filled once, at the look)
 
@@ -108,6 +133,7 @@ and slow entry: does gating 1m triggers on (b) beat gating them on (a)?
 | H2 | | | | | | |
 | H3 | | | | | | |
 | H4 | | | | | | |
+| H5 | | | | | | |
 
 ## 7. Ownership
 
