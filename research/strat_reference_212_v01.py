@@ -56,9 +56,13 @@ class Event:
     event_id: str
     instrument: str
     session_date: str
+    session: str
+    source_timeframe: str
+    population_scope: str
     parent_start: str
     inside_start: str
     parent_type: str
+    inside_type: str
     direction: str
     boundary_high: float
     boundary_low: float
@@ -75,6 +79,11 @@ class Event:
     mfe_points: float | None
     trigger_bar_excursion_excluded: bool
     watch_window_unresolved: bool
+    data_complete: bool
+    watch_window_complete: bool
+    ftfc_state: str
+    afs_ema_trend_state: str
+    afs_comparison_status: str
     half: str
 
 
@@ -212,9 +221,13 @@ def observe_candidate(
             event_id=event_id,
             instrument=instrument,
             session_date=day.isoformat(),
+            session="RTH",
+            source_timeframe="60m_RTH_session_aligned",
+            population_scope="A_B_C_same_RTH_session_only",
             parent_start=parent.start_utc.isoformat(),
             inside_start=inside.start_utc.isoformat(),
             parent_type=parent_type,
+            inside_type=INSIDE_BAR,
             direction=direction,
             boundary_high=float(inside.high),
             boundary_low=float(inside.low),
@@ -231,6 +244,11 @@ def observe_candidate(
             mfe_points=None,
             trigger_bar_excursion_excluded=False,
             watch_window_unresolved=not (ambiguous or opposite_first),
+            data_complete=True,
+            watch_window_complete=True,
+            ftfc_state=FTFC_UNAVAILABLE,
+            afs_ema_trend_state="UNAVAILABLE",
+            afs_comparison_status="UNAVAILABLE_NOT_WIRED",
             half=_half(day, midpoint),
         )
 
@@ -283,9 +301,13 @@ def observe_candidate(
         event_id=event_id,
         instrument=instrument,
         session_date=day.isoformat(),
+        session="RTH",
+        source_timeframe="60m_RTH_session_aligned",
+        population_scope="A_B_C_same_RTH_session_only",
         parent_start=parent.start_utc.isoformat(),
         inside_start=inside.start_utc.isoformat(),
         parent_type=parent_type,
+        inside_type=INSIDE_BAR,
         direction=direction,
         boundary_high=float(inside.high),
         boundary_low=float(inside.low),
@@ -306,6 +328,11 @@ def observe_candidate(
             and not structural_failure
             and not resolution_ambiguous
         ),
+        data_complete=True,
+        watch_window_complete=True,
+        ftfc_state=FTFC_UNAVAILABLE,
+        afs_ema_trend_state="UNAVAILABLE",
+        afs_comparison_status="UNAVAILABLE_NOT_WIRED",
         half=_half(day, midpoint),
     )
 
