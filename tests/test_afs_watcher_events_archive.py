@@ -39,6 +39,21 @@ def test_appends_only_unseen_lines_and_copies_snapshots(mod, tmp_path):
     assert sorted(p.name for p in (dst / "snapshots").iterdir()) == ["a.json", "b.json"]
 
 
+def test_snapshot_directories_are_copied_whole_and_once(mod, tmp_path):
+    # the watcher writes one DIRECTORY per event under snapshots/
+    src, dst = tmp_path / "tmp", tmp_path / "arch"
+    ev = src / "snapshots" / "2026-09-19T163218Z_BLOCKED_status_api_unreachable"
+    ev.mkdir(parents=True)
+    (ev / "latest_tick.json").write_text("{}")
+    (ev / "state.json").write_text("{}")
+    assert mod.archive(src, dst) == (0, 1)
+    assert (dst / "snapshots" / ev.name / "latest_tick.json").exists()
+    # a file added to an already-archived snapshot is not merged in; the entry is archived once
+    (ev / "late.json").write_text("{}")
+    assert mod.archive(src, dst) == (0, 0)
+    assert not (dst / "snapshots" / ev.name / "late.json").exists()
+
+
 def test_tmpfs_reset_does_not_duplicate_or_lose(mod, tmp_path):
     src, dst = tmp_path / "tmp", tmp_path / "arch"
     src.mkdir()

@@ -47,13 +47,22 @@ def archive(src: Path, dst: Path) -> tuple[int, int]:
         with dst_events.open("a", encoding="utf-8") as fh:
             fh.write("\n".join(new_lines) + "\n")
 
+    # Each snapshot is a per-event DIRECTORY (e.g. 2026-09-19T163218Z_BLOCKED_status_api_unreachable/)
+    # that events.jsonl rows point at. Copy whole entries once; never re-copy or merge.
     copied = 0
     src_snaps = src / "snapshots"
     if src_snaps.is_dir():
         for p in sorted(src_snaps.iterdir()):
-            if p.is_file() and not (dst / "snapshots" / p.name).exists():
-                shutil.copy2(p, dst / "snapshots" / p.name)
-                copied += 1
+            target = dst / "snapshots" / p.name
+            if target.exists():
+                continue
+            if p.is_dir():
+                shutil.copytree(p, target)
+            elif p.is_file():
+                shutil.copy2(p, target)
+            else:
+                continue
+            copied += 1
     return len(new_lines), copied
 
 
