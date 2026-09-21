@@ -17,7 +17,7 @@ import json
 import statistics
 import sys
 from dataclasses import asdict, dataclass
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timezone
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 from zoneinfo import ZoneInfo
