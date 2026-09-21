@@ -709,6 +709,32 @@ def _render_scanner_dashboard() -> str:
     .status.win { background: #12351f; color: var(--green); }
     .status.loss { background: #3a1919; color: var(--red); }
     .status.expired, .status.cancelled { color: var(--muted); }
+    td.wrap {
+      white-space: normal;
+      overflow-wrap: anywhere;
+      text-overflow: clip;
+    }
+    .code { font: 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .ctx { display: flex; flex-wrap: wrap; gap: 4px; }
+    .ctx-label { color: var(--muted); font-size: 11px; width: 100%; }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      border-radius: 6px;
+      padding: 2px 6px;
+      background: #222b2d;
+      color: var(--soft);
+      font-size: 11px;
+      white-space: nowrap;
+      cursor: help;
+    }
+    .chip.ok { background: var(--green-2); color: var(--green); }
+    .chip.err { background: #3a1919; color: var(--red); }
+    .chip.warn { background: #3a2f16; color: #e0b34a; }
+    .chip .src { font-weight: 700; }
+    .chip .val { opacity: 0.85; }
+    td[title] { cursor: help; }
     .kv {
       display: grid;
       grid-template-columns: 130px minmax(0, 1fr);
@@ -759,8 +785,8 @@ def _render_scanner_dashboard() -> str:
       .top-actions { justify-content: flex-start; }
       .toolbar { grid-template-columns: 1fr; }
       .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      th:nth-child(4), td:nth-child(4),
-      th:nth-child(5), td:nth-child(5) { display: none; }
+      th:nth-child(4), td:nth-child(4), col:nth-child(4),
+      th:nth-child(5), td:nth-child(5), col:nth-child(5) { display: none; }
       .kv { grid-template-columns: 104px minmax(0, 1fr); }
     }
   </style>
@@ -887,10 +913,16 @@ def _render_scanner_dashboard() -> str:
       return 'status ' + String(value || '').toLowerCase();
     }
 
-    function renderTable(headers, rows, emptyText) {
+    function renderTable(headers, rows, emptyText, widths) {
       if (!rows.length) return '<div class="empty">' + esc(emptyText) + '</div>';
-      return '<table><thead><tr>' + headers.map(h => '<th>' + esc(h) + '</th>').join('') +
+      const cols = widths ? '<colgroup>' + widths.map(w => '<col style="width:' + esc(w) + '">').join('') + '</colgroup>' : '';
+      return '<table>' + cols + '<thead><tr>' + headers.map(h => '<th>' + esc(h) + '</th>').join('') +
         '</tr></thead><tbody>' + rows.join('') + '</tbody></table>';
+    }
+
+    function cellWrap(text, extraClass) {
+      const value = String(text ?? '-');
+      return '<td class="wrap' + (extraClass ? ' ' + extraClass : '') + '" title="' + esc(value) + '">' + esc(value) + '</td>';
     }
 
     function latestContract(raw) {
@@ -908,13 +940,14 @@ def _render_scanner_dashboard() -> str:
         return '<tr>' +
           '<td><strong>' + esc(item.ticker) + '</strong><br><span class="muted">' + esc(item.direction) + '</span></td>' +
           '<td><span class="' + scoreClass(item.score) + '">' + esc(item.score) + '</span></td>' +
-          '<td>' + esc(item.pattern) + '</td>' +
-          '<td>' + esc(latestContract(raw)) + '</td>' +
-          '<td>' + esc(item.alert_sent ? 'sent' : (item.alert_suppression_reason || 'quiet')) + '</td>' +
+          cellWrap(item.pattern) +
+          cellWrap(latestContract(raw), 'code') +
+          cellWrap(item.alert_sent ? 'sent' : (item.alert_suppression_reason || 'quiet'), 'code') +
           '<td class="num">' + esc((item.timestamp || '').replace('T', ' ').slice(0, 19)) + '</td>' +
         '</tr>';
       });
-      latestScansEl.innerHTML = renderTable(['Symbol', 'Score', 'Pattern', 'Contract', 'Alert', 'Time'], rows, 'No scans recorded.');
+      latestScansEl.innerHTML = renderTable(['Symbol', 'Score', 'Pattern', 'Contract', 'Alert', 'Time'], rows, 'No scans recorded.',
+        ['13%', '9%', '18%', '20%', '24%', '16%']);
     }
 
     function signaSetupContextText(context) {
@@ -941,6 +974,56 @@ def _render_scanner_dashboard() -> str:
       }).join(' · ');
     }
 
+    function signaSourceLabel(source) {
+      const names = { dark_pool: 'dark pool', options_flow: 'flow', enhanced_signal: 'enhanced', action_card: 'card' };
+      return names[source] || String(source || '?').replace(/_/g, ' ');
+    }
+
+    function signaChipDetail(row) {
+      const fields = row.fields || {};
+      const parts = [];
+      if (row.healthy === false) parts.push(row.error ? 'ERROR ' + row.error : 'ERROR');
+      if (row.stale_fallback) parts.push('stale');
+      if (row.cached || fields.cached) parts.push('cached');
+      if (row.backoff_active || fields.backoff_active) parts.push('backoff');
+      if (row.direction) parts.push(row.direction);
+      if (fields.score !== undefined) parts.push('score ' + fields.score);
+      if (fields.sentiment !== undefined) parts.push(fields.sentiment);
+      if (fields.callPremium !== undefined) parts.push('calls $' + fields.callPremium);
+      if (fields.putPremium !== undefined) parts.push('puts $' + fields.putPremium);
+      if (fields.flip !== undefined) parts.push('flip ' + fields.flip);
+      if (fields.gamma_wall !== undefined) parts.push('wall ' + fields.gamma_wall);
+      if (fields.gammaWall !== undefined) parts.push('wall ' + fields.gammaWall);
+      if (fields.http_status !== undefined) parts.push('HTTP ' + fields.http_status);
+      return parts.join(', ');
+    }
+
+    function signaChipShort(row) {
+      const fields = row.fields || {};
+      if (row.healthy === false) return String(row.error || 'ERR').replace(/^http_/i, 'HTTP ').slice(0, 14);
+      if (row.stale_fallback) return 'stale';
+      const bits = [];
+      if (row.direction) bits.push(row.direction);
+      if (fields.sentiment !== undefined && !row.direction) bits.push(fields.sentiment);
+      if (fields.score !== undefined) bits.push(fields.score);
+      return bits.length ? bits.join(' ') : 'ok';
+    }
+
+    function signaSetupContextHtml(context) {
+      const rows = context || [];
+      if (!rows.length) return '<span class="muted">Context only: missing</span>';
+      const chips = rows.slice(0, 4).map(row => {
+        const cls = row.healthy === false ? 'err' : (row.stale_fallback || row.cached || row.backoff_active ? 'warn' : 'ok');
+        const detail = signaChipDetail(row);
+        const tip = row.source + (detail ? ' — ' + detail : '');
+        return '<span class="chip ' + cls + '" title="' + esc(tip) + '">' +
+          '<span class="src">' + esc(signaSourceLabel(row.source)) + '</span>' +
+          '<span class="val">' + esc(signaChipShort(row)) + '</span></span>';
+      }).join('');
+      return '<div class="ctx" title="' + esc(signaSetupContextText(context)) + '">' +
+        '<span class="ctx-label">Context only:</span>' + chips + '</div>';
+    }
+
     function renderShadow(items) {
       const rows = (items || []).map(item => {
         const ticket = item.selected_contract || {};
@@ -950,13 +1033,14 @@ def _render_scanner_dashboard() -> str:
           '<td><span class="' + statusClass(item.status) + '">' + esc(item.status) + '</span></td>' +
           '<td><strong>#' + esc(item.id) + ' ' + esc(item.ticker) + '</strong><br>' + esc(item.direction) + '</td>' +
           '<td><span class="' + scoreClass(item.score) + '">' + esc(item.score) + '</span></td>' +
-          '<td>' + esc(contract || item.pattern) + '</td>' +
-          '<td>' + esc(signaSetupContextText(item.signa_context)) + '</td>' +
+          cellWrap(contract || item.pattern, 'code') +
+          '<td>' + signaSetupContextHtml(item.signa_context) + '</td>' +
           '<td class="num">' + esc(outcome.pnl_dollars !== undefined ? money(outcome.pnl_dollars) : '-') + '</td>' +
           '<td class="num">' + esc((item.timestamp || '').replace('T', ' ').slice(0, 19)) + '</td>' +
         '</tr>';
       });
-      shadowLedgerEl.innerHTML = renderTable(['Status', 'Idea', 'Score', 'Contract', 'Signa Context', 'P&L', 'Time'], rows, 'No shadow ledger rows.');
+      shadowLedgerEl.innerHTML = renderTable(['Status', 'Idea', 'Score', 'Contract', 'Signa Context', 'P&L', 'Time'], rows, 'No shadow ledger rows.',
+        ['10%', '15%', '8%', '19%', '28%', '9%', '11%']);
     }
 
     function renderSigna(data) {
