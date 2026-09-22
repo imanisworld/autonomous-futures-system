@@ -81,6 +81,20 @@ FAMILY_MIYAGI = "12HR_MIYAGI"
 FAMILY_ASIA = "ASIA_D_EMA"
 FAMILY_ST = "SUSTAINED_TREND_V1"
 
+# Standalone controls must preserve each family's frozen capacity contract.
+# Sustained v1 alone had a max-3/day CapacityGate. Asia D+EMA did not; its
+# archived cohort was one-position-only. The other families emit at most one
+# same-day opportunity under their frozen state machines, so the large cap is
+# behavior-neutral for them.
+STANDALONE_DAILY_CAP = {
+    FAMILY_ST: 3,
+    FAMILY_ASIA: 1_000_000,
+    FAMILY_4HR: 1_000_000,
+    FAMILY_322: 1_000_000,
+    FAMILY_DAILY: 1_000_000,
+    FAMILY_MIYAGI: 1_000_000,
+}
+
 
 def _parse(value: str | datetime) -> datetime:
     if isinstance(value, datetime):
@@ -796,6 +810,8 @@ def _large_move_coverage(bars15, attempts: list[dict], replay) -> dict:
             "descriptive_only": True,
         },
         "windows": len(windows),
+        "represented_by_signal": len(windows) - int(counts.get("NO_SIGNAL", 0)),
+        "actually_filled": int(counts.get("FILLED", 0)),
         "categories": dict(counts),
         "details": details,
     }
@@ -836,9 +852,16 @@ def run(data_root: Path) -> dict:
         )
 
     standalone = {}
+    attempts_by_family = Counter(a["family"] for a in all_attempts)
     for family in TIE_PRIORITY:
         family_events = [event for event in all_events if event.family == family]
-        standalone[family] = summarize_replay(replay_portfolio(family_events))
+        standalone[family] = summarize_replay(
+            replay_portfolio(
+                family_events,
+                max_fills_per_day=STANDALONE_DAILY_CAP[family],
+            )
+        )
+        standalone[family]["eligible_signals"] = int(attempts_by_family.get(family, 0))
 
     combined_replay = replay_portfolio(all_events)
     combined = summarize_replay(combined_replay)
@@ -864,7 +887,7 @@ def run(data_root: Path) -> dict:
         },
         "controls": controls,
         "common_raw": {
-            "attempts_by_family": dict(Counter(a["family"] for a in all_attempts)),
+            "attempts_by_family": dict(attempts_by_family),
             "fillable_events_by_family": dict(Counter(e.family for e in all_events)),
             "families_with_no_fillable_events": sorted(missing),
         },
