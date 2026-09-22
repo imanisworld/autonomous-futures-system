@@ -188,3 +188,10 @@ def test_portfolio_research_files_have_no_live_broker_or_webhook_imports():
             for name in imported
             for prefix in forbidden
         ), (path, imported)
+
+
+def test_combined_runner_imports_without_side_effects():
+    import importlib
+    module = importlib.import_module("scripts.mnq_combined_portfolio_audit")
+    assert module.START.isoformat() == "2025-07-24"
+    assert module.END.isoformat() == "2026-06-26"
