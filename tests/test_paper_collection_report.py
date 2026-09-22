@@ -46,8 +46,6 @@ def test_summarize_futures_reads_real_journal_row_shapes():
 
 
 def test_census_options_scans_judged_against_session_close_not_wall_clock():
-    # 15:57 ET last scan on the report day: FRESH at the 16:00 close even though
-    # the census (run at 17:10 ET) calls it STALE.
     census = {
         "collectors": [
             {"name": "options scans", "status": "STALE", "last": "2026-09-16T19:57:46+00:00", "limit_minutes": 30},
@@ -60,7 +58,6 @@ def test_census_options_scans_judged_against_session_close_not_wall_clock():
     assert "FRESH_AT_CLOSE 1" in lines[0]
     assert "QUIET_BY_DESIGN 1" in lines[0]
     assert "FRESH 1" in lines[0]
-    # A genuinely dead scanner (last scan hours before the close) is still raised.
     census["collectors"][0]["last"] = "2026-09-16T14:05:00+00:00"
     lines = report._census_lines(census, options=True, session_end=date(2026, 9, 16))
     assert "attention: options scans" in lines[0]
@@ -97,7 +94,6 @@ def test_summarize_options_is_read_only_and_date_scoped(tmp_path):
     assert out["tables"]["options_shadow_journal"]["rows"] == 2
     assert out["tables"]["options_shadow_journal"]["status_counts"] == {"WATCH": 1, "ACTIVE": 1}
 
-    # Reporter must not mutate either table.
     conn = sqlite3.connect(db)
     assert conn.execute("SELECT COUNT(*) FROM scans").fetchone()[0] == 3
     assert conn.execute("SELECT COUNT(*) FROM options_shadow_journal").fetchone()[0] == 2
@@ -215,7 +211,7 @@ def test_futures_card_prioritizes_attention_without_claiming_executed_results():
     ]}
     payload = report.futures_discord_payload(summary, census, period="eod", start=date(2026, 9, 16), end=date(2026, 9, 16))
     embed = payload["embeds"][0]
-    assert "content" not in payload  # one card, no duplicate wall of text
+    assert "content" not in payload
     assert payload["allowed_mentions"] == {"parse": []}
     assert embed["color"] == 0xF0B232
     assert "Proof backup" in embed["fields"][0]["value"]
@@ -268,9 +264,6 @@ def test_main_posts_futures_embed_and_retains_raw_artifact(tmp_path, monkeypatch
 
 
 def test_retired_overnight_watch_log_never_raises_collector_attention(tmp_path):
-    """A stale legacy ``overnight_watch_summary.log`` on the box must not surface as
-    a false DEAD health item in the EOD/EOW cards once the census registration is
-    retired; the rest of the census flows through untouched."""
     (tmp_path / "overnight_watch_summary.log").write_text(
         "2026-09-01T18:04:25.671722+00:00 cycle ok: service=active\n"
     )
@@ -301,10 +294,14 @@ def test_options_card_matches_screenshot_counts_and_close_context():
     payload = report.options_discord_payload(summary, census, period="eod", start=date(2026, 9, 17), end=date(2026, 9, 17))
     embed = payload["embeds"][0]
     fields = {f["name"]: f["value"] for f in embed["fields"]}
-    assert embed["color"] == 0x5865F2
+    assert embed["title"] == "Options · Read-only daily pass"
+    assert embed["color"] == 0x57F287
+    assert fields["Status"].startswith("**PASS**")
     assert "15:57 ET" in fields["✓ Collector health"]
     assert "disabled by design" in fields["✓ Collector health"]
-    assert "**3,165**" in fields["Collection"]
+    assert "**3,165**" in fields["Collection status"]
+    assert "**3,165** scanner rows found" in fields["Signals found"]
+    assert "No data blockers" in fields["Errors / blocked channels"]
     assert "**51** · Win" in fields["Journal row statuses"]
     assert "NOT option P&L outcomes" in fields["Journal row statuses"]
     assert "futures journal" not in json.dumps(payload)
@@ -317,8 +314,8 @@ def test_options_unscoped_or_missing_data_never_looks_like_healthy_window_counts
         summary = {"status": "OK", "tables": {"scans": {"status": status, "rows": 5000}}}
         card = report.options_discord_payload(summary, {"status": "ERROR"}, period="eow", start=date(2026, 9, 14), end=date(2026, 9, 18))["embeds"][0]
         text = json.dumps(card)
-        assert card["color"] == 0xF0B232
-        assert status in text
+        assert card["color"] == 0xED4245
+        assert status.replace("_", " ").capitalize() in text
         assert "5,000" not in text
         assert "window count unavailable" in text
         assert all(len(f["value"]) <= 1024 for f in card["fields"])
@@ -334,5 +331,5 @@ def test_main_routes_options_card_and_keeps_missing_db_diagnostic(tmp_path, monk
     assert report.main(["--period", "eod", "--date", "2026-09-17", "--log-dir", str(tmp_path), "--options-db", str(tmp_path / "missing.sqlite")]) == 0
     assert len(posts) == 1
     assert posts[0][0] == "https://example.invalid/options"
-    assert "MISSING_DB" in json.dumps(posts[0][1])
-    assert posts[0][1]["embeds"][0]["title"] == "Options · Daily paper report"
+    assert "Missing db" in json.dumps(posts[0][1])
+    assert posts[0][1]["embeds"][0]["title"] == "Options · Read-only daily pass"
