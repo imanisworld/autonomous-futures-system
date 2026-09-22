@@ -104,13 +104,20 @@ The 120-tick ceiling is the existing MNQ hard-stop budget and is frozen to avoid
 
 ## Data / development status
 
-Primary retrospective development screen:
+Primary retrospective structural screen:
 
 `data/replay_corpus_v1_market_condition_fixed/MNQ`
 - 313 daily files
 - 2025-07-24 through 2026-07-23
+- canonical 15m structural source used by the existing evidence/null-baseline work
 
-Important: this corpus has been used repeatedly by the project. It is **not true out-of-sample validation** for a new idea. A retrospective PASS may only authorize a prospective observation/paper proposal.
+Frozen 5m trigger/path source:
+
+`data/replay_corpus_v1_5m/MNQ`
+
+The evaluator must select the exact 5m files matching the 313 structural dates and fail closed before scoring if any measured 15m bar has no causal 5m coverage inside its interval. No silent session dropping, RTH-only substitution, or interpolation is allowed.
+
+Important: these corpora have been used repeatedly by the project. They are **not true out-of-sample validation** for a new idea. A retrospective PASS may only authorize a prospective observation/paper proposal.
 
 The 2026-09-21 move that motivated the research is also not validation data because it has already been observed.
 
@@ -135,12 +142,12 @@ Report:
 - best day;
 - leave-best-day-out;
 - leave-best-3-days-out;
-- top-3 positive-day contribution to total net;
+- top-3 positive-day contribution to total positive day net;
 - max consecutive losses;
 - session breakdown;
 - monthly breakdown.
 
-Also report large-move coverage descriptively using a separate outcome-defined population. Coverage may not alter the detector or pass/fail threshold.
+Also report large-move coverage descriptively using the project's already-established missed-move denominator: non-overlapping 4-bar (15m) blocks with MNQ high-low range >= 60 points. Report all large-range windows and the LONG-relevant subset whose final close is above the first bar's open; for each, report overlap with ARMED, trigger, and filled events. This coverage analysis has no pass/fail authority and may not alter the detector.
 
 ## Frozen retrospective gate
 
