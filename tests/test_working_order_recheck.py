@@ -179,3 +179,26 @@ def test_paper_broker_path_does_not_call_tradovate_order_list_logic(monkeypatch,
     result = process_alert(payload, config=cfg, log_dir=str(tmp_path / "logs"), for_date=fd)
     assert result["decision"] == "TRADE", result
     assert result.get("fill")
+
+
+def test_unknown_order_status_prevents_execute_bracket(monkeypatch, tmp_path):
+    result, fake_broker = _run_with_fake_broker(
+        monkeypatch,
+        tmp_path,
+        list_orders_impl=lambda broker: [
+            {"ordStatus": "FutureBrokerStatus", "accountId": None}
+        ],
+    )
+    assert fake_broker.execute_bracket_called is False
+    assert result["decision"] == "ORDER_SUPPRESSED", result
+    assert "working_order_conflict" in result.get("gate_reason", "")
+
+
+def test_terminal_order_status_does_not_block_execute_bracket(monkeypatch, tmp_path):
+    result, fake_broker = _run_with_fake_broker(
+        monkeypatch,
+        tmp_path,
+        list_orders_impl=lambda broker: [{"ordStatus": "Filled", "accountId": None}],
+    )
+    assert fake_broker.execute_bracket_called is True
+    assert result["decision"] == "TRADE", result

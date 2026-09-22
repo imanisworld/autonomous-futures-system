@@ -41,7 +41,7 @@ from execution.day_only_exit import (
     positions_agree,
 )
 from execution.live_preflight import (
-    WORKING_ORDER_STATUSES,
+    TERMINAL_ORDER_STATUSES,
     _list_orders,
     _list_positions,
     _order_status,
@@ -108,7 +108,7 @@ def _account_entry_gate(broker) -> tuple[bool, str]:
         orders = _list_orders(broker)
         if any(abs(_position_qty(row)) > 0 for row in positions):
             return False, "broker_account_not_flat"
-        if any(_order_status(row) in WORKING_ORDER_STATUSES for row in orders):
+        if any(_order_status(row) not in TERMINAL_ORDER_STATUSES for row in orders):
             return False, "broker_working_orders_present"
     except Exception as exc:
         return False, f"broker_state_unreadable:{type(exc).__name__}"
@@ -307,7 +307,7 @@ def _eod_exclusive_gate(broker, position: dict[str, Any]) -> tuple[bool, str]:
     working_ids = {
         row.get("id")
         for row in orders
-        if _order_status(row) in WORKING_ORDER_STATUSES and row.get("id") is not None
+        if _order_status(row) not in TERMINAL_ORDER_STATUSES and row.get("id") is not None
     }
     if working_ids - allowed_ids:
         return False, "eod_unexpected_working_orders_present"

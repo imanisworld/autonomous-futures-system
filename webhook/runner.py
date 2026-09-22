@@ -2908,13 +2908,17 @@ def process_alert(
     if getattr(cfg, "working_order_recheck_enabled", True) and not isinstance(broker, PaperBroker):
         _wo_reason = None
         try:
-            from execution.live_preflight import _list_orders, _order_status, WORKING_ORDER_STATUSES
+            from execution.live_preflight import (
+                TERMINAL_ORDER_STATUSES,
+                _list_orders,
+                _order_status,
+            )
 
             _account_id = getattr(broker, "_account_id", None)
             _existing_orders = _list_orders(broker)
             _working = [
                 o for o in _existing_orders
-                if _order_status(o) in WORKING_ORDER_STATUSES
+                if _order_status(o) not in TERMINAL_ORDER_STATUSES
                 and (_account_id is None or o.get("accountId") in (None, _account_id))
             ]
             if _working:
