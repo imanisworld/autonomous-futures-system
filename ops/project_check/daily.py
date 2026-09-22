@@ -68,6 +68,7 @@ def _parse_strategy_inventory(path: Path) -> tuple[list[dict[str, Any]], str | N
     rows: list[dict[str, Any]] = []
     in_master_table = False
     header_seen = False
+    header_cells: list[str] = []
     for line in lines:
         if line.startswith("## Master Table"):
             in_master_table = True
@@ -83,6 +84,7 @@ def _parse_strategy_inventory(path: Path) -> tuple[list[dict[str, Any]], str | N
         cells = [c.strip() for c in match.group(1).split("|")]
         if not header_seen:
             header_seen = True
+            header_cells = [c.strip().lower() for c in cells]
             continue
         if not cells or set(cells[0]) <= {"-", " "}:
             continue
@@ -90,8 +92,22 @@ def _parse_strategy_inventory(path: Path) -> tuple[list[dict[str, Any]], str | N
         verdict_cell = cells[-1] if cells else ""
         verdict_match = re.search(r"\*\*(.+?)\*\*", verdict_cell)
         verdict = verdict_match.group(1).strip() if verdict_match else verdict_cell.strip() or None
+        execution_posture = None
+        for label in ("execution posture (not evidence)", "execution posture"):
+            if label in header_cells:
+                idx = header_cells.index(label)
+                if idx < len(cells):
+                    execution_posture = cells[idx].strip() or None
+                break
         if name:
-            rows.append({"name": name, "verdict": verdict, "raw_verdict_cell": verdict_cell})
+            rows.append(
+                {
+                    "name": name,
+                    "verdict": verdict,
+                    "raw_verdict_cell": verdict_cell,
+                    "execution_posture": execution_posture,
+                }
+            )
     return rows, None
 
 
@@ -158,17 +174,23 @@ def _strategy_source_of_truth(*, repo_root: Path, rules_active_lanes: dict[str, 
         return any(word in _normalize(row["name"]) for word in _DERIVED_LANE_WORDS)
 
     def _is_parked_family_row(row: dict[str, Any]) -> bool:
-        """The wide-stop family's verdict form: real signal, parked on account size.
+        """Whether the inventory explicitly parks a family on current-account risk.
 
-        `BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS ... PARKED below $N equity`
-        is not the same claim as `BROKEN`. It says the strategy is incompatible
-        with the $1,500 book, which is precisely what the hypothetical-ledger
-        lane exists to test on a $4,000 / $6,000 ledger that is not real equity.
-        A fill there is expected, not drift. See
-        docs/wide-stop-hypothetical-ledger-lane-spec-2026-09-07.md §5.
+        New inventories carry this in `execution_posture`; the verdict fallback
+        preserves compatibility with historical/synthetic inventory tables.
         """
+        posture = (row.get("execution_posture") or "").upper()
         verdict = (row.get("verdict") or "").upper()
-        return "CURRENT SYSTEM RISK CONSTRAINTS" in verdict and "PARKED" in verdict
+        combined = f"{posture} {verdict}"
+        return (
+            "PARKED" in combined
+            and (
+                "CURRENT RISK CONSTRAINTS" in combined
+                or "CURRENT-ACCOUNT" in combined
+                or "REAL-ACCOUNT EXECUTION BLOCKED" in combined
+                or "CURRENT SYSTEM RISK CONSTRAINTS" in combined
+            )
+        )
 
     # A derived lane (e.g. the inverted ORB Breakout paper lane) executes a
     # transform of its source concept, so the source concept must be enabled
@@ -192,17 +214,17 @@ def _strategy_source_of_truth(*, repo_root: Path, rules_active_lanes: dict[str, 
                 "concept_key": concept,
                 "match_kind": match_kind,
                 "inventory_verdict": row.get("verdict"),
+                "inventory_execution_posture": row.get("execution_posture"),
                 "configured_active": is_active_in_config,
             }
         )
-        if not (is_active_in_config and _is_unsafe(row)):
-            continue
-        if _is_parked_family_row(row) and wide_stop_ledger_active:
+        if is_active_in_config and _is_parked_family_row(row) and wide_stop_ledger_active:
             hypothetical_notes.append(
                 {
                     "strategy": row["name"],
                     "concept_key": concept,
                     "inventory_verdict": row.get("verdict"),
+                    "inventory_execution_posture": row.get("execution_posture"),
                     "ledger": (wide_stop_membership.get(concept) or {}).get("ledger"),
                     "role": (wide_stop_membership.get(concept) or {}).get("role"),
                     "label": wide_stop_ledger_paper.LABEL,
@@ -213,6 +235,8 @@ def _strategy_source_of_truth(*, repo_root: Path, rules_active_lanes: dict[str, 
                     ),
                 }
             )
+            continue
+        if not (is_active_in_config and _is_unsafe(row)):
             continue
         derived_rows = [] if _is_derived_row(row) else safe_derived_rows_by_concept.get(concept, [])
         if derived_rows:
