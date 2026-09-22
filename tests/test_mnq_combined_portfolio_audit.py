@@ -269,3 +269,8 @@ def test_sustained_standalone_control_keeps_frozen_three_per_day_cap():
         max_fills_per_day=runner.STANDALONE_DAILY_CAP["SUSTAINED_TREND_V1"],
     )
     assert len(replay.fills) == 3
+
+
+def test_322_portfolio_adapter_uses_frozen_research_corpus_identity():
+    from scripts import mnq_combined_portfolio_audit as runner
+    assert runner.CANONICAL_322_15M_DIR == "replay_polygon"
