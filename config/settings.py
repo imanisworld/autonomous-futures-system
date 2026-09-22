@@ -517,6 +517,13 @@ class SystemConfig:
     session_22c_paper_mode: str = "off"
     session_22c_paper_epoch_start: Optional[str] = None
 
+    # ── MNQ existing-family trend-day forward paper cohort (2026-09-22) ───
+    # Four independent LONG-only family lanes using existing shadow candidates
+    # and canonical PaperBroker IOC mechanics. Default OFF. paper_sim requires
+    # an offset-aware epoch. No demo/live mode exists.
+    mnq_trend_day_paper_mode: str = "off"
+    mnq_trend_day_paper_epoch_start: Optional[str] = None
+
     # ── Wide-stop hypothetical-ledger paper lane (2026-09-07 spec, B+) ────
     # Isolated $4,000 / $6,000 HYPOTHETICAL ledgers for the parked wide-stop
     # family. Paper-only by construction: no demo or live value exists, and
@@ -861,6 +868,12 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         ).strip().lower(),
         session_22c_paper_epoch_start=(
             os.getenv("SESSION_22C_PAPER_EPOCH_START") or None
+        ),
+        mnq_trend_day_paper_mode=str(
+            os.getenv("MNQ_TREND_DAY_PAPER_MODE", "off") or "off"
+        ).strip().lower(),
+        mnq_trend_day_paper_epoch_start=(
+            os.getenv("MNQ_TREND_DAY_PAPER_EPOCH_START") or None
         ),
         wide_stop_ledger_mode=str(
             os.getenv("WIDE_STOP_LEDGER_MODE", "observe_only") or "observe_only"
@@ -1249,6 +1262,33 @@ def _validate_config(config: SystemConfig) -> None:
             ) from exc
         if _parsed_22c_epoch.tzinfo is None:
             raise ConfigError("SESSION_22C_PAPER_EPOCH_START must include a UTC offset.")
+
+    _valid_trend_day_modes = {"off", "paper_sim"}
+    if config.mnq_trend_day_paper_mode not in _valid_trend_day_modes:
+        raise ConfigError(
+            "MNQ_TREND_DAY_PAPER_MODE must be one of "
+            f"{sorted(_valid_trend_day_modes)} (got {config.mnq_trend_day_paper_mode!r}); "
+            "this cohort is paper-only and defaults to off."
+        )
+    if config.mnq_trend_day_paper_mode == "paper_sim":
+        _trend_day_epoch = config.mnq_trend_day_paper_epoch_start
+        if not _trend_day_epoch:
+            raise ConfigError(
+                "MNQ_TREND_DAY_PAPER_EPOCH_START is required when "
+                "MNQ_TREND_DAY_PAPER_MODE=paper_sim."
+            )
+        try:
+            _parsed_trend_day_epoch = datetime.fromisoformat(
+                str(_trend_day_epoch).replace("Z", "+00:00")
+            )
+        except ValueError as exc:
+            raise ConfigError(
+                "MNQ_TREND_DAY_PAPER_EPOCH_START must be an ISO-8601 timestamp."
+            ) from exc
+        if _parsed_trend_day_epoch.tzinfo is None:
+            raise ConfigError(
+                "MNQ_TREND_DAY_PAPER_EPOCH_START must include a UTC offset."
+            )
     if (
         config.mnq_orb_breakout_inverse_mode != "observe_only"
         and config.mnq_orb_breakout_proof_mode != "observe_only"
