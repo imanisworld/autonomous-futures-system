@@ -686,7 +686,7 @@ def _sustained(root15: Path, root5late: Path) -> tuple[list[PortfolioEvent], dic
     detector = SustainedTrendContinuationV1()
     capacity = CapacityGate()
     active: ResearchTrade | None = None
-    admitted: list[tuple[ResearchTrade, str]] = []
+    admitted: list[tuple[ResearchTrade, str, str]] = []
     attempts_full: list[dict] = []
 
     for path15 in files15_all:
@@ -724,6 +724,7 @@ def _sustained(root15: Path, root5late: Path) -> tuple[list[PortfolioEvent], dic
                     "family": FAMILY_ST,
                     "source_id": source_id,
                     "ts": item.event_ts,
+                    "source_day": day,
                 })
                 if item.event != "TRIGGERED":
                     continue
@@ -741,7 +742,7 @@ def _sustained(root15: Path, root5late: Path) -> tuple[list[PortfolioEvent], dic
                     target=float(item.target),
                     stop_ticks=float(item.stop_ticks),
                 )
-                admitted.append((trade, source_id))
+                admitted.append((trade, source_id, day))
                 active = trade
 
     if active is not None:
@@ -749,7 +750,9 @@ def _sustained(root15: Path, root5late: Path) -> tuple[list[PortfolioEvent], dic
         active = None
 
     full_events: list[PortfolioEvent] = []
-    for trade, source_id in admitted:
+    source_day_by_id: dict[str, str] = {}
+    for trade, source_id, source_day in admitted:
+        source_day_by_id[source_id] = source_day
         exit_ts = trade.exit_ts
         if trade.result == "OPEN_EOD":
             exit_ts = _sustained_day_end(trade.observation_day)
@@ -795,13 +798,15 @@ def _sustained(root15: Path, root5late: Path) -> tuple[list[PortfolioEvent], dic
     events = [
         event
         for event in full_events
-        if START <= date.fromisoformat(event.eligible_fill_ts[:10]) <= END
+        if START <= date.fromisoformat(source_day_by_id[event.source_id]) <= END
     ]
     attempts = [
         attempt
         for attempt in attempts_full
-        if START <= date.fromisoformat(attempt["ts"][:10]) <= END
+        if START <= date.fromisoformat(attempt["source_day"]) <= END
     ]
+    for attempt in attempts:
+        attempt.pop("source_day", None)
 
     return events, {
         "canonical_full_window": control,
