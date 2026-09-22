@@ -308,11 +308,32 @@ def disarm(*, reason: str = "manual", state_path: str | Path | None = None, noti
     return state.as_dict()
 
 
+def _current_drift_ok() -> tuple[bool, dict[str, Any]]:
+    try:
+        drift = _drift_report()
+    except Exception as exc:
+        return False, {
+            "ok": False,
+            "status": "error",
+            "summary": f"live box drift guard raised {type(exc).__name__}",
+        }
+    return drift.get("ok") is True, drift
+
+
 def live_order_ready(*, state_path: str | Path | None = None) -> bool:
-    return load_state(state_path).ready
+    state = load_state(state_path)
+    if not state.ready:
+        return False
+    drift_ok, _ = _current_drift_ok()
+    return drift_ok
 
 
 def live_order_status(*, state_path: str | Path | None = None) -> dict[str, Any]:
-    payload = load_state(state_path).as_dict()
-    payload["live_box_drift_guard"] = _drift_report()
+    state = load_state(state_path)
+    payload = state.as_dict()
+    drift_ok, drift = _current_drift_ok()
+    payload["live_box_drift_guard"] = drift
+    payload["ready"] = bool(state.ready and drift_ok)
+    if state.ready and not drift_ok:
+        payload["reason"] = "runtime_drift"
     return payload
