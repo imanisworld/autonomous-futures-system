@@ -204,6 +204,30 @@ def test_largest_rss_probe_is_display_only_and_fails_open(monkeypatch):
     assert "• Largest RSS: unavailable" in text
 
 
+def test_largest_rss_probe_passes_the_real_read_only_allowlist(monkeypatch):
+    # The probe used to be refused by run()'s allowlist, and that RuntimeError
+    # crashed every tick that rendered a memory notice. Exercise the real run().
+    calls = []
+
+    def fake_subprocess_run(cmd, **_kwargs):
+        calls.append(cmd)
+        return w.subprocess.CompletedProcess(cmd, 0, stdout="python3 350000\nbash 4000\n", stderr="")
+
+    monkeypatch.setattr(w.subprocess, "run", fake_subprocess_run)
+    assert w._largest_rss_process() == ("python3", 341.8)
+    assert calls == [["ps", "-eo", "comm=,rss=", "--sort=-rss"]]
+
+
+def test_largest_rss_probe_fails_open_when_run_raises(monkeypatch):
+    def refuse(*_args, **_kwargs):
+        raise RuntimeError("command not in read-only allowlist")
+
+    monkeypatch.setattr(w, "run", refuse)
+    assert w._largest_rss_process() is None
+    text = w._memory_discord_text("RECOVERED", "swap_pressure_warning", None, _memory_tick())
+    assert "• Largest RSS: unavailable" in text
+
+
 def test_feed_status_is_readable_for_healthy_and_stale(monkeypatch):
     monkeypatch.setattr(w, "now_utc", lambda: w._ts("2026-09-15T21:00:00Z"))
     lanes = {"inventory": {}, "newest_5m_mnq_bar_mtime": "2026-09-15T20:55:00Z",

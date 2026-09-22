@@ -248,7 +248,7 @@ DAILY_DIR = STATE_DIR / "daily"
 INTERIM_DIR = STATE_DIR / "interim"
 NOTIFY_PREFIX = "[AFS WATCHER · read-only]"
 
-READ_ONLY_COMMANDS = ("systemctl", "journalctl", "readlink", "df", "pgrep")
+READ_ONLY_COMMANDS = ("systemctl", "journalctl", "readlink", "df", "pgrep", "ps")
 FORBIDDEN_TOKENS = (
     "systemctl restart", "systemctl stop", "systemctl start", "systemctl kill",
     "systemctl reload", "atomic_release", "afs-deploy", "ln -sfn", "/order/",
@@ -1859,7 +1859,10 @@ _FINDING_EXPLAIN = {
 
 def _largest_rss_process() -> tuple[str, float] | None:
     """Return the current largest RSS process for display only; fail open."""
-    rc, out = run(["ps", "-eo", "comm=,rss=", "--sort=-rss"], timeout=10)
+    try:
+        rc, out = run(["ps", "-eo", "comm=,rss=", "--sort=-rss"], timeout=10)
+    except Exception:
+        return None
     if rc != 0:
         return None
     for line in out.splitlines():
