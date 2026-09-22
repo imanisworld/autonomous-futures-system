@@ -51,6 +51,11 @@ PROOF_CRITICAL_RUNTIME_OVERRIDES = (
     # fixes its evidence identity.
     "SESSION_22C_PAPER_MODE",
     "SESSION_22C_PAPER_EPOCH_START",
+    # MNQ existing-family trend-day paper cohort (2026-09-22). Default OFF,
+    # PaperBroker-only; proof-critical because mode/epoch define whether and
+    # where the prospective evidence stream exists.
+    "MNQ_TREND_DAY_PAPER_MODE",
+    "MNQ_TREND_DAY_PAPER_EPOCH_START",
     "STARTING_BALANCE",
     "REQUIRE_TRENDING_CONDITION",
     "VWAP_ENTRY_MAX_DISTANCE_TICKS",
