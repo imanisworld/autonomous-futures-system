@@ -486,6 +486,37 @@ def test_runner_trending_orb_breakout_mes_produces_trade(config, tmp_path):
     assert entry["confluence"]["grade"]
 
 
+def test_normal_paper_ioc_uses_decision_close_like_replay(config, tmp_path, monkeypatch):
+    """Normal PaperBroker IOC entry must use the same causal decision-bar close
+    reference ReplayEngine passes to execute_bracket()."""
+    from execution.paper_broker import PaperBroker
+    from webhook.runner import process_alert
+
+    captured = {}
+    real_execute = PaperBroker.execute_bracket
+
+    def spy_execute(self, order, market_price=None, **kwargs):
+        captured["market_price"] = market_price
+        return real_execute(self, order, market_price=market_price, **kwargs)
+
+    monkeypatch.setattr(PaperBroker, "execute_bracket", spy_execute)
+    cfg = replace(
+        config,
+        enabled_concepts=config.enabled_concepts + ["orb_breakout"],
+        entry_fill_model="ioc_limit",
+        entry_tolerance_ticks_by_root={"MES": 32.0},
+    )
+    result = process_alert(
+        _mes_orb_payload(),
+        config=cfg,
+        log_dir=str(tmp_path / "logs"),
+    )
+
+    assert captured["market_price"] == 5900.0
+    assert result["decision"] == "TRADE"
+    assert result["fill"]["status"] == "OPEN"
+
+
 def test_runner_logs_exec_trace_around_broker_call(config, tmp_path, caplog):
     """EXECUTION_STATE_BUG diagnostic tracing (2026-07-10): confirms
     execute_bracket is reached and logs its actual return, independent of
