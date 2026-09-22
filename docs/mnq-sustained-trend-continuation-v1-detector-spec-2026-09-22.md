@@ -117,7 +117,7 @@ Let completed 15m bars be `b0..b7`, chronological, where `b7` is the arm-decisio
 
 `up_transitions = count(bi.close > b(i-1).close)` for i=1..7
 
-`ATR20` is the standard true-range ATR over the latest 20 completed 15m bars, including b7.
+`ATR20` is Wilder/RMA ATR(20), using standard true range, seeded as the simple average of the first 20 causal true-range observations and then updated as `(prior_atr * 19 + current_tr) / 20`; the arm bar b7 is included. This matches the project's established meaning of standard ATR rather than a rolling SMA of true range.
 
 Arm iff:
 
