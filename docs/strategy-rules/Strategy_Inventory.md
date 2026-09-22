@@ -642,6 +642,8 @@ See `ICC_ICT_Research.md` for full breakdown.
 
 ## Pending Research
 
+| ~~**Existing MNQ sustained-trend family audit (#911)**~~ — **CLOSED 2026-09-22 / REJECT — no candidate.** Frozen unchanged run over all 313 canonical days: EMA pullback 461 terminal / -$3,823.28 / PF 0.8587; impulse first pullback 728 / -$2,593.94 / PF 0.8972; Strat 22 continuation 758 / +$3,530.16 / PF 1.1065 with H1 negative; trend consolidation break 484 / -$4,765.82 / PF 0.7487. None cleared the preregistered gate. #910 default-off paper cohort closed unmerged because the prerequisite audit produced no qualifying family. No tuning/session rescue/runtime activation authorized. | — | closed |
+
 | Item | Blocking | Who |
 |---|---|---|
 | ~~VWAP hold IOC reference-price resolution~~ — **done 2026-07-26**, operator chose `close` as canonical; see `VWAP_HOLD_IOC_CLOSE_RESCORING_2026-07-26.md` | — | — |
