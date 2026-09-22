@@ -43,6 +43,15 @@ WORKING_ORDER_STATUSES = {
     "working",
 }
 
+TERMINAL_ORDER_STATUSES = {
+    "filled",
+    "completed",
+    "rejected",
+    "canceled",
+    "cancelled",
+    "expired",
+}
+
 
 @dataclass(frozen=True)
 class PreflightCheck:
@@ -256,7 +265,11 @@ def run_preflight(
 
     try:
         orders = _list_orders(broker)
-        working_orders = [o for o in orders if _order_status(o) in WORKING_ORDER_STATUSES]
+        statuses = [(_order_status(o), o) for o in orders]
+        working_orders = [
+            o for status, o in statuses
+            if status not in TERMINAL_ORDER_STATUSES
+        ]
         checks.append(_check("orders_readable", True, f"{len(orders)} order row(s)"))
     except Exception as exc:
         checks.append(_check("orders_readable", False, str(exc)))
