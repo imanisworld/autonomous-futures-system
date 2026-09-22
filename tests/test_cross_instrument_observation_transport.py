@@ -513,9 +513,12 @@ def test_sessions_are_product_aware():
     assert product_session_active("MBT", datetime(2026, 9, 26, 5, 0, tzinfo=ET)) is True    # normal Sat reopen
     assert product_session_active("MBT", datetime(2026, 9, 14, 17, 1, tzinfo=ET)) is False  # Mon–Fri 16:00–16:02 CT
     assert product_session_active("MBT", datetime(2026, 9, 14, 17, 30, tzinfo=ET)) is True  # no 17:00–18:00 break for crypto
-    assert product_session_active("MNQ", datetime(2026, 9, 14, 16, 20, tzinfo=ET)) is False  # equity-index halt
-    assert product_session_active("M2K", datetime(2026, 9, 14, 16, 20, tzinfo=ET)) is False
-    assert product_session_active("MGC", datetime(2026, 9, 14, 16, 20, tzinfo=ET)) is True   # no halt for metals
+    # CME removed the 16:15–16:30 ET equity-index halt effective 2021-06-28.
+    assert product_session_active("MNQ", datetime(2026, 9, 14, 16, 20, tzinfo=ET)) is True
+    assert product_session_active("M2K", datetime(2026, 9, 14, 16, 15, tzinfo=ET)) is True
+    assert product_session_active("MES", datetime(2026, 9, 14, 16, 29, tzinfo=ET)) is True
+    assert product_session_active("MGC", datetime(2026, 9, 14, 16, 20, tzinfo=ET)) is True
+    assert product_session_active("MNQ", datetime(2026, 9, 14, 17, 0, tzinfo=ET)) is False   # daily break
     assert product_session_active("MCL", datetime(2026, 9, 14, 17, 30, tzinfo=ET)) is False  # daily break
     assert product_session_active("XYZ", sat_noon) is None                                 # unknown = unknown
     # Legacy helper untouched for its existing callers.

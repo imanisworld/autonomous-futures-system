@@ -24,8 +24,10 @@ It returns a `ProductSessionStatus` (`instrument`, `status`, `calendar`,
   cannot tell which, so that evening is unknown and closed.
 - Good Friday is not in the repo calendar. It is unknown and closed.
 - The early close uses 13:00 ET. CME's is 12:15 CT (13:15 ET).
-- The CME 16:15–16:30 ET equity halt that `product_session_active` encodes is
-  not modeled here. Confirm it against the CME before a wiring PR relies on it.
+- There is no 16:15–16:30 ET equity halt to model. Verified removed: CME
+  eliminated it effective trade date 2021-06-28 (Globex notice 2021-06-21);
+  the Micro E-mini FAQ lists Sun–Fri 17:00–16:00 CT with only the 16:00–17:00
+  CT daily maintenance halt. `product_session_active` no longer encodes it.
 
 ## Not product-calendar proof
 
