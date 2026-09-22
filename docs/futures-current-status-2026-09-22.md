@@ -86,6 +86,27 @@ Current curated reporter pin:
 
 The frozen retrospective v1 screen is **CLOSED / WAIT**. At exact research head `cd50f423c77a87255f3b1b19160bb9566f902011`, coverage was complete (23,533/23,533 bars) and the run produced 36 fills / 34 terminal, +$576.18 net, PF 1.762, positive H1/H2, and $172.42 max drawdown. It failed the preregistered >=40 terminal-fill and PF >=1.94 gates. PR #912 remains the unmerged research record. Do not tune or rerun v1 on the same corpus; a materially different sustained-trend hypothesis requires a new preregistration.
 
+## 2026-09-22 natural evidence update
+
+### 1-2-2 prospective collector
+
+The natural 13:00 UTC run and subsequent cycles exited successfully, but **today's evidence does not qualify**. Twelve new rows were all `COLLECTOR_ERROR` with `source_error:ReadTimeout`; there were 0 accepted setup rows, 0 denominator/rejected setup rows, and 0 SIP reconciliations. Classification: **HOLD — source availability blocked evidence collection**. Do not backfill, rerun, or tune the frozen `122-IEX-E1` policy to compensate.
+
+### Signa #892 forward proof
+
+Natural market-hours traffic produced 59 HTTP-200 snapshots and three scan `ReadTimeout` errors across successive checks. Context remained `observation_only=1` and `trade_authority=0`. No 429 was observed, so normal provider use is functioning, but the shared 429 cooldown path is **not yet naturally proven**. Do not force throttling merely to exercise it.
+
+### Existing MNQ trend-family audit — #911
+
+Frozen #911 audit at `e68e2da...` ran unchanged across all 313 canonical days. **No family cleared the preregistered research gate.**
+
+- EMA pullback: 461 terminal, -$3,823.28, PF 0.8587; H2 negative.
+- Impulse first pullback: 728 terminal, -$2,593.94, PF 0.8972; both halves negative.
+- Strat 22 continuation: 758 terminal, +$3,530.16, PF 1.1065; H1 negative.
+- Trend consolidation break: 484 terminal, -$4,765.82, PF 0.7487; both halves negative.
+
+#911 is closed unmerged as **REJECT / no candidate**. #910 is also closed unmerged: its default-off paper cohort had no qualifying family to justify merge or activation. No session rescue, tuning, stop/target rewrite, or runtime integration is authorized from these results.
+
 ## Current evidence gates
 
 1. **1-2-2:** wait for the natural RTH chain:
