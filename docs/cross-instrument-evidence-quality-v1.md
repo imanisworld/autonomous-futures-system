@@ -56,8 +56,9 @@ from up to the last eight recorded 15m bars ending at the signal. It then checks
 every expected 15m bar open through the terminal exit.
 
 Expected-bar logic uses the product-aware feed calendar so known maintenance,
-weekend closures, and the equity-index 16:15–16:30 ET halt do not become fake
-gaps. Holiday and early-close exceptions are **not guessed**. A false-positive
+and weekend closures do not become fake gaps. (There is no 16:15–16:30 ET
+equity-index halt; CME removed it effective 2021-06-28, so a missing 16:15 ET
+bar is a real gap.) Holiday and early-close exceptions are **not guessed**. A false-positive
 quality block is acceptable; falsely clean evidence is not.
 
 Missing bars are never fabricated or automatically backfilled by this layer.
@@ -133,7 +134,8 @@ Thirty dirty rows cannot satisfy the gate.
 - a complete continuous M2K window spanning the observed 2026-09-14 live roll
   failing closed as `ROLL_PROVENANCE_UNKNOWN`;
 - an unexplained missing 15m bar blocking the sample;
-- the equity-index 16:15–16:30 ET halt not becoming a false gap;
+- a missing 16:15 ET equity-index bar counting as a gap, and the daily
+  17:00–18:00 ET maintenance break not becoming a false gap;
 - continuous MGC failing closed while exact contract identity is unproven;
 - an exact contract switch inside a window being roll-contaminated;
 - unknown release SHA blocking evidence;
