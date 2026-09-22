@@ -279,3 +279,24 @@ def test_322_portfolio_adapter_uses_frozen_research_corpus_identity():
 def test_miyagi_portfolio_adapter_uses_frozen_5m_evidence_corpus():
     from scripts import mnq_combined_portfolio_audit as runner
     assert runner.CANONICAL_MIYAGI_5M_DIR == "replay_polygon_5m"
+
+
+def test_sustained_open_eod_uses_exact_cme_observation_day_roll():
+    from scripts import mnq_combined_portfolio_audit as runner
+
+    # Jan 5, 2026 is EST: 18:00 ET == 23:00 UTC.
+    assert (
+        runner._sustained_day_end("2026-01-05")
+        == "2026-01-05T23:00:00+00:00"
+    )
+
+
+def test_sustained_expected_control_includes_full_frozen_fill_count():
+    from scripts import mnq_combined_portfolio_audit as runner
+
+    assert runner.EXPECTED["SUSTAINED_TREND_V1"] == {
+        "fills": 36,
+        "terminal": 34,
+        "net": 576.18,
+        "pf": 1.762,
+    }
