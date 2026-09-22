@@ -138,15 +138,15 @@ The duplicate research work did not create a journal repair requirement.
 ## Known technical defects — current delta
 
 **OPEN**
-1. **Normal paper vs ReplayEngine entry-fill parity:** the normal webhook paper path can omit the market price while replay supplies the candle close. This remains a real parity defect.
-2. **Strategy Inventory taxonomy:** evidence classification and execution/enabled status are still mixed in the inventory wording. These must remain separate concepts.
+1. **Strategy Inventory taxonomy:** evidence classification and execution/enabled status are still mixed in the inventory wording. These must remain separate concepts.
 
 **CONFIRMED FIXED — do not carry forward as open defects**
+- normal PaperBroker vs ReplayEngine IOC entry-reference parity (#918 / `3e624693871cb725541e286b7feabf2633342228`): the normal webhook PaperBroker IOC path now supplies the causal decision-bar close, matching ReplayEngine; full CI passed before merge. This was repo-only and has **not** been deployed/restarted.
 - promotion gate hard-blocker success semantics (#893 / `acadbf8`);
 - zero/dead forward-campaign arm visibility (#582 / `964099c`);
 - `project_check daily` critical-failure success semantics (#788/#790).
 
-This documentation update does not authorize fixing either remaining defect, changing runtime, or rerunning strategy research.
+This documentation update does not authorize fixing the remaining taxonomy defect, changing runtime, deploying #918, restarting services, or rerunning strategy research.
 
 ## Current evidence gates
 
