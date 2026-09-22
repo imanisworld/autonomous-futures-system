@@ -3022,6 +3022,16 @@ def process_alert(
         _inverse_ioc_market_px
         if _inverse_ioc_market_px is not None
         else _proof_market_px
+        if _proof_market_px is not None
+        else (
+            state.ohlc.close
+            if (
+                state.ohlc is not None
+                and isinstance(broker, PaperBroker)
+                and getattr(broker, "_entry_fill_model", None) == "ioc_limit"
+            )
+            else None
+        )
     )
     _submit_ts = datetime.now(timezone.utc)
     fill = (
