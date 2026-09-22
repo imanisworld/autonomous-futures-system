@@ -655,3 +655,34 @@ def test_demo_entry_blocks_malformed_broker_state(
     assert str(blocked[-1].get("lane_reason") or "").startswith(
         "broker_state_unreadable:ValueError"
     )
+
+
+@pytest.mark.parametrize(
+    "positions,orders",
+    [
+        ([{"contractId": 12345}], []),
+        ([{"netPos": "unknown"}], []),
+        ([], [{"id": 999}]),
+    ],
+)
+def test_demo_entry_blocks_ambiguous_broker_rows(
+    tmp_path, monkeypatch, positions, orders
+):
+    _demo_env(monkeypatch)
+    _patch_candidate(monkeypatch, FOUR_HR)
+    broker = _FakeBroker(positions=positions, orders=orders)
+
+    events = demo.process_demo_five_min_bar(
+        payload=_payload(), cfg=_cfg(), bars_5m=[], log_dir=tmp_path,
+        for_date=DAY, broker_factory=lambda: broker,
+    )
+
+    assert broker.execute_calls == 0
+    blocked = [
+        row for row in events
+        if row.get("lane_failed_rule") == "demo_account_exclusive_gate"
+    ]
+    assert blocked
+    assert str(blocked[-1].get("lane_reason") or "").startswith(
+        "broker_state_unreadable:ValueError"
+    )
