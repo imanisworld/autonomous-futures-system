@@ -194,14 +194,20 @@ def _position_qty(position: dict) -> float:
     return 0.0
 
 
+def _validated_broker_rows(result: Any, endpoint: str) -> list[dict]:
+    if not isinstance(result, list):
+        raise ValueError(f"{endpoint} returned non-list broker state")
+    if any(not isinstance(row, dict) for row in result):
+        raise ValueError(f"{endpoint} returned malformed broker-state row")
+    return result
+
+
 def _list_positions(broker) -> list[dict]:
-    result = broker._get("/position/list")
-    return result if isinstance(result, list) else []
+    return _validated_broker_rows(broker._get("/position/list"), "/position/list")
 
 
 def _list_orders(broker) -> list[dict]:
-    result = broker._get("/order/list")
-    return result if isinstance(result, list) else []
+    return _validated_broker_rows(broker._get("/order/list"), "/order/list")
 
 
 def run_preflight(

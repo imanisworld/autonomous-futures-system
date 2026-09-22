@@ -157,3 +157,75 @@ def test_unarmed_state_does_not_need_runtime_drift_check(monkeypatch, tmp_path):
 
     assert live_preflight.live_order_ready(state_path=state_path) is False
     assert calls["count"] == 0
+
+
+class RawStateBroker(FakeBroker):
+    def __init__(self, *, position_payload=None, order_payload=None):
+        self.position_payload = [] if position_payload is None else position_payload
+        self.order_payload = [] if order_payload is None else order_payload
+        self.heartbeat = AuthResult(AUTH_HEALTHY)
+
+    def _get(self, path):
+        if path == "/position/list":
+            return self.position_payload
+        if path == "/order/list":
+            return self.order_payload
+        raise AssertionError(path)
+
+
+def test_preflight_blocks_non_list_position_state(monkeypatch, tmp_path):
+    state_path = tmp_path / "preflight.json"
+    monkeypatch.setattr(live_preflight, "reliability_snapshot", _healthy_snapshot)
+    monkeypatch.setattr(
+        live_preflight,
+        "live_box_drift_report",
+        lambda **_: {"ok": True, "summary": "guard ok"},
+    )
+
+    result = live_preflight.run_preflight(
+        RawStateBroker(position_payload={"netPos": 0}),
+        state_path=state_path,
+    )
+
+    assert result["passed"] is False
+    assert result["reason"] == "preflight_failed:positions_readable"
+    by_name = {row["name"]: row for row in result["checks"]}
+    assert by_name["positions_readable"]["ok"] is False
+
+
+def test_preflight_blocks_non_list_order_state(monkeypatch, tmp_path):
+    state_path = tmp_path / "preflight.json"
+    monkeypatch.setattr(live_preflight, "reliability_snapshot", _healthy_snapshot)
+    monkeypatch.setattr(
+        live_preflight,
+        "live_box_drift_report",
+        lambda **_: {"ok": True, "summary": "guard ok"},
+    )
+
+    result = live_preflight.run_preflight(
+        RawStateBroker(order_payload={"ordStatus": "Filled"}),
+        state_path=state_path,
+    )
+
+    assert result["passed"] is False
+    assert result["reason"] == "preflight_failed:orders_readable"
+    by_name = {row["name"]: row for row in result["checks"]}
+    assert by_name["orders_readable"]["ok"] is False
+
+
+def test_preflight_blocks_malformed_rows_in_broker_state(monkeypatch, tmp_path):
+    state_path = tmp_path / "preflight.json"
+    monkeypatch.setattr(live_preflight, "reliability_snapshot", _healthy_snapshot)
+    monkeypatch.setattr(
+        live_preflight,
+        "live_box_drift_report",
+        lambda **_: {"ok": True, "summary": "guard ok"},
+    )
+
+    result = live_preflight.run_preflight(
+        RawStateBroker(position_payload=["not-an-object"]),
+        state_path=state_path,
+    )
+
+    assert result["passed"] is False
+    assert result["reason"] == "preflight_failed:positions_readable"
