@@ -135,9 +135,11 @@ def lane_config(cfg):
       - fixed 1 MES, all sizing/streak scaling off;
       - $1,500 starting balance;
       - PaperBroker forced via `paper_mode=True`;
+      - range observation disabled inside the re-entrant lane so this isolated
+        pass cannot consume the runner's shared `_RANGE_BREAK_ARM` state;
       - swings allowed (no day-only flatten for strat_122) and the merged MES
         strat_122 8h stale-timeout exemption already applies.
-    Every other gate evaluates exactly as it does for the real book.
+    Every trading gate evaluates exactly as it does for the real book.
     """
     lane = copy.copy(cfg)
     sizing = getattr(cfg, "position_sizing", None)
@@ -160,6 +162,11 @@ def lane_config(cfg):
         # process is running, so the lane cannot silently collect on another
         # decision timeframe.
         "expected_timeframe_minutes": TIMEFRAME_MINUTES,
+        # This lane re-enters webhook.runner.process_alert in the same Python
+        # process. RangeBreakArmState is module-global there, so letting the
+        # isolated pass observe ranges would arm/clear the real book's state
+        # before the authoritative MES pass sees the bar.
+        "range_observe_enabled": False,
         "enabled_concepts": [STRATEGY],
         "disabled_concepts_per_instrument": {},
         "strategy_permission_gate_enabled": True,
