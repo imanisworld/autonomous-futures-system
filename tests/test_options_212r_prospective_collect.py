@@ -36,10 +36,11 @@ def test_journal_recovers_earliest_arm_and_terminal_state(tmp_path: Path):
         _state_row("RESOLUTION", setup_id="abc", observed_at="2026-09-18T15:10:30+00:00", observation=observation),
     ]
     path.write_text("".join(json.dumps(row) + "\n" for row in rows))
-    armed, terminal, fingerprints = _load_journal(path)
+    armed, terminal, fingerprints, drifted = _load_journal(path)
     assert armed["abc"] == datetime(2026, 9, 18, 15, 3, tzinfo=UTC)
     assert terminal == {"abc"}
     assert fingerprints == {"abc": "fp1"}
+    assert drifted == set()
 
 
 def test_malformed_journal_fails_closed(tmp_path: Path):
@@ -83,6 +84,105 @@ def test_journal_source_revision_fails_closed(tmp_path: Path):
     path.write_text("".join(json.dumps(row) + "\n" for row in rows))
     with pytest.raises(RuntimeError, match="journal_setup_fingerprint_drift"):
         _load_journal(path)
+
+
+def test_own_source_drift_row_reloads_and_blocks_setup(tmp_path: Path):
+    path = tmp_path / "evidence.jsonl"
+    rows = [
+        _state_row("ARMED", setup_id="drift", observed_at="2026-09-18T15:01:00+00:00", observation={"setup_fingerprint": "fp1"}),
+        _state_row("ARMED", setup_id="pending", observed_at="2026-09-18T15:01:00+00:00", observation={"setup_fingerprint": "fpp"}),
+        _state_row(
+            "SOURCE_DRIFT", setup_id="drift", observed_at="2026-09-18T15:06:00+00:00",
+            previous_setup_fingerprint="fp1", current_setup_fingerprint="fp2",
+            observation={"setup_fingerprint": "fp2"}, reason_code="public_completed_bar_revision",
+        ),
+    ]
+    path.write_text("".join(json.dumps(row) + "\n" for row in rows))
+    armed, terminal, fingerprints, drifted = _load_journal(path)
+    assert drifted == {"drift"}
+    assert fingerprints == {"drift": "fp1", "pending": "fpp"}
+    assert terminal == set() and set(armed) == {"drift", "pending"}
+
+
+def test_source_drift_row_does_not_relax_resolution_fingerprint_check(tmp_path: Path):
+    path = tmp_path / "evidence.jsonl"
+    rows = [
+        _state_row("ARMED", setup_id="abc", observed_at="2026-09-18T15:01:00+00:00", observation={"setup_fingerprint": "fp1"}),
+        _state_row("SOURCE_DRIFT", setup_id="abc", observed_at="2026-09-18T15:06:00+00:00", observation={"setup_fingerprint": "fp2"}),
+        _state_row("RESOLUTION", setup_id="abc", observed_at="2026-09-18T15:10:00+00:00", observation={"setup_fingerprint": "fp2"}),
+    ]
+    path.write_text("".join(json.dumps(row) + "\n" for row in rows))
+    with pytest.raises(RuntimeError, match="journal_setup_fingerprint_drift_3"):
+        _load_journal(path)
+
+
+def test_run_survives_source_drift_restart_and_keeps_collecting(tmp_path: Path, monkeypatch):
+    import argparse
+    from dataclasses import replace
+    from types import SimpleNamespace
+
+    import scripts.options_212r_prospective_collect as collector
+
+    fixed_now = datetime(2026, 9, 18, 15, 5, 10, tzinfo=UTC)
+
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return fixed_now if tz is None else fixed_now.astimezone(tz)
+
+    class FakePublic:
+        def __init__(self, cfg): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *_exc): return None
+
+    async def fake_chart(*_args, **_kwargs):
+        return {}
+
+    cross_calls = []
+
+    async def fake_live_cross(_provider, *, observation, **_kwargs):
+        cross_calls.append(observation.setup_id)
+        return {"status": "WATCHING"}
+
+    base = _watching_observation()
+    observations = (
+        replace(base, setup_id="drift", setup_fingerprint="fp2"),
+        replace(base, setup_id="pending", setup_fingerprint="fpp"),
+        replace(base, setup_id="new", setup_fingerprint="fpn"),
+    )
+    monkeypatch.setattr(collector, "datetime", FixedDateTime)
+    monkeypatch.setattr(collector, "load_config", lambda: SimpleNamespace(alpaca_data_base_url="https://data.alpaca.markets"))
+    monkeypatch.setattr(collector, "resolve_alpaca_credentials", lambda: ("key", "secret"))
+    monkeypatch.setattr(collector, "PublicMarketDataClient", FakePublic)
+    monkeypatch.setattr(collector, "_public_chart", fake_chart)
+    monkeypatch.setattr(collector, "parse_regular_market_bars", lambda *_a, **_k: SimpleNamespace(bars=[]))
+    monkeypatch.setattr(collector, "build_session_timeframe", lambda *_a, **_k: [])
+    monkeypatch.setattr(collector, "observe_212_setups", lambda **_k: observations)
+    monkeypatch.setattr(collector, "_capture_live_first_boundary", fake_live_cross)
+
+    journal = tmp_path / "evidence.jsonl"
+    journal.write_text("".join(
+        json.dumps(_state_row("ARMED", setup_id=sid, observed_at="2026-09-18T15:01:00+00:00", observation={"setup_fingerprint": fp})) + "\n"
+        for sid, fp in (("drift", "fp1"), ("pending", "fpp"))
+    ))
+    args = argparse.Namespace(
+        env_file=None, ticker=["SPY"], journal=str(journal), sip_trade_dir=str(tmp_path / "sip"),
+        max_capture_lag_seconds=60.0, dry_run=False,
+    )
+
+    first = asyncio.run(collector.run(args))
+    after_first = journal.read_bytes()
+    second = asyncio.run(collector.run(args))
+    after_second = journal.read_bytes()
+
+    assert after_second.startswith(after_first)
+    rows = [json.loads(line) for line in after_second.decode().splitlines()]
+    assert [r["record_type"] for r in rows if r["setup_id"] == "drift"] == ["ARMED", "SOURCE_DRIFT"]
+    assert [r["record_type"] for r in rows if r["setup_id"] == "new"] == ["ARMED"]
+    assert "drift" not in cross_calls
+    assert cross_calls == ["pending", "new", "pending", "new"]
+    assert first["data_blocked"] == 1 and second["data_blocked"] == 0
+    assert second["armed_written"] == 0
 
 
 def test_week_history_includes_previous_friday_for_monday_open_reanchor():
