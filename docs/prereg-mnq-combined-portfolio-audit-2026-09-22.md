@@ -2,6 +2,36 @@
 
 **AUDIT / RESEARCH ONLY. NO EXECUTION AUTHORITY.**
 
+## Current implementation status — 2026-09-22
+
+PR #915 is **DRAFT / AUDIT ONLY** and the combined portfolio replay has **not**
+yet produced an accepted result. The branch is being actively built and audited;
+branch movement during this work is not production drift and does not itself
+change any strategy verdict.
+
+Corrections proven during implementation so far are confined to the combined
+research adapter and its tests:
+
+- 4HR provenance now distinguishes 80 resolved outcomes from the one
+  `EOD_BAR_MISSING_FAIL_CLOSED` unresolved exclusion;
+- standalone controls preserve each family's frozen capacity semantics instead
+  of inheriting the shared portfolio's three-fill cap;
+- 3-2-2 is explicitly sourced from its frozen research corpus
+  (`replay_polygon`);
+- Miyagi is explicitly sourced from its frozen 5-minute evidence corpus
+  (`replay_polygon_5m`).
+
+These are provenance/reproduction corrections for this audit. They do **not**
+revert newer corpora globally, modify the frozen strategy logic, or authorize
+changes to risk, execution, broker, webhook, runtime, or deployment behavior.
+Using a historical corpus here means reproducing the evidence population that
+created a frozen family result; it does not declare that corpus superior to a
+newer corrected corpus for other studies.
+
+No combined P&L, portfolio classification, strategy promotion/demotion, or
+runtime conclusion is accepted until all frozen controls reconcile on one
+frozen CI-green commit and the full common-window replay completes fail-closed.
+
 ## Question
 
 The system has mostly evaluated promising MNQ strategies in isolated ledgers.
