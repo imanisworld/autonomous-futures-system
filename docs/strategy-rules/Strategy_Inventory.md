@@ -1,6 +1,6 @@
 # STRATEGY INVENTORY
 **Autonomous Futures System — Master Reference**
-*Evidence classifications reconciled through 2026-09-20; edge-decomposition audit verdicts applied 2026-09-07 with the 4HR trigger-timing correction and #798/#799/#807 observation lanes below.*
+*Evidence classifications reconciled through 2026-09-22; edge-decomposition audit verdicts applied 2026-09-07 with the 4HR trigger-timing correction and #798/#799/#807 observation lanes below.*
 
 ---
 
@@ -646,6 +646,7 @@ See `ICC_ICT_Research.md` for full breakdown.
 
 | Item | Blocking | Who |
 |---|---|---|
+| ~~**MNQ sustained trend continuation v1 postmortem (#912)**~~ — **DONE 2026-09-22 / PROMISING BUT UNPROVEN / WAIT.** Exact frozen-head reconstruction matched all original summaries before analysis. Same 36 identities remain positive at 2 adverse ticks (+$559.18, PF 1.7308; both halves positive) and 3 ticks (+$542.18, PF 1.7004; both halves positive), but the original PF >=1.94 and terminal >=40 gates still fail. Winner/loss separation is modest/overlapping; 16/34 terminals reached 2R; 102 stop-cap rejects show the 120-tick cap materially limits participation without proving wider stops profitable. Postmortem ruling: `POSSIBLE EDGE — MECHANISM UNCLEAR`. One discovery-only hypothesis (shallower pullback relative to arm move) may be tested only on untouched/prospective evidence under a new preregistration. #911 inverse follow-up remains deferred because a valid mirrored-SHORT comparator requires a separate research campaign. | untouched/prospective mechanism test if separately authorized; frozen v1 gate remains failed | WAIT |
 | ~~VWAP hold IOC reference-price resolution~~ — **done 2026-07-26**, operator chose `close` as canonical; see `VWAP_HOLD_IOC_CLOSE_RESCORING_2026-07-26.md` | — | — |
 | ~~VWAP hold exit-mode resolution~~ — **moot 2026-09-07**: static −$326.92 / PF 0.49 and runner −$3.26 / PF 1.00 on the NY-only arms under the decision-bar fill reference; no exit mode has a positive cell to choose | — | — |
 | ~~VWAP hold NY-only sample expansion~~ — **moot 2026-09-07**: the ~55-fill cell included 20 fills that exist only under the 5-minute-late arrival-close reference; the honest cell is 35 fills and negative | — | — |
