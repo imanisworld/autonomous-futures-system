@@ -90,6 +90,14 @@ def test_lane_config_does_not_mutate_the_shipped_config(config):
         assert dataclasses.asdict(config) == before
 
 
+def test_lane_config_disables_range_observation_without_mutating_parent(config):
+    parent = dataclasses.replace(config, range_observe_enabled=True)
+    lane_cfg = lane.lane_config(parent)
+
+    assert lane_cfg.range_observe_enabled is False
+    assert parent.range_observe_enabled is True
+
+
 def test_lane_journal_root_is_never_the_real_book(tmp_path):
     root = lane.journal_dir(tmp_path)
     assert root == tmp_path / "hypothetical_ledger" / "mes_122_1500"
@@ -237,6 +245,36 @@ def _mes_payload(**overrides):
     }
     data.update(overrides)
     return _base_payload(**data)
+
+
+def test_lane_reentrant_pass_does_not_consume_shared_range_arm(
+    config, tmp_path, monkeypatch
+):
+    """The isolated MES pass must not touch the module-global range arm.
+
+    The outer real-book pass should be the only caller of apply() for this bar.
+    """
+    import webhook.runner as runner
+
+    calls = []
+
+    class _SpyArm:
+        def apply(self, instrument, signal):
+            calls.append((instrument, signal.signal_type))
+            return signal
+
+    monkeypatch.setattr(runner, "_RANGE_BREAK_ARM", _SpyArm())
+    parent = _active(dataclasses.replace(config, range_observe_enabled=True))
+
+    runner.process_alert(
+        _mes_payload(market_condition="RANGE_BOUND"),
+        config=parent,
+        log_dir=str(tmp_path),
+        for_date=date(2026, 5, 23),
+    )
+
+    assert len(calls) == 1, "isolated lane consumed the shared range arm"
+    assert calls[0][0] == "MES"
 
 
 def test_real_book_decision_is_unchanged_while_the_lane_runs(config, tmp_path):
