@@ -3154,6 +3154,7 @@ def _dashboard_init(status: dict) -> dict:
                 "CURRENT SYSTEM RISK CONSTRAINTS" in combined
                 or "CURRENT-ACCOUNT" in combined
                 or "REAL-ACCOUNT EXECUTION BLOCKED" in combined
+                or "PARKED FOR REAL-ACCOUNT EXECUTION" in combined
                 or "NOT EXECUTABLE UNDER CURRENT REAL-ACCOUNT RISK" in combined
             ):
                 return "CURRENT-ACCOUNT INCOMPATIBLE"
