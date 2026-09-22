@@ -1219,6 +1219,25 @@ def process_alert(
         except Exception:  # noqa: BLE001 — evidence must never affect trading
             logger.warning("session_22c paper lane skipped", exc_info=True)
 
+        # MNQ existing-family trend-day forward paper cohort. Four independent
+        # LONG-only family lanes, all default-OFF and PaperBroker-only. This
+        # consumes the already-computed shadow candidates and cannot change the
+        # authoritative decision/risk/broker path.
+        try:
+            from context import mnq_trend_day_paper_cohort as _trend_day
+
+            _trend_day_summary = _trend_day.process_bar(
+                state=state,
+                cfg=cfg,
+                log_dir=log_dir,
+                shadow_candidates=shadow_candidates,
+                for_date=for_date,
+            )
+            if _trend_day_summary is not None:
+                result["mnq_trend_day_cohort"] = _trend_day_summary
+        except Exception:  # noqa: BLE001 — evidence must never affect trading
+            logger.warning("mnq trend-day paper cohort skipped", exc_info=True)
+
     # Shadow candidate resolution: causally resolve PRIOR bars' journaled
     # observe-only candidates (shadow_setups + range_signal lanes) against the
     # bars ingested since, appending SHADOW_OUTCOME evidence rows. Runs AFTER
