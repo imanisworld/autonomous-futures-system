@@ -18,8 +18,11 @@ inferred as zero.
 Lineage: #603 (EOD/EOW rollups) → #604 (real journal row shapes, session-bound
 collectors judged at the close, honest status labels) → #608 (readable Discord
 cards) → #609 (EOW master evidence registry) → #610 (retired the obsolete
-`overnight watch` census registration that produced a permanent false DEAD).
-#602 and #605 were competing drafts, closed unmerged.
+`overnight watch` census registration that produced a permanent false DEAD) →
+#899 (Options `Read-only daily pass` / `Read-only weekly pass` presentation,
+explicit PASS/WARN/FAIL/NO DATA states, and fail-closed suppression of row counts
+when the underlying window/table status is not `OK`). #602 and #605 were
+competing drafts, closed unmerged.
 
 ```
 python -m scripts.paper_collection_report --period eod
@@ -120,6 +123,18 @@ reports fresh.
 Installed and enabled on the box 2026-09-16; first unattended EOD firing
 2026-09-16 17:10 ET posted both cards. Pinned copy re-pinned the same evening
 to `ce9df48` (#610), verified by an old-vs-new smoke whose only difference was
-the retired `overnight watch` DEAD line. Ruled operationally complete: leave
-the units, timers and pinned copy alone unless a report itself exposes a
-defect.
+the retired `overnight watch` DEAD line.
+
+Repository-side presentation refresh #899 merged on 2026-09-21 at
+`6512dc3578e9de59d8d6a8ceea8e78a39b9cb8e4` after full CI passed. The final
+fix makes row counts display only when the corresponding table/window status is
+`OK`; invalid/missing/unscoped data renders as unavailable instead of showing a
+misleading raw count.
+
+**Runtime deployment of #899 is still pending.** The pinned VPS reporter copy
+has not yet been re-pinned to `6512dc...`, and no live Discord smoke has been
+claimed. The remote host connector was unavailable during this documentation
+update, so no service, timer, symlink, webhook, or trading runtime was touched.
+The remaining reporter gate is exactly: old-vs-new `--no-discord` smoke →
+manifest/hash verification → atomic `current` symlink flip → actual read-only
+Options Discord smoke → verify timers and trading PIDs/restart counts unchanged.
