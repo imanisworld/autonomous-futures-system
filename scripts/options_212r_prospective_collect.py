@@ -121,12 +121,13 @@ async def _public_chart(pub: PublicMarketDataClient, ticker: str, period: str) -
     return payload
 
 
-def _load_journal(path: Path) -> tuple[dict[str, datetime], set[str], dict[str, str]]:
+def _load_journal(path: Path) -> tuple[dict[str, datetime], set[str], dict[str, str], set[str]]:
     armed: dict[str, datetime] = {}
     terminal: set[str] = set()
     fingerprints: dict[str, str] = {}
+    drifted: set[str] = set()
     if not path.exists():
-        return armed, terminal, fingerprints
+        return armed, terminal, fingerprints, drifted
     for number, raw in enumerate(path.read_text().splitlines(), start=1):
         if not raw.strip():
             continue
@@ -143,6 +144,11 @@ def _load_journal(path: Path) -> tuple[dict[str, datetime], set[str], dict[str, 
             ):
                 raise RuntimeError(f"journal_collector_version_mismatch_{number}")
         setup_id = str(row["setup_id"])
+        if row.get("record_type") == "SOURCE_DRIFT":
+            # The row carries the revised fingerprint by design; keep the frozen
+            # one and block the setup (never re-armed or resolved).
+            drifted.add(setup_id)
+            continue
         observation = row.get("observation") if isinstance(row.get("observation"), dict) else {}
         fingerprint = observation.get("setup_fingerprint")
         if fingerprint is not None:
@@ -159,7 +165,7 @@ def _load_journal(path: Path) -> tuple[dict[str, datetime], set[str], dict[str, 
                 armed[setup_id] = observed
         if row.get("record_type") == "RESOLUTION":
             terminal.add(setup_id)
-    return armed, terminal, fingerprints
+    return armed, terminal, fingerprints, drifted
 
 
 def _append(path: Path, row: Mapping[str, Any]) -> None:
@@ -668,7 +674,7 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
         raise ValueError("max_capture_lag_seconds must be positive")
     tickers = tuple(dict.fromkeys(item.upper() for item in args.ticker))
     journal = Path(args.journal)
-    armed_seen, terminal_seen, fingerprint_seen = _load_journal(journal)
+    armed_seen, terminal_seen, fingerprint_seen, drifted = _load_journal(journal)
 
     summary = {
         "collector_id": COLLECTOR_ID,
@@ -733,6 +739,8 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
                 row = obs.to_dict()
                 setup_id = obs.setup_id
                 trigger_cross_evidence: dict[str, Any] | None = None
+                if setup_id in drifted:
+                    continue
                 prior_fingerprint = fingerprint_seen.get(setup_id)
                 if prior_fingerprint is not None and prior_fingerprint != obs.setup_fingerprint:
                     summary["data_blocked"] += 1
@@ -748,6 +756,7 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
                             "observation": row,
                             "reason_code": "public_completed_bar_revision",
                         })
+                    drifted.add(setup_id)
                     continue
                 if setup_id in terminal_seen:
                     continue
