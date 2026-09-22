@@ -1,6 +1,6 @@
 # Options — Current State Handoff
 
-_As of 2026-09-20. This is the single current-state authority for the options lane._
+_As of 2026-09-21. This is the single current-state authority for the options lane._
 
 Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`; the read-only coverage evidence lane (observer, reducer, outcome study, after-close collector) is described in `docs/options-coverage-observer.md`.
 
@@ -427,3 +427,16 @@ Existing V1 collection continues without tuning. Steps 1–5 of the original dep
 5. Treat legacy Signa read timeouts as a separate reliability audit; they cannot alter a trade decision (scorer contribution 0, no branch on Signa state).
 
 **No proof, no trade. No optimization before evidence.**
+
+## Operational refresh — 2026-09-21/22
+
+This section supersedes older release-identity statements above where they conflict with the later operational state.
+
+- The options scanner is now pinned to immutable release `a6f79d79702e32afcda44b230f22d418db66d35b` after the bounded shared Signa request-budget fix. It remains advisory/read-only: no order support, no account endpoints, and no Signa trade authority. Natural market-hours proof of the new backoff/reuse behavior is still pending; do not manually hammer the provider.
+- The futures service remained isolated on its existing immutable release during the options-scanner promotion.
+- The `122-IEX-E1` collector release `36e73f1981850b66b043d849ce877c15bd1ab3e7` was found missing while its systemd unit still referenced it. The resulting launches failed with `203/EXEC` before evidence writes. That missed collection window is **not** valid prospective evidence and must not be backfilled or relabeled.
+- The exact `36e73f...` collector release was reconstructed from its source commit and frozen dependency set, re-verified, and restored without changing the frozen 1-2-2 policy. Off-RTH validation produced no synthetic evidence. The next legitimate 1-2-2 gate remains a natural scheduled RTH acceptance row.
+- The release-retention defect in the external deploy wrapper has been corrected and real-host dry-run verified. Referenced releases are now protected using fail-closed systemd/process discovery plus a second pre-delete discovery pass. The deployment hold caused specifically by unsafe release pruning is lifted.
+- No strategy, stop/target/runner, V1 risk rule, broker/order path, scanner cadence, or 1-2-2 source policy was changed by the retention recovery.
+
+Operational details and safety invariants: `docs/release-retention-safety-2026-09-21.md`.
