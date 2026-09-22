@@ -55,8 +55,9 @@ WorkingDirectory=/root/afs-shared/paper_collection/current
 ExecStart=/usr/bin/python3 -m scripts.paper_collection_report --period eod ...
 ```
 
-`current` is a symlink to `releases/<full-commit-sha>/`, a read-only copy of
-exactly four files from one commit of `main`:
+`current` is a symlink to `releases/<pin-id>/`, a read-only copy of exactly
+four source files. Normal pins use a full commit SHA from `main`; the curated
+#899 pin documented below records a base commit plus a reporter-only overlay:
 
 ```
 scripts/paper_collection_report.py
@@ -131,10 +132,40 @@ fix makes row counts display only when the corresponding table/window status is
 `OK`; invalid/missing/unscoped data renders as unavailable instead of showing a
 misleading raw count.
 
-**Runtime deployment of #899 is still pending.** The pinned VPS reporter copy
-has not yet been re-pinned to `6512dc...`, and no live Discord smoke has been
-claimed. The remote host connector was unavailable during this documentation
-update, so no service, timer, symlink, webhook, or trading runtime was touched.
-The remaining reporter gate is exactly: old-vs-new `--no-discord` smoke →
-manifest/hash verification → atomic `current` symlink flip → actual read-only
-Options Discord smoke → verify timers and trading PIDs/restart counts unchanged.
+**Runtime deployment of #899 is DEPLOYED / SMOKE PROVEN**, activated at
+2026-09-22T03:26:42Z. Current curated pin:
+`b60931a6a9f8-reporter-6512dc3578e9`.
+
+- Base: the exact previously active pin
+  `b60931a6a9f8839ab9bbadb88eb6c5cb93cccd28`.
+- Overlay: only `scripts/paper_collection_report.py`, byte-for-byte from
+  `6512dc3578e9de59d8d6a8ceea8e78a39b9cb8e4`.
+- `ops/__init__.py`, `ops/collector_census.py`, and `ops/evidence_registry.py`
+  remain byte-identical to that base. This is **not** a pure full-tree
+  `6512dc...` release. `PIN_INFO.txt` records the mixed provenance explicitly.
+- Reporter SHA256:
+  `d9c9c771926db95e6e1fae72d4cced2a12907d2ac82aaeb40310cdb287620ff0`.
+- `MANIFEST.sha256` file SHA256:
+  `1a96c6d830d15709334f2a3018e961cae1c6a2b3a1c53c2169331022bc7b4353`.
+
+Both manifests were verified against source bytes, and the four-file comparison
+proved that only the reporter changed. A production `--no-discord` run captured
+real inputs for the 2026-09-21 EOD window into scratch storage. Old and curated
+CLI runs then replayed that identical parsed-input snapshot on the VPS with
+`--no-discord`: both exited 0, non-presentation artifact data matched (excluding
+generation time), and the futures card matched exactly. Invalid/unscoped table
+status probes suppressed sentinel raw row counts. The futures-output parity
+claim applies to this captured EOD input, not every possible future census state.
+
+After the atomic symlink flip, exactly one read-only Options smoke card was
+posted. Discord returned HTTP 200 and the stored message was retrieved again;
+title, description, color, footer, and all field text matched, with Discord's
+normal explicit `inline: false` defaults. This is API read-back proof; no claim
+of a completed visual client inspection is made. Timer configuration/state and
+both reporter service unit files were unchanged. Futures/options trading
+`MainPID` and `NRestarts` matched the before snapshot; neither was restarted.
+No strategy, risk, broker, execution, source-policy or collection cadence changed.
+
+Rollback needs only an atomic reporter `current` flip back to
+`releases/b60931a6a9f8839ab9bbadb88eb6c5cb93cccd28`; retain the prior pin.
+No trading-service restart or systemd reload is required.
