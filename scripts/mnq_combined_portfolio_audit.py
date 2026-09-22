@@ -145,14 +145,19 @@ def _assert_control(label: str, actual: dict, expected: dict) -> None:
             _assert_close(f"{label} {key}", float(got), float(exp))
 
 
-def _common_days(root5: Path, root15: Path, root5late: Path) -> list[str]:
+def _common_days(*roots: Path) -> list[str]:
     def days(root: Path) -> set[str]:
         return {
             p.stem.removeprefix("MNQ_")
             for p in (root / "MNQ").glob("MNQ_*.jsonl")
         }
 
-    common = sorted(days(root5) & days(root15) & days(root5late))
+    if not roots:
+        raise RuntimeError("no corpus roots supplied")
+    common_set = days(roots[0])
+    for root in roots[1:]:
+        common_set &= days(root)
+    common = sorted(common_set)
     common = [d for d in common if START <= date.fromisoformat(d) <= END]
     if len(common) != EXPECTED_COMMON_DAYS:
         raise RuntimeError(
@@ -306,12 +311,14 @@ def _four_hr(root5: Path) -> tuple[list[PortfolioEvent], dict, list[dict]]:
     }, attempts
 
 
-def _three_two_two(root15: Path, root5: Path) -> tuple[list[PortfolioEvent], dict, list[dict]]:
-    # Import through importlib because the canonical script begins with a digit.
+def _three_two_two(research_15m: Path, root5: Path) -> tuple[list[PortfolioEvent], dict, list[dict]]:
+    # The frozen detector control was built on data/replay_polygon, not the
+    # corrected 15m market-condition corpus used by other families. Using a
+    # different 15m source changes the detector population and must fail closed.
     import importlib
     audit322 = importlib.import_module("scripts.322_trigger_timing_ab_2026_09_18")
 
-    candidates, triggers, bars = audit322.crosscheck(root15, root5)
+    candidates, triggers, bars = audit322.crosscheck(research_15m, root5)
     prearmed = audit322.make_prearmed(candidates, triggers, bars)
     control_rows = run_bracket_stage(
         LANES["322_mnq"], bars, prearmed,
@@ -821,12 +828,13 @@ def run(data_root: Path) -> dict:
     root5 = data_root / "replay_corpus_v1_5m_4hr_audit"
     root15 = data_root / "replay_corpus_v1_market_condition_fixed"
     root5late = data_root / "replay_corpus_v1_5m"
-    common_days = _common_days(root5, root15, root5late)
+    root322_15 = data_root / "replay_polygon"
+    common_days = _common_days(root5, root15, root5late, root322_15)
 
     # Control order is deliberate. Any mismatch raises before combined numbers.
     adapters = [
         _four_hr(root5),
-        _three_two_two(root15, root5),
+        _three_two_two(root322_15, root5),
         _daily(root5),
         _miyagi(root5),
         _asia(root15),
