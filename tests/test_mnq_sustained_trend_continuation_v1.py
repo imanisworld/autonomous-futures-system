@@ -425,3 +425,50 @@ def test_offline_runner_fails_closed_on_missing_5m_coverage(tmp_path):
     )
     with pytest.raises(RuntimeError, match="5m trigger coverage is incomplete"):
         _validate_5m_coverage([path15], {day: path5})
+
+
+def test_atr20_is_wilder_rma_not_rolling_sma():
+    detector = SustainedTrendContinuationV1()
+    for i in range(20):
+        detector.on_15m(
+            _bar(
+                T0 + timedelta(minutes=15 * i),
+                open_=100.0,
+                high=105.0,
+                low=95.0,
+                close=100.0,
+            ),
+            close_time=T0 + timedelta(minutes=15 * (i + 1)),
+        )
+    assert detector.atr20 == pytest.approx(10.0)
+
+    detector.on_15m(
+        _bar(
+            T0 + timedelta(minutes=15 * 20),
+            open_=100.0,
+            high=115.0,
+            low=85.0,
+            close=100.0,
+        ),
+        close_time=T0 + timedelta(minutes=15 * 21),
+    )
+    assert detector.atr20 == pytest.approx((10.0 * 19.0 + 30.0) / 20.0)
+
+
+def test_same_time_5m_close_as_pullback_ready_cannot_trigger():
+    detector = SustainedTrendContinuationV1()
+    detector.episode = _episode(
+        state="PULLBACK_READY",
+        pullback_low=100.5,
+        pullback_high=129.0,
+        ready_time=T0,
+    )
+    bar = _bar(
+        T0,
+        open_=129.0,
+        high=132.0,
+        low=128.0,
+        close=131.0,
+    )
+    assert detector.on_5m(bar, close_time=T0) == []
+    assert detector.episode is not None
