@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+
+import pytest
 from execution import live_preflight
 from execution.tradovate_broker import AUTH_HEALTHY, AuthResult
 
@@ -318,9 +320,6 @@ def test_preflight_allows_explicit_terminal_order_status(monkeypatch, tmp_path):
     )
 
     assert result["passed"] is True
-
-
-import pytest
 
 
 @pytest.mark.parametrize("quantity", ["NaN", "Infinity", "-Infinity"])
