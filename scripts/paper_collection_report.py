@@ -374,6 +374,11 @@ def _collector_health(census: dict[str, Any], *, options: bool, end: date) -> tu
     return {"name": "⚠ Collector attention" if attention or not statuses else "✓ Collector health", "value": value}, bool(attention) or not statuses
 
 
+def _table_rows(table: dict[str, Any]) -> int | None:
+    rows = table.get("rows")
+    return rows if isinstance(rows, int) else None
+
+
 def futures_discord_payload(
     summary: dict[str, Any],
     census: dict[str, Any],
@@ -464,32 +469,97 @@ def options_discord_payload(
     tables = summary.get("tables") or {}
     scans = tables.get("scans") or {}
     journal = tables.get("options_shadow_journal") or {}
-    health, warning = _collector_health(census, options=True, end=end)
-    issues = []
-    db_status = summary.get("status", "UNKNOWN")
+    health, health_warning = _collector_health(census, options=True, end=end)
+
+    db_status = str(summary.get("status", "UNKNOWN"))
+    scans_status = str(scans.get("status", "UNKNOWN"))
+    journal_status = str(journal.get("status", "UNKNOWN"))
+    scan_rows = _table_rows(scans)
+    journal_rows = _table_rows(journal)
+
+    blockers: list[str] = []
+    warnings: list[str] = []
     if db_status != "OK":
-        issues.append(f"Scanner database: {_display_name(db_status)} ({db_status}). Check database availability and read access.")
-    collection = [f"Scanner database: {_display_name(db_status)}"]
-    for label, table in (("Scans", scans), ("Shadow journal", journal)):
-        status = table.get("status", "UNKNOWN")
-        rows = table.get("rows")
-        if status == "OK" and isinstance(rows, int):
-            collection.append(f"**{rows:,}** · {label}")
-        else:
-            collection.append(f"{label}: window count unavailable ({status})")
-            if db_status == "OK":
-                issues.append(f"{label}: {status}. Check the scanner database table and timestamp column.")
-    if scans.get("status") == "OK" and scans.get("rows") == 0:
-        issues.append("zero option scans in the report window. Check the session calendar and scanner logs.")
-    fields = [health]
-    if issues:
-        fields.insert(0, {"name": "⚠ Data attention", "value": "\n".join(issues)})
+        blockers.append(f"Scanner database: {_display_name(db_status)}. Check database availability and read access.")
+    if db_status == "OK" and scans_status != "OK":
+        blockers.append(f"Scans: window count unavailable ({_display_name(scans_status)}). Check table and timestamp-column shape.")
+    if db_status == "OK" and journal_status != "OK":
+        blockers.append(f"Shadow journal: window count unavailable ({_display_name(journal_status)}). Check table and timestamp-column shape.")
+    if scans_status == "OK" and scan_rows == 0:
+        warnings.append("zero option scans in this report window. Check the session calendar and scanner logs.")
+    if journal_status == "OK" and journal_rows == 0:
+        warnings.append("zero shadow-journal rows in this report window. That can be valid only if no setups were recorded.")
+
+    no_data = (
+        db_status == "OK"
+        and scans_status == "OK"
+        and journal_status == "OK"
+        and (scan_rows or 0) == 0
+        and (journal_rows or 0) == 0
+    )
+    if blockers:
+        badge = "FAIL"
+        color = 0xED4245
+    elif no_data:
+        badge = "NO DATA"
+        color = 0xF0B232
+    elif health_warning or warnings:
+        badge = "WARN"
+        color = 0xF0B232
+    else:
+        badge = "PASS"
+        color = 0x57F287
+
+    collection_lines = [f"Database: **{_display_name(db_status)}**"]
+    if scans_status == "OK" and scan_rows is not None:
+        collection_lines.append(f"Scans: **{scan_rows:,}** rows")
+    else:
+        collection_lines.append(f"Scans: unavailable ({_display_name(scans_status)})")
+    if journal_status == "OK" and journal_rows is not None:
+        collection_lines.append(f"Shadow journal: **{journal_rows:,}** rows")
+    else:
+        collection_lines.append(f"Shadow journal: unavailable ({_display_name(journal_status)})")
+
+    signal_lines = []
+    if scans_status == "OK" and scan_rows is not None:
+        signal_lines.append(f"**{scan_rows:,}** scanner rows found")
+    else:
+        signal_lines.append("Scanner rows unavailable")
+    if journal_status == "OK" and journal_rows is not None:
+        signal_lines.append(f"**{journal_rows:,}** shadow-journal rows found")
+    else:
+        signal_lines.append("Shadow-journal rows unavailable")
+    signal_lines.append("Counts are collection evidence only · not trade recommendations")
+
+    error_lines = blockers + warnings
+    if not error_lines and not health_warning:
+        error_lines.append("No data blockers reported by the paper-collection pass.")
+    if not error_lines:
+        error_lines.append("None reported")
+
+    if blockers:
+        next_action = "Fix the database/table read blocker first, then rerun the EOD pass with `--no-discord` before posting."
+    elif health_warning:
+        next_action = "Review collector health and timestamps before treating the pass as complete."
+    elif no_data:
+        next_action = "Confirm whether Options should have produced scans today; if yes, inspect scanner logs and the session calendar."
+    elif warnings:
+        next_action = "Review the warning above; if expected, no trading-system action is implied."
+    else:
+        next_action = "No repo action from this card. Keep collecting evidence."
+
     journal_statuses = (_count_lines(journal.get("status_counts") or {})
-                        if journal.get("status") == "OK" else "Unavailable — see data attention")
-    fields.extend([
-        {"name": "Collection", "value": "\n".join(collection)},
+                        if journal_status == "OK" else "Unavailable — see data attention")
+
+    fields = [
+        {"name": "Status", "value": f"**{badge}** · read-only Options paper collection"},
+        {"name": "Collection status", "value": "\n".join(collection_lines)},
+        {"name": "Signals found", "value": "\n".join(signal_lines)},
+        {"name": "Errors / blocked channels", "value": "\n".join(error_lines[:8])},
+        {"name": "Next action", "value": next_action},
+        health,
         {"name": "Journal row statuses", "value": journal_statuses + "\nRow status only · NOT option P&L outcomes"},
-    ])
+    ]
     if period == "eow":
         field = _registry_field(registry, system="options")
         if field:
@@ -501,10 +571,11 @@ def options_discord_payload(
     window = start.strftime("%b %d, %Y")
     if start != end:
         window += " → " + end.strftime("%b %d, %Y")
+    title = "Options · " + ("Read-only daily pass" if period == "eod" else "Read-only weekly pass")
     return {"allowed_mentions": {"parse": []}, "embeds": [{
-        "title": "Options · " + ("Daily paper report" if period == "eod" else "Weekly paper report"),
-        "description": window + " · UTC database window",
-        "color": 0xF0B232 if warning or issues else 0x5865F2,
+        "title": title,
+        "description": f"{window} · UTC database window · **{badge}**",
+        "color": color,
         "fields": fields,
         "footer": {"text": "READ ONLY · Evidence collection · No promotion or execution action"},
     }]}

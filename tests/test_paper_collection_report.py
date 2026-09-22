@@ -301,10 +301,14 @@ def test_options_card_matches_screenshot_counts_and_close_context():
     payload = report.options_discord_payload(summary, census, period="eod", start=date(2026, 9, 17), end=date(2026, 9, 17))
     embed = payload["embeds"][0]
     fields = {f["name"]: f["value"] for f in embed["fields"]}
-    assert embed["color"] == 0x5865F2
+    assert embed["title"] == "Options · Read-only daily pass"
+    assert embed["color"] == 0x57F287
+    assert fields["Status"].startswith("**PASS**")
     assert "15:57 ET" in fields["✓ Collector health"]
     assert "disabled by design" in fields["✓ Collector health"]
-    assert "**3,165**" in fields["Collection"]
+    assert "**3,165**" in fields["Collection status"]
+    assert "**3,165** scanner rows found" in fields["Signals found"]
+    assert "No data blockers" in fields["Errors / blocked channels"]
     assert "**51** · Win" in fields["Journal row statuses"]
     assert "NOT option P&L outcomes" in fields["Journal row statuses"]
     assert "futures journal" not in json.dumps(payload)
@@ -317,8 +321,8 @@ def test_options_unscoped_or_missing_data_never_looks_like_healthy_window_counts
         summary = {"status": "OK", "tables": {"scans": {"status": status, "rows": 5000}}}
         card = report.options_discord_payload(summary, {"status": "ERROR"}, period="eow", start=date(2026, 9, 14), end=date(2026, 9, 18))["embeds"][0]
         text = json.dumps(card)
-        assert card["color"] == 0xF0B232
-        assert status in text
+        assert card["color"] == 0xED4245
+        assert status.replace("_", " ").capitalize() in text
         assert "5,000" not in text
         assert "window count unavailable" in text
         assert all(len(f["value"]) <= 1024 for f in card["fields"])
@@ -334,5 +338,5 @@ def test_main_routes_options_card_and_keeps_missing_db_diagnostic(tmp_path, monk
     assert report.main(["--period", "eod", "--date", "2026-09-17", "--log-dir", str(tmp_path), "--options-db", str(tmp_path / "missing.sqlite")]) == 0
     assert len(posts) == 1
     assert posts[0][0] == "https://example.invalid/options"
-    assert "MISSING_DB" in json.dumps(posts[0][1])
-    assert posts[0][1]["embeds"][0]["title"] == "Options · Daily paper report"
+    assert "Missing db" in json.dumps(posts[0][1])
+    assert posts[0][1]["embeds"][0]["title"] == "Options · Read-only daily pass"
