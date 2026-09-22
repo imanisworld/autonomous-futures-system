@@ -1517,7 +1517,7 @@ def test_dashboard_strategy_inventory_keeps_evidence_and_authority_separate(monk
     four_hr = by_name["4HR Re-Trigger (MNQ)"]
     assert four_hr["classification"] == "PROMISING BUT UNPROVEN"
     assert "GUARDED DEMO" in four_hr["posture"].upper()
-    assert "REAL-ACCOUNT EXECUTION BLOCKED" in four_hr["posture"].upper()
+    assert "PARKED FOR REAL-ACCOUNT EXECUTION" in four_hr["posture"].upper()
     assert four_hr["authority"] == "CURRENT-ACCOUNT INCOMPATIBLE"
     assert "PAPER" not in four_hr["verdict"].upper()
 
