@@ -12,10 +12,15 @@ import dataclasses
 import json
 import math
 import tempfile
+import sys
 from collections import Counter, defaultdict, deque
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Iterable
+
+REPO = Path(__file__).resolve().parents[1]
+if str(REPO) not in sys.path:
+    sys.path.insert(0, str(REPO))
 
 from config.settings import load_config
 from context import asia_d_ema_paper_cohort as asia
@@ -53,7 +58,6 @@ from scripts.edge_decomposition_audit import (
 from strategy.shadow_setups import evaluate_shadow_setups
 
 
-REPO = Path(__file__).resolve().parents[1]
 START = date(2025, 7, 24)
 END = date(2026, 6, 26)
 EXPECTED_COMMON_DAYS = 290
@@ -63,7 +67,7 @@ DEFAULT_OUT = REPO / "logs/mnq_combined_portfolio_audit_2026-09-22.json"
 # Canonical accepted full-window controls. They are provenance gates, not
 # portfolio pass/fail thresholds.
 EXPECTED = {
-    "4HR_RETRIGGER": {"fills": 80, "net": 1414.60, "pf": 1.299},
+    "4HR_RETRIGGER": {"fills": 80, "eod_bar_missing": 1, "net": 1414.60, "pf": 1.299},
     "60M_322_FIRST_LIVE": {"fills": 33, "net": 2742.66},
     "DAILY_22_COMPLETED_CLOSE": {"fills": 34, "net": 13571.68, "pf": 1.9482},
     "12HR_MIYAGI": {"fills": 8, "net": 425.33, "pf": 2.322},
@@ -158,7 +162,7 @@ def _event_from_bracket(
     trigger_idx: int,
     source: str,
 ) -> PortfolioEvent | None:
-    if resolution.get("status") not in {"RESOLVED", "OPEN", "UNRESOLVED"}:
+    if resolution.get("status") not in {"RESOLVED", "OPEN"}:
         return None
     fill = resolution.get("fill_entry")
     if fill is None:
@@ -251,7 +255,8 @@ def _four_hr(root5: Path) -> tuple[list[PortfolioEvent], dict, list[dict]]:
     )
     control = bracket_summary(control_rows, _boundary(prearmed))
     control_check = {
-        "fills": int(control["filled"]),
+        "fills": int(control["resolved"]),
+        "eod_bar_missing": int(control["eod_bar_missing"]),
         "net": float(control["net"]),
         "pf": float(control["profit_factor"]),
     }
