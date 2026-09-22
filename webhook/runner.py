@@ -3025,7 +3025,11 @@ def process_alert(
         if _proof_market_px is not None
         else (
             state.ohlc.close
-            if state.ohlc is not None and isinstance(broker, PaperBroker)
+            if (
+                state.ohlc is not None
+                and isinstance(broker, PaperBroker)
+                and getattr(broker, "_entry_fill_model", None) == "ioc_limit"
+            )
             else None
         )
     )
