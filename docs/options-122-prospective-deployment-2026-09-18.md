@@ -115,3 +115,20 @@ No threshold, cadence, source, or endpoint may be changed inside `122-IEX-E1` af
 **1-2-2: COLLECTING RESEARCH EVIDENCE / NOT TRADE AUTHORIZED.**
 
 No proof, no trade.
+
+## Release-retention incident and recovery — 2026-09-21/22
+
+After deployment, the collector unit still referenced immutable release `36e73f1981850b66b043d849ce877c15bd1ab3e7`, but that release directory was no longer present. The unit therefore produced repeated `203/EXEC` failures before collector code or evidence writes could run.
+
+Evidence ruling:
+
+- the missed 2026-09-21 collection window is lost;
+- it must not be backfilled and described as prospective evidence;
+- the failure was deployment-retention infrastructure, not a strategy result;
+- the frozen `122-IEX-E1` policy, cadence, source policy, and evidence definitions remain unchanged.
+
+Recovery reconstructed the exact immutable release from its source commit and frozen dependency set, verified release/dependency parity, and restored the original service pin. An off-RTH run succeeded without writing prospective trade evidence. The next acceptance gate is still the first natural scheduled RTH causal row on the frozen epoch.
+
+The external deployment pruner was separately hardened so active systemd/timer/process references are protected, incomplete discovery skips all pruning, candidate metadata is revalidated, and a second complete discovery occurs immediately before deletion. A real-host dry-run completed successfully after regression coverage for the host's systemd unit shapes. This infrastructure fix did not change collector logic, options strategy rules, risk, broker/order behavior, or evidence authority.
+
+See `docs/release-retention-safety-2026-09-21.md`.
