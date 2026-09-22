@@ -495,11 +495,11 @@ def options_discord_payload(
         collection_lines.append(f"Shadow journal: unavailable ({_display_name(journal_status)})")
 
     signal_lines = []
-    if scan_rows is not None:
+    if scans_status == "OK" and scan_rows is not None:
         signal_lines.append(f"**{scan_rows:,}** scanner rows found")
     else:
         signal_lines.append("Scanner rows unavailable")
-    if journal_rows is not None:
+    if journal_status == "OK" and journal_rows is not None:
         signal_lines.append(f"**{journal_rows:,}** shadow-journal rows found")
     else:
         signal_lines.append("Shadow-journal rows unavailable")
