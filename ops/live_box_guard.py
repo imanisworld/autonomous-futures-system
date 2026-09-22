@@ -14,6 +14,7 @@ from typing import Any
 DEFAULT_EXPECTED_EVIDENCE_SOURCE = "active_box_journal_and_status"
 DEFAULT_EXPECTED_STATUS_PATHS = ("/status/today", "/status/broker-account")
 UNSET_PIN = "<unset>"
+EXPECTED_TRADOVATE_ACCOUNT_ID_ENV = "EXPECTED_TRADOVATE_ACCOUNT_ID"
 
 # Environment values in this list bypass the risk_rules.yaml fingerprint and can
 # change which setups trade, how they enter, position size, or how paper/live
@@ -365,6 +366,19 @@ def live_box_drift_report(
         for part in (_env("EXPECTED_RUNTIME_STATUS_PATHS") or ",".join(DEFAULT_EXPECTED_STATUS_PATHS)).split(",")
         if part.strip()
     )
+    observed_account_id = _env("TRADOVATE_EXPECTED_ACCOUNT_ID")
+    expected_account_id = _env(EXPECTED_TRADOVATE_ACCOUNT_ID_ENV)
+    account_identity_required = (
+        str(_env("BROKER") or "").strip().lower() == "tradovate"
+        or str(_env("WIDE_STOP_LEDGER_EXECUTION_ROUTE") or "").strip().lower()
+        == "tradovate_demo"
+        or observed_account_id is not None
+    )
+    account_identity_matches = (
+        observed_account_id is not None
+        and expected_account_id is not None
+        and observed_account_id == expected_account_id
+    )
     runtime_overrides, override_comparisons, unpinned_overrides = _runtime_override_report()
     security_runtime = _security_runtime_report(
         manual_controls_enabled=manual_controls_enabled,
@@ -378,6 +392,20 @@ def live_box_drift_report(
         _path_cmp("journal_dir", log_path, expected_journal_dir),
         _cmp("runtime_evidence_source", _env("RUNTIME_EVIDENCE_SOURCE") or DEFAULT_EXPECTED_EVIDENCE_SOURCE, expected_evidence_source),
         _cmp("status_paths", ",".join(expected_status_paths), ",".join(DEFAULT_EXPECTED_STATUS_PATHS), required=False),
+        Comparison(
+            name="tradovate_expected_account_identity",
+            observed="<configured>" if observed_account_id is not None else None,
+            expected="<configured>" if expected_account_id is not None else None,
+            ok=(not account_identity_required) or account_identity_matches,
+            required=account_identity_required,
+            detail=(
+                "not required for non-Tradovate routing"
+                if not account_identity_required
+                else "matches"
+                if account_identity_matches
+                else "missing or mismatched account routing identity"
+            ),
+        ),
         *override_comparisons,
     ]
 
@@ -454,6 +482,13 @@ def live_box_drift_report(
         ],
         "unpinned_runtime_overrides": unpinned_overrides,
         "security_runtime": security_runtime,
+        "tradovate_account_identity": {
+            "required": account_identity_required,
+            "observed_configured": observed_account_id is not None,
+            "expected_configured": expected_account_id is not None,
+            "matches": account_identity_matches if account_identity_required else None,
+            "redaction": "Raw Tradovate account identifiers are intentionally omitted.",
+        },
         "missing_pins": missing_pins,
         "mismatches": mismatches,
         "next_step": (
