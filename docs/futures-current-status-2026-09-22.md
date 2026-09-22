@@ -86,6 +86,16 @@ Current curated reporter pin:
 
 The frozen retrospective v1 screen is **CLOSED / WAIT**. At exact research head `cd50f423c77a87255f3b1b19160bb9566f902011`, coverage was complete (23,533/23,533 bars) and the run produced 36 fills / 34 terminal, +$576.18 net, PF 1.762, positive H1/H2, and $172.42 max drawdown. It failed the preregistered >=40 terminal-fill and PF >=1.94 gates. PR #912 remains the unmerged research record. Do not tune or rerun v1 on the same corpus; a materially different sustained-trend hypothesis requires a new preregistration.
 
+### Offline evidence recovery / mechanism postmortem — 2026-09-22
+
+**AUDIT ONLY. The frozen v1 gate result above is unchanged.** The original successful result JSON was recovered from the prior local scratch run, copied unchanged into isolated box storage, and verified against the frozen study/rules and corpus fingerprints (313 matched daily files per timeframe, 2025-07-24 through 2026-07-23, 23,533/23,533 causal coverage). Because the original aggregate report did not persist the trade/event ledger, one identity-verified reconstruction at the exact frozen head reproduced all ten saved summary sections before any new diagnostics were accepted. The recovered support ledger contains 1,815 detector events, 36 fills, 34 terminal trades, and 102 `STOP_CAP_REJECTED` events.
+
+New diagnostics do **not** clear the preregistered gate. The same 36 setup identities remain positive under 2-tick (+$559.18, PF 1.7308; H1 +$397.04 / H2 +$162.14) and 3-tick (+$542.18, PF 1.7004; H1 +$383.54 / H2 +$158.64) adverse-entry stress, but PF remains below 1.94. Sixteen of 34 terminal trades reached the frozen 2R target; median MFE was about 1.759R. Winners tended toward larger arms and proportionally shallower pullbacks, while losers tended toward smaller arms and quicker triggers, but the distributions overlap substantially and do not establish an actionable filter. The 120-tick cap materially restricts participation (102 rejects versus 39 within-cap triggers; rejected median 228 ticks), but no rejected-trade counterfactual P&L was assigned and wider stops are **not** authorized.
+
+Current classification: **PROMISING BUT UNPROVEN / WAIT; postmortem = POSSIBLE EDGE — MECHANISM UNCLEAR.** One discovery hypothesis is retained for a future untouched/prospective test only: smaller pullback depth relative to the sustained arm move may predict a higher probability of reaching the unchanged 2R target before the unchanged stop. This is not validated and is not authorized for implementation. Supporting evidence is preserved under `/root/afs-offline-912-recovery-20260922/`; that path is provenance only, never a runtime dependency.
+
+The conditional #911 inverse follow-up was **not run**. A causal mirrored-SHORT comparator would require additional replay/research implementation beyond the cheap recovery pass, so #911 remains closed under its existing LONG results unless a separate research campaign is explicitly authorized.
+
 ## 2026-09-22 natural evidence update
 
 ### 1-2-2 prospective collector
@@ -106,6 +116,37 @@ Frozen #911 audit at `e68e2da...` ran unchanged across all 313 canonical days. *
 - Trend consolidation break: 484 terminal, -$4,765.82, PF 0.7487; both halves negative.
 
 #911 is closed unmerged as **REJECT / no candidate**. #910 is also closed unmerged: its default-off paper cohort had no qualifying family to justify merge or activation. No session rescue, tuning, stop/target rewrite, or runtime integration is authorized from these results.
+
+## Research update — MNQ combined portfolio audit #915
+
+PR #915, branch `research/mnq-combined-portfolio-audit-20260922`, completed its combined-portfolio run at `5a9f14b`. Earlier scratch runs at `62c9207` and `e46cfd5` are superseded. The work is **UNIQUE / KEEP / AUDIT ONLY** and does not change runtime, broker, risk, strategy enablement, or deployment state.
+
+Do not describe #915 as "not run" anymore. Completion of the run is not the same as accepting a strategy for promotion or validation; no paper, DEMO, live, broker, risk, or deployment authority follows from it.
+
+## Journal delta — 2026-09-22 duplicate-work audit
+
+Compared with the last proven September 20 journal check:
+- duplicate order identities: **0 -> 0**;
+- unmatched outcomes: **3 -> 3**;
+- unmatched order-ID rows: **0**;
+- orphan records: **0 -> 0**;
+- naked-position flags: **0 -> 0**;
+- new unresolved/open journal attempts since September 20: **0**.
+
+The duplicate research work did not create a journal repair requirement.
+
+## Known technical defects — current delta
+
+**OPEN**
+1. **Normal paper vs ReplayEngine entry-fill parity:** the normal webhook paper path can omit the market price while replay supplies the candle close. This remains a real parity defect.
+2. **Strategy Inventory taxonomy:** evidence classification and execution/enabled status are still mixed in the inventory wording. These must remain separate concepts.
+
+**CONFIRMED FIXED — do not carry forward as open defects**
+- promotion gate hard-blocker success semantics (#893 / `acadbf8`);
+- zero/dead forward-campaign arm visibility (#582 / `964099c`);
+- `project_check daily` critical-failure success semantics (#788/#790).
+
+This documentation update does not authorize fixing either remaining defect, changing runtime, or rerunning strategy research.
 
 ## Current evidence gates
 
