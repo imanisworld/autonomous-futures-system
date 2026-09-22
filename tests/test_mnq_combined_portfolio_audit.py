@@ -229,3 +229,43 @@ def test_unresolved_source_event_is_not_portfolio_fillable():
         trigger_idx=0,
         source="unit",
     ) is None
+
+
+def test_asia_standalone_control_does_not_inherit_portfolio_three_per_day_cap():
+    from scripts import mnq_combined_portfolio_audit as runner
+
+    rows = [
+        event(
+            f"asia-{i}",
+            "ASIA_D_EMA",
+            f"2026-01-05T1{i}:00:00+00:00",
+            f"2026-01-05T1{i}:10:00+00:00",
+            pnl=5.0,
+        )
+        for i in range(4)
+    ]
+    replay = replay_portfolio(
+        rows,
+        max_fills_per_day=runner.STANDALONE_DAILY_CAP["ASIA_D_EMA"],
+    )
+    assert len(replay.fills) == 4
+
+
+def test_sustained_standalone_control_keeps_frozen_three_per_day_cap():
+    from scripts import mnq_combined_portfolio_audit as runner
+
+    rows = [
+        event(
+            f"st-{i}",
+            "SUSTAINED_TREND_V1",
+            f"2026-01-05T1{i}:00:00+00:00",
+            f"2026-01-05T1{i}:10:00+00:00",
+            pnl=5.0,
+        )
+        for i in range(4)
+    ]
+    replay = replay_portfolio(
+        rows,
+        max_fills_per_day=runner.STANDALONE_DAILY_CAP["SUSTAINED_TREND_V1"],
+    )
+    assert len(replay.fills) == 3
