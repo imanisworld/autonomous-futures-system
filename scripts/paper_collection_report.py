@@ -465,6 +465,7 @@ def options_discord_payload(
     summary: dict[str, Any], census: dict[str, Any], *, period: str,
     start: date, end: date, registry: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """Match the futures card without interpreting journal statuses as option P&L."""
     tables = summary.get("tables") or {}
     scans = tables.get("scans") or {}
     journal = tables.get("options_shadow_journal") or {}
