@@ -82,6 +82,10 @@ Current curated reporter pin:
 
 #899 is deployed / smoke-proven via Discord API read-back. The reporter overlay changes only `scripts/paper_collection_report.py`; its three pinned `ops/` dependencies remain byte-identical to the prior proven pin. Visual client inspection was not required for the deployment ruling.
 
+## Research closure — MNQ sustained trend continuation v1
+
+The frozen retrospective v1 screen is **CLOSED / WAIT**. At exact research head `cd50f423c77a87255f3b1b19160bb9566f902011`, coverage was complete (23,533/23,533 bars) and the run produced 36 fills / 34 terminal, +$576.18 net, PF 1.762, positive H1/H2, and $172.42 max drawdown. It failed the preregistered >=40 terminal-fill and PF >=1.94 gates. PR #912 remains the unmerged research record. Do not tune or rerun v1 on the same corpus; a materially different sustained-trend hypothesis requires a new preregistration.
+
 ## Current evidence gates
 
 1. **1-2-2:** wait for the natural RTH chain:
