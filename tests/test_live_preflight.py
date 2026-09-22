@@ -318,3 +318,30 @@ def test_preflight_allows_explicit_terminal_order_status(monkeypatch, tmp_path):
     )
 
     assert result["passed"] is True
+
+
+import pytest
+
+
+@pytest.mark.parametrize("quantity", ["NaN", "Infinity", "-Infinity"])
+def test_preflight_blocks_nonfinite_position_quantity(
+    monkeypatch, tmp_path, quantity
+):
+    state_path = tmp_path / "preflight.json"
+    monkeypatch.setattr(live_preflight, "reliability_snapshot", _healthy_snapshot)
+    monkeypatch.setattr(
+        live_preflight,
+        "live_box_drift_report",
+        lambda **_: {"ok": True, "summary": "guard ok"},
+    )
+
+    result = live_preflight.run_preflight(
+        FakeBroker(positions=[{"netPos": quantity}]),
+        state_path=state_path,
+    )
+
+    assert result["passed"] is False
+    assert result["reason"] == "preflight_failed:positions_readable"
+    by_name = {row["name"]: row for row in result["checks"]}
+    assert by_name["positions_readable"]["ok"] is False
+    assert "non-finite" in by_name["positions_readable"]["detail"]
