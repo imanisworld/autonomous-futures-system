@@ -3126,7 +3126,7 @@ def _dashboard_init(status: dict) -> dict:
                     return label
             return "UNKNOWN"
 
-        def posture(verdict: str, cls: str) -> str:
+        def legacy_posture(verdict: str, cls: str) -> str:
             upper = (verdict or "").upper()
             labels = []
             if "PARKED" in upper:
@@ -3148,15 +3148,20 @@ def _dashboard_init(status: dict) -> dict:
                     labels.append("UNKNOWN")
             return " / ".join(dict.fromkeys(labels))
 
-        def authority(verdict: str, cls: str) -> str:
-            upper = (verdict or "").upper()
+        def authority(execution_posture: str, verdict: str, cls: str) -> str:
+            combined = f"{execution_posture or ''} {verdict or ''}".upper()
             if (
-                "CURRENT SYSTEM RISK CONSTRAINTS" in upper
-                or "CURRENT-ACCOUNT" in upper
-                or "NOT EXECUTABLE UNDER CURRENT REAL-ACCOUNT RISK" in upper
+                "CURRENT SYSTEM RISK CONSTRAINTS" in combined
+                or "CURRENT-ACCOUNT" in combined
+                or "REAL-ACCOUNT EXECUTION BLOCKED" in combined
+                or "NOT EXECUTABLE UNDER CURRENT REAL-ACCOUNT RISK" in combined
             ):
                 return "CURRENT-ACCOUNT INCOMPATIBLE"
-            if cls in {"BROKEN", "RETIRE", "UNSAFE"}:
+            if (
+                "NO EXECUTION AUTHORITY" in combined
+                or "NO BROKER ROUTE" in combined
+                or cls in {"BROKEN", "RETIRE", "UNSAFE"}
+            ):
                 return "NO EXECUTION AUTHORITY"
             if cls == "VALIDATED":
                 return "RUNTIME AUTHORITY SEPARATE"
@@ -3168,11 +3173,14 @@ def _dashboard_init(status: dict) -> dict:
         for row in rows:
             verdict = str(row.get("verdict") or "UNKNOWN")
             cls = classification(verdict)
+            execution_posture = str(row.get("execution_posture") or "").strip()
+            if not execution_posture:
+                execution_posture = legacy_posture(verdict, cls)
             display_rows.append({
                 "name": str(row.get("name") or "Unknown strategy"),
                 "classification": cls,
-                "posture": posture(verdict, cls),
-                "authority": authority(verdict, cls),
+                "posture": execution_posture,
+                "authority": authority(execution_posture, verdict, cls),
                 "verdict": verdict,
             })
         return {"ok": True, "source": source, "rows": display_rows, "error": None}
