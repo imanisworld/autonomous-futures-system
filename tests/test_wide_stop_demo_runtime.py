@@ -734,3 +734,56 @@ def test_eod_exclusive_gate_treats_unknown_status_as_working():
 
     assert ok is False
     assert reason == "eod_unexpected_working_orders_present"
+
+
+@pytest.mark.parametrize("quantity", ["NaN", "Infinity", "-Infinity"])
+def test_demo_entry_blocks_nonfinite_position_quantity(
+    tmp_path, monkeypatch, quantity
+):
+    _demo_env(monkeypatch)
+    _patch_candidate(monkeypatch, FOUR_HR)
+    broker = _FakeBroker(positions=[{"netPos": quantity}])
+
+    events = demo.process_demo_five_min_bar(
+        payload=_payload(), cfg=_cfg(), bars_5m=[], log_dir=tmp_path,
+        for_date=DAY, broker_factory=lambda: broker,
+    )
+
+    assert broker.execute_calls == 0
+    assert any(
+        row.get("lane_failed_rule") == "demo_account_exclusive_gate"
+        and str(row.get("lane_reason") or "").startswith(
+            "broker_state_unreadable:ValueError"
+        )
+        for row in events
+    )
+
+
+@pytest.mark.parametrize("quantity", ["NaN", "Infinity", "-Infinity"])
+def test_eod_exclusive_gate_blocks_nonfinite_position_quantity(quantity):
+    position = {"broker_order_ids": {"entry": 11, "target": 12, "stop": 13}}
+    broker = _FakeBroker(
+        positions=[{"netPos": quantity}],
+        orders=[
+            {"id": 12, "ordStatus": "Working"},
+            {"id": 13, "ordStatus": "Working"},
+        ],
+    )
+
+    ok, reason = demo._core._eod_exclusive_gate(broker, position)
+
+    assert ok is False
+    assert reason == "eod_broker_state_unreadable:ValueError"
+
+
+def test_eod_exclusive_gate_blocks_missing_order_status():
+    position = {"broker_order_ids": {"entry": 11, "target": 12, "stop": 13}}
+    broker = _FakeBroker(
+        positions=[{"netPos": 1}],
+        orders=[{"id": 12}, {"id": 13, "ordStatus": "Working"}],
+    )
+
+    ok, reason = demo._core._eod_exclusive_gate(broker, position)
+
+    assert ok is False
+    assert reason == "eod_broker_state_unreadable:ValueError"

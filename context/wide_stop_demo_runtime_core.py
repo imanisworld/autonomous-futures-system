@@ -299,16 +299,16 @@ def _eod_exclusive_gate(broker, position: dict[str, Any]) -> tuple[bool, str]:
     try:
         positions = _list_positions(broker)
         orders = _list_orders(broker)
+        open_rows = [row for row in positions if abs(_position_qty(row)) > 0]
+        working_ids = {
+            row.get("id")
+            for row in orders
+            if _order_status(row) not in TERMINAL_ORDER_STATUSES and row.get("id") is not None
+        }
     except Exception as exc:
         return False, f"eod_broker_state_unreadable:{type(exc).__name__}"
-    open_rows = [row for row in positions if abs(_position_qty(row)) > 0]
     if len(open_rows) != 1:
         return False, f"eod_expected_one_position_got_{len(open_rows)}"
-    working_ids = {
-        row.get("id")
-        for row in orders
-        if _order_status(row) not in TERMINAL_ORDER_STATUSES and row.get("id") is not None
-    }
     if working_ids - allowed_ids:
         return False, "eod_unexpected_working_orders_present"
     return True, "eod_account_exclusive"

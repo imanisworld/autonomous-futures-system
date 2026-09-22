@@ -7,6 +7,7 @@ only after today's preflight passed and the operator explicitly armed the bot.
 from __future__ import annotations
 
 import json
+import math
 import os
 import tempfile
 from dataclasses import dataclass, field
@@ -199,9 +200,12 @@ def _position_qty(position: dict) -> float:
             continue
         value = position.get(key)
         try:
-            return float(value)
+            quantity = float(value)
         except (TypeError, ValueError):
             raise ValueError(f"position row has invalid {key}")
+        if not math.isfinite(quantity):
+            raise ValueError(f"position row has non-finite {key}")
+        return quantity
     raise ValueError("position row has no recognized quantity field")
 
 
