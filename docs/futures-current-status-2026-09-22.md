@@ -138,15 +138,16 @@ The duplicate research work did not create a journal repair requirement.
 ## Known technical defects — current delta
 
 **OPEN**
-1. **Strategy Inventory taxonomy:** evidence classification and execution/enabled status are still mixed in the inventory wording. These must remain separate concepts.
+- None from the reconciled defect list as of this documentation pass.
 
-**CONFIRMED FIXED — do not carry forward as open defects**
+**CONFIRMED FIXED REPO-SIDE — do not carry forward as open repo defects**
+- Strategy Inventory taxonomy (#920 / `2e96e164624dc45996b45a2086b012c56ee5d43d`): evidence verdict and execution posture are now separate fields; `project_check daily` keeps the final evidence verdict as its safety classification while parsing posture separately, and the dashboard no longer infers execution authority from verdict text. Full CI passed before merge. This is **not deployed/restarted**; the current VPS status/dashboard remains on its existing release until a separately justified future release.
 - normal PaperBroker vs ReplayEngine IOC entry-reference parity (#918 / `3e624693871cb725541e286b7feabf2633342228`): the normal webhook PaperBroker IOC path now supplies the causal decision-bar close, matching ReplayEngine; full CI passed before merge. This was repo-only and has **not** been deployed/restarted.
 - promotion gate hard-blocker success semantics (#893 / `acadbf8`);
 - zero/dead forward-campaign arm visibility (#582 / `964099c`);
 - `project_check daily` critical-failure success semantics (#788/#790).
 
-This documentation update does not authorize fixing the remaining taxonomy defect, changing runtime, deploying #918, restarting services, or rerunning strategy research.
+No deployment or restart is authorized merely to pick up #918/#920. Strategy/risk/broker/runtime execution behavior remains unchanged on the current box until a separately approved release.
 
 ## Current evidence gates
 
