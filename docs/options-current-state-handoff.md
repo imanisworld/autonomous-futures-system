@@ -440,3 +440,14 @@ This section supersedes older release-identity statements above where they confl
 - No strategy, stop/target/runner, V1 risk rule, broker/order path, scanner cadence, or 1-2-2 source policy was changed by the retention recovery.
 
 Operational details and safety invariants: `docs/release-retention-safety-2026-09-21.md`.
+
+### Paper-collection card refresh — 2026-09-21/22
+
+- PR #899 merged at `6512dc3578e9de59d8d6a8ceea8e78a39b9cb8e4` after full CI passed.
+- The Options EOD/EOW card is now repository-defined as `Read-only daily pass` / `Read-only weekly pass` with explicit PASS / WARN / FAIL / NO DATA states.
+- The CI failure found during review was corrected before merge: a table with an invalid window status can no longer surface its raw row count as though it were a trustworthy scoped count. Counts are shown only when that table status is `OK`.
+- This is reporting/presentation only. It does not alter the scanner, strategy, risk, broker, execution, signal eligibility, source policy, collector cadence, or evidence authority.
+- **Runtime re-pin and live Discord smoke are still pending.** The VPS paper-collection reporter runs from its separate pinned copy, so merging #899 does not change the live card by itself. No runtime deployment is claimed until the exact `6512dc...` reporter copy passes the documented no-Discord smoke, manifest/hash checks, atomic pin flip, and actual read-only Discord smoke with trading-service PIDs/restarts unchanged.
+- The runtime step was not performed during this update because the remote host connector was unavailable; no service/timer/symlink/webhook/trading runtime was touched.
+
+Reporter procedure and current pin state: `docs/paper-collection-reporter.md`.
