@@ -254,7 +254,7 @@ def _four_hr(root5: Path) -> tuple[list[PortfolioEvent], dict, list[dict]]:
     control_check = {
         "fills": int(control["filled"]),
         "net": float(control["net"]),
-        "pf": float(control["pf"]),
+        "pf": float(control["profit_factor"]),
     }
     _assert_control(FAMILY_4HR, control_check, EXPECTED[FAMILY_4HR])
 
