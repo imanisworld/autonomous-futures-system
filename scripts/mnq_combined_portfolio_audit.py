@@ -553,6 +553,12 @@ def _asia(root15: Path) -> tuple[list[PortfolioEvent], dict, list[dict]]:
                     for cand in evaluate_shadow_setups(state, list(history), config)
                 ]
                 context = asia._bar_context(state)
+                raw_source = getattr(candle, "source", None)
+                if isinstance(raw_source, dict):
+                    if not context.get("structural_market_condition"):
+                        context["structural_market_condition"] = raw_source.get("structural_market_condition")
+                    if not context.get("structural_direction"):
+                        context["structural_direction"] = raw_source.get("structural_direction")
                 day = _obs_day(_bar_close_ts(candle.timestamp, 15))
                 picks = asia.d_ema_candidates(context, shadow, day, seen_by_day[day])
                 for cand in sorted(picks, key=lambda c: (c["strategy"], c["direction"])):
