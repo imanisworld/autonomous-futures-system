@@ -229,3 +229,57 @@ def test_preflight_blocks_malformed_rows_in_broker_state(monkeypatch, tmp_path):
 
     assert result["passed"] is False
     assert result["reason"] == "preflight_failed:positions_readable"
+
+
+def test_preflight_blocks_position_row_without_quantity(monkeypatch, tmp_path):
+    state_path = tmp_path / "preflight.json"
+    monkeypatch.setattr(live_preflight, "reliability_snapshot", _healthy_snapshot)
+    monkeypatch.setattr(
+        live_preflight,
+        "live_box_drift_report",
+        lambda **_: {"ok": True, "summary": "guard ok"},
+    )
+
+    result = live_preflight.run_preflight(
+        FakeBroker(positions=[{"contractId": 12345}]),
+        state_path=state_path,
+    )
+
+    assert result["passed"] is False
+    assert result["reason"] == "preflight_failed:positions_readable"
+
+
+def test_preflight_blocks_position_row_with_unparseable_quantity(monkeypatch, tmp_path):
+    state_path = tmp_path / "preflight.json"
+    monkeypatch.setattr(live_preflight, "reliability_snapshot", _healthy_snapshot)
+    monkeypatch.setattr(
+        live_preflight,
+        "live_box_drift_report",
+        lambda **_: {"ok": True, "summary": "guard ok"},
+    )
+
+    result = live_preflight.run_preflight(
+        FakeBroker(positions=[{"netPos": "unknown"}]),
+        state_path=state_path,
+    )
+
+    assert result["passed"] is False
+    assert result["reason"] == "preflight_failed:positions_readable"
+
+
+def test_preflight_blocks_order_row_without_status(monkeypatch, tmp_path):
+    state_path = tmp_path / "preflight.json"
+    monkeypatch.setattr(live_preflight, "reliability_snapshot", _healthy_snapshot)
+    monkeypatch.setattr(
+        live_preflight,
+        "live_box_drift_report",
+        lambda **_: {"ok": True, "summary": "guard ok"},
+    )
+
+    result = live_preflight.run_preflight(
+        FakeBroker(orders=[{"id": 999}]),
+        state_path=state_path,
+    )
+
+    assert result["passed"] is False
+    assert result["reason"] == "preflight_failed:orders_readable"
