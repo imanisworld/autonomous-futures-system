@@ -686,3 +686,51 @@ def test_demo_entry_blocks_ambiguous_broker_rows(
     assert str(blocked[-1].get("lane_reason") or "").startswith(
         "broker_state_unreadable:ValueError"
     )
+
+
+def test_demo_entry_blocks_unknown_order_status(tmp_path, monkeypatch):
+    _demo_env(monkeypatch)
+    _patch_candidate(monkeypatch, FOUR_HR)
+    broker = _FakeBroker(orders=[{"id": 77, "ordStatus": "FutureBrokerStatus"}])
+
+    events = demo.process_demo_five_min_bar(
+        payload=_payload(), cfg=_cfg(), bars_5m=[], log_dir=tmp_path,
+        for_date=DAY, broker_factory=lambda: broker,
+    )
+
+    assert broker.execute_calls == 0
+    assert any(
+        row.get("lane_failed_rule") == "demo_account_exclusive_gate"
+        and row.get("lane_reason") == "broker_working_orders_present"
+        for row in events
+    )
+
+
+def test_demo_entry_allows_explicit_terminal_order_status(tmp_path, monkeypatch):
+    _demo_env(monkeypatch)
+    _patch_candidate(monkeypatch, FOUR_HR)
+    broker = _FakeBroker(orders=[{"id": 77, "ordStatus": "Filled"}])
+
+    demo.process_demo_five_min_bar(
+        payload=_payload(), cfg=_cfg(), bars_5m=[], log_dir=tmp_path,
+        for_date=DAY, broker_factory=lambda: broker,
+    )
+
+    assert broker.execute_calls == 1
+
+
+def test_eod_exclusive_gate_treats_unknown_status_as_working():
+    position = {"broker_order_ids": {"entry": 11, "target": 12, "stop": 13}}
+    broker = _FakeBroker(
+        positions=[{"netPos": 1}],
+        orders=[
+            {"id": 12, "ordStatus": "Working"},
+            {"id": 13, "ordStatus": "Working"},
+            {"id": 99, "ordStatus": "FutureBrokerStatus"},
+        ],
+    )
+
+    ok, reason = demo._core._eod_exclusive_gate(broker, position)
+
+    assert ok is False
+    assert reason == "eod_unexpected_working_orders_present"
