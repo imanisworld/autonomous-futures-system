@@ -107,6 +107,37 @@ Frozen #911 audit at `e68e2da...` ran unchanged across all 313 canonical days. *
 
 #911 is closed unmerged as **REJECT / no candidate**. #910 is also closed unmerged: its default-off paper cohort had no qualifying family to justify merge or activation. No session rescue, tuning, stop/target rewrite, or runtime integration is authorized from these results.
 
+## Research update — MNQ combined portfolio audit #915
+
+PR #915, branch `research/mnq-combined-portfolio-audit-20260922`, completed its combined-portfolio run at `5a9f14b`. Earlier scratch runs at `62c9207` and `e46cfd5` are superseded. The work is **UNIQUE / KEEP / AUDIT ONLY** and does not change runtime, broker, risk, strategy enablement, or deployment state.
+
+Do not describe #915 as "not run" anymore. Completion of the run is not the same as accepting a strategy for promotion or validation; no paper, DEMO, live, broker, risk, or deployment authority follows from it.
+
+## Journal delta — 2026-09-22 duplicate-work audit
+
+Compared with the last proven September 20 journal check:
+- duplicate order identities: **0 -> 0**;
+- unmatched outcomes: **3 -> 3**;
+- unmatched order-ID rows: **0**;
+- orphan records: **0 -> 0**;
+- naked-position flags: **0 -> 0**;
+- new unresolved/open journal attempts since September 20: **0**.
+
+The duplicate research work did not create a journal repair requirement.
+
+## Known technical defects — current delta
+
+**OPEN**
+1. **Normal paper vs ReplayEngine entry-fill parity:** the normal webhook paper path can omit the market price while replay supplies the candle close. This remains a real parity defect.
+2. **Strategy Inventory taxonomy:** evidence classification and execution/enabled status are still mixed in the inventory wording. These must remain separate concepts.
+
+**CONFIRMED FIXED — do not carry forward as open defects**
+- promotion gate hard-blocker success semantics (#893 / `acadbf8`);
+- zero/dead forward-campaign arm visibility (#582 / `964099c`);
+- `project_check daily` critical-failure success semantics (#788/#790).
+
+This documentation update does not authorize fixing either remaining defect, changing runtime, or rerunning strategy research.
+
 ## Current evidence gates
 
 1. **1-2-2:** wait for the natural RTH chain:
