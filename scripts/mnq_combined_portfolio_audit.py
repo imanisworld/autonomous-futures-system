@@ -50,7 +50,6 @@ from scripts.edge_decomposition_audit import (
     resolve_bracket,
     run_bracket_stage,
 )
-from scripts import _322_trigger_timing_shim as _unused  # type: ignore  # pragma: no cover
 from strategy.shadow_setups import evaluate_shadow_setups
 
 
