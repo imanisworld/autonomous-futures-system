@@ -59,6 +59,32 @@ def test_a_parked_member_active_on_the_lane_is_a_note_not_a_finding(tmp_path):
     assert "not a drift finding" in notes[0]["note"]
 
 
+def test_explicit_execution_posture_preserves_parked_lane_note(tmp_path):
+    path = tmp_path / "docs" / "strategy-rules"
+    path.mkdir(parents=True)
+    (path / "Strategy_Inventory.md").write_text(
+        "\n".join(
+            [
+                "## Master Table",
+                "",
+                "| Strategy | Execution posture (not evidence) | Evidence verdict |",
+                "|---|---|---|",
+                "| 4HR Re-Trigger | Hypothetical paper + guarded DEMO evidence; parked for real-account execution under current risk constraints | **PROMISING BUT UNPROVEN** |",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    report = _strategy_source_of_truth(
+        repo_root=tmp_path,
+        rules_active_lanes=_active("strat_4hr_retrigger", lane_mode="paper_sim"),
+    )
+    assert report["drift_findings"] == []
+    assert len(report["hypothetical_ledger_notes"]) == 1
+    note = report["hypothetical_ledger_notes"][0]
+    assert note["inventory_verdict"] == "PROMISING BUT UNPROVEN"
+    assert "parked for real-account execution" in note["inventory_execution_posture"].lower()
+
+
 def test_the_322_member_routes_to_the_six_k_ledger(tmp_path):
     root = _inventory(tmp_path, ("60M 3-2-2 First Live", PARKED_322))
     report = _strategy_source_of_truth(
