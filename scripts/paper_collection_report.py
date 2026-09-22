@@ -39,9 +39,12 @@ from ops.evidence_registry import build_registry, format_registry_lines
 
 NY_TZ = ZoneInfo("America/New_York")
 RTH_CLOSE = time(16, 0)
+# Collectors whose silence is by design; never raised as attention.
 EXPECTED_QUIET = {
     "options companion": "disabled by design (OPTIONS_COMPANION_ENABLED=false)",
 }
+# Collectors that only advance during regular trading hours; judged against the
+# session close of the report window, not against the wall clock at 17:10 ET.
 SESSION_BOUND = {"options scans"}
 
 FUTURES_ENV = "DISCORD_ROUTE_PAPER_COLLECTION_FUTURES"
@@ -87,6 +90,13 @@ def _futures_rows(log_dir: Path, start: date, end: date) -> list[dict[str, Any]]
 
 
 def summarize_futures(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Count what the futures journal actually writes.
+
+    Three row shapes share the file: decision rows (``decision`` set, no
+    ``type``), ``type=BAR_CLAIM`` bar claims, and ``type=SHADOW_OUTCOME`` rows
+    that carry ``strategy``/``lane`` and a nested ``shadow_outcome.result``.
+    Shadow outcomes are paper resolutions of observed setups — not fills.
+    """
     row_types: Counter[str] = Counter()
     decisions: Counter[str] = Counter()
     shadow_results: Counter[str] = Counter()
@@ -196,6 +206,7 @@ def summarize_options(sqlite_path: Path, start: date, end: date) -> dict[str, An
 
 
 def run_collector_census(log_dir: Path) -> dict[str, Any]:
+    """Run the existing read-only census and return its JSON payload."""
     try:
         proc = subprocess.run(
             [sys.executable, "-m", "ops.collector_census", "--log-dir", str(log_dir), "--json"],
@@ -232,6 +243,13 @@ def _parse_ts(value: Any) -> datetime | None:
 
 
 def _effective_status(item: dict[str, Any], *, session_end: date) -> tuple[str, str]:
+    """Return (status, note) after applying reporting-time context.
+
+    The census is a wall-clock freshness test. At 17:10 ET the market has been
+    closed for over an hour, so a session-bound collector is judged against the
+    session close instead; a collector that is quiet by design is reported as
+    such rather than raised as attention.
+    """
     name = str(item.get("name") or "")
     status = str(item.get("status") or "UNKNOWN")
     if name in EXPECTED_QUIET:
@@ -282,6 +300,7 @@ def _top(counter: dict[str, int], limit: int = 5) -> str:
     )
 
 
+# Presentation aliases only: journal identifiers and counters remain unchanged.
 _DISPLAY_NAMES = {
     "strat_22_continuation_observed": "2-2 continuation",
     "strat_22_reversal_observed": "2-2 reversal",
@@ -297,8 +316,9 @@ _DISPLAY_NAMES = {
 
 
 def _display_name(value: str) -> str:
+    # Bound and neutralize data-derived labels in Discord markdown.
     label = _DISPLAY_NAMES.get(value, value.replace("_", " ").capitalize())
-    return label.translate(str.maketrans("", "", '*`~|<>\\"'))[:80]
+    return label.translate(str.maketrans("", "", "*`~|<>\\"))[:80]
 
 
 def _count_lines(counter: dict[str, int], *, limit: int = 5) -> str:
@@ -324,6 +344,7 @@ def _registry_field(registry: dict[str, Any] | None, *, system: str) -> dict[str
 
 
 def _collector_health(census: dict[str, Any], *, options: bool, end: date) -> tuple[dict[str, Any], bool]:
+    """Lead with failures and retain the timestamps needed to investigate them."""
     collectors = census.get("collectors")
     chosen = [item for item in collectors if isinstance(item, dict)
               and str(item.get("name") or "").startswith("options ") == options] if isinstance(collectors, list) else []
@@ -367,7 +388,9 @@ def futures_discord_payload(
     end: date,
     registry: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """A mobile-readable card; counts are observations, never inferred fills/P&L."""
     health_field, health_warning = _collector_health(census, options=False, end=end)
+
     warning = health_warning or summary["rows"] == 0
     outcomes = summary.get("shadow_outcomes") or {}
     outcome_lines = []
@@ -400,6 +423,7 @@ def futures_discord_payload(
         field = _registry_field(registry, system="futures")
         if field:
             fields.append(field)
+    # Bounded fields keep the card inside Discord's per-field and total limits.
     for field in fields:
         if len(field["value"]) > 900:
             field["value"] = field["value"][:850] + "\n… Full counts in the JSON artifact."
@@ -427,6 +451,7 @@ def format_futures_report(
     end: date,
     registry: dict[str, Any] | None = None,
 ) -> str:
+    """Keep CLI/artifact-only runs readable using the same card content."""
     embed = futures_discord_payload(
         summary, census, period=period, start=start, end=end, registry=registry
     )["embeds"][0]
@@ -600,6 +625,9 @@ def _default_coverage_dir() -> str:
         if shared.exists():
             return str(shared)
     except OSError:
+        # Non-root/CI environments may be unable even to stat /root. Treat an
+        # inaccessible shared path exactly like an absent one; the report stays
+        # read-only and falls back to the repository-local collector directory.
         pass
     return str(Path("logs/coverage_collector"))
 
