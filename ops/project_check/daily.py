@@ -188,6 +188,7 @@ def _strategy_source_of_truth(*, repo_root: Path, rules_active_lanes: dict[str, 
                 "CURRENT RISK CONSTRAINTS" in combined
                 or "CURRENT-ACCOUNT" in combined
                 or "REAL-ACCOUNT EXECUTION BLOCKED" in combined
+                or "PARKED FOR REAL-ACCOUNT EXECUTION" in combined
                 or "CURRENT SYSTEM RISK CONSTRAINTS" in combined
             )
         )
