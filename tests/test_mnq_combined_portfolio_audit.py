@@ -274,3 +274,8 @@ def test_sustained_standalone_control_keeps_frozen_three_per_day_cap():
 def test_322_portfolio_adapter_uses_frozen_research_corpus_identity():
     from scripts import mnq_combined_portfolio_audit as runner
     assert runner.CANONICAL_322_15M_DIR == "replay_polygon"
+
+
+def test_miyagi_portfolio_adapter_uses_frozen_5m_evidence_corpus():
+    from scripts import mnq_combined_portfolio_audit as runner
+    assert runner.CANONICAL_MIYAGI_5M_DIR == "replay_polygon_5m"
