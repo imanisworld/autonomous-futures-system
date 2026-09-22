@@ -16,7 +16,7 @@ _As of 2026-09-22. This is the long futures handoff. Historical audit docs remai
 >
 > **Current safe next step:** seed or verify the shared snapshot store with a controlled read-only Signa pull for `QQQ, SPY, IWM, DIA, TLT, VIX, GLD, USO, XLE`, then audit the first future natural futures setup for causal timing, 4H continuation metadata when applicable, Signa v2 `snapshot_ids` / `snapshot_refs` / `snapshot_status`, and zero execution-authority leakage. Do not retune, expand instruments, loosen risk, add Signa gates, or replace the broad 4HR lane because the tags now exist.
 >
-> The long reconciliation/history below is retained for provenance. Where it conflicts with the current operator summary or `docs/futures-current-status-2026-09-20.md`, the newer summary governs.
+> The long reconciliation/history below is retained for provenance. Where it conflicts with the current operator summary or `docs/futures-current-status-2026-09-22.md`, the 2026-09-22 summary governs.
 
 ## 2026-09-18 reconciliation
 
