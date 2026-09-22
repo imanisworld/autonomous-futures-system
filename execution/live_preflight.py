@@ -174,24 +174,26 @@ def _parse_iso(value: object) -> Optional[datetime]:
 
 
 def _order_status(order: dict) -> str:
-    return str(
+    raw = (
         order.get("ordStatus")
         or order.get("status")
         or order.get("orderStatus")
-        or ""
-    ).replace("_", "").replace(" ", "").lower()
+    )
+    if raw is None or not str(raw).strip():
+        raise ValueError("order row has no recognized status field")
+    return str(raw).replace("_", "").replace(" ", "").lower()
 
 
 def _position_qty(position: dict) -> float:
     for key in ("netPos", "netPosition", "qty", "quantity"):
-        value = position.get(key)
-        if value is None:
+        if key not in position:
             continue
+        value = position.get(key)
         try:
             return float(value)
         except (TypeError, ValueError):
-            continue
-    return 0.0
+            raise ValueError(f"position row has invalid {key}")
+    raise ValueError("position row has no recognized quantity field")
 
 
 def _validated_broker_rows(result: Any, endpoint: str) -> list[dict]:
