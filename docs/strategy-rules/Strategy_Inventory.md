@@ -6,7 +6,7 @@
 
 ## How to read this document
 
-Every strategy is classified across eight dimensions, plus a diagnostic column from the 2026-09-07 edge-decomposition audit:
+Every strategy is classified across eight evidence dimensions, plus a diagnostic column and a separate execution-posture column. Evidence quality and execution/runtime authority are intentionally different fields:
 
 | Dimension | What it means |
 |---|---|
@@ -18,20 +18,22 @@ Every strategy is classified across eight dimensions, plus a diagnostic column f
 | **Slippage tested** | Edge survives at 2-tick and 3-tick adverse slippage |
 | **Sample adequate** | Enough trades to draw directional conclusions (minimum 30 per cell) |
 | **Primary failure stage** | Where the edge disappears in the standardized waterfall (`SIGNAL_NOT_DIRECTIONAL` → `BRACKET_DESTROYS_EDGE` → `RISK_GATES_REMOVE_EDGE` → `FILL_MODEL_REMOVES_EDGE` → `SURVIVES_*`); diagnostic, not a verdict — see `docs/edge-decomposition-audit-2026-09-07.md` |
-| **Verdict** | Current classification. **Must stay the last column** — `ops/project_check/daily.py` reads the final cell of each Master Table row as the verdict |
+| **Execution posture** | Descriptive collection/execution state (research, observation, paper evidence, guarded DEMO evidence, parked, retired). This is **not** an evidence verdict and never grants runtime authority; the box/config remains authoritative. |
+| **Evidence verdict** | Evidence classification only. **Must stay the last column** — `ops/project_check/daily.py` reads the final cell of each Master Table row as the verdict |
 
-Verdict taxonomy:
-- **VALIDATED** — passes all eight dimensions
-- **PAPER PROOF** — promoted to paper trading, accumulating live evidence
-- **PROMISING BUT UNPROVEN** — positive replay evidence, not yet fully validated
-- **WAIT** — rules incomplete or detector missing
-- **RESEARCH ONLY** — concept only, no testable spec
-- **BROKEN** — tested and fails honest fill or walk-forward
-- **RETIRE** — negative results, no path to recovery
+Evidence-verdict taxonomy:
+- **VALIDATED** — passes the required evidence dimensions and validation gates
+- **PROMISING BUT UNPROVEN** — positive evidence exists, but validation is incomplete
+- **WAIT** — insufficient evidence or an unresolved prerequisite blocks a stronger evidence classification
+- **RESEARCH ONLY** — concept/specification evidence only; not validated as a strategy
+- **BROKEN** — tested formulation fails its required evidence/fidelity criteria
+- **RETIRE** — negative/superseded evidence with no approved recovery path
+
+Execution posture is recorded separately and may include **research only**, **observation only**, **paper evidence only**, **guarded DEMO evidence**, **parked**, or **retired**. Legacy `PAPER PROOF` wording is an execution/evidence-collection posture, not an evidence verdict. None of these labels proves what the VPS is currently running.
 
 ---
 
-> **Runtime boundary (2026-09-01):** strategy verdicts below are evidence classifications. They do not prove the current VPS service, environment pins, enabled concepts, feeds, or broker account routing. Those remain box-side facts to verify separately.
+> **Runtime boundary (reconciled 2026-09-22):** the final **Evidence verdict** column is evidence-only. The separate **Execution posture** column describes intended/known collection authority but does not prove current VPS service state, environment pins, enabled concepts, feeds, or broker routing. Those remain box-side facts to verify separately.
 
 > **Observation-lane update (2026-09-20):** #798 adds read-only 4HR 4H 2→2 continuation treatment tagging to natural 1m 4HR observer events. #799 adds read-only Signa futures context tagging to futures journal context. #807 upgrades that futures context to v2 by referencing shared Signa snapshots (`snapshot_ids`, `snapshot_refs`, `snapshot_status`) when available. These are segmentation metadata only: no strategy replacement, paper-fill authority, DEMO authority, live authority, Signa entry gate, risk change, stop/target change, or broker route was added.
 
@@ -46,32 +48,32 @@ Verdict taxonomy:
 
 ## Master Table
 
-| Strategy | Rules | Detector | Replay parity | Honest fills | Walk-forward | Slippage | Sample | Primary failure stage (2026-09-07) | Verdict |
-|---|---|---|---|---|---|---|---|---|---|
-| ORB Reclaim — current/first_cross (MNQ+MES) | ✅ | ✅ | ✅ isolated own-account audit (#368) | ✅ ioc_limit | ❌ own drawdown breaker halts H2 | n/a — halted | ⚠️ n=38; MNQ −$164.44 / MES −$49.30 | `SIGNAL_NOT_DIRECTIONAL` — plan-fill artifact +$20.7k MNQ / +$9.8k MES; resting-fill bracket PF 0.78 / 0.89 on n=459 / 432 | **BROKEN — negative evidence** |
-| ORB Reclaim V4-R candidate | ✅ preregistered | ✅ research detector | ✅ isolated own-account audit (#368) | ✅ ioc_limit | ❌ H2 −$451.20 vs H1 +$900.57 | not established | ⚠️ n=31 | not separately decomposed (same close-confirmed family as the row above) | **WAIT** — positive aggregate, fails frozen H2 + concentration gates |
-| 4HR Re-Trigger (MNQ) | ✅ — retrigger is a level touch, no 5m close required | ✅ detector; 1m evidence lane deployed; #798 adds read-only 4H 2→2 continuation treatment tag | ⚠️ full-engine/risk parity audited; trigger-time parity corrected offline 2026-09-18, prospective natural 1m proof pending | ✅ pre-armed stop-touch: broad control 80/81 fills, +$1,414.60 at 1 tick; 4H 2→2 treatment subset 29 fills, +$1,444.58 / PF 2.032 at 1 tick; old +$2,886.60 trigger-backfill headline retired | ✅ broad pre-armed 3-tick H1 +$802.80 / H2 +$491.80; treatment 3-tick H1 +$663.28 / H2 +$739.30 | ✅ broad +$1,294.60 at 3 ticks; treatment +$1,402.58 at 3 ticks | n=81 / 80 broad pre-armed fills; treatment n=29 but top-three-month concentration about 94–96%; forward causal-1m sample still pending | historical `RISK_GATES_REMOVE_EDGE` still applies to the real-account cap/R:R; **2026-09-18 timing defect proven; #798 treatment is observation metadata only** | **PROMISING BUT UNPROVEN / PAPER + GUARDED DEMO CONTROL; TREATMENT OBSERVATION ONLY — positive after timing correction; not executable under current real-account risk** |
-| 4HR Re-Trigger (MES) | ✅ | ✅ | ✅ full-engine audit (#372) | ❌ 50/76 IOC fills but net −$346.50, PF 0.75 | ❌ bracket H2 −$634.99 | ❌ 3-tick PF 0.65 | n=76 / 7 production attempts / 4 fills | `RISK_GATES_REMOVE_EDGE` on the mechanical rule, but the signal is weak (bracket PF 1.07, IOC negative) — no edge to recover | **BROKEN / WAIT** |
-| 12HR Miyagi | ✅ | ⚠️ research detector only (`research/detector_12hr_miyagi.py`); `strat_12hr_miyagi` is not wired into `signal_engine.py` | ✅ completed-hour lookahead repaired (#776) and trigger-touch bar stop/T1 suppression fixed repo-side 2026-09-19; no full-engine result possible | ⚠️ causal trigger-bar A/B at 2 ticks: MNQ 8 fills, 6W/2L, **+$425.33 / PF 2.322**; MES unchanged +$138.85 / PF 1.593 | ⚠️ MNQ H1 +$291.82 / H2 +$133.51, but H2 has only 1 fill; MES H2 −$1.84 at 2 ticks | ✅ causal MNQ remains positive through 4 ticks (+$409.33 / PF 2.257); MES H2 negative at 2–4 ticks | ❌ MNQ n=8, MES n=10 — far below any cell minimum | MNQ remains `RISK_GATES_REMOVE_EDGE` under current account caps; MES remains weak; **replay identity is fixed and regenerated, but sample/risk blockers remain** | **PROMISING BUT UNPROVEN / PARKED / REPLAY DEFECT FIXED; still BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS** |
-| 60M 3-2-2 First Live | ✅ — first live break, no close required | ✅ | ⚠️ full-engine/risk closure #367; **trigger-time parity corrected offline 2026-09-18**, prospective lower-latency proof pending | ✅ pre-armed First Live: 33/34 fills; 3-tick **+$2,709.66**, 33 resolved wins / 0 losses; completed-5m IOC32 only 20/34 fills / +$1,838.40 at 3 ticks | ✅ pre-armed H1 +$1,366.34 / H2 +$1,343.32 at 3 ticks | ✅ pre-armed 3-tick result positive; completed-close IOC also positive | n=34 — thin / consumed; 33/33 corrected resolved wins is a small-sample warning, not validation | `RISK_GATES_REMOVE_EDGE` still applies to the real account — 34/34 over cap and 34/34 below 2.0 R:R; **completed-5m timing defect also proven** | **PROMISING BUT UNPROVEN signal / BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS — PARKED below $6,000 equity** |
-| ORB Breakout — inverted (MNQ evidence lane) | ✅ | ✅ | ✅ | ❌ under the decision-time reference through the production PaperBroker (8-tick IOC, 1 adverse tick, pessimistic, #508 guard): **41 of 63 arms are `ENTRY_BRACKET_INVALID_AT_FILL`**; the 2026-09-07 "57 fills" used a fill one 5m bar late and held 37 fills beyond their own stop | ❌ admissible 22 fills: H1 +$75.18 / **H2 −$45.74** (2026-09-08) | n/a — nothing to stress | ❌ 22 admissible fills, +$29.44, PF 1.14 (`docs/inverse-orb-decision-time-replay-2026-09-08.md`); the +$1,026.64 / PF 5.28 (63 arms) and +$745.72 / PF 2.39 (n=111, 66/111 invalid) baselines are **RETIRED** | `BRACKET_DESTROYS_EDGE` — the mirrored 50-tick stop sits inside the breakout bar's own range (median favourable detachment 68 ticks at the decision close); the gated "positive" was the detached-fill artifact | **BROKEN — negative evidence** (downgraded 2026-09-08) |
-| MES 1-2-2 (`strat_122`) | ✅ | ✅ | ⚠️ 2026-09-19 pre-arm audit: final 15m arm-bar type/high/low are known only at bar close, exactly when the watched bar opens; **exact pre-open execution parity is not feasible as the same strategy identity**. Late non-Paper submission correctly fails closed. | ✅ reconstructed gap-aware / pessimistic same-bar paper fills | ⚠️ executable subset thin | ✅ historical stress, but stronger slippage weakens/turns edge negative | 16/33 canonical candidates executable | not decomposed | **PROMISING BUT UNPROVEN / PAPER EVIDENCE ONLY / EXACT PRE-OPEN PARITY NOT FEASIBLE** |
-| VWAP Hold (MNQ NY) | ✅ fully specified in `strategy/signal_engine.py` (`_try_vwap_hold`) | ✅ | ✅ replay-engine population reused (2026-09-07) | ❌ under the decision-bar IOC reference the replay/production use: NY-only 35/107 fills, −$326.92, PF 0.49 (2026-09-07). The 2026-07-26 ✅ was the arrival-bar close, 5 min after the order | ❌ both halves negative under the decision-bar reference (2026-09-07) | ❌ (moot — negative at 1 tick) | n=107 armed / 35 filled NY-only; 348 / 105 blended — the 55-fill figure counted 20 fills that exist only under the 5-minute look-ahead | `SIGNAL_NOT_DIRECTIONAL` on the raw predicate (n=4,579); detached-entry gate selects a weakly positive subset (t ≤ 1.9, not NY-specific); the NY cell's sign is a fill-reference artifact (`docs/vwap-hold-reconciliation-2026-09-07.md`) | **BROKEN — negative evidence** (downgraded from PROMISING BUT UNPROVEN 2026-09-07) |
-| VWAP Reclaim (MNQ NY) | ✅ cleanest of the 3 VWAP predicates | Partial | ✅ isolated, confirmed no leaks (2026-07-26) | ✅ ioc_limit (2026-07-26) | ❌ H2 negative (2026-07-26) | ❌ fails 3-tick (2026-07-26) | ⚠️ n=70 combined / n=21 MNQ thin (2026-07-26) | not decomposed | **WAIT** |
-| VWAP Rejection | ❌ | Partial | ❌ | ❌ | ❌ | ❌ | — | not decomposed | **BROKEN — unreachable predicate** |
-| ORB Breakout (MNQ) | ✅ | ✅ | ⚠️ Pine stop offset stale, see profile | ✅ isolated ioc_limit both exits (2026-07-26); audit: 11% IOC fill on n=710, PF 0.59 | ❌ H2 washout both exits (2026-07-26); audit resting-fill bracket H1/H2 both negative | ❌ fails 1-4 tick both exits (2026-07-26); audit 3-tick PF 0.55 | ⚠️ n=25 thin (2026-07-26); audit n=710 raw / 226 bracket-resolved — no longer thin, and negative | `SIGNAL_NOT_DIRECTIONAL` — 0/4 horizons positive; plan-fill artifact +$23.0k; frozen engine halts 2026-03-16 exactly as the 2026-07-26 closure recorded | **BROKEN — negative evidence** (upgraded from WAIT 2026-09-07) |
-| Transition failed-breakdown reclaim (MNQ/MES, shadow) | ✅ objective predicate in the audit script (`scripts/edge_decomposition_audit.py`); shadow detector `_failed_breakdown_reclaim` in `strategy/shadow_setups.py` (#492, 3 unit tests) | ⚠️ research/shadow only | n/a — never executable | ✅ resting + IOC (audit) | ❌ H1/H2 both negative on the full corpus | ❌ 3-tick PF 0.73 | ✅ n=3,292 MNQ full corpus; 299 MNQ / 405 MES re-anchored audit sets | `BRACKET_DESTROYS_EDGE` — weak drift (best t 1.86) → PF 0.80, −$10,768; 91% fail R:R, 83% WEAK/C, RANGE-conditioned so always fails `require_trending_condition` | **BROKEN — no path under the documented bracket** |
-| PDL Reclaim | ✅ | ✅ | Partial | ✅ | ❌ too thin | — | ❌ n=13 | — | **RESEARCH ONLY — undersample** |
-| PDH Reclaim | ✅ | ✅ | ✅ | ✅ | ❌ both halves neg | ❌ | ✅ n=67 | — | **RETIRE** |
-| ICC (all variants) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | — | — | **RESEARCH ONLY** |
-| ICT — FVG | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | — | — | **RESEARCH ONLY** |
-| ICT — Order Block | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | — | — | **RESEARCH ONLY** |
-| ICT — Liquidity Sweep | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | — | — | **RESEARCH ONLY** |
-| 7HR Sweep | ❌ no source material | ❌ | ❌ | ❌ | ❌ | ❌ | — | — | **RESEARCH ONLY — undefined** |
-| FOMC | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ n=16 | — | **RESEARCH ONLY — not portable** |
-| Main Combos (naked) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | — | — | **RESEARCH ONLY — negative without context** |
-| IPC Short | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ n=1615 | — | **RETIRE — fat tail artifact** |
-| Structural Level Fade | ✅ | ✅ | ✅ | ✅ | ❌ both neg | ❌ | ✅ n=3396 | — | **RETIRE** |
+| Strategy | Rules | Detector | Replay parity | Honest fills | Walk-forward | Slippage | Sample | Primary failure stage (2026-09-07) | Execution posture (not evidence) | Evidence verdict |
+|---|---|---|---|---|---|---|---|---|---|---|
+| ORB Reclaim — current/first_cross (MNQ+MES) | ✅ | ✅ | ✅ isolated own-account audit (#368) | ✅ ioc_limit | ❌ own drawdown breaker halts H2 | n/a — halted | ⚠️ n=38; MNQ −$164.44 / MES −$49.30 | `SIGNAL_NOT_DIRECTIONAL` — plan-fill artifact +$20.7k MNQ / +$9.8k MES; resting-fill bracket PF 0.78 / 0.89 on n=459 / 432 | No execution authority from this evidence classification; verify box/config separately | **BROKEN — negative evidence** |
+| ORB Reclaim V4-R candidate | ✅ preregistered | ✅ research detector | ✅ isolated own-account audit (#368) | ✅ ioc_limit | ❌ H2 −$451.20 vs H1 +$900.57 | not established | ⚠️ n=31 | not separately decomposed (same close-confirmed family as the row above) | Research only; no execution authority | **WAIT** — positive aggregate, fails frozen H2 + concentration gates |
+| 4HR Re-Trigger (MNQ) | ✅ — retrigger is a level touch, no 5m close required | ✅ detector; 1m evidence lane deployed; #798 adds read-only 4H 2→2 continuation treatment tag | ⚠️ full-engine/risk parity audited; trigger-time parity corrected offline 2026-09-18, prospective natural 1m proof pending | ✅ pre-armed stop-touch: broad control 80/81 fills, +$1,414.60 at 1 tick; 4H 2→2 treatment subset 29 fills, +$1,444.58 / PF 2.032 at 1 tick; old +$2,886.60 trigger-backfill headline retired | ✅ broad pre-armed 3-tick H1 +$802.80 / H2 +$491.80; treatment 3-tick H1 +$663.28 / H2 +$739.30 | ✅ broad +$1,294.60 at 3 ticks; treatment +$1,402.58 at 3 ticks | n=81 / 80 broad pre-armed fills; treatment n=29 but top-three-month concentration about 94–96%; forward causal-1m sample still pending | historical `RISK_GATES_REMOVE_EDGE` still applies to the real-account cap/R:R; **2026-09-18 timing defect proven; #798 treatment is observation metadata only** | Hypothetical paper + guarded DEMO evidence; treatment observation only; parked for real-account execution under current risk constraints | **PROMISING BUT UNPROVEN** |
+| 4HR Re-Trigger (MES) | ✅ | ✅ | ✅ full-engine audit (#372) | ❌ 50/76 IOC fills but net −$346.50, PF 0.75 | ❌ bracket H2 −$634.99 | ❌ 3-tick PF 0.65 | n=76 / 7 production attempts / 4 fills | `RISK_GATES_REMOVE_EDGE` on the mechanical rule, but the signal is weak (bracket PF 1.07, IOC negative) — no edge to recover | Parked / no execution authority | **BROKEN** |
+| 12HR Miyagi | ✅ | ⚠️ research detector only (`research/detector_12hr_miyagi.py`); `strat_12hr_miyagi` is not wired into `signal_engine.py` | ✅ completed-hour lookahead repaired (#776) and trigger-touch bar stop/T1 suppression fixed repo-side 2026-09-19; no full-engine result possible | ⚠️ causal trigger-bar A/B at 2 ticks: MNQ 8 fills, 6W/2L, **+$425.33 / PF 2.322**; MES unchanged +$138.85 / PF 1.593 | ⚠️ MNQ H1 +$291.82 / H2 +$133.51, but H2 has only 1 fill; MES H2 −$1.84 at 2 ticks | ✅ causal MNQ remains positive through 4 ticks (+$409.33 / PF 2.257); MES H2 negative at 2–4 ticks | ❌ MNQ n=8, MES n=10 — far below any cell minimum | MNQ remains `RISK_GATES_REMOVE_EDGE` under current account caps; MES remains weak; **replay identity is fixed and regenerated, but sample/risk blockers remain** | Research/shadow only; parked under current account-risk constraints; not wired into `signal_engine.py` | **PROMISING BUT UNPROVEN** |
+| 60M 3-2-2 First Live | ✅ — first live break, no close required | ✅ | ⚠️ full-engine/risk closure #367; **trigger-time parity corrected offline 2026-09-18**, prospective lower-latency proof pending | ✅ pre-armed First Live: 33/34 fills; 3-tick **+$2,709.66**, 33 resolved wins / 0 losses; completed-5m IOC32 only 20/34 fills / +$1,838.40 at 3 ticks | ✅ pre-armed H1 +$1,366.34 / H2 +$1,343.32 at 3 ticks | ✅ pre-armed 3-tick result positive; completed-close IOC also positive | n=34 — thin / consumed; 33/33 corrected resolved wins is a small-sample warning, not validation | `RISK_GATES_REMOVE_EDGE` still applies to the real account — 34/34 over cap and 34/34 below 2.0 R:R; **completed-5m timing defect also proven** | Hypothetical paper + guarded DEMO evidence; parked for real-account execution under current risk constraints | **PROMISING BUT UNPROVEN** |
+| ORB Breakout — inverted (MNQ evidence lane) | ✅ | ✅ | ✅ | ❌ under the decision-time reference through the production PaperBroker (8-tick IOC, 1 adverse tick, pessimistic, #508 guard): **41 of 63 arms are `ENTRY_BRACKET_INVALID_AT_FILL`**; the 2026-09-07 "57 fills" used a fill one 5m bar late and held 37 fills beyond their own stop | ❌ admissible 22 fills: H1 +$75.18 / **H2 −$45.74** (2026-09-08) | n/a — nothing to stress | ❌ 22 admissible fills, +$29.44, PF 1.14 (`docs/inverse-orb-decision-time-replay-2026-09-08.md`); the +$1,026.64 / PF 5.28 (63 arms) and +$745.72 / PF 2.39 (n=111, 66/111 invalid) baselines are **RETIRED** | `BRACKET_DESTROYS_EDGE` — the mirrored 50-tick stop sits inside the breakout bar's own range (median favourable detachment 68 ticks at the decision close); the gated "positive" was the detached-fill artifact | Evidence lane only; no promotion authority | **BROKEN — negative evidence** (downgraded 2026-09-08) |
+| MES 1-2-2 (`strat_122`) | ✅ | ✅ | ⚠️ 2026-09-19 pre-arm audit: final 15m arm-bar type/high/low are known only at bar close, exactly when the watched bar opens; **exact pre-open execution parity is not feasible as the same strategy identity**. Late non-Paper submission correctly fails closed. | ✅ reconstructed gap-aware / pessimistic same-bar paper fills | ⚠️ executable subset thin | ✅ historical stress, but stronger slippage weakens/turns edge negative | 16/33 canonical candidates executable | not decomposed | Paper evidence only; no broker route | **PROMISING BUT UNPROVEN** |
+| VWAP Hold (MNQ NY) | ✅ fully specified in `strategy/signal_engine.py` (`_try_vwap_hold`) | ✅ | ✅ replay-engine population reused (2026-09-07) | ❌ under the decision-bar IOC reference the replay/production use: NY-only 35/107 fills, −$326.92, PF 0.49 (2026-09-07). The 2026-07-26 ✅ was the arrival-bar close, 5 min after the order | ❌ both halves negative under the decision-bar reference (2026-09-07) | ❌ (moot — negative at 1 tick) | n=107 armed / 35 filled NY-only; 348 / 105 blended — the 55-fill figure counted 20 fills that exist only under the 5-minute look-ahead | `SIGNAL_NOT_DIRECTIONAL` on the raw predicate (n=4,579); detached-entry gate selects a weakly positive subset (t ≤ 1.9, not NY-specific); the NY cell's sign is a fill-reference artifact (`docs/vwap-hold-reconciliation-2026-09-07.md`) | No execution authority | **BROKEN — negative evidence** (downgraded from PROMISING BUT UNPROVEN 2026-09-07) |
+| VWAP Reclaim (MNQ NY) | ✅ cleanest of the 3 VWAP predicates | Partial | ✅ isolated, confirmed no leaks (2026-07-26) | ✅ ioc_limit (2026-07-26) | ❌ H2 negative (2026-07-26) | ❌ fails 3-tick (2026-07-26) | ⚠️ n=70 combined / n=21 MNQ thin (2026-07-26) | not decomposed | Research only; no execution authority | **WAIT** |
+| VWAP Rejection | ❌ | Partial | ❌ | ❌ | ❌ | ❌ | — | not decomposed | No execution authority | **BROKEN — unreachable predicate** |
+| ORB Breakout (MNQ) | ✅ | ✅ | ⚠️ Pine stop offset stale, see profile | ✅ isolated ioc_limit both exits (2026-07-26); audit: 11% IOC fill on n=710, PF 0.59 | ❌ H2 washout both exits (2026-07-26); audit resting-fill bracket H1/H2 both negative | ❌ fails 1-4 tick both exits (2026-07-26); audit 3-tick PF 0.55 | ⚠️ n=25 thin (2026-07-26); audit n=710 raw / 226 bracket-resolved — no longer thin, and negative | `SIGNAL_NOT_DIRECTIONAL` — 0/4 horizons positive; plan-fill artifact +$23.0k; frozen engine halts 2026-03-16 exactly as the 2026-07-26 closure recorded | Direct strategy retired from executable book; derived evidence lanes are separate | **BROKEN — negative evidence** (upgraded from WAIT 2026-09-07) |
+| Transition failed-breakdown reclaim (MNQ/MES, shadow) | ✅ objective predicate in the audit script (`scripts/edge_decomposition_audit.py`); shadow detector `_failed_breakdown_reclaim` in `strategy/shadow_setups.py` (#492, 3 unit tests) | ⚠️ research/shadow only | n/a — never executable | ✅ resting + IOC (audit) | ❌ H1/H2 both negative on the full corpus | ❌ 3-tick PF 0.73 | ✅ n=3,292 MNQ full corpus; 299 MNQ / 405 MES re-anchored audit sets | `BRACKET_DESTROYS_EDGE` — weak drift (best t 1.86) → PF 0.80, −$10,768; 91% fail R:R, 83% WEAK/C, RANGE-conditioned so always fails `require_trending_condition` | Shadow observation only; no execution authority | **BROKEN — no path under the documented bracket** |
+| PDL Reclaim | ✅ | ✅ | Partial | ✅ | ❌ too thin | — | ❌ n=13 | — | Research only | **RESEARCH ONLY — undersample** |
+| PDH Reclaim | ✅ | ✅ | ✅ | ✅ | ❌ both halves neg | ❌ | ✅ n=67 | — | Retired | **RETIRE** |
+| ICC (all variants) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | — | — | Research only; no execution authority | **RESEARCH ONLY** |
+| ICT — FVG | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | — | — | Research only; no execution authority | **RESEARCH ONLY** |
+| ICT — Order Block | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | — | — | Research only; no execution authority | **RESEARCH ONLY** |
+| ICT — Liquidity Sweep | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | — | — | Research only; no execution authority | **RESEARCH ONLY** |
+| 7HR Sweep | ❌ no source material | ❌ | ❌ | ❌ | ❌ | ❌ | — | — | Research only; no execution authority | **RESEARCH ONLY — undefined** |
+| FOMC | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ n=16 | — | Research only; no execution authority | **RESEARCH ONLY — not portable** |
+| Main Combos (naked) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | — | — | Research only; no execution authority | **RESEARCH ONLY — negative without context** |
+| IPC Short | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ n=1615 | — | Retired | **RETIRE — fat tail artifact** |
+| Structural Level Fade | ✅ | ✅ | ✅ | ✅ | ❌ both neg | ❌ | ✅ n=3396 | — | Retired | **RETIRE** |
 
 ---
 
@@ -100,7 +102,8 @@ Verdict taxonomy:
 ---
 
 ### 4HR Re-Trigger
-**Verdict: MNQ PROMISING BUT UNPROVEN / PAPER ONLY — positive after trigger-timing correction, but not executable under current real-account risk; MES BROKEN / WAIT**
+**Evidence verdict:** MNQ **PROMISING BUT UNPROVEN**; MES **BROKEN**  
+**Execution posture:** MNQ hypothetical paper + guarded DEMO evidence / observation treatment only, with real-account execution blocked by current risk constraints; MES parked / no execution authority.
 
 - Binding full-engine audit: PR #372.
 - MNQ: the prior 80-fill standalone population collapses to 1/81 real fills through `ReplayEngine -> DecisionEngine -> RiskEngine -> PaperBroker`, including the hypothetical parity-defect ceiling pass.
@@ -113,7 +116,8 @@ Verdict taxonomy:
 ---
 
 ### 12HR Miyagi
-**Verdict: BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS**
+**Evidence verdict:** **PROMISING BUT UNPROVEN**  
+**Execution posture:** research/shadow only; parked under current account-risk constraints; not wired into `signal_engine.py`.
 
 - Binding causal-stop closure: PR #366.
 - The earlier PF/P&L study used a stop-reference formula with a confirmed lookahead defect.
@@ -127,7 +131,8 @@ Verdict taxonomy:
 ---
 
 ### 60M 3-2-2 First Live
-**Verdict: PROMISING BUT UNPROVEN signal / BROKEN FOR CURRENT SYSTEM RISK CONSTRAINTS — PARKED**
+**Evidence verdict:** **PROMISING BUT UNPROVEN**  
+**Execution posture:** hypothetical paper + guarded DEMO evidence; parked for real-account execution under current risk constraints.
 
 - Binding executable-parity closure: PR #367.
 - The prior 34-candidate / 21-fill / PF 10.36 study was standalone research and did not exercise the account's real runtime controls.

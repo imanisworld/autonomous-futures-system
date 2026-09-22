@@ -65,6 +65,32 @@ def test_parse_strategy_inventory_extracts_name_and_verdict(tmp_path: Path) -> N
     assert by_name["ORB Breakout (MNQ)"] == "WAIT"
 
 
+def test_parse_strategy_inventory_separates_execution_posture_from_evidence_verdict(tmp_path: Path) -> None:
+    doc = tmp_path / "Strategy_Inventory.md"
+    doc.write_text(
+        "\n".join(
+            [
+                "## Master Table",
+                "",
+                "| Strategy | Execution posture (not evidence) | Evidence verdict |",
+                "|---|---|---|",
+                "| 4HR Re-Trigger (MNQ) | Hypothetical paper + guarded DEMO evidence; real-account execution blocked by current risk constraints | **PROMISING BUT UNPROVEN** |",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    rows, error = _parse_strategy_inventory(doc)
+    assert error is None
+    assert rows == [
+        {
+            "name": "4HR Re-Trigger (MNQ)",
+            "verdict": "PROMISING BUT UNPROVEN",
+            "raw_verdict_cell": "**PROMISING BUT UNPROVEN**",
+            "execution_posture": "Hypothetical paper + guarded DEMO evidence; real-account execution blocked by current risk constraints",
+        }
+    ]
+
+
 def test_strategy_source_of_truth_separates_evidence_verdict_from_config_state(tmp_path: Path) -> None:
     inventory_dir = tmp_path / "docs" / "strategy-rules"
     inventory_dir.mkdir(parents=True)
