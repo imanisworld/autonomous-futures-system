@@ -106,12 +106,12 @@ def _account_entry_gate(broker) -> tuple[bool, str]:
     try:
         positions = _list_positions(broker)
         orders = _list_orders(broker)
+        if any(abs(_position_qty(row)) > 0 for row in positions):
+            return False, "broker_account_not_flat"
+        if any(_order_status(row) in WORKING_ORDER_STATUSES for row in orders):
+            return False, "broker_working_orders_present"
     except Exception as exc:
         return False, f"broker_state_unreadable:{type(exc).__name__}"
-    if any(abs(_position_qty(row)) > 0 for row in positions):
-        return False, "broker_account_not_flat"
-    if any(_order_status(row) in WORKING_ORDER_STATUSES for row in orders):
-        return False, "broker_working_orders_present"
     return True, "broker_account_flat"
 
 
