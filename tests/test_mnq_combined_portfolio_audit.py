@@ -195,3 +195,37 @@ def test_combined_runner_imports_without_side_effects():
     module = importlib.import_module("scripts.mnq_combined_portfolio_audit")
     assert module.START.isoformat() == "2025-07-24"
     assert module.END.isoformat() == "2026-06-26"
+
+
+def test_unresolved_source_event_is_not_portfolio_fillable():
+    # The canonical 4HR timing study treats EOD_BAR_MISSING as fail-closed /
+    # excluded, not as an occupied portfolio fill.
+    from scripts import mnq_combined_portfolio_audit as runner
+
+    class Cand:
+        direction = "LONG"
+        stop = 90.0
+        target = 120.0
+        session = "new_york"
+
+    class Bars:
+        rows = [
+            {"timestamp": "2026-01-05T15:00:00+00:00"},
+            {"timestamp": "2026-01-05T15:05:00+00:00"},
+        ]
+
+    result = {
+        "status": "UNRESOLVED",
+        "fill_entry": 100.0,
+        "exit_idx": 1,
+        "net": 0.0,
+    }
+    assert runner._event_from_bracket(
+        "4HR_RETRIGGER",
+        "x",
+        Cand(),
+        Bars(),
+        result,
+        trigger_idx=0,
+        source="unit",
+    ) is None
