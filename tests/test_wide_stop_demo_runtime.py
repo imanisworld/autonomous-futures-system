@@ -606,3 +606,52 @@ def test_independent_eod_fallback_refuses_unexpected_working_order(tmp_path, mon
     assert broker.flatten_calls == 0
     state = demo_state.load_state(_root(tmp_path), DAY)
     assert state["position"] is not None
+
+
+class _MalformedStateBroker(_FakeBroker):
+    def __init__(self, *, position_payload=None, order_payload=None):
+        super().__init__()
+        self.position_payload = [] if position_payload is None else position_payload
+        self.order_payload = [] if order_payload is None else order_payload
+
+    def _get(self, path):
+        if path == "/position/list":
+            return self.position_payload
+        if path == "/order/list":
+            return self.order_payload
+        return []
+
+
+@pytest.mark.parametrize(
+    "position_payload,order_payload",
+    [
+        ({"netPos": 0}, []),
+        ([], {"ordStatus": "Filled"}),
+        (["not-an-object"], []),
+        ([], ["not-an-object"]),
+    ],
+)
+def test_demo_entry_blocks_malformed_broker_state(
+    tmp_path, monkeypatch, position_payload, order_payload
+):
+    _demo_env(monkeypatch)
+    _patch_candidate(monkeypatch, FOUR_HR)
+    broker = _MalformedStateBroker(
+        position_payload=position_payload,
+        order_payload=order_payload,
+    )
+
+    events = demo.process_demo_five_min_bar(
+        payload=_payload(), cfg=_cfg(), bars_5m=[], log_dir=tmp_path,
+        for_date=DAY, broker_factory=lambda: broker,
+    )
+
+    assert broker.execute_calls == 0
+    blocked = [
+        row for row in events
+        if row.get("lane_failed_rule") == "demo_account_exclusive_gate"
+    ]
+    assert blocked
+    assert str(blocked[-1].get("lane_reason") or "").startswith(
+        "broker_state_unreadable:ValueError"
+    )
