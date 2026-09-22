@@ -61,6 +61,7 @@ from strategy.shadow_setups import evaluate_shadow_setups
 START = date(2025, 7, 24)
 END = date(2026, 6, 26)
 EXPECTED_COMMON_DAYS = 290
+CANONICAL_322_15M_DIR = "replay_polygon"
 DEFAULT_DATA = REPO / "data"
 DEFAULT_OUT = REPO / "logs/mnq_combined_portfolio_audit_2026-09-22.json"
 
@@ -828,7 +829,7 @@ def run(data_root: Path) -> dict:
     root5 = data_root / "replay_corpus_v1_5m_4hr_audit"
     root15 = data_root / "replay_corpus_v1_market_condition_fixed"
     root5late = data_root / "replay_corpus_v1_5m"
-    root322_15 = data_root / "replay_polygon"
+    root322_15 = data_root / CANONICAL_322_15M_DIR
     common_days = _common_days(root5, root15, root5late, root322_15)
 
     # Control order is deliberate. Any mismatch raises before combined numbers.
