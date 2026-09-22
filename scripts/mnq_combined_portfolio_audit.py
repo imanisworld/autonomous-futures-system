@@ -14,9 +14,10 @@ import math
 import tempfile
 import sys
 from collections import Counter, defaultdict, deque
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable
+from zoneinfo import ZoneInfo
 
 REPO = Path(__file__).resolve().parents[1]
 if str(REPO) not in sys.path:
@@ -36,6 +37,7 @@ from research.mnq_combined_portfolio_audit import (
     summarize_replay,
 )
 from research.mnq_sustained_trend_continuation_v1 import (
+    CapacityGate,
     ResearchTrade,
     SustainedTrendContinuationV1,
     resolve_trade_on_bar,
@@ -73,7 +75,7 @@ EXPECTED = {
     "60M_322_FIRST_LIVE": {"fills": 33, "net": 2742.66},
     "DAILY_22_COMPLETED_CLOSE": {"fills": 34, "net": 13571.68, "pf": 1.9482},
     "12HR_MIYAGI": {"fills": 8, "net": 425.33, "pf": 2.322},
-    "SUSTAINED_TREND_V1": {"terminal": 34, "net": 576.18, "pf": 1.762},
+    "SUSTAINED_TREND_V1": {"fills": 36, "terminal": 34, "net": 576.18, "pf": 1.762},
 }
 
 FAMILY_4HR = "4HR_RETRIGGER"
@@ -646,90 +648,118 @@ def _asia(root15: Path) -> tuple[list[PortfolioEvent], dict, list[dict]]:
     }, attempts
 
 
+def _sustained_day_end(day: str) -> str:
+    """Exact CME observation-day roll used by frozen v1 (18:00 ET)."""
+    local = datetime.combine(
+        date.fromisoformat(day),
+        time(18, 0),
+        tzinfo=ZoneInfo("America/New_York"),
+    )
+    return local.astimezone(timezone.utc).isoformat()
+
+
 def _sustained(root15: Path, root5late: Path) -> tuple[list[PortfolioEvent], dict, list[dict]]:
-    canonical = sustained_script.run(root15, root5late)
+    # The frozen #912 CLI takes the instrument leaf directories, unlike the
+    # other portfolio adapters whose loaders append /MNQ themselves.
+    leaf15 = root15 / "MNQ"
+    leaf5 = root5late / "MNQ"
+
+    canonical = sustained_script.run(leaf15, leaf5)
     all_metrics = canonical["all"]
     control = {
+        "fills": int(all_metrics["fills"]),
         "terminal": int(all_metrics["terminal"]),
         "net": float(all_metrics["net_pnl"]),
         "pf": float(all_metrics["profit_factor"]),
     }
     _assert_control(FAMILY_ST, control, EXPECTED[FAMILY_ST])
 
-    files15 = {
-        sustained_script._day(p): p
-        for p in sustained_script._corpus_files(root15)
-        if _date_in_window(sustained_script._day(p))
-    }
-    files5 = {
-        sustained_script._day(p): p
-        for p in sustained_script._corpus_files(root5late)
-        if _date_in_window(sustained_script._day(p))
-    }
-    if set(files15) - set(files5):
-        raise RuntimeError("Sustained v1 common window missing 5m files")
+    files15_all = sustained_script._corpus_files(leaf15)
+    files5_all = sustained_script._corpus_files(leaf5)
+    by_day5 = {sustained_script._day(p): p for p in files5_all}
+    if any(sustained_script._day(p) not in by_day5 for p in files15_all):
+        raise RuntimeError("Sustained v1 full frozen window missing 5m files")
 
+    # Mirror the frozen #912 capacity loop exactly so the normalized event
+    # stream cannot manufacture triggers that the standalone study skipped
+    # while a position was open or after its 3/day cap.
     detector = SustainedTrendContinuationV1()
-    triggers: list[tuple[Any, dict]] = []
-    all_5m: list[tuple[datetime, dict]] = []
+    capacity = CapacityGate()
+    active: ResearchTrade | None = None
+    admitted: list[tuple[ResearchTrade, str]] = []
+    attempts_full: list[dict] = []
 
-    for day in sorted(files15):
-        b15 = sustained_script._load_jsonl(files15[day])
-        b5 = sustained_script._load_jsonl(files5[day])
-        all_5m.extend((sustained_script._close_time(row, 5), row) for row in b5)
+    for path15 in files15_all:
+        day = sustained_script._day(path15)
+        path5 = by_day5[day]
+        b15 = sustained_script._load_jsonl(path15)
+        b5 = sustained_script._load_jsonl(path5)
         stream = (
             [(sustained_script._close_time(row, 15), 0, "15m", row) for row in b15]
             + [(sustained_script._close_time(row, 5), 1, "5m", row) for row in b5]
         )
         stream.sort(key=lambda item: (item[0], item[1]))
-        for close_ts, _, tf, row in stream:
-            produced = (
-                detector.on_15m(row, close_time=close_ts)
-                if tf == "15m"
-                else detector.on_5m(row, close_time=close_ts)
-            )
-            for event in produced:
-                if event.event in {"TRIGGERED", "STOP_CAP_REJECTED"}:
-                    triggers.append((event, row))
 
-    all_5m.sort(key=lambda item: item[0])
-    events: list[PortfolioEvent] = []
-    attempts: list[dict] = []
-    for event, _ in triggers:
-        source_id = f"sustained:{event.arm_bar_ts}:{event.event_ts}"
-        attempts.append({"family": FAMILY_ST, "source_id": source_id, "ts": event.event_ts})
-        if event.event != "TRIGGERED":
-            continue
-        trade = ResearchTrade(
-            observation_day=_obs_day(event.event_ts),
-            session=str(event.session or ""),
-            arm_bar_ts=event.arm_bar_ts,
-            trigger_ts=event.event_ts,
-            entry=float(event.modeled_fill),
-            stop=float(event.stop),
-            target=float(event.target),
-            stop_ticks=float(event.stop_ticks),
-        )
-        last_same_day = event.event_ts
-        for close_ts, row in all_5m:
-            if close_ts <= _parse(event.event_ts):
-                continue
-            if _obs_day(close_ts) != trade.observation_day:
-                break
-            last_same_day = close_ts.isoformat()
-            if resolve_trade_on_bar(trade, row, close_time=close_ts) is not None:
-                break
-        if trade.result == "OPEN":
-            trade.result = "OPEN_EOD"
-            trade.exit_ts = last_same_day
-            trade.net_pnl = 0.0
-        events.append(
+        for close_ts, _, tf, row in stream:
+            current_day = sustained_script.observation_day(close_ts)
+            if active is not None and active.observation_day != current_day:
+                sustained_script._close_open_eod(active, capacity)
+                active = None
+
+            if tf == "15m":
+                produced = detector.on_15m(row, close_time=close_ts)
+            else:
+                if active is not None and close_ts > sustained_script._parse_ts(active.trigger_ts):
+                    resolved = resolve_trade_on_bar(active, row, close_time=close_ts)
+                    if resolved is not None:
+                        capacity.mark_closed()
+                        active = None
+                produced = detector.on_5m(row, close_time=close_ts)
+
+            for item in produced:
+                if item.event not in {"TRIGGERED", "STOP_CAP_REJECTED"}:
+                    continue
+                source_id = f"sustained:{item.arm_bar_ts}:{item.event_ts}"
+                attempts_full.append({
+                    "family": FAMILY_ST,
+                    "source_id": source_id,
+                    "ts": item.event_ts,
+                })
+                if item.event != "TRIGGERED":
+                    continue
+                status = capacity.classify_trigger(current_day)
+                if status != "FILLED":
+                    continue
+
+                trade = ResearchTrade(
+                    observation_day=current_day,
+                    session=str(item.session or row.get("session") or "unknown"),
+                    arm_bar_ts=item.arm_bar_ts,
+                    trigger_ts=item.event_ts,
+                    entry=float(item.modeled_fill),
+                    stop=float(item.stop),
+                    target=float(item.target),
+                    stop_ticks=float(item.stop_ticks),
+                )
+                admitted.append((trade, source_id))
+                active = trade
+
+    if active is not None:
+        sustained_script._close_open_eod(active, capacity)
+        active = None
+
+    full_events: list[PortfolioEvent] = []
+    for trade, source_id in admitted:
+        exit_ts = trade.exit_ts
+        if trade.result == "OPEN_EOD":
+            exit_ts = _sustained_day_end(trade.observation_day)
+        full_events.append(
             PortfolioEvent(
                 family=FAMILY_ST,
                 source_id=source_id,
-                signal_ts=event.event_ts,
-                eligible_fill_ts=event.event_ts,
-                exit_ts=trade.exit_ts,
+                signal_ts=trade.trigger_ts,
+                eligible_fill_ts=trade.trigger_ts,
+                exit_ts=exit_ts,
                 observation_day=trade.observation_day,
                 direction="LONG",
                 entry=trade.entry,
@@ -738,12 +768,44 @@ def _sustained(root15: Path, root5late: Path) -> tuple[list[PortfolioEvent], dic
                 result=trade.result,
                 net_pnl=float(trade.net_pnl or 0.0),
                 session=trade.session,
-                source="frozen PR #912 v1 detector",
+                source="frozen PR #912 v1 detector + capacity contract",
             )
         )
 
+    # Independent adapter parity: the normalized full stream must itself match
+    # the accepted #912 headline before it can enter the combined portfolio.
+    normalized = summarize_replay(
+        replay_portfolio(
+            full_events,
+            max_fills_per_day=STANDALONE_DAILY_CAP[FAMILY_ST],
+        )
+    )
+    normalized_control = {
+        "fills": int(normalized["fills"]),
+        "terminal": int(normalized["terminal"]),
+        "net": float(normalized["net"]),
+        "pf": float(normalized["pf"]),
+    }
+    _assert_control(
+        f"{FAMILY_ST}_NORMALIZED",
+        normalized_control,
+        EXPECTED[FAMILY_ST],
+    )
+
+    events = [
+        event
+        for event in full_events
+        if START <= date.fromisoformat(event.eligible_fill_ts[:10]) <= END
+    ]
+    attempts = [
+        attempt
+        for attempt in attempts_full
+        if START <= date.fromisoformat(attempt["ts"][:10]) <= END
+    ]
+
     return events, {
         "canonical_full_window": control,
+        "normalized_full_window": normalized_control,
         "canonical_coverage": canonical["data"]["coverage_check"],
         "raw_common_candidates": len(attempts),
         "raw_common_fillable": len(events),
