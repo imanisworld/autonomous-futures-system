@@ -83,6 +83,36 @@ trading release, when the units can point back at the repo.
 The same pattern is used for the options coverage collector
 (`docs/options-coverage-observer.md`, "After-close collector").
 
+## Curated single-file overlay exception
+
+The normal procedure above assumes all four pinned files should come from one
+target commit. **Do not use that assumption when the target commit also changes
+one of the pinned `ops/` dependencies for an unrelated lane.** In that case,
+start from the exact currently proven pin and overlay only the intended reporter
+file.
+
+Required proof for a curated reporter overlay:
+
+1. Copy the exact current pin into a new immutable release directory.
+2. Replace only `scripts/paper_collection_report.py` with the intended source
+   commit's exact bytes.
+3. Prove `ops/__init__.py`, `ops/collector_census.py`, and
+   `ops/evidence_registry.py` are byte-identical to the current pin.
+4. Record mixed provenance explicitly in `PIN_INFO.txt`: base pin + overlay
+   commit + overlaid path. Do not label the directory as a pure full-tree
+   release from the overlay commit.
+5. Rebuild and verify `MANIFEST.sha256`.
+6. Run old-vs-curated `--no-discord` smoke against the same captured real
+   inputs. Non-presentation data and futures output must remain unchanged when
+   the change is Options-only.
+7. Flip `current` atomically only after those checks pass, then perform one
+   read-only Discord smoke and verify trading PIDs/restart counts and reporter
+   timers did not move.
+
+Any unexpected dependency diff, futures-output change, runtime mutation, or
+provenance ambiguity is a **HOLD**. This exception exists to prevent a
+reporting-only pin from silently importing unrelated evidence-lane changes.
+
 ## Re-pinning to a newer commit (no service restart)
 
 1. Export the four files from the target commit: `git archive <sha> scripts/paper_collection_report.py ops/__init__.py ops/collector_census.py ops/evidence_registry.py`.
