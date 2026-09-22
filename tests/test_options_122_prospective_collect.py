@@ -64,9 +64,10 @@ def test_journal_is_version_locked_and_append_only_state(tmp_path: Path):
         '{"record_type":"RECONCILIATION","collector_id":"%s","collector_version":"%s","policy_epoch":"%s","setup_id":"s1","observation":{"setup_fingerprint":"f1"}}\n'
         % (COLLECTOR_ID,COLLECTOR_VERSION,POLICY_EPOCH,COLLECTOR_ID,COLLECTOR_VERSION,POLICY_EPOCH,COLLECTOR_ID,COLLECTOR_VERSION,POLICY_EPOCH)
     )
-    armed, terminal, fp, reconciled = _load_state(p)
+    armed, terminal, fp, reconciled, drifted = _load_state(p)
     assert armed["s1"] == datetime(2026,9,18,15,0,10,tzinfo=UTC)
     assert "s1" in terminal and fp["s1"] == "f1" and "s1" in reconciled
+    assert drifted == set()
 
 
 def test_collector_has_no_broker_order_or_risk_imports():
@@ -125,3 +126,130 @@ def test_closed_session_is_not_an_error(monkeypatch, tmp_path):
     assert result["status"] == "CLOSED_SESSION"
     assert result["resolutions_written"] == 0
     assert result["option_evidence_captured"] == 0
+
+
+def _row(record_type, setup_id, fp, **extra):
+    import json
+
+    return json.dumps({
+        "record_type": record_type, "collector_id": COLLECTOR_ID,
+        "collector_version": COLLECTOR_VERSION, "policy_epoch": POLICY_EPOCH,
+        "setup_id": setup_id, "observed_at": "2026-09-22T16:30:11+00:00",
+        "observation": {"setup_fingerprint": fp}, **extra,
+    }) + "\n"
+
+
+def test_own_source_drift_row_reloads_and_blocks_setup(tmp_path: Path):
+    # Production 2026-09-22: ARMED(fp1) -> SOURCE_DRIFT(fp2) -> every restart
+    # raised journal_setup_fingerprint_drift_58.
+    p = tmp_path / "j.jsonl"
+    p.write_text(
+        _row("ARMED", "drift", "fp1")
+        + _row("ARMED", "pending", "fpp")
+        + _row("SOURCE_DRIFT", "drift", "fp2", reason_code="public_completed_bar_revision")
+    )
+    armed, terminal, fp, reconciled, drifted = _load_state(p)
+    assert drifted == {"drift"}
+    assert fp["drift"] == "fp1"
+    assert "drift" not in terminal and "drift" not in reconciled
+    assert set(armed) == {"drift", "pending"} and fp["pending"] == "fpp"
+
+
+def test_fingerprint_drift_outside_source_drift_rows_still_fails_closed(tmp_path: Path):
+    import pytest
+
+    p = tmp_path / "j.jsonl"
+    p.write_text(_row("ARMED", "s1", "fp1") + _row("RESOLUTION", "s1", "fp2"))
+    with pytest.raises(RuntimeError, match="journal_setup_fingerprint_drift_2"):
+        _load_state(p)
+    p.write_text(
+        _row("ARMED", "s1", "fp1") + _row("SOURCE_DRIFT", "s1", "fp2")
+        + _row("RESOLUTION", "s1", "fp2")
+    )
+    with pytest.raises(RuntimeError, match="journal_setup_fingerprint_drift_3"):
+        _load_state(p)
+
+
+def test_source_drift_row_stays_version_locked(tmp_path: Path):
+    import pytest
+
+    p = tmp_path / "j.jsonl"
+    p.write_text(_row("ARMED", "s1", "fp1") + _row("SOURCE_DRIFT", "s1", "fp2").replace(COLLECTOR_VERSION, "old"))
+    with pytest.raises(RuntimeError, match="journal_collector_version_mismatch_2"):
+        _load_state(p)
+
+
+def test_run_survives_source_drift_restart_and_keeps_collecting(monkeypatch, tmp_path):
+    import argparse
+    import asyncio
+    import json
+    from dataclasses import replace
+    from datetime import timedelta
+    from types import SimpleNamespace
+
+    import scripts.options_122_prospective_collect as mod
+
+    now = datetime.now(UTC)
+    later = (now + timedelta(hours=1)).isoformat()
+    session = SimpleNamespace(date=now.date(), open=now - timedelta(hours=1), close=now + timedelta(hours=1))
+
+    class FakePublic:
+        def __init__(self, cfg): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *_exc): return None
+
+    async def fake_chart(*_args, **_kwargs):
+        return {}
+
+    source_calls = []
+
+    async def fake_source(_provider, *, obs, **_kwargs):
+        source_calls.append(obs.setup_id)
+        return {"status": "NO_BREAK", "reason_code": "watch_open"}
+
+    base = replace(_obs(), watch_until=later)
+    observations = [
+        replace(base, setup_id="drift", setup_fingerprint="fp2"),
+        replace(base, setup_id="pending", setup_fingerprint="fpp"),
+        replace(base, setup_id="new", setup_fingerprint="fpn"),
+    ]
+    monkeypatch.setattr(mod, "load_config", lambda: SimpleNamespace(alpaca_data_base_url="https://x", public_stale_quote_seconds=30))
+    monkeypatch.setattr(mod, "resolve_alpaca_credentials", lambda: (None, None))
+    monkeypatch.setattr(mod, "nyse_session_for", lambda _day: session)
+    monkeypatch.setattr(mod, "_week_sessions", lambda _day: [])
+    monkeypatch.setattr(mod, "PublicMarketDataClient", FakePublic)
+    monkeypatch.setattr(mod, "_public_chart", fake_chart)
+    monkeypatch.setattr(mod, "parse_regular_market_bars", lambda *_a, **_k: SimpleNamespace(bars=[]))
+    monkeypatch.setattr(mod, "build_session_timeframe", lambda *_a, **_k: [])
+    monkeypatch.setattr(mod, "observe_122_setups", lambda **_k: observations)
+    monkeypatch.setattr(mod, "_source_first_boundary", fake_source)
+
+    journal = tmp_path / "j.jsonl"
+    triggered = _row("RESOLUTION", "trig", "fpt", source_outcome="REVERSAL", reconciliation_status="PENDING_DELAYED_SIP")
+    triggered = triggered.replace('"observation": {"setup_fingerprint": "fpt"}', '"observation": {"setup_fingerprint": "fpt", "watch_until": "%s"}' % later)
+    journal.write_text(
+        _row("ARMED", "drift", "fp1") + _row("ARMED", "pending", "fpp")
+        + _row("ARMED", "trig", "fpt") + triggered
+    )
+    args = argparse.Namespace(
+        env_file=None, ticker=["SPY"], journal=str(journal), raw_trade_dir=str(tmp_path / "raw"),
+        max_capture_lag_seconds=mod.DEFAULT_MAX_CAPTURE_LAG_SECONDS, dry_run=False,
+    )
+
+    first = asyncio.run(mod.run(args))  # detects the revision -> one SOURCE_DRIFT row
+    after_first = journal.read_bytes()
+    second = asyncio.run(mod.run(args))  # restart: must load, not raise
+    after_second = journal.read_bytes()
+
+    assert first["status"] == second["status"] == "RTH_COLLECTION"
+    assert after_second.startswith(after_first)  # append-only, never rewritten
+    rows = [json.loads(line) for line in after_second.decode().splitlines()]
+    drift_rows = [r for r in rows if r["setup_id"] == "drift"]
+    assert [r["record_type"] for r in drift_rows] == ["ARMED", "SOURCE_DRIFT"]
+    assert drift_rows[1]["observation"]["setup_fingerprint"] == "fp2"
+    assert "drift" not in source_calls
+    assert [r["record_type"] for r in rows if r["setup_id"] == "new"] == ["ARMED"]
+    assert source_calls == ["pending", "new", "pending", "new"]
+    assert second["armed_written"] == 0 and second["data_blocked"] == 0
+    assert second["sip_pending"] == 1  # only the real RESOLUTION waits for SIP
+    assert not any(r["record_type"] == "RECONCILIATION" for r in rows)

@@ -110,8 +110,9 @@ def _load_state(path: Path):
     terminal: dict[str, dict[str, Any]] = {}
     fingerprints: dict[str, str] = {}
     reconciled: set[str] = set()
+    drifted: set[str] = set()
     if not path.exists():
-        return armed, terminal, fingerprints, reconciled
+        return armed, terminal, fingerprints, reconciled, drifted
     for number, raw in enumerate(path.read_text().splitlines(), start=1):
         if not raw.strip():
             continue
@@ -125,6 +126,11 @@ def _load_state(path: Path):
             if row.get("collector_id") != COLLECTOR_ID or row.get("collector_version") != COLLECTOR_VERSION:
                 raise RuntimeError(f"journal_collector_version_mismatch_{number}")
         setup_id = str(row["setup_id"])
+        if row.get("record_type") == "SOURCE_DRIFT":
+            # The row carries the revised fingerprint by design; keep the frozen
+            # one and block the setup (never re-armed, resolved or reconciled).
+            drifted.add(setup_id)
+            continue
         obs = row.get("observation") if isinstance(row.get("observation"), dict) else {}
         fp = obs.get("setup_fingerprint")
         if fp is not None:
@@ -141,7 +147,7 @@ def _load_state(path: Path):
             terminal[setup_id] = row
         elif row.get("record_type") == "RECONCILIATION":
             reconciled.add(setup_id)
-    return armed, terminal, fingerprints, reconciled
+    return armed, terminal, fingerprints, reconciled, drifted
 
 
 async def _capture_selector_evidence(pub: PublicMarketDataClient, *, ticker: str, direction: str, cfg: Any) -> dict[str, Any]:
@@ -379,7 +385,7 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
     sip_provider = HistoricalTradeProvider(cfg.alpaca_data_base_url, key, secret, "sip") if key and secret else None
     journal = Path(args.journal)
     raw_dir = Path(args.raw_trade_dir)
-    armed_seen, terminal_seen, fingerprints, reconciled = _load_state(journal)
+    armed_seen, terminal_seen, fingerprints, reconciled, drifted = _load_state(journal)
     started = datetime.now(timezone.utc)
     session = nyse_session_for(started.date())
     tickers = tuple(dict.fromkeys(t.upper() for t in (args.ticker or PRIMARY_20)))
@@ -437,12 +443,13 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
 
             for obs in observations:
                 setup_id = obs.setup_id
-                if setup_id in terminal_seen:
+                if setup_id in terminal_seen or setup_id in drifted:
                     continue
                 if setup_id in fingerprints and fingerprints[setup_id] != obs.setup_fingerprint:
                     summary["data_blocked"] += 1
                     if not args.dry_run:
                         _append(journal,{"record_type":"SOURCE_DRIFT","observed_at":observed_at.isoformat(),"collector_id":COLLECTOR_ID,"collector_version":COLLECTOR_VERSION,"policy_epoch":POLICY_EPOCH,"setup_id":setup_id,"observation":obs.to_dict(),"reason_code":"public_completed_bar_revision"})
+                    drifted.add(setup_id)
                     continue
                 if setup_id not in armed_seen:
                     arm_record={"record_type":"ARMED","observed_at":observed_at.isoformat(),"collector_id":COLLECTOR_ID,"collector_version":COLLECTOR_VERSION,"policy_epoch":POLICY_EPOCH,"setup_id":setup_id,"observation":obs.to_dict()}
