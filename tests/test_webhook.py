@@ -1512,14 +1512,20 @@ def test_dashboard_strategy_inventory_keeps_evidence_and_authority_separate(monk
     assert inventory["source"] == "docs/strategy-rules/Strategy_Inventory.md"
     assert inventory["rows"]
 
-    combined = [
-        row for row in inventory["rows"]
-        if "PROMISING BUT UNPROVEN" in row["verdict"].upper()
-        and "CURRENT SYSTEM RISK CONSTRAINTS" in row["verdict"].upper()
-    ]
-    assert combined, "expected at least one promising-evidence/current-risk-incompatible row"
-    assert all(row["classification"] == "PROMISING BUT UNPROVEN" for row in combined)
-    assert all(row["authority"] == "CURRENT-ACCOUNT INCOMPATIBLE" for row in combined)
+    by_name = {row["name"]: row for row in inventory["rows"]}
+
+    four_hr = by_name["4HR Re-Trigger (MNQ)"]
+    assert four_hr["classification"] == "PROMISING BUT UNPROVEN"
+    assert "GUARDED DEMO" in four_hr["posture"].upper()
+    assert "REAL-ACCOUNT EXECUTION BLOCKED" in four_hr["posture"].upper()
+    assert four_hr["authority"] == "CURRENT-ACCOUNT INCOMPATIBLE"
+    assert "PAPER" not in four_hr["verdict"].upper()
+
+    mes_122 = by_name["MES 1-2-2 (`strat_122`)"]
+    assert mes_122["classification"] == "PROMISING BUT UNPROVEN"
+    assert "PAPER EVIDENCE ONLY" in mes_122["posture"].upper()
+    assert "NO BROKER ROUTE" in mes_122["posture"].upper()
+    assert mes_122["authority"] == "NO EXECUTION AUTHORITY"
 
     inactive = [
         row for row in inventory["rows"]
