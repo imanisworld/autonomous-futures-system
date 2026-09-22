@@ -100,3 +100,60 @@ def test_drift_guard_blocks_preflight(monkeypatch, tmp_path):
     assert result["passed"] is False
     assert result["reason"] == "preflight_failed:live_box_drift_guard"
     assert result["live_box_drift_guard"]["summary"] == "branch mismatch"
+
+
+def test_armed_preflight_becomes_not_ready_when_runtime_drifts(monkeypatch, tmp_path):
+    state_path = tmp_path / "preflight.json"
+    monkeypatch.setattr(live_preflight, "reliability_snapshot", _healthy_snapshot)
+    drift = {"ok": True, "summary": "guard ok"}
+    monkeypatch.setattr(live_preflight, "live_box_drift_report", lambda **_: dict(drift))
+
+    result = live_preflight.run_preflight(FakeBroker(), state_path=state_path)
+    assert result["passed"] is True
+    armed = live_preflight.arm_today(state_path=state_path)
+    assert armed["ready"] is True
+    assert live_preflight.live_order_ready(state_path=state_path) is True
+
+    drift.update(ok=False, status="error", summary="runtime drift detected")
+
+    assert live_preflight.live_order_ready(state_path=state_path) is False
+    status = live_preflight.live_order_status(state_path=state_path)
+    assert status["ready"] is False
+    assert status["reason"] == "runtime_drift"
+    assert status["live_box_drift_guard"]["ok"] is False
+
+
+def test_live_order_ready_fails_closed_when_drift_guard_raises(monkeypatch, tmp_path):
+    state_path = tmp_path / "preflight.json"
+    state = live_preflight.LivePreflightState(
+        date=live_preflight._today(),
+        armed=True,
+        last_result=True,
+        disarmed_reason=None,
+    )
+    live_preflight.save_state(state, state_path)
+
+    def boom(**_kwargs):
+        raise RuntimeError("unexpected guard failure")
+
+    monkeypatch.setattr(live_preflight, "live_box_drift_report", boom)
+
+    assert live_preflight.live_order_ready(state_path=state_path) is False
+    status = live_preflight.live_order_status(state_path=state_path)
+    assert status["ready"] is False
+    assert status["reason"] == "runtime_drift"
+    assert status["live_box_drift_guard"]["status"] == "error"
+
+
+def test_unarmed_state_does_not_need_runtime_drift_check(monkeypatch, tmp_path):
+    state_path = tmp_path / "preflight.json"
+    calls = {"count": 0}
+
+    def counted(**_kwargs):
+        calls["count"] += 1
+        return {"ok": True, "summary": "guard ok"}
+
+    monkeypatch.setattr(live_preflight, "live_box_drift_report", counted)
+
+    assert live_preflight.live_order_ready(state_path=state_path) is False
+    assert calls["count"] == 0
