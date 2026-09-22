@@ -603,3 +603,48 @@ def test_claimed_minimum_must_match_enumerated_required_cells(
 
     assert report["gate_pass"] is False
     assert any("does not match the enumerated required-cell minimum 40" in blocker for blocker in report["blockers"])
+
+
+def test_fractional_validation_counts_cannot_qualify(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _pin_runtime_head_and_diff(monkeypatch)
+    payload = _complete_evidence(tmp_path)
+    payload["validation"]["required_resolved_fills_per_cell"] = 30.9
+    payload["validation"]["minimum_resolved_fills_in_required_cells"] = 40.9
+    payload["validation"]["cells"][0]["resolved_fills"] = 40.9
+    payload["validation"]["cells"][1]["resolved_fills"] = 40.9
+    evidence = _write_evidence(tmp_path, payload)
+
+    report = build_demo_qualification_report(
+        strategy="example", repo_root=tmp_path, evidence_path=evidence
+    )
+
+    assert report["gate_pass"] is False
+    assert any(
+        "required_resolved_fills_per_cell" in blocker
+        for blocker in report["blockers"]
+    )
+    assert any(
+        "resolved_fills must be a non-negative integer" in blocker
+        for blocker in report["blockers"]
+    )
+
+
+def test_fractional_slippage_stress_ticks_cannot_satisfy_required_stress(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _pin_runtime_head_and_diff(monkeypatch)
+    payload = _complete_evidence(tmp_path)
+    payload["execution_realism"]["slippage_stress_ticks"] = [1, 2.9, 3.1]
+    evidence = _write_evidence(tmp_path, payload)
+
+    report = build_demo_qualification_report(
+        strategy="example", repo_root=tmp_path, evidence_path=evidence
+    )
+
+    assert report["gate_pass"] is False
+    assert any(
+        "must include both 2-tick and 3-tick adverse stress" in blocker
+        for blocker in report["blockers"]
+    )

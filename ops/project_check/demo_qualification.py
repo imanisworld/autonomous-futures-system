@@ -93,10 +93,15 @@ def _require_nonempty(section: dict[str, Any], key: str, blockers: list[str], pr
 
 
 def _as_int(value: Any) -> int | None:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
+    if isinstance(value, bool):
         return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        raw = value.strip()
+        if raw and raw.lstrip("-").isdigit():
+            return int(raw)
+    return None
 
 
 def _as_float(value: Any) -> float | None:
