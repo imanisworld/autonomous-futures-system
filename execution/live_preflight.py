@@ -245,22 +245,34 @@ def run_preflight(
     except Exception as exc:
         checks.append(_check("account_readable", False, str(exc)))
 
+    open_positions: list[dict] = []
+    working_orders: list[dict] = []
     try:
         positions = _list_positions(broker)
+        open_positions = [p for p in positions if abs(_position_qty(p)) > 0]
         checks.append(_check("positions_readable", True, f"{len(positions)} position row(s)"))
     except Exception as exc:
         checks.append(_check("positions_readable", False, str(exc)))
 
     try:
         orders = _list_orders(broker)
+        working_orders = [o for o in orders if _order_status(o) in WORKING_ORDER_STATUSES]
         checks.append(_check("orders_readable", True, f"{len(orders)} order row(s)"))
     except Exception as exc:
         checks.append(_check("orders_readable", False, str(exc)))
 
-    open_positions = [p for p in positions if abs(_position_qty(p)) > 0]
-    working_orders = [o for o in orders if _order_status(o) in WORKING_ORDER_STATUSES]
-    checks.append(_check("no_open_positions", not open_positions, f"{len(open_positions)} open position(s)"))
-    checks.append(_check("no_working_orders", not working_orders, f"{len(working_orders)} working order(s)"))
+    checks.append(_check(
+        "no_open_positions",
+        any(c.name == "positions_readable" and c.ok for c in checks) and not open_positions,
+        f"{len(open_positions)} open position(s)" if any(c.name == "positions_readable" and c.ok for c in checks)
+        else "position state unreadable",
+    ))
+    checks.append(_check(
+        "no_working_orders",
+        any(c.name == "orders_readable" and c.ok for c in checks) and not working_orders,
+        f"{len(working_orders)} working order(s)" if any(c.name == "orders_readable" and c.ok for c in checks)
+        else "order state unreadable",
+    ))
     drift = _drift_report()
     checks.append(_check("live_box_drift_guard", drift.get("ok") is True, drift.get("summary", "")))
 
