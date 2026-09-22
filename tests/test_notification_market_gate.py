@@ -34,7 +34,6 @@ def _trade_result(instrument: str = "MNQ") -> dict:
     [
         (datetime(2026, 9, 19, 10, 0, tzinfo=_ET), "MARKET_CLOSED_AT_SIGNAL"),
         (datetime(2026, 9, 20, 12, 0, tzinfo=_ET), "MARKET_CLOSED_AT_SIGNAL"),
-        (datetime(2026, 9, 21, 16, 20, tzinfo=_ET), "MARKET_CLOSED_AT_SIGNAL"),
         (datetime(2026, 9, 21, 17, 30, tzinfo=_ET), "MARKET_CLOSED_AT_SIGNAL"),
     ],
 )
@@ -52,10 +51,17 @@ def test_notification_gate_blocks_known_mnq_closures(when, reason):
     assert root == "MNQ"
 
 
-def test_notification_gate_allows_normal_open_session():
+@pytest.mark.parametrize(
+    "when",
+    [
+        datetime(2026, 9, 21, 10, 0, tzinfo=_ET),
+        # CME removed the 16:15–16:30 ET equity-index halt effective 2021-06-28.
+        datetime(2026, 9, 21, 16, 20, tzinfo=_ET),
+    ],
+)
+def test_notification_gate_allows_normal_open_session(when):
     from webhook.app import _decision_notification_market_gate
 
-    when = datetime(2026, 9, 21, 10, 0, tzinfo=_ET)
     allowed, reason, root = _decision_notification_market_gate(
         _payload(when),
         _trade_result(),
@@ -70,8 +76,8 @@ def test_notification_gate_allows_normal_open_session():
 def test_notification_gate_blocks_when_market_closes_before_delivery():
     from webhook.app import _decision_notification_market_gate
 
-    signal = datetime(2026, 9, 21, 16, 14, tzinfo=_ET)
-    send = datetime(2026, 9, 21, 16, 20, tzinfo=_ET)
+    signal = datetime(2026, 9, 21, 16, 59, tzinfo=_ET)
+    send = datetime(2026, 9, 21, 17, 5, tzinfo=_ET)
     allowed, reason, root = _decision_notification_market_gate(
         _payload(signal),
         _trade_result(),

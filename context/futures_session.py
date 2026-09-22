@@ -57,9 +57,10 @@ def futures_session_active(now: datetime | None = None) -> bool:
 # and per-instrument feed health use `product_session_active(root, now)` so
 # the equity calendar is never applied to a product it does not describe.
 #
-# Sources (CME, checked 2026-09-16):
+# Sources (CME):
 #   equity index  (MNQ/MES/M2K/ES/NQ): Sun 18:00 ET → Fri 17:00 ET, daily
-#       17:00–18:00 ET maintenance, plus a 16:15–16:30 ET trading halt.
+#       17:00–18:00 ET maintenance. No 16:15–16:30 ET halt: CME removed it
+#       effective trade date 2021-06-28 (Globex notice 2021-06-21).
 #   metals/energy (MGC/MCL): Sun 18:00 ET → Fri 17:00 ET, daily 17:00–18:00 ET.
 #   crypto        (MBT): 24/7 since 2026; maintenance Mon–Fri 16:00–16:02 CT
 #       (17:00–17:02 ET) and Saturday 02:00–04:00 CT (03:00–05:00 ET).
@@ -92,7 +93,7 @@ def _et(now: datetime | None) -> datetime | None:
         return None
 
 
-def _globex_weekly_active(et: datetime, *, equity_halt: bool) -> bool:
+def _globex_weekly_active(et: datetime) -> bool:
     wd, t = et.weekday(), et.time()
     if wd == 5:
         return False
@@ -101,8 +102,6 @@ def _globex_weekly_active(et: datetime, *, equity_halt: bool) -> bool:
     if wd == 4 and t >= time(17, 0):
         return False
     if time(17, 0) <= t < time(18, 0):
-        return False
-    if equity_halt and time(16, 15) <= t < time(16, 30):
         return False
     return True
 
@@ -133,7 +132,7 @@ def product_session_active(root: str | None, now: datetime | None = None) -> boo
         return True  # fail OPEN, like the legacy helper: warn rather than hide an outage
     if product == PRODUCT_CRYPTO:
         return _crypto_active(et)
-    return _globex_weekly_active(et, equity_halt=(product == PRODUCT_EQUITY_INDEX))
+    return _globex_weekly_active(et)
 
 
 def feed_stale_after_minutes(expected_tf_minutes: int = 15) -> int:

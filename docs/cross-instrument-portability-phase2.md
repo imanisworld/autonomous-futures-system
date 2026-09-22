@@ -72,12 +72,12 @@ places entry exactly one tick beyond the boundary (tested for all six micros).
 
 `context/futures_session.py::futures_session_active` models only the weekend
 close (Fri 17:00 ET → Sun 18:00 ET) and the daily 17:00–18:00 ET maintenance
-break. CME also halts the equity-index micros (MNQ/MES/M2K) 16:15–16:30 ET;
-that pause is **not modelled**. Callers: `webhook/app.py`,
+break. (Correction 2026-09-22: this report claimed CME also halts the
+equity-index micros 16:15–16:30 ET. It does not — CME removed that halt
+effective 2021-06-28 — so not modelling it was correct.) Callers: `webhook/app.py`,
 `execution/tradovate_supervisor.py`, `scripts/feed_watchdog.py`,
 `adaptive/ops_monitor.py` — all use it for feed-staleness / heartbeat
-expectations, so the gap can only produce a false "stale feed" during the
-15-minute halt; it cannot open a trade. MGC/MCL follow the ordinary
+expectations; it cannot open a trade. MGC/MCL follow the ordinary
 17:00–18:00 ET break, which is modelled.
 
 **MBT is materially different and the helper is NOT valid for it.** CME moved
@@ -154,7 +154,7 @@ resolver → outcome → report/readiness for two epochs plus a legacy row, and
 ## Remaining blockers before any population-creation PR
 
 1. `execution/tradovate_broker.py` fallbacks (real-book route only; MNQ-only today).
-2. `context/futures_session.py`: 16:15–16:30 ET equity-index halt not modelled; **not valid for MBT's 24/7 schedule** (product-aware sessions required).
+2. `context/futures_session.py`: **not valid for MBT's 24/7 schedule** (product-aware sessions required).
 3. No continuous roll schedule for MGC/MCL/MBT; live-feed roll continuity unproven for all roots.
 4. Commission / slippage proof per instrument (#582 requires explicit costs for non-MNQ outcomes; none recorded).
 5. Feed availability: TradingView alerts exist only for MNQ/MES 15m; nothing demonstrated for M2K/MGC/MCL/MBT.

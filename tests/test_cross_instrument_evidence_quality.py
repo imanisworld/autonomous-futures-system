@@ -122,12 +122,23 @@ def test_missing_expected_15m_bar_contaminates_sample(tmp_path):
     assert any("14:30:00" in ts for ts in quality["continuity"]["missing_expected_bars"])
 
 
-def test_known_equity_halt_is_not_misclassified_as_gap(tmp_path):
-    # 2026-08-10 is EDT: 20:00Z=16:00 ET and 20:30Z=16:30 ET.
-    # The 16:15 ET bar open is inside the known equity-index halt.
+def test_missing_1615_et_equity_bar_is_a_gap(tmp_path):
+    # 2026-08-10 is EDT: 20:00Z=16:00 ET, 20:15Z=16:15 ET, 20:30Z=16:30 ET.
+    # CME removed the 16:15–16:30 ET equity-index halt effective 2021-06-28,
+    # so the 16:15 ET bar is expected and its absence is a real gap.
     _record(tmp_path, "M2K", _ts(20, 0), "M2K1!")
     _record(tmp_path, "M2K", _ts(20, 30), "M2K1!")
     row = _row(signal=_ts(20, 30), exit_ts=_ts(20, 30))
+    quality = assess_evidence_row(row, tmp_path)
+    assert DATA_GAP_CONTAMINATED in quality["issues"]
+    assert quality["continuity"]["missing_expected_bars"] == [_ts(20, 15)]
+
+
+def test_daily_maintenance_break_is_not_misclassified_as_gap(tmp_path):
+    # 20:45Z=16:45 ET; 21:00–21:45Z = 17:00–17:45 ET maintenance; 22:00Z=18:00 ET reopen.
+    _record(tmp_path, "M2K", _ts(20, 45), "M2K1!")
+    _record(tmp_path, "M2K", _ts(22, 0), "M2K1!")
+    row = _row(signal=_ts(22, 0), exit_ts=_ts(22, 0))
     quality = assess_evidence_row(row, tmp_path)
     assert DATA_GAP_CONTAMINATED not in quality["issues"]
     assert quality["continuity"]["missing_expected_bars"] == []
