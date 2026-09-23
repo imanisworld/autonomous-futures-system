@@ -41,11 +41,14 @@ def _db(tmp_path: Path) -> Path:
 
 def _add(db: Path, sid: int, *, direction="LONG", price=99.0, trigger=100.0, stop=95.0, target=110.0,
          ask=5.0, bid=4.9, path=(), status="OPEN", outcome=None, lane=None, opened=T0, symbol="XYZ261120C00100000",
-         quote_ts=True, marks_symbol=None, geometry="AHEAD"):
+         quote_ts=True, marks_symbol=None, geometry="AHEAD", volume=500, open_interest=5000, delta=0.45,
+         expiry="2026-11-20", planned_risk=None):
     c = sqlite3.connect(db)
-    sc = {"paper_policy_id": "OPTIONS_PAPER_V1", "contract": symbol, "expiry": "2026-11-20", "stop": stop,
+    sc = {"paper_policy_id": "OPTIONS_PAPER_V1", "contract": symbol, "expiry": expiry, "stop": stop,
           "target": target, "option_ask": ask, "option_bid": bid, "entry_quote": ask, "premium_stop": round(ask * 0.75, 4),
           "paper_entry_geometry": geometry}
+    if planned_risk is not None:
+        sc["planned_risk_dollars"] = planned_risk
     if lane:
         sc["paper_evidence_lane"] = lane
     si = {"price": price, "setup_entry_trigger": trigger, "underlying_invalidation": stop, "target": target}
@@ -61,7 +64,7 @@ def _add(db: Path, sid: int, *, direction="LONG", price=99.0, trigger=100.0, sto
                   (sid, ts.isoformat(), ev, px, trigger, b, a, qts))
         c.execute("insert into options_contract_marks(shadow_id,timestamp,option_symbol,bid,ask,volume,open_interest,delta,"
                   "quote_timestamp,error) values (?,?,?,?,?,?,?,?,?,'')",
-                  (sid, ts.isoformat(), marks_symbol or symbol, b, a, 500, 5000, 0.45, qts))
+                  (sid, ts.isoformat(), marks_symbol or symbol, b, a, volume, open_interest, delta, qts))
     c.commit()
     c.close()
 
@@ -82,6 +85,9 @@ def test_frozen_constants_match_prereg_and_v1():
     assert oe.MAX_AGGREGATE_OPEN_RISK_DOLLARS == pv.MAX_AGGREGATE_OPEN_RISK_DOLLARS
     assert oe.MAX_SPREAD_PERCENT == pv.MAX_SPREAD_PERCENT
     assert oe.FORWARD_START == datetime(2026, 9, 23, 14, 7, 8, tzinfo=UTC)
+    ask = 5.0137
+    expected_risk = round((ask - round(ask * pv.PREMIUM_STOP_MULTIPLIER, 4)) * pv.CONTRACT_MULTIPLIER, 2)
+    assert oe._planned_risk(ask) == expected_risk
 
 
 def test_control_matches_production_resolution_order(tmp_path):
@@ -129,10 +135,12 @@ def test_eligibility_rules(tmp_path):
     _add(db, 5, lane="COUNTERFACTUAL")                               # not ACTIVE -> not loaded
     _add(db, 6, direction="SHORT", price=101.0, trigger=100.0, stop=105.0, target=90.0)  # SHORT failed side
     _add(db, 7, geometry="TARGET_CONSUMED_AT_ENTRY")
+    _add(db, 8, opened=oe.FORWARD_START)                              # exact merge instant is not forward
     _, eps = _load(db)
     got = {e.shadow_id: oe.eligibility(e)[1] for e in eps}
     assert got == {1: "eligible", 2: "before_forward_start", 3: "first_sight_not_on_failed_side",
-                   4: "no_decision_time_quote_evidence", 6: "eligible", 7: "entry_geometry_TARGET_CONSUMED_AT_ENTRY"}
+                   4: "no_decision_time_quote_evidence", 6: "eligible", 7: "entry_geometry_TARGET_CONSUMED_AT_ENTRY",
+                   8: "before_forward_start"}
 
 
 def test_reclaim_enters_on_first_valid_reclaim_with_same_contract(tmp_path):
@@ -159,9 +167,17 @@ def test_reclaim_skips_observations_failing_frozen_gates(tmp_path):
     # first sight rr = 5/4 >= 1; the reclaim at 101.5 leaves rr = 2.5/6.5 < 1 (target 104) -> skipped,
     # never re-thresholded; stop later -> NO_ENTRY
     _add(db, 1, target=104.0, path=[(101.5, 5.5, 5.6), (94.0, 2.0, 2.1)])
+    # Missing production-critical liquidity fields must fail closed, not pass.
+    _add(db, 2, volume=None, path=[(100.5, 5.5, 5.6), (94.0, 2.0, 2.1)])
+    _add(db, 3, open_interest=None, path=[(100.5, 5.5, 5.6), (94.0, 2.0, 2.1)])
+    # Exact contract must still satisfy the frozen >=14 DTE V1 eligibility at reclaim.
+    _add(db, 4, expiry="2026-10-01", path=[(100.5, 5.5, 5.6), (94.0, 2.0, 2.1)])
     _, eps = _load(db)
-    r = oe.reclaim_arm(eps[0], eps)
-    assert r["state"] == "NO_ENTRY" and r["ineligible_reclaims_skipped"][0]["failed"] == ["remaining_rr_below_1"]
+    r = {e.shadow_id: oe.reclaim_arm(e, eps) for e in eps}
+    assert r[1]["state"] == "NO_ENTRY" and r[1]["ineligible_reclaims_skipped"][0]["failed"] == ["remaining_rr_below_1"]
+    assert "volume" in r[2]["ineligible_reclaims_skipped"][0]["failed"]
+    assert "open_interest" in r[3]["ineligible_reclaims_skipped"][0]["failed"]
+    assert "dte" in r[4]["ineligible_reclaims_skipped"][0]["failed"]
 
 
 def test_reclaim_blocked_on_missing_quote_or_data_end(tmp_path):
@@ -169,11 +185,13 @@ def test_reclaim_blocked_on_missing_quote_or_data_end(tmp_path):
     _add(db, 1, path=[(100.5, None, None)])                       # reclaim with no quote -> BLOCKED
     _add(db, 2, path=[(99.0, 4.9, 5.0)])                          # data ends, unresolved -> BLOCKED
     _add(db, 3, path=[(100.5, 5.5, 5.6), (101.0, 5.7, 5.8)])       # entered but marks end open -> BLOCKED
+    _add(db, 4, path=[(100.5, 5.5, 5.5)])                          # locked/invalid market -> BLOCKED
     _, eps = _load(db)
     r = {e.shadow_id: oe.reclaim_arm(e, eps) for e in eps}
-    assert r[1] == {"state": "BLOCKED", "reason": "missing_quote_at_reclaim", "at": r[1]["at"]}
+    assert r[1] == {"state": "BLOCKED", "reason": "missing_or_invalid_quote_at_reclaim", "at": r[1]["at"]}
     assert r[2]["reason"] == "episode_unresolved_when_contract_marks_end"
     assert r[3]["reason"] == "reclaim_open_when_contract_marks_end"
+    assert r[4]["reason"] == "missing_or_invalid_quote_at_reclaim"
 
 
 def test_counts_report_is_blind_and_look_is_gated(tmp_path):
@@ -207,12 +225,19 @@ def test_look_verdict_on_a_full_sample(tmp_path):
                                     "both_halves_diff_non_negative"}
 
 
-def test_cli_look_guards(tmp_path, capsys):
+def test_cli_look_guards(tmp_path, capsys, monkeypatch):
     import importlib
 
     cli = importlib.import_module("scripts.options_reclaim_entry")
     db = _db(tmp_path)
-    assert cli.main(["look", "--db", str(db), "--out", str(tmp_path / "l.json")]) == 3
-    (tmp_path / "l.json").write_text("{}")
-    assert cli.main(["look", "--db", str(db), "--out", str(tmp_path / "l.json"), "--confirm-single-look"]) == 3
-    assert "already happened" in capsys.readouterr().err
+    canonical = tmp_path / "canonical-look.json"
+    monkeypatch.setattr(cli, "CANONICAL_LOOK_PATH", canonical)
+
+    assert cli.main(["look", "--db", str(db)]) == 3
+    assert cli.main(["look", "--db", str(db), "--out", str(tmp_path / "alternate.json"),
+                     "--confirm-single-look"]) == 3
+    assert "fixed at" in capsys.readouterr().err
+
+    canonical.write_text("{}")
+    assert cli.main(["look", "--db", str(db), "--confirm-single-look"]) == 3
+    assert "already exists" in capsys.readouterr().err
