@@ -1,7 +1,6 @@
 """Locks the fail-closed CME equity-index product-session guard.
 
-Runtime authority is deliberately narrow: webhook decision-notification
-suppression for MNQ/MES only. It is not an execution or risk gate.
+The guard is prep for a later wiring PR; nothing imports it at runtime yet.
 """
 from __future__ import annotations
 
@@ -185,16 +184,11 @@ def test_nyse_rth_label_is_not_globex_session():
     assert product_session_status("MNQ", overnight).status == MARKET_OPEN
 
 
-def test_guard_runtime_import_is_notification_only():
+def test_guard_is_not_imported_by_runtime():
     import subprocess
     out = subprocess.run(
         ["git", "grep", "-l", "futures_product_session", "--", "*.py"],
         capture_output=True, text=True, check=False,
         cwd=Path(__file__).resolve().parents[1],
     ).stdout.split()
-    assert set(out) <= {
-        "context/futures_product_session.py",
-        "tests/test_futures_product_session.py",
-        "webhook/app.py",
-    }
-    assert "webhook/app.py" in out
+    assert set(out) <= {"context/futures_product_session.py", "tests/test_futures_product_session.py"}
