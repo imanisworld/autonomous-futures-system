@@ -42,7 +42,13 @@ Runtime effect of `aba8324..b242071` on the futures path:
 
 **Approval record:** operator GO for releases `902a99a`, `88e89e4` (the first to carry #918/#920), `5fd4716`, `3a3d425` and `42b9def` is recorded in the private handoff log. The final `b242071` release (#930) had no handoff entry as of 2026-09-23 ~01:45 UTC. The "no deployment authorized merely to pick up #918/#920" statement below was accurate when written and is superseded by the approved `88e89e4` release.
 
-**Landmine:** the futures process runs from the release cwd but with the interpreter `/root/autonomous-futures-system/.venv/bin/python` (the mutable git-checkout venv), so its dependencies are not pinned by the release.
+**Python environment — pinned per release (2026-09-23 ~01:50 UTC):** `/root/autonomous-futures-system` is a symlink to the live release, not a git checkout. Every futures release's `.venv` used to be a symlink to one shared, mutable venv (`/root/afs-shared/.venv`), so a `pip install` there would change the dependencies of the running release and of every rollback target. An earlier revision of this note wrongly called it the "git-checkout venv".
+
+- Live release `b2420713b9cc`: `.venv` now points to `.venv-release`, a byte-identical copy of the shared venv inside the release dir (every file matches by sha256, `pip freeze --all` is identical). Swapped atomically with no restart; pid `2119380` is unchanged, integrity OK (1,473 files), health 200. Its freeze is recorded in `/root/afs-shared/release-b2420713b9cccf036a4b67865618985d94e7b42b-dependencies.txt`.
+- New releases: the operator's deploy script now copies the shared venv into each new release the same way. It refuses to switch if the copy's freeze differs, records the freeze per release, prints any dependency change against the previous release, and runs the staging integrity and import checks with the release's own Python.
+- Older release dirs (3a3d425, both 42b9def dirs) still link to the shared venv, so they roll back unchanged.
+- `/root/afs-shared/.venv` remains the dependency source: to change dependencies deliberately, install there, then cut a release.
+- Known gap, unchanged: the shared venv has drifted from `requirements.lock` (uvicorn 0.48.0 vs 0.49.0, idna 3.17 vs 3.18), and the lock omits `requests`, which `requirements.txt` declares and `execution/tradovate_broker.py` imports. Do not rebuild a venv from `requirements.lock` until the lock is regenerated.
 
 ## Verified runtime — 2026-09-22 morning preflight (superseded, see above)
 
