@@ -8,7 +8,43 @@ This is the concise operator-facing source of truth for the futures system. Hist
 
 Core rule remains: **No proof, no run.**
 
-## Verified runtime — 2026-09-22 morning preflight
+## Runtime reconciliation — 2026-09-23 01:35 UTC (read-only box check)
+
+This section supersedes the morning-preflight runtime block below, which is kept as provenance. Checked via `/proc/<pid>/cwd`, `systemctl show`, `/root/afs-shared/release_history.txt`, and the process environment. Nothing was changed.
+
+**Futures service**
+
+- PID: `2119380`; `NRestarts=0`; active since **2026-09-23 01:25:28 UTC**;
+- cwd / deployed release: `/root/afs-releases/b2420713b9cc-20260922-212508`;
+- release commit: `b2420713b9cccf036a4b67865618985d94e7b42b` (= `main` at #930);
+- environment: `LIVE_TRADING_ENABLED=false`, `SCHEDULE_MODE=always_on_shadow`, `EXIT_MODE=static`, `BROKER=tradovate`, `TRADOVATE_ENV=demo`, `EXPECTED_TRADOVATE_ACCOUNT_ID` pinned; `ENTRY_FILL_MODEL` unset;
+- failed systemd units: **0**.
+
+Release history since the `aba8324` baseline (from `release_history.txt`):
+
+| UTC | release commit | adds |
+|---|---|---|
+| 09-22 23:47 | `902a99a` | `aba8324` + #924 only (curated) |
+| 09-22 23:56 | `88e89e4` | `main` at #924, so also #917–#923 |
+| 09-23 00:22 | `5fd4716` | + #925, #926 |
+| 09-23 00:42 | `3a3d425` | + #927 |
+| 09-23 00:51 | `42b9def` | + #928 |
+| 09-23 01:25 | `b242071` | + #929 (docs), #930 |
+
+Runtime effect of `aba8324..b242071` on the futures path:
+
+- no `config/`, `risk/`, strategy, or broker order/cancel/flatten/sizing/account-selection change. The only `execution/` diff is the Tradovate session-alert Discord post body (#927);
+- #918 IOC entry-reference fallback: deployed but **inert** — it only fires for `PaperBroker(entry_fill_model="ioc_limit")` with no proof/inverse market price, and the box default is `market` (`config/settings.py`), with no env or YAML override;
+- #920: dashboard strategy table reads the separate execution-posture field (display only);
+- #923: fail-closed product-session guard module is deployed but **unwired**;
+- #924: decision-notification and feed-health gating no longer suppress 16:15–16:30 ET (CME removed that halt in 2021);
+- #927/#928/#930: Discord alerts sent as cards, in plain English (presentation only).
+
+**Approval record:** operator GO for releases `902a99a`, `88e89e4` (the first to carry #918/#920), `5fd4716`, `3a3d425` and `42b9def` is recorded in the private handoff log. The final `b242071` release (#930) had no handoff entry as of 2026-09-23 ~01:45 UTC. The "no deployment authorized merely to pick up #918/#920" statement below was accurate when written and is superseded by the approved `88e89e4` release.
+
+**Landmine:** the futures process runs from the release cwd but with the interpreter `/root/autonomous-futures-system/.venv/bin/python` (the mutable git-checkout venv), so its dependencies are not pinned by the release.
+
+## Verified runtime — 2026-09-22 morning preflight (superseded, see above)
 
 - futures service: active;
 - PID: `1495829`;
@@ -67,10 +103,9 @@ Natural market-hours proof of the #892 Signa request-budget/backoff/reuse behavi
 ### 1-2-2 prospective collector
 
 - timer: enabled/active;
-- exact release: `36e73f1981850b66b043d849ce877c15bd1ab3e7`;
-- release integrity: **1,346 files verified**;
-- last service result: successful;
-- next scheduled run at the morning preflight: **13:00 UTC**.
+- exact release: **`db9bc7e2c00559fc969af7be0e2cb12b00a1454c`** (#922, drop-in `10-release.conf`, switched 2026-09-22 22:52 UTC; prior pin `36e73f1...` backed up as `options-122-prospective.10-release.conf.pre-922-20260922T225209Z`);
+- last service run: **FAILED** 2026-09-22 20:59:01 UTC on the old `36e73f1` release with `journal_setup_fingerprint_drift_58` — the crash-loop #922 fixes (every run since 16:36 UTC);
+- no run has executed on `db9bc7e2` yet. Its first proof is the next natural timer fire, **2026-09-23 13:00 UTC**: the existing journal loads unchanged, the cycle succeeds, and `journal_setup_fingerprint_drift_58` does not recur.
 
 The prior missed window remains lost and must not be backfilled. The next legitimate gate is natural RTH evidence under the frozen `122-IEX-E1` policy.
 
@@ -141,13 +176,13 @@ The duplicate research work did not create a journal repair requirement.
 - None from the reconciled defect list as of this documentation pass.
 
 **CONFIRMED FIXED REPO-SIDE — do not carry forward as open repo defects**
-- Strategy Inventory taxonomy (#920 / `2e96e164624dc45996b45a2086b012c56ee5d43d`): evidence verdict and execution posture are now separate fields; `project_check daily` keeps the final evidence verdict as its safety classification while parsing posture separately, and the dashboard no longer infers execution authority from verdict text. Full CI passed before merge. This is **not deployed/restarted**; the current VPS status/dashboard remains on its existing release until a separately justified future release.
-- normal PaperBroker vs ReplayEngine IOC entry-reference parity (#918 / `3e624693871cb725541e286b7feabf2633342228`): the normal webhook PaperBroker IOC path now supplies the causal decision-bar close, matching ReplayEngine; full CI passed before merge. This was repo-only and has **not** been deployed/restarted.
+- Strategy Inventory taxonomy (#920 / `2e96e164624dc45996b45a2086b012c56ee5d43d`): evidence verdict and execution posture are now separate fields; `project_check daily` keeps the final evidence verdict as its safety classification while parsing posture separately, and the dashboard no longer infers execution authority from verdict text. Full CI passed before merge. **Deployed** since release `88e89e4` (2026-09-22 23:56 UTC); see "Runtime reconciliation" above.
+- normal PaperBroker vs ReplayEngine IOC entry-reference parity (#918 / `3e624693871cb725541e286b7feabf2633342228`): the normal webhook PaperBroker IOC path now supplies the causal decision-bar close, matching ReplayEngine; full CI passed before merge. **Deployed** since release `88e89e4`, but inert on the box (entry fill model is `market`).
 - promotion gate hard-blocker success semantics (#893 / `acadbf8`);
 - zero/dead forward-campaign arm visibility (#582 / `964099c`);
 - `project_check daily` critical-failure success semantics (#788/#790).
 
-No deployment or restart is authorized merely to pick up #918/#920. Strategy/risk/broker/runtime execution behavior remains unchanged on the current box until a separately approved release.
+~~No deployment or restart is authorized merely to pick up #918/#920.~~ Superseded 2026-09-23: both reached the box in the operator-approved `88e89e4` release (see "Runtime reconciliation"). Strategy, risk, and broker order behavior are unchanged by them; any further trading-path change still needs its own approved release.
 
 ## Current evidence gates
 
