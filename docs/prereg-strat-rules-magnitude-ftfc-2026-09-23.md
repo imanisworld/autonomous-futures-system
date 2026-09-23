@@ -101,6 +101,37 @@ result of this study was seen. They were not chosen from the losses above.
   **2025-08-01 → 2026-07-23**. August 2025 is the first calendar month whose
   monthly open is inside the corpus.
 - **Half split:** trading date < 2026-01-22 = H1, ≥ 2026-01-22 = H2 (as #911).
+- **Out-of-sample (OOS) window, scored separately and never pooled with the
+  main window:**
+  - **OOS-A: 2026-07-24 → 2026-09-14**, from
+    `data/replay_polygon_parity_2026_07_16_09_14/{MNQ,MES}`. It was built by
+    the same Polygon builder as the main corpus (`slc-build-v1.3`,
+    `polygon_to_replay.derive_candles`), with the manifest committed at
+    `docs/structural-level-corpus-manifests/`.
+    - Verified before registration: its Jul 16–23 overlap with the main corpus
+      is **552/552 bars OHLC-identical for both MNQ and MES**.
+    - No contract roll inside the window (MNQU6/MESU6 only).
+    - Gaps: 2026-09-07 is the Labor Day early close (a real closure, not a
+      gap). 2026-09-11 is missing 11 MNQ / 12 MES bars; patterns spanning it
+      are skipped as `GAP`.
+  - **OOS-B: 2026-09-15 → CME trading date 2026-09-22 (fixed)**, to be pulled
+    with `scripts/structural_level_corpus_build.py` from `main`. It covers the
+    Sep 15 roll to the December contracts (MNQZ6/MESZ6) under the same
+    `roll_days=3` rule. **OOS-B is admitted only if all of these hold:**
+    1. the pull's bars for 2026-07-16 → 2026-09-14 are ≥ 99.5% OHLC-identical
+       to OOS-A (Polygon revisions are allowed, but must be listed);
+    2. the roll ledger shows exactly one seam, U6 → Z6 on 2026-09-15;
+    3. the gap ledger has no unexplained gap inside CME hours.
+
+    If any check fails, OOS-B is dropped and the reason is recorded; OOS-A
+    stands alone. **No pattern may span a roll seam.** Such patterns are
+    skipped (`ROLL`).
+  - The box's live `bars_*.jsonl` files are **not** used. They are a different
+    feed and are only 89% (MNQ) / 99% (MES) OHLC-identical to Polygon over
+    Jul 24 → Sep 14.
+  - FTFC opens in the OOS windows come from the concatenated series (main
+    corpus + extension). The overlap is identical, so no seam is introduced
+    except the Sep 15 roll.
 - **Gold (MGC), crude (MCL), M2K, MBT:** **out of scope.** The repo has no
   canonical corpus for them. They stay collection-only in the observer; nothing
   here changes that.
@@ -228,6 +259,15 @@ A cell with PF between 1.94 and 2.55 that meets items 1 and 3–6 is labeled
 cell on **MES** is reported. It is labeled **REPLICATED** only if MES net > 0
 and MES PF > 1.0. MES never creates a pass on its own.
 
+**Q2b (out-of-sample confirmation).** Every cell is also scored on the OOS
+window: OOS-A, plus OOS-B if admitted, reported both separately and together.
+The window is short (about 1.5–2 months), so the OOS bar is directional, not a
+second PF hurdle. A main-window PASS or PROMISING cell is labeled **OOS
+CONFIRMED** only if its OOS result has **≥ 10 terminal trades, net > 0 and
+PF > 1.0** on MNQ. It is labeled **OOS CONTRADICTED** if OOS net < 0 with
+≥ 10 trades, and **OOS INSUFFICIENT** otherwise. OOS results never create a
+pass on their own, and a cell that fails the main window is not rescued by OOS.
+
 **Q3 (descriptive only, no gate, no rule).** For arms A and S of every setup,
 P&L is broken down by FTFC state at signal (aligned / against / conflict) and
 by the corpus `market_condition` label (TRENDING / RANGE_BOUND / CHOPPY /
@@ -259,7 +299,10 @@ forward observer data and a separate preregistration.
 
 ## 10. What a result can and cannot do
 
-- **PASS or PROMISING:** permits only a *separate* PR proposing a **new**
+- **OOS CONTRADICTED:** blocks the next step for that cell. It stays on record
+  as a main-window result, but gets no new observer population.
+- **PASS or PROMISING** (and not OOS CONTRADICTED): permits only a *separate*
+  PR proposing a **new**
   observer population in a **new** epoch for forward collection. It never
   touches the running epoch, a trading lane, risk, or a broker path. Any
   trading use would need its own preregistration, forward evidence, staged
