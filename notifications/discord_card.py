@@ -53,10 +53,12 @@ _WARN = re.compile(r"(⚠|🟡|🟠)|\b(WARN\w*|STALE|DEGRADED|ATTENTION|GAP|DRI
 _PASS = re.compile(r"(✅|🟢|✓)|\b(OK|PASS\w*|HEALTHY|UP)\b", re.I)
 
 _KV = re.compile(r"^(?P<key>[^:\n]{1,40}?):\s+(?P<value>\S.*)$")
+# "**Key:** value" / "**Key**: value" — the watcher's card style.
+_KV_BOLD = re.compile(r"^\*\*(?P<key>[^*:\n]{1,40}):?\*\*:?\s+(?P<value>\S.*)$")
 _HEADER_BOLD = re.compile(r"^\*\*(?P<name>[^*]{1,80})\*\*:?$")
 _HEADER_COLON = re.compile(r"^(?P<name>[A-Za-z][^:]{0,60}):$")
 _BULLET = re.compile(r"^\s*([-*•·]|\d+[.)])\s")
-_BOUNDARY = re.compile(r"^(\[.*\]|(READ ONLY|OBSERVATION ONLY|PAPER ONLY|EVIDENCE ONLY)\b.*)$", re.I)
+_BOUNDARY = re.compile(r"^(\[.*\]|`[^`]+`|(READ ONLY|OBSERVATION ONLY|PAPER ONLY|EVIDENCE ONLY)\b.*)$", re.I)
 _INLINE_MAX = 40
 _TITLE_SPLIT_AT = 60
 
@@ -108,6 +110,8 @@ def text_card(text: str, *, source: str = "", timestamp: Optional[datetime] = No
         body.pop()
     if len(body) > 1 and _BOUNDARY.match(body[-1].strip()):
         footer_bits.insert(0, body.pop().strip().strip("[]"))
+    # Footers render no markdown.
+    footer_bits = [bit.replace("`", "").strip() for bit in footer_bits]
     title = _clean_title(body.pop(0)) if body else (source or "AFS alert")
     if len(title) > _TITLE_SPLIT_AT and " · " in title:
         title, rest = title.split(" · ", 1)
@@ -131,9 +135,16 @@ def text_card(text: str, *, source: str = "", timestamp: Optional[datetime] = No
             target().append(line)
             continue
         stripped = line.strip()
+        bold_kv = _KV_BOLD.match(stripped)
+        if bold_kv:
+            # An explicit labelled line always stands on its own and ends a section.
+            section = None
+            value = bold_kv.group("value").strip()
+            fields.append({"name": bold_kv.group("key").strip(), "value": value, "inline": len(value) <= _INLINE_MAX})
+            continue
         header = _HEADER_BOLD.match(stripped) or _HEADER_COLON.match(stripped)
         if header and not _BULLET.match(line):
-            section = {"name": header.group("name").strip(), "lines": []}
+            section = {"name": header.group("name").strip().rstrip(":").strip(), "lines": []}
             fields.append(section)
             continue
         kv = _KV.match(stripped)

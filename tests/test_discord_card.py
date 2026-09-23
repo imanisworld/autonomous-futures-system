@@ -152,3 +152,13 @@ def test_long_dot_title_splits_and_boundary_line_moves_to_footer():
     assert embed["title"] == "🫀 heartbeat"
     assert embed["description"] == "asian session · last bar 5m ago · flat · 2 trade(s) today · P&L $55.00"
     assert embed["footer"]["text"] == "read-only · no rule change"
+
+
+def test_bold_key_lines_become_fields_and_end_sections():
+    embed = text_card(
+        "✅ **STATUS: HEALTHY**\n**ISSUE:** Daily reconciliation\n**KEY EVIDENCE:**\n• rows: 12\n"
+        "**ACTION:** None — continue monitoring.\n-# File: `/tmp/x.json`"
+    )
+    assert [f["name"] for f in embed["fields"]] == ["ISSUE", "KEY EVIDENCE", "ACTION"]
+    assert embed["fields"][1]["value"] == "• rows: 12"
+    assert embed["footer"]["text"] == "File: /tmp/x.json"

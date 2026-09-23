@@ -71,18 +71,19 @@ Plain-text alerts are posted as paper-collection-style embed cards by
 `notifications/discord_card.py` — the DiscordRouter (heartbeat, signal, error,
 daily_report, observation, deployment, signa), the legacy webhook alert path,
 system notifier, options companion, Tradovate session alerts, force-close,
-feed-gap alarm, gate-condition report, health digest and weekly review.
+feed-gap alarm, gate-condition report, health digest, weekly review and the
+read-only watcher.
 
 Write the text so it lays out well:
 
 - line 1 = title (emoji/status word sets the color: FAIL/DOWN/ERROR red,
   WARN/STALE/GAP amber, OK/PASS/RECOVERED green, otherwise blurple)
-- `Key: value` lines = inline fields
+- `Key: value` or `**Key:** value` lines = fields
 - `**Section**` line, then its lines = a full-width field
 - last line `READ ONLY …` / `[read-only …]` / `-# …` = footer
 
 Senders that already build embeds (paper collection, paper decisions, options
 scanner, drift gate) pass through unchanged. If Discord rejects a card (HTTP
 400) the original text is re-sent, so layout can never drop an alert. The
-read-only watcher still posts text: it installs as standalone files outside the
-release and is not covered.
+read-only watcher uses the same cards: its installer ships a copy of
+`discord_card.py` next to `watcher.py`, and without that copy it posts plain text.

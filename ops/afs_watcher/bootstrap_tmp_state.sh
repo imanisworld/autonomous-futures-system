@@ -12,4 +12,6 @@ mkdir -p "$STATE"
 cp -f "$SRC/watcher.py" "$SRC/watcher_memory_guard.py" "$SRC/run_ro.sh" "$STATE/"
 # optional read-only advisory lane (watcher imports it defensively; absent = disabled)
 [ -f "$SRC/watcher_triage.py" ] && cp -f "$SRC/watcher_triage.py" "$STATE/"
+# optional Discord card layout (watcher imports it defensively; absent = plain text)
+[ -f "$SRC/discord_card.py" ] && cp -f "$SRC/discord_card.py" "$STATE/"
 chmod 700 "$STATE/run_ro.sh"
