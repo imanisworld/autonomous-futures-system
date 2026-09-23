@@ -55,12 +55,13 @@ def test_unchecked_caveat_rendered_only_when_incomplete():
         trade_proof_status="INCOMPLETE",
         trade_proof_reason="event_risk_unavailable;flip_context_unavailable",
     )
-    assert _unchecked_text(r) == "Not checked: event risk, flip context"
+    expected = "Not checked: upcoming news or earnings, big options-positioning price levels"
+    assert _unchecked_text(r) == expected
     assert _unchecked_text(_result(trade_proof_status="VALID")) == "N/A"
 
     fields = {f["name"]: f["value"] for f in build_discord_payload(r)["embeds"][0]["fields"]}
-    assert fields["Unchecked"] == "Not checked: event risk, flip context"
+    assert fields["Not checked"] == expected
     valid_fields = {
         f["name"] for f in build_discord_payload(_result(trade_proof_status="VALID"))["embeds"][0]["fields"]
     }
-    assert "Unchecked" not in valid_fields  # N/A fields are dropped from the embed
+    assert "Not checked" not in valid_fields  # N/A fields are dropped from the embed

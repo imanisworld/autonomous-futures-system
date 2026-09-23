@@ -298,10 +298,13 @@ def order_states(states: object) -> str:
     """``stop-loss order expired, profit target order expired`` from ``{"stop": "expired", …}``."""
     if not isinstance(states, dict) or not states:
         return "unknown"
-    return ", ".join(
-        f"{PROTECTION.get(str(role).upper(), _words(role))} order {_words(status)}"
-        for role, status in states.items()
-    )
+    parts = []
+    for key, value in states.items():
+        if isinstance(value, int) and not isinstance(value, bool):
+            parts.append(f"{value} {_words(key)}")  # census counts, e.g. {"Expired": 2}
+        else:
+            parts.append(f"{PROTECTION.get(str(key).upper(), _words(key))} order {_words(value)}")
+    return ", ".join(parts)
 
 
 def preflight_reason(reason: object) -> str:
@@ -318,3 +321,82 @@ def result_word(result: object) -> str:
     """``won`` / ``lost`` / ``broke even`` for WIN / LOSS / BREAKEVEN."""
     text = str(result or "").strip().upper()
     return RESULTS.get(text) or _words(text)
+
+
+# ── Options (appended 2026-09-23 for the options-side messages) ─────────────
+# The options scanner (alert_ranker/) keeps its own twin of these in
+# alert_ranker/plain_text.py because it ships as a separate curated release.
+
+
+def today_et() -> date:
+    return datetime.now(ET).date()
+
+
+def expires(expiry: object = None, *, dte: object = None, today: Optional[date] = None) -> str:
+    """``expires today`` / ``expires tomorrow, Thu Sep 24`` / ``expires Fri Sep 26 (3 days)``.
+
+    Uses the day count when only that is known (``expires in 3 days``); empty when
+    nothing is known. Never ``DTE`` / ``0DTE`` / ISO dates.
+    """
+    day: Optional[date] = None
+    if isinstance(expiry, datetime):
+        day = expiry.date()
+    elif isinstance(expiry, date):
+        day = expiry
+    elif expiry:
+        try:
+            day = date.fromisoformat(str(expiry).strip()[:10])
+        except ValueError:
+            day = None
+    days: Optional[int] = None
+    if day is not None:
+        days = (day - (today or today_et())).days
+    elif dte not in (None, ""):
+        try:
+            days = int(dte)  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            days = None
+    if day is None:
+        if days is None:
+            raw = str(expiry or "").strip()
+            return f"expires {raw}" if raw else ""
+        return "expires today" if days == 0 else "expires tomorrow" if days == 1 else f"expires in {days} days"
+    label = f"{day.strftime('%a %b')} {day.day}"
+    if days == 0:
+        return "expires today"
+    if days == 1:
+        return f"expires tomorrow, {label}"
+    if days is not None and days > 1:
+        return f"expires {label} ({days} days)"
+    return f"expired {label}"
+
+
+def option_kind(value: object, *, explain: bool = False) -> str:
+    """``call`` / ``put`` (from CALL/PUT/C/P); with explain: ``call (bets the price goes up)``."""
+    text = str(value or "").strip().upper()
+    kind = {"CALL": "call", "C": "call", "PUT": "put", "P": "put"}.get(text)
+    if kind is None:
+        return text.lower() or "option"
+    if not explain:
+        return kind
+    return f"{kind} (bets the price goes {'up' if kind == 'call' else 'down'})"
+
+
+def option_label(underlying: object, strike: object, kind: object) -> str:
+    """``QQQ 741 call``."""
+    parts = [str(underlying or "").strip() or "?"]
+    try:
+        parts.append(f"{float(strike):g}")  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        pass
+    parts.append(option_kind(kind))
+    return " ".join(parts)
+
+
+def option_price(value: object) -> str:
+    """Option price per share plus per contract: ``$1.20 a share ($120 per contract)``."""
+    try:
+        amount = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return "?"
+    return f"${amount:,.2f} a share (${amount * 100:,.0f} per contract)"

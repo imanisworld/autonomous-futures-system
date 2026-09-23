@@ -737,17 +737,27 @@ class TestDiscordNotify:
 
         self._env(monkeypatch)
         posts = self._capture(monkeypatch)
+        from notifications.plain_english import today_et
+
+        today = today_et().isoformat()
         notify_companion_create({"candidates": [
             {"status": "OPEN", "underlying": "QQQ", "contract_type": "CALL",
-             "option_symbol": "QQQ260623C00741000", "strike": 741.0, "expiry": "2026-06-23", "dte": 0,
+             "option_symbol": "QQQ260623C00741000", "strike": 741.0, "expiry": today, "dte": 0,
              "entry_mark": 2.1, "stop_mark": 1.05, "target_mark": 4.2,
              "futures_instrument": "MNQ", "futures_direction": "LONG"},
         ]})
         assert len(posts) == 1
         url, msg = posts[0]
-        # human-readable contract: "QQQ $741 CALL · exp Jun 23 (0DTE)"
-        assert url == "https://discord/sig" and "OPEN" in msg
-        assert "$741" in msg and "CALL" in msg and "Jun 23" in msg and "0DTE" in msg
+        # Plain English: "QQQ 741 call (bets the price goes up), expires today"
+        assert url == "https://discord/sig" and "Paper option opened" in msg
+        assert "QQQ 741 call" in msg and "bets the price goes up" in msg and "expires today" in msg
+        assert "$2.10 a share ($210 per contract)" in msg
+        assert "buy on MNQ (Micro Nasdaq)" in msg
+        assert "PAPER ONLY" in msg
+        # No jargon in the body; the raw option symbol only survives as footer detail.
+        body = msg.split("PAPER ONLY")[0]
+        assert "DTE" not in msg and "CALL" not in msg and "LONG" not in msg
+        assert "QQQ260623C00741000" not in body
 
     def test_reject_posts_only_when_opted_in(self, monkeypatch):
         from options_companion.notify import notify_companion_create
@@ -779,16 +789,22 @@ class TestDiscordNotify:
              "expiry": "2026-06-24", "dte": 1, "option_symbol": "SPY260624P00600000", "pnl_dollars": -50.0},
         ]})
         assert len(posts) == 2
-        assert "WIN" in posts[0][1] and "$741" in posts[0][1] and "Jun 23" in posts[0][1]
-        assert "LOSS" in posts[1][1] and "SPY" in posts[1][1] and "$600" in posts[1][1]
+        assert "Paper option won" in posts[0][1] and "QQQ 741 call" in posts[0][1]
+        assert "+$100.00" in posts[0][1] and "Tue Jun 23" in posts[0][1]
+        assert "Paper option lost" in posts[1][1] and "SPY 600 put" in posts[1][1] and "-$50.00" in posts[1][1]
+        assert "2026-06-23" not in posts[0][1]
 
     def test_error_posts_to_error_channel(self, monkeypatch):
         from options_companion.notify import notify_companion_error
 
         self._env(monkeypatch)
         posts = self._capture(monkeypatch)
-        notify_companion_error("boom")
-        assert len(posts) == 1 and posts[0][0] == "https://discord/err" and "boom" in posts[0][1]
+        notify_companion_error("create: boom")
+        assert len(posts) == 1 and posts[0][0] == "https://discord/err"
+        msg = posts[0][1]
+        assert "Paper options tracker error" in msg and "opening new paper option trades" in msg
+        # Raw exception text is kept, but only as footer detail (after the boundary line).
+        assert "boom" in msg and msg.index("boom") > msg.index("PAPER ONLY")
 
     def test_disabled_posts_nothing(self, monkeypatch):
         from options_companion.notify import notify_companion_create, notify_companion_error
@@ -831,11 +847,13 @@ class TestDailyReport:
 
         rows = store.all_rows()
         report = build_report(rows, companion_summary(store), day_iso=TODAY.isoformat())
-        assert TODAY.isoformat() in report
-        assert "2** opened" in report or "**2**" in report  # 2 opened today (not the old one)
-        assert "1W / 0L / 0exp" in report
-        assert "$80.00" in report
+        assert "Tue Jun 23" in report and TODAY.isoformat() not in report
+        assert "Opened today: **2**" in report  # 2 opened today (not the old one)
+        assert "1 won, 0 lost, 0 expired" in report
+        assert "+$80.00" in report
         assert "1 skipped" in report
+        assert "W / " not in report and "formed" not in report
+        assert "PAPER ONLY" in report
 
     def test_daily_report_posts_to_daily_channel(self, monkeypatch):
         from options_companion.notify import notify_companion_daily_report
@@ -874,8 +892,8 @@ class TestRejectEnglish:
         from options_companion.notify import _fmt_reject
 
         msg = _fmt_reject({"underlying": "QQQ", "contract_type": "CALL", "rule": "signa_grade"})
-        assert "Companion skipped" in msg
-        assert "Signa grade too low (needs A or B)" in msg
+        assert "Paper option skipped: QQQ call" in msg
+        assert "Signa (outside opinion) rating too low (needs A or B)" in msg
         assert "signa_grade" not in msg  # raw code must not leak through
 
     def test_unknown_code_is_humanised(self):

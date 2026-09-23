@@ -88,26 +88,33 @@ def test_generic_discord_cannot_claim_confirmed_without_triggered_setup():
     payload = build_discord_payload(_discord_result(setup_status=None))
     embed = payload["embeds"][0]
     text = f"{embed['title']} {embed['description']}"
-    assert "SETUP WATCHING" in embed["title"]
+    assert "watching only" in embed["title"]
+    assert "triggered" not in embed["title"].lower()
     assert "CONFIRMED" not in text
     assert "All gates passed" not in text
     fields = {field["name"]: field["value"] for field in embed["fields"]}
     assert "no entry permission" in fields["Status"]
+    assert "no entry permission" in fields["Can I trade this?"]
+    assert "TRIGGERED" not in fields["Can I trade this?"]
 
 
 def test_triggered_setup_may_use_triggered_wording():
     payload = build_discord_payload(_discord_result(setup_status="TRIGGERED"))
     embed = payload["embeds"][0]
-    assert "TRIGGERED" in embed["title"]
+    assert "setup triggered" in embed["title"]
     fields = {field["name"]: field["value"] for field in embed["fields"]}
-    assert "Mechanical setup TRIGGERED" in fields["Trade authority"]
+    authority = fields["Can I trade this?"]
+    assert "Setup TRIGGERED" in authority
+    # Triggered still is not a blanket go: contract/risk checks remain the reader's job.
+    assert "still need to check the contract and risk" in authority
+    assert "nothing is placed automatically" in authority
 
 
 def test_signa_display_is_explicitly_observational():
     payload = build_discord_payload(_discord_result(setup_status=None))
     fields = {field["name"]: field["value"] for field in payload["embeds"][0]["fields"]}
-    assert fields["Signa Context"].startswith("Observational")
-    assert "score +" not in fields["Signa Context"]
+    assert fields["Signa (outside opinion)"].startswith("For info only")
+    assert "score +" not in fields["Signa (outside opinion)"]
 
 
 def test_signa_provenance_keeps_raw_surfaces_and_timestamps():
