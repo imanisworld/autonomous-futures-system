@@ -4,7 +4,7 @@
 
 This document records a clean-sheet architecture review against the **current repository**, not against older audit handoffs. It does not authorize strategy changes, risk changes, broker changes, deployment, VPS changes, paper/demo activation, or live execution.
 
-**Original audit basis:** `main@e4c6f0d81559bbeb0c3dc2846580f0771e990576` (2026-09-23). **Reconciliation basis:** `main@d4147e9738386f769debfb8fbfaca2dbc5b79932` after PR #952 merged. Historical findings are preserved with their original basis; current-state statements below are reconciled to the later main SHA.
+**Original audit basis:** `main@e4c6f0d81559bbeb0c3dc2846580f0771e990576` (2026-09-23). **Current reconciliation basis:** `main@e75c8d088f6536811efaa2e42b770f42bfb41114` after PRs #952, #954, and #953 merged. Historical findings are preserved with their original basis; current-state statements below are reconciled to the later main SHA. PR #954 hardens the options reclaim evaluator's one-look receipt storage, and #953 records the corrected MCL research result; neither closes the trial-ledger, system-level fault-injection, or universal report-identity gaps identified here.
 
 **Important boundary:** repository state is not proof of deployed/VPS state. Runtime claims still require box verification.
 
@@ -44,7 +44,7 @@ The prior external review was useful, but several items were incorrectly labeled
 
 | Claimed gap | Current repo reality | Status |
 |---|---|---|
-| Formal hypothesis/preregistration registry | Present and actively used. At this audit point `docs/` contains **23** files named `prereg-*.md`; current studies explicitly freeze hypotheses, populations, thresholds, allowed variants, data windows, and prohibited retuning before the run. | **ESTABLISHED** |
+| Formal hypothesis/preregistration registry | Present and actively used. At the current reconciliation basis `docs/` contains **24** files named `prereg-*.md`; current studies explicitly freeze hypotheses, populations, thresholds, allowed variants, data windows, and prohibited retuning before the run. | **ESTABLISHED** |
 | Trial / multiple-testing ledger | Per-study cell counts and family-wise/null thresholds exist, but there is no single repo-enforced pre-run ledger that guarantees every attempted variant is recorded before execution. | **REAL GAP** |
 | Null / placebo testing | Present. Current research uses the fixed null baseline **p95 PF 1.94 / max-of-500 2.55**, and newer work also uses direction/time nulls where preregistered. | **ESTABLISHED** |
 | Rejected-candidate counterfactual data | Rejections/no-trades are logged and have already supported gate-attribution studies. The weakness is that post-rejection outcome follow-through is not a universal automatic field/process. | **MOSTLY ESTABLISHED / PARTIAL AUTOMATION GAP** |
@@ -554,7 +554,7 @@ The architecture problem identified here is primarily **research accounting + fa
 This document is itself the first step.
 
 1. **Final independent review of this reconciled document.**
-   - Claude should verify every "already have" and "gap" claim against current `main@d4147e9738386f769debfb8fbfaca2dbc5b79932`.
+   - Verify every "already have" and "gap" claim against current `main@e75c8d088f6536811efaa2e42b770f42bfb41114`.
    - The Perplexity external audit has already been reconciled into this document; do not start another broad external audit unless a new factual question requires one.
 
 2. **If the review survives, preregister the experiment-ledger design.**
