@@ -114,7 +114,7 @@ result of this study was seen. They were not chosen from the losses above.
     - Gaps: 2026-09-07 is the Labor Day early close (a real closure, not a
       gap). 2026-09-11 is missing 11 MNQ / 12 MES bars; patterns spanning it
       are skipped as `GAP`.
-  - **OOS-B: 2026-09-15 → CME trading date 2026-09-22 (fixed)**, to be pulled
+  - **OOS-B: 2026-09-15 → CME trading date 2026-09-22 as registered; see the admission result below for the amended end date**, to be pulled
     with `scripts/structural_level_corpus_build.py` from `main`. It covers the
     Sep 15 roll to the December contracts (MNQZ6/MESZ6) under the same
     `roll_days=3` rule. **OOS-B is admitted only if all of these hold:**
@@ -124,8 +124,43 @@ result of this study was seen. They were not chosen from the losses above.
     3. the gap ledger has no unexplained gap inside CME hours.
 
     If any check fails, OOS-B is dropped and the reason is recorded; OOS-A
-    stands alone. **No pattern may span a roll seam.** Such patterns are
-    skipped (`ROLL`).
+    stands alone.
+
+    **Admission result (pulled 2026-09-23 ~02:40Z, recorded before any
+    scoring):** OOS-B was built to
+    `data/replay_polygon_parity_2026_07_16_09_22/{MNQ,MES}` with
+    `slc-build-v1.5`. Manifest sha256 prefixes: MNQ `063f58261b046070`, MES
+    `c70f76fba34caeee`.
+    1. **Pass.** The Jul 16 → Sep 14 overlap is 3,921/3,921 (MNQ) and
+       3,920/3,920 (MES) bars OHLC-identical to OOS-A, with no revisions. It
+       also matches the main corpus on Jul 16–23 (552/552 each). The extra 8
+       bars on Sep 14 are the ones OOS-A cut at its 22:00Z end.
+    2. **Pass.** There is exactly one seam per instrument: U6 → Z6 at
+       2026-09-15T00:00Z. The gap is +292.00 points (MNQ) and +67.75 (MES).
+    3. **Pass.** The only gaps inside CME hours are the known 2026-09-07
+       (Labor Day early close) and 2026-09-11 (11 MNQ / 12 MES bars).
+    4. **Amended end date.** The Polygon source stops at 2026-09-22T18:30Z,
+       9 bars short of that session's close, at pull time. **OOS-B therefore
+       ends at CME trading date 2026-09-21**, the last complete trading date.
+       Trading date 2026-09-22 is excluded; it is not a gap to be filled.
+
+    **OOS-B is admitted: 2026-09-15 → CME trading date 2026-09-21.**
+
+**Contract rolls (all windows, main corpus included).** Roll seams are placed
+by the builder's deterministic rule: `roll_days=3`, meaning the front contract
+advances 3 calendar days before the 3rd-Friday expiry. Each seam falls at
+00:00Z on the roll date, and its gap = the first new-contract open − the last
+old-contract close. At every seam:
+
+- **No pattern may span a roll seam.** A setup whose bars (`t-3` … `t`) or
+  forward resolution window cross a seam is skipped (`ROLL`). An open
+  position is closed at the last pre-seam bar's close (`ROLL_EXIT`,
+  terminal).
+- **FTFC opens are back-adjusted:** any monthly, weekly, daily or 60-minute
+  open set before the seam and still in force after it has that seam's gap
+  added. This is standard difference back-adjustment and the only adjustment
+  permitted. Bars and prices used for entries, stops and targets are never
+  adjusted.
   - The box's live `bars_*.jsonl` files are **not** used. They are a different
     feed and are only 89% (MNQ) / 99% (MES) OHLC-identical to Polygon over
     Jul 24 → Sep 14.
