@@ -1308,6 +1308,23 @@ class TradovateBroker(BrokerInterface):
                     with self._client_order_lock:
                         self._client_order_registry[client_id] = "AMBIGUOUS"
                 raise
+            # A transport-success response that is not a mapping is UNKNOWN:
+            # the broker may have created the order even though we cannot parse
+            # its command result. Poison this signal identity so it cannot be
+            # blindly re-fired until reconciliation.
+            if not isinstance(result, dict):
+                logger.error(
+                    "Tradovate placeOSO returned malformed response — submission outcome "
+                    "UNKNOWN: %r",
+                    result,
+                )
+                if client_id:
+                    with self._client_order_lock:
+                        self._client_order_registry[client_id] = "AMBIGUOUS"
+                return self._cancelled_fill(
+                    order, "TRADOVATE_NO_ORDER_ID", order_type=entry_leg.get("orderType"),
+                )
+
             # HTTP success is not business success, and Tradovate documents
             # failureReason="Success" on successful command responses. Only a
             # non-success application marker is a rejection.
