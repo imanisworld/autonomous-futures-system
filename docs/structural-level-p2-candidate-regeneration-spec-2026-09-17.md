@@ -203,9 +203,11 @@ Prereg v1.5 adds M2K. For the regeneration and parity machinery this means:
   X0 `PROVEN`, live bars identified Z6 27/27), extended as the observation window grows and
   seam-free until the December roll. The first-draft stitched corpus
   `data/replay_polygon_parity_m2k_2026_09_16/M2K` (`roll_days=3`, seam 2026-09-15T00:00Z;
-  manifest `78d4127d…`) is **`ROLL_PROVENANCE_UNKNOWN` / NOT ADMITTED** — M2K's live feed
-  switch was never observed, so its seam cannot be reconciled (X0 report
-  `…-x0-parity-stitched.json`); do not use it for M2K parity.
+  manifest `78d4127d…`) is **`ROLL_PROVENANCE_UNKNOWN` / NOT ADMITTED** — the box did
+  not observe the exact intraday M2K transition, and the later operator-captured TradingView
+  Contract Switch marker dates U6→Z6 on **2026-09-16**, making this stitched
+  `2026-09-15T00:00Z` seam date-level inconsistent with TradingView (see
+  `docs/equity-index-tradingview-roll-provenance-2026-09-23.md`). Do not use it for M2K parity.
 - **Family matrix additions (C21):** `strat_212`, `strat_122` = `LANE_ONLY` (observation-lane
   canonical detector), must be absent from replay (manifest check). Not configured for M2K by
   the lane: `strat_122_pullback`, `strat_4hr_retrigger_observed`, `vwap_*`.

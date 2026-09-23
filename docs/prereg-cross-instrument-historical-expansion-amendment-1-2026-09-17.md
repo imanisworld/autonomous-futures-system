@@ -4,6 +4,8 @@
 
 **Status:** SPEC ONLY / PAPER-RESEARCH ONLY / NO OUTCOMES AUTHORIZED
 
+> **2026-09-23 provenance correction:** the statement below that a 2026-09-14 M2K live-feed check established the switch timing is superseded. The box did not observe the exact M2K U6→Z6 transition. Operator-captured TradingView Contract Switch markers now prove the date-level switches as **2026-06-16 M6→U6** and **2026-09-16 U6→Z6**; exact intraday/UTC timing remains unknown. The amendment's core rule is unchanged: the generic quarterly scheduler is not roll authority. See `docs/equity-index-tradingview-roll-provenance-2026-09-23.md`.
+
 ## Reason for amendment
 
 The parent prereg correctly requires a fresh source probe before M2K corpus construction, but its readiness table can be read too strongly because the repository already contains a proven counterexample to treating the generic quarterly roll convention as live continuous-feed authority.

@@ -40,4 +40,15 @@ No historical bars are rewritten and no runtime, strategy, risk, broker, configu
 - Do not use the Sep-14 transition to certify a scheduler seam or historical continuous-contract roll rule.
 - Fixed-dated-contract windows remain the safest confirmatory design when exact roll provenance is required.
 
+## 2026-09-23 TradingView date-level addendum
+
+Operator-captured TradingView Contract Switch markers now independently establish the **date-level** 2026 switches:
+
+- `MNQ1!`: M6→U6 on **2026-06-15**; U6→Z6 on **2026-09-15**.
+- `MES1!`: M6→U6 on **2026-06-15**; U6→Z6 on **2026-09-15**.
+
+This narrows the prior unknown: the TradingView **switch date** is now proven for those four events, while the exact intraday/UTC switch instant remains unproven. The saved box evidence still supports the narrower statement above: 22:00Z is the first proven Z6 bar after the September observation gap, not independently a proven switch timestamp.
+
+Canonical date-level record: `docs/equity-index-tradingview-roll-provenance-2026-09-23.md`.
+
 Rule: **No proof, no run.**
