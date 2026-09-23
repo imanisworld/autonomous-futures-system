@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from notifications import heartbeat as hb
+from notifications.discord_card import card_text
 from notifications.heartbeat import (
     build_heartbeat_message,
     maybe_send_heartbeat,
@@ -60,7 +61,9 @@ def test_heartbeat_sends_when_bars_are_fresh(tmp_path):
     result = maybe_send_heartbeat(_config(), str(tmp_path), sender=fake_sender)
     assert result is not None
     assert "heartbeat" in result
-    assert captured["body"]["content"] == result
+    # Sent as a card; every part of the heartbeat line is still on it.
+    flat = card_text(captured["body"])
+    assert all(part.strip("* ") in flat for part in result.split(" · "))
 
 
 def test_heartbeat_skips_when_market_quiet(tmp_path):

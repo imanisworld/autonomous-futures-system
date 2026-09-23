@@ -697,10 +697,11 @@ def _handle_alert_blocking(payload: AlertPayload) -> None:
         if _notify_allowed:
             try:
                 from notifications.discord_router import DiscordRouter as _DR
-                from notifications.discord_notifier import _format_message as _fmt
+                from notifications.discord_notifier import _discord_payload as _card
                 _router = _DR()
                 if _router.is_enabled("signal") and _wants_decision_notification:
-                    _router.send("signal", _fmt(payload, result))
+                    # Same paper-decision card the legacy webhook path sends.
+                    _router.send("signal", _card(payload, result))
                 else:
                     notify_discord(payload=payload, result=result, config=_config)
             except Exception as _disc_exc:

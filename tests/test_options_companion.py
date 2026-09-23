@@ -22,6 +22,7 @@ from options_companion.selection import CompanionSelection, SelectionRejected, s
 from options_companion.signa_gate import evaluate_companion_signa
 from options_companion.status import companion_summary
 from options_companion.store import OptionsCompanionStore
+from notifications.discord_card import card_text
 
 # 11:00 ET (before the 14:00 same-day cutoff); ET date = 2026-06-23.
 NOW = datetime(2026, 6, 23, 15, 0, tzinfo=timezone.utc)
@@ -720,7 +721,7 @@ class TestDiscordNotify:
         import notifications.discord_notifier as dn
 
         def fake_post(url, body, headers):
-            posts.append((url, json.loads(body.decode())["content"]))
+            posts.append((url, card_text(json.loads(body.decode()))))
 
         monkeypatch.setattr(dn, "_post_json", fake_post)
         return posts
@@ -841,7 +842,7 @@ class TestDailyReport:
         import notifications.discord_notifier as dn
 
         posts = []
-        monkeypatch.setattr(dn, "_post_json", lambda u, b, h: posts.append((u, json.loads(b.decode())["content"])))
+        monkeypatch.setattr(dn, "_post_json", lambda u, b, h: posts.append((u, card_text(json.loads(b.decode())))))
         monkeypatch.setenv("DISCORD_NOTIFICATIONS_ENABLED", "true")
         monkeypatch.setenv("DISCORD_OPTIONS_DAILY_REPORT", "https://discord/daily")
         assert notify_companion_daily_report("hi") is True

@@ -32,8 +32,9 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
-# transport(url, message) -> None ; must raise on failure.
-Transport = Callable[[str, str], None]
+# transport(url, message) -> None ; must raise on failure. ``message`` is plain
+# text or an already-built webhook body (dict, e.g. an embed card).
+Transport = Callable[[str, "str | dict"], None]
 
 _DEFAULT_ROUTES_PATH = Path(__file__).resolve().parent.parent / "config" / "notification_routes.yaml"
 
@@ -78,11 +79,18 @@ def load_routes(path: str | os.PathLike[str] | None = None) -> dict[str, Route]:
     return routes
 
 
-def _default_transport(url: str, message: str) -> None:
+def _default_transport(url: str, message: "str | dict", *, source: str = "") -> None:
     import httpx
 
-    response = httpx.post(url, json={"content": message}, timeout=5)
-    response.raise_for_status()
+    from notifications.discord_card import post_card_or_text
+
+    def _post(body: dict) -> None:
+        response = httpx.post(url, json=body, timeout=5)
+        response.raise_for_status()
+
+    # Plain text is laid out as a paper-collection-style card; a 400 falls
+    # back to the original text so layout can never drop an alert.
+    post_card_or_text(_post, message, source=source)
 
 
 class DiscordRouter:
@@ -133,7 +141,7 @@ class DiscordRouter:
             )
 
     # ── Delivery ─────────────────────────────────────────────────────────────
-    def send(self, route_name: str, message: str, metadata: Optional[dict] = None) -> bool:
+    def send(self, route_name: str, message: "str | dict", metadata: Optional[dict] = None) -> bool:
         """Deliver a message to a logical route.
 
         Returns:
@@ -173,7 +181,10 @@ class DiscordRouter:
         # an outage.
         for attempt in (1, 2):
             try:
-                self._transport(url, message)
+                if self._transport is _default_transport:
+                    _default_transport(url, message, source=f"{route.name} route")
+                else:
+                    self._transport(url, message)
                 return True
             except Exception as exc:  # noqa: BLE001 - delivery must never propagate
                 if attempt == 1:

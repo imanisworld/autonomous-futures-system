@@ -36,6 +36,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Optional
 
+try:  # card layout when run from a release; plain text from a standalone copy
+    from notifications.discord_card import post_card_or_text as _post_card_or_text
+except ImportError:  # pragma: no cover - standalone copy without the package
+    _post_card_or_text = None
+
 INSTRUMENTS = ("MNQ", "MES")
 THRESHOLD_MIN = 31
 REMINDER_MIN = 120
@@ -72,13 +77,18 @@ def send_discord(env_path: Path, log_dir: Path, msg: str, *, now: datetime) -> b
         log_line(log_dir, "WARN no DISCORD_WEBHOOK_URL; alert not sent", now=now)
         return False
     try:
-        body = json.dumps({"content": msg}).encode()
-        # Discord's edge 403s the default Python-urllib User-Agent —
-        # a custom UA is required (verified on-box 2026-07-16).
-        req = urllib.request.Request(
-            url, data=body, headers={"Content-Type": "application/json",
-                                     "User-Agent": USER_AGENT})
-        urllib.request.urlopen(req, timeout=15).read()
+        def _post(payload: dict) -> None:
+            # Discord's edge 403s the default Python-urllib User-Agent —
+            # a custom UA is required (verified on-box 2026-07-16).
+            req = urllib.request.Request(
+                url, data=json.dumps(payload).encode(),
+                headers={"Content-Type": "application/json", "User-Agent": USER_AGENT})
+            urllib.request.urlopen(req, timeout=15).read()
+
+        if _post_card_or_text is not None:
+            _post_card_or_text(_post, msg, source="feed gap alarm")
+        else:
+            _post({"content": msg})
         log_line(log_dir, "discord alert delivered", now=now)
         return True
     except urllib.error.HTTPError as exc:
