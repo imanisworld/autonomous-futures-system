@@ -117,6 +117,18 @@ bars. Let `t-1` be the **last completed** HTF bar. The trigger is armed at
 | **2-1-2 reversal** | `t-1`=1, `t-2`=2d | `t-1` high + 1 tick | `t-1` low − 1 tick | `t-2` high |
 | **3-1-2** (both sides) | `t-1`=1, `t-2`=3 | `t-1` high + 1 tick (or low − 1 tick for SHORT) | opposite side of `t-1` ± 1 tick | `t-2` high (low) |
 | **2-2 continuation** | `t-1`=2u | `t-1` high + 1 tick | `t-1` low − 1 tick | *none* (2R arms only) |
+| **Hammer at a level** (shooter mirrored) | `t-1` is a hammer (open and close both in the top 33% of its range) **and** `t-1` low ≤ a level from the table below | `t-1` high + 1 tick | `t-1` low − 1 tick | `t-2` high |
+
+**Hammer levels** are fixed per TF, all from completed prior periods, with a
+tolerance of 0 ticks. The hammer must trade at or through the level:
+
+| TF | LONG levels (low ≤ any of) | SHORT levels (high ≥ any of) |
+|---|---|---|
+| 60m, 4H | prior trading day low, prior week low | prior trading day high, prior week high |
+| Daily | prior week low, prior month low | prior week high, prior month high |
+
+Prior day, week and month use the §4 trading-day calendar and the §6 seam
+back-adjustment.
 
 SHORT is mirrored.
 
@@ -134,7 +146,11 @@ SHORT is mirrored.
 - `MAGNITUDE_INVALID`: the magnitude is not at least 1 tick beyond the trigger
   price at arming. It is counted and not taken.
 
-**Excluded:** hammer/shooter (PF 0.52 at 15m), 1-3, 3-2, 2-2-2, 1-3-2,
+**Hammer/shooter** was PF 0.52 at 15m with no confluence (#936). It is
+included here only in the level-plus-FTFC form above, added on the operator's
+instruction on 2026-09-23, before any script or result exists.
+
+**Excluded:** 1-3, 3-2, 2-2-2, 1-3-2,
 measured moves, PMG/kicker/IOI (the reasons are as in #934 §4), and the
 continuation side of 2-1-2 and 1-2-2.
 
@@ -149,7 +165,11 @@ continuation side of 2-1-2 and 1-2-2.
 | **M** | magnitude (§5) | none |
 | **M+F** | magnitude | FTFC |
 
-2-2 continuation has R and R+F only.
+- 2-2 continuation has R and R+F only.
+- **Hammer at a level always carries the FTFC filter.** FTFC is part of its
+  confluence, so it has **M+F** and **R+F** only. Its baseline for item 6 of
+  §7 is its own R+F arm, so only **M+F** is judged against a baseline; R+F is
+  judged on items 1–5.
 
 **FTFC** is evaluated at the trigger level, at the start of the 15m bar that
 triggers. With the opens as defined in #934 §5 (the month, week and day opens
@@ -209,8 +229,8 @@ trading day.
 
 **Candidate cells (MNQ):**
 - per TF: the five magnitude setups × {M, M+F, R+F}, plus 2-2 continuation ×
-  {R+F}, which is 16 per TF;
-- **48 in total.**
+  {R+F}, plus hammer-at-a-level × {M+F, R+F}, which is 18 per TF;
+- **54 in total.**
 
 Arm R is the baseline and cannot pass.
 
@@ -237,7 +257,8 @@ maxima.
 4. net after removing the single best trading day > 0;
 5. the top 3 trading days are < 50% of net;
 6. PF > the same setup's arm-R PF (for the 2-2 continuation R+F cell, versus
-   continuation R).
+   continuation R). For hammer-at-a-level: M+F must beat its R+F; R+F is N/A
+   on this item.
 
 **PROMISING / FORWARD-ONLY:** PF ≥ 1.94 but below `T_tf`, with 1 and 3–6 met.
 **DOES NOT CLEAR:** everything else.
