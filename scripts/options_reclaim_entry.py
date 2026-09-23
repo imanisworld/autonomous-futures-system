@@ -10,12 +10,12 @@ store (take it with SQLite's online backup; never read the live file in place).
              RECLAIM entries / NO_ENTRY, blocked reasons, gate status. Never prints P&L.
   look       the single look. Refuses unless reproduce PASSES on the same snapshot, the
              gate (>=50 pairs, >=20 days, >=30 RECLAIM entries) is met, --confirm-single-look
-             is given and --out does not exist.
+             is given, and the canonical preregistration look receipt does not already exist.
 
 Usage:
     python3 scripts/options_reclaim_entry.py reproduce --db snapshot.sqlite
     python3 scripts/options_reclaim_entry.py counts --db snapshot.sqlite [--out counts.json]
-    python3 scripts/options_reclaim_entry.py look --db snapshot.sqlite --out look.json --confirm-single-look
+    python3 scripts/options_reclaim_entry.py look --db snapshot.sqlite --confirm-single-look
 """
 from __future__ import annotations
 
@@ -31,6 +31,8 @@ if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
 from research import options_reclaim_entry as oe  # noqa: E402
+
+CANONICAL_LOOK_PATH = REPO / ".evidence" / f"{oe.PREREG_ID}-single-look.json"
 
 
 def _sha(path: Path) -> str:
@@ -53,8 +55,11 @@ def main(argv=None) -> int:
         if not a.confirm_single_look:
             print("REFUSED: the look happens once; pass --confirm-single-look", file=sys.stderr)
             return 3
-        if a.out is None or a.out.exists():
-            print("REFUSED: look needs a new --out file (an existing one means the look already happened)", file=sys.stderr)
+        if a.out is not None and a.out.resolve() != CANONICAL_LOOK_PATH.resolve():
+            print(f"REFUSED: look output is fixed at {CANONICAL_LOOK_PATH}", file=sys.stderr)
+            return 3
+        if CANONICAL_LOOK_PATH.exists():
+            print(f"REFUSED: canonical single-look receipt already exists at {CANONICAL_LOOK_PATH}", file=sys.stderr)
             return 3
     conn = oe.connect_readonly(a.db)
     eps = oe.load_episodes(conn)
@@ -66,7 +71,8 @@ def main(argv=None) -> int:
         text = json.dumps(out, indent=2, default=str)
         if a.out:
             a.out.write_text(text + "\n")
-        print(json.dumps({"verdict": repro["verdict"], "matched": repro["matched"], "total": repro["total"]}))
+        print(json.dumps({"verdict": repro["verdict"], "matched": repro["matched"], "total": repro["total"],
+                          "fixture_ids": repro["fixture_ids"]}))
         return 0 if repro["verdict"] == "PASS" else 2
     if repro["verdict"] != "PASS":
         print(f"BLOCKED: reproduction {repro['matched']}/{repro['total']} — exact lineage not proven", file=sys.stderr)
@@ -80,13 +86,27 @@ def main(argv=None) -> int:
             a.out.write_text(text + "\n")
         print(text)
         return 0
+    # Check the frozen gate without exposing economics, then atomically reserve
+    # the canonical receipt before computing the one allowed look.
+    blind = oe.counts_report(pairs, as_of=now, source=source)
+    if blind["status"] != "READY_FOR_SINGLE_LOOK":
+        print("REFUSED: scoring gate not reached", file=sys.stderr)
+        return 3
+    CANONICAL_LOOK_PATH.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with CANONICAL_LOOK_PATH.open("x") as fh:
+            fh.write(json.dumps({"prereg": oe.PREREG_ID, "status": "LOOK_RESERVED",
+                                 "reserved_at": now.isoformat()}) + "\n")
+    except FileExistsError:
+        print(f"REFUSED: canonical single-look receipt already exists at {CANONICAL_LOOK_PATH}", file=sys.stderr)
+        return 3
     try:
         rep = oe.look_report(pairs, as_of=now)
-    except oe.LookRefused as exc:
-        print(f"REFUSED: {exc}", file=sys.stderr)
-        return 3
-    rep["source"] = source
-    a.out.write_text(json.dumps(rep, indent=2, sort_keys=True, default=str) + "\n")
+        rep["source"] = source
+        CANONICAL_LOOK_PATH.write_text(json.dumps(rep, indent=2, sort_keys=True, default=str) + "\n")
+    except Exception:
+        # Fail closed: the reservation remains, preventing an unrecorded second look.
+        raise
     print(json.dumps({"verdict": rep["verdict"], "criteria": rep["criteria"]}, indent=2))
     return 0
 
