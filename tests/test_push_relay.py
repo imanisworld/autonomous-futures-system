@@ -133,3 +133,19 @@ def test_daily_due_once_per_weekday_after_time():
     assert daily_due(sat, None, "16:15") is False
     assert daily_due(mon_late, None, "") is False
     assert daily_due(mon_late, None, "bad") is False
+
+
+def test_poll_reuses_one_http_client():
+    """A new AsyncClient per poll leaked ~0.7 MB/poll on the box (SSL context)."""
+    import asyncio
+
+    from ops.push_relay import app as relay
+
+    relay._http_client = None
+    first = relay._client()
+    assert relay._client() is first
+    asyncio.run(relay._shutdown())
+    assert relay._http_client is None and first.is_closed
+    second = relay._client()
+    assert second is not first
+    asyncio.run(relay._shutdown())
