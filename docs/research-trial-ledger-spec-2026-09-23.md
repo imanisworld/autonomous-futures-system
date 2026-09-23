@@ -1,4 +1,4 @@
-# Research Trial Ledger — minimal control specification (2026-09-23, rev 2)
+# Research Trial Ledger — minimal control specification (2026-09-23, rev 3)
 
 **Status: SPECIFICATION ONLY — NOT IMPLEMENTED. Docs-only. No code, no runtime, no
 strategy, risk, broker, collector or deployment change. Nothing in this document
@@ -16,6 +16,16 @@ are **ADOPTED**, not retro-`PLANNED` (§8); an unregistered study that did run i
 `UNREGISTERED_ATTEMPT` / `INVALID_EVIDENCE`, never as `NOT_RUN` (§5); the multiple-testing
 count moves to the `PLANNED` line where it is frozen (§4); `family` becomes a stable
 machine id plus a label (§4). The §10 questions carry proposed answers.
+
+**Rev 3 (same day) — four internal contradictions removed after the second review:** a
+one-time **bootstrap** case for the PR that creates the ledger (§7.2); optional historical
+backfill is **removed** entirely so every first line is `PLANNED`/`ADOPTED`/
+`UNREGISTERED_ATTEMPT` (§8); `attempts_in_family_before` is defined as a **ledger-era**
+count that CI can derive, with a separate `pre_ledger_attempts` disclosure that may be
+`"UNKNOWN"` (§4.3, §4.5); the `PLANNED`-time `variant_set.manifest` must point at a file
+that **already exists at that commit** — the prereg or a frozen cell manifest — never at
+a result that does not exist yet (§4.2, §6, §7.4). Evidence artifacts are identified by a
+mandatory naming convention **and** a machine-readable marker (§7.3).
 
 ---
 
@@ -94,14 +104,15 @@ individual cells are not separate trials unless a prereg declares them so.
 | `family_id` | string | **stable machine id**, `^[a-z0-9_]+$` (e.g. `mnq_322_first_live`); the multiple-testing family key |
 | `family_label` | string | human label, free text |
 | `population` | string | instruments + data window + corpus identity, one line |
-| `variant_set` | object | `{"count": int, "manifest": "<repo path or null>"}` — count of cells/variants declared by the prereg; manifest = retained cell inventory (§6) |
+| `variant_set` | object | `{"count": int, "manifest": "<repo path>"}` — count of cells/variants declared by the prereg; `manifest` = the **frozen** cell inventory, a file that **already exists at the commit of the first line**: the prereg itself when it enumerates the cells, otherwise `docs/research-trial-manifests/<trial_id>.json` committed in the same PR (§6). Never a result artifact. |
 | `prior_exposed` | string | `none` or a one-line disclosure of previously seen cells/lanes |
 
 ### 4.3 Required additionally on the first line (`PLANNED` / `ADOPTED` / `UNREGISTERED_ATTEMPT`)
 
 | Field | Rule |
 |---|---|
-| `attempts_in_family_before` | integer — number of prior trials with the same `family_id` (any event, any disposition) at registration time. **Frozen on the first line; never restated on later lines.** This is the multiple-testing count. |
+| `attempts_in_family_before` | integer — **ledger-era count only:** the number of earlier first lines (`PLANNED`/`ADOPTED`/`UNREGISTERED_ATTEMPT`) in this ledger with the same `family_id`. It is mechanically derivable, and CI recomputes and checks it (§7.1). **Frozen on the first line; never restated.** It says nothing about pre-ledger history. |
+| `pre_ledger_attempts` | integer or the string `"UNKNOWN"` — a best-effort disclosure of attempts in this family **before the ledger existed**, with a `notes` pointer to the source (Inventory row, handoff, results doc) when an integer is given. `"UNKNOWN"` is the honest default and is never treated as `0`. Not verified by CI. |
 
 ### 4.4 Required additionally on `COMPLETED` / `ABORTED` / `SUPERSEDED` / `UNREGISTERED_ATTEMPT`
 
@@ -116,8 +127,10 @@ individual cells are not separate trials unless a prereg declares them so.
 ### 4.5 Family id collisions
 
 `family_id` values that are equal after stripping `_`, `-`, spaces and case (e.g.
-`mnq_322` vs `MNQ-322`) are treated as a collision and rejected by the CI test (§7). A new
-family is introduced only by a first line whose `attempts_in_family_before` is `0`.
+`mnq_322` vs `MNQ-322`) are treated as a collision and rejected by the CI test (§7). A
+`family_id` appears for the first time on a first line whose `attempts_in_family_before`
+is `0` — meaning *no earlier ledger entry*, not "no historical attempts"; that line's
+`pre_ledger_attempts` carries whatever is actually known, or `"UNKNOWN"`.
 
 ## 5. Rule — register-before-evidence
 
@@ -150,14 +163,22 @@ tick.
 
 ## 6. Rule — attempted variants cannot disappear
 
-For every trial, the **variant/cell inventory** must be retained in a versioned location:
+For every trial, the **variant/cell inventory** is frozen **before** scoring and retained
+in a versioned location. `variant_set.manifest` on the first line must point at a file that
+exists at that line's commit:
 
-- if the study's artifacts are in-repo, the results doc/JSON already is the inventory
-  (`variant_set.manifest` points at it);
-- if the study's data/scripts are private (`private/`, `.git/info/exclude`), a **manifest**
-  must be committed under `docs/research-trial-manifests/<trial_id>.json` listing every
-  attempted variant/cell identity and the SHA-256 of the private per-cell results file. The
-  private data may stay private; the *list of what was tried* may not.
+- the **prereg itself**, when it enumerates every cell/variant (the common case — e.g.
+  "18 candidate cells" listed in `docs/prereg-strat-rules-magnitude-ftfc-2026-09-23.md`);
+- otherwise a **frozen cell manifest** at `docs/research-trial-manifests/<trial_id>.json`,
+  committed in the same PR as the `PLANNED` line, listing every attempted variant/cell
+  identity. For studies whose data/scripts are private (`private/`,
+  `.git/info/exclude`), the manifest also carries the SHA-256 of the private per-cell
+  results file once it exists (appended as a `COMPLETED`-time update to the manifest's
+  `results_sha256` field only; the cell list itself is never edited). The private data may
+  stay private; the *list of what was tried* may not.
+
+The later result artifact **references** the frozen inventory (via `trial_id`); it never
+becomes the inventory after the fact.
 
 Abandoned or negative trials receive an `ABORTED` or `COMPLETED` line with a negative
 disposition. Removing a trial's lines, its manifest, or a superseded result artifact is a
@@ -171,25 +192,38 @@ rule rather than a habit.
 
 1. **Ledger integrity:** file parses line-by-line; every line has the required fields for
    its event; every `trial_id`'s first line is `PLANNED`, `ADOPTED` or
-   `UNREGISTERED_ATTEMPT`; enum values valid; `recorded_at` non-decreasing per `trial_id`;
-   `attempts_in_family_before` present only on first lines; `family_id` collision check
-   (§4.5).
+   `UNREGISTERED_ATTEMPT` (no other first event exists — §8); enum values valid;
+   `recorded_at` non-decreasing per `trial_id`; `attempts_in_family_before` present only on
+   first lines **and equal to the recomputed ledger-era count** (§4.3); `family_id`
+   collision check (§4.5).
 2. **Append-only, against the trusted base:** in CI the test reads
    `git show origin/main:docs/research-trial-ledger.jsonl` (the base branch, which a PR
    cannot rewrite) and requires the PR's file to begin with exactly those bytes. Locally the
-   same check runs against `origin/main`; if the base file is unavailable the test **fails
-   closed**, it does not skip. No fixture, no anchor file — nothing that can be edited in
-   the same PR as the ledger.
-3. **Register-before-evidence:** for every `docs/*results*.json`, `docs/*-results-*.md` and
-   `docs/*evaluator*.md` first added **after the ledger start commit** (§8), the artifact
-   must cite a `trial_id` whose `PLANNED` line's first commit is a strict ancestor of the
-   artifact's first commit (`git log --diff-filter=A`), and whose prereg cites the same
-   `trial_id`. `ADOPTED` trials are exempt from the ancestry check (§8). Artifacts older
-   than the start commit are exempt.
-4. **Retention:** every `variant_set.manifest` path exists; for private studies the manifest
-   lists ≥ `variant_set.count` entries.
+   same check runs against `origin/main`. No fixture, no anchor file — nothing that can be
+   edited in the same PR as the ledger.
+   **Bootstrap, once:** if `origin/main` has **no** ledger file, the check passes only when
+   the PR's ledger is the file's first addition (`git log --diff-filter=A` shows it added in
+   this branch's commits) and every first line is `ADOPTED` or `PLANNED` (nothing to be
+   append-only *against* yet). Once the ledger exists on `main`, a missing or unreadable
+   base file **fails closed** forever — the test does not skip, and a PR that deletes or
+   renames the ledger fails.
+3. **Register-before-evidence:** an **evidence artifact** is any file first added after the
+   ledger start commit (§8) that (a) matches the **mandatory naming convention** for new
+   evidence — `docs/<slug>-results-<YYYY-MM-DD>.{md,json}` or
+   `docs/<slug>-evaluator-<YYYY-MM-DD>.md` — **or** (b) carries the machine-readable marker
+   (JSON key `trial_id`, or Markdown front matter / HTML comment `trial_id:`). Both sets are
+   scanned. Every artifact found must cite a `trial_id` whose `PLANNED` line's first commit
+   is a strict ancestor of the artifact's first commit (`git log --diff-filter=A`), and
+   whose prereg cites the same `trial_id`. `ADOPTED` trials are exempt from the ancestry
+   check (§8). Artifacts older than the start commit are exempt. A new evidence file that
+   uses neither the convention nor the marker is a ledger violation that review, not CI,
+   catches — the convention exists precisely so that this cannot happen by accident.
+4. **Retention:** every `variant_set.manifest` path **exists at the commit of the line that
+   declares it** (`git cat-file -e <first-line commit>:<path>`) and still exists at `HEAD`;
+   for frozen manifests the cell list has ≥ `variant_set.count` entries and is byte-identical
+   between the first-line commit and `HEAD` except for the `results_sha256` field (§6).
 5. **Linkage:** every `docs/prereg-*.md` first added after the start commit has at least one
-   ledger line.
+   ledger line, and cites its own `trial_id`.
 
 The test is read-only, runs under the existing unrestricted `pytest -q`
 (`.github/workflows/ci.yml:27`), and needs base-branch history in CI (`fetch-depth: 0` and
@@ -205,11 +239,16 @@ an `origin/main` ref — the only workflow change; to be confirmed at implementa
   not preregistered by this ledger"`. `ADOPTED` is explicitly **excluded** from the
   register-before-evidence guarantee; their eventual look is a `COMPLETED` line. This keeps
   the ledger historically truthful instead of implying the ledger preregistered them.
-- Historical completed studies may be backfilled with `COMPLETED` lines carrying
-  `notes: "historical backfill"`; backfill must **not** assign `attempts_in_family_before`
-  values as if they had been frozen at the time. Backfill is optional.
+- **No historical backfill.** Studies completed before the start commit are not entered
+  into the ledger at all; their record remains where it already is (Inventory, prereg/result
+  pairs, handoffs). This keeps §7.1's rule exact — every first line is `PLANNED`, `ADOPTED`
+  or `UNREGISTERED_ATTEMPT` — and avoids manufacturing frozen-looking counts after the fact.
+  Pre-ledger history enters only as the `pre_ledger_attempts` disclosure on a new family's
+  first line (§4.3), which may be `"UNKNOWN"`.
 - The 2026-09-23 cross-market grid is the first candidate for a retention manifest (§6)
-  because its cell history is private; that is a follow-up, not part of this spec.
+  because its cell history is private. Since it completed before the start commit it is
+  **not** a ledger entry; the manifest would be a standalone retention artifact, and that
+  is a follow-up, not part of this spec.
 
 ## 9. What this deliberately does not do
 
