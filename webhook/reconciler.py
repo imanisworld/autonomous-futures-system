@@ -30,6 +30,8 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+from notifications import plain_english as _pe
+
 logger = logging.getLogger(__name__)
 
 RECONCILE_INTERVAL_SECONDS = 20 * 60
@@ -161,11 +163,15 @@ def reconcile_open_position(
                 f"{k}={v}" for k, v in (census.get("states") or {}).items()
             )
             msg = (
-                f"🚨 ORPHAN OPEN POSITION: {open_pos.get('direction')} "
-                f"{open_pos.get('contracts', 1)}x {open_pos.get('instrument')} "
-                f"(opened {open_pos_date}) is OPEN at the broker with ZERO working "
-                f"protective orders ({states}). The position is NAKED — no stop, no "
-                f"target. NO automatic action taken. Flatten/verify in Tradovate NOW."
+                f"🚨 Open position with NO stop-loss — {_pe.side(open_pos.get('direction'))} "
+                f"{_pe.contracts(open_pos.get('contracts', 1))} {_pe.market(open_pos.get('instrument'))}\n"
+                f"Opened: {_pe.et_date(open_pos_date)}\n"
+                "What happened: Tradovate shows this position open, but it has no working "
+                "stop-loss or profit target order\n"
+                f"Protective orders: {_pe.order_states(census.get('states'))}\n"
+                "What the bot did: nothing — it will NOT close this on its own\n"
+                "What to do: open Tradovate NOW and close the position or check it\n"
+                f"-# details: ORPHAN/NAKED open position, 0 working protective orders ({states})"
             )
             logger.error(msg)
             try:
@@ -238,10 +244,13 @@ def reconcile_open_position(
             for_date=open_pos_date,
         )
         msg = (
-            f"Auto-reconcile: completed trade resolved — {fill.result} "
-            f"{fill.direction} {fill.instrument} P&L ${float(fill.pnl_dollars or 0):.2f} "
-            f"({fill.exit_reason}). The exit filled between bar resolves; "
-            f"journal updated, no orders sent."
+            f"Late trade result recorded — {fill.instrument} trade {_pe.result_word(fill.result)} "
+            f"{_pe.money(float(fill.pnl_dollars or 0))}\n"
+            f"Trade: {_pe.side(fill.direction)} {_pe.contracts(fill.contracts)} {_pe.market(fill.instrument)}\n"
+            f"How it ended: {_pe.exit_reason(fill.exit_reason)}\n"
+            "What happened: the trade closed between the bot's regular price checks, so the bot "
+            "caught up and recorded the result now. Nothing was sent to Tradovate.\n"
+            f"-# details: auto-reconcile completed trade {fill.result} ({fill.exit_reason})"
         )
         logger.warning(msg)
         try:
@@ -278,9 +287,12 @@ def reconcile_open_position(
         for_date=open_pos_date,
     )
     msg = (
-        f"Auto-reconciled phantom position: journal showed "
-        f"{open_pos.get('direction')} {open_pos.get('instrument')} open but the broker "
-        f"is flat — cleared (CANCELLED). Verify in Tradovate if unexpected."
+        f"⚠️ Cleared a trade that never opened — {_pe.side(open_pos.get('direction'))} "
+        f"{_pe.market(open_pos.get('instrument'))}\n"
+        "What happened: the bot's records showed this trade open, but Tradovate has no position\n"
+        "What the bot did: marked it cancelled (no profit or loss counted)\n"
+        "What to do: check Tradovate if you didn't expect this\n"
+        "-# details: auto-reconcile phantom position cleared (CANCELLED)"
     )
     logger.error(msg)  # ERROR so it surfaces in journald
     try:

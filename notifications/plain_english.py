@@ -200,3 +200,121 @@ def dollars_per_point(tick_size: object, tick_value: object) -> Optional[float]:
         return float(tick_value) / float(tick_size)  # type: ignore[arg-type]
     except (TypeError, ValueError, ZeroDivisionError):
         return None
+
+
+# ── Broker / execution safety wording (appended 2026-09-23) ──────────────────
+
+EXITS.update({
+    "TARGET": "hit the profit target",
+    "STOP": "hit the stop-loss",
+    "CLOSED": "closed",
+    "FEED_GAP": "price feed gap",
+})
+
+ORDER_PROBLEMS = {
+    "POST_FILL_INVALID_AUTO_FLATTENED": "the real fill price broke the risk rules, so the bot closed the position",
+    "POST_FILL_INVALID_FLATTEN_UNCONFIRMED": (
+        "the real fill price broke the risk rules; the bot tried to close the position "
+        "but Tradovate hasn't confirmed it"
+    ),
+    "NAKED_BRACKET_AUTO_FLATTENED": "the stop-loss or profit target wasn't confirmed, so the bot closed the position",
+    "NAKED_FLATTEN_UNCONFIRMED": (
+        "the stop-loss or profit target wasn't confirmed; the bot tried to close the position "
+        "but Tradovate hasn't confirmed it"
+    ),
+    "TRADOVATE_ORDER_ERROR": "Tradovate returned an error for the order",
+    "REJECTED": "Tradovate rejected the order",
+    "ERROR": "the order hit an error",
+}
+
+POST_FILL_CHECKS = {
+    "actual_rr_minimum": "profit target too small for the risk at the real fill price",
+    "actual_dollar_risk": "dollar risk too big at the real fill price",
+    "actual_stop_distance": "stop-loss too far away at the real fill price",
+    "slippage_limit": "filled at a worse price than allowed",
+    "target_direction": "profit target on the wrong side of the fill price",
+    "stop_direction": "stop-loss on the wrong side of the fill price",
+    "entry_tick": "fill price not a valid price step",
+    "stop_tick": "stop-loss not a valid price step",
+    "target_tick": "profit target not a valid price step",
+}
+
+PROTECTION = {
+    "STOP": "stop-loss",
+    "TARGET": "profit target",
+}
+
+PREFLIGHT_CHECKS = {
+    "tradovate_reliability_healthy": "the Tradovate connection isn't healthy",
+    "heartbeat_fresh": "no recent check-in from Tradovate",
+    "account_readable": "couldn't read the Tradovate account",
+    "positions_readable": "couldn't read open positions",
+    "orders_readable": "couldn't read waiting orders",
+    "no_open_positions": "a position is already open",
+    "no_working_orders": "orders are already waiting in Tradovate",
+    "live_box_drift_guard": "the server's code or settings don't match what was approved",
+    "unknown": "an unknown check",
+}
+
+RESULTS = {"WIN": "won", "LOSS": "lost", "BREAKEVEN": "broke even", "CANCELLED": "cancelled"}
+
+
+def _words(code: object) -> str:
+    return str(code or "").strip().replace("_", " ").lower() or "?"
+
+
+def order_problem(code: object) -> str:
+    """Short words for why an order did not stay open; lower-cased words when unknown."""
+    text = str(code or "").strip()
+    return ORDER_PROBLEMS.get(text.upper()) or _words(text)
+
+
+def code_list(codes: object) -> str:
+    """``a, b`` for a list of raw codes (for ``-# details`` footers); never raises."""
+    if isinstance(codes, (list, tuple, set)):
+        return ", ".join(str(c) for c in codes) or "none"
+    return str(codes)
+
+
+def post_fill_problems(codes: object) -> str:
+    """``profit target too small …; filled at a worse price …`` from failed check names."""
+    names = [str(c) for c in codes] if isinstance(codes, (list, tuple, set)) else []
+    if not names:
+        return "the fill didn't pass the risk rules"
+    return "; ".join(POST_FILL_CHECKS.get(n, _words(n)) for n in names)
+
+
+def protection(names: object) -> str:
+    """``stop-loss and profit target`` from ``["STOP", "TARGET"]``."""
+    items = (
+        [PROTECTION.get(str(n).upper(), _words(n)) for n in names]
+        if isinstance(names, (list, tuple))
+        else []
+    )
+    return " and ".join(items) or "stop-loss or profit target"
+
+
+def order_states(states: object) -> str:
+    """``stop-loss order expired, profit target order expired`` from ``{"stop": "expired", …}``."""
+    if not isinstance(states, dict) or not states:
+        return "unknown"
+    return ", ".join(
+        f"{PROTECTION.get(str(role).upper(), _words(role))} order {_words(status)}"
+        for role, status in states.items()
+    )
+
+
+def preflight_reason(reason: object) -> str:
+    """Plain words for a live-trading on/off reason (``preflight_failed:heartbeat_fresh`` etc.)."""
+    text = str(reason or "").strip()
+    prefix = "preflight_failed:"
+    if text.startswith(prefix):
+        name = text[len(prefix):]
+        return PREFLIGHT_CHECKS.get(name, _words(name))
+    return _words(text)
+
+
+def result_word(result: object) -> str:
+    """``won`` / ``lost`` / ``broke even`` for WIN / LOSS / BREAKEVEN."""
+    text = str(result or "").strip().upper()
+    return RESULTS.get(text) or _words(text)

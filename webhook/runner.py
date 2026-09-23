@@ -122,6 +122,7 @@ from config.futures_contracts import (
     symbol_economics as _symbol_economics,
 )
 from journal.journal_logger import JournalLogger
+from notifications import plain_english as _pe
 from risk.risk_engine import DailyState, RiskEngine, RiskResult, TradeSetup
 from strategy.confluence_scorer import score_setup as _score_setup
 from strategy.stop_sizing import apply_stop_multiplier
@@ -3072,10 +3073,16 @@ def process_alert(
                     from notifications.discord_notifier import send_operational_alert
                     send_operational_alert(
                         cfg,
-                        "EXECUTION SAFETY: Tradovate order did not remain open. "
-                        f"Reason: {getattr(fill, 'exit_reason', None) or fill.result}. "
-                        f"Setup: {order.direction} {order.instrument} {order.contracts}c "
-                        f"@ {order.entry} stop {order.stop} target {order.target}.",
+                        "🚨 Order did not stay open — check Tradovate\n"
+                        f"Trade: {_pe.side(order.direction)} {_pe.contracts(order.contracts)} "
+                        f"{_pe.market(order.instrument)}\n"
+                        f"Prices: entry {_pe.price(order.entry)}, stop-loss {_pe.price(order.stop)}, "
+                        f"profit target {_pe.price(order.target)}\n"
+                        "What happened: "
+                        f"{_pe.order_problem(getattr(fill, 'exit_reason', None) or fill.result)}\n"
+                        "What the bot did: it is not counting this as an open trade\n"
+                        "What to do: check Tradovate that no position is open\n"
+                        f"-# details: {getattr(fill, 'exit_reason', None) or fill.result}",
                     )
                 except Exception as exc:  # pragma: no cover - notification must never affect trading
                     logger.warning("Live-order-blocked Discord alert failed: %s", exc)
@@ -3154,10 +3161,16 @@ def process_alert(
                 from notifications.discord_notifier import send_operational_alert
                 send_operational_alert(
                     cfg,
-                    "LIVE ORDER BLOCKED: broker reported OPEN but returned no order ids. "
-                    "Position NOT marked open (fail-closed) — verify in Tradovate. "
-                    f"Setup: {order.direction} {order.instrument} {order.contracts}c "
-                    f"@ {order.entry} stop {order.stop} target {order.target}.",
+                    "🚨 Live order blocked — check Tradovate now\n"
+                    f"Trade: {_pe.side(order.direction)} {_pe.contracts(order.contracts)} "
+                    f"{_pe.market(order.instrument)}\n"
+                    f"Prices: entry {_pe.price(order.entry)}, stop-loss {_pe.price(order.stop)}, "
+                    f"profit target {_pe.price(order.target)}\n"
+                    "What happened: Tradovate said the order went through but sent back no order "
+                    "number, so the bot can't track it\n"
+                    "What the bot did: to be safe, it is NOT treating this as an open trade\n"
+                    "What to do: open Tradovate and check whether a position is open\n"
+                    "-# details: broker reported OPEN with no order ids",
                 )
             except Exception as exc:  # pragma: no cover - notification must never affect trading
                 logger.warning("Order-confirmation-missing Discord alert failed: %s", exc)
@@ -3422,11 +3435,14 @@ def _notify_force_close(
     from notifications.discord_notifier import _post_json
     import json as _json
 
-    sign = "+" if pnl_dollars >= 0 else ""
     message = (
-        f"⚠️ FORCE_CLOSE ({reason})\n"
-        f"{instrument} {contracts}c  P&L {sign}${pnl_dollars:.2f}\n"
-        f"Position closed by safety net — check candle feed / position tracking."
+        f"⚠️ Safety net closed an open {instrument} trade\n"
+        f"Trade: {_pe.contracts(contracts)} {_pe.market(instrument)}\n"
+        f"Result: {_pe.money(pnl_dollars)}\n"
+        f"Why: {_pe.exit_reason(reason)}\n"
+        "What to check: the bot's price feed or its record of the open position may be out of "
+        "step with Tradovate\n"
+        f"-# details: FORCE_CLOSE ({reason})"
     )
 
     def _send():
@@ -3479,24 +3495,22 @@ def _notify_trade_closed(
     pnl = float(fill.pnl_dollars or 0.0)
     ticks = float(fill.pnl_ticks or 0.0)
     if fill.result == "WIN":
-        icon, label = "🟢", "WIN"
+        icon, label = "🟢", "won"
     elif fill.result == "LOSS":
-        icon, label = "🔴", "LOSS"
+        icon, label = "🔴", "lost"
     else:
-        icon, label = "⚪", "BREAKEVEN"
-    sign = "+" if pnl >= 0 else "-"
+        icon, label = "⚪", "broke even"
     points = abs(ticks) * _tick_size_for(fill.instrument)
     points_sign = "+" if ticks >= 0 else "-"
-    day_sign = "+" if day_pnl_dollars >= 0 else "-"
     reason = fill.exit_reason or "CLOSED"
-    entry = "?" if fill.entry_price is None else f"{fill.entry_price:g}"
-    exit_price = "?" if fill.exit_price is None else f"{fill.exit_price:g}"
-    session_label = (session or "").replace("_", " ").title()
     message = (
-        f"{icon} {label} — {fill.instrument} {fill.direction}  "
-        f"{sign}${abs(pnl):.2f}  ({points_sign}{points:.2f} pts)\n"
-        f"Entry {entry} → Exit {exit_price} · {reason} · {fill.contracts}c · {session_label}\n"
-        f"Day P&L: {day_sign}${abs(day_pnl_dollars):.2f}"
+        f"{icon} Practice trade {label} {_pe.money(pnl)}\n"
+        f"Trade: {_pe.side(fill.direction)} {_pe.contracts(fill.contracts)} {_pe.market(fill.instrument)}\n"
+        f"Prices: in at {_pe.price(fill.entry_price)}, out at {_pe.price(fill.exit_price)}\n"
+        f"Price move: {points_sign}{points:.2f} points\n"
+        f"How it ended: {_pe.exit_reason(reason)}\n"
+        f"Session: {_pe.session(session)}\n"
+        f"Profit today: {_pe.money(day_pnl_dollars)}"
     )
 
     def _send() -> None:

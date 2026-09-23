@@ -137,14 +137,19 @@ def _mark_failure(result: AuthResult, now: float, market_active: bool) -> None:
             notify_degraded = True
     if notify_action:
         _notify(
-            "TRADOVATE ACTION REQUIRED: authentication credentials/API key were "
-            "rejected or the auth safety cooldown is active. Orders remain blocked."
+            "🔴 Tradovate ACTION REQUIRED — orders are blocked\n"
+            "What happened: Tradovate rejected the bot's login details or API key, or the bot "
+            "is pausing its login attempts so Tradovate doesn't lock the account\n"
+            "What to do: check the API key and login details in Tradovate\n"
+            "Orders stay blocked until the login works."
         )
     elif notify_degraded:
         _notify(
-            "TRADOVATE DEGRADED: broker connectivity has been unavailable for "
-            "more than five minutes during market hours. Orders remain blocked; "
-            "automatic recovery is continuing."
+            "⚠️ Can't reach Tradovate — orders are blocked\n"
+            "What happened: the bot hasn't been able to reach Tradovate for more than 5 minutes "
+            "during market hours\n"
+            "What the bot is doing: it keeps trying to reconnect on its own\n"
+            "Orders stay blocked until it's back."
         )
 
 
@@ -169,8 +174,9 @@ def _mark_healthy(broker: TradovateBroker, now: float, market_active: bool) -> N
         _SNAPSHOT.action_required_notified = False
     if notify_recovery:
         _notify(
-            "TRADOVATE RECOVERED: authentication, account access, and broker "
-            "position state are confirmed. Paper orders are enabled."
+            "✅ Tradovate RECOVERED — practice orders allowed again\n"
+            "The bot is logged in, can see the account, and has confirmed its open positions "
+            "with Tradovate."
         )
 
 

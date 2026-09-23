@@ -17,6 +17,7 @@ from typing import Any, Optional
 
 from execution.tradovate_supervisor import HEARTBEAT_FRESH_SECONDS, reliability_snapshot
 from ops.live_box_guard import live_box_drift_report
+from notifications import plain_english as _pe
 
 
 STATE_FILENAME = "live_preflight_state.json"
@@ -312,7 +313,11 @@ def run_preflight(
     payload["passed"] = passed
     payload["live_box_drift_guard"] = drift
     if notify and not passed:
-        notify(f"LIVE PREFLIGHT FAILED: {state.disarmed_reason}. Live orders remain blocked.")
+        notify(
+            "🔴 Live trading safety check FAILED — live orders stay blocked\n"
+            f"What failed: {_pe.preflight_reason(state.disarmed_reason)}\n"
+            f"-# details: {state.disarmed_reason}"
+        )
     return payload
 
 
@@ -329,7 +334,11 @@ def arm_today(*, state_path: str | Path | None = None, notify=None, armed_by: st
     state.disarmed_reason = None
     save_state(state, state_path)
     if notify:
-        notify("LIVE ARMED FOR TODAY: Tradovate preflight passed. Live orders may route while broker health stays green.")
+        notify(
+            "✅ Live trading switched ON for today\n"
+            "The Tradovate safety check passed. Live orders can go through while the Tradovate "
+            "connection stays healthy."
+        )
     return state.as_dict()
 
 
@@ -341,7 +350,11 @@ def disarm(*, reason: str = "manual", state_path: str | Path | None = None, noti
     state.disarmed_reason = reason
     save_state(state, state_path)
     if notify:
-        notify(f"LIVE DISARMED: {reason}. Live orders are blocked.")
+        notify(
+            "🛑 Live trading switched OFF — live orders are blocked\n"
+            f"Why: {_pe.preflight_reason(reason)}\n"
+            f"-# details: {reason}"
+        )
     return state.as_dict()
 
 

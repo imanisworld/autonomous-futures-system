@@ -347,6 +347,8 @@ def test_orphan_open_alerts_when_zero_children_working(monkeypatch, tmp_path, co
 
     assert res["action"] == "orphan_open_alerted"
     assert "NAKED" in sent["msg"] and "expired" in sent["msg"]
+    assert sent["msg"].startswith("🚨 Open position with NO stop-loss")
+    assert "open Tradovate NOW" in sent["msg"] and "will NOT close this on its own" in sent["msg"]
     assert j.get_open_position(_NOW.date()) is not None      # journal untouched
 
 

@@ -70,9 +70,13 @@ def test_live_trade_close_uses_fail_soft_fallback_and_instrument_tick(monkeypatc
     )
 
     assert len(sent) == 1
-    assert "WIN — MGC LONG" in sent[0]
-    assert "(+1.00 pts)" in sent[0]
-    assert "Day P&L: +$25.00" in sent[0]
+    assert sent[0].startswith("🟢 Practice trade won +$20.00\n")
+    assert "Trade: Buy 1 contract MGC (Micro Gold)" in sent[0]
+    assert "Prices: in at 2,400, out at 2,401" in sent[0]
+    assert "Price move: +1.00 points" in sent[0]
+    assert "How it ended: hit the profit target" in sent[0]
+    assert "Profit today: +$25.00" in sent[0]
+    assert "LONG" not in sent[0] and "1c" not in sent[0]
 
 
 def test_force_close_notification_is_suppressed_for_simulation(monkeypatch):

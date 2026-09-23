@@ -1453,7 +1453,7 @@ async def admin_test_discord(
     _verify_webhook_secret(await _resolve_inbound_secret(request, x_webhook_secret, secret))
     result = send_discord_alert(
         _config,
-        "DISCORD TEST: RiskSentinel operator alerts are reaching this channel.",
+        "✅ Discord test — alerts from the trading bot are reaching this channel.",
     )
     return JSONResponse(content={"ok": result.sent, "reason": result.reason})
 
