@@ -63,6 +63,27 @@ def _outcome_dollars(event: dict) -> Optional[float]:
     return None
 
 
+_BIG_PICTURE = {
+    "aligned": "✅ month, week, day and hour all agree with this trade",
+    "against": "⛔ month, week, day and hour all point the other way",
+    "conflict": "⚠️ mixed: month, week, day and hour disagree",
+    "unknown": "not enough price history yet",
+}
+# The MNQ 2-2 reversal "lined-up only" tracker (label view, no filtering).
+_TRACKED = ("MNQ", "strat_22_reversal_observed")
+
+
+def _big_picture_lines(event: dict) -> list[str]:
+    label = event.get("strat_ftfc")
+    alignment = label.get("alignment") if isinstance(label, dict) else None
+    if alignment not in _BIG_PICTURE:
+        return []
+    lines = [f"Big-picture check: {_BIG_PICTURE[alignment]}"]
+    if (str(event.get("instrument") or ""), str(event.get("strategy") or "")) == _TRACKED:
+        lines.append("Lined-up-only tracker: " + ("counts this one" if alignment == "aligned" else "skips this one"))
+    return lines
+
+
 def format_event(event: dict) -> Optional[str]:
     """One plain-English card per event; None for anything not announceable.
 
@@ -95,6 +116,7 @@ def format_event(event: dict) -> Optional[str]:
         if event.get("entry") is not None and event.get("exit_price") is not None:
             lines.append(f"Prices: in at {_fmt_price(event.get('entry'))}, out at {_fmt_price(event.get('exit_price'))}")
         lines.append(f"Closed: {_when(event.get('exit_timestamp') or event.get('resolved_at_bar_ts'))}")
+        lines.extend(_big_picture_lines(event))
         lines.append(_FOOTER)
         return "\n".join(lines)
     lines = [
@@ -106,6 +128,7 @@ def format_event(event: dict) -> Optional[str]:
         f"Profit target: {_leg(event, 'target', 'would make')}",
         f"Seen: {_when(event.get('signal_timestamp'))}",
     ]
+    lines.extend(_big_picture_lines(event))
     if kind == "SIGNAL":
         lines.append("Note: stop-loss and target here are rough, from the chart alert")
     lines.append(_FOOTER)

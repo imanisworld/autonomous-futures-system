@@ -31,6 +31,7 @@ from typing import Any, Iterable, Optional
 from zoneinfo import ZoneInfo
 
 from config.futures_contracts import contract_economics, contract_root
+from execution import strat_ftfc_opens as _ftfc
 
 try:
     import fcntl
@@ -142,6 +143,53 @@ def observation_day(instrument: str, timestamp: object, *, for_date: Optional[da
     if et.time() >= time(18, 0):
         return et.date() + timedelta(days=1)
     return et.date()
+
+
+def _is_session_start(instrument: str, ts: datetime) -> bool:
+    """The bar that opens a trading day: 18:00 ET (CME), 00:00 ET for 24/7 MBT."""
+    et = ts.astimezone(_ET)
+    return (et.hour, et.minute) == ((0, 0) if instrument == "MBT" else (18, 0))
+
+
+def _ftfc_seed(log_dir: str | Path, instrument: str, before: datetime) -> dict:
+    """Rebuild the FTFC opens tracker from saved 15m bar files (fail-soft)."""
+    tracker = _ftfc.empty_tracker()
+    try:
+        from context.bar_history import BarHistory
+
+        history = BarHistory(log_dir=str(log_dir)).recent(
+            instrument, 5000, for_date=before.astimezone(timezone.utc).date(), lookback_days=40
+        )
+    except Exception:  # noqa: BLE001 — labels are informational; never block observation
+        return tracker
+    for bar in history:
+        if normalize_timeframe_minutes(bar.get("timeframe")) != DECISION_TIMEFRAME_MINUTES:
+            continue
+        ts = _parse_timestamp(bar.get("ts"))
+        if ts is None or ts >= before or not _finite(bar.get("open")):
+            continue
+        _ftfc.update(tracker, bar_ts=ts, bar_open=float(bar["open"]),
+                     trading_date=observation_day(instrument, ts),
+                     is_session_start=_is_session_start(instrument, ts))
+    return tracker
+
+
+def _ftfc_for_bar(log_dir: str | Path, campaign_state: dict, instrument: str, state_obj) -> Optional[dict]:
+    """Update this instrument's opens with the current bar; return the FTFC reading."""
+    try:
+        bar_dt = _parse_timestamp(state_obj.timestamp)
+        if bar_dt is None:
+            return None
+        trackers = campaign_state.setdefault("strat_ftfc_opens", {})
+        if instrument not in trackers:
+            trackers[instrument] = _ftfc_seed(log_dir, instrument, bar_dt)
+        trading_date = observation_day(instrument, bar_dt)
+        _ftfc.update(trackers[instrument], bar_ts=bar_dt, bar_open=float(state_obj.ohlc.open),
+                     trading_date=trading_date, is_session_start=_is_session_start(instrument, bar_dt))
+        return _ftfc.evaluate(trackers[instrument], bar_ts=bar_dt, close=float(state_obj.ohlc.close),
+                              trading_date=trading_date)
+    except Exception:  # noqa: BLE001 — labels are informational; never block observation
+        return None
 
 
 # ── configuration ─────────────────────────────────────────────────────────────
@@ -442,6 +490,9 @@ def observe_bar(
             return summary
         campaign_state["seen_bars"].append(bar_key)
         campaign_state["seen_bars"] = campaign_state["seen_bars"][-5000:]
+        ftfc = _ftfc_for_bar(log_dir, campaign_state, instrument, state_obj)
+        if ftfc is not None:
+            summary["strat_ftfc_state"] = ftfc["state"]
 
         rows = [dict(c) for c in candidates if isinstance(c, dict)]
         if include_strat_212_122:
@@ -497,6 +548,8 @@ def observe_bar(
                 "source": source,
                 "pine_advisory_ignored": pine_advisory_ignored,
                 "detector_notes": cand.get("notes"),
+                "strat_ftfc": (None if ftfc is None else
+                               {**ftfc, "alignment": _ftfc.alignment(direction, ftfc["state"])}),
                 "execution_reachable": False,
                 "generating_git_sha": sha,
                 "provenance_status": provenance,
@@ -511,7 +564,7 @@ def observe_bar(
                     k: record.get(k) for k in (
                         "record_type", "candidate_id", "strategy", "instrument", "variant",
                         "direction", "entry", "stop", "target", "signal_timestamp",
-                        "collection_mode", "bracket_authoritative",
+                        "collection_mode", "bracket_authoritative", "strat_ftfc",
                     )
                 })
             else:
@@ -811,4 +864,62 @@ def build_report(log_dir: str | Path, *, epoch: Optional[str] = None) -> dict:
         "evidence_rows": len(rows),
         "evidence_rows_raw": len(raw_rows),
         "duplicate_rows_ignored": duplicate_rows_ignored,
+    }
+
+
+# ── Strat FTFC split (label-only view; operator request 2026-09-23) ──────────
+
+FTFC_TRACKER_STRATEGY = "strat_22_reversal_observed"
+FTFC_TRACKER_INSTRUMENT = "MNQ"
+_ALIGNMENTS = ("aligned", "conflict", "against", "unknown")
+
+
+def strat_ftfc_split(
+    log_dir: str | Path,
+    *,
+    epoch: Optional[str] = None,
+    strategy: str = FTFC_TRACKER_STRATEGY,
+    instrument: str = FTFC_TRACKER_INSTRUMENT,
+) -> dict:
+    """Resolved outcomes of one population split by their Strat FTFC label.
+
+    The "aligned" bucket IS the aligned-only tracker: the observer records every
+    candidate without position limits, so filtering the labeled rows is the same
+    population a filtered observer would have produced. Rows written before the
+    label existed are counted as ``unlabeled`` and never guessed.
+    """
+    epoch = epoch if epoch is not None else evidence_epoch()
+    rows, _ = _dedupe_rows(read_evidence(log_dir))
+    buckets = {name: {"trades": 0, "wins": 0, "gross_dollars_1_contract": 0.0} for name in _ALIGNMENTS}
+    unlabeled = 0
+    first_labeled: Optional[str] = None
+    for row in rows:
+        if (row.get("record_type") != "OUTCOME" or row.get("strategy") != strategy
+                or row.get("instrument") != instrument or row.get("evidence_epoch") != epoch
+                or row.get("result") not in TERMINAL_RESULTS):
+            continue
+        label = row.get("strat_ftfc")
+        name = label.get("alignment") if isinstance(label, dict) else None
+        if name not in buckets:
+            unlabeled += 1
+            continue
+        bucket = buckets[name]
+        bucket["trades"] += 1
+        bucket["wins"] += row["result"] == "WIN"
+        if _finite(row.get("gross_pnl_dollars_1_contract")):
+            bucket["gross_dollars_1_contract"] += float(row["gross_pnl_dollars_1_contract"])
+        ts = row.get("signal_timestamp")
+        if isinstance(ts, str) and (first_labeled is None or ts < first_labeled):
+            first_labeled = ts
+    for bucket in buckets.values():
+        bucket["gross_dollars_1_contract"] = round(bucket["gross_dollars_1_contract"], 2)
+    return {
+        "definition": _ftfc.DEFINITION,
+        "strategy": strategy,
+        "instrument": instrument,
+        "evidence_epoch": epoch,
+        "by_alignment": buckets,
+        "unlabeled_outcomes": unlabeled,
+        "first_labeled_signal": first_labeled,
+        "costs_note": "gross, 1 contract, before fees; practice tracking only",
     }

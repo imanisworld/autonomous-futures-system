@@ -432,6 +432,29 @@ def _table_rows(table: dict[str, Any]) -> int | None:
     return rows if isinstance(rows, int) else None
 
 
+def ftfc_tracker_field(split: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Weekly line for the MNQ 2-2 reversal 'big picture lined up' tracker."""
+    if not isinstance(split, dict):
+        return None
+    buckets = split.get("by_alignment") or {}
+
+    def part(name: str) -> str:
+        b = buckets.get(name) or {}
+        trades = int(b.get("trades") or 0)
+        dollars = float(b.get("gross_dollars_1_contract") or 0.0)
+        sign = "+" if dollars > 0 else "−" if dollars < 0 else ""
+        return f"**{trades:,}** trades · **{int(b.get('wins') or 0):,}** won · **{sign}${abs(dollars):,.0f}**"
+
+    since = str(split.get("first_labeled_signal") or "")[:10]
+    lines = [
+        f"Lined up only: {part('aligned')}",
+        f"Mixed: {part('conflict')}",
+        f"Against: {part('against')}",
+        "Since " + (since or "labels start") + " · all trades so far, 1 contract, before fees",
+    ]
+    return {"name": "MNQ 2-2 reversal: big-picture check", "value": "\n".join(lines)}
+
+
 def futures_discord_payload(
     summary: dict[str, Any],
     census: dict[str, Any],
@@ -440,6 +463,7 @@ def futures_discord_payload(
     start: date,
     end: date,
     registry: dict[str, Any] | None = None,
+    ftfc_split: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """A mobile-readable card; counts are observations, never inferred fills/P&L."""
     health_field, health_warning = _collector_health(census, options=False, end=end)
@@ -476,6 +500,9 @@ def futures_discord_payload(
         field = _registry_field(registry, system="futures")
         if field:
             fields.append(field)
+        field = ftfc_tracker_field(ftfc_split)
+        if field:
+            fields.append(field)
     # Bounded fields keep the card inside Discord's per-field and total limits.
     for field in fields:
         if len(field["value"]) > 900:
@@ -500,10 +527,12 @@ def format_futures_report(
     start: date,
     end: date,
     registry: dict[str, Any] | None = None,
+    ftfc_split: dict[str, Any] | None = None,
 ) -> str:
     """Keep CLI/artifact-only runs readable using the same card content."""
     embed = futures_discord_payload(
-        summary, census, period=period, start=start, end=end, registry=registry
+        summary, census, period=period, start=start, end=end, registry=registry,
+        ftfc_split=ftfc_split,
     )["embeds"][0]
     sections = [f"**{embed['title']}**\n{embed['description']}"]
     sections.extend(f"**{field['name']}**\n{field['value']}" for field in embed["fields"])
@@ -722,8 +751,18 @@ def main(argv: list[str] | None = None) -> int:
             ),
         )
 
+    ftfc_split = None
+    if args.period == "eow":
+        try:
+            from execution.cross_instrument_observation import strat_ftfc_split
+
+            ftfc_split = strat_ftfc_split(log_dir)
+        except Exception as exc:  # noqa: BLE001 — the report must still go out
+            print(f"[paper_collection_report] ftfc split unavailable: {exc}")
+
     futures_report = format_futures_report(
-        futures, census, period=args.period, start=start, end=end, registry=registry
+        futures, census, period=args.period, start=start, end=end, registry=registry,
+        ftfc_split=ftfc_split,
     )
     options_report = format_options_report(
         options, census, period=args.period, start=start, end=end, registry=registry
@@ -741,12 +780,15 @@ def main(argv: list[str] | None = None) -> int:
     }
     if registry is not None:
         payload["evidence_registry"] = registry
+    if ftfc_split is not None:
+        payload["strat_ftfc_split"] = ftfc_split
     artifact = _write_artifact(log_dir, payload, ref=ref, period=args.period)
 
     send_failures = 0
     if not args.no_discord:
         futures_card = futures_discord_payload(
-            futures, census, period=args.period, start=start, end=end, registry=registry
+            futures, census, period=args.period, start=start, end=end, registry=registry,
+            ftfc_split=ftfc_split,
         )
         options_card = options_discord_payload(
             options, census, period=args.period, start=start, end=end, registry=registry
