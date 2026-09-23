@@ -20,7 +20,14 @@ used rather than levels because the continuous chart is back-adjusted. Every ses
 exactly one of O or N; no session was ambiguous. TradingView daily bars are stamped with the
 session-open date (Sunday for Monday's session); dates below are converted to CME trade dates.
 
-## Result — TradingView's rule (5 of 5 quarters, all three roots)
+## Result — observed TradingView switch dates (5 of 5 quarters, all three roots)
+
+TradingView does not publish a fixed offset. Its documented method sets each symbol's switch
+rule from that symbol's volume behavior and applies it across the symbol's history, and the
+chart's Contract Switch markers show the actual from/to contracts and dates
+(TradingView support: "How is the switching date of contracts determined in continuous
+futures?" and "Switching continuous futures contracts"). The offsets below are therefore an
+**empirical five-quarter pattern**, not a rule we can rely on for the future.
 
 | Quarter | Expiry (last trade) | MNQ1! / MES1! first trade date on new | M2K1! first trade date on new |
 |---|---|---|---|
@@ -30,11 +37,15 @@ session-open date (Sunday for Monday's session); dates below are converted to CM
 | Jun 2026 | **Thu 2026-06-18** (Juneteenth Fri) | Mon 06-15 | Tue 06-16 |
 | Sep 2026 | Fri 2026-09-18 | Tue 09-15 | Wed 09-16 |
 
-- **MNQ1! and MES1!:** on the new contract from the trade date **3 business days before the
-  expiring contract's last trade date** (switch at the 18:00 ET session open the evening before).
-- **M2K1!:** from **2 business days before** the last trade date — one day later than MNQ/MES.
-- The rule counts from the *actual* last trade date: in June 2026 expiry moved to Thursday
-  06-18 for the Juneteenth holiday, and TradingView rolled a day earlier accordingly.
+- **MNQ1! and MES1! (observed):** on the new contract from the trade date **3 business days
+  before the expiring contract's last trade date** in all five quarters (switch at the 18:00 ET
+  session open the evening before).
+- **M2K1! (observed):** **2 business days before** the last trade date in all five quarters —
+  one day later than MNQ/MES.
+- The observed offset counts from the *actual* last trade date: in June 2026 expiry moved to Thursday
+  06-18 for the Juneteenth holiday (CME's published 2026 roll calendar lists June 18), and
+  TradingView rolled a day earlier accordingly. Our tests assume the nominal 3rd Friday
+  (`tests/test_tradovate_rollover.py:41`, `tests/test_polygon_client.py:33` use 2026-06-19).
 - Sep 2026 MNQ agrees with the live observation already recorded in the parity audit
   (switch 2026-09-14 22:00Z, trade date 09-15).
 
@@ -76,14 +87,17 @@ the #929 step-0 decomposition.
      in the journal (June: 3 OUTCOME rows with no fill; September: shadow posture). This is a
      code-path risk, not a recorded incident.
    - It only matters once the bot places orders again; the current posture is shadow/paper.
-3. **The M2K rule differs from MNQ/MES**, so any future per-root roll table must not assume a
-   single equity-index offset.
+3. **The observed M2K offset differs from MNQ/MES.** This is one more reason not to encode any
+   inferred offset as a routing rule (see below).
 
 ## Not done here (each needs its own review and GO)
 
 - No change to `DEFAULT_ROLL_DAYS`, `_ROLL_DAYS`, any corpus, the #929 / #947 frozen
   evaluators, or order routing.
-- Candidate follow-ups: (a) a pre-order guard that blocks orders when the routed contract is
-  not the contract the alert's chart is on, or aligns routing to TradingView's
-  N-business-days-before-last-trade rule with a holiday-aware expiry calendar;
-  (b) roll-seam exclusion for live-vs-research parity checks on the dates above.
+- **Safety requirement before broker orders resume:** the dated contract receiving an order
+  must be proven to be the same dated contract underlying the alert's price basis. If that
+  identity cannot be established, the order is blocked (fail closed). The fix must **not**
+  replace `_ROLL_DAYS=8` with another inferred constant such as "3 business days";
+  TradingView's switch is per-symbol and volume-derived, so any mimicked calendar can drift.
+- Separate, lower-priority follow-up: roll-seam exclusion for live-vs-research parity checks
+  on the dates above.
