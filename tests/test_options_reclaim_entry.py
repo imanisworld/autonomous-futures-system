@@ -230,14 +230,21 @@ def test_cli_look_guards(tmp_path, capsys, monkeypatch):
 
     cli = importlib.import_module("scripts.options_reclaim_entry")
     db = _db(tmp_path)
-    canonical = tmp_path / "canonical-look.json"
-    monkeypatch.setattr(cli, "CANONICAL_LOOK_PATH", canonical)
+
+    monkeypatch.delenv("AFS_SHARED_DIR", raising=False)
+    assert cli.main(["look", "--db", str(db), "--confirm-single-look"]) == 3
+    assert "set AFS_SHARED_DIR" in capsys.readouterr().err
+
+    shared = tmp_path / "shared"
+    monkeypatch.setenv("AFS_SHARED_DIR", str(shared))
+    canonical = shared / "evidence" / f"{oe.PREREG_ID}-single-look.json"
 
     assert cli.main(["look", "--db", str(db)]) == 3
     assert cli.main(["look", "--db", str(db), "--out", str(tmp_path / "alternate.json"),
                      "--confirm-single-look"]) == 3
     assert "fixed at" in capsys.readouterr().err
 
+    canonical.parent.mkdir(parents=True)
     canonical.write_text("{}")
     assert cli.main(["look", "--db", str(db), "--confirm-single-look"]) == 3
     assert "already exists" in capsys.readouterr().err

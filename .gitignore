@@ -72,3 +72,5 @@ journal/*.jsonl
 # Release-deploy artifacts on the box (afs-deploy.sh --release)
 .deploy-bak/
 release_manifest.json
+# Local research evidence / one-look receipts — never commit outcome-bearing artifacts
+.evidence/
