@@ -914,6 +914,27 @@ class TradovateBroker(BrokerInterface):
             )
         return self._send("POST", path, json_body=body, **kwargs)
 
+    @staticmethod
+    def _business_failure(response: object) -> Optional[str]:
+        """Return a Tradovate application-level failure, if one is present.
+
+        Tradovate command responses may carry failureReason="Success" on a
+        successful HTTP 200. That value is an explicit success marker, not an
+        error. Keep transport success separate from business success and fail
+        closed on malformed/non-success response markers.
+        """
+        if not isinstance(response, dict):
+            return "MALFORMED_RESPONSE"
+        for key in ("failureReason", "failureText", "errorText", "errorCode"):
+            value = response.get(key)
+            if value is None:
+                continue
+            marker = str(value).strip()
+            if not marker or marker.lower() == "success" or marker == "0":
+                continue
+            return marker
+        return None
+
     # ── Contract resolution ───────────────────────────────────────────────────
 
     @staticmethod
@@ -1287,8 +1308,10 @@ class TradovateBroker(BrokerInterface):
                     with self._client_order_lock:
                         self._client_order_registry[client_id] = "AMBIGUOUS"
                 raise
-            # Detect API-level rejection — Tradovate returns errorText/failureReason on bad payloads
-            error_text = result.get("errorText") or result.get("failureReason") or result.get("errorCode")
+            # HTTP success is not business success, and Tradovate documents
+            # failureReason="Success" on successful command responses. Only a
+            # non-success application marker is a rejection.
+            error_text = self._business_failure(result)
             if error_text:
                 logger.error(
                     "Tradovate placeOSO REJECTED: %s | instrument=%s dir=%s body=%s",
@@ -1933,6 +1956,61 @@ class TradovateBroker(BrokerInterface):
         self._last_position = None
         self._last_order_ids = None
 
+    _STOP_REPLACE_CONFIRM_RETRIES = 6
+    _STOP_REPLACE_CONFIRM_DELAY = 0.4
+
+    def _confirm_stop_replace(
+        self,
+        order_id,
+        expected_stop: float,
+        retries: int | None = None,
+        delay: float | None = None,
+    ) -> bool:
+        """Confirm the broker shows a Working stop at the requested price.
+
+        modifyOrder is only a request; Tradovate does not guarantee the
+        replacement completed merely because the command returned successfully.
+        Local protective state is changed only after this read-back proof.
+        """
+        if not order_id:
+            return False
+        retries = self._STOP_REPLACE_CONFIRM_RETRIES if retries is None else retries
+        delay = self._STOP_REPLACE_CONFIRM_DELAY if delay is None else delay
+        for attempt in range(max(1, retries)):
+            try:
+                item = self._get(f"/order/item?id={order_id}")
+                status = str(item.get("ordStatus", "")).strip().lower()
+                observed = item.get("stopPrice")
+                if status == "working" and observed is not None:
+                    try:
+                        if math.isclose(
+                            float(observed), float(expected_stop),
+                            rel_tol=0.0, abs_tol=1e-9,
+                        ):
+                            return True
+                    except (TypeError, ValueError):
+                        pass
+                if status in self._DEAD_ORDER_STATUSES or status == "filled":
+                    logger.error(
+                        "replace_stop confirmation found non-resting order id=%s "
+                        "status=%s expected_stop=%s",
+                        order_id, status, expected_stop,
+                    )
+                    return False
+            except Exception as exc:
+                logger.warning(
+                    "replace_stop confirmation read failed id=%s attempt=%d/%d: %s",
+                    order_id, attempt + 1, retries, exc,
+                )
+            if attempt + 1 < retries:
+                time.sleep(delay)
+        logger.error(
+            "replace_stop NOT CONFIRMED id=%s stop=%s after %d polls — "
+            "local protective state unchanged",
+            order_id, expected_stop, retries,
+        )
+        return False
+
     def replace_stop(self, new_stop_price: float) -> bool:
         """Move the resting protective stop to a new, tighter-only price (live runner trail).
 
@@ -1987,23 +2065,32 @@ class TradovateBroker(BrokerInterface):
                 "timeInForce": "GTC",
                 "isAutomated": True,
             })
-            fail = None
-            if isinstance(resp, dict):
-                fail = resp.get("failureReason") or resp.get("failureText") or resp.get("errorText")
+            fail = self._business_failure(resp)
             if fail:
                 logger.error(
                     "replace_stop REJECTED (%s→%s id=%s): %s — old stop still resting",
                     cur, new_stop, stop_id, fail,
                 )
                 return False
-            # modifyorder may mint a new order id; track it so the next trail and
-            # any exit attribution reference the live resting order.
+
+            # Tradovate does not guarantee that modifyOrder completed just
+            # because the command was accepted. Read the broker state back and
+            # require the requested stop to be Working before changing local
+            # protection state.
             new_id = resp.get("orderId") if isinstance(resp, dict) else None
+            confirm_id = new_id or stop_id
+            if not self._confirm_stop_replace(confirm_id, new_stop):
+                logger.error(
+                    "replace_stop accepted but NOT CONFIRMED (%s→%s id=%s) — "
+                    "local stop remains %s",
+                    cur, new_stop, confirm_id, cur,
+                )
+                return False
             if new_id:
                 self._last_order_ids["stop"] = new_id
             self._last_position.stop = new_stop
             logger.info(
-                "Tradovate trail: stop %s→%s (id=%s) %s",
+                "Tradovate trail CONFIRMED: stop %s→%s (id=%s) %s",
                 cur, new_stop, self._last_order_ids.get("stop"), pos.instrument,
             )
             return True
@@ -2065,9 +2152,7 @@ class TradovateBroker(BrokerInterface):
                 # Tradovate can return HTTP 200 with a failure body (no exception),
                 # so a clean POST does NOT mean the position closed. Only report
                 # close_sent on a response with no failure marker — fail closed.
-                fail = None
-                if isinstance(liq, dict):
-                    fail = liq.get("failureReason") or liq.get("failureText") or liq.get("errorText")
+                fail = self._business_failure(liq)
                 close_order_id = liq.get("orderId") if isinstance(liq, dict) else None
                 if fail:
                     logger.error(
