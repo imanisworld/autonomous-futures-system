@@ -1954,7 +1954,7 @@ def test_admin_test_discord_endpoint(monkeypatch):
 
     assert resp.status_code == 200
     assert resp.json() == {"ok": True, "reason": "sent"}
-    assert sent and "DISCORD TEST" in sent[0]
+    assert sent and "Discord test" in sent[0]
 
 
 def test_diagnostics_items_carry_stable_codes(monkeypatch, tmp_path):

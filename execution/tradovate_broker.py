@@ -38,6 +38,7 @@ from execution.broker_interface import (
 )
 from execution.no_fill_taxonomy import classify_no_fill_reason, classify_provider_failure
 from execution.post_fill_validation import validate_post_fill
+from notifications import plain_english as _pe
 
 logger = logging.getLogger(__name__)
 
@@ -442,11 +443,15 @@ class TradovateBroker(BrokerInterface):
             # (When the session is dead, "no trades" looks identical to "no setups".)
             if not self._auth_state.alerted:
                 self._send_session_alert(
-                    f"\U0001F534 **Tradovate session DOWN** — auth failed "
-                    f"{self._auth_fail_count}× ({reason}). Trading is HALTED "
-                    f"(~{self._AUTH_COOLDOWN_SECONDS // 60}m backoff). Most likely an "
-                    "expired API key — reactivate it in Tradovate, then restart futures-bot. "
-                    "⚠️ While this is down, *no trades* does NOT mean *no setups*."
+                    f"\U0001F534 **Tradovate login DOWN — trading stopped**\n"
+                    f"What happened: the bot failed to log in to Tradovate "
+                    f"{self._auth_fail_count} times in a row\n"
+                    f"What the bot is doing: waiting about {self._AUTH_COOLDOWN_SECONDS // 60} min "
+                    "before trying again, so Tradovate doesn't lock the account\n"
+                    "Most likely cause: the Tradovate API key expired\n"
+                    "What to do: turn the API key back on in Tradovate, then restart the futures bot\n"
+                    "⚠️ While this is down, *no trades* does NOT mean *no setups*.\n"
+                    f"-# details: {reason}"
                 )
                 self._auth_state.alerted = True
 
@@ -455,7 +460,8 @@ class TradovateBroker(BrokerInterface):
         recovery once so the Discord channel shows the session came back."""
         if self._auth_state.alerted:
             self._send_session_alert(
-                "\U0001F7E2 **Tradovate session restored** — auth recovered, trading resumed."
+                "\U0001F7E2 **Tradovate login restored — trading resumed**\n"
+                "The bot is logged in to Tradovate again."
             )
             self._auth_state.alerted = False
         self._auth_fail_count = 0
@@ -1682,9 +1688,14 @@ class TradovateBroker(BrokerInterface):
         """Log + Discord-alert that an entry filled without a confirmed bracket."""
         missing = [name for name, ok in (("STOP", stop_ok), ("TARGET", target_ok)) if not ok]
         msg = (
-            f"🚨 NAKED POSITION: {order.direction} {order.contracts}x {order.instrument} "
-            f"entry filled but bracket child(ren) NOT confirmed live: {', '.join(missing)}. "
-            f"Auto-flattening NOW (cancel-all + market close). Verify flat in Tradovate."
+            f"🚨 Open position with NO {_pe.protection(missing)} — {_pe.side(order.direction)} "
+            f"{_pe.contracts(order.contracts)} {_pe.market(order.instrument)}\n"
+            f"What happened: the order filled, but its {_pe.protection(missing)} order isn't "
+            "confirmed working in Tradovate\n"
+            "What the bot is doing: closing the position NOW (cancelling its orders and closing "
+            "at market price)\n"
+            "What to do: check Tradovate that the position is closed\n"
+            f"-# details: NAKED POSITION, bracket not confirmed: {', '.join(missing)}"
         )
         logger.error(msg)
         try:
@@ -2186,8 +2197,12 @@ class TradovateBroker(BrokerInterface):
         """Flatten an already-filled position whose actual economics fail risk."""
         failed = (audit.get("post_fill_validation") or {}).get("failed_checks") or []
         msg = (
-            f"POST-FILL VALIDATION FAILED: {order.direction} {qty}x {order.instrument} "
-            f"failed={failed}; controlled flatten required"
+            f"🚨 Trade filled at a price that breaks the risk rules — {_pe.side(order.direction)} "
+            f"{_pe.contracts(qty)} {_pe.market(order.instrument)}\n"
+            f"Problem: {_pe.post_fill_problems(failed)}\n"
+            "What the bot is doing: closing the position NOW\n"
+            "What to do: check Tradovate that the position is closed\n"
+            f"-# details: POST-FILL VALIDATION FAILED, failed checks: {_pe.code_list(failed)}"
         )
         logger.error(msg)
         try:
@@ -2308,10 +2323,14 @@ class TradovateBroker(BrokerInterface):
         last = self._last_position
         states = ", ".join(f"{k}={v}" for k, v in (census.get("states") or {}).items())
         msg = (
-            f"🚨 ORPHAN OPEN POSITION: {getattr(last, 'direction', '?')} "
-            f"{getattr(last, 'quantity', '?')}x {getattr(last, 'instrument', '?')} is OPEN at the "
-            f"broker with ZERO working protective orders ({states}). The position is NAKED — "
-            f"no stop, no target. NO automatic action taken. Flatten/verify in Tradovate NOW."
+            f"🚨 Open position with NO stop-loss — {_pe.side(getattr(last, 'direction', '?'))} "
+            f"{_pe.contracts(getattr(last, 'quantity', '?'))} {_pe.market(getattr(last, 'instrument', '?'))}\n"
+            "What happened: Tradovate shows this position open, but it has no working "
+            "stop-loss or profit target order\n"
+            f"Protective orders: {_pe.order_states(census.get('states'))}\n"
+            "What the bot did: nothing — it will NOT close this on its own\n"
+            "What to do: open Tradovate NOW and close the position or check it\n"
+            f"-# details: ORPHAN/NAKED open position, 0 working protective orders ({states})"
         )
         logger.error(msg)
         try:

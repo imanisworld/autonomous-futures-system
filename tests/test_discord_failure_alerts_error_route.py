@@ -157,8 +157,8 @@ def test_watchdog_unset_error_route_falls_back_and_never_crashes(monkeypatch, ca
 
 def test_runner_tradovate_safety_alerts_use_operational_error_helper():
     src = (ROOT / "webhook" / "runner.py").read_text(encoding="utf-8")
-    for needle in ("EXECUTION SAFETY: Tradovate order did not remain open.",
-                   "LIVE ORDER BLOCKED: broker reported OPEN but returned no order ids."):
+    for needle in ("🚨 Order did not stay open — check Tradovate",
+                   "🚨 Live order blocked — check Tradovate now"):
         idx = src.index(needle)
         window = src[max(0, idx - 400): idx]
         assert "send_operational_alert(" in window, needle
