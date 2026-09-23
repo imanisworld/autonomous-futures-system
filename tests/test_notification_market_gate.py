@@ -54,14 +54,6 @@ def test_notification_gate_blocks_known_mnq_closures(when, reason):
 @pytest.mark.parametrize(
     "when",
     [
-        datetime(2026, 9, 21, 10, 0, tzinfo=_ET),
-        # CME removed the 16:15–16:30 ET equity-index halt effective 2021-06-28.
-        datetime(2026, 9, 21, 16, 20, tzinfo=_ET),
-    ],
-)
-@pytest.mark.parametrize(
-    "when",
-    [
         datetime(2026, 9, 7, 10, 0, tzinfo=_ET),   # Labor Day
         datetime(2026, 11, 27, 13, 5, tzinfo=_ET), # day-after-Thanksgiving early close
         datetime(2026, 4, 3, 10, 0, tzinfo=_ET),   # Good Friday: unknown -> fail closed
@@ -97,6 +89,14 @@ def test_notification_gate_keeps_mgc_normal_session_fallback():
     assert root == "MGC"
 
 
+@pytest.mark.parametrize(
+    "when",
+    [
+        datetime(2026, 9, 21, 10, 0, tzinfo=_ET),
+        # CME removed the 16:15–16:30 ET equity-index halt effective 2021-06-28.
+        datetime(2026, 9, 21, 16, 20, tzinfo=_ET),
+    ],
+)
 def test_notification_gate_allows_normal_open_session(when):
     from webhook.app import _decision_notification_market_gate
 
