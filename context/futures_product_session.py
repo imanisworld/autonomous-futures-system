@@ -1,9 +1,8 @@
 """Fail-closed product-session guard for CME equity-index futures (MNQ/MES).
 
 Answers "is this product's Globex session open at this instant?" with a
-structured status, not a bare bool. It is used only by the futures decision-
-notification gate for MNQ/MES. It does not gate signal generation, risk,
-broker submission, collectors, or execution.
+structured status, not a bare bool. PREP ONLY: nothing imports this yet. A
+later PR may wire it into alerting; this module changes no runtime behavior.
 
 Why not reuse the existing helpers:
   - ``context.futures_session.futures_session_active`` is a broad FEED-HEALTH

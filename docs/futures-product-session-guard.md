@@ -1,4 +1,4 @@
-# Futures product-session guard (notification-only wiring)
+# Futures product-session guard (prep, not wired)
 
 `context/futures_product_session.py` answers one question: is the Globex
 session for a CME equity-index product open at a given instant?
@@ -37,15 +37,6 @@ pin cases where they disagree with this guard.
 
 ## Scope
 
-The guard is wired only into `webhook.app._decision_notification_market_gate`
-for **MNQ/MES decision-channel Discord suppression**. It can suppress a message
-when the signal timestamp or send timestamp is closed/unknown under the strict
-calendar.
-
-It does **not** gate signal generation, journal/evidence writes, risk decisions,
-broker submission, collector behavior, operational/error alerts, or deployment.
-A test enforces that `webhook/app.py` is the only runtime Python importer.
-
-Other known futures products continue to use `product_session_active` for their
-normal weekly/maintenance schedule. This document does not claim proven
-holiday/early-close authority for MGC/MCL/other products.
+Nothing imports this module at runtime; a test enforces that. Any wiring
+(alerts, Discord suppression, collectors) is a separate PR under the change
+rule.
