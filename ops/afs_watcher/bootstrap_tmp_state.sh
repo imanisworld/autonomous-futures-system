@@ -14,4 +14,6 @@ cp -f "$SRC/watcher.py" "$SRC/watcher_memory_guard.py" "$SRC/run_ro.sh" "$STATE/
 [ -f "$SRC/watcher_triage.py" ] && cp -f "$SRC/watcher_triage.py" "$STATE/"
 # optional Discord card layout (watcher imports it defensively; absent = plain text)
 [ -f "$SRC/discord_card.py" ] && cp -f "$SRC/discord_card.py" "$STATE/"
+# optional plain-English wording (watcher imports it defensively; absent = simple local wording)
+[ -f "$SRC/plain_english.py" ] && cp -f "$SRC/plain_english.py" "$STATE/"
 chmod 700 "$STATE/run_ro.sh"

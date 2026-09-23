@@ -27,16 +27,14 @@ def test_known_blocked_messages_lead_with_a_plain_english_headline(monkeypatch):
     stale = w._blocked_discord_text("watcher_release_stale")
     restart = w._blocked_discord_text("unexpected_restart")
 
-    assert stale.splitlines()[0] == "🛑 **STATUS: CRITICAL**"
-    assert "**ISSUE:** Watcher needs restart" in stale
-    assert "New release is live, but the watcher is still tracking the previous release." in stale
-    assert "**ACTION:** restart `afs-watcher` only" in stale
-    assert stale.splitlines()[-1] == "-# `watcher_release_stale · futures-bot · release ee2d0b1d`"
+    assert stale.splitlines()[0] == "🛑 Watcher is still checking the old version"
+    assert "What's wrong: A new version of the bot is live, but the watcher is still checking against the previous one." in stale
+    assert "What to do: Restart the watcher only — the bot itself is fine" in stale
+    assert stale.splitlines()[-1] == "-# watcher_release_stale · version ee2d0b1d"
 
-    assert restart.splitlines()[0] == "🛑 **STATUS: CRITICAL**"
-    assert "**ISSUE:** Unexpected futures-bot restart" in restart
-    assert "The bot restarted and no approved deployment explains it." in restart
-    assert restart.splitlines()[-1] == "-# `unexpected_restart · futures-bot · release ee2d0b1d`"
+    assert restart.splitlines()[0] == "🛑 Trading bot restarted without a planned update"
+    assert "What's wrong: The bot restarted and no planned update explains it." in restart
+    assert restart.splitlines()[-1] == "-# unexpected_restart · version ee2d0b1d"
 
 
 def test_blocked_message_surfaces_the_first_offending_line_and_snapshot(monkeypatch):
@@ -50,12 +48,14 @@ def test_blocked_message_surfaces_the_first_offending_line_and_snapshot(monkeypa
     text = w._blocked_discord_text("alert_non200", finding, "/tmp/afs_watcher/snapshots/x")
     lines = text.splitlines()
 
-    assert lines[0] == "🛑 **STATUS: CRITICAL**"
-    assert lines[1] == "**ISSUE:** Webhook post rejected"
-    assert lines[2] == "**CURRENT STATE:** 1 non-200 alert responses since 2026-09-11T03:41:15Z"
-    assert lines[3] == f"↳ `{sample}`"
-    assert lines[4].startswith("**ACTION:** read the rejected alert lines")
-    assert lines[5] == "-# Snapshot: `/tmp/afs_watcher/snapshots/x`"
+    assert lines[0] == "🛑 Bot is rejecting TradingView alerts"
+    assert lines[1] == "What's wrong: TradingView is sending alerts but the bot is turning some of them away."
+    assert lines[2].startswith("What to do: Look at the rejected alerts")
+    assert lines[3] == "-# snapshot x"
+    assert lines[4] == "-# alert_non200 · version 5115b780"
+    # the raw offending line is still there for debugging, but only in the small footer
+    assert lines[5] == f"-# log: {sample[-110:]}"
+    assert "non-200" not in "\n".join(lines[:3])
 
 
 def test_unknown_blocked_key_has_safe_readable_fallback(monkeypatch):
@@ -63,17 +63,17 @@ def test_unknown_blocked_key_has_safe_readable_fallback(monkeypatch):
 
     text = w._blocked_discord_text("new_unknown_finding")
 
-    assert text.splitlines()[0] == "🛑 **STATUS: CRITICAL**"
-    assert "**ACTION:** inspect the snapshot; no automatic fix" in text
-    assert "-# `new_unknown_finding · futures-bot · release 01234567`" in text
+    assert text.splitlines()[0] == "🛑 New unknown finding"
+    assert f"What to do: {w._DEFAULT_FIX}" in text
+    assert "-# new_unknown_finding · version 01234567" in text
 
 
 def test_warning_uses_the_same_layout_with_a_warning_icon(monkeypatch):
     monkeypatch.setattr(w, "RELEASE_SHA", "0123456789abcdef")
     text = w._finding_discord_text("WARNING", "post_epoch_spans_releases", {"summary": "spans 4 releases", "detail": {}}, "/snap")
-    assert text.splitlines()[0] == "⚠️ **STATUS: WARNING**"
-    assert "spans 4 releases" in text
-    assert "-# Snapshot: `/snap`" in text
+    assert text.splitlines()[0] == "⚠️ Test records come from several versions"
+    assert "-# detail: spans 4 releases" in text
+    assert "-# snapshot snap" in text
 
 
 def test_daily_pass_is_multiline_and_readable(monkeypatch):
@@ -84,17 +84,23 @@ def test_daily_pass_is_multiline_and_readable(monkeypatch):
     }
     pops["vwap_hold/control"] = {"candidates": 48, "resolved_filled_economic": 39, "distinct_trading_days": 18}
     text = w._daily_discord_text("DAILY PASS", "2026-09-10", {"200": 548}, 22, pops, [], "/tmp/afs_watcher/daily/2026-09-10.json")
-    assert text.splitlines()[0] == "✅ **STATUS: HEALTHY**"
-    assert "• Forward campaign: 5/5 arms reporting" in text
-    assert "  • orb_reclaim/control: 0 candidates · 0 cand · 0 filled · 0 days" in text
-    assert "**ACTION:** None — continue monitoring." in text
+    assert text.splitlines()[0] == "✅ Daily check: all good (Thu Sep 10)"
+    assert "**Alerts received:** 548, all accepted" in text
+    assert "**Forward test:** 5 of 5 versions reporting, 22 records so far" in text
+    quiet = next(l for l in text.splitlines() if l.startswith("**No setups yet:**"))
+    assert "Back inside the opening range (original rules)" in quiet
+    assert "Holding the day's average price (original rules)" not in quiet
+    assert "**What to do:** nothing" in text
+    assert "-# report /tmp/afs_watcher/daily/2026-09-10.json" in text
 
 
 def test_daily_blocked_lists_discrepancies_and_rejected_posts():
     text = w._daily_discord_text("DAILY BLOCKED", "2026-09-10", {"200": 5, "422": 1}, 0, {}, ["open BLOCKED conditions: ['alert_non200']"], "/f")
-    assert text.splitlines()[0] == "🛑 **STATUS: CRITICAL**"
-    assert "• Webhook posts: 6 — rejected: {'422': 1}" in text
-    assert "⚠️ open BLOCKED conditions: ['alert_non200']" in text
+    assert text.splitlines()[0] == "🛑 Daily check: problems found (Thu Sep 10)"
+    assert "**Alerts received:** 6, 1 turned away" in text
+    assert "⚠️ Still not fixed: Bot is rejecting TradingView alerts" in text
+    # no Python dict/list reprs reach Discord
+    assert "{" not in text and "[" not in text
 
 
 def test_notification_presentation_does_not_change_event_or_state_semantics(monkeypatch, tmp_path):
@@ -149,8 +155,9 @@ def test_cleared_blocker_sends_a_cleared_notification(monkeypatch):
 
     assert state["blocked"] == {}
     assert notifications[0][0] == "DISCORD_ROUTE_ERROR"
-    assert notifications[0][1].splitlines()[0] == "✅ **STATUS: RECOVERED**"
-    assert "**ACTION:** None — continue monitoring." in notifications[0][1]
+    assert notifications[0][1].splitlines()[0] == "✅ Resolved: Bot is rejecting TradingView alerts"
+    assert "Lasted: 7 min" in notifications[0][1]
+    assert "What to do: nothing" in notifications[0][1]
 
 
 def _memory_tick(*, swap_in=0.0, swap_out=0.0):
@@ -163,11 +170,13 @@ def test_recovered_memory_pressure_is_not_presented_as_active(monkeypatch):
     monkeypatch.setattr(w, "RELEASE_SHA", "899a524aad82")
     monkeypatch.setattr(w, "_largest_rss_process", lambda: ("futures-bot", 341.0))
     text = w._memory_discord_text("RECOVERED", "swap_pressure_warning", None, _memory_tick())
-    assert text.splitlines()[0] == "✅ **STATUS: RECOVERED**"
-    assert "current memory pressure is clear" in text
-    assert "• Active paging: NO (0.0 MiB in / 0.0 MiB out)" in text
-    assert "• Largest RSS: futures-bot 341.0 MiB" in text
-    assert "**ACTION:** None — continue monitoring." in text
+    assert text.splitlines()[0] == "✅ Server memory is back to normal"
+    assert "Was: Server is short of memory" in text
+    assert "Swapping to disk now: no" in text
+    assert "Biggest program: futures-bot (341 MB)" in text
+    assert "What to do: nothing" in text
+    for jargon in ("MiB", "RSS", "OOM"):
+        assert jargon not in text
 
 
 def test_ongoing_memory_pressure_remains_warning(monkeypatch):
@@ -176,10 +185,12 @@ def test_ongoing_memory_pressure_remains_warning(monkeypatch):
     finding = {"summary": "swap activity 0.0 MB in / 119.2 MB out since last tick", "detail": {}}
     text = w._memory_discord_text("WARNING", "swap_pressure_warning", finding,
                                   _memory_tick(swap_out=119.2), "/snap")
-    assert text.splitlines()[0] == "⚠️ **STATUS: WARNING**"
-    assert "• Active paging: YES (0.0 MiB in / 119.2 MiB out)" in text
-    assert "• Largest RSS: alert-ranker 288.4 MiB" in text
-    assert "current memory pressure is clear" not in text
+    assert text.splitlines()[0] == "⚠️ Server is short of memory"
+    assert "Free memory: 924 MB" in text
+    assert "Bot is using: 341 MB" in text
+    assert "Swapping to disk now: yes, 119 MB in the last 5 min" in text
+    assert "Biggest program: alert-ranker (288 MB)" in text
+    assert "back to normal" not in text
 
 
 def test_memory_warning_episode_emits_one_recovery_notice(monkeypatch):
@@ -194,14 +205,14 @@ def test_memory_warning_episode_emits_one_recovery_notice(monkeypatch):
     w.handle_memory_fixed_warnings(state, w.Findings(), _memory_tick())
     w.handle_memory_fixed_warnings(state, w.Findings(), _memory_tick())
     assert len(sent) == 1
-    assert sent[0][1].startswith("✅ **STATUS: RECOVERED**")
+    assert sent[0][1].startswith("✅ Server memory is back to normal")
 
 
 def test_largest_rss_probe_is_display_only_and_fails_open(monkeypatch):
     monkeypatch.setattr(w, "run", lambda *_args, **_kwargs: (1, "ps unavailable"))
     assert w._largest_rss_process() is None
     text = w._memory_discord_text("RECOVERED", "swap_pressure_warning", None, _memory_tick())
-    assert "• Largest RSS: unavailable" in text
+    assert "Biggest program: unknown" in text
 
 
 def test_largest_rss_probe_passes_the_real_read_only_allowlist(monkeypatch):
@@ -225,7 +236,7 @@ def test_largest_rss_probe_fails_open_when_run_raises(monkeypatch):
     monkeypatch.setattr(w, "run", refuse)
     assert w._largest_rss_process() is None
     text = w._memory_discord_text("RECOVERED", "swap_pressure_warning", None, _memory_tick())
-    assert "• Largest RSS: unavailable" in text
+    assert "Biggest program: unknown" in text
 
 
 def test_feed_status_is_readable_for_healthy_and_stale(monkeypatch):
@@ -233,14 +244,13 @@ def test_feed_status_is_readable_for_healthy_and_stale(monkeypatch):
     lanes = {"inventory": {}, "newest_5m_mnq_bar_mtime": "2026-09-15T20:55:00Z",
              "five_min_feed_stalled": False}
     healthy = w._daily_discord_text("DAILY PASS", "2026-09-15", {}, 0, {}, [], "/f", lanes)
-    assert "• Feed: HEALTHY" in healthy
-    assert "• Newest 5m bar: 2026-09-15T20:55:00Z" in healthy
-    assert "• Bar age: 5 min" in healthy
+    assert "**Newest price bar:** 4:55 PM ET (5 min ago)" in healthy
+    assert "2026-09-15T20:55:00Z" not in healthy
     assert "5m feed stalled: False" not in healthy
     lanes["five_min_feed_stalled"] = True
     stale = w._daily_discord_text("DAILY BLOCKED", "2026-09-15", {}, 0, {}, ["feed stale"], "/f", lanes)
-    assert "• Feed: STALE" in stale
-    assert f"• Threshold: {w.LANE_STALL_MIN} min (existing lane-stall threshold)" in stale
+    assert (f"**5-minute prices:** stopped — newest bar 4:55 PM ET (5 min ago) "
+            f"(alarm after {w.LANE_STALL_MIN} min)") in stale
 
 
 def test_campaign_populations_are_strategy_variant_specific_and_zero_visible():
@@ -252,6 +262,9 @@ def test_campaign_populations_are_strategy_variant_specific_and_zero_visible():
         "vwap_rejection/observer": {"candidates": 5, "resolved_filled_economic": 0, "distinct_trading_days": 2},
     }
     text = w._daily_discord_text("DAILY PASS", "2026-09-15", {}, 26, pops, [], "/f")
-    assert "• Forward campaign: 5/5 arms reporting" in text
-    assert "  • vwap_hold/control: OK · 9 cand" in text
-    assert "  • orb_reclaim/control: 0 candidates · 0 cand" in text
+    assert "**Forward test:** 5 of 5 versions reporting, 26 records so far" in text
+    # a version with zero setups stays visible, by its plain name
+    assert "**No setups yet:** Back inside the opening range (original rules)" in text
+    assert "**Progress to review:** 0 of 20 trading days, 0 of 30 filled trades (slowest version)" in text
+    for internal in ("vwap_hold", "orb_reclaim", "control", "modified", "cand ", "arms"):
+        assert internal not in text

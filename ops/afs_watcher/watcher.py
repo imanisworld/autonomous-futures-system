@@ -22,6 +22,7 @@ Hard read-only guarantees, in layers:
 from __future__ import annotations
 
 import fcntl
+import functools
 import hashlib
 import json
 import os
@@ -48,6 +49,13 @@ except ImportError:
         from notifications.discord_card import post_card_or_text as _post_card_or_text
     except ImportError:  # pragma: no cover — missing copy = plain text, never a crash
         _post_card_or_text = None
+try:  # plain-English wording: sibling copy on the box, package import in the repo
+    import plain_english as _pe
+except ImportError:
+    try:
+        from notifications import plain_english as _pe
+    except ImportError:  # pragma: no cover — missing copy = simple local wording, never a crash
+        _pe = None
 
 # ── fixed facts ──────────────────────────────────────────────────────────────
 RELEASE_LINK = Path("/root/autonomous-futures-system")
@@ -485,36 +493,132 @@ def emit_event(state: dict, kind: str, key: str, payload: dict, notify_route: st
     return True
 
 
+# ── plain-English wording (display only) ─────────────────────────────────────
+# docs/discord-operator-message-style.md "Plain English": ET times, dollars,
+# Buy/Sell, spelled-out names, no unexplained abbreviations; SHAs, pids, paths
+# and finding keys only in a small "-#" footer. None of this reaches the
+# evidence record, state, dedupe keys or alert logic. Every builder is wrapped
+# by _fail_open_text so a wording bug can never break a tick.
+_MARKET_NAMES = {"MNQ": "Micro Nasdaq", "MES": "Micro S&P 500"}
+_POINT_VALUE = {"MNQ": 2.0, "MES": 5.0}   # dollars per point, one contract
+
+
+def _fail_open_text(fallback_title: str):
+    def wrap(fn):
+        @functools.wraps(fn)
+        def inner(*args, **kwargs):
+            try:
+                return fn(*args, **kwargs)
+            except Exception as exc:  # noqa: BLE001 — wording must never break a tick
+                try:
+                    log(f"WARN Discord wording failed in {fn.__name__}: {type(exc).__name__}: {exc}")
+                except Exception:  # noqa: BLE001
+                    pass
+                bits = " · ".join(str(a) for a in args if isinstance(a, str))[:200]
+                return f"{fallback_title}\n-# {bits}" if bits else fallback_title
+        return inner
+    return wrap
+
+
+def _pe_or(name: str, fallback, *args, **kwargs):
+    """Use notifications/plain_english when it shipped; otherwise the local fallback."""
+    fn = getattr(_pe, name, None) if _pe is not None else None
+    if fn is not None:
+        try:
+            return fn(*args, **kwargs)
+        except Exception:  # noqa: BLE001
+            pass
+    return fallback()
+
+
+def _when(ts, with_day: bool = True) -> str:
+    """'9:00 PM ET, Tue Sep 22' (or '9:00 PM ET')."""
+    if ts is None or ts == "":
+        return "unknown"
+
+    def local() -> str:
+        d = ts if isinstance(ts, datetime) else _ts(ts)
+        if d is None:
+            return str(ts)
+        if d.tzinfo is None:
+            d = d.replace(tzinfo=timezone.utc)
+        et = d.astimezone(ET)
+        clock = et.strftime("%I:%M %p").lstrip("0") + " ET"
+        return clock if not with_day else f"{clock}, {et.strftime('%a %b')} {et.day}"
+    return _pe_or("et_time", local, ts, with_day=with_day)
+
+
+def _day_name(value) -> str:
+    """'Tue Sep 22' from an ET date string."""
+    def local() -> str:
+        try:
+            d = date.fromisoformat(str(value)[:10])
+        except ValueError:
+            return str(value)
+        return f"{d.strftime('%a %b')} {d.day}"
+    return _pe_or("et_date", local, value)
+
+
+def _duration(minutes) -> str:
+    return _pe_or("duration", lambda: f"{minutes} min", minutes)
+
+
+def _side(direction) -> str:
+    text = str(direction or "").strip().upper()
+    return _pe_or("side", lambda: {"LONG": "Buy", "SHORT": "Sell"}.get(text, text.title() or "?"), text)
+
+
+def _price(value) -> str:
+    return _pe_or("price", lambda: str(value), value)
+
+
+def _market_name(inst: str) -> str:
+    names = getattr(_pe, "MARKETS", None) or {}
+    return names.get(inst) or _MARKET_NAMES.get(inst) or inst
+
+
+def _mb(value) -> str:
+    try:
+        return f"{int(round(float(value))):,} MB"
+    except (TypeError, ValueError):
+        return "unknown"
+
+
+def _footer_id(key: str) -> str:
+    return f"-# {key} · version {RELEASE_SHA[:8]}"
+
+
 _EVENT_TITLES = {
-    "REBASELINED": "🔄 Restart adopted",
-    "FIRST_FIRE": "🆕 First fire",
-    "MILESTONE": "🏁 Milestone",
+    "REBASELINED": "🔄 Bot restarted on a new version",
+    "FIRST_FIRE": "🆕 First one seen",
+    "MILESTONE": "🏁 Milestone reached",
 }
 
 
+@_fail_open_text("🆕 Watcher event — see the watcher log")
 def _event_discord_text(kind: str, summary: str) -> str:
-    """Short card title from the event kind; the summary becomes the body."""
-    title = _EVENT_TITLES.get(kind, kind.replace("_", " ").title())
+    """Fallback card for an event without its own wording; the summary becomes the body."""
+    title = _EVENT_TITLES.get(kind, kind.replace("_", " ").capitalize())
     return f"**{title}**\n{summary}"
 
 
 def _systemd_ts_et(value: object) -> str:
-    """'Wed 2026-09-23 00:42:26 UTC' -> '8:42 PM ET (00:42 UTC)'; raw text if unparseable."""
+    """'Wed 2026-09-23 00:42:26 UTC' -> '8:42 PM ET'; raw text if unparseable."""
     try:
         d = datetime.strptime(str(value).strip(), "%a %Y-%m-%d %H:%M:%S UTC").replace(tzinfo=timezone.utc)
     except ValueError:
         return str(value)
-    return f"{d.astimezone(ET).strftime('%-I:%M %p ET')} ({d.strftime('%H:%M UTC')})"
+    return _when(d, with_day=False)
 
 
+@_fail_open_text("✅ Bot restarted on the new version")
 def _rebaseline_discord_text(previous: dict, props: dict, pid: str) -> str:
     was = str((previous.get("release") or {}).get("commit"))[:12]
     return "\n".join([
-        "✅ **futures-bot restarted — sanctioned release adopted**",
-        f"**Release:** {RELEASE_SHA[:12]} (was {was})",
-        f"**PID:** {previous.get('ExecMainPID')} → {pid}",
-        f"**Restarted:** {_systemd_ts_et(props.get('ActiveEnterTimestamp'))}",
-        "**Action:** None — expected restart from a release deploy.",
+        "✅ Bot restarted on the new version",
+        f"When: {_systemd_ts_et(props.get('ActiveEnterTimestamp'))}",
+        "What to do: nothing — this restart was part of a planned update",
+        f"-# version {RELEASE_SHA[:12]} (was {was}) · process {pid}",
     ])
 
 
@@ -1473,15 +1577,7 @@ def check_lanes(state: dict, f: Findings, tick: dict) -> None:
                    {"summary": f"{name} hypothetical position OPEN: {pos.get('direction')} @ {pos.get('entry')} "
                                f"stop {pos.get('stop')} target {pos.get('target')} since {pos.get('entry_time')} (paper, observe only)",
                     "position": pos,
-                    "discord": "\n".join([
-                        f"🆕 **{_LANE_LABELS.get(name, name)} — paper position OPEN**",
-                        f"**Direction:** {str(pos.get('direction') or '?').upper()}",
-                        f"**Entry:** {pos.get('entry')}",
-                        f"**Stop:** {pos.get('stop')}",
-                        f"**Target:** {pos.get('target')}",
-                        f"**Since:** {_et_clock(pos.get('entry_time'))}",
-                        "Paper · observe only",
-                    ])}, "DISCORD_ROUTE_DAILY_REPORT")
+                    "discord": _lane_opened_text(name, pos)}, "DISCORD_ROUTE_DAILY_REPORT")
     mnq_exposed = [n for n in open_positions if n != "mes_122_1500"]
     if mnq_exposed and five_min_stalled:
         f.add("BLOCKED", "hypothetical_position_exposed_stale_bars",
@@ -1683,18 +1779,21 @@ def check_campaign(state: dict, f: Findings, tick: dict) -> None:
         if pops[key]["gate_ready"]:
             emit_event(state, "MILESTONE", f"ready_for_audit:{key}",
                        {"summary": f"{key} READY FOR AUDIT — {len(filled)} resolved FILLED economic outcomes over {len(days)} trading days (never auto-promoted)",
-                        "population": pops[key]}, "DISCORD_ROUTE_DAILY_REPORT")
+                        "population": pops[key],
+                        "discord": _milestone_text(key, len(filled), len(days))}, "DISCORD_ROUTE_DAILY_REPORT")
         if post_c:
             first = min(post_c, key=lambda r: str(r.get("observed_at") or ""))
             emit_event(state, "FIRST_FIRE", f"first_post_epoch_candidate:{key}",
                        {"summary": f"first post-epoch {key} candidate {first.get('candidate_id')} observed {first.get('observed_at')} sha={str(first.get('generating_git_sha'))[:12]}",
-                        "row": {k: first.get(k) for k in ("candidate_id", "event_id", "instrument", "session", "signal_timestamp", "observed_at", "generating_git_sha", "provenance_status")}},
+                        "row": {k: first.get(k) for k in ("candidate_id", "event_id", "instrument", "session", "signal_timestamp", "observed_at", "generating_git_sha", "provenance_status")},
+                        "discord": _first_candidate_text(key, first)},
                        "DISCORD_ROUTE_DAILY_REPORT")
     camp["populations"] = pops
     if post:
         first = min(post, key=lambda r: str(r.get("observed_at") or ""))
         emit_event(state, "FIRST_FIRE", "first_post_epoch_campaign_row",
-                   {"summary": f"first post-epoch campaign row: {first.get('record_type')} {first.get('strategy')}/{first.get('variant')} observed {first.get('observed_at')} sha={str(first.get('generating_git_sha'))[:12]} ({'OK' if str(first.get('generating_git_sha','')).startswith(RELEASE_SHA[:12]) else 'SHA MISMATCH'})"},
+                   {"summary": f"first post-epoch campaign row: {first.get('record_type')} {first.get('strategy')}/{first.get('variant')} observed {first.get('observed_at')} sha={str(first.get('generating_git_sha'))[:12]} ({'OK' if str(first.get('generating_git_sha','')).startswith(RELEASE_SHA[:12]) else 'SHA MISMATCH'})",
+                    "discord": _first_campaign_row_text(first)},
                    "DISCORD_ROUTE_DAILY_REPORT")
 
     # orb_reclaim pairing: every event_id with an orb_reclaim candidate must carry BOTH arms
@@ -1707,7 +1806,8 @@ def check_campaign(state: dict, f: Findings, tick: dict) -> None:
         camp["orb_reclaim_events"] = len(by_evt)
         camp["orb_reclaim_unpaired_events"] = unpaired[:10]
         emit_event(state, "FIRST_FIRE", "first_orb_reclaim_candidate",
-                   {"summary": f"first orb_reclaim candidate observed ({len(by_evt)} event(s)); unpaired events: {len(unpaired)}"}, "DISCORD_ROUTE_DAILY_REPORT")
+                   {"summary": f"first orb_reclaim candidate observed ({len(by_evt)} event(s)); unpaired events: {len(unpaired)}",
+                    "discord": _first_orb_reclaim_text(len(by_evt), len(unpaired))}, "DISCORD_ROUTE_DAILY_REPORT")
         if unpaired:
             f.add("BLOCKED", "orb_reclaim_unpaired", f"{len(unpaired)} orb_reclaim event(s) missing control or modified arm", events=unpaired[:10])
 
@@ -1754,7 +1854,8 @@ def check_failed_reclaim(state: dict, f: Findings, tick: dict) -> None:
         first = sorted(hits, key=lambda h: str(h["ts"]))[0]
         state["first_fire"]["vwap_failed_reclaim_true"] = first
         emit_event(state, "FIRST_FIRE", "first_vwap_failed_reclaim_true",
-                   {"summary": f"first vwap_failed_reclaim=true after epoch: {first}", "hit": first}, "DISCORD_ROUTE_DAILY_REPORT")
+                   {"summary": f"first vwap_failed_reclaim=true after epoch: {first}", "hit": first,
+                    "discord": _first_failed_reclaim_text(first)}, "DISCORD_ROUTE_DAILY_REPORT")
 
 
 # ── snapshot + blocked handling ──────────────────────────────────────────────
@@ -1871,53 +1972,173 @@ def handle_memory_fixed_warnings(state: dict, findings: Findings, tick: dict) ->
                f"memory-fixed-warning:{key}:{iso(now_utc())[:13]}")
 
 
-# Plain-English titles for finding keys (prefix match). Anything not listed falls
-# back to the key with underscores turned into spaces.
+# Plain-English titles for finding keys (prefix match, first hit wins, so longer
+# prefixes come first). Anything not listed falls back to the key's words.
 _FINDING_TITLES = {
-    "watcher_release_stale": "Watcher needs restart",
-    "unexpected_restart": "Unexpected futures-bot restart",
-    "unexpected_deploy": "Unexpected deploy",
-    "service_not_active": "futures-bot is not running",
-    "service_crash_restart": "futures-bot crashed and restarted",
-    "service_traceback": "Bot logged a traceback",
-    "alert_non200": "Webhook post rejected",
-    "webhook_process_count": "Wrong number of webhook processes",
-    "journal_not_advancing": "Journal stopped growing",
-    "evidence_write_error": "Evidence write failed",
-    "unexpected_broker_position": "Unexpected broker position",
-    "post_epoch_wrong_sha": "Evidence rows from the wrong release",
-    "post_epoch_spans_releases": "Post-epoch evidence spans several releases",
-    "orb_reclaim_unpaired": "orb_reclaim pairing defect",
-    "deploy_candidate_running": "Leftover deploy verifier still running",
-    "feed_alarm_stale": "Feed-gap alarm is stale",
-    "oom_kill_new": "Kernel OOM-killed a process",
-    "memory_rss_growth_critical": "futures-bot memory growing fast",
-    "memory_rss_critical": "futures-bot memory near OOM level",
-    "memory_avail_critical": "Box nearly out of memory",
-    "memory_rss_growth": "futures-bot memory rising",
-    "swap_pressure_critical": "Heavy swap paging",
-    "swap_pressure_warning": "Kernel is paging to swap",
-    "swap_used_critical": "Swap nearly exhausted",
-    "swap_used_warning": "Swap filling up",
-    "swap_inactive": "Swap is off",
-    "swap_not_persistent": "Swap missing from fstab",
-    "five_min_feed_stalled": "5-minute MNQ bar stream stalled",
-    "five_min_feed_missing": "5-minute MNQ bar stream missing",
-    "daily_22_collector_stalled": "Daily 2-2 lane stopped processing bars",
-    "daily_22_state_epoch_mismatch": "Daily 2-2 state is from another epoch",
-    "daily_22_state_unreadable": "Daily 2-2 state file unreadable",
-    "daily_22_halted": "Daily 2-2 ledger hit its hard halt",
-    "mes_122_lane_stalled": "MES 1-2-2 lane stopped evaluating bars",
-    "hypothetical_position_exposed_stale_bars": "Open paper position with no fresh bars",
-    "daily_22_state_missing_while_feed_active": "Daily 2-2 state missing while 5m bars flow",
-    "mes_122_lane_missing_while_feed_active": "MES 1-2-2 lane missing while MES bars flow",
+    "watcher_release_stale": "Watcher is still checking the old version",
+    "unexpected_restart": "Trading bot restarted without a planned update",
+    "unexpected_deploy": "Unplanned update on the server",
+    "unexpected_population": "Forward test has an unknown group",
+    "service_not_active": "Trading bot is not running",
+    "service_crash_restart": "Trading bot crashed and restarted",
+    "service_traceback": "Trading bot logged an error",
+    "service_wrong_release": "Trading bot is running the wrong version",
+    "service_pid_cwd_unreadable": "Can't tell which version the bot is running",
+    "release_link_unreadable": "Can't tell which version is installed",
+    "deploy_pins_unreadable": "Can't read the expected version settings",
+    "epoch_drift": "Test start date setting changed",
+    "alert_non200": "Bot is rejecting TradingView alerts",
+    "webhook_process_count": "Wrong number of bot copies running",
+    "journal_not_advancing": "Bot stopped recording price bars",
+    "journal_missing": "Bot's trade log is missing",
+    "journal_tail_corrupt": "Bot's trade log has a broken last line",
+    "evidence_write_error": "Bot couldn't save its records",
+    "status_api_unreachable": "Can't reach the trading bot",
+    "broker_env_not_demo": "Broker is NOT the practice account",
+    "unexpected_broker_position": "Unexpected position at the broker",
+    "live_trading_enabled": "Real-money trading is switched ON",
+    "tradovate_": "Broker connection problem",
+    "post_epoch_wrong_sha": "Test records written by the wrong version",
+    "post_epoch_spans_releases": "Test records come from several versions",
+    "orb_reclaim_unpaired": "Opening-range test records don't pair up",
+    "deploy_candidate_running": "Leftover update check still running",
+    "feed_alarm_stale": "Price-gap checker has stopped",
+    "feed_state_unreadable": "Price-gap checker file can't be read",
+    "oom_kill_new": "Server ran out of memory and closed a program",
+    "memory_critical": "Server memory is critically low",
+    "memory_warning": "Server memory is getting low",
+    "memory_rss_growth_critical": "Bot memory use is growing fast",
+    "memory_rss_critical": "Bot is using almost all its memory",
+    "memory_rss_warning": "Bot memory use is high",
+    "memory_avail_critical": "Server is almost out of memory",
+    "memory_avail_warning": "Server memory is getting low",
+    "memory_rss_growth": "Bot memory use is rising",
+    "swap_pressure_critical": "Server is badly short of memory",
+    "swap_pressure_warning": "Server is short of memory",
+    "swap_used_critical": "Server's backup memory is almost full",
+    "swap_used_warning": "Server's backup memory is filling up",
+    "swap_inactive": "Server's backup memory is switched off",
+    "swap_not_persistent": "Backup memory won't come back after a reboot",
+    "five_min_feed_stalled": "5-minute Micro Nasdaq prices stopped",
+    "five_min_feed_missing": "5-minute Micro Nasdaq prices are missing",
+    "daily_22_collector_stalled": "Daily 2-2 tracker stopped reading prices",
+    "daily_22_state_epoch_mismatch": "Daily 2-2 saved state is from an older test",
+    "daily_22_state_unreadable": "Daily 2-2 saved state can't be read",
+    "daily_22_halted": "Daily 2-2 practice account hit its loss limit",
+    "daily_22_state_missing_while_feed_active": "Daily 2-2 tracker isn't saving anything",
+    "mes_122_lane_stalled": "Micro S&P 1-2-2 tracker stopped checking prices",
+    "mes_122_lane_missing_while_feed_active": "Micro S&P 1-2-2 tracker isn't writing anything",
+    "hypothetical_position_exposed_stale_bars": "Open practice position has no fresh prices",
+    "disk_": "Server disk is nearly full",
+    "root_fs_readonly": "Server disk is read-only",
+    "path_missing_": "A record folder disappeared",
+    "path_not_writable_": "A record folder can't be written to",
+    "file_shrank_": "A record file got smaller",
+    "history_rewritten_": "A record file was rewritten",
+    "campaign_": "Forward-test records can't be read",
+    "population_config_changed": "Forward-test groups changed",
+    "conflicting_": "Forward-test records conflict",
+    "report_evidence_integrity": "Forward-test report says records are damaged",
+    "report_unexpected_population": "Forward-test report has an unknown group",
 }
 
-# A one-sentence explanation for the findings whose summary is too terse to read cold.
+# One plain sentence on what is going on, for the findings where it helps.
 _FINDING_EXPLAIN = {
-    "watcher_release_stale": "New release is live, but the watcher is still tracking the previous release.",
-    "unexpected_restart": "The bot restarted and no approved deployment explains it.",
+    "watcher_release_stale": "A new version of the bot is live, but the watcher is still checking against the previous one.",
+    "unexpected_restart": "The bot restarted and no planned update explains it.",
+    "unexpected_deploy": "The installed version changed without the planned update steps.",
+    "service_not_active": "The trading bot program is stopped.",
+    "service_crash_restart": "The trading bot crashed and the server started it again.",
+    "service_traceback": "The bot wrote an error message to its log.",
+    "service_wrong_release": "The bot program is running from a different folder than the approved version.",
+    "alert_non200": "TradingView is sending alerts but the bot is turning some of them away.",
+    "webhook_process_count": "There should be exactly one copy of the bot running.",
+    "journal_not_advancing": "A new price bar arrived but the bot's trade log didn't grow.",
+    "evidence_write_error": "The bot tried to save trade records and failed.",
+    "status_api_unreachable": "The watcher couldn't get an answer from the bot.",
+    "broker_env_not_demo": "The bot is connected to a broker account that is not the practice account.",
+    "unexpected_broker_position": "The broker shows an open position the bot didn't expect.",
+    "live_trading_enabled": "The bot reports real-money trading is on. It should be off.",
+    "tradovate_": "The bot is having trouble talking to the broker.",
+    "post_epoch_wrong_sha": "Some test records say they came from a different version than the one running.",
+    "post_epoch_spans_releases": "Test records since the start came from more than one version of the bot.",
+    "orb_reclaim_unpaired": "Each opening-range setup should be recorded under both the original and adjusted rules.",
+    "feed_alarm_stale": "The checker that watches for gaps in prices hasn't updated.",
+    "oom_kill_new": "The server ran out of memory and shut down a program to cope.",
+    "memory_": "The server is running low on memory.",
+    "swap_": "The server is running low on memory.",
+    "five_min_feed_": "15-minute prices are still arriving but 5-minute ones are not.",
+    "daily_22_collector_stalled": "Prices are arriving but the Daily 2-2 tracker isn't using them.",
+    "daily_22_state_epoch_mismatch": "The Daily 2-2 saved state is older than the current test.",
+    "daily_22_state_unreadable": "The Daily 2-2 saved state file is damaged, so the tracker is paused.",
+    "daily_22_halted": "The Daily 2-2 practice account reached its loss limit and stopped.",
+    "daily_22_state_missing_while_feed_active": "Prices are arriving but the Daily 2-2 tracker has no saved state.",
+    "mes_122_lane": "Micro S&P prices are arriving but the 1-2-2 tracker isn't using them.",
+    "hypothetical_position_exposed_stale_bars": "A practice position is open but 5-minute prices stopped, so it can't be checked.",
+    "disk_": "The server's disk is filling up.",
+    "path_missing_": "A folder where records are saved has disappeared.",
+    "file_shrank_": "A record file got smaller, which should never happen.",
+    "history_rewritten_": "The start of a record file changed, which should never happen.",
 }
+
+_DEFAULT_FIX = "Ask for the watcher snapshot to be checked — nothing is fixed automatically"
+
+
+def smallest_fix(key: str) -> str:
+    """Plain 'What to do' line for a finding (display only)."""
+    m = {
+        "watcher_release_stale": "Restart the watcher only — the bot itself is fine",
+        "unexpected_deploy": "Confirm the update was meant to happen, then re-arm the watcher on it",
+        "service_not_active": "Check the bot's log; only restart it if you decide to",
+        "unexpected_restart": "Find out who restarted the bot. If it was on purpose, reset the watcher's baseline by hand",
+        "service_crash_restart": "Read the crash error in the snapshot before restarting anything",
+        "deploy_candidate_running": "Stop the leftover update check once you've confirmed it's old",
+        "webhook_process_count": "Find the extra or missing bot copy in the snapshot",
+        "feed_alarm_stale": "Check that the price-gap checker's scheduled job is still running",
+        "alert_non200": "Look at the rejected alerts — usually a wrong secret, too many alerts, or a bad message",
+        "service_traceback": "Read the error in the snapshot; nothing is fixed automatically",
+        "evidence_write_error": "Check the server's disk space and folder permissions",
+        "journal_not_advancing": "Check the bot's log — prices are arriving but not being processed",
+        "unexpected_broker_position": "Check the practice account by hand; the watcher never touches the broker",
+        "broker_env_not_demo": "Check which broker account the bot is connected to right away",
+        "live_trading_enabled": "Check the bot's settings right away — it should be practice only",
+        "post_epoch_wrong_sha": "Set aside the test records listed in the snapshot",
+        "orb_reclaim_unpaired": "Check the listed setups for the missing version",
+        "oom_kill_new": "Find out which program was closed and free up memory; don't auto-restart",
+        "memory_rss_growth_critical": "Look at the bot's memory history before deciding on a restart",
+        "memory_rss_critical": "Look at the bot's memory history before deciding on a restart",
+        "memory_avail_critical": "Find the programs using the most memory",
+        "memory_critical": "Find the programs using the most memory",
+        "swap_pressure_critical": "The server has too much running — close something",
+        "swap_used_critical": "Find what's filling backup memory before the server runs out",
+        "swap_inactive": "Turn the server's backup memory (swap file) back on",
+        "swap_not_persistent": "Add the backup memory (swap file) back to the startup settings",
+        "memory_rss_growth": "Nothing yet — the watcher will warn again if it gets worse",
+        "swap_used_warning": "Nothing yet — the watcher will warn again if it gets worse",
+        "swap_pressure_warning": "Nothing yet — the watcher will warn again if it gets worse",
+        "memory_": "Nothing yet — the watcher will warn again if it gets worse",
+        "five_min_feed": "Check the 5-minute Micro Nasdaq alert in TradingView — every Micro Nasdaq practice position depends on it",
+        "daily_22_collector_stalled": "Read the bot's log in the snapshot for the error",
+        "daily_22_state_epoch_mismatch": "Don't delete the saved state; decide by hand which one is right",
+        "daily_22_state_unreadable": "Look at the saved state file in the snapshot; the tracker stays paused until it's fixed",
+        "daily_22_halted": "Nothing to do — this practice account's test is over; it never resets on its own",
+        "mes_122_lane_stalled": "Read the bot's log for why the Micro S&P 1-2-2 tracker skipped",
+        "hypothetical_position_exposed_stale_bars": "Get the 5-minute prices flowing again; never guess the result from later prices",
+        "daily_22_state_missing_while_feed_active": "Check the bot's log for the tracker failing; never recreate the state by hand",
+        "mes_122_lane_missing_while_feed_active": "Check the bot's log for why the Micro S&P 1-2-2 tracker skipped",
+    }
+    for k, v in m.items():
+        if key.startswith(k):
+            return v
+    if key.startswith("feed_"):
+        return "Check that the TradingView alerts are still on and reaching the bot"
+    if key.startswith(("file_shrank", "history_rewritten", "path_missing", "campaign_corrupt", "campaign_state_corrupt")):
+        return "Compare the records with the watcher snapshot and backups before repairing anything"
+    if key.startswith("disk_"):
+        return "Free up disk space (never delete trade records)"
+    if key.startswith("tradovate_"):
+        return "Check the broker connection status page; the watcher doesn't reconnect anything"
+    return _DEFAULT_FIX
 
 
 def _largest_rss_process() -> tuple[str, float] | None:
@@ -1939,6 +2160,28 @@ def _largest_rss_process() -> tuple[str, float] | None:
     return None
 
 
+def _prefix_lookup(table: dict, key: str) -> str | None:
+    for prefix, text in table.items():
+        if key.startswith(prefix):
+            return text
+    return None
+
+
+def _finding_title(key: str) -> str:
+    title = _prefix_lookup(_FINDING_TITLES, key)
+    if title:
+        return title
+    m = re.match(r"feed_([A-Z0-9]+)_", key)
+    if m:
+        return f"{_market_name(m.group(1))} prices have stopped"
+    return key.replace("_", " ").strip().capitalize()
+
+
+def _snapshot_footer(snapshot: str | None) -> list[str]:
+    return [f"-# snapshot {Path(snapshot).name}"] if snapshot else []
+
+
+@_fail_open_text("⚠️ Server memory notice — see the watcher log")
 def _memory_discord_text(status: str, key: str, finding: dict | None, tick: dict,
                          snapshot: str | None = None) -> str:
     """Present already-collected memory evidence without changing alert logic."""
@@ -1946,63 +2189,48 @@ def _memory_discord_text(status: str, key: str, finding: dict | None, tick: dict
     swap_in = mem.get("swapin_mb_since_last_tick")
     swap_out = mem.get("swapout_mb_since_last_tick")
     paging_known = swap_in is not None and swap_out is not None
-    paging_active = paging_known and (float(swap_in) + float(swap_out) > 0)
     recovered = status == "RECOVERED"
     largest = _largest_rss_process()
-    lines = [
-        f"{'✅' if recovered else '⚠️'} **STATUS: {status}**",
-        f"**ISSUE:** {_finding_title(key)}",
-        ("**CURRENT STATE:** Earlier pressure triggered the warning; current memory pressure is clear."
-         if recovered else f"**CURRENT STATE:** {str((finding or {}).get('summary') or 'Memory pressure is active.')}"),
-        "**KEY EVIDENCE:**",
-        f"• RAM available: {mem.get('avail_mb', 'unknown')} MiB",
-        f"• Swap used: {mem.get('swap_used_mb', 'unknown')} MiB",
-        (f"• Active paging: {'YES' if paging_active else 'NO'} ({swap_in} MiB in / {swap_out} MiB out)"
-         if paging_known else "• Active paging: unknown"),
-        f"• futures-bot RSS: {mem.get('rss_mb', 'unknown')} MiB",
-        (f"• Largest RSS: {largest[0]} {largest[1]} MiB" if largest else "• Largest RSS: unavailable"),
-        ("**ACTION:** None — continue monitoring."
-         if recovered else f"**ACTION:** {smallest_fix(key).removeprefix('operator: ')}"),
+    if recovered:
+        lines = ["✅ Server memory is back to normal", f"Was: {_finding_title(key)}"]
+    else:
+        lines = [f"⚠️ {_finding_title(key)}"]
+    lines += [
+        f"Free memory: {_mb(mem.get('avail_mb'))}",
+        f"Bot is using: {_mb(mem.get('rss_mb'))}",
+        f"Backup memory in use: {_mb(mem.get('swap_used_mb'))}",
     ]
-    if snapshot:
-        lines.append(f"-# Snapshot: `{snapshot}`")
-    lines.append(f"-# `{key} · {SERVICE} · release {RELEASE_SHA[:8]}`")
+    if paging_known:
+        moved = float(swap_in) + float(swap_out)
+        lines.append(f"Swapping to disk now: {'yes, ' + _mb(moved) + ' in the last 5 min' if moved > 0 else 'no'}")
+    lines.append(f"Biggest program: {largest[0]} ({_mb(largest[1])})" if largest else "Biggest program: unknown")
+    lines.append("What to do: nothing" if recovered else f"What to do: {smallest_fix(key)}")
+    lines += _snapshot_footer(snapshot)
+    lines.append(_footer_id(key))
     return "\n".join(lines)
 
 
-def _finding_title(key: str) -> str:
-    for prefix, title in _FINDING_TITLES.items():
-        if key.startswith(prefix):
-            return title
-    return key.replace("_", " ").strip().capitalize()
-
-
+@_fail_open_text("🛑 Watcher alert — see the watcher log")
 def _finding_discord_text(level: str, key: str, finding: dict | None = None, snapshot: str | None = None) -> str:
-    """Render one finding for a human reading Discord on a phone: headline first,
-    the specific evidence next, then what to check. Never changes the finding."""
-    status = "CRITICAL" if level == "BLOCKED" else level
-    icon = "🛑" if status == "CRITICAL" else "⚠️"
-    lines = [f"{icon} **STATUS: {status}**", f"**ISSUE:** {_finding_title(key)}"]
-    explain = _FINDING_EXPLAIN.get(key)
-    summary = (finding or {}).get("summary")
+    """Render one finding for a human reading Discord on a phone: plain headline,
+    what is wrong, what to do; raw detail only in the footer. Never changes the finding."""
+    icon = "🛑" if level == "BLOCKED" else "⚠️"
+    lines = [f"{icon} {_finding_title(key)}"]
+    explain = _prefix_lookup(_FINDING_EXPLAIN, key)
+    summary = str((finding or {}).get("summary") or "").strip()
+    samples = ((finding or {}).get("detail") or {}).get("samples") or []
     if explain:
-        lines.append(f"**CURRENT STATE:** {explain}")
+        lines.append(f"What's wrong: {explain}")
     elif summary:
-        lines.append(f"**CURRENT STATE:** {summary}")
-    else:
-        lines.append("**CURRENT STATE:** Condition is active.")
-    detail = (finding or {}).get("detail") or {}
-    samples = detail.get("samples") or []
-    if samples:
+        lines.append(f"Details: {summary[:300]}")
+    lines.append(f"What to do: {smallest_fix(key)}")
+    lines += _snapshot_footer(snapshot)
+    lines.append(_footer_id(key))
+    if explain and samples:
         # the first offending log line is usually the whole answer (who / what / status)
-        lines.append(f"↳ `{str(samples[0]).strip()[-160:]}`")
-    action = smallest_fix(key)
-    if action.startswith("operator: "):
-        action = action[len("operator: "):]
-    lines.append(f"**ACTION:** {action}")
-    if snapshot:
-        lines.append(f"-# Snapshot: `{snapshot}`")
-    lines.append(f"-# `{key} · {SERVICE} · release {RELEASE_SHA[:8]}`")
+        lines.append(f"-# log: {str(samples[0]).strip()[-110:]}")
+    elif explain and summary:
+        lines.append(f"-# detail: {summary[:110]}")
     return "\n".join(lines)
 
 
@@ -2010,20 +2238,16 @@ def _blocked_discord_text(key: str, finding: dict | None = None, snapshot: str |
     return _finding_discord_text("BLOCKED", key, finding, snapshot)
 
 
+@_fail_open_text("✅ A watcher problem cleared — see the watcher log")
 def _cleared_discord_text(key: str, first_utc: str | None, tick: dict | None = None) -> str:
-    since = ""
-    if first_utc:
-        mins = int((now_utc() - _ts(first_utc)).total_seconds() // 60)
-        since = f" (was blocked {mins} min)"
     if key.startswith(("memory_", "swap_", "oom_")):
         return _memory_discord_text("RECOVERED", key, None, tick or {})
-    return "\n".join([
-        "✅ **STATUS: RECOVERED**",
-        f"**ISSUE:** {_finding_title(key)}",
-        f"**CURRENT STATE:** Condition cleared{since}.",
-        "**ACTION:** None — continue monitoring.",
-        f"-# `{key} · {SERVICE} · release {RELEASE_SHA[:8]}`",
-    ])
+    lines = [f"✅ Resolved: {_finding_title(key)}"]
+    if first_utc and _ts(first_utc):
+        mins = int((now_utc() - _ts(first_utc)).total_seconds() // 60)
+        lines.append(f"Lasted: {_duration(mins)}")
+    lines += ["What to do: nothing", _footer_id(key)]
+    return "\n".join(lines)
 
 
 # ── ACTION REQUIRED cards ────────────────────────────────────────────────────
@@ -2050,7 +2274,8 @@ _ACTION_ALWAYS_PREFIXES = (
 _ACTION_IF_EXPOSED_PREFIXES = (
     "feed_", "five_min_feed_", "alert_non200", "journal_not_advancing", "hypothetical_position_exposed",
 )
-_LANE_LABELS = {"daily_22_5k": "Daily 2-2", "mes_122_1500": "MES 1-2-2", "wide_stop_6k": "4HR/3-2-2", "wide_stop_4k": "4HR/3-2-2"}
+_LANE_LABELS = {"daily_22_5k": "Daily 2-2", "mes_122_1500": "Micro S&P 1-2-2",
+                "wide_stop_6k": "4-hour 3-2-2", "wide_stop_4k": "4-hour 3-2-2"}
 # Which open lanes a finding key actually exposes (feed_MES_* does not expose an MNQ lane).
 _LANE_INSTRUMENT = {"mes_122_1500": "MES"}
 
@@ -2086,16 +2311,19 @@ def action_required(key: str, tick: dict | None) -> bool:
     return False
 
 
+def _position_phrase(name: str, pos: dict) -> str:
+    """'Daily 2-2 sell at 29,338.25'."""
+    label = _LANE_LABELS.get(name, name.replace("_", " "))
+    direction = str(pos.get("direction") or "").strip()
+    what = f"{label} {_side(direction).lower()}" if direction else f"{label} position"
+    return what + (f" at {_price(pos.get('entry'))}" if pos.get("entry") is not None else "")
+
+
 def _exposure_line(key: str, tick: dict | None) -> str:
     lanes = _exposed_lanes_for(key, tick) if key.startswith(_ACTION_IF_EXPOSED_PREFIXES) else _open_lane_positions(tick)
     if not lanes:
-        return "no open paper/demo position"
-    parts = []
-    for name, pos in lanes:
-        label = _LANE_LABELS.get(name, name)
-        direction = str(pos.get("direction") or "position").upper()
-        parts.append(f"{label} paper {direction} is OPEN" + (f" @ {pos.get('entry')}" if pos.get("entry") is not None else ""))
-    return "; ".join(parts)
+        return "none"
+    return "; ".join(_position_phrase(name, pos) for name, pos in lanes)
 
 
 def _bar_age_minutes(inst: str, tick: dict | None) -> int | None:
@@ -2107,80 +2335,194 @@ def _bar_age_minutes(inst: str, tick: dict | None) -> int | None:
     return int((now_utc() - d).total_seconds() // 60) if d else None
 
 
+_NO_CHECK = "The bot can't check the stop-loss or profit target while prices are missing"
+
+
 def _action_headline_problem_impact(key: str, finding: dict | None, tick: dict | None) -> tuple[str, str, str]:
-    summary = str((finding or {}).get("summary") or "").strip()
+    """(headline, what's wrong, why it matters) in plain words; 'what's wrong' may be empty."""
+    detail = (finding or {}).get("detail") or {}
     m = re.match(r"feed_([A-Z]+)_", key)
     if m:
-        inst = m.group(1)
-        age = _bar_age_minutes(inst, tick)
-        problem = f"No {inst} bars for {age} min" if age is not None else f"{inst} bar feed is stale"
-        return (f"{inst} FEED STALE", problem, "Stop/target cannot be evaluated while feed is down")
+        name = _market_name(m.group(1))
+        age = _bar_age_minutes(m.group(1), tick)
+        headline = f"no {name} prices for {_duration(age)}" if age is not None else f"{name} prices have stopped"
+        return (headline, "", _NO_CHECK)
     if key.startswith("five_min_feed_"):
         age = _bar_age_minutes("MNQ", tick)
-        problem = f"No MNQ 5m bars for {age} min while 15m bars keep arriving" if age is not None else "MNQ 5m stream stopped while 15m continues"
-        return ("MNQ 5M FEED STALLED", problem, "Every MNQ paper lane resolves on 5m bars — stop/target cannot be evaluated")
+        headline = (f"no 5-minute Micro Nasdaq prices for {_duration(age)}" if age is not None
+                    else "5-minute Micro Nasdaq prices have stopped")
+        return (headline, "15-minute prices are still arriving, but 5-minute ones are not",
+                "Every Micro Nasdaq practice position is checked on 5-minute prices, so its stop-loss and target can't be checked")
     if key.startswith("alert_non200"):
-        return ("WEBHOOK POSTS REJECTED", summary or "TradingView posts are being rejected by the bot", "Bars are not reaching the decision engine; open positions are not being evaluated")
+        counts = detail.get("counts") or {}
+        rejected = sum(int(v) for k, v in counts.items() if str(k) != "200") if counts else 0
+        problem = f"{rejected} alert{'s' if rejected != 1 else ''} turned away" if rejected else ""
+        return ("bot is rejecting TradingView alerts", problem,
+                "Prices aren't reaching the bot, so open positions aren't being checked")
     if key.startswith("journal_not_advancing"):
-        return ("JOURNAL STOPPED", summary or "A 15m bar arrived but the journal did not grow", "The bot is receiving bars but not processing them")
+        return ("bot stopped recording price bars", "A new price bar arrived but the bot's trade log didn't grow",
+                "The bot is getting prices but not using them")
     if key.startswith("hypothetical_position_exposed"):
-        return ("POSITION EXPOSED TO STALE BARS", summary, "Stop/target cannot be resolved; do not assume neither was touched")
+        return ("open practice position has no fresh prices", "",
+                "Stop-loss and target can't be checked — don't assume neither was hit")
+    title = _finding_title(key)
+    headline = title[:1].lower() + title[1:]
+    explain = _prefix_lookup(_FINDING_EXPLAIN, key) or ""
     if key.startswith(("service_not_active", "service_crash_restart")):
-        return (_finding_title(key).upper(), summary or "futures-bot is down", "Nothing is being evaluated; any open position is unmanaged")
+        return (headline, explain, "Nothing is being checked; any open position is unmanaged")
     if key.startswith(("unexpected_restart", "unexpected_deploy", "webhook_process_count")):
-        return (_finding_title(key).upper(), summary, "Runtime identity is uncertain; evidence and position state may not be what you think")
+        return (headline, explain, "We can't be sure which version is running, so records and positions may not be what you think")
     if key.startswith(("unexpected_broker_position", "tradovate_")):
-        return (_finding_title(key).upper(), summary or "Broker state does not match what the bot believes", "Broker/order state is ambiguous — verify the account by hand before anything else")
+        return (headline, explain, "Broker and order status is unclear — check the practice account by hand before anything else")
     if key.startswith(("post_epoch_wrong_sha", "history_rewritten", "file_shrank")):
-        return (_finding_title(key).upper(), summary, "Evidence integrity is compromised until reconciled")
+        return (headline, explain, "The test records can't be trusted until this is sorted out")
     if key.startswith("daily_22_"):
-        return (_finding_title(key).upper(), summary, "The Daily 2-2 lane fails closed until its state is repaired")
-    return (_finding_title(key).upper(), summary, "Operator judgement needed")
+        return (headline, explain, "The Daily 2-2 tracker stays paused until its saved state is fixed")
+    return (headline, explain, "Needs a person to look at it")
 
 
 def _et_clock(utc_iso: str | None) -> str:
-    d = _ts(utc_iso) or now_utc()
-    return d.astimezone(ET).strftime("%-I:%M %p ET")
+    return _when(_ts(utc_iso) or now_utc(), with_day=False)
 
 
+@_fail_open_text("🛑 ACTION NEEDED — watcher alert, see the watcher log")
 def _action_card_text(key: str, finding: dict | None, tick: dict | None, first_utc: str | None) -> str:
     headline, problem, impact = _action_headline_problem_impact(key, finding, tick)
-    do_now = smallest_fix(key)
-    if do_now.startswith("operator: "):
-        do_now = do_now[len("operator: "):]
-    if key.startswith("feed_") or key.startswith("alert_non200"):
-        do_now = "Check TradingView alerts / webhook delivery"
-    return "\n".join([
-        f"🛑 **ACTION REQUIRED — {headline}**",
-        f"**Exposure:** {_exposure_line(key, tick)}",
-        f"**Problem:** {problem}",
-        f"**Impact:** {impact}",
-        f"**Do now:** {do_now}",
-        f"**Since:** {_et_clock(first_utc)}",
-        f"`{key} · read-only`",
-    ])
+    lines = [f"🛑 ACTION NEEDED — {headline}", f"Open practice position: {_exposure_line(key, tick)}"]
+    if problem:
+        lines.append(f"What's wrong: {problem}")
+    lines += [
+        f"Why it matters: {impact}",
+        f"Do now: {smallest_fix(key)}",
+        f"Since: {_et_clock(first_utc)}",
+        f"-# {key} · read-only",
+    ]
+    return "\n".join(lines)
 
 
+@_fail_open_text("✅ Resolved — see the watcher log")
 def _resolved_card_text(key: str, first_utc: str | None, tick: dict | None) -> str:
     mins = None
     if first_utc and _ts(first_utc):
         mins = int((now_utc() - _ts(first_utc)).total_seconds() // 60)
     m = re.match(r"feed_([A-Z]+)_", key)
     if m:
-        headline = f"{m.group(1)} FEED RECOVERED"
-        body = f"Bars flowing again after {mins} min." if mins is not None else "Bars flowing again."
+        lines = [f"✅ {_market_name(m.group(1))} prices are back"]
+        lasted = "Down for"
     elif key.startswith("five_min_feed_"):
-        headline = "MNQ 5M FEED RECOVERED"
-        body = f"5m bars flowing again after {mins} min." if mins is not None else "5m bars flowing again."
+        lines = ["✅ 5-minute Micro Nasdaq prices are back"]
+        lasted = "Down for"
     else:
-        headline = f"{_finding_title(key).upper()} CLEARED"
-        body = f"Condition cleared after {mins} min." if mins is not None else "Condition cleared."
-    lines = [f"✅ **RESOLVED — {headline}**", body]
+        lines = [f"✅ Resolved: {_finding_title(key)}"]
+        lasted = "Lasted"
+    if mins is not None:
+        lines.append(f"{lasted}: {_duration(mins)}")
     exposed = _exposed_lanes_for(key, tick) if key.startswith(_ACTION_IF_EXPOSED_PREFIXES) else _open_lane_positions(tick)
-    for name, pos in exposed:
-        lines.append(f"{_LANE_LABELS.get(name, name)} paper position remains OPEN"
-                     + (f" ({str(pos.get('direction') or '').upper()} @ {pos.get('entry')})." if pos.get("entry") is not None else "."))
-    lines.append(f"`{key} · read-only`")
+    if exposed:
+        lines.append("Still open: " + "; ".join(_position_phrase(name, pos) for name, pos in exposed))
+    lines.append(f"-# {key} · read-only")
+    return "\n".join(lines)
+
+
+# ── event wording (FIRST_FIRE / MILESTONE) ──────────────────────────────────
+_PRACTICE_FOOTER = "PAPER ONLY · practice tracking, no real order was placed"
+_TEST_NAMES = {
+    "vwap_hold": "Holding the day's average price",
+    "orb_reclaim": "Back inside the opening range",
+    "vwap_rejection": "Turned away at the day's average price",
+}
+_TEST_VERSIONS = {"control": "original rules", "modified": "adjusted rules", "observer": "watch only"}
+
+
+def _test_name(population: str) -> str:
+    """'vwap_hold/control' -> "Holding the day's average price (original rules)"."""
+    strategy, _, variant = str(population).partition("/")
+    name = _TEST_NAMES.get(strategy) or strategy.replace("_", " ").capitalize()
+    version = _TEST_VERSIONS.get(variant) or variant.replace("_", " ")
+    return f"{name} ({version})" if version else name
+
+
+def _leg_dollars(inst: str, entry, far) -> str:
+    try:
+        return f" (about ${abs(float(far) - float(entry)) * _POINT_VALUE[inst]:,.0f} per contract)"
+    except (KeyError, TypeError, ValueError):
+        return ""
+
+
+def _market_label(inst) -> str:
+    text = str(inst or "").strip().upper()
+    return _pe_or("market", lambda: f"{text} ({_market_name(text)})" if text in _MARKET_NAMES else text, text)
+
+
+@_fail_open_text("🆕 Practice position opened — see the watcher log")
+def _lane_opened_text(name: str, pos: dict) -> str:
+    inst = _LANE_INSTRUMENT.get(name, "MNQ")
+    side = _side(pos.get("direction"))
+    label = _LANE_LABELS.get(name, name.replace("_", " "))
+    entry = pos.get("entry")
+    return "\n".join([
+        f"🆕 {label} practice {side.lower()} opened",
+        f"Market: {_market_label(inst)}",
+        f"{side} at: {_price(entry)}",
+        f"Stop-loss: {_price(pos.get('stop'))}{_leg_dollars(inst, entry, pos.get('stop'))}",
+        f"Profit target: {_price(pos.get('target'))}{_leg_dollars(inst, entry, pos.get('target'))}",
+        f"Opened: {_when(pos.get('entry_time'))}",
+        _PRACTICE_FOOTER,
+    ])
+
+
+@_fail_open_text("🏁 Forward test ready for review — see the watcher log")
+def _milestone_text(population: str, filled: int, days: int) -> str:
+    return "\n".join([
+        "🏁 Forward test has enough results to review",
+        f"Test: {_test_name(population)}",
+        f"Filled practice trades: {filled}",
+        f"Trading days: {days}",
+        "What to do: a person reviews it — nothing changes automatically",
+    ])
+
+
+@_fail_open_text("🆕 First practice setup in this test — see the watcher log")
+def _first_candidate_text(population: str, row: dict) -> str:
+    lines = ["🆕 First practice setup in this test", f"Test: {_test_name(population)}"]
+    if row.get("instrument"):
+        lines.append(f"Market: {_market_label(row.get('instrument'))}")
+    lines.append(f"Seen: {_when(row.get('observed_at'))}")
+    lines.append(f"-# {row.get('candidate_id')} · version {str(row.get('generating_git_sha'))[:12]}")
+    return "\n".join(lines)
+
+
+@_fail_open_text("🆕 First forward-test record — see the watcher log")
+def _first_campaign_row_text(row: dict) -> str:
+    sha = str(row.get("generating_git_sha") or "")
+    population = f"{row.get('strategy')}/{row.get('variant')}"
+    lines = [
+        "🆕 First forward-test record in this test",
+        f"Test: {_test_name(population)}",
+        f"Seen: {_when(row.get('observed_at'))}",
+    ]
+    if not sha.startswith(RELEASE_SHA[:12]):
+        lines.append("⚠️ Written by a different version than the one running")
+    lines.append(f"-# version {sha[:12] or 'missing'}")
+    return "\n".join(lines)
+
+
+@_fail_open_text("🆕 First opening-range setup — see the watcher log")
+def _first_orb_reclaim_text(events: int, unpaired: int) -> str:
+    lines = ["🆕 First opening-range setup recorded", f"Setups so far: {events}"]
+    if unpaired:
+        lines.append(f"⚠️ Not recorded under both rule versions: {unpaired}")
+    return "\n".join(lines)
+
+
+@_fail_open_text("🆕 Price failed to get back above the day's average — see the watcher log")
+def _first_failed_reclaim_text(hit: dict) -> str:
+    lines = ["🆕 First time price failed to get back above the day's average"]
+    if hit.get("instrument"):
+        lines.append(f"Market: {_market_label(hit.get('instrument'))}")
+    if hit.get("session"):
+        lines.append(f"Session: {_pe_or('session', lambda: str(hit.get('session')), hit.get('session'))}")
+    lines.append(f"Seen: {_when(hit.get('ts'))}")
     return "\n".join(lines)
 
 
@@ -2252,58 +2594,6 @@ def _maybe_triage(state: dict, key: str, finding: dict, tick: dict, first_utc: s
         )
     except Exception as exc:  # noqa: BLE001 — advisory lane must never break the tick
         log(f"TRIAGE FAILED {key}: {type(exc).__name__}: {exc}")
-
-
-def smallest_fix(key: str) -> str:
-    m = {
-        "watcher_release_stale": "operator: restart `afs-watcher` only — the bot is fine, the watcher is pinned to the old release",
-        "unexpected_deploy": "operator: confirm the deploy was intended; re-arm the watcher on the new release (no auto-fix)",
-        "service_not_active": "operator: inspect `journalctl -u futures-bot`; restart only by operator decision",
-        "unexpected_restart": "operator: confirm who restarted futures-bot — a sanctioned --release re-baselines on its own, and this restart could not be tied to one (see not_adopted); re-baseline by hand only if intended",
-        "service_crash_restart": "operator: read the crash traceback in the snapshot before any restart",
-        "deploy_candidate_running": "operator: stop the leftover afs-candidate unit (systemctl, operator-run) after confirming it is a stale verifier",
-        "webhook_process_count": "operator: identify the extra/missing uvicorn process in the snapshot",
-        "feed_alarm_stale": "operator: check the feed-gap cron on the box",
-        "alert_non200": "operator: read the rejected alert lines in the snapshot (secret/rate-limit/payload)",
-        "service_traceback": "operator: read the traceback in the snapshot; no fix is applied automatically",
-        "evidence_write_error": "operator: check disk/permissions on /root/afs-shared/logs; see snapshot",
-        "journal_not_advancing": "operator: a 15m bar arrived but the journal did not grow — real stall (5m-only traffic no longer triggers this); check the service log in the snapshot",
-        "unexpected_broker_position": "operator: verify the demo account manually; the watcher never touches broker state",
-        "post_epoch_wrong_sha": "operator: evidence provenance defect — quarantine the rows listed in the snapshot",
-        "orb_reclaim_unpaired": "operator: pairing defect — audit the listed event_ids",
-        "oom_kill_new": "operator: read `journalctl -k` for the victim; free headroom (swap/resident processes); never auto-restart",
-        "memory_rss_growth_critical": "operator: futures-bot footprint grew >= 250 MB in ~2 h — inspect /tmp/afs_watcher/memory.jsonl and the snapshot before any restart decision",
-        "memory_rss_critical": "operator: futures-bot footprint near the OOM level — inspect /tmp/afs_watcher/memory.jsonl before any restart decision",
-        "memory_avail_critical": "operator: box nearly out of memory — identify the largest resident processes (ps --sort=-rss)",
-        "swap_pressure_critical": "operator: heavy paging — the box is over-committed; reduce resident processes",
-        "swap_used_critical": "operator: swap nearly exhausted — identify what is parked in swap (smem/ps) before it OOMs",
-        "swap_inactive": "operator: `swapon /swapfile` (persisted in fstab)",
-        "swap_not_persistent": "operator: restore the /swapfile line in /etc/fstab",
-        "memory_rss_growth": "operator: footprint rising ~150 MB/2 h — watch the next ticks; CRITICAL fires at +250 MB",
-        "swap_used_warning": "operator: swap filling — check what is parked in swap before it reaches 1800 MB",
-        "swap_pressure_warning": "operator: the kernel is paging — check for a memory spike in ps --sort=-rss",
-        "five_min_feed": "operator: check the TradingView 5m MNQ alert and `GET /status/five-min`; every MNQ paper lane resolves on this stream",
-        "daily_22_collector_stalled": "operator: read the service log in the snapshot — the 5m hook raises before the Daily collector (state-integrity or wide-stop error)",
-        "daily_22_state_epoch_mismatch": "operator: the persisted swing state predates the pinned epoch — do NOT delete it; decide epoch vs state by hand",
-        "daily_22_state_unreadable": "operator: inspect swing_state.json in the snapshot; the lane fails closed until it is valid",
-        "daily_22_halted": "operator: hard paper halt reached — evidence collection for this ledger is over; no automatic reset",
-        "mes_122_lane_stalled": "operator: read the service log for `mes_122 paper lane hook skipped` lines",
-        "hypothetical_position_exposed_stale_bars": "operator: a paper position cannot be resolved without bars — restore the 5m feed; never infer the outcome from later OHLC",
-        "daily_22_state_missing_while_feed_active": "operator: post-epoch MNQ 5m bars exist but swing_state.json does not — check the service log for the 5m hook failing closed; never recreate the state by hand",
-        "mes_122_lane_missing_while_feed_active": "operator: post-epoch MES 15m bars exist but the MES 1-2-2 lane wrote nothing — check `mes_122 paper lane hook skipped` in the service log",
-    }
-    for k, v in m.items():
-        if key.startswith(k):
-            return v
-    if key.startswith("feed_"):
-        return "operator: check TradingView alert delivery / chart alerts (feed-gap alarm says stale)"
-    if key.startswith(("file_shrank", "history_rewritten", "path_missing", "campaign_corrupt", "campaign_state_corrupt")):
-        return "operator: evidence integrity defect — compare against the watcher snapshot and the box backups before any repair"
-    if key.startswith("disk_"):
-        return "operator: free disk space (never delete evidence)"
-    if key.startswith("tradovate_"):
-        return "operator: inspect /status/tradovate-reliability; no recovery is triggered by the watcher"
-    return "operator: inspect the snapshot; no automatic fix"
 
 
 # ── daily reconciliation (after New York close) ──────────────────────────────
@@ -2457,56 +2747,139 @@ def _lane_census_discrepancies(collectors: list, lanes: dict, et_day: date) -> t
     return disc, skipped
 
 
+_COLLECTOR_NAMES = {
+    "futures journal": "The bot's trade log",
+    "bars MNQ": "Micro Nasdaq prices",
+    "bars MES": "Micro S&P 500 prices",
+    "strategy context": "Market background data",
+    "feed gap alarm": "The price-gap checker",
+    "bars MNQ 5m": "5-minute Micro Nasdaq prices",
+    "daily_22 swing state": "The Daily 2-2 tracker",
+    "mes_122 lane journal": "The Micro S&P 1-2-2 tracker",
+}
+_STATUS_PAGES = {
+    "/status/today": "today's summary",
+    "/status/broker-account": "the broker account",
+    "/status/proof/mnq-30": "the profit/loss check",
+}
+
+
+def _plain_problem(text: str) -> str:
+    """Daily discrepancy string (stored verbatim in the report) -> one plain line for Discord."""
+    t = str(text)
+    m = re.match(r"open BLOCKED conditions: \[(.*)\]$", t)
+    if m:
+        keys = [k.strip().strip("'\"") for k in m.group(1).split(",") if k.strip()]
+        return "Still not fixed: " + "; ".join(_finding_title(k) for k in keys)
+    m = re.match(r"(/status/[\w/-]+)\S* unreachable", t)
+    if m:
+        return f"Couldn't reach {_STATUS_PAGES.get(m.group(1), 'the bot')}"
+    if t.startswith("non-200 alert responses today"):
+        return "Some TradingView alerts were turned away today"
+    if t.startswith("journal still shows an open position after New York close"):
+        return "The bot's log still shows an open position after the 5 PM close"
+    if t.startswith("broker reports an open position after New York close"):
+        return "The broker still shows an open position after the 5 PM close"
+    if t.startswith("proof report ok=false"):
+        return "The profit/loss check reported a problem"
+    m = re.match(r"(\d+) journal outcome\(s\) unmatched", t)
+    if m:
+        return f"{m.group(1)} closed trade(s) in the log couldn't be matched to a trade"
+    if t.startswith("journal read errors"):
+        return "Some of the bot's log files couldn't be read"
+    m = re.match(r"journal P&L since epoch (\S+) != broker realized (\S+)", t)
+    if m:
+        return (f"The bot's profit/loss ({_pe_or('money', lambda: m.group(1), m.group(1))}) doesn't match "
+                f"the broker's ({_pe_or('money', lambda: m.group(2), m.group(2))})")
+    m = re.match(r"collector '(.+)' is (\w+) \(age (\S+) min\)", t)
+    if m:
+        name = _COLLECTOR_NAMES.get(m.group(1), m.group(1).replace("_", " "))
+        status = {"STALE": "out of date", "MISSING": "missing"}.get(m.group(2), m.group(2).lower())
+        try:
+            age = f" (last update {_duration(float(m.group(3)))} ago)"
+        except ValueError:
+            age = ""
+        return f"{name} — {status}{age}"
+    if t.startswith("collector census could not be produced"):
+        return "The data-freshness check couldn't run"
+    m = re.match(r"(\d+) traceback line", t)
+    if m:
+        return f"The bot logged {m.group(1)} error line(s) today"
+    m = re.match(r"hypothetical lane (\S+) holds an OPEN paper position after New York close", t)
+    if m:
+        return f"{_LANE_LABELS.get(m.group(1), m.group(1))} practice position is still open after the 5 PM close (not expected)"
+    return t
+
+
+@_fail_open_text("📋 Daily check finished — see the watcher log")
 def _daily_discord_text(verdict: str, day: str, posts: dict, rows_after_epoch, pops: dict, disc: list, path: str, lanes: dict | None = None) -> str:
-    icon = "✅" if verdict == "DAILY PASS" else "🛑"
+    ok = verdict == "DAILY PASS"
+    title = (f"✅ Daily check: all good ({_day_name(day)})" if ok
+             else f"🛑 Daily check: problems found ({_day_name(day)})")
     total = sum(posts.values()) if posts else 0
-    non200 = {k: v for k, v in posts.items() if k != "200"}
-    posts_line = f"Webhook posts: {total}" + (" (all 200)" if total and not non200 else (f" — rejected: {non200}" if non200 else ""))
-    status = "HEALTHY" if verdict == "DAILY PASS" else "CRITICAL"
-    lines = [f"{icon} **STATUS: {status}**", "**ISSUE:** Daily watcher reconciliation",
-             f"**CURRENT STATE:** {verdict} for {day}", "**KEY EVIDENCE:**", f"• {posts_line}",
-             f"• Post-epoch campaign rows: {rows_after_epoch}"]
-    reporting = sum(f"{strategy}/{variant}" in pops for strategy, variant in EXPECTED_POPULATIONS)
-    lines.append(f"• Forward campaign: {reporting}/{len(EXPECTED_POPULATIONS)} arms reporting")
-    for strategy, variant in EXPECTED_POPULATIONS:
-        key = f"{strategy}/{variant}"
-        value = pops.get(key)
-        if value is None:
-            lines.append(f"  • {key}: MISSING")
-            continue
-        candidates = value.get("candidates", 0)
-        filled = value.get("resolved_filled_economic", 0)
-        days = value.get("distinct_trading_days", 0)
-        state = "0 candidates" if candidates == 0 else "OK"
-        lines.append(f"  • {key}: {state} · {candidates} cand · {filled} filled · {days} days")
-    paired = [pops.get(f"{strategy}/{variant}", {}) for strategy, variant in EXPECTED_POPULATIONS if variant in {"control", "modified"}]
-    gate_days = min((p.get("distinct_trading_days", 0) for p in paired), default=0)
-    gate_filled = min((p.get("resolved_filled_economic", 0) for p in paired), default=0)
-    lines.append(f"• Gate: {gate_days}/{GATE_MIN_DAYS} days · {gate_filled}/{GATE_MIN_FILLED} resolved filled per control/modified arm")
-    for d in disc:
-        lines.append(f"⚠️ {d}")
+    rejected = sum(v for k, v in posts.items() if k != "200") if posts else 0
+    if not total:
+        alerts = "none"
+    elif rejected:
+        alerts = f"{total}, {rejected} turned away"
+    else:
+        alerts = f"{total}, all accepted"
+    lines = [title, f"**Alerts received:** {alerts}"]
     if lanes:
+        newest = _ts(lanes.get("newest_5m_mnq_bar_mtime"))
+        age = int((now_utc() - newest).total_seconds() // 60) if newest else None
+        when = f"{_when(newest, with_day=False)} ({_duration(age)} ago)" if newest else "unknown"
+        if lanes.get("five_min_feed_stalled"):
+            lines.append(f"**5-minute prices:** stopped — newest bar {when} (alarm after {LANE_STALL_MIN} min)")
+        else:
+            lines.append(f"**Newest price bar:** {when}")
+        positions = []
         for name, row in sorted((lanes.get("inventory") or {}).items()):
             pos = row.get("open_position") or {}
             if pos:
-                expected = name in EXPECTED_OVERNIGHT_LANES
-                instrument = "MES" if name == "mes_122_1500" else "MNQ"
-                lines.append(f"• {_LANE_LABELS.get(name, name)} · {instrument} · {pos.get('direction')} @ {pos.get('entry')} · "
-                             f"OPEN · overnight {'EXPECTED' if expected else 'NOT EXPECTED'}")
-        newest = lanes.get("newest_5m_mnq_bar_mtime")
-        stamp = _ts(newest)
-        age = int((now_utc() - stamp).total_seconds() // 60) if stamp else None
-        feed = "STALE" if lanes.get("five_min_feed_stalled") else "HEALTHY"
-        lines.extend([f"• Feed: {feed}", f"• Newest 5m bar: {newest or 'unavailable'}",
-                      f"• Bar age: {age if age is not None else 'unknown'} min"])
-        if feed == "STALE":
-            lines.append(f"• Threshold: {LANE_STALL_MIN} min (existing lane-stall threshold)")
-    lines.append("**ACTION:** None — continue monitoring." if not disc else "**ACTION:** Review the listed active problems.")
-    lines.append(f"-# File: `{path}`")
+                note = "fine to hold overnight" if name in EXPECTED_OVERNIGHT_LANES else "should have closed"
+                positions.append(f"{_position_phrase(name, pos)} ({note})")
+        if positions:
+            lines.append(f"**Open practice positions:** {'; '.join(positions)}")
+    reporting = sum(f"{strategy}/{variant}" in pops for strategy, variant in EXPECTED_POPULATIONS)
+    lines.append(f"**Forward test:** {reporting} of {len(EXPECTED_POPULATIONS)} versions reporting, {rows_after_epoch} records so far")
+    missing = [_test_name(f"{s}/{v}") for s, v in EXPECTED_POPULATIONS if f"{s}/{v}" not in pops]
+    quiet = [_test_name(f"{s}/{v}") for s, v in EXPECTED_POPULATIONS
+             if f"{s}/{v}" in pops and not (pops[f"{s}/{v}"] or {}).get("candidates")]
+    if missing:
+        lines.append(f"**Not reporting:** {'; '.join(missing)}")
+    if quiet:
+        lines.append(f"**No setups yet:** {'; '.join(quiet)}")
+    paired = [pops.get(f"{strategy}/{variant}", {}) for strategy, variant in EXPECTED_POPULATIONS if variant in {"control", "modified"}]
+    gate_days = min((p.get("distinct_trading_days", 0) for p in paired), default=0)
+    gate_filled = min((p.get("resolved_filled_economic", 0) for p in paired), default=0)
+    lines.append(f"**Progress to review:** {gate_days} of {GATE_MIN_DAYS} trading days, "
+                 f"{gate_filled} of {GATE_MIN_FILLED} filled trades (slowest version)")
+    if disc:
+        lines.append("**Problems:**")
+        lines.extend(f"⚠️ {_plain_problem(d)}" for d in disc)
+    lines.append("**What to do:** nothing" if not disc else "**What to do:** look at the problems above")
+    lines.append(f"-# report {path}")
     return "\n".join(lines)
 
 
 # ── interim two-week audit ───────────────────────────────────────────────────
+@_fail_open_text("📋 Two-week forward-test check-in written — see the watcher log")
+def _interim_discord_text(pops: dict, path: str) -> str:
+    lines = [
+        "📋 Two-week check-in on the forward test",
+        "This is a progress note, not a decision — the test keeps running.",
+    ]
+    for k, v in sorted(pops.items()):
+        lines.append(f"**{_test_name(k)}:** {v['candidates']} setups · "
+                     f"{v['resolved_filled_economic']} filled trades · {v['distinct_trading_days']} trading days")
+    if not pops:
+        lines.append("No forward-test results available yet.")
+    lines.append("**What to do:** nothing — no rules, versions or settings change")
+    lines.append(f"-# report {path}")
+    return "\n".join(lines)
+
+
 def maybe_interim(state: dict, tick: dict) -> None:
     if state.get("interim_done") or now_utc() < INTERIM_AT:
         return
@@ -2534,29 +2907,7 @@ def maybe_interim(state: dict, tick: dict) -> None:
     state["interim_done"] = True
     state_append(EVENTS_FILE, json.dumps({"utc": iso(now_utc()), "kind": "INTERIM_AUDIT", "path": str(path)}) + "\n")
     log(f"INTERIM EVIDENCE AUDIT written: {path}")
-    evidence_lines = []
-    for k, v in sorted(pops.items()):
-        evidence_lines.append(
-            f"**{k}** — {v['candidates']} candidates · "
-            f"{v['resolved_filled_economic']} resolved filled · "
-            f"{v['distinct_trading_days']} trading days"
-        )
-    status = "Not a gate decision · collection continues"
-    message = "\n".join([
-        "**Read-only daily pass**",
-        "",
-        "**Status**",
-        status,
-        "",
-        "**Evidence audit**",
-        "Two weeks post-epoch checkpoint",
-        *(evidence_lines or ["No populations available in the watcher tick"]),
-        "",
-        "**Action**",
-        "No rule change · no deploy · no restart",
-        "",
-        f"**Artifact**\n`{path}`",
-    ])
+    message = _interim_discord_text(pops, str(path))
     notify(state, "DISCORD_ROUTE_DAILY_REPORT", message, "interim")
 
 

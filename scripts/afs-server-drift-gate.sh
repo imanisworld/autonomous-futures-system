@@ -156,6 +156,15 @@ post_red_alert() {
     || log_line "WARN drift alert delivery failed"
 }
 
+# Plain-English red alert for a phone: title, one line on what it means, what to
+# do, then the raw technical detail (pins, SHAs, hashes) as small "-#" lines.
+post_plain_alert() {
+  local title="$1" what="$2" todo="$3" raw="$4" detail
+  detail="$(printf '%s\n' "$raw" | sed -n '1,8p' | sed 's/^/-# /')"
+  post_red_alert "$title" "$(printf '%s\nWhat to do: %s\n%s\n-# READ ONLY · this check never installs or restarts anything' \
+    "$what" "$todo" "$detail")"
+}
+
 file_filter() {
   grep -E '\.(py|ya?ml|json|html|j2)$|(^|/)requirements[^/]*\.txt$' \
     | grep -Ev '^(tests|scripts|docs|\.github|interactive-course|data)/' \
@@ -223,7 +232,9 @@ run_gate() {
   if [[ ! -d "$LIVE" || ! -f "$LIVE/release_manifest.json" ]]; then
     body="live release tree/manifest unavailable: $LIVE"
     log_line "ALARM release-drift: $body"
-    post_red_alert "🚨 **AFS release drift: integrity proof unavailable**" "$body"
+    post_plain_alert "🚨 Can't confirm which version the server is running" \
+      "The installed version's record file is missing, so the server can't prove it runs the approved version." \
+      "Check what's installed before trusting any new results" "$body"
     return 1
   fi
 
@@ -231,7 +242,9 @@ run_gate() {
     body="$integrity"
     log_line "ALARM release-drift: release integrity FAILED"
     printf '%s\n' "$body"
-    post_red_alert "🚨 **AFS release drift: manifest integrity FAILED**" "$body"
+    post_plain_alert "🚨 Server files don't match the installed version" \
+      "Some of the bot's files on the server changed after the version was installed." \
+      "Don't trust new results until the approved version is reinstalled" "$body"
     return 1
   fi
 
@@ -240,7 +253,9 @@ run_gate() {
   if [[ -z "$expected_commit" || -z "$manifest_commit" || "$expected_commit" != "$manifest_commit" ]]; then
     body="EXPECTED_LIVE_COMMIT=${expected_commit:-<missing>} manifest_commit=${manifest_commit:-<missing>}"
     log_line "ALARM release-drift: pinned commit mismatch"
-    post_red_alert "🚨 **AFS release drift: pinned commit mismatch**" "$body"
+    post_plain_alert "🚨 Server is running a different version than expected" \
+      "The installed version isn't the one the server's settings say should be running." \
+      "Check which version was meant to be installed" "$body"
     return 1
   fi
   expected_fp="$(env_value EXPECTED_RELEASE_FINGERPRINT 2>/dev/null || true)"
@@ -248,7 +263,9 @@ run_gate() {
   if [[ -n "$expected_fp" && "$expected_fp" != "$manifest_fp" ]]; then
     body="EXPECTED_RELEASE_FINGERPRINT=$expected_fp manifest_fingerprint=${manifest_fp:-<missing>}"
     log_line "ALARM release-drift: pinned fingerprint mismatch"
-    post_red_alert "🚨 **AFS release drift: release fingerprint mismatch**" "$body"
+    post_plain_alert "🚨 Server is running a different version than expected" \
+      "The installed files don't match the fingerprint the server's settings expect." \
+      "Check which version was meant to be installed" "$body"
     return 1
   fi
 
@@ -259,7 +276,9 @@ run_gate() {
     body="$options_integrity"
     log_line "ALARM release-drift: options-scanner release integrity FAILED"
     printf '%s\n' "$body"
-    post_red_alert "🚨 **AFS release drift: options-scanner release integrity FAILED**" "$body"
+    post_plain_alert "🚨 Options scanner files don't match its installed version" \
+      "Some of the options scanner's files changed after its version was installed." \
+      "Don't trust new options alerts until the approved version is reinstalled" "$body"
     return 1
   fi
   if [[ -n "$options_integrity" && "$QUIET" -ne 1 ]]; then

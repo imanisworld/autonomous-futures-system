@@ -198,7 +198,7 @@ def test_finding_titles_and_fixes_exist_for_new_keys():
                 "daily_22_state_epoch_mismatch", "mes_122_lane_stalled",
                 "hypothetical_position_exposed_stale_bars"):
         assert w._finding_title(key) != key.replace("_", " ").capitalize()
-        assert w.smallest_fix(key) != "operator: inspect the snapshot; no automatic fix"
+        assert w.smallest_fix(key) != w._DEFAULT_FIX
 
 
 # ── missing state / lane files: causal condition, not calendar ──────────────────
