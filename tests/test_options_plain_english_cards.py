@@ -35,14 +35,14 @@ def test_osi_symbol_is_spelled_out():
 
 
 def test_scanner_card_moves_osi_and_policy_id_to_footer():
-    osi = "QQQ" + (date.today() + timedelta(days=3)).strftime("%y%m%d") + "C00741000"
+    osi = "QQQ" + (pt.today_et() + timedelta(days=3)).strftime("%y%m%d") + "C00741000"
     result = ScoreResult(
         ticker="QQQ", direction="LONG", score=8, pattern="strat_222_reversal",
         components={"strat_pattern": 3, "vwap": 2, "trend": 2, "signa": 0},
         raw={
             "setup_status": "TRIGGERED", "paper_policy_id": "OPTIONS_PAPER_V1",
             "paper_policy_status": "VALID", "contract": osi, "strike": 741,
-            "expiry": (date.today() + timedelta(days=3)).isoformat(), "dte": 3,
+            "expiry": (pt.today_et() + timedelta(days=3)).isoformat(), "dte": 3,
             "premium_stop": 1.05, "planned_risk_dollars": 105.0,
             "projected_aggregate_open_planned_risk": 210.0,
         },
