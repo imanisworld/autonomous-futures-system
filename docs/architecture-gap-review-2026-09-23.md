@@ -111,7 +111,7 @@ Recent preregs also use strategy-specific random-direction and random-time nulls
 
 The project has already reconstructed and analyzed blocked populations rather than treating "no trade" as no information.
 
-A concrete example is the 2026-09-21 MNQ TRENDING analysis in `docs/prereg-mnq-volume-label-and-sunday-reopen-2026-09-21.md`, where 67 shadow setups were decomposed and the regime-only rejected subset was measured separately.
+A concrete example is the 2026-09-21 MNQ TRENDING analysis in `docs/prereg-mnq-volume-label-and-sunday-reopen-2026-09-21.md`, where 67 shadow setups were decomposed and the regime-only rejected subset was measured separately. That document explicitly labels the finding **"Back-tape motivation (in-sample, not scored)"**; the 27 regime-only rejects resolving 11/27 for +$642 gross are diagnostic motivation, not scored strategy evidence.
 
 `scripts/counterfactual_stats_report.py` also aggregates already-produced counterfactual rows while deliberately refusing to recreate or alter research logic.
 
@@ -155,6 +155,8 @@ The project records many trial counts and family sizes inside individual preregs
 - reruns prohibited on frozen corpora in several studies.
 
 That is materially better than untracked optimization.
+
+`ops/evidence_registry.py` also exists, with dedicated tests and paper-collection integration. It is a **read-only lane/population evidence registry** for evidence already produced; it does not require a hypothesis/variant to be registered before a scored run and does not provide a complete attempted-trial history. Its existence therefore does **not** close this gap.
 
 ### What is missing
 
@@ -249,7 +251,9 @@ This is a safety infrastructure task, not a strategy task.
 
 The project already preserves rejected candidates and has generated useful counterfactual studies from them.
 
-The current evidence proves that manual/targeted reconstruction is possible.
+One family already has automatic follow-through: the wide-stop hypothetical-ledger lane (`context/wide_stop_ledger_runtime.py`, `context/wide_stop_forward_collector.py`, and `docs/wide-stop-hypothetical-ledger-lane-spec-2026-09-07.md`) records forward IOC-real hypothetical outcomes for setups that normal risk geometry rejects. That is direct proof that automatic post-rejection tracking exists in a scoped lane.
+
+The current evidence therefore proves both manual/targeted reconstruction **and one family-specific automatic implementation**. The remaining gap is lack of a standard mechanism across all eligible rejected populations.
 
 ### What is missing
 
@@ -285,7 +289,7 @@ Execution realism is already taken seriously:
 
 - IOC tolerance studies;
 - pessimistic same-bar handling;
-- gap-stop correction;
+- gap-stop correction (`context/wide_stop_forward_collector.py`, regression coverage in `tests/test_wide_stop_forward_collector.py`, and `docs/wide-stop-gap670-deployment-2026-09-18.md`);
 - slippage stress;
 - production/replay parity work;
 - lane-specific paper/demo execution checks.
@@ -342,6 +346,66 @@ For scored research, the minimum identity should eventually include:
 Missing required identity should produce **UNKNOWN/BLOCKED**, not a normal-looking report.
 
 This is hardening of an existing architecture, not a new subsystem requirement.
+
+---
+
+## 8A. Adversarial follow-up — Perplexity audit, independently checked
+
+A later external audit surfaced several useful challenges. Each was checked against the repository and, where possible, actual GitHub Actions logs. The result is mixed: some findings are real, some are already documented debt, and one major CI inference was false.
+
+### CI scope — external concern falsified
+
+The repository's only GitHub Actions workflow, `.github/workflows/ci.yml`, installs `requirements-dev.txt` and runs **unrestricted `pytest -q`**.
+
+Actual Actions logs confirm broad collection rather than a small targeted subset:
+
+- PR #949 head: **6,863 passed / 7 skipped** in 89.48s;
+- PR #945 head: **6,872 passed / 7 skipped** in 92.54s.
+
+Therefore the inference "the job finishes in roughly two minutes, so CI probably runs only a subset" is **false**.
+
+Limits still apply: a green source-level pytest run does not prove VPS configuration, installed systemd units, current environment variables, broker account state, or deployed release identity. Those remain box-side proofs. Branch-protection/ruleset enforcement was not established by this review.
+
+PR #945's description currently says "full suite 6879 passed." The Actions log shows **6,872 passed + 7 skipped = 6,879 collected**. That wording should be corrected before treating the PR body as exact evidence.
+
+### Product/session safety — real but narrower than implied
+
+Two similarly named mechanisms have different authority:
+
+- `context/futures_session.py::product_session_active` is active session/feed expectation logic used by runtime and evidence paths;
+- `context/futures_product_session.py` is the stricter product-aware CME guard and is explicitly **prep-only / unwired**.
+
+The unwired module must not be counted as an execution control.
+
+This also leaves an **open operator requirement**: alerts/notifications should be suppressed when the relevant product market is closed. That work should be scoped to alert/signal dispatch semantics first; this review does not authorize turning the prep-only utility into a broker execution gate.
+
+### Broker mutation guards — operation-specific, not absent
+
+The Tradovate adapter has explicit live-environment checks on all three externally mutating methods reviewed:
+
+- `execute_bracket`;
+- `replace_stop`;
+- `flatten_position`.
+
+`execute_bracket` additionally requires live preflight readiness, the reliability supervisor, authentication, and order/account checks before opening new exposure.
+
+`replace_stop` and `flatten_position` intentionally do not share the full **entry** authorization chain. That asymmetry is not automatically a defect: protective-stop modification and emergency liquidation have different safety goals from opening exposure. In particular, forcing emergency flatten through an entry-arming preflight could make risk containment worse.
+
+The documentation should therefore describe live safeguards **by operation** instead of claiming that every broker mutation passes an identical five-layer chain.
+
+### Contract metadata centralization — real pre-expansion hardening item
+
+`config/futures_contracts.py` is the intended canonical economics source, but current `main` still contains Tradovate lookup fallbacks such as `_TICK_SIZE.get(root, 0.25)`.
+
+PR #945 improves this by importing the canonical tables and fixes known M2K/MBT economics, but the branch still retains an unknown-root `0.25` fallback. Therefore it does not yet establish a universal fail-closed contract-metadata invariant.
+
+This does **not** invalidate current MNQ/MES evidence merely because the fallback exists. It is a **precondition before cross-market broker admission or any claim of universal fail-closed metadata centralization**. Do not rewrite frozen research scripts merely because they carry study-specific constants; frozen cost/economic assumptions need provenance, not silent mutation to today's table.
+
+### Dependency lock — confirmed known debt, not the current promotion source
+
+`requirements.lock` is stale relative to the currently documented environment and omits `requests`, which `requirements.txt` declares and the Tradovate adapter imports. The current-status document already records this as a known gap.
+
+Current `scripts/atomic_release.sh` builds release environments from **`requirements.txt`**, then records `pip freeze`; it does not rebuild current releases from `requirements.lock`. Therefore the stale lock is reproducibility debt that should be repaired deliberately, but it is not evidence that the current release process is secretly installing from that stale file.
 
 ---
 
@@ -472,7 +536,13 @@ This document is itself the first step.
 4. **Then evaluate automatic rejected-candidate follow-through.**
    - Only for populations with causally valid predeclared hypothetical geometry.
 
-5. **Later hardening:** standing three-way execution calibration and mandatory report identity.
+5. **Before any cross-market broker admission:** resolve the remaining Tradovate unknown-root contract-economics fallback or prove an equivalent fail-closed boundary; do not treat PR #945's table import as universal centralization while the fallback remains.
+
+6. **Separately scope the market-closed alert requirement:** use the product-aware session work to suppress irrelevant alerts/notifications for closed products without silently converting the prep-only guard into execution authority.
+
+7. **Known maintenance debt:** regenerate and reconcile `requirements.lock` deliberately; current promotion uses `requirements.txt` plus a recorded freeze, so do not rebuild from the stale lock first.
+
+8. **Later hardening:** standing three-way execution calibration and mandatory report identity.
 
 No implementation work above is authorized by this document alone.
 
