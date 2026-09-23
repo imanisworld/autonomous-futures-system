@@ -1,4 +1,4 @@
-# Research Trial Ledger — minimal control specification (2026-09-23, rev 3)
+# Research Trial Ledger — minimal control specification (2026-09-23, rev 4)
 
 **Status: SPECIFICATION ONLY — NOT IMPLEMENTED. Docs-only. No code, no runtime, no
 strategy, risk, broker, collector or deployment change. Nothing in this document
@@ -27,6 +27,14 @@ that **already exists at that commit** — the prereg or a frozen cell manifest 
 a result that does not exist yet (§4.2, §6, §7.4). Evidence artifacts are identified by a
 mandatory naming convention **and** a machine-readable marker (§7.3).
 
+**Rev 4 (same day) — final design corrections from the third review:** each execution gets
+a unique ordinal `trial_id` even when the same prereg is rerun (§4.2); every multi-variant
+trial uses a small machine-readable frozen JSON manifest rather than asking CI to parse
+arbitrary Markdown (§4.2, §6, §7.4); and post-ledger scored evidence has one canonical
+CI-controlled home, `docs/research-evidence/<trial_id>/` (§5, §7.3). Files outside that
+boundary may exist as notes or exploratory artifacts, but they are not ledger-governed
+evidence and cannot be the `result_artifact` of a valid `COMPLETED` event.
+
 ---
 
 ## 1. The gap, in one paragraph
@@ -50,7 +58,8 @@ lives under `private/` (`.gitignore:65`) — unversioned.
 2. one rule: a result cannot become evidence unless its trial (and prereg) were registered
    in an earlier commit — **register-before-evidence**;
 3. one retention rule: an attempted variant set cannot disappear;
-4. one CI test that enforces 1–3 mechanically.
+4. one CI test that mechanically enforces 1–3 for the repository's canonical
+   ledger-governed evidence boundary (§5, §7).
 
 **Explicitly out of scope — do not touch:** `ops/evidence_registry.py`,
 `docs/strategy-rules/Strategy_Inventory.md`, the one-look receipt mechanism, existing
@@ -95,7 +104,7 @@ individual cells are not separate trials unless a prereg declares them so.
 
 | Field | Type | Rule |
 |---|---|---|
-| `trial_id` | string | `T-<YYYY-MM-DD>-<slug>`; `<slug>` = prereg filename stem; unique per first line (`PLANNED`/`ADOPTED`/`UNREGISTERED_ATTEMPT`) |
+| `trial_id` | string | `T-<YYYY-MM-DD>-<slug>-<NN>`; `<slug>` = prereg filename stem when a prereg exists (otherwise a stable descriptive slug for `UNREGISTERED_ATTEMPT`); `<NN>` = 2-digit execution ordinal for that slug/date, starting at `01`. Every distinct execution/rerun/reproduction gets a new `trial_id`; state changes for one execution reuse that id. |
 | `event` | enum | §4.1 |
 | `recorded_at` | ISO-8601 UTC | when the line was appended; non-decreasing within a `trial_id` |
 | `recorded_by` | string | agent/operator label (no e-mail) |
@@ -104,7 +113,7 @@ individual cells are not separate trials unless a prereg declares them so.
 | `family_id` | string | **stable machine id**, `^[a-z0-9_]+$` (e.g. `mnq_322_first_live`); the multiple-testing family key |
 | `family_label` | string | human label, free text |
 | `population` | string | instruments + data window + corpus identity, one line |
-| `variant_set` | object | `{"count": int, "manifest": "<repo path>"}` — count of cells/variants declared by the prereg; `manifest` = the **frozen** cell inventory, a file that **already exists at the commit of the first line**: the prereg itself when it enumerates the cells, otherwise `docs/research-trial-manifests/<trial_id>.json` committed in the same PR (§6). Never a result artifact. |
+| `variant_set` | object | `{"count": int, "manifest": "<repo path>"}` — count of cells/variants declared before scoring. If `count > 1`, `manifest` **must** be `docs/research-trial-manifests/<trial_id>.json`, a frozen machine-readable inventory committed no later than the first ledger line. If `count == 1`, `manifest` may be that JSON manifest or the prereg itself when the single variant is explicit. Never a result artifact. |
 | `prior_exposed` | string | `none` or a one-line disclosure of previously seen cells/lanes |
 
 ### 4.3 Required additionally on the first line (`PLANNED` / `ADOPTED` / `UNREGISTERED_ATTEMPT`)
@@ -140,8 +149,10 @@ committed:
 1. a `PLANNED` line for its `trial_id` exists in the ledger at a commit that is an ancestor
    of the result commit and **not the same commit**;
 2. that line's `prereg_commit` is likewise a strict ancestor of the result commit;
-3. the result artifact cites the `trial_id` (JSON key `trial_id`; Markdown front matter
-   `trial_id:`), and the prereg cites it too (two-way link).
+3. the result artifact lives under the canonical path
+   `docs/research-evidence/<trial_id>/`, cites the same `trial_id` (JSON key
+   `trial_id`; Markdown front matter / HTML comment `trial_id:`), and the prereg cites
+   it too (two-way link).
 
 **What is not guaranteed, stated plainly.** The repository cannot observe a local shell. A
 study can be executed, its result seen, and only then registered — the ledger cannot detect
@@ -150,6 +161,13 @@ commit*, which makes silent post-hoc registration a deliberate act that leaves a
 (commit order and timestamps), not an accident. A true pre-run check (for example, a study
 script refusing to write a result file unless a `PLANNED` line for its `trial_id` already
 exists in `HEAD`) is a possible later hardening and is **not** part of this spec.
+
+**Canonical evidence boundary.** After the ledger starts, a scored research artifact counts
+as repository evidence only when it is registered through the ledger and stored under
+`docs/research-evidence/<trial_id>/`. Exploratory notes, scratch outputs, or result-like
+files elsewhere in the repo may be retained for provenance, but they are **not
+ledger-governed evidence**, cannot be the `result_artifact` of a valid `COMPLETED` event,
+and must not be used for Inventory, handoff, or promotion claims.
 
 **Unregistered results.** A result artifact that fails 1–3 is `INVALID_EVIDENCE`. It is not
 deleted. It receives an `UNREGISTERED_ATTEMPT` line carrying `result_artifact`,
@@ -167,15 +185,18 @@ For every trial, the **variant/cell inventory** is frozen **before** scoring and
 in a versioned location. `variant_set.manifest` on the first line must point at a file that
 exists at that line's commit:
 
-- the **prereg itself**, when it enumerates every cell/variant (the common case — e.g.
-  "18 candidate cells" listed in `docs/prereg-strat-rules-magnitude-ftfc-2026-09-23.md`);
-- otherwise a **frozen cell manifest** at `docs/research-trial-manifests/<trial_id>.json`,
-  committed in the same PR as the `PLANNED` line, listing every attempted variant/cell
-  identity. For studies whose data/scripts are private (`private/`,
-  `.git/info/exclude`), the manifest also carries the SHA-256 of the private per-cell
-  results file once it exists (appended as a `COMPLETED`-time update to the manifest's
-  `results_sha256` field only; the cell list itself is never edited). The private data may
-  stay private; the *list of what was tried* may not.
+- if `variant_set.count > 1`, a **frozen machine-readable manifest** is mandatory at
+  `docs/research-trial-manifests/<trial_id>.json`, committed no later than the first
+  `PLANNED`/`ADOPTED` line. Minimum shape:
+  `{"trial_id":"...","variants":[{"id":"stable-cell-id"}, ...],"results_sha256":null}`.
+  `variants[].id` values are unique and the array length must equal
+  `variant_set.count`. The cell identities are immutable after registration;
+- if `variant_set.count == 1`, the prereg itself may be the manifest when it names the
+  single variant explicitly, or the same JSON form may be used;
+- for studies whose data/scripts are private (`private/`, `.git/info/exclude`), the JSON
+  manifest also records the SHA-256 of the private per-cell results bundle once it exists
+  (the only permitted completed-time mutation is `results_sha256: null -> "<sha256>"`).
+  The private data may stay private; the *list of what was tried* may not.
 
 The later result artifact **references** the frozen inventory (via `trial_id`); it never
 becomes the inventory after the fact.
@@ -207,21 +228,25 @@ rule rather than a habit.
    append-only *against* yet). Once the ledger exists on `main`, a missing or unreadable
    base file **fails closed** forever — the test does not skip, and a PR that deletes or
    renames the ledger fails.
-3. **Register-before-evidence:** an **evidence artifact** is any file first added after the
-   ledger start commit (§8) that (a) matches the **mandatory naming convention** for new
-   evidence — `docs/<slug>-results-<YYYY-MM-DD>.{md,json}` or
-   `docs/<slug>-evaluator-<YYYY-MM-DD>.md` — **or** (b) carries the machine-readable marker
-   (JSON key `trial_id`, or Markdown front matter / HTML comment `trial_id:`). Both sets are
-   scanned. Every artifact found must cite a `trial_id` whose `PLANNED` line's first commit
-   is a strict ancestor of the artifact's first commit (`git log --diff-filter=A`), and
-   whose prereg cites the same `trial_id`. `ADOPTED` trials are exempt from the ancestry
-   check (§8). Artifacts older than the start commit are exempt. A new evidence file that
-   uses neither the convention nor the marker is a ledger violation that review, not CI,
-   catches — the convention exists precisely so that this cannot happen by accident.
+3. **Register-before-evidence / canonical path:** CI scans every file under
+   `docs/research-evidence/` added or modified after the ledger start commit. Each scored
+   artifact must live under `docs/research-evidence/<trial_id>/`, carry that exact
+   `trial_id`, and be named by the corresponding `COMPLETED` or
+   `UNREGISTERED_ATTEMPT.result_artifact`. For valid evidence, the `PLANNED` line's first
+   commit must be a strict ancestor of the artifact's first commit
+   (`git log --diff-filter=A`), and the prereg must cite the same `trial_id`.
+   `ADOPTED` trials are exempt from the ancestry guarantee (§8) but still use the canonical
+   path at completion. A `COMPLETED.result_artifact` outside
+   `docs/research-evidence/<trial_id>/` fails CI. Files outside
+   `docs/research-evidence/` are not recognized as ledger-governed evidence by this
+   mechanism and cannot satisfy a `COMPLETED` event.
 4. **Retention:** every `variant_set.manifest` path **exists at the commit of the line that
-   declares it** (`git cat-file -e <first-line commit>:<path>`) and still exists at `HEAD`;
-   for frozen manifests the cell list has ≥ `variant_set.count` entries and is byte-identical
-   between the first-line commit and `HEAD` except for the `results_sha256` field (§6).
+   declares it** (`git cat-file -e <first-line commit>:<path>`) and still exists at `HEAD`.
+   When `variant_set.count > 1`, CI requires the JSON manifest path defined in §6, requires
+   exactly `variant_set.count` unique `variants[].id` entries, and requires the manifest
+   to remain byte-equivalent to its first-line version except for the one permitted
+   `results_sha256: null -> "<sha256>"` mutation. For `count == 1`, CI only accepts either
+   that JSON shape or the prereg path declared on the first line.
 5. **Linkage:** every `docs/prereg-*.md` first added after the start commit has at least one
    ledger line, and cites its own `trial_id`.
 
@@ -258,14 +283,17 @@ an `origin/main` ref — the only workflow change; to be confirmed at implementa
   becoming evidence without a prior registration commit, and it records unregistered
   executions instead of hiding them.
 - It does not replace, wrap, or import `ops/evidence_registry.py`.
-- It does not change how preregs are written beyond one required cross-reference
-  (`trial_id`).
+- It does not change study logic. New preregs add one required `trial_id` cross-reference;
+  multi-variant trials also add the small JSON variant manifest required by §6.
+- It does not classify arbitrary files elsewhere in the repository as scored evidence. The
+  canonical ledger-governed evidence boundary is `docs/research-evidence/<trial_id>/`; a
+  file outside it cannot satisfy a valid `COMPLETED` event.
 
 ## 10. Open questions — proposed answers (pending operator confirmation)
 
 | # | Question | Proposed answer |
 |---|---|---|
-| 1 | Two-way `trial_id` link (prereg ↔ result) or results only? | **Two-way.** `trial_id` is derived from the prereg stem, so the prereg can cite it in the same PR that adds the `PLANNED` line. |
+| 1 | Two-way `trial_id` link (prereg ↔ result) or results only? | **Two-way.** The prereg/ledger PR allocates the next unique `T-<date>-<slug>-<NN>` execution id; the prereg cites that id before scoring and the result reuses it. |
 | 2 | Markdown citation form? | **Front matter `trial_id:`** (or an HTML comment `<!-- trial_id: … -->` if the doc has no front matter). No mandatory JSON sidecar. |
 | 3 | Options-lane studies: same ledger? | **One shared ledger** for futures and options. `family_id` separates them. |
 | 4 | Who appends? | **The study owner/agent**, in the same PR as the prereg, before any scoring. |
@@ -276,7 +304,8 @@ an `origin/main` ref — the only workflow change; to be confirmed at implementa
 1. Review this revision; confirm §10.
 2. If approved: one PR containing the empty ledger file, the three `ADOPTED` lines, the CI
    test and the `fetch-depth` line. No other files.
-3. The next new prereg is the first `PLANNED` entry.
+3. The next new prereg is the first `PLANNED` entry and allocates a unique execution
+   ordinal; if it has more than one variant it includes the frozen JSON manifest.
 4. Later, separately: retention manifest for the 2026-09-23 grid; optional pre-run
    hardening in study scripts (§5).
 
