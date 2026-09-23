@@ -40,7 +40,7 @@ Runtime effect of `aba8324..b242071` on the futures path:
 - #924: decision-notification and feed-health gating no longer suppress 16:15–16:30 ET (CME removed that halt in 2021);
 - #927/#928/#930: Discord alerts sent as cards, in plain English (presentation only).
 
-**Approval record:** the operator GO for the releases that carried #918 and #920 is **not recorded in this repository**. The "no deployment authorized merely to pick up #918/#920" statement below was accurate when written and is now superseded by the box state. Record the approval (or its absence) in the private handoff log.
+**Approval record:** operator GO for releases `902a99a`, `88e89e4` (the first to carry #918/#920), `5fd4716`, `3a3d425` and `42b9def` is recorded in the private handoff log. The final `b242071` release (#930) had no handoff entry as of 2026-09-23 ~01:45 UTC. The "no deployment authorized merely to pick up #918/#920" statement below was accurate when written and is superseded by the approved `88e89e4` release.
 
 **Landmine:** the futures process runs from the release cwd but with the interpreter `/root/autonomous-futures-system/.venv/bin/python` (the mutable git-checkout venv), so its dependencies are not pinned by the release.
 
@@ -182,7 +182,7 @@ The duplicate research work did not create a journal repair requirement.
 - zero/dead forward-campaign arm visibility (#582 / `964099c`);
 - `project_check daily` critical-failure success semantics (#788/#790).
 
-~~No deployment or restart is authorized merely to pick up #918/#920.~~ Superseded 2026-09-23: both are now on the box via the bundled releases listed under "Runtime reconciliation". Strategy, risk, and broker order behavior are unchanged by them; any further trading-path change still needs its own approved release.
+~~No deployment or restart is authorized merely to pick up #918/#920.~~ Superseded 2026-09-23: both reached the box in the operator-approved `88e89e4` release (see "Runtime reconciliation"). Strategy, risk, and broker order behavior are unchanged by them; any further trading-path change still needs its own approved release.
 
 ## Current evidence gates
 
