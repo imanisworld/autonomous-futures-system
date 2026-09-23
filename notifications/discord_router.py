@@ -16,6 +16,11 @@ Design guarantees:
     crash the webhook/decision loop. It raises only for a programming error
     (an unknown route name).
   - One retry maximum on a send failure, then local log and return False.
+    A 429 retry first waits the delay Discord asked for (``retry_after`` /
+    ``Retry-After``), bounded by ``max_retry_wait``; a longer requested wait
+    drops the message instead of blocking the caller.
+  - Webhook URLs/tokens are never logged: every logged error is passed
+    through ``redact_webhooks`` first.
   - A failed delivery is NEVER re-notified through Discord (no notification
     loops during a Discord outage).
 """
@@ -24,6 +29,8 @@ from __future__ import annotations
 
 import logging
 import os
+import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Mapping, Optional
@@ -37,6 +44,47 @@ logger = logging.getLogger(__name__)
 Transport = Callable[[str, "str | dict"], None]
 
 _DEFAULT_ROUTES_PATH = Path(__file__).resolve().parent.parent / "config" / "notification_routes.yaml"
+
+# Discord webhook URL: /api/webhooks/<id>/<token>. The token is the secret.
+_WEBHOOK_URL = re.compile(
+    r"https?://(?:[\w-]+\.)?discord(?:app)?\.com/api(?:/v\d+)?/webhooks/[^\s'\"<>]+",
+    re.IGNORECASE,
+)
+_REDACTED_WEBHOOK = "<discord-webhook-redacted>"
+
+# Default ceiling on a server-requested 429 wait for inline callers (the
+# signal/error routes run on the alert path). Background senders pass more.
+DEFAULT_MAX_RETRY_WAIT = 2.0
+
+
+def redact_webhooks(text: object) -> str:
+    """Replace any Discord webhook URL (id + secret token) in ``text``."""
+    return _WEBHOOK_URL.sub(_REDACTED_WEBHOOK, str(text))
+
+
+def retry_after_seconds(exc: BaseException) -> Optional[float]:
+    """Seconds Discord asked us to wait on a 429, or None when not a 429.
+
+    Reads the JSON body's ``retry_after`` first (Discord's documented field),
+    then the ``Retry-After`` header. A 429 without a usable value returns 1.0.
+    """
+    response = getattr(exc, "response", None)
+    if getattr(response, "status_code", None) != 429:
+        return None
+    try:
+        value = float((response.json() or {}).get("retry_after"))
+        if value >= 0:
+            return value
+    except Exception:  # noqa: BLE001 - body may be missing or not JSON
+        pass
+    try:
+        value = float(response.headers.get("Retry-After"))
+        if value >= 0:
+            return value
+    except Exception:  # noqa: BLE001
+        pass
+    return 1.0
+
 
 # Remember which optional routes we've already warned about so a disabled
 # optional route does not spam the log on every send.
@@ -102,10 +150,12 @@ class DiscordRouter:
         routes_path: str | os.PathLike[str] | None = None,
         transport: Optional[Transport] = None,
         env: Optional[Mapping[str, str]] = None,
+        sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         self.routes: dict[str, Route] = dict(routes) if routes is not None else load_routes(routes_path)
         self._transport = transport or _default_transport
         self._env = env if env is not None else os.environ
+        self._sleep = sleep
 
     # ── Introspection (safe metadata only — never the URL) ───────────────────
     def route_names(self) -> list[str]:
@@ -141,7 +191,14 @@ class DiscordRouter:
             )
 
     # ── Delivery ─────────────────────────────────────────────────────────────
-    def send(self, route_name: str, message: "str | dict", metadata: Optional[dict] = None) -> bool:
+    def send(
+        self,
+        route_name: str,
+        message: "str | dict",
+        metadata: Optional[dict] = None,
+        *,
+        max_retry_wait: float = DEFAULT_MAX_RETRY_WAIT,
+    ) -> bool:
         """Deliver a message to a logical route.
 
         Returns:
@@ -187,10 +244,25 @@ class DiscordRouter:
                     self._transport(url, message)
                 return True
             except Exception as exc:  # noqa: BLE001 - delivery must never propagate
+                error = redact_webhooks(exc)
                 if attempt == 1:
-                    logger.warning("Discord route '%s' send attempt 1 failed: %s; retrying once.", route.name, exc)
+                    wait = retry_after_seconds(exc)
+                    if wait is not None and wait > max_retry_wait:
+                        logger.error(
+                            "Discord route '%s' rate limited (retry after %.2fs > %.2fs cap): %s; message dropped.",
+                            route.name, wait, max_retry_wait, error,
+                        )
+                        return False
+                    if wait is not None:
+                        logger.warning(
+                            "Discord route '%s' rate limited: %s; retrying once after %.2fs.",
+                            route.name, error, wait,
+                        )
+                        self._sleep(wait)
+                    else:
+                        logger.warning("Discord route '%s' send attempt 1 failed: %s; retrying once.", route.name, error)
                     continue
-                logger.error("Discord route '%s' send failed after retry: %s; message dropped.", route.name, exc)
+                logger.error("Discord route '%s' send failed after retry: %s; message dropped.", route.name, error)
                 return False
         return False
 

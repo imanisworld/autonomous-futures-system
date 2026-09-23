@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 from dataclasses import replace
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -18,6 +19,7 @@ import pytest
 
 from execution import cross_instrument_observation as cio
 from notifications import observation_notifier as obs
+from notifications.discord_card import card_text
 from notifications.discord_router import DiscordRouter, load_routes
 from webhook.observation_transport import observe_collection_only_alert
 from webhook.payload import AlertPayload
@@ -72,7 +74,12 @@ def capture_router(monkeypatch):
     sent: list[tuple[str, str]] = []
 
     def transport(url, message):
-        sent.append((url, message))
+        # Observation cards arrive grouped (one embed per event); record each
+        # card as its flattened text so assertions stay per event.
+        if isinstance(message, dict) and message.get("embeds"):
+            sent.extend((url, card_text({"embeds": [embed]})) for embed in message["embeds"])
+        else:
+            sent.append((url, message))
 
     real_init = DiscordRouter.__init__
 
@@ -80,6 +87,7 @@ def capture_router(monkeypatch):
         real_init(self, routes=routes, routes_path=routes_path, transport=transport, env=env)
 
     monkeypatch.setattr(DiscordRouter, "__init__", patched_init)
+    monkeypatch.setattr(obs, "DELIVERY_MODE", "inline")
     return sent
 
 
@@ -315,3 +323,70 @@ def test_stale_pending_with_persisted_outcome_is_cleared_without_duplicate_event
     assert obs.notify_observation(resolved) == 1 and len(capture_router) == 1
     assert capture_router[0][1].startswith("🟢 M2K practice buy won")
     assert cio.resolve_pending(tmp_path, instrument="M2K", bars=[], current_bar_ts=_ts(15, 45)) == []  # nothing left
+
+
+# ── 6. delivery isolation (2026-09-23 session-open 429 burst) ────────────────
+
+def _hanging_router(monkeypatch, gate, sent):
+    """Real router whose transport blocks until ``gate`` is set (Discord hung)."""
+    real_init = DiscordRouter.__init__
+
+    def transport(url, message):
+        gate.wait(10)
+        sent.append(message)
+
+    monkeypatch.setattr(DiscordRouter, "__init__",
+                        lambda self, routes=None, routes_path=None, transport_=None, env=None:
+                        real_init(self, routes=routes, routes_path=routes_path, transport=transport, env=env))
+
+
+def test_mnq_alert_processing_is_not_blocked_by_a_hung_observation_discord(tmp_path, config, armed, monkeypatch):
+    """The MNQ/MES leg calls notify_observation under the alert lock; with the
+    background sender it must return while Discord is still hanging."""
+    import time as _time
+
+    from webhook.runner import process_alert
+
+    gate, sent = threading.Event(), []
+    _hanging_router(monkeypatch, gate, sent)
+    monkeypatch.setattr(obs, "_DISPATCHER", obs._Dispatcher(sleep=lambda s: None))
+    monkeypatch.setattr(obs, "DELIVERY_MODE", "background")
+    monkeypatch.setenv("DISCORD_ROUTE_OBSERVATION", "https://obs.invalid/route")
+    cfg = replace(config, enabled_concepts=[])
+    started = _time.monotonic()
+    for p in _strat_212_sequence("MNQ1!", 19500.0):
+        out = process_alert(p, config=cfg, log_dir=str(tmp_path), for_date=DAY)
+        assert "cross_instrument_observation" in out
+    assert _time.monotonic() - started < 5.0      # would be ≥10s per card if sends were inline
+    assert sent == []                              # Discord still "hung", alerts already processed
+    assert any(r["record_type"] == "CANDIDATE" for r in cio.read_evidence(tmp_path))
+    gate.set()
+    assert obs._DISPATCHER.join(5) and sent
+
+
+def test_permanent_discord_failure_leaves_observation_results_and_evidence_unchanged(tmp_path, config, armed, monkeypatch):
+    """Same alerts, Discord down vs no Discord at all: identical decisions and evidence rows."""
+    monkeypatch.setattr(obs, "DELIVERY_MODE", "inline")
+    seq = _strat_212_sequence("MGC1!", 2400.0)
+
+    def run(log_dir):
+        return [observe_collection_only_alert(p, config=config, log_dir=str(log_dir), for_date=DAY)["decision"]
+                for p in seq]
+
+    baseline = run(tmp_path / "off")
+    real_init = DiscordRouter.__init__
+
+    def failing(url, message):
+        raise RuntimeError(f"503 for url '{url}'")
+
+    monkeypatch.setattr(DiscordRouter, "__init__",
+                        lambda self, routes=None, routes_path=None, transport_=None, env=None:
+                        real_init(self, routes=routes, routes_path=routes_path, transport=failing, env=env))
+    monkeypatch.setenv("DISCORD_ROUTE_OBSERVATION", "https://discord.com/api/webhooks/1/tok")
+    assert run(tmp_path / "down") == baseline
+
+    def strip(rows):
+        return [{k: v for k, v in r.items() if k not in ("observed_at",)} for r in rows]
+
+    rows = strip(cio.read_evidence(tmp_path / "off"))
+    assert rows and strip(cio.read_evidence(tmp_path / "down")) == rows
