@@ -8,8 +8,9 @@ title, status color, labelled fields, footer.
 The alert TEXT is never rewritten — only laid out. Parsing is deliberately
 simple and deterministic:
 
-  - first non-empty line                       -> card title (a long
-                                                  "a · b · c" line keeps "a")
+  - first non-empty line                       -> card title (a long line
+                                                  keeps its lead phrase before
+                                                  " — ", " · " or ": ")
   - "Key: value" lines before any section      -> inline fields
   - "**Header**" / "Header:" lines (no value)  -> full-width field sections
   - fenced ``` blocks                          -> kept verbatim in place
@@ -65,6 +66,11 @@ _TITLE_SPLIT_AT = 60
 
 def status_color(title: str, body: str = "") -> int:
     """Color from the title; fall back to emoji markers in the body."""
+    # A leading status emoji is the sender's explicit verdict.
+    lead = title.lstrip()[:2]
+    for marks, color in (("🔴🚨❌⛔🛑", COLOR_FAIL), ("⚠🟡🟠", COLOR_WARN), ("✅🟢", COLOR_PASS)):
+        if any(mark in lead for mark in marks):
+            return color
     if _RECOVERY.search(title):
         return COLOR_PASS
     for pattern, color in ((_FAIL, COLOR_FAIL), (_WARN, COLOR_WARN), (_PASS, COLOR_PASS)):
@@ -85,6 +91,18 @@ def _clean_title(line: str) -> str:
 
 def _cut(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+
+def _list_lines(value: str) -> str:
+    """'a · b · c · d' reads better stacked; short pairs stay on one line."""
+    parts = [part.strip() for part in value.split(" · ")]
+    return "\n".join(parts) if len(parts) >= 3 and all(parts) else value
+
+
+def _inline(value: str) -> bool:
+    """Short values (or short stacked lists) sit side by side as columns."""
+    lines = value.split("\n")
+    return len(lines) <= 8 and all(len(line) <= _INLINE_MAX for line in lines)
 
 
 def _is_kv_key(key: str) -> bool:
@@ -113,9 +131,14 @@ def text_card(text: str, *, source: str = "", timestamp: Optional[datetime] = No
     # Footers render no markdown.
     footer_bits = [bit.replace("`", "").strip() for bit in footer_bits]
     title = _clean_title(body.pop(0)) if body else (source or "AFS alert")
-    if len(title) > _TITLE_SPLIT_AT and " · " in title:
-        title, rest = title.split(" · ", 1)
-        body.insert(0, rest)
+    if len(title) > _TITLE_SPLIT_AT:
+        # A run-on first line reads badly as a bold title: keep its lead phrase.
+        for sep in (" — ", " · ", ": "):
+            head, _, rest = title.partition(sep)
+            if rest and 3 <= len(head) <= _TITLE_SPLIT_AT:
+                title = head
+                body.insert(0, rest)
+                break
 
     description: list[str] = []
     fields: list[dict[str, Any]] = []
@@ -139,8 +162,8 @@ def text_card(text: str, *, source: str = "", timestamp: Optional[datetime] = No
         if bold_kv:
             # An explicit labelled line always stands on its own and ends a section.
             section = None
-            value = bold_kv.group("value").strip()
-            fields.append({"name": bold_kv.group("key").strip(), "value": value, "inline": len(value) <= _INLINE_MAX})
+            value = _list_lines(bold_kv.group("value").strip())
+            fields.append({"name": bold_kv.group("key").strip(), "value": value, "inline": _inline(value)})
             continue
         header = _HEADER_BOLD.match(stripped) or _HEADER_COLON.match(stripped)
         if header and not _BULLET.match(line):
@@ -149,10 +172,11 @@ def text_card(text: str, *, source: str = "", timestamp: Optional[datetime] = No
             continue
         kv = _KV.match(stripped)
         if section is None and kv and _is_kv_key(kv.group("key")) and not _BULLET.match(line):
+            value = _list_lines(kv.group("value").strip())
             fields.append({
                 "name": kv.group("key").strip().strip("*").strip(),
-                "value": kv.group("value").strip(),
-                "inline": len(kv.group("value").strip()) <= _INLINE_MAX,
+                "value": value,
+                "inline": _inline(value),
             })
             continue
         target().append(line)
