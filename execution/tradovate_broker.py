@@ -29,6 +29,11 @@ from zoneinfo import ZoneInfo
 
 import requests
 
+from config.futures_contracts import (
+    TICK_SIZE as _CONTRACT_TICK_SIZE,
+    TICK_VALUE as _CONTRACT_TICK_VALUE,
+    contract_root,
+)
 from execution.broker_interface import (
     BracketOrder,
     BrokerCapabilities,
@@ -95,13 +100,11 @@ class AuthResult:
     def ok(self) -> bool:
         return self.status == AUTH_HEALTHY
 
-# Per-instrument tick specs
-_TICK_SIZE: dict[str, float] = {
-    "MES": 0.25, "ES": 0.25, "MNQ": 0.25, "NQ": 0.25, "MGC": 0.10, "MCL": 0.01,
-}
-_TICK_VALUE: dict[str, float] = {
-    "MES": 1.25, "ES": 12.50, "MNQ": 0.50, "NQ": 5.00, "MGC": 1.00, "MCL": 1.00,
-}
+# Per-instrument tick specs: the single source in config/futures_contracts.py
+# (same MNQ/MES/ES/NQ/MGC/MCL values as the old local table, plus M2K and MBT,
+# which previously fell through to the 0.25 / $1.25 defaults).
+_TICK_SIZE = _CONTRACT_TICK_SIZE
+_TICK_VALUE = _CONTRACT_TICK_VALUE
 
 
 def _round_to_tick(price: float, instrument: str) -> float:
@@ -1043,6 +1046,20 @@ class TradovateBroker(BrokerInterface):
                 logger.error("BLOCKED Tradovate order: reliability supervisor is not ready")
                 return self._cancelled_fill(order, "BROKER_NOT_READY")
 
+            # ── Market admission (prereg 2026-09-23 §7) ──────────────────────
+            # MNQ/MES only unless config/paper_market_admission.json lists the
+            # market (empty = switched off). An admitted market also needs a
+            # computed contract-roll rule; the nearest-expiry fallback is never
+            # used for a newly admitted market.
+            from execution.paper_market_admission import BASE_PAPER_ROOTS, paper_order_allowed
+            allowed, adm_root = paper_order_allowed(order.instrument)
+            if not allowed:
+                logger.error("BLOCKED Tradovate order: market %r is not admitted for paper", order.instrument)
+                return self._cancelled_fill(order, "MARKET_NOT_ADMITTED")
+            if adm_root not in BASE_PAPER_ROOTS and _front_month_symbol(adm_root, self._trading_date()) is None:
+                logger.error("BLOCKED Tradovate order: no contract-roll rule for admitted market %s", adm_root)
+                return self._cancelled_fill(order, "NO_ROLL_POLICY")
+
             # ── Entry execution mode (demo/paper only beyond "legacy") ────────
             # An order-level override (e.g. the isolated wide-stop demo lane)
             # takes precedence over the process-wide env var so that lane can
@@ -1760,10 +1777,9 @@ class TradovateBroker(BrokerInterface):
         try:
             data = self._get(f"/contract/item?id={contract_id}")
             name = data.get("name", "") or data.get("root", "")
-            # Strip expiry suffix — e.g. "MESM26" → "MES"
-            for root in ("MES", "ES", "MNQ", "NQ", "MGC", "MCL"):
-                if str(name).upper().startswith(root):
-                    return root
+            # Strip expiry suffix — e.g. "MESM26" → "MES" (exact-root match,
+            # so M2K keeps its digit and MNQ never matches as NQ).
+            return contract_root(name)
         except Exception:
             pass
         return None
