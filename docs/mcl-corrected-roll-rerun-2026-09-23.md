@@ -34,8 +34,11 @@ last trade date**.
   - The live MCL1! switched V6→X6 at 2026-09-17T22:00Z (trade date 09-18);
     V6's last trade was 09-21.
   - The rule matches every Polygon volume crossover since 2026-03.
-  - It matches TradingView's documented method: a fixed per-symbol number
-    of business days before expiration.
+  - TradingView documents continuous-futures switch timing as symbol-specific
+    and derived from historical volume behavior relative to expiration. The
+    observed MCL switch behavior here is consistent with one business day
+    before the listed last-trade date. This is MCL-specific and is not a rule
+    for other futures.
 - It is causal: last-trade dates are known when a contract lists.
 
 **Parity on the corrected corpus** (live CANDIDATE rows, 2026-09-16..22):
