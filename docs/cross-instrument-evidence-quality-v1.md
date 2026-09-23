@@ -79,9 +79,11 @@ Rules:
 - missing per-bar source ticker: fail closed as unknown.
 
 The repo's historical quarterly roll convention is not treated as proof of the
-live continuous feed's switch time. The 2026-09-14 M2K live-feed check showed the
-continuous switch later than that convention, so using the helper as a quality
-certificate could produce false-clean evidence.
+live continuous feed's switch time. Operator-captured TradingView Contract Switch
+markers now prove the 2026 M2K switch **dates** as 2026-06-16 (M6→U6) and
+2026-09-16 (U6→Z6), while the box did not observe either exact intraday transition.
+The generic scheduler therefore remains non-authoritative, and using it as a
+quality certificate could still produce false-clean evidence.
 
 ### Current conservative limitation
 
@@ -131,7 +133,7 @@ Thirty dirty rows cannot satisfy the gate.
 `tests/test_cross_instrument_evidence_quality.py` covers:
 
 - a complete exact-dated M2K window qualifying;
-- a complete continuous M2K window spanning the observed 2026-09-14 live roll
+- a complete continuous M2K window spanning an unproven intraday roll boundary
   failing closed as `ROLL_PROVENANCE_UNKNOWN`;
 - an unexplained missing 15m bar blocking the sample;
 - a missing 16:15 ET equity-index bar counting as a gap, and the daily
