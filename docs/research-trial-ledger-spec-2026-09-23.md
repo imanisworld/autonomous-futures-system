@@ -109,12 +109,16 @@ individual cells are not separate trials unless a prereg declares them so.
 | `recorded_at` | ISO-8601 UTC | when the line was appended; non-decreasing within a `trial_id` |
 | `recorded_by` | string | agent/operator label (no e-mail) |
 | `prereg_path` | string | repo path of the prereg doc (`null` only on `UNREGISTERED_ATTEMPT`) |
-| `prereg_commit` | 40-hex | commit at which the prereg was frozen (`null` only on `UNREGISTERED_ATTEMPT`) |
+| `prereg_commit` | 40-hex or `null` | **informational only, optional.** Commit at which the prereg was frozen as known when the line was written (`null` on `UNREGISTERED_ATTEMPT`). CI checks the format but never resolves it: a branch commit SHA does not survive a squash merge onto `main`, so prereg provenance is always derived from history (§5, §7.3). |
 | `family_id` | string | **stable machine id**, `^[a-z0-9_]+$` (e.g. `mnq_322_first_live`); the multiple-testing family key |
 | `family_label` | string | human label, free text |
 | `population` | string | instruments + data window + corpus identity, one line |
 | `variant_set` | object | `{"count": int, "manifest": "<repo path>"}` — count of cells/variants declared before scoring. If `count > 1`, `manifest` **must** be `docs/research-trial-manifests/<trial_id>.json`, a frozen machine-readable inventory committed no later than the first ledger line. If `count == 1`, `manifest` may be that JSON manifest or the prereg itself when the single variant is explicit. Never a result artifact. |
 | `prior_exposed` | string | `none` or a one-line disclosure of previously seen cells/lanes |
+
+`prereg_path`, `prereg_commit`, `family_id`, `family_label`, `population`, `variant_set`
+and `prior_exposed` are **frozen by the first line**: every later line for the same
+`trial_id` must restate them identically, and CI rejects any difference (§7.1).
 
 ### 4.3 Required additionally on the first line (`PLANNED` / `ADOPTED` / `UNREGISTERED_ATTEMPT`)
 
@@ -129,7 +133,7 @@ individual cells are not separate trials unless a prereg declares them so.
 |---|---|
 | `disposition` | `VALIDATED` \| `PROMISING_BUT_UNPROVEN` \| `WAIT` \| `RESEARCH_ONLY` \| `BROKEN` \| `OVERFIT` \| `RETIRE` \| `NOT_RUN` \| `INVALID_EVIDENCE` — the Inventory taxonomy plus `OVERFIT`, `NOT_RUN` (registered, never scored) and `INVALID_EVIDENCE` (scored, not registered first) |
 | `result_artifact` | repo path of the results doc/JSON; `null` with a `reason` for `ABORTED`/`NOT_RUN` |
-| `result_commit` | commit that added the result artifact (`COMPLETED` and `UNREGISTERED_ATTEMPT`) |
+| `result_commit` | **optional, informational only** — commit that added the result artifact as known when the line was written. Never verified: CI derives the artifact's first-add commit from history (`git log --diff-filter=A`), because a branch SHA written here cannot match the squash commit that lands on `main`. |
 
 - Optional on any line: `notes` (one line), `supersedes` (`trial_id`).
 
@@ -148,7 +152,8 @@ committed:
 
 1. a `PLANNED` line for its `trial_id` exists in the ledger at a commit that is an ancestor
    of the result commit and **not the same commit**;
-2. that line's `prereg_commit` is likewise a strict ancestor of the result commit;
+2. the commit that first added that line's `prereg_path` (derived from history, not the
+   stored `prereg_commit`) is likewise a strict ancestor of the result commit;
 3. the result artifact lives under the canonical path
    `docs/research-evidence/<trial_id>/`, cites the same `trial_id` (JSON key
    `trial_id`; Markdown front matter / HTML comment `trial_id:`), and the prereg cites
@@ -171,7 +176,7 @@ and must not be used for Inventory, handoff, or promotion claims.
 
 **Unregistered results.** A result artifact that fails 1–3 is `INVALID_EVIDENCE`. It is not
 deleted. It receives an `UNREGISTERED_ATTEMPT` line carrying `result_artifact`,
-`result_commit` and `attempts_in_family_before`, so the fact that the study **ran** is on
+`attempts_in_family_before` (and optionally `result_commit`), so the fact that the study **ran** is on
 the record and counts against the family. It must not be cited as evidence in the Inventory,
 a handoff, or a promotion facts file.
 
