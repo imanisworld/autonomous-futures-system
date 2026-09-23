@@ -1,7 +1,12 @@
 # Equity-index roll-rule check — MNQ / MES / M2K (2026-09-23)
 
 **Type:** read-only evidence note. No code, config, corpus or runtime change.
-**Basis:** `main@991df5f`. Companion to the MCL finding in the 2026-09-23 data-parity audit
+**Basis:** code analysis performed at `main@991df5f` and reconciled against `main@f697260`
+(which includes #959 at `1dc9396`); none of the cited code or test files changed in between.
+**Canonical 2026 date record:** `docs/equity-index-tradingview-roll-provenance-2026-09-23.md`
+(#959, operator-captured Contract Switch markers). This note is the extended five-quarter and
+execution-safety analysis; it agrees with #959's 2026 dates and does not replace it.
+Companion to the MCL finding in the 2026-09-23 data-parity audit
 (TradingView MCL1! observed rolling 1 business day before the listed last trade date).
 
 ## Question
@@ -38,16 +43,16 @@ futures?" and "Switching continuous futures contracts"). The offsets below are t
 | Sep 2026 | Fri 2026-09-18 | Tue 09-15 | Wed 09-16 |
 
 - **MNQ1! and MES1! (observed):** on the new contract from the trade date **3 business days
-  before the expiring contract's last trade date** in all five quarters (switch at the 18:00 ET
-  session open the evening before).
+  before the expiring contract's last trade date** in all five quarters.
 - **M2K1! (observed):** **2 business days before** the last trade date in all five quarters —
   one day later than MNQ/MES.
 - The observed offset counts from the *actual* last trade date: in June 2026 expiry moved to Thursday
   06-18 for the Juneteenth holiday (CME's published 2026 roll calendar lists June 18), and
   TradingView rolled a day earlier accordingly. Our tests assume the nominal 3rd Friday
   (`tests/test_tradovate_rollover.py:41`, `tests/test_polygon_client.py:33` use 2026-06-19).
-- Sep 2026 MNQ agrees with the live observation already recorded in the parity audit
-  (switch 2026-09-14 22:00Z, trade date 09-15).
+- The 2026 dates (June and September, all three roots) match #959's Contract Switch markers.
+  Like #959, this note proves **dates only**: first TradingView trade date on the new contract
+  (e.g. MNQ 2026-09-15), not the exact intraday/UTC switch instant.
 
 Roll spread (new − expiring, daily close on the Thursday before expiry week), for scale:
 MNQ 212–297 pts, MES 50–68 pts, M2K 15.7–21.5 pts across the five quarters.
@@ -66,7 +71,7 @@ Both use the nominal 3rd Friday and ignore holiday-moved expiries.
 | Component | MNQ / MES | M2K |
 |---|---|---|
 | Research corpora (Polygon) | 3 trade dates (Thu, Fri, Mon) on the new contract while TV is still on the old | 4 trade dates (Thu, Fri, Mon, Tue) |
-| Order routing (Tradovate) | ~2 sessions: Fri 00:00 ET → Mon 18:00 ET | ~3 sessions: Fri 00:00 ET → Tue 18:00 ET |
+| Order routing (Tradovate) | ~2 trade dates: from Fri 00:00 ET until TV's first new-contract trade date (Tue) | ~3 trade dates: from Fri 00:00 ET until TV's first new-contract trade date (Wed) |
 | June 2026 (holiday expiry) | corpora 06-11, 06-12; routing Fri 06-12 only | corpora 06-11 → 06-15; routing 06-12 → 06-15 |
 
 The June 2026 corpus row reproduces the "June roll days 06-11 / 06-12" found independently in
@@ -74,7 +79,7 @@ the #929 step-0 decomposition.
 
 ## What this means
 
-1. **Research-vs-research comparisons are unaffected** (both sides use the same Polygon rule).
+1. **Comparisons where both sides use the same Polygon-stitched corpus are unaffected.**
    **Live-vs-research parity** will show 3 (MNQ/MES) or 4 (M2K) mismatched trade dates per
    quarter; those days should be treated as roll-seam days, as MCL's were.
 2. **Order routing carries a price-basis risk in its window.** Entry, stop and target prices
