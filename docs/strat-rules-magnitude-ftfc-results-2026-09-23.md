@@ -23,8 +23,9 @@ Two descriptive findings follow. Neither is a rule.
    Win rates go up (to 32–52%), but the prior-bar extreme sits too close to
    pay for the stop plus costs.
 2. **The FTFC entry filter improved four of five MNQ reversal baselines**
-   (A → A+F). None of the improvements comes close to the gate, and none
-   replicates on MES.
+   (A → A+F): 2-2 reversal 0.95 → 1.24, 1-2-2 0.77 → 1.11, 2-1-2 1.09 → 1.27,
+   3-1-2 0.65 → 0.88. None comes close to the gate. On MES the filter helped
+   only 2-1-2 (0.85 → 1.03) and 3-1-2 (0.91 → 1.22).
 
 ## Integrity (prereg §8): all passed before scoring
 
