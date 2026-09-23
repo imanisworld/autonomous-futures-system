@@ -1,5 +1,7 @@
 # Structural-Level Prereg v1.5 — M2K Added; R4 Rerun on the #621 Replay Fix (2026-09-17)
 
+> **2026-09-23 provenance addendum:** operator-captured TradingView Contract Switch markers now prove `M2K1!` switched M6→U6 on **2026-06-16** and U6→Z6 on **2026-09-16**. The box still did not observe the exact intraday U6→Z6 transition, so exact switch time remains unknown. This makes the stitched `roll_days=3` September seam at `2026-09-15T00:00Z` date-level inconsistent with TradingView and leaves that stitched corpus non-confirmatory. Historical result text below is retained as the record available when it was written; use `docs/equity-index-tradingview-roll-provenance-2026-09-23.md` for the superseding date-level authority.
+
 **Mode:** RESEARCH ONLY / PAPER ONLY. No runtime, deployment, strategy, risk, config, `.env`,
 Pine, collector or gate change. Box only read (a tar-over-ssh copy of `logs/bars_M2K_*.jsonl`
 and `logs/cross_instrument_observation_v1.jsonl`, taken 2026-09-17T02:15:04Z). **No outcome
