@@ -5,6 +5,12 @@ enables, disables, promotes, demotes, or re-parameterizes any strategy, lane,
 risk rule, broker path, or deployment. The live runtime stays PAPER / OBSERVE
 only and `LIVE_TRADING_ENABLED=false` is not in scope.
 
+> **Amended 2026-09-23, before the scoring start (see §9).** The forward bar
+> source, gap handling, warm-up and three evaluator mechanics changed. The
+> hypotheses, family set, shared-account rules, thresholds, minimum sample,
+> deadline and single look are unchanged. Where §9 and an earlier section
+> disagree, §9 wins. The original text is kept for the audit trail.
+
 ## 1. What we already know (frozen as of registration)
 
 PR #915 (closed, audit-only; preserved as
@@ -205,3 +211,130 @@ No merge, deploy, restart, paper activation, DEMO activation, or broker action
 is authorized by this document.
 
 **No proof, no run.**
+
+## 9. Amendment 1 (registered 2026-09-23, before the scoring start)
+
+**Why.** The evaluator was built and step 0 was run on the box bars. It
+failed: 0a 97.65%, 0b 90.86%, 0c 271 mismatches; 0d passed. The cause was
+the bar source, not the families:
+
+- The box 5m lane was switched off on purpose from 2026-07-03 to 07-12.
+- Whole-feed outages lost bars on 07-28, 08-14, 09-14 and 09-21.
+- The TradingView 5m alert did not fire on 09-03.
+- About 2% of live-captured closes are 2–4 ticks off the settled close.
+
+Under the original §6 the study could not survive the next outage.
+
+**What was seen before this amendment.** Only data-quality facts: bar
+coverage, OHLC agreement, and which enriched fields differ between sources.
+The blind counts run showed 0 scored fills, because scoring has not started.
+**No forward P&L, PF, drawdown, win/loss, entry, stop or target has been
+computed or read.**
+
+### 9.1 Forward bar source (replaces the "Bar sources" paragraph of §3)
+
+- Forward bars come from the **Polygon futures API**, fetched with the
+  unchanged `scripts/polygon_to_replay.py` path. That path uses
+  `PolygonFuturesClient.fetch_continuous`, the continuous front contract with
+  `DEFAULT_ROLL_DAYS = 8`, and `derive_candles`.
+- This is the same source and code path that built the frozen `replay_corpus_v1*`
+  corpora. On the step-0 overlap, a fresh fetch matched the frozen corpora
+  exactly: 5m 4,644/4,644 bars and 15m 3,188/3,188 bars identical in O/H/L/C,
+  with 0 corpus bars missing.
+- The box's live-captured bars (`logs/tf5m/`, `logs/bars_MNQ_*`) are **no longer
+  scored**. They stay the paper bot's runtime input, which this study does not
+  evaluate.
+- **Settlement delay:** a CME observation day is used only if it ended at least
+  24 hours before the fetch.
+- **Every run re-fetches the whole window fresh.** Earlier fetches are never
+  mixed in or cached across runs.
+- The look records the fetch time and the SHA-256 of the raw bar files it used.
+- 5m and 15m are fetched separately at their native resolution. Neither is
+  resampled from the other.
+
+### 9.2 Warm-up (replaces the open `--corpus-start` question)
+
+- The loaded corpus starts **60 calendar days** before the first day it scores.
+  Candles are then derived as `polygon_to_replay` does, with its own 10-day
+  pre-roll on top.
+- For the forward run the corpus starts **2026-07-25**. Candidates before
+  2026-09-23T22:00:00Z are still dropped before the shared-account replay (§3).
+- For step 0 the rebuilt overlap uses `--warmup-days 60`. With that setting
+  every EMA field matches the frozen corpora exactly. With the 10-day default,
+  `ema_200` drifted until 07-13.
+
+### 9.3 Gap days (new, fixed; no filling of any kind)
+
+- A **gap day** is a CME observation day (18:00 ET roll) where the Polygon 5m
+  or 15m series is missing a bar that the CME Globex MNQ schedule says should
+  trade.
+  - The schedule is Sunday–Friday 18:00–17:00 ET with the daily 17:00–18:00
+    break.
+  - Exchange holidays and early closes use the calendar in
+    `scripts/csv_to_replay.detect_day_boundaries` / `cme_trading_day`.
+  - A 5m/15m coverage disagreement is also a gap.
+- Gap days are detected mechanically before any adapter runs. They are listed
+  with their missing windows. Example known today: Fri 2026-09-11, 13:00–15:00
+  and 16:00–17:00 ET, missing in both MNQU6 and MNQZ6.
+- **Handling:**
+  - Candles are derived over all delivered bars. Nothing is filled,
+    interpolated, or taken from another source (box, TradingView, other
+    vendor).
+  - The gap day's candles are then removed from **both** the 5m and 15m
+    corpora, over the whole loaded window including warm-up. The families
+    see it like a market closure.
+  - Any portfolio fill is `VOID_GAP_DAY` if its signal, fill or exit falls on
+    a gap day, or it is open across one.
+  - `VOID_GAP_DAY` fills are not terminal and are excluded from every §5
+    number. They are reported with their count and family, but their P&L is
+    never shown. Skips they caused stay as replayed.
+  - Gap days do not count toward the 120 CME days.
+- **Fail-closed cap:** if more than **10%** of the CME observation days in the
+  scoring window are gap days at the look, H1 is `INSUFFICIENT_DATA`, whatever
+  the P&L. H2 is then `NOT CONFIRMED`.
+
+### 9.4 Step 0 (thresholds unchanged)
+
+- **0a and 0b:** same windows and same thresholds (≥ 99.5% within 1 tick; the
+  RTH gap rule). They now compare a fresh Polygon fetch (§9.1, §9.2) with the
+  frozen corpora, not the box bars.
+- **0c:** unchanged, except for one pre-declared explanation class.
+  - The current `derive_candles` sets the day boundary differently from the
+    code that built the frozen corpora. This shows on the CME days just after
+    an exchange holiday or early close: 2026-06-21..06-23 after Juneteenth,
+    and 2026-07-05..07-07 after July 3/4.
+  - A 0c mismatch is explained by this class only if **both** hold:
+    - it lies on those days;
+    - it traces to the day-boundary fields `previous_day_*`, `daily_*`, `vwap`,
+      `hod`, `lod`, `price_vs_pdh/pdl/vwap` or `ftfc_*`.
+  - Such mismatches must still be listed one by one. Any other mismatch stays
+    unexplained and fails 0c.
+  - The class was identified from field-level diffs only, before any candidate
+    comparison was run on Polygon data.
+- **0d:** add the two lineages the evaluator found, with the same "identical, or
+  documented construction change" test:
+  - the 3-2-2 15m detector: `replay_polygon` vs
+    `replay_corpus_v1_market_condition_fixed`;
+  - the Miyagi fill corpus: `replay_polygon_5m` vs `replay_corpus_v1_5m`.
+
+### 9.5 Evaluator mechanics (additions to the permitted changes in §3)
+
+1. **12HR Miyagi candidates:** off the frozen corpora, candidates come from the
+   unchanged detector `research/run_12hr_miyagi_evidence.detect_candidates`,
+   pointed at the forward corpus. It reproduces the frozen #915 candidate file
+   15/15.
+2. **#915 control assertions:** these assert the frozen-corpus totals (for
+   example "4HR fills == 80"). They are no-ops off the frozen corpora, and the
+   control-only summaries are `None`-safe. Every other fail-closed guard still
+   runs. That includes the 3-2-2 crosscheck and the #912 5m coverage guard,
+   which §9.3 now satisfies by removing gap days from both timeframes.
+3. The evaluator reads Polygon-rebuilt corpora (§9.1) instead of box bars.
+
+### 9.6 §6 changes
+
+- "Fetching new vendor data" is now allowed **only** as §9.1 describes. It is
+  the registered forward source, not a rescue.
+- "Backfilling box gaps" stays forbidden, and §9.3 extends that to any gap in
+  any source.
+- Every other line of §6 stands.
+- Further amendments are forbidden after the scoring start.
