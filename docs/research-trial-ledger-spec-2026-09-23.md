@@ -302,8 +302,10 @@ an `origin/main` ref — the only workflow change; to be confirmed at implementa
 ## 11. Ordered next steps
 
 1. Review this revision; confirm §10.
-2. If approved: one PR containing the empty ledger file, the three `ADOPTED` lines, the CI
-   test and the `fetch-depth` line. No other files.
+2. If approved: one implementation PR containing the ledger with the three `ADOPTED`
+   lines, the required frozen JSON manifests for adopted multi-variant trials, the CI test,
+   and the minimal `fetch-depth` workflow change. No runtime, strategy, risk, broker,
+   collector, deployment, or unrelated files.
 3. The next new prereg is the first `PLANNED` entry and allocates a unique execution
    ordinal; if it has more than one variant it includes the frozen JSON manifest.
 4. Later, separately: retention manifest for the 2026-09-23 grid; optional pre-run
