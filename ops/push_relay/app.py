@@ -403,14 +403,29 @@ def _save_daily_mark(day: str) -> None:
     _DAILY_MARK.write_text(day)
 
 
-async def _fetch_today() -> dict[str, Any] | None:
-    import httpx
+_http_client: Any = None
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        r = await client.get(f"{STATUS_BASE}/status/today")
-        r.raise_for_status()
-        data = r.json()
-        return data if isinstance(data, dict) else None
+
+def _client() -> Any:
+    """One long-lived HTTP client for the poll loop.
+
+    A new ``httpx.AsyncClient`` per poll builds a fresh SSL context (certifi
+    bundle) each time; on the box that retained ~0.7 MB per poll and grew the
+    relay to ~850 MB (mostly swapped) over two days. Reusing one client is flat.
+    """
+    global _http_client
+    if _http_client is None or _http_client.is_closed:
+        import httpx
+
+        _http_client = httpx.AsyncClient(timeout=10.0)
+    return _http_client
+
+
+async def _fetch_today() -> dict[str, Any] | None:
+    r = await _client().get(f"{STATUS_BASE}/status/today")
+    r.raise_for_status()
+    data = r.json()
+    return data if isinstance(data, dict) else None
 
 
 async def _tick() -> None:
@@ -456,3 +471,11 @@ async def _startup() -> None:
     if WATCH:
         asyncio.create_task(_watch_loop())
         logger.info("watching %s every %ds; %d subscriptions", STATUS_BASE, POLL_SEC, len(store()))
+
+
+@app.on_event("shutdown")
+async def _shutdown() -> None:
+    global _http_client
+    if _http_client is not None:
+        await _http_client.aclose()
+        _http_client = None
