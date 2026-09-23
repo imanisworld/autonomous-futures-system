@@ -371,8 +371,13 @@ def _sqlite_last(
 def _resolve(collector: Collector, log_dir: Path, now: datetime) -> Path:
     target = collector.target
     if collector.kind == "daily_jsonl":
-        target = target.format(date=now.strftime("%Y-%m-%d"))
+        target = target.format(date=now.astimezone(timezone.utc).strftime("%Y-%m-%d"))
     return log_dir / target
+
+
+def _previous_daily_path(collector: Collector, log_dir: Path, now: datetime) -> Path:
+    """Yesterday's (UTC) file for a daily_jsonl collector."""
+    return _resolve(collector, log_dir, now - timedelta(days=1))
 
 
 def check(collector: Collector, log_dir: Path, now: datetime) -> dict[str, Any]:
@@ -383,6 +388,17 @@ def check(collector: Collector, log_dir: Path, now: datetime) -> dict[str, Any]:
         last, rows, _exists = _sqlite_last(path, collector.table, collector.time_columns)
     elif collector.kind in {"jsonl", "daily_jsonl"}:
         last = _last_jsonl_timestamp(path)
+        if last is None and collector.kind == "daily_jsonl":
+            # Daily files roll over at UTC midnight, but today's file only
+            # appears when its first record is written (a 15m bar stamped
+            # 00:00Z lands at ~00:15Z). Until then the newest record is the
+            # last one in yesterday's file; judge freshness from that rather
+            # than calling a live feed absent. The age check still marks an
+            # old tail STALE/DEAD.
+            previous = _previous_daily_path(collector, log_dir, now)
+            previous_last = _last_jsonl_timestamp(previous)
+            if previous_last is not None:
+                path, last = previous, previous_last
         if last is None:
             # A daily file that has not been created yet is absent, not stale.
             last = _mtime(path) if collector.kind == "jsonl" else None

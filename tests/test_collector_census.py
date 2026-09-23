@@ -72,6 +72,38 @@ def test_daily_jsonl_resolves_todays_filename(tmp_path):
     assert check(collector, tmp_path, NOW)["status"] == FRESH
 
 
+def test_daily_jsonl_uses_previous_utc_file_before_first_record_of_day(tmp_path):
+    # 2026-09-23 00:06Z (Tue 20:06 ET): the 23:45Z bar was written at 00:00Z
+    # into the 09-22 file; the first 09-23 bar is not written until ~00:15Z.
+    just_after_midnight = datetime(2026, 9, 23, 0, 6, tzinfo=timezone.utc)
+    _write_jsonl(tmp_path / "bars_MNQ_2026-09-22.jsonl", [{"ts": "2026-09-22T23:45:00+00:00"}])
+    collector = Collector(
+        "bars MNQ", "daily_jsonl", "bars_MNQ_{date}.jsonl", 30, session="cme_equity"
+    )
+    result = check(collector, tmp_path, just_after_midnight)
+    assert result["status"] == FRESH
+    assert result["last"].startswith("2026-09-22T23:45")
+    assert result["path"].endswith("bars_MNQ_2026-09-22.jsonl")
+    assert "bars MNQ" not in build_census(tmp_path, just_after_midnight)["dead"]
+
+
+def test_daily_jsonl_prefers_todays_file_when_it_exists(tmp_path):
+    _write_jsonl(tmp_path / "journal_2026-08-24.jsonl", [{"ts": "2026-08-24T23:59:00+00:00"}])
+    _write_jsonl(tmp_path / "journal_2026-08-25.jsonl", [{"ts": "2026-08-25T12:50:00+00:00"}])
+    collector = Collector("journal", "daily_jsonl", "journal_{date}.jsonl", 30)
+    result = check(collector, tmp_path, NOW)
+    assert result["last"].startswith("2026-08-25T12:50")
+    assert result["path"].endswith("journal_2026-08-25.jsonl")
+
+
+def test_daily_jsonl_previous_file_fallback_still_ages(tmp_path):
+    # Today's file is missing mid-session and yesterday's tail is hours old:
+    # the fallback must not make a dead feed look fresh.
+    _write_jsonl(tmp_path / "journal_2026-08-24.jsonl", [{"ts": "2026-08-24T23:45:00+00:00"}])
+    collector = Collector("journal", "daily_jsonl", "journal_{date}.jsonl", 30)
+    assert check(collector, tmp_path, NOW)["status"] == DEAD
+
+
 def test_cme_heartbeat_absence_is_off_session_during_weekend(tmp_path):
     saturday_utc = datetime(2026, 9, 19, 1, 43, tzinfo=timezone.utc)  # Fri 21:43 ET
     collector = Collector(
