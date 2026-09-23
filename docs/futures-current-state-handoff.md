@@ -1,6 +1,19 @@
 # Futures — Current State Handoff
 
-_As of 2026-09-22. This is the long futures handoff. Historical audit docs remain evidence records, but they do not override the latest dated current-status file. Repository state is not proof of VPS/deployment state; verify the box separately before claiming anything is running._
+_As of 2026-09-23. This is the long futures handoff. Historical audit docs remain evidence records, but they do not override the latest dated current-status file. Repository state is not proof of VPS/deployment state; verify the box separately before claiming anything is running._
+
+## Repository refresh — 2026-09-23
+
+**Repository main at this refresh:** `061b5ec25d5809cc13373a932260956f2d9b6a5d` after PR #955. **This refresh did not re-verify the VPS.** The last verified runtime identity remains the dated operational baseline below until the box is checked again; do not infer that merged source is deployed.
+
+- **#952 Tradovate response safety:** merged as `d4147e9738386f769debfb8fbfaca2dbc5b79932`. Malformed `placeOSO` outcomes are treated as UNKNOWN/AMBIGUOUS and cannot blindly re-fire; explicit broker rejections remain retryable; stop replacement now requires broker read-back before local protective state advances; liquidation still requires independent flat-position confirmation. **Merged source only; not deployment proof and no real-money authority.**
+- **#953 corrected MCL production-detector rerun:** merged as `e75c8d088f6536811efaa2e42b770f42bfb41114`. Corrected MCL-specific roll construction restored parity to 98.7% setup reproduction / 99.7% geometry among reproduced setups, with roll-switch trade dates excluded as contaminated. 15m CONTROL failed; 60m WIDE is **PROMISING BUT UNPROVEN**; 4H WIDE is **REJECT**. **No fresh MCL forward test is justified.**
+- **MGC 4H forward campaign:** remains frozen **PROMISING BUT UNPROVEN / WAIT**. Collection begins 2026-09-24 18:00 ET under the merged prereg/evaluator. No tuning, peeking, restart, or execution authority.
+- **#955 closed-market decision-alert suppression:** merged as `061b5ec25d5809cc13373a932260956f2d9b6a5d`. MNQ/MES decision-channel Discord notifications now use the strict fail-closed product-session guard for reviewed holiday/special-session cases. This changes notification delivery only; it does not gate signals, evidence, risk, broker submission, collectors, or execution. **Not deployed by this merge.**
+- **Index roll provenance:** MNQ/MES/M2K exact continuous-contract switch timing remains unresolved around the identified seams. Do not invent or generalize an MCL roll rule to the equity-index contracts.
+- **Cleanup:** #940 (FTFC labels) and #945 (cross-market paper admission) were closed without merge as stale implementations. #950 architecture-gap review was reconciled and merged as `f6f7a80afce87676e716ca4ea7e04c0e47e95167`; it grants no implementation or execution authority.
+
+**Current safe posture:** keep live execution disabled, keep existing forward evidence lanes frozen, do not expand instruments, and do not deploy the new Tradovate or notification changes without a separate runtime proof gate.
 
 > **CURRENT OPERATOR SUMMARY — 2026-09-22:** read `docs/futures-current-status-2026-09-22.md` first. The accepted futures runtime baseline is now `aba8324dee1ad67e4b6a9c97e12c22b11490c3e6` (release `aba8324dee1a-20260922-000127`), deployed 2026-09-22 04:01:46 UTC under operator approval and verified active with release integrity OK, PID `1495829`, and `NRestarts=0`. PR #909 is the immediate deployment reason: a PAPER-ONLY MES 1-2-2 evidence-isolation fix preventing the isolated lane from consuming shared range-arm state. The active release is current-main at that merge, not a two-file curated release; future comparisons start from `aba8324...`. Options, the 1-2-2 prospective collector, and the curated paper-collection reporter remain independently pinned as recorded in the 2026-09-22 current-status file.
 >
