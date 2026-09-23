@@ -8,6 +8,14 @@ This is the concise operator-facing source of truth for the futures system. Hist
 
 Core rule remains: **No proof, no run.**
 
+## Runtime update — 2026-09-23 03:50 UTC (read-only box check)
+
+- **Futures release is now `799a89e2db2d`** (#932, plain-English Discord on every channel). It was released at 01:59:58 UTC by another session, so the service block below is one release behind.
+  - PID `2151194`, active.
+  - `/root/autonomous-futures-system` points to `/root/afs-releases/799a89e2db2d-20260922-215935`.
+- **Options scanner:** `5b7be0f7` (`a6f79d7` + #932 cards), released 02:04:56 UTC.
+- The #932 change is message text only; strategy, risk and broker behaviour are unchanged. Nothing else was changed by this check.
+
 ## Runtime reconciliation — 2026-09-23 01:35 UTC (read-only box check)
 
 This section supersedes the morning-preflight runtime block below, which is kept as provenance. Checked via `/proc/<pid>/cwd`, `systemctl show`, `/root/afs-shared/release_history.txt`, and the process environment. Nothing was changed.
@@ -164,6 +172,31 @@ PR #915, branch `research/mnq-combined-portfolio-audit-20260922`, completed its 
 
 Do not describe #915 as "not run" anymore. Completion of the run is not the same as accepting a strategy for promotion or validation; no paper, DEMO, live, broker, risk, or deployment authority follows from it.
 
+## Research update — 2026-09-23 Strat rules, higher timeframes, signal grading
+
+All of this is research or reporting only. No runtime, strategy, risk or broker change.
+
+- **#934 → #936 (merged `0f21ad6`): 15m TheStrat source rules. DOES NOT CLEAR, all 18 MNQ cells.**
+  - The rules tested were the magnitude target, the entry-bar stop and the FTFC entry filter (price vs the month/week/day/hour opens).
+  - The magnitude target never beat the observer's 2R.
+  - FTFC improved 4 of 5 reversal baselines. The best cell was 2-2 reversal + FTFC: PF 1.24, n = 290, below the 1.94 bar, and not replicated on MES.
+  - About 70% of signals are in FTFC "conflict", where most losses sit. Hammer/shooter PF 0.52.
+- **#938 → #941 (merged `4c3b0b6`): Strat on 60m/4H/daily with an intrabar stop entry. DOES NOT CLEAR, all 54 MNQ cells.**
+  - Family-wise direction-flip null: 60m 1.93, 4H 1.99, daily 1.36.
+  - The best results were unfiltered 4H baselines (2-2 reversal, 2-2 continuation, 1-2-2): PF 1.12–1.41, inside the null.
+  - FTFC hurt at 60m and on most 4H setups. Hammer-at-a-level was too rare (0–11 trades).
+  - Only daily 2-2 reversal with magnitude + FTFC looked strong: PF 4.0 on 23 trades. It is prior-exposed (the Daily 2-2 lane), so it is forward-only context.
+  - The integrity check caught a holiday-calendar bug before scoring. It was fixed with `context.cme_trading_day`: 461/461 daily parity.
+- **No variants of either study may be run on the same data.**
+- **#940 (DRAFT, not released): Strat FTFC labels on every observer row, plus a MNQ 2-2 reversal "lined-up only" tracker.**
+  - It is a label view on the Discord cards and the Friday report. It filters nothing.
+  - Opens are not roll-adjusted (a follow-up is needed before the December roll).
+  - The release needs the futures release plus the `paper_collection/current` snapshot, and an **operator GO**.
+- **#942 (merged `8b2700c`): observer signal grading, a forward test.**
+  - The grade: A = FTFC aligned + New York session + not DEAD; B = aligned; C = conflict; D = against.
+  - It is judged once on cost-adjusted live outcomes: when MNQ A ≥ 60 on ≥ 30 days and B/C/D ≥ 30 each, or at 2027-03-31.
+  - Evaluator #943 (merged `7808fe8`) is counts-only until that look. Collection starts when #940 is live.
+
 ## Journal delta — 2026-09-22 duplicate-work audit
 
 Compared with the last proven September 20 journal check:
@@ -192,6 +225,10 @@ The duplicate research work did not create a journal repair requirement.
 
 ## Current evidence gates
 
+0. **Options 1-2-2 collector fix (#922, release `db9bc7e2`).**
+   - Its last run (2026-09-22 20:59 UTC) failed with `journal_setup_fingerprint_drift_58`. That run predates the fix going live at 22:52 UTC.
+   - The first run on the fix is the 13:00 UTC timer on 2026-09-23. Read-only checks are scheduled for 13:05, 13:20 and 13:45 UTC.
+   - #940's release waits for this verdict and an operator GO.
 1. **1-2-2:** wait for the natural RTH chain:
    `ARMED -> IEX reversal -> selector capture <=120s -> production replay parity -> delayed SIP reconciliation`.
 2. **Signa #892:** wait for natural market-hours scanner traffic and verify shared 429 circuit, cooldown, snapshot reuse, and truthful provider-health telemetry.
