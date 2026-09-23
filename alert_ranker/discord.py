@@ -10,10 +10,10 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from .config import ScannerConfig
+from . import plain_text as pt
 from .paper_v1 import MAX_SANITY_DTE, POLICY_ID, dte_for
 from .scorer import ScoreResult
 from .session_calendar import us_equity_rth_state
-from .signa_v2_display import render_signa_v2
 from .storage import ScanStorage
 
 
@@ -115,40 +115,48 @@ class DiscordAlerter:
 
 
 def build_discord_payload(result: ScoreResult) -> dict[str, Any]:
+    """Plain-English options card (docs/discord-operator-message-style.md).
+
+    Presentation only: which fields appear and what they say about authority
+    follow the setup state exactly as before — an untriggered setup always
+    says "no entry permission", Signa is always "for info only".
+    """
     raw = result.raw
     volume_ratio = raw.get("volume_ratio")
     iv_rank = raw.get("iv_rank")
-    session = "NY Open" if raw.get("ny_open") else "Other"
+    session = "New York open" if raw.get("ny_open") else "regular hours"
     iv_label = "unknown"
     if isinstance(iv_rank, (int, float)):
         iv_label = "cheap" if iv_rank < 30 else "neutral" if iv_rank <= 50 else "expensive"
     side = "CALL" if result.direction == "LONG" else "PUT"
+    kind = pt.option_kind(side)
     state = _alert_state(result)
     color = 0x57F287 if result.direction == "LONG" else 0xED4245
 
-    setup_status = "Watching"
-    if state == "forming":
-        setup_status = "Forming"
-    elif state in {"confirmed", "golden"}:
-        setup_status = "Triggered"
-    title = "Options · SETUP " + setup_status.upper()
+    title = {
+        "watching": f"👀 {result.ticker} {kind} idea — watching only",
+        "forming": f"⏳ {result.ticker} {kind} idea — setup still forming",
+        "confirmed": f"🔔 {result.ticker} {kind} — setup triggered",
+        "golden": f"🔔 {result.ticker} {kind} — setup triggered (top score)",
+    }[state]
+    description = f"**{pt.option_kind(side, explain=True).capitalize()}** on {result.ticker}"
 
     fields: list[dict[str, Any]] = [
         {"name": "Status", "value": _status_text(result, side, state), "inline": False},
         {"name": "Setup", "value": _setup_card_text(result), "inline": True},
-        {"name": "Context", "value": _context_card_text(result, session), "inline": True},
-        {"name": "Contract", "value": _contract_card_text(result, side), "inline": True},
-        {"name": "Levels", "value": _levels_card_text(result), "inline": True},
-        {"name": "Liquidity / value", "value": _liquidity_card_text(result, volume_ratio, iv_rank, iv_label), "inline": True},
-        {"name": "Signa Context", "value": _signa_text(result), "inline": True},
+        {"name": "Market check", "value": _context_card_text(result, session), "inline": True},
+        {"name": "Option", "value": _contract_card_text(result, side), "inline": True},
+        {"name": "Stock price levels", "value": _levels_card_text(result), "inline": True},
+        {"name": "Option price check", "value": _liquidity_card_text(result, volume_ratio, iv_rank, iv_label), "inline": True},
+        {"name": "Signa (outside opinion)", "value": _signa_text(result), "inline": True},
         {"name": "Why", "value": _why_text(result, session), "inline": False},
         {"name": "Risk", "value": _risk_text(result), "inline": False},
-        {"name": "Unchecked", "value": _unchecked_text(result), "inline": False},
+        {"name": "Not checked", "value": _unchecked_text(result), "inline": False},
     ]
     if _mechanically_triggered(result):
-        fields.insert(8, {"name": "Trade authority", "value": "Mechanical setup TRIGGERED · still requires contract/risk validation before action", "inline": False})
+        fields.insert(8, {"name": "Can I trade this?", "value": "Setup TRIGGERED · you still need to check the contract and risk before doing anything · nothing is placed automatically", "inline": False})
     else:
-        fields.insert(8, {"name": "Trade authority", "value": "WAIT · observational only · no entry permission", "inline": False})
+        fields.insert(8, {"name": "Can I trade this?", "value": "No — WAIT · watching only · no entry permission", "inline": False})
 
     fields = [field for field in fields if field["value"] != "N/A"]
     for field in fields:
@@ -158,15 +166,25 @@ def build_discord_payload(result: ScoreResult) -> dict[str, Any]:
         "embeds": [
             {
                 "title": title,
-                "description": f"{result.ticker} · {side} · {setup_status}",
+                "description": description,
                 "color": color,
                 "fields": fields,
-                "footer": {
-                    "text": "READ ONLY · Options advisory · No scanner/Signa-driven execution"
-                },
+                "footer": {"text": _footer_text(result)},
             }
         ],
     }
+
+
+def _footer_text(result: ScoreResult) -> str:
+    """Boundary first; debug ids (policy id, raw option symbol) trail it."""
+    raw = result.raw
+    bits = ["READ ONLY · advice only, paper · the scanner and Signa never place trades"]
+    if raw.get("paper_policy_id"):
+        bits.append(str(raw.get("paper_policy_id")))
+    contract = raw.get("contract")
+    if contract and pt.parse_osi(contract):
+        bits.append(str(contract).strip())
+    return " · ".join(bits)
 
 
 def _discord_field_text(value: Any, limit: int = 900) -> str:
@@ -177,43 +195,44 @@ def _discord_field_text(value: Any, limit: int = 900) -> str:
 
 
 def _status_text(result: ScoreResult, side: str, state: str) -> str:
+    score = f"Scanner score **{result.score} out of 10**"
     if state in {"forming", "watching"}:
-        label = "FORMING" if state == "forming" else "WATCHING"
-        return f"**{label}** · no entry permission\nScanner score **{result.score}/10** · {result.ticker} {side}"
-    label = "MECHANICAL SETUP TRIGGERED" if state == "golden" else "SETUP TRIGGERED"
-    return f"**{label}**\nScanner score **{result.score}/10** · {result.ticker} {side}"
+        label = "Still forming" if state == "forming" else "Watching only"
+        return f"**{label}** · no entry permission\n{score}"
+    label = "Setup triggered (top score)" if state == "golden" else "Setup triggered"
+    return f"**{label}**\n{score}"
 
 
 def _setup_card_text(result: ScoreResult) -> str:
     lines = []
     if result.pattern:
-        lines.append(result.pattern)
+        lines.append(pt.setup_name(result.pattern))
     combo = _strat_combo_text(result)
     if combo != "N/A":
-        lines.append(f"Strat {combo}")
+        lines.append(f"Candles: {pt.strat_sequence(combo)}")
     tf = _timeframe_text(result)
     if tf != "N/A":
-        lines.append(f"Timeframe {tf}")
+        lines.append(f"Chart: {tf}")
     ftfc = _ftfc_text(result)
     if ftfc != "N/A":
-        lines.append(f"FTFC {ftfc}")
-    return "\n".join(lines) if lines else "No setup metadata"
+        lines.append(f"All timeframes agree: {ftfc}")
+    return "\n".join(lines) if lines else "No setup details"
 
 
 def _context_card_text(result: ScoreResult, session: str) -> str:
     raw = result.raw
-    pieces = [f"Session {session}"]
+    pieces = [f"Time of day: {session}"]
     if raw.get("price") is not None:
-        pieces.append(f"Spot {_money_text(raw.get('price'))}")
+        pieces.append(f"Price: {_money_text(raw.get('price'))}")
     if "market_alignment" in result.components:
         # Daily setup: intraday VWAP/EMA20 are informational only (not scored).
         pieces.append(
-            f"SPY/QQQ alignment {_pass_fail(result.components.get('market_alignment'))}"
+            f"SPY/QQQ daily trend agrees: {_yes_no(result.components.get('market_alignment'))}"
         )
-        pieces.append("VWAP/Trend n/a (Daily setup; intraday filters not applied)")
+        pieces.append("Day's average price and short-term trend: not used for daily setups")
     else:
-        pieces.append(f"VWAP {_pass_fail(result.components.get('vwap'))}")
-        pieces.append(f"Trend {_pass_fail(result.components.get('trend'))}")
+        pieces.append(f"Right side of the day's average price: {_yes_no(result.components.get('vwap'))}")
+        pieces.append(f"Short-term trend agrees: {_yes_no(result.components.get('trend'))}")
     return "\n".join(pieces)
 
 
@@ -228,24 +247,26 @@ def _levels_card_text(result: ScoreResult) -> str:
     target_1 = _money_text(raw.get("target_1") or raw.get("target"))
     target_2 = _money_text(raw.get("target_2"))
     if stop != "N/A":
-        lines.append(f"Stop {stop}")
+        lines.append(f"Stop-loss: {stop}")
     if target_1 != "N/A":
-        lines.append(f"Target 1 {target_1}")
+        lines.append(f"First target: {target_1}")
     if target_2 != "N/A":
-        lines.append(f"Target 2 {target_2}")
-    return "\n".join(lines) if lines else "No levels supplied"
+        lines.append(f"Second target: {target_2}")
+    return "\n".join(lines) if lines else "N/A"
 
 
 def _liquidity_card_text(result: ScoreResult, volume_ratio: Any, iv_rank: Any, iv_label: str) -> str:
     lines = []
     volume = _ratio_text(volume_ratio)
     if volume != "N/A":
-        lines.append(f"Volume {volume}")
-    lines.append(f"IV {_iv_text(iv_rank, iv_label)}")
+        lines.append(f"Trading volume: {volume} normal")
+    iv = _iv_text(iv_rank, iv_label)
+    if iv != "N/A":
+        lines.append(f"Option prices: {iv}")
     premium = _premium_value_text(result)
     if premium != "N/A":
-        lines.append(f"Premium {premium}")
-    return "\n".join(lines) if lines else "No liquidity/value metadata"
+        lines.append(f"Vs fair value: {premium}")
+    return "\n".join(lines) if lines else "N/A"
 
 
 # Trade-proof statuses that do NOT block a user-facing alert. VALID is a pass;
@@ -272,12 +293,18 @@ def _unchecked_text(result: ScoreResult) -> str:
     status = str(raw.get("trade_proof_status") or "").strip().upper()
     if status != "INCOMPLETE":
         return "N/A"
-    items = [
-        part.strip().replace("_unavailable", "").replace("_", " ")
-        for part in str(raw.get("trade_proof_reason") or "").split(";")
-        if part.strip()
-    ]
-    return "Not checked: " + ", ".join(items) if items else "Not checked: trade proof incomplete"
+    items = []
+    for part in str(raw.get("trade_proof_reason") or "").split(";"):
+        code = part.strip().replace("_unavailable", "")
+        if code:
+            items.append(_UNCHECKED_ENGLISH.get(code, code.replace("_", " ")))
+    return "Not checked: " + ", ".join(items) if items else "Not checked: some safety checks did not run"
+
+
+_UNCHECKED_ENGLISH = {
+    "event_risk": "upcoming news or earnings",
+    "flip_context": "big options-positioning price levels",
+}
 
 
 def _mechanically_triggered(result: ScoreResult) -> bool:
@@ -326,20 +353,26 @@ def _alert_description(result: ScoreResult, side: str, state: str) -> str:
 def _contract_text(result: ScoreResult, side: str) -> str:
     raw = result.raw
     contract = raw.get("contract")
-    dte = raw.get("dte")
-    dte_suffix = (
-        f" · {dte} DTE"
-        if raw.get("paper_policy_id") == POLICY_ID and dte not in (None, "")
-        else ""
-    )
-    if contract:
-        return f"{contract}{dte_suffix}"
-    strike = raw.get("strike")
     expiry = raw.get("expiry") or raw.get("expiration")
-    if strike and expiry:
-        return f"{result.ticker} ${strike} {side.title()} - {expiry}{dte_suffix}"
+    dte = raw.get("dte")
+    osi = pt.parse_osi(contract) if contract else None
+    if osi:
+        # Raw option symbol (QQQ260923C00741000) is spelled out here and kept
+        # only in the footer for debugging.
+        label = pt.option_label(osi["underlying"], osi["strike"], osi["kind"])
+        return f"{label}, {pt.expires(expiry or osi['expiry'], dte=dte)}"
+    if contract:
+        # Hand-written contract text from the alert source; the plain expiry is
+        # added only when the paper policy chose it (as the DTE suffix was).
+        if raw.get("paper_policy_id") == POLICY_ID and dte not in (None, ""):
+            when = pt.expires(expiry, dte=dte) if pt.as_date(expiry) else pt.expires(dte=dte)
+            return f"{contract} · {when}"
+        return str(contract)
+    strike = raw.get("strike")
     if strike:
-        return f"{result.ticker} ${strike} {side.title()}{dte_suffix}"
+        label = pt.option_label(result.ticker, strike, side)
+        when = pt.expires(expiry, dte=dte) if (expiry or dte not in (None, "")) else ""
+        return f"{label}, {when}" if when else label
     return "N/A"
 
 
@@ -351,20 +384,20 @@ def _why_text(result: ScoreResult, session: str) -> str:
             return str(why)
     reasons = []
     if _mechanically_triggered(result):
-        reasons.append("mechanical setup TRIGGERED")
+        reasons.append("setup triggered")
     elif result.pattern and result.pattern.upper() != "N/A":
-        reasons.append(f"{result.pattern} observed")
+        reasons.append(f"{pt.setup_name(result.pattern)} seen")
     if result.components.get("market_alignment"):
-        reasons.append("SPY/QQQ daily trend aligned")
+        reasons.append("SPY/QQQ daily trend agrees")
     if result.components.get("vwap"):
-        reasons.append("VWAP aligned")
+        reasons.append("price is on the right side of the day's average price")
     if result.components.get("trend"):
-        reasons.append("20 EMA trend aligned")
+        reasons.append("short-term trend agrees")
     if result.components.get("volume"):
-        reasons.append("volume expanding")
+        reasons.append("trading volume is picking up")
     if result.components.get("session"):
         reasons.append(f"{session} window")
-    return "; ".join(reasons) if reasons else "Observational scanner context only."
+    return "; ".join(reasons) if reasons else "Scanner background only — nothing confirmed."
 
 
 def _edge_text(result: ScoreResult) -> str:
@@ -379,24 +412,39 @@ def _edge_text(result: ScoreResult) -> str:
     return f"{gates} positive scanner components. Signa is observational and not counted."
 
 
+_POLICY_WARNINGS = {
+    "DTE_EXCEPTION": "expiry is outside the usual window",
+    "GREEKS_PARTIAL": "some option data was missing",
+}
+
+
 def _risk_text(result: ScoreResult) -> str:
     raw = result.raw
     if not _mechanically_triggered(result):
-        return "No entry. Wait for mechanical TRIGGERED setup and canonical contract/risk proof."
+        return "No entry. Wait for the setup to trigger and for the contract and risk check."
     if raw.get("paper_policy_id") == POLICY_ID and raw.get("paper_policy_status") == "VALID":
         planned = _money_text(raw.get("planned_risk_dollars"))
         premium_stop = _money_text(raw.get("premium_stop"))
         projected = _money_text(raw.get("projected_aggregate_open_planned_risk"))
         warning = raw.get("paper_policy_warnings") or []
-        warning_text = f" · {'/'.join(str(item) for item in warning)}" if warning else ""
-        return (
-            f"{POLICY_ID} · planned risk {planned} · premium stop {premium_stop} · "
-            f"projected aggregate risk {projected}{warning_text}"
-        )
+        lines = [
+            f"Most you'd lose: {planned} (1 contract, paper)",
+            f"Get out if the option drops to {premium_stop} a share",
+            f"Planned loss across all open paper trades: {projected}",
+        ]
+        if warning:
+            lines.append(
+                "Heads up: "
+                + "; ".join(
+                    _POLICY_WARNINGS.get(str(item), str(item).replace("_", " ").lower())
+                    for item in warning
+                )
+            )
+        return "\n".join(lines)
     risk = raw.get("risk")
     if risk:
         return str(risk)
-    return "Mechanical setup triggered; use canonical invalidation, targets, contract and risk validation before any trade."
+    return "Setup triggered; check the stop-loss, targets, contract and risk before any trade."
 
 
 def _strat_combo_text(result: ScoreResult) -> str:
@@ -413,13 +461,24 @@ def _timeframe_text(result: ScoreResult) -> str:
     raw = result.raw
     timeframe = raw.get("timeframe") or raw.get("tf")
     if timeframe:
-        return str(timeframe)
+        return pt.timeframe(timeframe)
     timeframes = raw.get("timeframes") or raw.get("tf_stack")
     if isinstance(timeframes, (list, tuple)):
-        return " / ".join(str(item) for item in timeframes)
+        return " / ".join(pt.timeframe(item) for item in timeframes)
     if timeframes:
-        return str(timeframes)
+        return pt.timeframe(timeframes)
     return "N/A"
+
+
+def _direction_word(value: Any) -> str:
+    text = str(value or "").strip().upper()
+    if text in {"UP", "LONG", "BULLISH", "BUY", "CALL"}:
+        return "up"
+    if text in {"DOWN", "SHORT", "BEARISH", "SELL", "PUT"}:
+        return "down"
+    if text in {"WAIT", "NEUTRAL", "HOLD", "FLAT"}:
+        return "no clear direction"
+    return text.lower()
 
 
 def _ftfc_text(result: ScoreResult) -> str:
@@ -429,36 +488,44 @@ def _ftfc_text(result: ScoreResult) -> str:
         ftfc = raw.get("full_timeframe_continuity")
     if isinstance(ftfc, bool):
         direction = raw.get("ftfc_direction") or result.direction
-        return f"Yes ({direction})" if ftfc else "No"
+        return f"yes ({_direction_word(direction)})" if ftfc else "no"
     if ftfc:
         direction = raw.get("ftfc_direction")
-        return f"{ftfc} ({direction})" if direction else str(ftfc)
+        if direction:
+            return f"{_direction_word(ftfc)} ({_direction_word(direction)})"
+        return _direction_word(ftfc)
     return "N/A"
 
 
-def _pass_fail(value: Any) -> str:
-    return "pass" if value else "fail"
+def _yes_no(value: Any) -> str:
+    return "yes" if value else "no"
 
 
 def _money_text(value: Any) -> str:
     try:
-        return f"${float(value):.2f}"
+        return f"${float(value):,.2f}"
     except (TypeError, ValueError):
         return "N/A"
 
 
 def _ratio_text(value: Any) -> str:
     try:
-        return f"{float(value):.2f}x"
+        return f"{float(value):.1f}×"
     except (TypeError, ValueError):
         return "N/A"
 
 
 def _iv_text(value: Any, label: str) -> str:
+    """Implied-volatility rank as words only (the number means nothing to the reader)."""
     try:
-        return f"{float(value):.1f}% ({label})"
+        float(value)
     except (TypeError, ValueError):
-        return "N/A (unknown)"
+        return "N/A"
+    return {
+        "cheap": "cheaper than usual",
+        "neutral": "about usual",
+        "expensive": "more expensive than usual",
+    }.get(label, "N/A")
 
 
 def _premium_value_text(result: ScoreResult) -> str:
@@ -468,28 +535,34 @@ def _premium_value_text(result: ScoreResult) -> str:
         return "N/A"
     edge = raw.get("option_edge_percent")
     fair = raw.get("option_theoretical_value")
-    score = result.components.get("premium_value", 0)
+    label = {
+        "discount": "cheaper than fair value",
+        "fair": "about fair value",
+        "overpriced": "pricier than fair value",
+    }.get(str(verdict).strip().lower(), str(verdict).replace("_", " ").lower())
+    details = []
     try:
-        edge_text = f"{float(edge):+.1f}%"
+        edge_value = float(edge)
+        details.append(f"{abs(edge_value):.0f}% {'below' if edge_value >= 0 else 'above'}")
     except (TypeError, ValueError):
-        edge_text = "n/a"
+        pass
     try:
-        fair_text = f"${float(fair):.2f}"
+        details.append(f"fair value ${float(fair):,.2f}")
     except (TypeError, ValueError):
-        fair_text = "n/a"
-    label = str(verdict).replace("_", " ").title()
-    return f"{label} ({edge_text}, fair {fair_text}, score {score:+})"
+        pass
+    return f"{label} ({', '.join(details)})" if details else label
 
 
 def _signa_text(result: ScoreResult) -> str:
     """Legacy Signa line first, v2 observation on its own line when present.
 
     Both surfaces stay visible during the comparison period; v2 never
-    replaces the legacy context it is being evaluated against.
+    replaces the legacy context it is being evaluated against. Every line
+    starts "For info only": Signa never adds to the score or grants entry.
     """
     raw = result.raw
-    legacy = _legacy_signa_text(raw)
-    v2 = render_signa_v2(raw)
+    legacy = _legacy_signa_text(raw, result.ticker)
+    v2 = _signa_v2_text(raw, result.ticker)
     if v2 == "N/A":
         return legacy
     if legacy == "N/A":
@@ -497,7 +570,22 @@ def _signa_text(result: ScoreResult) -> str:
     return f"{legacy}\n{v2}"
 
 
-def _legacy_signa_text(raw: dict) -> str:
+_SIGNA_STRENGTH = {"A": "strong", "B": "fairly strong", "C": "weak", "D": "very weak", "F": "very weak"}
+
+
+def _signa_read(grade: Any, direction: Any) -> str:
+    """``leaning up, strong (grade A)``."""
+    bits = []
+    if direction:
+        lean = _direction_word(direction)
+        bits.append(lean if lean == "no clear direction" else f"leaning {lean}")
+    if grade:
+        strength = _SIGNA_STRENGTH.get(str(grade).strip().upper()[:1])
+        bits.append(f"{strength} (grade {grade})" if strength else f"grade {grade}")
+    return ", ".join(bits)
+
+
+def _legacy_signa_text(raw: dict, ticker: str = "") -> str:
     grade = raw.get("signa_grade")
     score = raw.get("signa_score")
     direction = raw.get("signa_daily_direction") or raw.get("signa_direction")
@@ -505,27 +593,40 @@ def _legacy_signa_text(raw: dict) -> str:
     action = raw.get("signa_action")
     error = raw.get("signa_error")
     if error:
-        return f"Observational · unavailable ({error})"
+        return "For info only · Signa not available right now"
     if not any((grade, score, direction, action)):
         return "N/A"
-    parts = ["Observational"]
-    if symbol:
-        parts.append(str(symbol))
-    if grade:
-        parts.append(f"grade {grade}")
-    if score is not None:
-        try:
-            parts.append(f"score {float(score):.0f}")
-        except (TypeError, ValueError):
-            parts.append(f"score {score}")
-    if direction:
-        parts.append(str(direction))
-    if action and action != direction:
-        parts.append(str(action))
+    read = _signa_read(grade, direction or action) or "no read"
+    parts = [f"For info only · {read}"]
+    if symbol and str(symbol) != str(ticker):
+        parts.append(f"read on {symbol}")
     if raw.get("signa_stale") is True:
-        parts.append("stale")
-    if raw.get("signa_cached") is True:
-        parts.append("cached")
+        parts.append("may be out of date")
+    return " · ".join(parts)
+
+
+def _signa_v2_text(raw: dict, ticker: str = "") -> str:
+    """Plain twin of ``render_signa_v2`` for the Discord card (the dashboard keeps the original)."""
+    if not isinstance(raw, dict):
+        return "N/A"
+    if raw.get("signa_v2_error"):
+        return "For info only · Signa v2 (being tested) not available right now"
+    if raw.get("signa_v2_ok") is not True:
+        return "N/A"
+    read = _signa_read(raw.get("signa_v2_grade"), raw.get("signa_v2_direction")) or "no read"
+    parts = [f"For info only · Signa v2 (being tested): {read}"]
+    confidence = raw.get("signa_v2_confidence")
+    if confidence is not None:
+        try:
+            parts.append(f"{float(confidence):.0f}% confident")
+        except (TypeError, ValueError):
+            pass
+    timeframe = raw.get("signa_v2_timeframe")
+    if timeframe:
+        parts.append(f"{pt.timeframe(timeframe)} view")
+    symbol = raw.get("signa_v2_symbol")
+    if symbol and str(symbol) != str(ticker):
+        parts.append(f"read on {symbol}")
     return " · ".join(parts)
 
 
