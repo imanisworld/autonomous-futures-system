@@ -27,6 +27,15 @@ EPOCH = "obs-route-epoch"
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def _root(msg: str) -> str:
+    """Card title is '<emoji> <ROOT> practice …'; the root is its second token."""
+    return msg.splitlines()[0].split()[1]
+
+
+def _is_observation_card(msg: str, root: str) -> bool:
+    return _root(msg) == root and msg.splitlines()[-1].startswith("OBSERVATION ONLY")
+
+
 def _ts(hour: int, minute: int) -> str:
     return datetime(DAY.year, DAY.month, DAY.day, hour, minute, tzinfo=timezone.utc).isoformat()
 
@@ -107,18 +116,38 @@ def test_observation_route_is_env_backed_optional_and_uncommitted():
 def test_format_event_always_leads_with_root_and_label():
     cand = obs.format_event({"record_type": "CANDIDATE", "instrument": "MGC", "strategy": "strat_212",
                              "direction": "LONG", "entry": 2409.1, "stop": 2401.0, "target": 2425.3,
-                             "signal_timestamp": _ts(15, 0)})
-    assert cand.startswith("MGC — OBSERVATION ONLY — strat_212 LONG")
-    assert "structural candidate" in cand and "entry 2409.1" in cand and "stop 2401" in cand
+                             "signal_timestamp": _ts(15, 0), "tick_size": 0.1, "tick_value_dollars": 1.0})
+    assert cand.startswith("👀 MGC practice buy setup spotted\nMarket: MGC (Micro Gold)")
+    assert "Setup: 2-1-2 pattern" in cand and "Would buy at: 2,409.1" in cand
+    assert "Stop-loss: 2,401 (would lose about $81.00)" in cand
+    assert "Profit target: 2,425.3 (would make about $162.00)" in cand
+    assert cand.splitlines()[-1].startswith("OBSERVATION ONLY")
     sig = obs.format_event({"record_type": "SIGNAL", "instrument": "M2K", "strategy": "ema_pullback_trend",
                             "direction": "SHORT", "entry": 1, "stop": 2, "target": 0, "signal_timestamp": _ts(15, 0)})
-    assert sig.startswith("M2K — OBSERVATION ONLY — ema_pullback_trend SHORT") and "not authoritative" in sig
-    out = obs.format_event({"record_type": "OUTCOME", "instrument": "MBT", "strategy": "strat_212",
+    assert sig.startswith("👀 M2K practice sell setup spotted") and "rough, from the chart alert" in sig
+    assert "Stop-loss: 2\n" in sig                                                  # no tick data → no $ guess
+    out = obs.format_event({"record_type": "OUTCOME", "instrument": "MBT", "strategy": "strat_212_observed",
                             "direction": "LONG", "result": "WIN", "pnl_r": 2.0, "exit_reason": "TARGET_HIT",
-                            "resolved_at_bar_ts": _ts(15, 15)})
-    assert out.startswith("MBT — OBSERVATION ONLY — strat_212 LONG\nOutcome: WIN +2.00R (TARGET_HIT)")
+                            "gross_pnl_dollars_1_contract": 36.0, "resolved_at_bar_ts": _ts(15, 15)})
+    assert out.startswith("🟢 MBT practice buy won\nMarket: MBT (Micro Bitcoin)\nSetup: 2-1-2 pattern")
+    assert "Result: +$36.00 (1 contract, before fees)" in out and "How it ended: hit the profit target" in out
+    for text in (cand, sig, out):                                                     # no jargon left
+        assert "R\n" not in text and "Z\n" not in text and "UTC" not in text and " ET, " in text
     assert obs.format_event({"record_type": "CANDIDATE", "strategy": "x"}) is None          # no root → nothing
     assert obs.format_event({"record_type": "BAR", "instrument": "MGC", "strategy": "x"}) is None
+
+
+def test_format_event_times_are_eastern_and_losses_are_negative_dollars():
+    out = obs.format_event({"record_type": "OUTCOME", "instrument": "MNQ", "strategy": "strat_22_reversal_observed",
+                            "direction": "SHORT", "result": "LOSS", "exit_reason": "STOP_HIT_ON_FILL_BAR",
+                            "entry": 20000.0, "exit_price": 20010.0, "pnl_points": -10.0,
+                            "tick_size": 0.25, "tick_value_dollars": 0.5,
+                            "exit_timestamp": "2026-09-23T01:00:00+00:00"})
+    assert out.startswith("🔴 MNQ practice sell lost")
+    assert "Result: -$20.00 (1 contract, before fees)" in out
+    assert "How it ended: hit the stop-loss right after entry" in out
+    assert "Prices: in at 20,000, out at 20,010" in out
+    assert "Closed: 9:00 PM ET, Tue Sep 22" in out
 
 
 # ── 3. end-to-end: collection-only root → observation route only ─────────────
@@ -136,9 +165,9 @@ def test_collection_only_detection_routes_to_observation_with_root_and_label(tmp
     urls = {u for u, _ in capture_router}
     assert urls == {"https://obs.invalid/route"}                 # never signal/error
     for _, msg in capture_router:
-        assert msg.startswith("MGC — OBSERVATION ONLY — ")
+        assert _is_observation_card(msg, "MGC")
         assert re.search(r"\bMGC\b", msg)
-    assert any("strat_212 LONG\nstructural candidate" in m for _, m in capture_router)
+    assert any("practice buy setup spotted" in m and "Setup: 2-1-2 pattern" in m for _, m in capture_router)
 
 
 def test_unset_observation_route_never_breaks_collection(tmp_path, config, armed, monkeypatch, capture_router):
@@ -192,7 +221,7 @@ def test_collection_only_roots_still_cannot_reach_execution_with_route_enabled(t
         assert out["decision"] == "OBSERVATION_ONLY" and out["execution_reachable"] is False
     assert not list(tmp_path.glob("journal_*.jsonl"))            # no trade/decision rows
     assert capture_router and all(u == "https://obs.invalid/route" for u, _ in capture_router)
-    assert {m.split(" — ")[0] for _, m in capture_router} <= {"M2K", "MGC", "MCL", "MBT"}
+    assert {_root(m) for _, m in capture_router} <= {"M2K", "MGC", "MCL", "MBT"}
     # The notifier module itself imports nothing from the execution/risk/broker stack.
     src = (ROOT / "notifications" / "observation_notifier.py").read_text(encoding="utf-8")
     for forbidden in ("signal_engine", "risk_engine", "paper_broker", "tradovate", "webhook.runner"):
@@ -231,7 +260,7 @@ def test_mnq_campaign_leg_uses_observation_route_not_signal(tmp_path, config, ar
         out = process_alert(p, config=cfg, log_dir=str(tmp_path), for_date=DAY)
         assert "cross_instrument_observation" in out
     assert capture_router and all(u == "https://obs.invalid/route" for u, _ in capture_router)
-    assert all(m.startswith("MNQ — OBSERVATION ONLY — ") for _, m in capture_router)
+    assert all(_is_observation_card(m, "MNQ") for _, m in capture_router)
 
 
 # ── 6. idempotence: an already-persisted OUTCOME with stale pending state ────
@@ -284,5 +313,5 @@ def test_stale_pending_with_persisted_outcome_is_cleared_without_duplicate_event
     resolved = cio.resolve_pending(tmp_path, instrument="M2K", bars=[], current_bar_ts=_ts(15, 30))
     assert [r["candidate_id"] for r in resolved] == ["fresh-1"]
     assert obs.notify_observation(resolved) == 1 and len(capture_router) == 1
-    assert capture_router[0][1].startswith("M2K — OBSERVATION ONLY — strat_212 LONG\nOutcome: WIN")
+    assert capture_router[0][1].startswith("🟢 M2K practice buy won")
     assert cio.resolve_pending(tmp_path, instrument="M2K", bars=[], current_bar_ts=_ts(15, 45)) == []  # nothing left
