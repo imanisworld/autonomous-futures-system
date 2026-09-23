@@ -162,3 +162,20 @@ def test_bold_key_lines_become_fields_and_end_sections():
     assert [f["name"] for f in embed["fields"]] == ["ISSUE", "KEY EVIDENCE", "ACTION"]
     assert embed["fields"][1]["value"] == "• rows: 12"
     assert embed["footer"]["text"] == "File: /tmp/x.json"
+
+
+def test_run_on_title_keeps_lead_phrase_and_dot_lists_stack():
+    embed = text_card(
+        "📊 Options companion — daily paper report (2026-09-22)\n"
+        "Today: 0 opened · 0W / 0L / 0exp · paper P&L $0.00\n"
+        "REBASELINED — futures-bot restarted: pid 1 → 2 — adopted: sanctioned release abc (was def) and more"
+    )
+    assert embed["title"] == "📊 Options companion — daily paper report (2026-09-22)"
+    assert embed["fields"][0] == {"name": "Today", "value": "0 opened\n0W / 0L / 0exp\npaper P&L $0.00", "inline": True}
+    long_title = text_card("REBASELINED — futures-bot restarted: pid 1 → 2 — adopted: sanctioned release abc (was def)")
+    assert long_title["title"] == "REBASELINED"
+
+
+def test_leading_status_emoji_beats_title_words():
+    assert text_card("✅ AFS weekly drift report")["color"] == COLOR_PASS
+    assert text_card("🔴 all healthy")["color"] == COLOR_FAIL

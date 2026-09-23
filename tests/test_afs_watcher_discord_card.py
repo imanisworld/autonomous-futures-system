@@ -84,3 +84,28 @@ def test_bootstrap_copies_card_helper_when_present(tmp_path):
 def test_installer_ships_the_card_helper():
     installer = (WATCHER_DIR / "install_afs_watcher_service.sh").read_text()
     assert "notifications/discord_card.py" in installer
+
+
+def test_rebaseline_card_is_labelled_lines_not_a_run_on_title(monkeypatch):
+    monkeypatch.setattr(w, "RELEASE_SHA", "3a3d42592e598e16")
+    text = w._rebaseline_discord_text(
+        {"ExecMainPID": "2066185", "release": {"commit": "5fd471636b709ac7"}},
+        {"ActiveEnterTimestamp": "Wed 2026-09-23 00:42:26 UTC"},
+        "2081619",
+    )
+    assert text.splitlines()[0] == "✅ **futures-bot restarted — sanctioned release adopted**"
+    assert "**Release:** 3a3d42592e59 (was 5fd471636b70)" in text
+    assert "**PID:** 2066185 → 2081619" in text
+    assert "**Restarted:** 8:42 PM ET (00:42 UTC)" in text
+
+
+def test_event_discord_text_stays_out_of_the_evidence_record(monkeypatch, tmp_path):
+    rows, sent = [], []
+    monkeypatch.setattr(w, "state_append", lambda _path, line: rows.append(json.loads(line)))
+    monkeypatch.setattr(w, "notify", lambda _s, _r, text, _k: sent.append(text))
+    monkeypatch.setattr(w, "log", lambda *_a, **_k: None)
+    state = {"events_seen": {}, "notified": {}}
+    w.emit_event(state, "FIRST_FIRE", "k", {"summary": "s", "discord": "custom card"}, "DISCORD_ROUTE_DAILY_REPORT")
+    w.emit_event(state, "MILESTONE", "k2", {"summary": "lane READY"}, "DISCORD_ROUTE_DAILY_REPORT")
+    assert "discord" not in rows[0] and rows[0]["summary"] == "s"
+    assert sent == ["custom card", "**🏁 Milestone**\nlane READY"]

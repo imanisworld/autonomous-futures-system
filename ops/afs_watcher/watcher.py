@@ -474,12 +474,48 @@ def emit_event(state: dict, kind: str, key: str, payload: dict, notify_route: st
     if key in state["events_seen"]:
         return False
     state["events_seen"][key] = iso(now_utc())
+    # "discord" is presentation only: never written to the evidence record.
+    payload = dict(payload)
+    discord_text = payload.pop("discord", None)
     rec = {"utc": iso(now_utc()), "kind": kind, "key": key, **payload}
     state_append(EVENTS_FILE, json.dumps(rec, sort_keys=True) + "\n")
     log(f"EVENT {kind} {key} :: {payload.get('summary', '')}")
     if notify_route:
-        notify(state, notify_route, f"{kind} — {payload.get('summary', key)}", key)
+        notify(state, notify_route, discord_text or _event_discord_text(kind, str(payload.get("summary", key))), key)
     return True
+
+
+_EVENT_TITLES = {
+    "REBASELINED": "🔄 Restart adopted",
+    "FIRST_FIRE": "🆕 First fire",
+    "MILESTONE": "🏁 Milestone",
+}
+
+
+def _event_discord_text(kind: str, summary: str) -> str:
+    """Short card title from the event kind; the summary becomes the body."""
+    title = _EVENT_TITLES.get(kind, kind.replace("_", " ").title())
+    return f"**{title}**\n{summary}"
+
+
+def _systemd_ts_et(value: object) -> str:
+    """'Wed 2026-09-23 00:42:26 UTC' -> '8:42 PM ET (00:42 UTC)'; raw text if unparseable."""
+    try:
+        d = datetime.strptime(str(value).strip(), "%a %Y-%m-%d %H:%M:%S UTC").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return str(value)
+    return f"{d.astimezone(ET).strftime('%-I:%M %p ET')} ({d.strftime('%H:%M UTC')})"
+
+
+def _rebaseline_discord_text(previous: dict, props: dict, pid: str) -> str:
+    was = str((previous.get("release") or {}).get("commit"))[:12]
+    return "\n".join([
+        "✅ **futures-bot restarted — sanctioned release adopted**",
+        f"**Release:** {RELEASE_SHA[:12]} (was {was})",
+        f"**PID:** {previous.get('ExecMainPID')} → {pid}",
+        f"**Restarted:** {_systemd_ts_et(props.get('ActiveEnterTimestamp'))}",
+        "**Action:** None — expected restart from a release deploy.",
+    ])
 
 
 # ── notification (existing Discord routes; secrets never logged) ─────────────
@@ -634,7 +670,8 @@ def settle_baseline(state: dict, f: Findings, rt: dict, base: dict | None, resta
     state.setdefault("notified", {})
     emit_event(state, "REBASELINED", f"sanctioned_restart:{RELEASE_SHA[:12]}:{pid}",
                {"summary": f"{summary} — adopted: sanctioned release {RELEASE_SHA[:12]} "
-                           f"(was {str((previous.get('release') or {}).get('commit'))[:12]})"},
+                           f"(was {str((previous.get('release') or {}).get('commit'))[:12]})",
+                "discord": _rebaseline_discord_text(previous, props, pid)},
                "DISCORD_ROUTE_ERROR")
     f.items.remove(restart)
     state["baseline"] = {**_baseline_record(props, pid), "adopted_from": previous}
@@ -1435,7 +1472,16 @@ def check_lanes(state: dict, f: Findings, tick: dict) -> None:
         emit_event(state, "FIRST_FIRE", f"hypothetical_position_open:{name}:{pos.get('paper_order_id') or pos.get('entry_time')}",
                    {"summary": f"{name} hypothetical position OPEN: {pos.get('direction')} @ {pos.get('entry')} "
                                f"stop {pos.get('stop')} target {pos.get('target')} since {pos.get('entry_time')} (paper, observe only)",
-                    "position": pos}, "DISCORD_ROUTE_DAILY_REPORT")
+                    "position": pos,
+                    "discord": "\n".join([
+                        f"🆕 **{_LANE_LABELS.get(name, name)} — paper position OPEN**",
+                        f"**Direction:** {str(pos.get('direction') or '?').upper()}",
+                        f"**Entry:** {pos.get('entry')}",
+                        f"**Stop:** {pos.get('stop')}",
+                        f"**Target:** {pos.get('target')}",
+                        f"**Since:** {_et_clock(pos.get('entry_time'))}",
+                        "Paper · observe only",
+                    ])}, "DISCORD_ROUTE_DAILY_REPORT")
     mnq_exposed = [n for n in open_positions if n != "mes_122_1500"]
     if mnq_exposed and five_min_stalled:
         f.add("BLOCKED", "hypothetical_position_exposed_stale_bars",
