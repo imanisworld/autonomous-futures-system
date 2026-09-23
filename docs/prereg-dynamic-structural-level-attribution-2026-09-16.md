@@ -1,6 +1,8 @@
 # Pre-Registration — Dynamic Structural-Level Attribution Study
 
 **Version:** 1.5 (2026-09-17), frozen at the commit that introduces this version.
+
+> **2026-09-23 provenance note (does not alter the frozen prereg):** TradingView Contract Switch markers now prove the 2026 switch **dates** for the equity-index micros: MNQ/MES 2026-06-15 and 2026-09-15; M2K 2026-06-16 and 2026-09-16. Exact intraday/UTC switch timestamps remain unproven. Historical X0 language below describing what the box could or could not observe remains part of the frozen record, but date-level uncertainty is superseded by `docs/equity-index-tradingview-roll-provenance-2026-09-23.md`.
 Changelog v1.4 → v1.5 (operator instruction 2026-09-17: "add M2K first as a v1.5 amendment";
 MGC / MCL / MBT are deferred to later tranche-2 amendments because they need product-specific
 session / RTH-open / daily-roll level definitions and non-quarterly contract-roll schedules;
