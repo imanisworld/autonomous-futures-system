@@ -2,7 +2,7 @@
 
 **Type:** read-only evidence note. No code, config, corpus or runtime change.
 **Basis:** `main@991df5f`. Companion to the MCL finding in the 2026-09-23 data-parity audit
-(TradingView MCL1! rolls 1 business day before the listed last trade date).
+(TradingView MCL1! observed rolling 1 business day before the listed last trade date).
 
 ## Question
 
