@@ -393,6 +393,40 @@ The Tradovate adapter has explicit live-environment checks on all three external
 
 The documentation should therefore describe live safeguards **by operation** instead of claiming that every broker mutation passes an identical five-layer chain.
 
+### Tradovate command-response semantics — concrete broker defect found after the original review basis
+
+A later external-source audit compared the adapter to current Tradovate Partner API semantics and exposed a concrete defect on current `main@d362a3f`.
+
+Tradovate command responses may carry `failureReason="Success"` on a successful HTTP response. The current adapter treated any truthy `failureReason` as rejection in `execute_bracket`, `replace_stop`, and `flatten_position`. That can create broker/local disagreement: the broker may have accepted a command while the local path records it as failed.
+
+A second issue exists in `replace_stop`: an accepted `modifyOrder` request was enough to mutate local protective-stop state even though Tradovate documents that a modification request is not guaranteed to complete. Local stop state must not advance until broker state confirms the requested stop is actually resting.
+
+**Classification: BROKEN for Tradovate broker execution confidence; HOLD / PAPER ONLY remains.**
+
+Draft PR #952 is the narrow remediation lane. It:
+- treats documented success markers as success while retaining fail-closed handling for real failures;
+- requires broker read-back before `replace_stop` mutates local protective state;
+- preserves the existing independent flat-position confirmation after liquidation;
+- changes no strategy, risk, session, instrument-admission, deployment, or live-enablement policy.
+
+PR #952 is not execution authorization. It must be independently reviewed before merge, and merge would still not prove VPS/deployment state.
+
+### Session-audit correction — normal MGC/MCL hours are not presently contradicted
+
+The external audit correctly identified the lack of a wired fail-closed holiday/special-session guard, but it overstated the normal-session mismatch.
+
+`context/futures_session.py::product_session_active` already maps MGC/MCL to a metals/energy family and applies the normal Sunday-Friday 18:00-17:00 ET week with the 17:00-18:00 ET maintenance break. That aligns with the normal CME schedule cited by the audit.
+
+The real unresolved requirement is **holiday/early-close/special-session authority and alert suppression**, not the ordinary MGC/MCL maintenance window. `context/futures_product_session.py` remains MNQ/MES-only, fail-closed, and intentionally unwired.
+
+### Polygon history wording — observed access limit, not provider-wide capability
+
+The current prereg says the paid Polygon plan returned zero futures bars for several tested pre-2024-10 windows. That is a valid observation about the tested account/query path.
+
+Public Massive/Polygon material advertising older futures history means the statement should not be generalized into a provider-wide start date. The safe wording is: **no earlier history was available to that study through the tested account/query path**. The exact entitlement, ticker, endpoint, and raw failed-query artifact remain the facts needed to explain the boundary.
+
+The repo's `sources/polygon_client.py` also fetches specific listed contracts and constructs its own continuous series from an explicit roll schedule; provider-side continuous-contract stitching is therefore not automatically the method used by that client.
+
 ### Contract metadata centralization — real pre-expansion hardening item
 
 `config/futures_contracts.py` is the intended canonical economics source, but current `main` still contains Tradovate lookup fallbacks such as `_TICK_SIZE.get(root, 0.25)`.
@@ -536,13 +570,17 @@ This document is itself the first step.
 4. **Then evaluate automatic rejected-candidate follow-through.**
    - Only for populations with causally valid predeclared hypothetical geometry.
 
-5. **Before any cross-market broker admission:** resolve the remaining Tradovate unknown-root contract-economics fallback or prove an equivalent fail-closed boundary; do not treat PR #945's table import as universal centralization while the fallback remains.
+5. **Broker-response blocker:** independently review PR #952. Until the Tradovate response-semantics defect is resolved and reviewed, broker execution confidence remains **BROKEN** and the standing posture remains **HOLD / PAPER ONLY**.
 
-6. **Separately scope the market-closed alert requirement:** use the product-aware session work to suppress irrelevant alerts/notifications for closed products without silently converting the prep-only guard into execution authority.
+6. **Before any cross-market broker admission:** resolve the remaining Tradovate unknown-root contract-economics fallback or prove an equivalent fail-closed boundary; do not treat PR #945's table import as universal centralization while the fallback remains.
 
-7. **Known maintenance debt:** regenerate and reconcile `requirements.lock` deliberately; current promotion uses `requirements.txt` plus a recorded freeze, so do not rebuild from the stale lock first.
+7. **Separately scope the market-closed alert requirement:** use product-aware session evidence to suppress irrelevant alerts/notifications for closed products, with holiday/early-close authority treated separately from the already-correct normal MGC/MCL maintenance window.
 
-8. **Later hardening:** standing three-way execution calibration and mandatory report identity.
+8. **Clarify Polygon provenance wording:** retain the pre-2024-10 result as an observed account/query limitation unless a provider-wide boundary is proven.
+
+9. **Known maintenance debt:** regenerate and reconcile `requirements.lock` deliberately; current promotion uses `requirements.txt` plus a recorded freeze, so do not rebuild from the stale lock first.
+
+10. **Later hardening:** standing three-way execution calibration and mandatory report identity.
 
 No implementation work above is authorized by this document alone.
 
