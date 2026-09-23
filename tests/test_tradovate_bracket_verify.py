@@ -264,7 +264,12 @@ def test_flatten_liquidates_before_cancel(monkeypatch):
     monkeypatch.setattr(broker, "_authenticate", lambda: True)
     monkeypatch.setattr(broker, "get_position", lambda: calls.append("get_position") or pos)
     monkeypatch.setattr(broker, "_find_contract_id", lambda instrument: 123)
-    monkeypatch.setattr(broker, "_post", lambda path, body: calls.append(path) or {"orderId": 777})
+    monkeypatch.setattr(
+        broker,
+        "_post",
+        lambda path, body: calls.append(path)
+        or {"failureReason": "Success", "orderId": 777},
+    )
     monkeypatch.setattr(broker, "_cancel_working_orders", lambda: calls.append("cancel_orders") or 2)
     monkeypatch.setattr(broker, "get_position_snapshot", lambda: (True, None))
     monkeypatch.setattr(broker, "_entry_fill_price", lambda *args: 5899.75)
@@ -393,9 +398,18 @@ def test_replace_stop_restates_gtc(monkeypatch):
 
     def _post(path, body):
         captured["path"], captured["body"] = path, body
-        return {}
+        return {"failureReason": "Success", "orderId": 902}
 
     monkeypatch.setattr(broker, "_post", _post)
+    monkeypatch.setattr(
+        broker,
+        "_get",
+        lambda path, **kw: {
+            "id": 902,
+            "ordStatus": "Working",
+            "stopPrice": 5895.0,
+        },
+    )
 
     assert broker.replace_stop(5895.0) is True
     assert captured["path"] == "/order/modifyorder"
