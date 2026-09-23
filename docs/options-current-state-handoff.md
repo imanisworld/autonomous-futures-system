@@ -1,6 +1,6 @@
 # Options — Current State Handoff
 
-_As of 2026-09-21. This is the single current-state authority for the options lane._
+_As of 2026-09-23 (the dated "Operational refresh" sections at the bottom supersede older release statements). This is the single current-state authority for the options lane._
 
 Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`; the read-only coverage evidence lane (observer, reducer, outcome study, after-close collector) is described in `docs/options-coverage-observer.md`.
 
@@ -452,3 +452,14 @@ Operational details and safety invariants: `docs/release-retention-safety-2026-0
 - The reporter `current` flip was atomic. Reporter timers/unit files and futures/options trading PIDs/restart counts were unchanged. The previous reporter pin remains available for an atomic rollback without a trading-service restart.
 
 Reporter procedure and current pin state: `docs/paper-collection-reporter.md`.
+
+## Operational refresh — 2026-09-22/23
+
+This section supersedes older release-identity statements above where they conflict. Read-only box check at 2026-09-23 ~01:35 UTC; nothing was changed.
+
+- **Options scanner:** still pinned to `a6f79d79702e32afcda44b230f22d418db66d35b` (PID `1317855`). It was **not** re-released for #927/#928/#930, so scanner Discord alerts still use the pre-card format. The futures bot, watcher, and observation alerts already send the new cards. This is presentation only; no scanner behavior is pending on `main`.
+- **1-2-2 collector crash-loop (09-22):** a revised Public bar produced a `SOURCE_DRIFT` row carrying the revised `setup_fingerprint`. On every later run, `_load_state()` compared it with the frozen ARMED fingerprint and raised `journal_setup_fingerprint_drift_58`. The collector failed on every timer fire from **16:36 UTC** through the last fire at **20:59:01 UTC**. The same loader pattern existed in the 2-1-2R collector.
+- Earlier on 09-22 the collector ran, but today's evidence does not qualify: 12 rows, all `COLLECTOR_ERROR` / `source_error:ReadTimeout`, 0 accepted setups.
+- **Fix:** PR #922 (`ce6b36a`) changes only the loader. A `SOURCE_DRIFT` row no longer challenges the frozen fingerprint; the setup becomes a terminal `drifted` data block and is never re-armed, resolved, or sent to SIP reconciliation. The strict ARMED/RESOLUTION/RECONCILIATION fingerprint check is unchanged. The frozen `122-IEX-E1` policy (cadence, capture limit, reconciliation delay) is unchanged.
+- **Collector release:** the systemd drop-in `10-release.conf` now pins **`db9bc7e2c00559fc969af7be0e2cb12b00a1454c`** (switched 2026-09-22 22:52 UTC). The prior `36e73f1...` pin is backed up as `/root/afs-shared/backups/options-122-prospective.10-release.conf.pre-922-20260922T225209Z`. The temporary `zz-rollback-protect-20260922.conf` drop-in is still present.
+- **Not yet proven:** no collector run has executed on `db9bc7e2`. The first proof is the natural **2026-09-23 13:00 UTC** timer fire: the existing journal loads unchanged, the cycle succeeds, and `journal_setup_fingerprint_drift_58` does not recur. The 16:36–20:59 UTC window is lost and must not be backfilled.
