@@ -171,33 +171,40 @@ from collections import Counter
 header, body_file, url = sys.argv[1], sys.argv[2], sys.argv[3]
 lines = open(body_file).read().splitlines()
 counts = Counter((line.split() or ["UNKNOWN"])[0] for line in lines)
-summary = " · ".join(f"{counts[k]} {k.lower()}" for k in ("DIFFER", "MISSING", "EXTRA") if counts.get(k)) or "drift details unavailable"
+WORDS = {"DIFFER": ("file changed", "files changed"),
+         "MISSING": ("file not installed on the server yet", "files not installed on the server yet"),
+         "EXTRA": ("extra file only on the server", "extra files only on the server")}
+summary = " · ".join(f"{counts[k]} {WORDS[k][0] if counts[k] == 1 else WORDS[k][1]}"
+                     for k in ("DIFFER", "MISSING", "EXTRA") if counts.get(k)) or "details unavailable"
+LABELS = {"DIFFER": "changed", "MISSING": "not installed", "EXTRA": "extra"}
 
 def clean_item(line: str) -> str:
     parts = line.split()
     if not parts:
-        return "UNKNOWN"
-    status = parts[0]
+        return "unknown"
+    status = LABELS.get(parts[0], parts[0].lower())
     path = parts[1] if len(parts) > 1 else "unknown"
-    return f"**{status}** {path}"
+    return f"{status}: {path}"
 
 items = [clean_item(line) for line in lines[:10]]
 if len(lines) > 10:
-    items.append(f"+ {len(lines) - 10} more in gate stdout/log")
+    items.append(f"+ {len(lines) - 10} more in the gate output")
 
 payload = {
     "allowed_mentions": {"parse": []},
     "embeds": [{
-        "title": "AFS Drift Gate · Attention",
-        "description": "Runtime differs from the watched source set.",
+        "title": "🚨 Server code doesn't match the main code",
+        "description": ("Some program files on the server are different from the approved code. "
+                        "Usually an update was merged but not installed yet, or a file was edited on the server."),
         "color": 0xED4245,
         "fields": [
-            {"name": "Status", "value": "Unexpected drift detected"},
-            {"name": "Summary", "value": summary},
-            {"name": "Top items", "value": "\n".join(items) if items else "No item detail available"},
-            {"name": "Action", "value": "Review before deploy/reseed. Raw hash details stay in the gate output/log."},
+            {"name": "What's different", "value": summary},
+            {"name": "Files", "value": "\n".join(items) if items else "No file detail available"},
+            {"name": "What to do", "value": "Install the latest update. If the difference is on purpose, "
+                                            "mark it as accepted after checking it."},
         ],
-        "footer": {"text": "READ ONLY · Drift check · No deploy or restart action"},
+        "footer": {"text": "READ ONLY · nothing was installed or restarted · "
+                           "accept after review: afs-drift-gate.sh --seed · file hashes in the gate output"},
     }],
 }
 request = urllib.request.Request(

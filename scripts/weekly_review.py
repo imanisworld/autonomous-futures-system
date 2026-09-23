@@ -49,10 +49,6 @@ def iso_week_label(ref: date) -> str:
     return f"{y}-W{w:02d}"
 
 
-def _money(v) -> str:
-    return f"${v:,.2f}" if isinstance(v, (int, float)) else "n/a"
-
-
 def _pct(num: int, den: int) -> str:
     return f"{(100.0 * num / den):.0f}%" if den else "n/a"
 
@@ -130,45 +126,64 @@ def summarize_week(
     }
 
 
+def week_words(monday: date, sunday: date) -> str:
+    """``Week of Jun 22–28`` (``Week of Jun 29–Jul 5`` across months)."""
+    start = f"{monday.strftime('%b')} {monday.day}"
+    end = f"{sunday.day}" if sunday.month == monday.month else f"{sunday.strftime('%b')} {sunday.day}"
+    return f"Week of {start}–{end}"
+
+
+def _signed(v) -> str:
+    if not isinstance(v, (int, float)):
+        return "n/a"
+    return f"{'-' if v < 0 else '+'}${abs(v):,.2f}"
+
+
+def _plural(n, word: str) -> str:
+    return f"{n} {word}" if n == 1 else f"{n} {word}s"
+
+
 def format_report(data: dict, *, week: str, monday: date, sunday: date) -> str:
-    """Render the scorecard as a Discord message."""
+    """Render the scorecard as a plain-English Discord card.
+
+    ``week`` (ISO label) stays the artifact key; the message says "Week of …"
+    (docs/discord-operator-message-style.md).
+    """
     opt = data["options"]
     h = data.get("health") or {}
     lines = [
-        f"\U0001F4C5 **Weekly review — {week}** ({monday.isoformat()} → {sunday.isoformat()})",
+        f"\U0001F4C5 **Weekly review · {week_words(monday, sunday)}**",
+        f"Practice trades taken: **{data['approved_trades']}**",
+        f"No setup: {data['no_trade']}",
+        f"Skipped by risk limits: {data['risk_rejected']}",
         (
-            f"Futures: **{data['approved_trades']}** approved · "
-            f"{data['no_trade']} no-trade · {data['risk_rejected']} risk-rejected"
+            f"Orders filled: **{data['filled']} of {data['attempted']}** "
+            f"({_pct(data['filled'], data['attempted'])}) · {data['cancelled']} never filled"
         ),
         (
-            f"Fills: **{data['filled']}/{data['attempted']}** filled "
-            f"(fill rate **{_pct(data['filled'], data['attempted'])}**, "
-            f"{data['cancelled']} cancelled)"
+            f"Won / lost: **{data['wins']} won, {data['losses']} lost** "
+            f"({_pct(data['wins'], data['filled'])} won)"
         ),
-        (
-            f"Result: **{data['wins']}W / {data['losses']}L** "
-            f"(win rate {_pct(data['wins'], data['filled'])}) · "
-            f"P&L **{_money(data['pnl_total'])}**"
-        ),
+        f"Profit: **{_signed(data['pnl_total'])}**",
     ]
     if data["pnl_by_instrument"]:
-        by = " · ".join(f"{k} {_money(v)}" for k, v in sorted(data["pnl_by_instrument"].items()))
-        lines.append(f"By instrument: {by}")
-    lines.append(
-        f"Options: {opt['candidates']} candidates · **{opt['opened']}** opened · "
-        f"paper P&L {_money(opt['paper_pnl'])}"
-        + (
-            f" · top skip: {max(opt['rejects_by_reason'], key=opt['rejects_by_reason'].get)}"
-            if opt["rejects_by_reason"]
-            else ""
-        )
+        by = " · ".join(f"{k} {_signed(v)}" for k, v in sorted(data["pnl_by_instrument"].items()))
+        lines.append(f"By market: {by}")
+    options = (
+        f"Options: {_plural(opt['candidates'], 'idea')} · **{opt['opened']}** opened · "
+        f"practice profit {_signed(opt['paper_pnl'])}"
     )
+    if opt["rejects_by_reason"]:
+        top = max(opt["rejects_by_reason"], key=opt["rejects_by_reason"].get)
+        options += f" · most common skip: {str(top).replace('_', ' ').lower()}"
+    lines.append(options)
     if h:
         lines.append(
-            f"Health: {h.get('errors', '?')} errors · "
-            f"{h.get('breaker_events', '?')} breaker · "
-            f"{h.get('restarts', '?')} restarts"
+            f"Server: {_plural(h.get('errors', '?'), 'error')} · "
+            f"{_plural(h.get('breaker_events', '?'), 'safety stop')} · "
+            f"{_plural(h.get('restarts', '?'), 'restart')}"
         )
+    lines.append("[practice account · read only]")
     return "\n".join(lines)
 
 

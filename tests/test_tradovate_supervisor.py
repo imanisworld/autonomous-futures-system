@@ -68,7 +68,7 @@ def test_market_hours_outage_alerts_once_after_five_minutes(monkeypatch):
     supervisor.supervisor_step(broker, now=800.0, market_active=True)
 
     assert len(sent) == 1
-    assert "DEGRADED" in sent[0]
+    assert "Can't reach Tradovate" in sent[0] and "orders are blocked" in sent[0]
     assert supervisor.tradovate_order_ready(now=800.0) is True  # BROKER defaults to paper
 
 

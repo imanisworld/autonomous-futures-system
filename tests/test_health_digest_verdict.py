@@ -40,19 +40,19 @@ def test_flat_is_ok_regardless_of_working_orders():
 def test_open_position_with_zero_working_orders_is_alert():
     v = evaluate_health(_base(position_flat=False, working_orders=0))
     assert v["status"] == "ALERT"
-    assert any("NAKED" in p for p in v["problems"])
+    assert any("OPEN POSITION WITH NO STOP-LOSS — check Tradovate now" in p for p in v["problems"])
 
 
 def test_open_position_with_unknown_protection_is_warn():
     v = evaluate_health(_base(position_flat=False, working_orders=None))
     assert v["status"] == "WARN"
-    assert any("unknown" in p for p in v["problems"])
+    assert any("can't tell if it has a stop-loss" in p for p in v["problems"])
 
 
 def test_open_position_with_working_bracket_is_informational():
     v = evaluate_health(_base(position_flat=False, working_orders=2))
     assert v["status"] == "OK"
-    assert any("position OPEN" in n for n in v["notes"])
+    assert any("a position is open" in n for n in v["notes"])
     assert not v["problems"]
 
 
@@ -62,14 +62,14 @@ def test_broker_flat_but_local_open_is_drift_alert():
     v = evaluate_health(_base(position_flat=True, working_orders=0,
                               broker_local_drift=True))
     assert v["status"] == "ALERT"
-    assert any("drift" in p for p in v["problems"])
+    assert any("records don't match" in p for p in v["problems"])
 
 
 def test_stale_unresolved_position_is_alert():
     v = evaluate_health(_base(position_flat=False, working_orders=2,
                               block_stale=True))
     assert v["status"] == "ALERT"
-    assert any("unresolved past threshold" in p for p in v["problems"])
+    assert any("may be stuck" in p for p in v["problems"])
 
 
 def test_bars_without_decisions_is_alert():
@@ -77,7 +77,7 @@ def test_bars_without_decisions_is_alert():
     v = evaluate_health(_base(position_flat=False, working_orders=2,
                               bars_without_decisions=True))
     assert v["status"] == "ALERT"
-    assert any("pipeline blind" in p for p in v["problems"])
+    assert any("no setups are being checked" in p for p in v["problems"])
 
 
 def test_clean_state_has_no_visibility_escalations():

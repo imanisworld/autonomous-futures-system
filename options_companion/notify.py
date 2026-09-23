@@ -22,6 +22,8 @@ import logging
 import os
 from typing import Any
 
+from notifications import plain_english as pe
+
 logger = logging.getLogger(__name__)
 
 _SIGNAL_ENV = "DISCORD_OPTIONS_SIGNAL"
@@ -60,98 +62,93 @@ def _post(env_var: str, content: str) -> bool:
         return False
 
 
+_BOUNDARY = "PAPER ONLY · practice tracking, no real order was placed"
+
+
 def _money(value: Any) -> str:
-    try:
-        return f"${float(value):.2f}"
-    except (TypeError, ValueError):
-        return "$?"
+    return pe.money(value)
 
 
-def _fmt_expiry(expiry: Any) -> str:
-    if not expiry:
-        return ""
-    try:
-        from datetime import date
-
-        d = date.fromisoformat(str(expiry)[:10])
-        return f"{d.strftime('%b')} {d.day}"  # "Jun 23"
-    except (ValueError, TypeError):
-        return str(expiry)
-
-
-def _fmt_contract(c: dict[str, Any]) -> str:
-    """Human-readable contract, e.g. 'QQQ $741 CALL · exp Jun 23 (0DTE)'."""
-    parts = [str(c.get("underlying") or "?")]
-    strike = c.get("strike")
-    if strike is not None:
-        try:
-            parts.append(f"${float(strike):g}")
-        except (TypeError, ValueError):
-            pass
-    if c.get("contract_type"):
-        parts.append(str(c.get("contract_type")))
-    label = " ".join(parts)
-    exp = _fmt_expiry(c.get("expiry"))
-    if exp:
-        label += f" · exp {exp}"
-    dte = c.get("dte")
-    if dte is not None:
-        try:
-            label += f" ({int(dte)}DTE)"
-        except (TypeError, ValueError):
-            pass
+def _fmt_contract(c: dict[str, Any], *, with_expiry: bool = True, explain: bool = False) -> str:
+    """Plain contract, e.g. 'QQQ 741 call, expires today' (never OSI/'0DTE')."""
+    label = pe.option_label(c.get("underlying"), c.get("strike"), c.get("contract_type"))
+    if explain and c.get("contract_type"):
+        kind = pe.option_kind(c.get("contract_type"))
+        explained = pe.option_kind(c.get("contract_type"), explain=True)
+        label = label[: -len(kind)] + explained if label.endswith(kind) else label
+    if with_expiry:
+        when = pe.expires(c.get("expiry"), dte=c.get("dte"))
+        if when:
+            label += f", {when}"
     return label
 
 
-def _fmt_open(c: dict[str, Any]) -> str:
-    fut = c.get("futures_instrument") or "?"
-    side = c.get("futures_direction") or "?"
+def _source_trade(c: dict[str, Any]) -> str:
+    """'the buy on MNQ (Micro Nasdaq)' — the futures trade this option mirrors."""
+    fut = c.get("futures_instrument")
+    direction = c.get("futures_direction")
+    if not fut and not direction:
+        return ""
+    return f"the {pe.side(direction).lower()} on {pe.market(fut)}"
+
+
+def _symbol_footer(c: dict[str, Any]) -> list[str]:
     sym = c.get("option_symbol")
-    sym_ref = f"  `{sym}`" if sym else ""
-    return (
-        f"📄 **Paper option OPEN** — **{_fmt_contract(c)}**{sym_ref}\n"
-        f"entry {_money(c.get('entry_mark'))} · stop {_money(c.get('stop_mark'))} · "
-        f"target {_money(c.get('target_mark'))}  _(from {side} {fut})_"
-    )
+    return [f"-# {sym}"] if sym else []
+
+
+def _fmt_open(c: dict[str, Any]) -> str:
+    lines = [
+        f"📄 Paper option opened: {_fmt_contract(c, with_expiry=False)}",
+        f"Option: {_fmt_contract(c, explain=True)}",
+        f"Bought at: {pe.option_price(c.get('entry_mark'))}",
+        f"Stop-loss: {pe.option_price(c.get('stop_mark'))}",
+        f"Profit target: {pe.option_price(c.get('target_mark'))}",
+    ]
+    source = _source_trade(c)
+    if source:
+        lines.append(f"Follows: {source}")
+    lines.append(_BOUNDARY)
+    return "\n".join(lines + _symbol_footer(c))
 
 
 # Plain-English reasons for the internal skip codes (the Discord reader is human,
 # not a debugger). Unmapped codes fall back to a humanised form of the code itself.
 _REJECT_ENGLISH = {
     # ── Signa gate ──
-    "signa_direction_absent": "no futures direction to mirror",
-    "signa_missing": "no Signa read available",
-    "signa_grade": "Signa grade too low (needs A or B)",
-    "signa_daily_neutral": "Signa daily trend is WAIT/neutral",
+    "signa_direction_absent": "no futures direction to follow",
+    "signa_missing": "no Signa (outside opinion) read available",
+    "signa_grade": "Signa (outside opinion) rating too low (needs A or B)",
+    "signa_daily_neutral": "Signa daily trend shows no clear direction",
     "signa_opposes": "Signa daily trend opposed the trade",
     # ── Contract selection ──
-    "market_data_unavailable": "option quotes unavailable",
-    "no_valid_expiry": "no option expiry in the allowed window",
-    "spread_too_wide": "option bid/ask spread too wide",
+    "market_data_unavailable": "option prices unavailable",
+    "no_valid_expiry": "no option expiring in the allowed window",
+    "spread_too_wide": "gap between the buy and sell price is too wide",
     # ── Options risk engine ──
     "options_disabled": "options lane is turned off",
-    "live_options_blocked": "lane is paper-only (live blocked)",
-    "underlying_not_allowed": "underlying not on the options list",
+    "live_options_blocked": "lane is paper-only (real trading blocked)",
+    "underlying_not_allowed": "that stock/fund isn't on the options list",
     "contract_type_not_allowed": "that option type isn't allowed",
     "short_options_blocked": "only buying options is allowed",
-    "session_not_allowed": "not allowed in this trading session",
-    "session_window": "outside the options trading window",
+    "session_not_allowed": "not allowed at this time of day",
+    "session_window": "outside the options trading hours",
     "daily_trade_limit": "hit the daily options trade limit",
     "daily_loss_limit": "hit the daily options loss limit",
-    "consecutive_losses": "hit the consecutive-loss limit",
-    "max_open_positions": "already at max open option positions",
-    "quantity_invalid": "invalid contract quantity",
-    "max_contracts": "over the contract cap",
-    "market_order_blocked": "market orders disabled (limit only)",
+    "consecutive_losses": "too many losses in a row",
+    "max_open_positions": "already at the most open option trades allowed",
+    "quantity_invalid": "invalid number of contracts",
+    "max_contracts": "more contracts than allowed",
+    "market_order_blocked": "market orders are off (limit orders only)",
     "order_type_invalid": "unsupported order type",
     "entry_required": "missing entry price",
-    "stop_required": "missing stop price",
-    "target_required": "missing target price",
-    "bracket_invalid": "stop/target bracket is invalid",
-    "premium_per_contract": "premium per contract over the cap",
-    "total_premium": "total cost over the cap",
-    "risk_invalid": "premium risk must be positive",
-    "rr_too_low": "reward-to-risk too low",
+    "stop_required": "missing stop-loss price",
+    "target_required": "missing profit target price",
+    "bracket_invalid": "stop-loss and target prices don't make sense together",
+    "premium_per_contract": "option costs more per contract than allowed",
+    "total_premium": "total cost over the limit",
+    "risk_invalid": "possible loss must be more than zero",
+    "rr_too_low": "possible profit too small for the possible loss",
     "confluence_grade": "setup quality below the bar",
 }
 
@@ -164,28 +161,62 @@ def _english_rule(rule: Any) -> str:
 
 
 def _fmt_reject(c: dict[str, Any]) -> str:
-    return f"🚫 Companion skipped — {_fmt_contract(c)}: {_english_rule(c.get('rule'))}"
+    lines = [
+        f"🚫 Paper option skipped: {_fmt_contract(c)}",
+        f"Reason: {_english_rule(c.get('rule'))}",
+    ]
+    source = _source_trade(c)
+    if source:
+        lines.append(f"Would have followed: {source}")
+    lines.append(_BOUNDARY)
+    return "\n".join(lines + _symbol_footer(c))
 
 
 def _fmt_watchlist(c: dict[str, Any]) -> str:
-    fut = c.get("futures_instrument") or "?"
-    side = c.get("futures_direction") or "?"
-    return (
-        f"👀 Companion watchlist — {_fmt_contract(c)}: {_english_rule(c.get('rule'))} "
-        f"_(from {side} {fut})_"
-    )
+    lines = [
+        f"👀 Paper option on watch (not opened): {_fmt_contract(c)}",
+        f"Reason: {_english_rule(c.get('rule'))}",
+    ]
+    source = _source_trade(c)
+    if source:
+        lines.append(f"Would have followed: {source}")
+    lines.append(_BOUNDARY)
+    return "\n".join(lines + _symbol_footer(c))
+
+
+_RESOLVED = {
+    "WIN": ("✅", "won"),
+    "LOSS": ("❌", "lost"),
+    "EXPIRED": ("⌛", "expired"),
+}
 
 
 def _fmt_resolved(r: dict[str, Any]) -> str:
-    status = r.get("status")
-    icon = {"WIN": "✅", "LOSS": "❌", "EXPIRED": "⌛"}.get(status, "•")
-    # Prefer the human-readable contract; fall back to the OSI symbol.
-    label = _fmt_contract(r) if r.get("underlying") else (r.get("option_symbol") or "")
-    sym = r.get("option_symbol")
-    sym_ref = f"  `{sym}`" if sym and r.get("underlying") else ""
+    status = str(r.get("status") or "")
+    icon, verb = _RESOLVED.get(status, ("•", status.lower() or "closed"))
+    # Prefer the human-readable contract; fall back to the raw symbol.
+    label = _fmt_contract(r, with_expiry=False) if r.get("underlying") else (r.get("option_symbol") or "?")
     pnl = r.get("pnl_dollars")
-    pnl_str = f"  ({_money(pnl)})" if pnl is not None else ""
-    return f"{icon} **Paper option {status}** — **{label}**{sym_ref}{pnl_str}"
+    title = f"{icon} Paper option {verb}: {label}"
+    if pnl is not None:
+        title += f", {_money(pnl)}"
+    lines = [title]
+    if pnl is not None:
+        lines.append(f"Result: {_money(pnl)} (paper, not real money)")
+    if r.get("expiry"):
+        lines.append(f"Expiry date: {pe.et_date(r.get('expiry'))}")
+    lines.append(_BOUNDARY)
+    footer = _symbol_footer(r) if r.get("underlying") else []
+    return "\n".join(lines + footer)
+
+
+def _safe(fmt: Any, item: dict[str, Any]) -> str | None:
+    """Format one message; a formatting bug is logged, never raised into the lane."""
+    try:
+        return fmt(item)
+    except Exception:  # noqa: BLE001 — notification must never affect the lane
+        logger.warning("companion discord format failed", exc_info=True)
+        return None
 
 
 def notify_companion_create(audit: dict[str, Any] | None) -> None:
@@ -196,11 +227,16 @@ def notify_companion_create(audit: dict[str, Any] | None) -> None:
     for c in audit.get("candidates", []) or []:
         status = c.get("status")
         if status == "OPEN" and "TRADE" in decisions:
-            _post(_SIGNAL_ENV, _fmt_open(c))
+            fmt = _fmt_open
         elif status == "WATCHLIST" and "RISK_REJECTED" in decisions:
-            _post(_SIGNAL_ENV, _fmt_watchlist(c))
+            fmt = _fmt_watchlist
         elif status == "REJECTED" and "RISK_REJECTED" in decisions:
-            _post(_SIGNAL_ENV, _fmt_reject(c))
+            fmt = _fmt_reject
+        else:
+            continue
+        message = _safe(fmt, c)
+        if message:
+            _post(_SIGNAL_ENV, message)
 
 
 def notify_companion_resolved(resolved: dict[str, Any] | None) -> None:
@@ -208,14 +244,32 @@ def notify_companion_resolved(resolved: dict[str, Any] | None) -> None:
     if not resolved or not _discord_enabled() or "TRADE" not in _decisions():
         return
     for r in resolved.get("resolved", []) or []:
-        _post(_SIGNAL_ENV, _fmt_resolved(r))
+        message = _safe(_fmt_resolved, r)
+        if message:
+            _post(_SIGNAL_ENV, message)
+
+
+_ERROR_STEPS = {
+    "create": "opening new paper option trades",
+    "resolve": "checking open paper option trades",
+}
 
 
 def notify_companion_error(message: str) -> None:
-    """Post a lane error to the options error channel."""
+    """Post a lane error to the options error channel (raw error text in the footer)."""
     if not _discord_enabled():
         return
-    _post(_ERROR_ENV, f"⚠️ Options companion error: {message}")
+    text = str(message or "").strip()
+    step, _, _detail = text.partition(":")
+    step_text = _ERROR_STEPS.get(step.strip().lower())
+    lines = ["⚠️ Paper options tracker error"]
+    if step_text:
+        lines.append(f"While: {step_text}")
+    lines.append("What to do: check the options companion logs")
+    lines.append(_BOUNDARY)
+    if text:
+        lines.append(f"-# {text[:300]}")
+    _post(_ERROR_ENV, "\n".join(lines))
 
 
 def notify_companion_daily_report(message: str) -> bool:

@@ -270,7 +270,7 @@ def test_prior_day_open_lifecycle_flags_local_open_crossday(tmp_path, monkeypatc
               "working_orders": 0, "broker_local_drift": sig["local_open"]}
     v = hd.evaluate_health(checks)
     assert v["status"] == "ALERT"
-    assert any("drift" in p for p in v["problems"])
+    assert any("records don't match" in p for p in v["problems"])
 
 
 def test_order_suppression_record_is_inert_to_daily_state(tmp_path):

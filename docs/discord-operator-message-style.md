@@ -87,3 +87,17 @@ scanner, drift gate) pass through unchanged. If Discord rejects a card (HTTP
 400) the original text is re-sent, so layout can never drop an alert. The
 read-only watcher uses the same cards: its installer ships a copy of
 `discord_card.py` next to `watcher.py`, and without that copy it posts plain text.
+
+## Plain English (binding, 2026-09-23)
+
+The operator reads these on a phone and is not a quant. Every operator-facing message:
+
+- shows times in US Eastern, e.g. `9:00 PM ET, Tue Sep 22`. Never UTC `Z` stamps or raw ISO timestamps;
+- shows money in dollars (per contract when relevant). Never `R` multiples, `R:R`, `pts` or tick counts on their own;
+- says `Buy` / `Sell`. Never `LONG` / `SHORT`;
+- spells out markets (`MNQ (Micro Nasdaq)`) and setups (`2-2 reversal`). Never raw `strat_*` / snake_case ids;
+- translates status codes into short words (`TARGET_HIT` → "hit the profit target");
+- avoids unexplained abbreviations (PF, DD, EOD, RTH, ORB, VWAP, HTF, ATR, IOC, OOM, RSS, DTE, IV, n=). Write the words out or drop the number;
+- keeps SHAs, PIDs, file paths and raw exception text out of the title and body. When they're needed for debugging, put them in a small `-#` footer line.
+
+Use `notifications/plain_english.py` (`et_time`, `money`, `side`, `market`, `setup`, `exit_reason`, `session`, `ago`, `price`) instead of hand-formatting.

@@ -60,9 +60,11 @@ def test_discord_uses_v2_observation_without_implying_authority() -> None:
 
     embed = build_discord_payload(result)["embeds"][0]
     fields = {field["name"]: field["value"] for field in embed["fields"]}
-    assert fields["Signa Context"].startswith("V2 observational")
-    assert "grade A" in fields["Signa Context"]
-    assert "confidence 88%" in fields["Signa Context"]
+    signa = fields["Signa (outside opinion)"]
+    assert signa.startswith("For info only · Signa v2 (being tested)")
+    assert "strong (grade A)" in signa
+    assert "88% confident" in signa
+    assert "R:R" not in signa  # reward-to-risk ratio is jargon; dropped from the card
     assert result.components["signa"] == 0
 
 
@@ -93,6 +95,6 @@ def test_discord_keeps_legacy_signa_line_alongside_v2() -> None:
 
     embed = build_discord_payload(result)["embeds"][0]
     fields = {field["name"]: field["value"] for field in embed["fields"]}
-    legacy_line, v2_line = fields["Signa Context"].split("\n")
-    assert legacy_line == "Observational · AAPL · grade B · score 72 · UP"
-    assert v2_line == "V2 observational · AAPL · grade A · score 91 · LONG · 1d"
+    legacy_line, v2_line = fields["Signa (outside opinion)"].split("\n")
+    assert legacy_line == "For info only · leaning up, fairly strong (grade B)"
+    assert v2_line == "For info only · Signa v2 (being tested): leaning up, strong (grade A) · daily view"

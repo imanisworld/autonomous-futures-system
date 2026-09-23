@@ -61,6 +61,7 @@ What happened:
 What to check:
 Do not touch:
 
+Write plain English for a non-trader: no jargon, codes or abbreviations, times in US Eastern (ET).
 Ground every statement in the packet. If a field is missing or null, say it is unknown rather than
 guessing. Keep the whole reply under 900 characters. Prefer the smallest reversible check first.
 """
@@ -188,8 +189,8 @@ def extract_text(response: dict) -> str | None:
 # ── Discord text ─────────────────────────────────────────────────────────────
 def triage_discord_text(key: str, headline: str, advice: str) -> str:
     advice = advice.strip()
-    head = f"🧭 **TRIAGE — {headline}** (advisory, read-only)"
-    foot = f"`{key} · {MODEL} · no authority`"
+    head = f"🧭 Suggestions: {headline}"
+    foot = f"-# {key} · {MODEL} · advice only, no authority — it can't change anything"
     room = DISCORD_LIMIT - len(head) - len(foot) - 2
     if len(advice) > room:
         advice = advice[: max(0, room - 1)].rstrip() + "…"

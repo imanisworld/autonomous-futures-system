@@ -36,11 +36,15 @@ def test_build_heartbeat_message_formats_summary():
         session="asian", last_bar_age_s=300, has_open_position=False,
         trades_today=2, pnl_today=55.0,
     )
-    assert "asian session" in msg
-    assert "last bar 5m ago" in msg
-    assert "flat" in msg
-    assert "2 trade(s) today" in msg
-    assert "$55.00" in msg
+    assert msg.splitlines()[0] == "\U0001FAC0 Bot is running"
+    assert "Market: Asia session" in msg
+    assert "Last price update: 5 min ago" in msg
+    assert "Open positions: none" in msg
+    assert "Trades today: 2" in msg
+    assert "Profit today: +$55.00" in msg
+    # Plain English: no jargon / shorthand.
+    for jargon in ("trade(s)", "flat", "P&L", "asian", "5m ago"):
+        assert jargon not in msg
 
 
 def test_heartbeat_disabled_is_noop(tmp_path):
@@ -60,10 +64,10 @@ def test_heartbeat_sends_when_bars_are_fresh(tmp_path):
 
     result = maybe_send_heartbeat(_config(), str(tmp_path), sender=fake_sender)
     assert result is not None
-    assert "heartbeat" in result
-    # Sent as a card; every part of the heartbeat line is still on it.
+    assert "Bot is running" in result
+    # Sent as a card; every line of the heartbeat is still on it.
     flat = card_text(captured["body"])
-    assert all(part.strip("* ") in flat for part in result.split(" · "))
+    assert all(line in flat for line in result.splitlines())
 
 
 def test_heartbeat_skips_when_market_quiet(tmp_path):

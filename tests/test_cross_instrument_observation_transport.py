@@ -545,12 +545,13 @@ def test_watchdog_flags_a_dead_instrument_behind_a_healthy_one(tmp_path):
     out = fw.run(now=now, send=lambda c, m: msgs.append(m) or SimpleNamespace(sent=True), config=cfg)
     assert out["action"] == "ok"                                        # global feed healthy…
     assert out["instruments"]["stale"] and "M2K" in out["instruments"]["stale"][0]   # …but M2K is dead
-    assert any("INSTRUMENT FEED STALE" in m and "M2K" in m for m in msgs) and not any("MNQ (" in m for m in msgs)
+    assert any("No price updates for some markets" in m and "M2K (Micro Russell)" in m for m in msgs)
+    assert not any("MNQ" in m for m in msgs)                             # healthy MNQ is not named
     # Recovery is per instrument too.
     _write_latest(tmp_path, "M2K", now + timedelta(minutes=5) - timedelta(minutes=1))
     msgs.clear()
     out = fw.run(now=now + timedelta(minutes=5), send=lambda c, m: msgs.append(m) or SimpleNamespace(sent=True), config=cfg)
-    assert out["instruments"]["recovered"] == ["M2K"] and any("recovered: M2K" in m for m in msgs)
+    assert out["instruments"]["recovered"] == ["M2K"] and any("Price updates are back: M2K (Micro Russell)" in m for m in msgs)
 
 
 def test_watchdog_uses_crypto_calendar_for_mbt_and_ignores_never_reported(tmp_path):

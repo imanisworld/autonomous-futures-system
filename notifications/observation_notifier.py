@@ -17,94 +17,28 @@ existing routes.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
 from typing import Iterable, Optional
-from zoneinfo import ZoneInfo
+
+from notifications import plain_english as pe
 
 logger = logging.getLogger(__name__)
 
 ROUTE_NAME = "observation"
 LABEL = "OBSERVATION ONLY"
 
-_ET = ZoneInfo("America/New_York")
-
-# Plain names so a card reads without a glossary.
-_MARKETS = {
-    "MNQ": "Micro Nasdaq", "MES": "Micro S&P 500", "M2K": "Micro Russell",
-    "MYM": "Micro Dow", "MGC": "Micro Gold", "MCL": "Micro Crude Oil",
-    "MBT": "Micro Bitcoin",
-}
-_SETUPS = {
-    "strat_22_continuation": "2-2 continuation",
-    "strat_22_reversal": "2-2 reversal",
-    "strat_212": "2-1-2 pattern",
-    "strat_122": "1-2-2 pattern",
-    "strat_122_pullback": "1-2-2 pullback",
-    "strat_312": "3-1-2 pattern",
-    "strat_322_reversal": "3-2-2 reversal",
-    "strat_4hr_retrigger": "4-hour re-trigger",
-    "ema_pullback_trend": "pullback in a trend",
-    "impulse_first_pullback": "first pullback after a big move",
-    "trend_consolidation_break": "breakout from a pause in a trend",
-    "orb_false_break_fade": "fade of a failed opening-range break",
-    "transition_failed_breakdown_reclaim": "failed breakdown, price back above",
-    "vwap_hold": "holding above/below VWAP",
-}
-_EXITS = {
-    "TARGET_HIT": "hit the profit target",
-    "STOP_HIT": "hit the stop-loss",
-    "STOP_HIT_ON_FILL_BAR": "hit the stop-loss right after entry",
-    "STOP_GAP": "price jumped past the stop-loss",
-    "EOD": "closed at end of day",
-    "TIME_EXIT": "closed on time limit",
-}
 _FOOTER = "OBSERVATION ONLY · practice tracking, no real order was placed"
 
 
-def _fmt_price(value) -> str:
-    try:
-        return f"{float(value):,.2f}".rstrip("0").rstrip(".")
-    except (TypeError, ValueError):
-        return "?"
-
-
-def _money(value: float) -> str:
-    sign = "-" if value < 0 else "+"
-    return f"{sign}${abs(value):,.2f}"
-
-
-def _when(ts: object) -> str:
-    """'9:00 PM ET, Tue Sep 22' from an ISO UTC timestamp; raw text if unparseable."""
-    text = str(ts or "")
-    try:
-        moment = datetime.fromisoformat(text.replace("Z", "+00:00"))
-    except ValueError:
-        return text or "?"
-    if moment.tzinfo is None:
-        moment = moment.replace(tzinfo=timezone.utc)
-    local = moment.astimezone(_ET)
-    return f"{local.strftime('%I:%M %p').lstrip('0')} ET, {local.strftime('%a %b')} {local.day}"
-
-
-def _market(root: str) -> str:
-    name = _MARKETS.get(root)
-    return f"{root} ({name})" if name else root
-
-
-def _setup(strategy: str) -> str:
-    key = strategy[: -len("_observed")] if strategy.endswith("_observed") else strategy
-    return _SETUPS.get(key) or key.replace("strat_", "").replace("_", " ")
-
-
-def _side(direction: str) -> str:
-    return {"LONG": "Buy", "SHORT": "Sell"}.get(direction, direction.title() or "?")
+_fmt_price = pe.price
+_money = pe.money
+_when = pe.et_time
+_market = pe.market
+_setup = pe.setup
+_side = pe.side
 
 
 def _dollars_per_point(event: dict) -> Optional[float]:
-    try:
-        return float(event["tick_value_dollars"]) / float(event["tick_size"])
-    except (KeyError, TypeError, ValueError, ZeroDivisionError):
-        return None
+    return pe.dollars_per_point(event.get("tick_size"), event.get("tick_value_dollars"))
 
 
 def _leg(event: dict, far_key: str, verb: str) -> str:
@@ -157,7 +91,7 @@ def format_event(event: dict) -> Optional[str]:
         if dollars is not None:
             lines.append(f"Result: {_money(dollars)} (1 contract, before fees)")
         if reason:
-            lines.append(f"How it ended: {_EXITS.get(reason, reason.replace('_', ' ').lower())}")
+            lines.append(f"How it ended: {pe.exit_reason(reason)}")
         if event.get("entry") is not None and event.get("exit_price") is not None:
             lines.append(f"Prices: in at {_fmt_price(event.get('entry'))}, out at {_fmt_price(event.get('exit_price'))}")
         lines.append(f"Closed: {_when(event.get('exit_timestamp') or event.get('resolved_at_bar_ts'))}")

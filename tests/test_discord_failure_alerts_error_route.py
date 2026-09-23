@@ -106,8 +106,8 @@ def test_watchdog_legacy_stale_and_recovery_both_go_to_error_route(routes, captu
     urls = [u for u, _ in capture_router]
     assert urls and set(urls) == {"https://error.invalid/route"}
     msgs = [m for _, m in capture_router]
-    assert any("INSTRUMENT FEED STALE" in m and "M2K" in m for m in msgs)
-    assert any("recovered: M2K" in m for m in msgs)
+    assert any("No price updates for some markets" in m and "M2K (Micro Russell)" in m for m in msgs)
+    assert any("Price updates are back: M2K (Micro Russell)" in m for m in msgs)
 
 
 def test_watchdog_authoritative_15m_stale_and_transport_error_go_to_error_route(routes, capture_router, tmp_path, monkeypatch):
@@ -129,8 +129,10 @@ def test_watchdog_authoritative_15m_stale_and_transport_error_go_to_error_route(
     assert out["instruments"]["authority"] != "webhook_receipt_legacy"
     assert set(u for u, _ in capture_router) == {"https://error.invalid/route"}
     msgs = [m for _, m in capture_router]
-    assert any("OBSERVATION 15M FEED STALE" in m and "M2K" in m for m in msgs)
-    assert any("MGC (15m transport error: synthetic detector failure)" in m for m in msgs)
+    assert any("missing 15-minute price bars" in m and "M2K (Micro Russell)" in m for m in msgs)
+    assert any("MGC (Micro Gold): bars arrive but couldn't be processed" in m for m in msgs)
+    # Raw error text stays out of the body: it rides in the small footer line.
+    assert any("MGC: synthetic detector failure" in m for m in msgs)
 
 
 def test_watchdog_healthy_tick_sends_nothing_and_never_uses_heartbeat_or_observation(routes, capture_router, tmp_path):
@@ -157,8 +159,8 @@ def test_watchdog_unset_error_route_falls_back_and_never_crashes(monkeypatch, ca
 
 def test_runner_tradovate_safety_alerts_use_operational_error_helper():
     src = (ROOT / "webhook" / "runner.py").read_text(encoding="utf-8")
-    for needle in ("EXECUTION SAFETY: Tradovate order did not remain open.",
-                   "LIVE ORDER BLOCKED: broker reported OPEN but returned no order ids."):
+    for needle in ("🚨 Order did not stay open — check Tradovate",
+                   "🚨 Live order blocked — check Tradovate now"):
         idx = src.index(needle)
         window = src[max(0, idx - 400): idx]
         assert "send_operational_alert(" in window, needle

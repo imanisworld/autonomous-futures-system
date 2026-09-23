@@ -140,7 +140,7 @@ def test_fresh_5m_receipt_cannot_mask_stale_15m_campaign_feed(tmp_path, monkeypa
     )
     assert out["authority"] == "campaign_seen_bar_plus_matching_15m_bar_history_plus_latest_transport_attempt"
     assert out["stale"] and out["stale"][0].startswith("M2K ")
-    assert any("OBSERVATION 15M FEED STALE" in msg and "M2K" in msg for msg in messages)
+    assert any("missing 15-minute price bars" in msg and "M2K (Micro Russell)" in msg for msg in messages)
 
 
 def test_newer_failed_15m_transport_fails_health_immediately(tmp_path, monkeypatch):

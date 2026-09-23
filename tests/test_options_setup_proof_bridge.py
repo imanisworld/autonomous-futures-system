@@ -262,10 +262,10 @@ def test_paper_v1_opens_evidence_row_and_alerts_with_unchecked_caveat(tmp_path):
     assert len(posts) == 1
     payload = json.loads(posts[0].content)
     unchecked = next(
-        field for field in payload["embeds"][0]["fields"] if field["name"] == "Unchecked"
+        field for field in payload["embeds"][0]["fields"] if field["name"] == "Not checked"
     )
-    assert "event risk" in unchecked["value"]
-    assert "flip context" in unchecked["value"]
+    assert "upcoming news or earnings" in unchecked["value"]
+    assert "options-positioning price levels" in unchecked["value"]
     assert outcome.shadow_id > 0
     stored = storage.get_shadow_setup(outcome.shadow_id)
     assert stored is not None

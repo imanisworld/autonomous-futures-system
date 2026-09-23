@@ -14,6 +14,7 @@ from typing import Any
 
 import httpx
 
+from . import plain_text as pt
 from .scorer import ScoreResult
 from .storage import ScanStorage
 
@@ -513,54 +514,78 @@ def manage_rh_options_position(
     return _management_result("HOLD", reasons, setup, ticket)
 
 
+_ADVISORY_FOOTER = "Advice only · nothing is placed automatically · you manage trades in Robinhood"
+
+_TRADE_STYLES = {
+    "SCALP_INTRADAY": "quick same-day trade",
+    "SCALP": "quick trade",
+    "SWING": "swing trade (hold a few days)",
+}
+
+
+def _position_label(pos: Any) -> str:
+    """``QQQ 741 call · expires Fri Sep 25 (3 days)`` for a shadow position."""
+    ticket = getattr(pos, "selected_contract", {}) or {}
+    inp = getattr(pos, "setup_inputs", {}) or {}
+    contract_type = ticket.get("contract_type") or inp.get("contract_type") or getattr(pos, "direction", "")
+    strike = ticket.get("strike") or inp.get("strike", "")
+    expiry = ticket.get("expiry") or inp.get("expiry_date", "")
+    label = pt.option_label(getattr(pos, "ticker", "?"), strike, contract_type)
+    when = pt.expires(expiry) if expiry else ""
+    return f"{label} · {when}" if when else label
+
+
+def _position_lines(pos: Any, *, with_invalidation: bool = True) -> list[str]:
+    ticket = getattr(pos, "selected_contract", {}) or {}
+    inp = getattr(pos, "setup_inputs", {}) or {}
+    entry = ticket.get("limit_debit") or inp.get("premium")
+    stop = ticket.get("stop_premium")
+    target = ticket.get("target_premium")
+    style = ticket.get("trade_style", "")
+    invalidation = ticket.get("invalidation_level")
+    lines = []
+    if entry is not None:
+        lines.append(f"Bought at: {pt.premium(entry)}")
+    if stop is not None:
+        lines.append(f"Stop-loss: {pt.premium(stop)}")
+    if target is not None:
+        lines.append(f"Profit target: {pt.premium(target)}")
+    if style:
+        lines.append(f"Style: {_TRADE_STYLES.get(str(style).upper(), str(style).replace('_', ' ').lower())}")
+    if with_invalidation and invalidation is not None:
+        word = "above" if str(getattr(pos, "direction", "")).upper() == "SHORT" else "below"
+        lines.append(f"Idea is wrong if {getattr(pos, 'ticker', 'the stock')} goes {word} ${float(invalidation):,.2f}")
+    return lines
+
+
 def morning_check(storage: ScanStorage, discord_url: str) -> dict[str, Any]:
     """Send a Discord recap of every OPEN shadow position — call once at session start."""
     open_positions = storage.latest_shadow_setups(status="OPEN", limit=100)
     if not open_positions:
         discord_sent = _post_discord(discord_url, {"embeds": [{
-            "title": "☀️ Morning Check — No Open Positions",
-            "description": "Shadow journal is flat. Nothing to manage.",
+            "title": "☀️ Morning check — no open option trades",
+            "description": "No open option trades are being tracked. Nothing to manage today.",
             "color": 8421504,
-            "footer": {"text": "VP Options Advisory — advisory only"},
+            "footer": {"text": _ADVISORY_FOOTER},
         }]})
         return {"open_count": 0, "discord_sent": discord_sent}
 
     fields = []
     for pos in open_positions:
-        ticket = pos.selected_contract or {}
-        inp = pos.setup_inputs or {}
-        contract_type = ticket.get("contract_type") or inp.get("contract_type", "")
-        strike = ticket.get("strike") or inp.get("strike", "")
-        expiry = ticket.get("expiry") or inp.get("expiry_date", "")
-        entry = ticket.get("limit_debit") or inp.get("premium")
-        stop = ticket.get("stop_premium")
-        target = ticket.get("target_premium")
-        style = ticket.get("trade_style", "")
-        invalidation = ticket.get("invalidation_level")
-
-        label = f"**{pos.ticker} {pos.direction}** · {strike} {contract_type} exp {expiry}"
-        parts = []
-        if entry is not None:
-            parts.append(f"In ${float(entry):.2f}")
-        if stop is not None:
-            parts.append(f"Stop ${float(stop):.2f}")
-        if target is not None:
-            parts.append(f"Target ${float(target):.2f}")
-        if style:
-            parts.append(style)
-
-        notes = " | ".join(parts)
-        if invalidation is not None:
-            notes += f"\nInvalidation: ${float(invalidation):g}"
-        fields.append({"name": label, "value": notes or "no ticket data", "inline": False})
+        lines = _position_lines(pos)
+        fields.append({
+            "name": _position_label(pos),
+            "value": "\n".join(lines) if lines else "no trade details saved",
+            "inline": False,
+        })
 
     n = len(open_positions)
     embed = {
-        "title": f"☀️ Morning Check — {n} Open Position{'s' if n != 1 else ''}",
-        "description": "Manage in Robinhood. Stop and target levels below.",
+        "title": f"☀️ Morning check — {n} open option trade{'s' if n != 1 else ''}",
+        "description": "Manage these in Robinhood. Each one's stop-loss and profit target are below (prices are per share; one contract = 100 shares).",
         "color": 15908139,  # warm gold
         "fields": fields,
-        "footer": {"text": "VP Options Advisory — advisory only"},
+        "footer": {"text": _ADVISORY_FOOTER},
     }
     discord_sent = _post_discord(discord_url, {"embeds": [embed]})
     return {
@@ -578,38 +603,20 @@ def kill_switch(storage: ScanStorage, discord_url: str) -> dict[str, Any]:
 
     fields = []
     for pos in open_positions:
-        ticket = pos.selected_contract or {}
-        inp = pos.setup_inputs or {}
-        contract_type = ticket.get("contract_type") or inp.get("contract_type", "")
-        strike = ticket.get("strike") or inp.get("strike", "")
-        expiry = ticket.get("expiry") or inp.get("expiry_date", "")
-        entry = ticket.get("limit_debit") or inp.get("premium")
-        stop = ticket.get("stop_premium")
-        target = ticket.get("target_premium")
-        style = ticket.get("trade_style", "")
-
-        label = f"**{pos.ticker} {pos.direction}** · {strike} {contract_type} exp {expiry}"
-        parts = []
-        if entry is not None:
-            parts.append(f"Entry ${float(entry):.2f}")
-        if stop is not None:
-            parts.append(f"Stop ${float(stop):.2f}")
-        if target is not None:
-            parts.append(f"Target ${float(target):.2f}")
-        if style:
-            parts.append(style)
+        lines = _position_lines(pos, with_invalidation=False)
         fields.append({
-            "name": label,
-            "value": (" | ".join(parts) if parts else "no ticket data") + "\n→ **Close in Robinhood now**",
+            "name": _position_label(pos),
+            "value": ("\n".join(lines) if lines else "no trade details saved") + "\n→ **Close it in Robinhood now**",
             "inline": False,
         })
 
+    n = len(open_positions)
     embed = {
-        "title": f"🚨 KILL SWITCH — {len(open_positions)} POSITION{'S' if len(open_positions) != 1 else ''} TO CLOSE",
-        "description": "Close all open option positions in Robinhood immediately.",
+        "title": f"🚨 KILL SWITCH — close {n} option trade{'s' if n != 1 else ''} in Robinhood now",
+        "description": "Close every open option trade in Robinhood immediately.",
         "color": 15158332,
         "fields": fields,
-        "footer": {"text": "VP Options Advisory — advisory only"},
+        "footer": {"text": _ADVISORY_FOOTER},
     }
     discord_sent = _post_discord(discord_url, {"embeds": [embed]})
 
@@ -687,32 +694,33 @@ def _shadow_to_summary(pos: Any) -> dict[str, Any]:
 
 def _build_position_hit_embed(pos: Any, mark: float, hit_type: str) -> dict[str, Any]:
     ticket = getattr(pos, "selected_contract", {}) or {}
-    inp = getattr(pos, "setup_inputs", {}) or {}
     stop = ticket.get("stop_premium")
     target = ticket.get("target_premium")
-    strike = ticket.get("strike") or inp.get("strike", "")
-    contract_type = ticket.get("contract_type") or inp.get("contract_type", "")
-    expiry = ticket.get("expiry") or inp.get("expiry_date", "")
+    label = _position_label(pos)
+    short_label = label.split(" · ")[0]
 
     is_stop = hit_type == "STOP_HIT"
     color = 15158332 if is_stop else 3066993
-    icon = "🛑" if is_stop else "🎯"
-    label = "STOP HIT" if is_stop else "TARGET HIT"
-    action = "CUT THE POSITION" if is_stop else "TAKE PROFITS"
+    if is_stop:
+        title = f"🛑 Stop-loss hit on {short_label} — close it in Robinhood"
+        action = "→ **Close it in Robinhood now**"
+    else:
+        title = f"🎯 Profit target hit on {short_label} — take profits in Robinhood"
+        action = "→ **Take profits in Robinhood**"
 
-    fields: list[dict[str, Any]] = []
+    fields: list[dict[str, Any]] = [{"name": "Option", "value": label, "inline": False}]
+    fields.append({"name": "Option price now", "value": pt.premium(mark), "inline": True})
     if stop is not None:
-        fields.append({"name": "Stop", "value": f"${float(stop):.2f}", "inline": True})
+        fields.append({"name": "Stop-loss", "value": pt.premium(stop), "inline": True})
     if target is not None:
-        fields.append({"name": "Target", "value": f"${float(target):.2f}", "inline": True})
-    fields.append({"name": "Mark", "value": f"${mark:.2f}", "inline": True})
-    fields.append({"name": "Action", "value": f"→ **{action} in Robinhood**", "inline": False})
+        fields.append({"name": "Profit target", "value": pt.premium(target), "inline": True})
+    fields.append({"name": "What to do", "value": action, "inline": False})
 
     return {
-        "title": f"{icon} {label} — {pos.ticker} {pos.direction} · {strike} {contract_type} {expiry}",
+        "title": title,
         "color": color,
         "fields": fields,
-        "footer": {"text": "VP Options Advisory — advisory only"},
+        "footer": {"text": _ADVISORY_FOOTER},
     }
 
 

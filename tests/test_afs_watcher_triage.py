@@ -88,7 +88,7 @@ def _run(monkeypatch, *, key_present=True, urlopen=None, state=None, tick=None, 
     state = state if state is not None else {"blocked": {}, "notified": {}}
     ok = t.maybe_triage(
         key="feed_MNQ_stale", finding=FINDING, tick=tick or _tick(), state=state, first_utc=first,
-        headline="MNQ FEED STALE", release_sha="28f79a65a395af66", service="futures-bot", now=NOW,
+        headline="no Micro Nasdaq prices for 35 min", release_sha="28f79a65a395af66", service="futures-bot", now=NOW,
         env_value=env.get, notify=lambda _s, route, text, dedupe: posts.append((route, text, dedupe)),
         log=logs.append, recent_events=[{"utc": "2026-09-14T16:51:16Z", "kind": "BLOCKED", "key": "feed_MES_stale", "summary": "MES stale"}],
         urlopen=urlopen or _urlopen_ok()[0],
@@ -116,6 +116,7 @@ def test_request_has_no_tools_and_packet_is_secret_free(monkeypatch):
     assert body["model"] == "claude-opus-5"
     assert "tools" not in body and "tool_choice" not in body
     assert "no authority" in body["system"] or "no tools and no authority" in body["system"]
+    assert "plain English" in body["system"]
     assert body["messages"][0]["role"] == "user"
     packet = json.loads(body["messages"][0]["content"].split("\n", 1)[1])
     # what the model needs
@@ -142,9 +143,9 @@ def test_discord_post_shape_and_route(monkeypatch):
     assert route == "DISCORD_ROUTE_ERROR"          # no DISCORD_ROUTE_TRIAGE configured → error route
     assert dedupe == "triage:feed_MNQ_stale:2026-09-14T17:06:16Z"
     lines = text.splitlines()
-    assert lines[0] == "🧭 **TRIAGE — MNQ FEED STALE** (advisory, read-only)"
+    assert lines[0] == "🧭 Suggestions: no Micro Nasdaq prices for 35 min"
     assert lines[1] == "What happened:" and "Do not touch:" in lines
-    assert lines[-1] == "`feed_MNQ_stale · claude-opus-5 · no authority`"
+    assert lines[-1] == "-# feed_MNQ_stale · claude-opus-5 · advice only, no authority — it can't change anything"
     assert len(text) <= t.DISCORD_LIMIT
     assert state["triage"]["done"]["feed_MNQ_stale:2026-09-14T17:06:16Z"] == "posted"
     assert any(l.startswith("TRIAGE posted feed_MNQ_stale") for l in logs)
@@ -162,7 +163,8 @@ def test_prefers_dedicated_triage_route_when_configured(monkeypatch):
 
 def test_long_advice_is_truncated_to_discord_limit():
     text = t.triage_discord_text("k", "H", "x" * 5000)
-    assert len(text) <= t.DISCORD_LIMIT and text.endswith("`k · claude-opus-5 · no authority`") and "…" in text
+    assert len(text) <= t.DISCORD_LIMIT and "…" in text
+    assert text.endswith("-# k · claude-opus-5 · advice only, no authority — it can't change anything")
 
 
 # ── 4. failure isolation ─────────────────────────────────────────────────────
@@ -232,7 +234,7 @@ def test_watcher_triages_only_action_required_raises(monkeypatch):
     state = {"blocked": {}, "blocked_last_notified": {}, "notified": {}}
     w.handle_blocked(state, findings, tick)
     assert [kw["key"] for kw in seen] == ["feed_MNQ_stale"]
-    assert seen[0]["headline"] == "MNQ FEED STALE" and seen[0]["first_utc"] == state["blocked"]["feed_MNQ_stale"]["first_utc"]
+    assert seen[0]["headline"] == "no Micro Nasdaq prices for 35 min" and seen[0]["first_utc"] == state["blocked"]["feed_MNQ_stale"]["first_utc"]
     assert seen[0]["env_value"] is w._env_value and seen[0]["notify"] is w.notify
 
 

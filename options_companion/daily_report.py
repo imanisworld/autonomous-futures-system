@@ -12,6 +12,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from config.settings import options_companion_sqlite_path
+from notifications import plain_english as pe
 
 from .notify import notify_companion_daily_report
 from .status import companion_summary
@@ -19,11 +20,13 @@ from .store import CompanionRow, OptionsCompanionStore
 
 
 def _fmt_money(value: float) -> str:
-    return f"${value:,.2f}"
+    return pe.money(value)
 
 
-def _pct(value) -> str:
-    return f"{value:.1f}%" if isinstance(value, (int, float)) else "n/a"
+def _win_rate(value) -> str:
+    if not isinstance(value, (int, float)):
+        return "no finished trades yet"
+    return f"{value:.0f}% of finished trades won"
 
 
 def build_report(rows: list[CompanionRow], summary: dict, *, day_iso: str) -> str:
@@ -43,18 +46,17 @@ def build_report(rows: list[CompanionRow], summary: dict, *, day_iso: str) -> st
     today_pnl = round(sum(r.paper_pnl_dollars or 0.0 for r in resolved_today), 2)
 
     return "\n".join([
-        f"📊 **Options companion — daily paper report ({day_iso})**",
+        f"📊 Paper options daily report — {pe.et_date(day_iso)}",
+        f"Opened today: **{len(opened_today)}**",
+        f"Closed today: **{wins} won, {losses} lost, {expired} expired**",
+        f"Result today: **{_fmt_money(today_pnl)}** (paper)",
+        f"Not opened today: {len(watchlist_today)} on watch, {len(skipped_today)} skipped",
         (
-            f"Today: **{len(opened_today)}** opened · "
-            f"**{wins}W / {losses}L / {expired}exp** · "
-            f"paper P&L **{_fmt_money(today_pnl)}** · "
-            f"{len(watchlist_today)} watchlist · {len(skipped_today)} skipped"
-        ),
-        (
-            f"All-time: {summary.get('formed', 0)} formed · {summary.get('open', 0)} open · "
-            f"win rate {_pct(summary.get('win_rate_percent'))} · "
+            f"All time: {summary.get('formed', 0)} trades taken · {summary.get('open', 0)} still open · "
+            f"{_win_rate(summary.get('win_rate_percent'))} · "
             f"total {_fmt_money(summary.get('total_paper_pnl_dollars', 0.0))}"
         ),
+        "PAPER ONLY · practice tracking, no real money",
     ])
 
 

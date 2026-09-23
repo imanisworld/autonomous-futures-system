@@ -287,6 +287,13 @@ promote_release() {
       else
         rm -f "\$watcher_dest/watcher_triage.py"
       fi
+      # Display helpers the watcher imports fail-open (cards, plain-English wording).
+      for helper_file in discord_card.py plain_english.py; do
+        if test -f "$CURRENT/notifications/\$helper_file"; then
+          cp -f "$CURRENT/notifications/\$helper_file" "\$watcher_dest/\$helper_file"
+          cmp -s "$CURRENT/notifications/\$helper_file" "\$watcher_dest/\$helper_file"
+        fi
+      done
       chmod 700 "\$watcher_dest"/*.sh
       systemctl restart afs-watcher.service
       sleep 2
@@ -346,6 +353,13 @@ rollback_release() {
       else
         rm -f "\$watcher_dest/watcher_triage.py"
       fi
+      # Display helpers the watcher imports fail-open (cards, plain-English wording).
+      for helper_file in discord_card.py plain_english.py; do
+        if test -f "$CURRENT/notifications/\$helper_file"; then
+          cp -f "$CURRENT/notifications/\$helper_file" "\$watcher_dest/\$helper_file"
+          cmp -s "$CURRENT/notifications/\$helper_file" "\$watcher_dest/\$helper_file"
+        fi
+      done
       chmod 700 "\$watcher_dest"/*.sh
       systemctl restart afs-watcher.service
       sleep 2

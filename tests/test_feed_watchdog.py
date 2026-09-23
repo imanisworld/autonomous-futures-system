@@ -53,8 +53,10 @@ def test_alerts_when_stale_during_active_session(tmp_path):
     out = fw.run(now=_ACTIVE, send=cap, config=_cfg(tmp_path))
     assert out["action"] == "alerted"
     assert len(cap.messages) == 1
-    assert "INGESTION STALE" in cap.messages[0]
-    assert "15m" in cap.messages[0]
+    assert cap.messages[0].startswith("🚨 No price updates from TradingView for 2 hr")
+    assert "every 15 min" in cap.messages[0]
+    for jargon in ("STALE", "webhook", "RiskSentinel", "15m"):
+        assert jargon not in cap.messages[0], jargon
     # State persisted as down.
     state = json.loads((tmp_path / "feed_watchdog_state.json").read_text())
     assert state["status"] == "down"
@@ -96,7 +98,7 @@ def test_recovery_notice_after_outage(tmp_path):
     _write_latest(tmp_path, _ACTIVE)                     # fresh again
     out = fw.run(now=_ACTIVE, send=cap, config=cfg)
     assert out["action"] == "recovered"
-    assert any("RECOVERED" in m for m in cap.messages)
+    assert any(m.startswith("✅ Price updates are back") for m in cap.messages)
     state = json.loads((tmp_path / "feed_watchdog_state.json").read_text())
     assert state["status"] == "ok"
 
@@ -105,4 +107,4 @@ def test_no_webhook_file_is_treated_as_stale(tmp_path):
     cap = _Capture()
     out = fw.run(now=_ACTIVE, send=cap, config=_cfg(tmp_path))  # no latest_webhook.json
     assert out["action"] == "alerted"
-    assert "no webhook on record" in cap.messages[0]
+    assert "No price updates from TradingView on record" in cap.messages[0]

@@ -22,7 +22,7 @@ def test_health_all_green():
 def test_health_service_down_is_alert_and_short_circuits():
     v = hd.evaluate_health({"service_ok": False, "errors_today": 5, "disk_pct": 99})
     assert v["status"] == "ALERT"
-    assert v["problems"] == ["service unreachable"]
+    assert v["problems"] == ["trading bot is not answering"]
 
 
 def test_health_auth_and_disk_and_errors():
@@ -31,9 +31,9 @@ def test_health_auth_and_disk_and_errors():
         "auth_state": "OUTAGE", "errors_today": 3, "disk_pct": 92.0,
     })
     assert v["status"] == "ALERT"
-    assert any("auth OUTAGE" in p for p in v["problems"])
-    assert any("disk 92% full" in p for p in v["problems"])
-    assert any("3 real error" in p for p in v["problems"])
+    assert any("broker login: down" in p for p in v["problems"])
+    assert any("server disk is 92% full" in p for p in v["problems"])
+    assert any("3 errors in today's log" in p for p in v["problems"])
 
 
 def test_health_disk_warn_band_and_open_position_note():
@@ -47,16 +47,35 @@ def test_health_disk_warn_band_and_open_position_note():
         "working_orders": 2,
     })
     assert v["status"] == "WARN"            # disk in warn band
-    assert any("position OPEN" in n for n in v["notes"])
+    assert any("a position is open" in n for n in v["notes"])
 
 
 def test_health_format_contains_status_icon():
     checks = {"service_ok": True, "broker_reachable": True, "position_flat": True,
               "auth_state": "HEALTHY", "errors_today": 0, "disk_pct": 17.0}
     text = hd.format_digest(hd.evaluate_health(checks), checks, day_iso="2026-06-27")
-    assert "Box health · 2026-06-27" in text
-    assert "**Status**\nOK" in text
-    assert "\U0001F7E2" in text
+    assert "Server health · Sat Jun 27" in text
+    assert "Overall: all good" in text
+    assert "Broker login: working" in text
+    assert "Open positions: none" in text
+    assert text.startswith("\U0001F7E2")
+    # Plain English: no ISO dates, no status enums, no "Box".
+    for jargon in ("2026-06-27", "HEALTHY", "Box", "flat"):
+        assert jargon not in text
+
+
+def test_health_format_alert_reads_urgent_in_plain_words():
+    checks = {"service_ok": True, "broker_reachable": True, "position_flat": False,
+              "auth_state": "OUTAGE", "errors_today": 0, "disk_pct": 17.0,
+              "working_orders": 0, "bars_without_decisions": True}
+    text = hd.format_digest(hd.evaluate_health(checks), checks, day_iso="2026-06-27")
+    assert text.startswith("\U0001F534")
+    assert "Overall: PROBLEM — needs attention now" in text
+    assert "- OPEN POSITION WITH NO STOP-LOSS — check Tradovate now" in text
+    assert "- broker login: down" in text
+    assert "- prices are arriving but no setups are being checked" in text
+    for jargon in ("NAKED", "OUTAGE", "pipeline blind"):
+        assert jargon not in text
 
 
 # ── backup_proof_data ──────────────────────────────────────────────────────

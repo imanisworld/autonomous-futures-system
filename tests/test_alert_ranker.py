@@ -622,19 +622,21 @@ def test_war_room_discord_payload_uses_triggered_template():
     embed = build_discord_payload(result)["embeds"][0]
     field_map = {field["name"]: field["value"] for field in embed["fields"]}
 
-    assert embed["title"] == "Options · SETUP TRIGGERED"
-    assert embed["description"] == "NVDA · CALL · Triggered"
-    assert "Strat 2U-1-2U" in field_map["Setup"]
-    assert "Timeframe 15m" in field_map["Setup"]
-    assert "FTFC Yes (UP)" in field_map["Setup"]
-    assert field_map["Contract"] == "NVDA $950 Call - Jun 20"
-    assert "Stop $940.00" in field_map["Levels"]
-    assert "Target 1 $965.00" in field_map["Levels"]
-    assert "Target 2 $975.00" in field_map["Levels"]
+    assert embed["title"].startswith("🔔 NVDA call — setup triggered")
+    assert embed["description"] == "**Call (bets the price goes up)** on NVDA"
+    assert "Candles: 2U-1-2U (up, inside, up)" in field_map["Setup"]
+    assert "Chart: 15-minute" in field_map["Setup"]
+    assert "All timeframes agree: yes (up)" in field_map["Setup"]
+    assert "FTFC" not in field_map["Setup"]
+    assert field_map["Option"] == "NVDA $950 Call - Jun 20"
+    assert "Stop-loss: $940.00" in field_map["Stock price levels"]
+    assert "First target: $965.00" in field_map["Stock price levels"]
+    assert "Second target: $975.00" in field_map["Stock price levels"]
     assert field_map["Why"] == "Demand zone reclaim. Volume expanding. GEX flip at 950 cleared."
-    assert "Trade authority" in field_map
-    assert "Liquidity / value" in field_map
-    assert "fair" in field_map["Liquidity / value"].lower() or "discount" in field_map["Liquidity / value"].lower() or "overpriced" in field_map["Liquidity / value"].lower()
+    assert "Can I trade this?" in field_map
+    assert "Option price check" in field_map
+    assert "fair value" in field_map["Option price check"].lower()
+    assert "IV" not in field_map["Option price check"]
     assert field_map["Risk"] == "Size for your account. Exit at stop - no exceptions."
 
 
@@ -644,9 +646,10 @@ def test_war_room_discord_payload_marks_forming_setup():
     embed = build_discord_payload(result)["embeds"][0]
     field_map = {field["name"]: field["value"] for field in embed["fields"]}
 
-    assert embed["title"] == "Options · SETUP FORMING"
+    assert embed["title"] == "⏳ QQQ call idea — setup still forming"
     assert "no entry permission" in field_map["Status"]
-    assert field_map["Risk"] == "No entry. Wait for mechanical TRIGGERED setup and canonical contract/risk proof."
+    assert "no entry permission" in field_map["Can I trade this?"]
+    assert field_map["Risk"] == "No entry. Wait for the setup to trigger and for the contract and risk check."
 
 
 def test_webhook_context_passes_rich_alert_fields_to_storage_status(tmp_path):
@@ -687,9 +690,9 @@ def test_strat_context_fields_support_aliases():
     embed = build_discord_payload(result)["embeds"][0]
     field_map = {field["name"]: field["value"] for field in embed["fields"]}
 
-    assert "Strat 1-2-2 REV" in field_map["Setup"]
-    assert "Timeframe 15m / 30m / 1h" in field_map["Setup"]
-    assert "FTFC Yes (UP)" in field_map["Setup"]
+    assert "Candles: 1-2-2 REV" in field_map["Setup"]
+    assert "Chart: 15-minute / 30-minute / 1-hour" in field_map["Setup"]
+    assert "All timeframes agree: yes (up)" in field_map["Setup"]
 
 
 
@@ -826,12 +829,11 @@ def test_discord_payload_shows_signa_observational_context_field():
     embed = build_discord_payload(result)["embeds"][0]
     field_map = {field["name"]: field["value"] for field in embed["fields"]}
 
-    assert "Signa Context" in field_map
-    assert "Observational" in field_map["Signa Context"]
-    assert "QQQ" in field_map["Signa Context"]
-    assert "grade B" in field_map["Signa Context"]
-    assert "score 74" in field_map["Signa Context"]
-    assert "UP" in field_map["Signa Context"]
+    signa = field_map["Signa (outside opinion)"]
+    assert signa.startswith("For info only")
+    assert "leaning up" in signa
+    assert "fairly strong (grade B)" in signa
+    assert "score" not in signa
     assert result.components["signa"] == 0
 
 

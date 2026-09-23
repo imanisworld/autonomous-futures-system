@@ -37,6 +37,7 @@ from execution.cross_instrument_observation import (  # noqa: E402
     STATE_FILENAME as OBSERVATION_STATE_FILENAME,
     campaign_enabled as observation_campaign_enabled,
 )
+from notifications import plain_english as pe  # noqa: E402
 from notifications.discord_notifier import NotificationResult, send_operational_alert  # noqa: E402
 from ops.cross_instrument_feed_health import build_feed_health  # noqa: E402
 
@@ -88,6 +89,8 @@ def _check_campaign_instruments(now: datetime, log_dir: Path, state: dict, send,
     per_state: dict = dict(state.get("instruments") or {})
     now_epoch = now.timestamp()
     stale_now: list[str] = []
+    shown: list[str] = []
+    errors: list[str] = []
     recovered: list[str] = []
     health = build_feed_health(log_dir, now=now)
 
@@ -105,9 +108,12 @@ def _check_campaign_instruments(now: datetime, log_dir: Path, state: dict, send,
             if prior.get("status") != "down" or due:
                 if item["status"] == "TRANSPORT_ERROR":
                     detail = f"{root} (15m transport error: {item.get('last_error') or 'unknown'})"
+                    shown.append(f"• {pe.market(root)}: bars arrive but couldn't be processed")
+                    errors.append(f"{root}: {item.get('last_error') or 'unknown error'}")
                 else:
                     age = item["age_seconds"]
                     detail = f"{root} ({int((age or 0) / 60)}m, authoritative 15m campaign bars)"
+                    shown.append(f"• {pe.market(root)}: nothing for {pe.duration((age or 0) / 60)}")
                 stale_now.append(detail)
                 per_state[root] = {
                     "status": "down",
@@ -121,12 +127,13 @@ def _check_campaign_instruments(now: datetime, log_dir: Path, state: dict, send,
 
     if stale_now:
         send(cfg, (
-            "🚨 RiskSentinel feed watchdog — OBSERVATION 15M FEED STALE\n"
-            + "\n".join(f"• {item}" for item in stale_now)
-            + "\nFresh 5m webhooks do not satisfy this check; each root requires a successfully processed 15m campaign bar."
+            "🚨 Practice tracker is missing 15-minute price bars\n"
+            + "\n".join(shown)
+            + "\nEach market needs a finished 15-minute bar; 5-minute updates don't count."
+            + "".join(f"\n-# {line}" for line in errors)
         ))
     if recovered:
-        send(cfg, "✅ RiskSentinel feed watchdog — observation 15m feed recovered: " + ", ".join(recovered))
+        send(cfg, "✅ 15-minute price bars are back: " + ", ".join(pe.market(root) for root in recovered))
     return {
         "instruments": per_state,
         "stale": stale_now,
@@ -141,6 +148,7 @@ def _check_legacy_instruments(now: datetime, log_dir: Path, state: dict, send, c
     per_state: dict = dict(state.get("instruments") or {})
     now_epoch = now.timestamp()
     stale_now: list[str] = []
+    shown: list[str] = []
     recovered: list[str] = []
     for root in OBSERVATION_UNIVERSE:
         received, tf = _load_instrument_received_at(log_dir, root)
@@ -158,6 +166,10 @@ def _check_legacy_instruments(now: datetime, log_dir: Path, state: dict, send, c
             due = (now_epoch - float(prior.get("last_alert_epoch", 0))) >= _REMINDER_SECONDS
             if prior.get("status") != "down" or due:
                 stale_now.append(f"{root} ({int(age / 60)}m, {tf or tf_default}m bars)")
+                shown.append(
+                    f"• {pe.market(root)}: nothing for {pe.duration(age / 60)} "
+                    f"(expects one every {tf or tf_default} min)"
+                )
                 per_state[root] = {"status": "down", "last_alert_epoch": now_epoch,
                                    "last_received_at": received.isoformat()}
         elif prior.get("status") == "down":
@@ -165,12 +177,12 @@ def _check_legacy_instruments(now: datetime, log_dir: Path, state: dict, send, c
             per_state[root] = {"status": "ok"}
     if stale_now:
         send(cfg, (
-            "🚨 RiskSentinel feed watchdog — INSTRUMENT FEED STALE\n"
-            + "\n".join(f"• {item}" for item in stale_now)
-            + "\nOther instruments may be healthy; each feed is judged on its own product calendar."
+            "🚨 No price updates for some markets\n"
+            + "\n".join(shown)
+            + "\nOther markets may be fine; each is checked against its own trading hours."
         ))
     if recovered:
-        send(cfg, "✅ RiskSentinel feed watchdog — instrument feed recovered: " + ", ".join(recovered))
+        send(cfg, "✅ Price updates are back: " + ", ".join(pe.market(root) for root in recovered))
     return {"instruments": per_state, "stale": stale_now, "recovered": recovered, "authority": "webhook_receipt_legacy"}
 
 
@@ -228,13 +240,17 @@ def run(now: datetime | None = None, send=send_operational_alert, config=None) -
         first_time = state.get("status") != "down"
         due_reminder = (now_epoch - float(state.get("last_alert_epoch", 0))) >= _REMINDER_SECONDS
         if first_time or due_reminder:
-            age_txt = f"{int(age / 60)}m" if age is not None else "no webhook on record"
+            headline = (
+                f"🚨 No price updates from TradingView for {pe.duration(age / 60)}"
+                if age is not None
+                else "🚨 No price updates from TradingView on record"
+            )
             msg = (
-                "🚨 RiskSentinel feed watchdog — INGESTION STALE\n"
-                f"No TradingView webhook for {age_txt} during an active futures session "
-                f"(expected a {tf}m bar every {tf} minutes).\n"
-                "Check the TradingView alert log for webhook delivery failures and "
-                "confirm the alert is still running."
+                f"{headline}\n"
+                f"The futures market is open, so a new price bar should arrive every {tf} min. "
+                "The bot can't see the market until this is fixed.\n"
+                "What to do: open TradingView's alert log, look for failed deliveries, "
+                "and check the alert is still running."
             )
             result = send(cfg, msg)
             _write_state(state_path, {
@@ -249,8 +265,8 @@ def run(now: datetime | None = None, send=send_operational_alert, config=None) -
 
     if state.get("status") == "down":
         send(cfg, (
-            "✅ RiskSentinel feed watchdog — INGESTION RECOVERED\n"
-            f"TradingView webhooks are arriving again (last one {int(age / 60)}m ago)."
+            "✅ Price updates are back\n"
+            f"TradingView price updates are arriving again (last one {pe.ago(age / 60)})."
         ))
         _write_state(state_path, {"status": "ok", "instruments": per["instruments"]})
         return {"action": "recovered", "age_seconds": age, "instruments": per}
