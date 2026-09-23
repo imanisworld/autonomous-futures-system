@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -32,7 +33,20 @@ if str(REPO) not in sys.path:
 
 from research import options_reclaim_entry as oe  # noqa: E402
 
-CANONICAL_LOOK_PATH = REPO / ".evidence" / f"{oe.PREREG_ID}-single-look.json"
+
+def _canonical_look_path() -> Path | None:
+    """Shared one-look receipt; must live outside every repository checkout."""
+    shared = str(os.environ.get("AFS_SHARED_DIR") or "").strip()
+    if not shared:
+        return None
+    root = Path(shared).expanduser().resolve()
+    try:
+        root.relative_to(REPO.resolve())
+    except ValueError:
+        pass
+    else:
+        return None
+    return root / "evidence" / f"{oe.PREREG_ID}-single-look.json"
 
 
 def _sha(path: Path) -> str:
@@ -51,15 +65,21 @@ def main(argv=None) -> int:
     p.add_argument("--confirm-single-look", action="store_true")
     a = p.parse_args(argv)
     now = datetime.now(timezone.utc)
+    look_path = None
     if a.mode == "look":
         if not a.confirm_single_look:
             print("REFUSED: the look happens once; pass --confirm-single-look", file=sys.stderr)
             return 3
-        if a.out is not None and a.out.resolve() != CANONICAL_LOOK_PATH.resolve():
-            print(f"REFUSED: look output is fixed at {CANONICAL_LOOK_PATH}", file=sys.stderr)
+        look_path = _canonical_look_path()
+        if look_path is None:
+            print("REFUSED: set AFS_SHARED_DIR to a shared directory outside the repository before the single look",
+                  file=sys.stderr)
             return 3
-        if CANONICAL_LOOK_PATH.exists():
-            print(f"REFUSED: canonical single-look receipt already exists at {CANONICAL_LOOK_PATH}", file=sys.stderr)
+        if a.out is not None and a.out.resolve() != look_path.resolve():
+            print(f"REFUSED: look output is fixed at {look_path}", file=sys.stderr)
+            return 3
+        if look_path.exists():
+            print(f"REFUSED: canonical single-look receipt already exists at {look_path}", file=sys.stderr)
             return 3
     conn = oe.connect_readonly(a.db)
     eps = oe.load_episodes(conn)
@@ -92,18 +112,19 @@ def main(argv=None) -> int:
     if blind["status"] != "READY_FOR_SINGLE_LOOK":
         print("REFUSED: scoring gate not reached", file=sys.stderr)
         return 3
-    CANONICAL_LOOK_PATH.parent.mkdir(parents=True, exist_ok=True)
+    assert look_path is not None
+    look_path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        with CANONICAL_LOOK_PATH.open("x") as fh:
+        with look_path.open("x") as fh:
             fh.write(json.dumps({"prereg": oe.PREREG_ID, "status": "LOOK_RESERVED",
                                  "reserved_at": now.isoformat()}) + "\n")
     except FileExistsError:
-        print(f"REFUSED: canonical single-look receipt already exists at {CANONICAL_LOOK_PATH}", file=sys.stderr)
+        print(f"REFUSED: canonical single-look receipt already exists at {look_path}", file=sys.stderr)
         return 3
     try:
         rep = oe.look_report(pairs, as_of=now)
         rep["source"] = source
-        CANONICAL_LOOK_PATH.write_text(json.dumps(rep, indent=2, sort_keys=True, default=str) + "\n")
+        look_path.write_text(json.dumps(rep, indent=2, sort_keys=True, default=str) + "\n")
     except Exception:
         # Fail closed: the reservation remains, preventing an unrecorded second look.
         raise
