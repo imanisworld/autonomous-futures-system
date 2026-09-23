@@ -4,6 +4,18 @@ _As of 2026-09-23 (the dated "Operational refresh" sections at the bottom supers
 
 Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`; the read-only coverage evidence lane (observer, reducer, outcome study, after-close collector) is described in `docs/options-coverage-observer.md`.
 
+## Repository refresh — 2026-09-23
+
+**Repository main at this refresh:** `061b5ec25d5809cc13373a932260956f2d9b6a5d`. **No options-scanner/VPS deployment was performed or re-verified by this repo cleanup.** The latest box-specific operational facts in the dated refresh sections below remain the runtime authority until a fresh server check.
+
+- **#951 CONTROL vs RECLAIM forward evaluator:** merged after fail-closed fixes to volume/OI/quote validity, exact forward boundary, DTE, planned-risk arithmetic, and one-look reservation behavior. A fresh read-only SQLite snapshot reproduced **10/10** stored resolved fixtures with exact contract/entry-ask lineage. Forward eligibility is strictly after **2026-09-23T14:07:08Z**. The verified forward count at setup completion was **0**; status is **COLLECTING** and no forward P&L was exposed.
+- **#954 single-look hardening:** merged as `90bef890bdc9fe9750122baae787cc0817e3fdf8`. The eventual one-time scoring receipt must use shared `AFS_SHARED_DIR/evidence/`, refuses a repo-local/unset shared root, and local `.evidence/` artifacts are git-ignored. This is evaluator governance only.
+- **#875 non-Strat paper track:** closed without merge as a stale implementation. The newer frozen non-Strat underlying-geometry prereg explicitly does **not** authorize populating #875's geometry registry; forward sessions, a separately preregistered forward geometry, and actual option contract/risk evidence are still required. Do not revive the old branch.
+- **#950 architecture review:** merged as `f6f7a80afce87676e716ca4ea7e04c0e47e95167`. It records research-accounting/fault-testing hardening needs but authorizes no options strategy, risk, broker, or deployment change.
+- Existing V1 and prospective evidence lanes remain evidence collection. Do not tune them or infer that repository merges changed the deployed scanner.
+
+**Current safe posture:** continue blind collection, preserve cohort boundaries, keep Webull/real-money automation blocked, and perform a fresh box check before making any current deployment claim.
+
 ## Current verdict
 
 **DEPLOYED / SMOKE PROVEN / V1 EVIDENCE EPOCH RECORDED (`899a524` + 2026-09-15T16:50:00Z, cohort `V1-EPOCH-1`) / STRATEGY EDGE NOT PROVEN.**
