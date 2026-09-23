@@ -98,13 +98,13 @@ def test_thirty_minute_setup_keeps_the_intraday_veto():
 def test_discord_context_card_labels_daily_intraday_filters_as_not_applied():
     daily = score_setup(_spy_daily_reversal(), now=NOON)
     text = _context_card_text(daily, "New York")
-    assert "SPY/QQQ alignment pass" in text
-    assert "intraday filters not applied" in text
-    assert "VWAP fail" not in text
+    assert "SPY/QQQ daily trend agrees: yes" in text
+    assert "not used for daily setups" in text
+    assert "day's average price: no" not in text
 
     intraday = score_setup(
         _spy_daily_reversal(setup_timeframe="30m", timeframe="30m", price=761.0), now=NOON
     )
     text = _context_card_text(intraday, "New York")
-    assert "VWAP pass" in text and "Trend pass" in text
-    assert "alignment" not in text
+    assert "Right side of the day's average price: yes" in text and "Short-term trend agrees: yes" in text
+    assert "SPY/QQQ" not in text

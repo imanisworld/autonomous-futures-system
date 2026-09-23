@@ -84,7 +84,7 @@ def test_untriggered_discord_ignores_legacy_confirmed_copy():
         + [str(field["value"]) for field in embed["fields"]]
     )
 
-    assert "SETUP WATCHING" in embed["title"]
+    assert "watching only" in embed["title"]
     assert "A+ CONFIRMED" not in rendered
     assert "All gates passed" not in rendered
     assert "alignment confirmed" not in rendered
