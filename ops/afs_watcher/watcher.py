@@ -41,6 +41,13 @@ try:
     import watcher_triage  # optional read-only advisory lane; a missing copy must never stop the watcher
 except ImportError:  # pragma: no cover — exercised only by a partial install
     watcher_triage = None
+try:  # card layout: sibling copy on the box, package import in the repo
+    from discord_card import post_card_or_text as _post_card_or_text
+except ImportError:
+    try:
+        from notifications.discord_card import post_card_or_text as _post_card_or_text
+    except ImportError:  # pragma: no cover — missing copy = plain text, never a crash
+        _post_card_or_text = None
 
 # ── fixed facts ──────────────────────────────────────────────────────────────
 RELEASE_LINK = Path("/root/autonomous-futures-system")
@@ -494,12 +501,22 @@ def notify(state: dict, route: str, text: str, dedupe_key: str) -> None:
     if not url or not url.startswith("https://discord.com/api/webhooks/"):
         log(f"NOTIFY(unavailable route {route}) {text}")
         return
-    body = json.dumps({"content": f"{text}\n-# {NOTIFY_PREFIX}"[:1900]}).encode("utf-8")
-    try:
-        req = urllib.request.Request(url, data=body, method="POST",
+    message = f"{text}\n-# {NOTIFY_PREFIX}"
+
+    def _post(payload: dict) -> int:
+        if "content" in payload:
+            payload = {**payload, "content": payload["content"][:1900]}
+        req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), method="POST",
                                      headers={"Content-Type": "application/json", "User-Agent": "afs-watcher-readonly"})
         with urllib.request.urlopen(req, timeout=15) as resp:
-            code = resp.status
+            return resp.status
+
+    try:
+        # Paper-collection-style card; a 400 re-sends the plain text.
+        if _post_card_or_text is not None:
+            code = _post_card_or_text(_post, message)
+        else:
+            code = _post({"content": message})
         state["notified"][dedupe_key] = iso(now_utc())
         log(f"NOTIFY sent via {route} (HTTP {code}): {text[:160]}")
     except Exception as exc:  # noqa: BLE001

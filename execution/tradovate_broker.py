@@ -471,7 +471,12 @@ class TradovateBroker(BrokerInterface):
         if not url:
             return
         try:
-            requests.post(url, json={"content": content}, timeout=5)
+            from notifications.discord_card import post_card_or_text
+
+            def _post(body: dict) -> None:
+                requests.post(url, json=body, timeout=5).raise_for_status()
+
+            post_card_or_text(_post, content, source="Tradovate session")
         except Exception as exc:  # noqa: BLE001 - an alert must never break the auth path
             logger.warning("Tradovate session alert to Discord failed: %s", exc)
 

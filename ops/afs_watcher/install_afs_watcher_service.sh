@@ -27,6 +27,8 @@ mkdir -p "$DEST"
 cp -f "$SRC_DIR"/watcher.py "$SRC_DIR"/watcher_memory_guard.py "$SRC_DIR"/watcher_triage.py \
       "$SRC_DIR"/run_ro.sh "$SRC_DIR"/supervisor.sh \
       "$SRC_DIR"/bootstrap_tmp_state.sh "$DEST/"
+# Discord card layout lives in the package; the watcher runs outside it, so ship a copy.
+cp -f "$SRC_DIR"/../../notifications/discord_card.py "$DEST/"
 chmod 700 "$DEST"/*.sh
 
 sed "s#__AFS_WATCHER_SRC__#$DEST#g" "$SRC_DIR/afs-watcher.service" > "$UNIT"

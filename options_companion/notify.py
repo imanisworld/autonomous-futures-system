@@ -47,8 +47,13 @@ def _post(env_var: str, content: str) -> bool:
     try:
         from notifications.discord_notifier import _post_json
 
-        body = json.dumps({"content": content}).encode("utf-8")
-        _post_json(url, body, {"Content-Type": "application/json"})
+        from notifications.discord_card import post_card_or_text
+
+        post_card_or_text(
+            lambda body: _post_json(url, json.dumps(body).encode("utf-8"), {"Content-Type": "application/json"}),
+            content,
+            source="options companion",
+        )
         return True
     except Exception:  # noqa: BLE001 — notification must never affect the lane
         logger.warning("companion discord post failed (%s)", env_var, exc_info=True)

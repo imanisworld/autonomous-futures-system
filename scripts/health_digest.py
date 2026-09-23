@@ -27,6 +27,11 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
+try:  # card layout when run from a release; plain text from a standalone copy
+    from notifications.discord_card import post_card_or_text as _post_card_or_text
+except ImportError:  # pragma: no cover - standalone copy without the package
+    _post_card_or_text = None
+
 DISK_WARN_PCT = 80.0
 DISK_ALERT_PCT = 90.0
 _BASE = "http://127.0.0.1:8000"
@@ -315,9 +320,8 @@ def _block_visibility_signal() -> Optional[dict]:
 
 
 def _post_discord(url: str, content: str) -> bool:
-    try:
-        body = json.dumps({"content": content}).encode()
-        req = urllib.request.Request(url, data=body, headers={
+    def _post(payload: dict) -> int:
+        req = urllib.request.Request(url, data=json.dumps(payload).encode(), headers={
             "Content-Type": "application/json",
             # Discord's edge 403s urllib's default "Python-urllib/x" UA — the
             # service's own posts work because httpx sends a real UA. Verified
@@ -325,7 +329,14 @@ def _post_discord(url: str, content: str) -> bool:
             "User-Agent": "afs-health-digest/1.0",
         })
         with urllib.request.urlopen(req, timeout=15) as resp:
-            return 200 <= resp.status < 300
+            return resp.status
+
+    try:
+        if _post_card_or_text is not None:
+            status = _post_card_or_text(_post, content, source="health digest")
+        else:
+            status = _post({"content": content})
+        return 200 <= status < 300
     except Exception:
         return False
 

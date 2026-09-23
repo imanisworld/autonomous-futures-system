@@ -27,6 +27,11 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
+try:  # card layout when run from a release; plain text from a standalone copy
+    from notifications.discord_card import post_card_or_text as _post_card_or_text
+except ImportError:  # pragma: no cover - standalone copy without the package
+    _post_card_or_text = None
+
 from config.settings import options_companion_sqlite_path
 
 _FILLED = {"WIN", "LOSS", "BREAKEVEN", "BE"}
@@ -231,13 +236,19 @@ def collect_health(monday: date) -> dict:
 
 
 def _post_discord(webhook_url: str, content: str) -> bool:
-    try:
-        body = json.dumps({"content": content}).encode()
+    def _post(payload: dict) -> int:
         req = urllib.request.Request(
-            webhook_url, data=body, headers={"Content-Type": "application/json"}
+            webhook_url, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"}
         )
         with urllib.request.urlopen(req, timeout=15) as resp:
-            return 200 <= resp.status < 300
+            return resp.status
+
+    try:
+        if _post_card_or_text is not None:
+            status = _post_card_or_text(_post, content, source="weekly review")
+        else:
+            status = _post({"content": content})
+        return 200 <= status < 300
     except Exception:
         return False
 

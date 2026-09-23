@@ -30,5 +30,8 @@ def test_system_notifier_sends_when_configured(config):
 
     assert result.sent is True
     assert sent["url"] == "https://discord.test/webhook"
-    assert sent["body"] == {"content": "Broker heartbeat: connected"}
+    embed = sent["body"]["embeds"][0]
+    assert embed["title"] == "Broker heartbeat: connected"
+    assert embed["footer"]["text"] == "AFS · system health"
+    assert sent["body"]["allowed_mentions"] == {"parse": []}
     assert sent["headers"] == {"Content-Type": "application/json"}

@@ -32,11 +32,16 @@ def notify_system(
     if not config.discord_webhook_url:
         return SystemNotificationResult(sent=False, reason="missing_webhook_url")
 
-    body = json.dumps({"content": message}).encode("utf-8")
+    from notifications.discord_card import post_card_or_text
+
     headers = {"Content-Type": "application/json"}
     sender = transport or _post_json
     try:
-        sender(config.discord_webhook_url, body, headers)
+        post_card_or_text(
+            lambda body: sender(config.discord_webhook_url, json.dumps(body).encode("utf-8"), headers),
+            message,
+            source="system health",
+        )
     except Exception as exc:  # pragma: no cover - exact urllib errors vary
         logger.warning("Discord system notification failed: %s", exc)
         return SystemNotificationResult(sent=False, reason="send_failed")

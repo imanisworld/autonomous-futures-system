@@ -3449,8 +3449,13 @@ def _notify_force_close(
         if not url:
             return
         try:
-            body = _json.dumps({"content": message}).encode("utf-8")
-            _post_json(url, body, {"Content-Type": "application/json"})
+            from notifications.discord_card import post_card_or_text
+
+            post_card_or_text(
+                lambda body: _post_json(url, _json.dumps(body).encode("utf-8"), {"Content-Type": "application/json"}),
+                message,
+                source="force-close",
+            )
         except Exception as exc:
             logger.warning("Force-close Discord notification failed: %s", exc)
 

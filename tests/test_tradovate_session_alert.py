@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import execution.tradovate_broker as tb
 from execution.tradovate_broker import TradovateBroker, TradovateConfig
+from notifications.discord_card import card_text
 
 
 def _broker(monkeypatch, *, webhook=True):
@@ -33,8 +34,15 @@ def _broker(monkeypatch, *, webhook=True):
 
 def _capture_posts(monkeypatch):
     posts = []
-    monkeypatch.setattr(tb.requests, "post",
-                        lambda url, **k: posts.append((url, (k.get("json") or {}).get("content", ""))))
+    class _Ok:
+        def raise_for_status(self):
+            return None
+
+    def _post(url, **k):
+        posts.append((url, card_text(k.get("json") or {})))
+        return _Ok()
+
+    monkeypatch.setattr(tb.requests, "post", _post)
     return posts
 
 

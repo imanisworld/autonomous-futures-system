@@ -78,11 +78,16 @@ def send_discord_alert(
     """
     if not config.discord_webhook_url:
         return NotificationResult(sent=False, reason="missing_webhook_url")
-    body = json.dumps({"content": content}).encode("utf-8")
+    from notifications.discord_card import post_card_or_text
+
     headers = {"Content-Type": "application/json"}
     sender = transport or _post_json
     try:
-        sender(config.discord_webhook_url, body, headers)
+        post_card_or_text(
+            lambda body: sender(config.discord_webhook_url, json.dumps(body).encode("utf-8"), headers),
+            content,
+            source="operational alert",
+        )
     except Exception as exc:  # pragma: no cover - exact urllib errors vary
         logger.warning("Discord alert failed: %s", exc)
         return NotificationResult(sent=False, reason="send_failed")

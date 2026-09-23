@@ -30,6 +30,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+try:  # card layout when run from a release; plain text from a standalone copy
+    from notifications.discord_card import post_card_or_text as _post_card_or_text
+except ImportError:  # pragma: no cover - standalone copy without the package
+    _post_card_or_text = None
+
 from execution.forward_evidence_campaign import COMMISSION_DOLLARS, SLIPPAGE_TICKS  # noqa: E402
 
 CAMPAIGN_FILE = "cross_instrument_observation_v1.jsonl"
@@ -166,14 +171,21 @@ def format_digest(report: dict) -> str:
 
 
 def _post_discord(url: str, content: str) -> bool:
-    try:
+    def _post(payload: dict) -> int:
         req = urllib.request.Request(
             url,
-            data=json.dumps({"content": content}).encode(),
+            data=json.dumps(payload).encode(),
             headers={"Content-Type": "application/json", "User-Agent": "afs-gate-condition-report/1.0"},
         )
         with urllib.request.urlopen(req, timeout=15) as resp:
-            return 200 <= resp.status < 300
+            return resp.status
+
+    try:
+        if _post_card_or_text is not None:
+            status = _post_card_or_text(_post, content, source="gate condition report")
+        else:
+            status = _post({"content": content})
+        return 200 <= status < 300
     except Exception:
         return False
 

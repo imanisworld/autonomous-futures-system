@@ -214,7 +214,7 @@ def test_mnq_signal_route_and_watchdog_error_route_are_unchanged(monkeypatch, tm
     assert "observation_notifier" not in wd and '"observation"' not in wd
     # The MNQ/MES signal dispatch in app.py still targets "signal" and only "signal".
     app_src = (ROOT / "webhook" / "app.py").read_text(encoding="utf-8")
-    assert '_router.send("signal", _fmt(payload, result))' in app_src
+    assert '_router.send("signal", _card(payload, result))' in app_src
     assert 'send("observation"' not in app_src
 
 
