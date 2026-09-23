@@ -4,7 +4,7 @@
 
 This document records a clean-sheet architecture review against the **current repository**, not against older audit handoffs. It does not authorize strategy changes, risk changes, broker changes, deployment, VPS changes, paper/demo activation, or live execution.
 
-**Repository basis:** `main@e4c6f0d81559bbeb0c3dc2846580f0771e990576` (2026-09-23).
+**Original audit basis:** `main@e4c6f0d81559bbeb0c3dc2846580f0771e990576` (2026-09-23). **Reconciliation basis:** `main@d4147e9738386f769debfb8fbfaca2dbc5b79932` after PR #952 merged. Historical findings are preserved with their original basis; current-state statements below are reconciled to the later main SHA.
 
 **Important boundary:** repository state is not proof of deployed/VPS state. Runtime claims still require box verification.
 
@@ -393,23 +393,21 @@ The Tradovate adapter has explicit live-environment checks on all three external
 
 The documentation should therefore describe live safeguards **by operation** instead of claiming that every broker mutation passes an identical five-layer chain.
 
-### Tradovate command-response semantics — concrete broker defect found after the original review basis
+### Tradovate command-response semantics — defect resolved in repository, runtime still unproven
 
-A later external-source audit compared the adapter to current Tradovate Partner API semantics and exposed a concrete defect on current `main@d362a3f`.
+A later external-source audit compared the adapter to Tradovate Partner API semantics and exposed a concrete defect on `main@d362a3f`.
 
-Tradovate command responses may carry `failureReason="Success"` on a successful HTTP response. The current adapter treated any truthy `failureReason` as rejection in `execute_bracket`, `replace_stop`, and `flatten_position`. That can create broker/local disagreement: the broker may have accepted a command while the local path records it as failed.
+Tradovate command responses may carry `failureReason="Success"` on a successful HTTP response. The adapter at that basis treated any truthy `failureReason` as rejection in `execute_bracket`, `replace_stop`, and `flatten_position`. That could create broker/local disagreement: the broker might accept a command while the local path records it as failed.
 
-A second issue exists in `replace_stop`: an accepted `modifyOrder` request was enough to mutate local protective-stop state even though Tradovate documents that a modification request is not guaranteed to complete. Local stop state must not advance until broker state confirms the requested stop is actually resting.
+A second issue existed in `replace_stop`: an accepted `modifyOrder` request was enough to mutate local protective-stop state even though request acceptance did not prove the protective order had actually changed at the broker.
 
-**Classification: BROKEN for Tradovate broker execution confidence; HOLD / PAPER ONLY remains.**
-
-Draft PR #952 is the narrow remediation lane. It:
+PR #952 was independently reviewed, corrected once for malformed-response idempotency, re-reviewed, and merged into `main` as `d4147e9738386f769debfb8fbfaca2dbc5b79932`. The merged code now:
 - treats documented success markers as success while retaining fail-closed handling for real failures;
-- requires broker read-back before `replace_stop` mutates local protective state;
-- preserves the existing independent flat-position confirmation after liquidation;
-- changes no strategy, risk, session, instrument-admission, deployment, or live-enablement policy.
+- treats malformed/non-dict `placeOSO` responses as an **UNKNOWN** submission outcome and poisons the client-order identity as `AMBIGUOUS` so it cannot blindly re-fire;
+- requires broker read-back showing the requested stop as `Working` before `replace_stop` advances local protective state;
+- preserves the existing independent flat-position confirmation after liquidation.
 
-PR #952 is not execution authorization. It must be independently reviewed before merge, and merge would still not prove VPS/deployment state.
+**Classification of this specific source-code defect: RESOLVED IN REPOSITORY.** The standing system posture remains **HOLD / PAPER ONLY** because repository merge is not VPS/deployment proof and this document does not authorize broker execution, deployment, or live trading.
 
 ### Session-audit correction — normal MGC/MCL hours are not presently contradicted
 
@@ -555,9 +553,9 @@ The architecture problem identified here is primarily **research accounting + fa
 
 This document is itself the first step.
 
-1. **Independent review of this document.**
-   - Claude should verify every "already have" and "gap" claim against current main.
-   - Perplexity or another outside reviewer should be given the same repo basis and asked to falsify this review, not merely agree with it.
+1. **Final independent review of this reconciled document.**
+   - Claude should verify every "already have" and "gap" claim against current `main@d4147e9738386f769debfb8fbfaca2dbc5b79932`.
+   - The Perplexity external audit has already been reconciled into this document; do not start another broad external audit unless a new factual question requires one.
 
 2. **If the review survives, preregister the experiment-ledger design.**
    - Define the minimum schema and enforcement point.
@@ -570,7 +568,7 @@ This document is itself the first step.
 4. **Then evaluate automatic rejected-candidate follow-through.**
    - Only for populations with causally valid predeclared hypothetical geometry.
 
-5. **Broker-response blocker:** independently review PR #952. Until the Tradovate response-semantics defect is resolved and reviewed, broker execution confidence remains **BROKEN** and the standing posture remains **HOLD / PAPER ONLY**.
+5. **Broker-response blocker — RESOLVED IN REPOSITORY:** PR #952 passed independent review and merged as `d4147e9738386f769debfb8fbfaca2dbc5b79932`. Do not infer VPS/deployment state from that merge. The standing posture remains **HOLD / PAPER ONLY** pending the broader proof requirements in this review.
 
 6. **Before any cross-market broker admission:** resolve the remaining Tradovate unknown-root contract-economics fallback or prove an equivalent fail-closed boundary; do not treat PR #945's table import as universal centralization while the fallback remains.
 
