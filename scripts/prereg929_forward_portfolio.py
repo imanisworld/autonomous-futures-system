@@ -7,6 +7,9 @@ RESEARCH ONLY. BLIND BY DEFAULT.
           open positions, busy-skips, max-trades skips, CME observation days
           since 2026-09-23T22:00Z, pipeline health. Never emits net, PF,
           drawdown or win/loss (enforced by ``assert_blind``).
+  Both modes read only a corpus built by scripts/prereg929_forward_corpus.py
+  from Polygon (prereg §9.1); gap days in its manifests are removed from the
+  corpus and fills touching them are VOID_GAP_DAY (§9.3).
   look    the single P&L look. Refuses unless a passing step-0 report is given
           AND (>= 40 terminal portfolio fills and >= 120 CME days, or today is
           on/after 2027-09-30, in which case H1 = INSUFFICIENT_SAMPLE when the
@@ -36,6 +39,7 @@ if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
 from research import prereg929_forward_portfolio as fp  # noqa: E402
+from research.prereg929_forward_corpus import FORWARD_CORPUS_START, load_gap_days  # noqa: E402
 
 
 def _parse_as_of(value: str | None) -> datetime:
@@ -67,8 +71,8 @@ def main(argv=None) -> int:
     p.add_argument("--corpus-5m", type=Path, required=True)
     p.add_argument("--corpus-15m", type=Path, required=True)
     p.add_argument("--as-of", default=None, help="ISO timestamp with tz (default: now)")
-    p.add_argument("--corpus-start", type=date.fromisoformat, default=None,
-                   help="first corpus day the adapters load (warm-up history; default: first common day)")
+    p.add_argument("--corpus-start", type=date.fromisoformat, default=FORWARD_CORPUS_START,
+                   help="first corpus day the adapters load (prereg §9.2: 2026-07-25)")
     p.add_argument("--out", type=Path, default=None)
     p.add_argument("--step0-report", type=Path, default=None)
     p.add_argument("--confirm-single-look", action="store_true")
@@ -91,12 +95,19 @@ def main(argv=None) -> int:
             print(f"REFUSED: {exc}", file=sys.stderr)
             return 3
 
+    # §9.1/§9.3: only a Polygon-built corpus is scored; its manifests carry the gap days.
+    try:
+        gap_days = sorted(set(load_gap_days(args.corpus_5m)) | set(load_gap_days(args.corpus_15m)))
+    except RuntimeError as exc:
+        print(f"REFUSED: {exc}", file=sys.stderr)
+        return 3
+
     sink_err = io.StringIO()
     with tempfile.TemporaryDirectory(prefix="prereg929-eval-") as tmp, contextlib.redirect_stderr(sink_err):
         run, cme, extent = _collect(args.corpus_5m, args.corpus_15m, as_of, Path(tmp), args.corpus_start)
 
     if args.mode == "counts":
-        report = fp.counts_report(run, cme, as_of=as_of)
+        report = fp.counts_report(run, cme, as_of=as_of, gap_days=gap_days)
         report["corpus_common_day_range"] = list(extent)
         fp.assert_blind(report)
         text = json.dumps(report, indent=2, sort_keys=True)
@@ -107,7 +118,7 @@ def main(argv=None) -> int:
         return 0 if run.healthy else 2
 
     try:
-        report = fp.look_report(run, cme, as_of=as_of, step0_report_path=args.step0_report)
+        report = fp.look_report(run, cme, as_of=as_of, step0_report_path=args.step0_report, gap_days=gap_days)
     except fp.LookRefused as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)
         return 3

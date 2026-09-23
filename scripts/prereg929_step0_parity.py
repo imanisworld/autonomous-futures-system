@@ -2,15 +2,21 @@
 """Prereg #929 step 0 parity gate (checks 0a-0d). Never reads forward P&L.
 
 Research only. Implements docs/prereg-mnq-portfolio-ex-asia-forward-2026-09-23.md
-§3 step 0 literally:
+§3 step 0 as amended by §9.4 (thresholds unchanged):
 
-  0a  5m OHLC parity   box 5m bars  vs replay_corpus_v1_5m               2026-07-01..07-23
-  0b  15m OHLC parity  box 15m bars vs replay_corpus_v1_market_condition_fixed 2026-06-05..07-23
+  0a  5m OHLC parity   fresh Polygon 5m  vs replay_corpus_v1_5m               2026-07-01..07-23
+  0b  15m OHLC parity  fresh Polygon 15m vs replay_corpus_v1_market_condition_fixed 2026-06-05..07-23
   0c  candidate parity every frozen #915 family adapter over the corpus rebuilt
-      from box bars (existing derive_candles path) vs over the frozen corpus,
-      on the overlap dates
+      from that Polygon fetch (existing derive_candles path, 60-day pre-roll,
+      gap days removed) vs over the frozen corpus, on the overlap dates; the
+      §9.4 holiday-boundary class is the only automatic explanation
   0d  4HR-audit lineage: 4HR, 3-2-2, Miyagi, Daily adapters over
-      replay_corpus_v1_5m vs replay_corpus_v1_5m_4hr_audit on shared dates
+      replay_corpus_v1_5m vs replay_corpus_v1_5m_4hr_audit on shared dates,
+      plus 3-2-2 over replay_polygon vs replay_corpus_v1_market_condition_fixed
+      (15m detector) and Miyagi over replay_polygon_5m vs replay_corpus_v1_5m
+      (fill corpus), #915 window
+
+Every run re-fetches from Polygon (§9.1); needs the local POLYGON_API_KEY.
 
 Supplementary (reported, see the JSON): whether the unchanged Miyagi detector
 reproduces the frozen #915 Miyagi candidate file (gating for 0c, because
@@ -21,7 +27,6 @@ table on the frozen corpora.
 Usage:
     python3 scripts/prereg929_step0_parity.py \
         --data-root data \
-        --bars-5m <box copy>/tf5m --bars-15m <box copy>/tf15m \
         --out /private/tmp/.../step0.json [--summary step0.txt] \
         [--explanations reviewed.json] [--previous-report old_step0.json]
 """
@@ -39,7 +44,11 @@ if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
 from research import prereg929_step0 as s0  # noqa: E402
-from research.prereg929_forward_corpus import build, load_box_bars  # noqa: E402
+from research.prereg929_forward_corpus import (  # noqa: E402
+    STEP0_WARMUP_DAYS,
+    fetch_polygon_bars,
+    rebuild_overlap_corpus,
+)
 from research.prereg929_forward_portfolio import (  # noqa: E402
     ALL_FAMILIES,
     FAMILY_4HR,
@@ -66,7 +75,7 @@ PR915_TABLE = {
 }
 
 
-def _run_0c(data_root: Path, rebuilt_root: Path, tmp: Path) -> tuple[list, dict]:
+def _run_0c(data_root: Path, rebuilt_root: Path, tmp: Path) -> tuple[list, dict]:  
     frozen = single_pair_roots(
         data_root / "replay_corpus_v1_5m",
         data_root / "replay_corpus_v1_market_condition_fixed",
@@ -117,6 +126,27 @@ def _run_0d(data_root: Path, tmp: Path) -> tuple[list, dict, list[str]]:
     only = {"days_only_in_v1_5m_within_range": [d for d in sorted(a - b) if shared[0] <= d <= shared[-1]],
             "days_only_in_4hr_audit_within_range": [d for d in sorted(b - a) if shared[0] <= d <= shared[-1]]}
     return mm, {"shared_date_range": [shared[0], shared[-1]], "shared_days": len(shared), **only, "streams": sizes}, shared
+
+
+def _run_0d_polygon_lineage(data_root: Path, tmp: Path) -> tuple[list, dict]:
+    """§9.4: the two lineages the evaluator found (#915 window)."""
+    from dataclasses import replace
+
+    lo, hi = date(2025, 7, 24), date(2026, 6, 26)
+    base = pr915_roots(data_root)  # root322_15=replay_polygon, root_miyagi5=replay_polygon_5m
+    right = replace(
+        base,
+        root322_15=data_root / "replay_corpus_v1_market_condition_fixed",
+        root_miyagi5=data_root / "replay_corpus_v1_5m",
+    )
+    fams = (FAMILY_322, FAMILY_MIYAGI)
+    lv = view_roots(base, lo, hi, tmp / "0d_polygon")
+    rv = view_roots(right, lo, hi, tmp / "0d_v1")
+    lrun = run_family_adapters(lv, lo, hi, families=fams)
+    rrun = run_family_adapters(rv, lo, hi, families=fams)
+    mm = s0.compare_runs("0d_polygon", "replay_polygon", lrun, "v1_corpora", rrun, fams)
+    return mm, {"date_range": [lo.isoformat(), hi.isoformat()],
+                "streams": {"replay_polygon": s0.family_stream_sizes(lrun), "v1_corpora": s0.family_stream_sizes(rrun)}}
 
 
 def _supplementary(data_root: Path) -> dict:
@@ -179,10 +209,8 @@ def _core_reproduction(data_root: Path) -> dict:
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--data-root", type=Path, default=REPO / "data")
-    p.add_argument("--bars-5m", type=Path, required=True)
-    p.add_argument("--bars-15m", type=Path, required=True)
-    p.add_argument("--rebuilt-root", type=Path, default=None,
-                   help="existing output of scripts/prereg929_forward_corpus.py (default: rebuild into a temp dir)")
+    p.add_argument("--keep-rebuilt", type=Path, default=None,
+                   help="optional dir OUTSIDE the repo to keep the rebuilt overlap corpus for inspection")
     p.add_argument("--explanations", type=Path, default=None,
                    help="reviewed JSON {mismatch_id: explanation}; unexplained mismatches fail 0c/0d")
     p.add_argument("--previous-report", type=Path, default=None, help="carry its attempts log forward")
@@ -195,29 +223,47 @@ def main(argv=None) -> int:
     data_root = args.data_root.resolve()
     generated = datetime.now(timezone.utc).isoformat()
 
-    box5 = load_box_bars(args.bars_5m, 5)
-    box15 = load_box_bars(args.bars_15m, 15)
+    # §9.1/§9.2: one fresh fetch per timeframe, 60-day pre-roll, overlap end.
+    from datetime import timedelta
+
+    starts = {5: OVERLAP_5M[0], 15: OVERLAP_15M[0]}
+    end = OVERLAP_5M[1]
+    fetch_start = min(starts.values()) - timedelta(days=STEP0_WARMUP_DAYS)
+    loaded = {tf: fetch_polygon_bars(tf, fetch_start, end) for tf in (5, 15)}
     checks: dict = {}
-    checks["0a"] = s0.ohlc_parity(box5, data_root / "replay_corpus_v1_5m", *OVERLAP_5M, label="0a")
+    checks["0a"] = s0.ohlc_parity(loaded[5], data_root / "replay_corpus_v1_5m", *OVERLAP_5M, label="0a")
     checks["0b"] = s0.ohlc_parity(
-        box15, data_root / "replay_corpus_v1_market_condition_fixed", *OVERLAP_15M, label="0b"
+        loaded[15], data_root / "replay_corpus_v1_market_condition_fixed", *OVERLAP_15M, label="0b"
     )
 
     with tempfile.TemporaryDirectory(prefix="prereg929-step0-") as tmp_s:
         tmp = Path(tmp_s)
-        rebuilt_root = args.rebuilt_root
-        if rebuilt_root is None:
-            rebuilt_root = tmp / "rebuilt"
-            build(args.bars_5m, 5, rebuilt_root / "5m")
-            build(args.bars_15m, 15, rebuilt_root / "15m")
+        rebuilt_root = args.keep_rebuilt or (tmp / "rebuilt")
+        rebuilt = rebuild_overlap_corpus(rebuilt_root, loaded, starts, end)
         supp = _supplementary(data_root)
+        supp["step0_rebuild_gap_days"] = rebuilt["gap_days"]
         mm0c, sizes0c = _run_0c(data_root, rebuilt_root, tmp)
+        diffs = {
+            "5m": s0.corpus_field_diffs(data_root / "replay_corpus_v1_5m", rebuilt_root / "5m", *OVERLAP_5M),
+            "15m": s0.corpus_field_diffs(
+                data_root / "replay_corpus_v1_market_condition_fixed", rebuilt_root / "15m", *OVERLAP_15M
+            ),
+        }
+        merged: dict[str, list[str]] = {}
+        for per_day in diffs.values():
+            for d, fields in per_day.items():
+                merged[d] = sorted(set(merged.get(d, [])) | set(fields))
+        auto = s0.holiday_boundary_explanations(mm0c, merged)
+        supp["corpus_field_diffs_by_utc_day"] = diffs
         extra0c = []
         if not supp["miyagi_detector_reproduces_frozen_candidate_file"]["identical"]:
             extra0c.append({"what": "Miyagi detector does not reproduce the frozen #915 candidate file"})
-        checks["0c"] = s0.candidate_check("0c", mm0c, explanations, sizes=sizes0c, extra_failures=extra0c)
+        checks["0c"] = s0.candidate_check("0c", mm0c, {**auto, **explanations}, sizes=sizes0c, extra_failures=extra0c)
+        checks["0c"]["predeclared_holiday_class_applied"] = len(auto)
         mm0d, info0d, _ = _run_0d(data_root, tmp)
-        checks["0d"] = s0.candidate_check("0d", mm0d, explanations, sizes=info0d)
+        mm0dp, info0dp = _run_0d_polygon_lineage(data_root, tmp)
+        checks["0d"] = s0.candidate_check("0d", mm0d + mm0dp, explanations,
+                                          sizes={**info0d, "polygon_lineages": info0dp})
 
     if not args.skip_core_reproduction:
         supp["ported_915_core_reproduces_prereg_table"] = _core_reproduction(data_root)
@@ -246,8 +292,9 @@ def main(argv=None) -> int:
         "overall": overall,
         "thresholds": {"ohlc_match_rate_min": s0.MATCH_RATE_MIN, "tick": s0.TICK,
                        "max_rth_gap_bars": s0.MAX_RTH_GAP_BARS},
-        "inputs": {"data_root": str(data_root), "bars_5m": str(args.bars_5m), "bars_15m": str(args.bars_15m),
-                   "box_5m_source_files": box5.source_files, "box_15m_source_files": box15.source_files},
+        "inputs": {"data_root": str(data_root), "source": "polygon", "fetched_at": generated,
+                   "warmup_days": STEP0_WARMUP_DAYS,
+                   "polygon_5m_fetch": loaded[5].source_files, "polygon_15m_fetch": loaded[15].source_files},
         "checks": checks,
         "supplementary": supp,
         "attempts_log": attempts,

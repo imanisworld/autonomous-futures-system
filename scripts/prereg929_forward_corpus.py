@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
-"""Build the prereg #929 forward corpus from box-collected MNQ bars.
+"""Build the prereg #929 forward corpus from Polygon (prereg §9.1–§9.3).
 
-Research only. Uses the existing enrichment path
-(``scripts.polygon_to_replay.derive_candles``) via
-``research/prereg929_forward_corpus.py``. Writes OUTSIDE the repo.
+Research only. Fresh fetch every run through the unchanged polygon_to_replay
+path (PolygonFuturesClient.fetch_continuous, roll 8 days, derive_candles).
+Keeps only CME observation days that closed >= 24h before the fetch, detects
+gap days mechanically and removes them from BOTH timeframes (never filled).
+Box bars are no longer a forward source. Writes OUTSIDE the repo. Needs the
+local POLYGON_API_KEY (.env on the Mac; the box has none).
 
 Usage:
-    python3 scripts/prereg929_forward_corpus.py \
-        --bars-5m  <box copy>/tf5m  --bars-15m <box copy>/tf15m \
-        --out /private/tmp/.../prereg929_corpus
-Produces <out>/5m/MNQ/MNQ_<day>.jsonl, <out>/15m/MNQ/MNQ_<day>.jsonl and a
-MANIFEST_<n>m.json per timeframe. The output dirs must not already hold files.
+    python3 scripts/prereg929_forward_corpus.py --out /private/tmp/.../prereg929_corpus
+Produces <out>/5m/MNQ/MNQ_<day>.jsonl, <out>/15m/MNQ/MNQ_<day>.jsonl,
+<out>/<tf>m/MANIFEST_<tf>m.json and <out>/FORWARD_MANIFEST.json (gap days,
+raw-bar SHA-256). The output dirs must not already hold files.
 """
 from __future__ import annotations
 
@@ -24,30 +26,36 @@ REPO = Path(__file__).resolve().parents[1]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
-from research.prereg929_forward_corpus import build  # noqa: E402
+from research.prereg929_forward_corpus import (  # noqa: E402
+    FORWARD_CORPUS_START,
+    POLYGON_PREROLL_DAYS,
+    build_polygon_corpus,
+)
 
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--bars-5m", type=Path, required=True, help="dir of bars_MNQ_*.jsonl (5m, box logs/tf5m)")
-    p.add_argument("--bars-15m", type=Path, required=True, help="dir of bars_MNQ_*.jsonl (15m, box logs/)")
     p.add_argument("--out", type=Path, required=True, help="output root OUTSIDE the repo")
-    p.add_argument("--start", type=date.fromisoformat, default=None, help="first UTC day to write (optional)")
-    p.add_argument("--end", type=date.fromisoformat, default=None, help="last UTC day to write (optional)")
+    p.add_argument("--corpus-start", type=date.fromisoformat, default=FORWARD_CORPUS_START,
+                   help="first corpus day (prereg §9.2: 2026-07-25)")
     args = p.parse_args(argv)
 
-    summary = {}
-    for tf, src in ((5, args.bars_5m), (15, args.bars_15m)):
-        m = build(src, tf, args.out / f"{tf}m", start=args.start, end=args.end)
-        summary[f"{tf}m"] = {
-            "raw_bars": m["raw_bars"],
-            "derived_candles": m["derived_candles"],
-            "dropped_by_derive_candles": m["dropped_by_derive_candles"],
-            "exact_duplicates_dropped": m["exact_duplicates_dropped"],
+    res = build_polygon_corpus(args.out, args.corpus_start, preroll_days=POLYGON_PREROLL_DAYS)
+    fw = res["forward"]
+    summary = {
+        "fetched_at": fw["fetched_at"],
+        "settled_cutoff": fw["settled_cutoff"],
+        "corpus_start": fw["corpus_start"],
+        "last_obs_day_checked": fw["last_obs_day_checked"],
+        "gap_days": [g["obs_day"] for g in fw["gap_days"]],
+        "raw_sha256": fw["raw_sha256"],
+    }
+    for tf, m in res["timeframes"].items():
+        summary[tf] = {
+            "raw_bars_after_settlement": m["raw_bars_after_settlement"],
+            "candles_written": m["derived_candles_in_range"] - m["candles_removed_as_gap_days"],
+            "candles_removed_as_gap_days": m["candles_removed_as_gap_days"],
             "day_files": len(m["output_files"]),
-            "first_day": m["output_files"][0]["file"] if m["output_files"] else None,
-            "last_day": m["output_files"][-1]["file"] if m["output_files"] else None,
-            "out": str(args.out / f"{tf}m"),
         }
     print(json.dumps(summary, indent=2))
     return 0

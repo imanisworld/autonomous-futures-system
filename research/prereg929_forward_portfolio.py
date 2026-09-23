@@ -71,6 +71,8 @@ MIN_CME_DAYS = 120
 PF_HURDLE = 1.94
 MAX_DRAWDOWN = 1750.0
 TOP3_DAY_SHARE_MAX = 0.60
+GAP_DAY_SHARE_MAX = 0.10  # §9.3 fail-closed cap
+VOID_GAP_DAY = "VOID_GAP_DAY"
 
 FAMILY_4HR = "4HR_RETRIGGER"
 FAMILY_322 = "60M_322_FIRST_LIVE"
@@ -414,6 +416,51 @@ def _obs_day_end(day: date) -> datetime:
     return datetime.combine(day, time(18, 0), tzinfo=ET).astimezone(UTC)
 
 
+def gap_day_windows(gap_days: Iterable[str]) -> list[tuple[datetime, datetime]]:
+    """UTC [prior 18:00 ET, 18:00 ET) for each gap observation day (§9.3)."""
+    out = []
+    for d in sorted(set(gap_days)):
+        day = date.fromisoformat(d)
+        out.append((_obs_day_end(day - timedelta(days=1)), _obs_day_end(day)))
+    return out
+
+
+def split_void_gap_fills(
+    fills: Iterable[PortfolioEvent], gap_days: Iterable[str], as_of: datetime
+) -> tuple[list[PortfolioEvent], list[PortfolioEvent]]:
+    """§9.3: a fill is VOID_GAP_DAY if its signal, fill or exit falls on a gap
+    day or it is open across one. Returns (kept, voided); skips stay as replayed."""
+    windows = gap_day_windows(gap_days)
+    kept, void = [], []
+    for e in fills:
+        lo = min(parse_ts(e.signal_ts), parse_ts(e.eligible_fill_ts))
+        hi = parse_ts(e.exit_ts) if e.exit_ts else as_of
+        if any(lo < w_hi and w_lo <= hi for w_lo, w_hi in windows):
+            void.append(e)
+        else:
+            kept.append(e)
+    return kept, void
+
+
+def gap_days_in_scoring(gap_days: Iterable[str], as_of: datetime, start: datetime = SCORING_START) -> list[str]:
+    first = _obs_day(start)
+    return sorted(d for d in set(gap_days) if first <= date.fromisoformat(d) and _obs_day_end(date.fromisoformat(d)) <= as_of)
+
+
+def gap_day_status(gap_days: Iterable[str], cme_days: dict, as_of: datetime) -> dict:
+    scoring = gap_days_in_scoring(gap_days, as_of)
+    observed = int(cme_days["observed_completed_days"])
+    total = observed + len(scoring)
+    share = (len(scoring) / total) if total else 0.0
+    return {
+        "gap_days_in_scoring_period": scoring,
+        "gap_day_count": len(scoring),
+        "gap_day_share": round(share, 6),
+        "gap_day_share_cap": GAP_DAY_SHARE_MAX,
+        "cap_exceeded": share > GAP_DAY_SHARE_MAX,
+    }
+
+
 def observed_cme_days(root_5m: Path, as_of: datetime, start: datetime = SCORING_START) -> dict:
     """CME observation days (18:00 ET roll) with scored 5m bars, completed by ``as_of``."""
     days: set[date] = set()
@@ -468,9 +515,13 @@ def assert_blind(obj, path: str = "") -> None:
         raise AssertionError(f"blind violation: non-finite number at {path}")
 
 
-def _occupancy_counts(replay) -> dict:
+def _occupancy_counts(replay, voided: Iterable[PortfolioEvent] = ()) -> dict:
+    void_ids = {id(e) for e in voided}
     fam = Counter(e.family for e in replay.fills)
-    terminal = Counter(e.family for e in replay.fills if e.result in TERMINAL_RESULTS)
+    terminal = Counter(
+        e.family for e in replay.fills if e.result in TERMINAL_RESULTS and id(e) not in void_ids
+    )
+    void_fam = Counter(e.family for e in replay.fills if id(e) in void_ids)
     busy = Counter(d.family for d in replay.decisions if d.disposition == "SKIPPED_BUSY_PORTFOLIO")
     busy_by_blocker = Counter(
         d.blocker_family for d in replay.decisions if d.disposition == "SKIPPED_BUSY_PORTFOLIO"
@@ -479,7 +530,9 @@ def _occupancy_counts(replay) -> dict:
     return {
         "portfolio_fills": len(replay.fills),
         "terminal_portfolio_fills": sum(terminal.values()),
-        "open_or_nonterminal_fills": len(replay.fills) - sum(terminal.values()),
+        "open_or_nonterminal_fills": len(replay.fills) - sum(terminal.values()) - sum(void_fam.values()),
+        "void_gap_day_fills": sum(void_fam.values()),
+        "void_gap_day_fills_by_family": dict(sorted(void_fam.items())),
         "fills_by_family": dict(sorted(fam.items())),
         "terminal_fills_by_family": dict(sorted(terminal.items())),
         "busy_skips_by_family": dict(sorted(busy.items())),
@@ -502,7 +555,7 @@ def sample_status(terminal: int, cme_days: int, today: date) -> dict:
     }
 
 
-def counts_report(run: AdapterRun, cme_days: dict, *, as_of: datetime) -> dict:
+def counts_report(run: AdapterRun, cme_days: dict, *, as_of: datetime, gap_days: Iterable[str] = ()) -> dict:
     """Operational counts only (prereg §5). Built from an allowlist; checked blind."""
     pipeline = {
         "healthy": run.healthy,
@@ -517,6 +570,7 @@ def counts_report(run: AdapterRun, cme_days: dict, *, as_of: datetime) -> dict:
         "scoring_start": SCORING_START.isoformat(),
         "pipeline_health": pipeline,
         "cme_observation_days": cme_days,
+        "gap_days": gap_day_status(gap_days, cme_days, as_of),
     }
     if not run.healthy:
         out["h1_counts"] = None
@@ -531,8 +585,10 @@ def counts_report(run: AdapterRun, cme_days: dict, *, as_of: datetime) -> dict:
             a["family"] for o in run.families.values() for a in o.attempts
             if parse_ts(a["ts"]) >= SCORING_START
         )
-        out["h1_counts"] = _occupancy_counts(h1)
-        out["h2_six_family_counts"] = _occupancy_counts(six)
+        _, void1 = split_void_gap_fills(h1.fills, gap_days, as_of)
+        _, void6 = split_void_gap_fills(six.fills, gap_days, as_of)
+        out["h1_counts"] = _occupancy_counts(h1, void1)
+        out["h2_six_family_counts"] = _occupancy_counts(six, void6)
         out["scored_fillable_events_by_family"] = dict(sorted(raw.items()))
         out["scored_signal_attempts_by_family"] = dict(sorted(attempts.items()))
         out["fillable_events_before_scoring_start_excluded"] = pre_start
@@ -634,6 +690,7 @@ def look_report(
     *,
     as_of: datetime,
     step0_report_path: Path | None,
+    gap_days: Iterable[str] = (),
 ) -> dict:
     """The single P&L look. Refuses unless every precondition holds."""
     step0 = validate_step0_report(step0_report_path)
@@ -642,10 +699,13 @@ def look_report(
             "a family adapter failed closed: "
             + json.dumps({f: o.error for f, o in run.families.items() if o.error})
         )
+    gap_days = sorted(set(gap_days))
     scored = scored_events(run.events())
     h1_replay = replay_portfolio(scored, excluded_families={FAMILY_ASIA})
     six_replay = replay_portfolio(scored)
-    terminal_n = sum(1 for e in h1_replay.fills if e.result in TERMINAL_RESULTS)
+    h1_fills, h1_void = split_void_gap_fills(h1_replay.fills, gap_days, as_of)
+    six_fills, _six_void = split_void_gap_fills(six_replay.fills, gap_days, as_of)
+    terminal_n = sum(1 for e in h1_fills if e.result in TERMINAL_RESULTS)
     days_n = int(cme_days["observed_completed_days"])
     sample = sample_status(terminal_n, days_n, as_of.date())
     if not sample["look_allowed"]:
@@ -654,35 +714,40 @@ def look_report(
             f"{days_n}/{MIN_CME_DAYS} CME days) and deadline {DEADLINE} not reached"
         )
 
-    h1 = h1_criteria(h1_replay.fills)
-    if not sample["minimum_sample_met"]:
+    gaps = gap_day_status(gap_days, cme_days, as_of)
+    h1 = h1_criteria(h1_fills)
+    if gaps["cap_exceeded"]:
+        verdict = "INSUFFICIENT_DATA"
+    elif not sample["minimum_sample_met"]:
         verdict = "INSUFFICIENT_SAMPLE"
     elif h1["all_pass"]:
         verdict = "FORWARD_PORTFOLIO_EVIDENCE"
     else:
         verdict = "FORWARD_PORTFOLIO_REJECTED"
 
-    six = summarize_fills(six_replay.fills)
-    ex_ids = {e.source_id for e in h1_replay.fills}
+    six = summarize_fills(six_fills)
+    ex_ids = {e.source_id for e in h1_fills}
     asia_blocked_taken = sorted(
         d.source_id for d in six_replay.decisions
         if d.disposition == "SKIPPED_BUSY_PORTFOLIO"
         and d.blocker_family == FAMILY_ASIA
         and d.source_id in ex_ids
     )
-    h2_confirmed = h1["summary"]["net"] > six["net"] and bool(asia_blocked_taken)
+    h2_confirmed = (
+        not gaps["cap_exceeded"] and h1["summary"]["net"] > six["net"] and bool(asia_blocked_taken)
+    )
 
     loo = {}
     for fam in H1_FAMILIES:
         reduced = replay_portfolio(scored, excluded_families={FAMILY_ASIA, fam})
-        rs = summarize_fills(reduced.fills)
+        rs = summarize_fills(split_void_gap_fills(reduced.fills, gap_days, as_of)[0])
         loo[fam] = {"net_without": rs["net"], "delta_net_full_minus_without": round(h1["summary"]["net"] - rs["net"], 2)}
 
-    terminal = [e for e in h1_replay.fills if e.result in TERMINAL_RESULTS]
+    terminal = [e for e in h1_fills if e.result in TERMINAL_RESULTS]
     daily_net = round(sum(float(e.net_pnl) for e in terminal if e.family == FAMILY_DAILY), 2)
-    hours = _occupied_hours(h1_replay.fills, as_of)
+    hours = _occupied_hours(h1_fills, as_of)
     total_hours = sum(hours.values())
-    counts = _occupancy_counts(h1_replay)
+    counts = _occupancy_counts(h1_replay, h1_void)
     descriptive = {
         "fills_by_family": counts["fills_by_family"],
         "busy_skips_by_family": counts["busy_skips_by_family"],
@@ -698,7 +763,8 @@ def look_report(
         "occupied_account_hours_by_family": {k: round(v, 3) for k, v in sorted(hours.items())},
         "monthly": h1["summary"]["monthly"],
         "max_consecutive_losses": h1["summary"]["max_consecutive_losses"],
-        "net_with_plus_1_tick_adverse_slippage_per_side": _slip_stress_net(h1_replay.fills),
+        "net_with_plus_1_tick_adverse_slippage_per_side": _slip_stress_net(h1_fills),
+        "void_gap_day_fills_by_family": counts["void_gap_day_fills_by_family"],
     }
     return {
         "prereg": PREREG_ID,
@@ -721,6 +787,7 @@ def look_report(
                 "verdict": "CONFIRMED" if h2_confirmed else "NOT CONFIRMED",
             },
             "descriptive_table": descriptive,
+            "gap_days": gaps,
         },
         "sample": sample,
         "h1_summary": h1["summary"],

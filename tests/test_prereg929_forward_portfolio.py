@@ -255,9 +255,10 @@ def test_look_rejects_when_pf_below_hurdle(tmp_path):
 
 # ─── CLI ─────────────────────────────────────────────────────────────────────
 
-def _tiny_corpus(root: Path, days: list[str]):
+def _tiny_corpus(root: Path, days: list[str], *, source: str = "polygon", gap_days=()):
     leaf = root / "MNQ"
     leaf.mkdir(parents=True)
+    (root / "MANIFEST_5m.json").write_text(json.dumps({"source": source, "gap_days": list(gap_days)}))
     for d in days:
         rows = [{"timestamp": f"{d}T{h:02d}:00:00+00:00", "open": 1, "high": 1, "low": 1, "close": 1} for h in range(0, 24)]
         (leaf / f"MNQ_{d}.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n")
@@ -522,3 +523,213 @@ def test_step0_report_validation_requires_all_four_checks(tmp_path):
     with pytest.raises(fp.LookRefused, match="missing"):
         fp.validate_step0_report(p)
     assert fp.validate_step0_report(_passing_step0(tmp_path))["overall"] == "PASS"
+
+
+
+# ─── amendment 1 (§9): Polygon source, settlement, gap days, holiday class ──
+
+from research import prereg929_forward_corpus as fc  # noqa: E402
+
+
+def test_cli_refuses_a_non_polygon_corpus(tmp_path, capsys):
+    import importlib
+
+    cli = importlib.import_module("scripts.prereg929_forward_portfolio")
+    days = ["2026-09-24"]
+    _tiny_corpus(tmp_path / "c5", days, source="box")
+    _tiny_corpus(tmp_path / "c15", days, source="box")
+    rc = cli.main(["counts", "--corpus-5m", str(tmp_path / "c5"), "--corpus-15m", str(tmp_path / "c15")])
+    assert rc == 3 and "polygon" in capsys.readouterr().err
+    (tmp_path / "c5" / "MANIFEST_5m.json").unlink()
+    with pytest.raises(RuntimeError, match="no Polygon corpus manifest"):
+        fc.load_gap_days(tmp_path / "c5")
+
+
+def test_forward_corpus_start_is_60_days_before_scoring():
+    assert fc.FORWARD_CORPUS_START == fp.SCORING_START.date() - timedelta(days=60)
+    assert fc.STEP0_WARMUP_DAYS == 60 and fc.POLYGON_PREROLL_DAYS == 10
+
+
+def test_settled_cutoff_is_last_1700_et_close_at_least_24h_old():
+    # 09-23 03:00Z -> limit 09-22 03:00Z (09-21 23:00 ET) -> close 09-21 17:00 ET.
+    assert fc.settled_cutoff(datetime(2026, 9, 23, 3, 0, tzinfo=UTC)) == datetime(2026, 9, 21, 21, 0, tzinfo=UTC)
+    # Exactly 24h after a close keeps that close.
+    assert fc.settled_cutoff(datetime(2026, 9, 23, 21, 0, tzinfo=UTC)) == datetime(2026, 9, 22, 21, 0, tzinfo=UTC)
+
+
+def _full_day_bars(day: date, tf: int, *, drop=()):
+    lo, hi = fc.obs_day_window(day)
+    out = []
+    t = int(lo.timestamp())
+    while t < int(hi.timestamp()):
+        if t not in drop:
+            out.append({"ts": t})
+        t += tf * 60
+    return out
+
+
+def test_gap_days_regular_day_needs_every_slot_in_both_timeframes():
+    d = date(2026, 9, 10)  # Thursday, regular
+    b5, b15 = _full_day_bars(d, 5), _full_day_bars(d, 15)
+    assert fc.detect_gap_days(b5, b15, d, d) == []
+    hole = int(datetime(2026, 9, 10, 18, 0, tzinfo=UTC).timestamp())
+    g = fc.detect_gap_days([b for b in b5 if b["ts"] != hole], b15, d, d)
+    assert [x["obs_day"] for x in g] == ["2026-09-10"]
+    assert g[0]["missing_5m"] == [["2026-09-10T18:00:00+00:00", "2026-09-10T18:05:00+00:00"]]
+    assert g[0]["coverage_mismatch_15m_slots"] == ["2026-09-10T18:00:00+00:00"]
+    # A truncated end of session (the real 2026-09-11 Polygon hole) is a gap.
+    last_hour = int(datetime(2026, 9, 10, 20, 0, tzinfo=UTC).timestamp())
+    cut5 = [b for b in b5 if b["ts"] < last_hour]
+    cut15 = [b for b in b15 if b["ts"] < last_hour]
+    assert fc.detect_gap_days(cut5, cut15, d, d)[0]["missing_15m"] == [
+        ["2026-09-10T20:00:00+00:00", "2026-09-10T21:00:00+00:00"]]
+    # An empty regular weekday is a gap; weekends are never checked.
+    assert fc.detect_gap_days([], [], d, d)[0]["obs_day"] == "2026-09-10"
+    assert fc.detect_gap_days([], [], date(2026, 9, 12), date(2026, 9, 13)) == []
+
+
+def test_gap_days_reduced_schedule_checks_internal_holes_only():
+    d = date(2026, 9, 7)  # Labor Day: early halt at 13:00 ET
+    halt = int(datetime(2026, 9, 7, 17, 0, tzinfo=UTC).timestamp())
+    b5 = [b for b in _full_day_bars(d, 5) if b["ts"] < halt]
+    b15 = [b for b in _full_day_bars(d, 15) if b["ts"] < halt]
+    assert fc._reduced_schedule(d) and not fc._reduced_schedule(date(2026, 9, 8))
+    assert fc.detect_gap_days(b5, b15, d, d) == []
+    mid = int(datetime(2026, 9, 7, 3, 0, tzinfo=UTC).timestamp())
+    g = fc.detect_gap_days([b for b in b5 if b["ts"] != mid], b15, d, d)
+    assert g and g[0]["reduced_schedule"] is True
+    assert fc.detect_gap_days([], [], d, d) == []  # full closure
+
+
+def test_drop_obs_days_removes_whole_observation_day():
+    rows = [{"timestamp": t} for t in (
+        "2026-09-10T21:55:00+00:00",  # 17:55 ET Thu -> obs 09-10 (break slot, still obs 09-10)
+        "2026-09-10T22:00:00+00:00",  # 18:00 ET Thu -> obs 09-11
+        "2026-09-11T20:55:00+00:00",  # 16:55 ET Fri -> obs 09-11
+        "2026-09-13T22:00:00+00:00",  # Sun 18:00 ET -> obs 09-14
+    )]
+    kept = fc.drop_obs_days(rows, {"2026-09-11"})
+    assert [r["timestamp"] for r in kept] == ["2026-09-10T21:55:00+00:00", "2026-09-13T22:00:00+00:00"]
+
+
+def test_void_gap_fills_signal_fill_exit_or_open_across():
+    gap = ["2026-10-02"]  # window 10-01 22:00Z .. 10-02 22:00Z
+    on_day = _ev(fp.FAMILY_4HR, "a", "2026-10-02T14:00:00+00:00")
+    across = _ev(fp.FAMILY_DAILY, "b", "2026-10-01T15:00:00+00:00", exit_ts="2026-10-05T15:00:00+00:00")
+    before = _ev(fp.FAMILY_4HR, "c", "2026-10-01T14:00:00+00:00")
+    after = _ev(fp.FAMILY_4HR, "d", "2026-10-02T22:00:00+00:00")
+    still_open = _ev(fp.FAMILY_DAILY, "e", "2026-10-01T14:00:00+00:00")
+    still_open = PortfolioEvent(**{**still_open.__dict__, "exit_ts": None, "result": "OPEN"})
+    kept, void = fp.split_void_gap_fills([on_day, across, before, after, still_open], gap,
+                                         as_of=datetime(2026, 10, 10, tzinfo=UTC))
+    assert {e.source_id for e in void} == {"a", "b", "e"}
+    assert {e.source_id for e in kept} == {"c", "d"}
+
+
+def test_counts_report_reports_voids_and_excludes_them_from_terminal():
+    fills = _many_fills(4)  # 09-24, 09-25, 09-26, 09-27 at 14:00Z
+    rep = fp.counts_report(_run({fp.FAMILY_4HR: fills}), {"observed_completed_days": 3},
+                           as_of=datetime(2026, 9, 30, tzinfo=UTC), gap_days=["2026-09-25"])
+    assert rep["h1_counts"]["void_gap_day_fills"] == 1
+    assert rep["h1_counts"]["terminal_portfolio_fills"] == 3
+    assert rep["gap_days"]["gap_day_count"] == 1 and rep["gap_days"]["cap_exceeded"] is True  # 1/4 > 10%
+
+
+def test_look_voids_gap_day_fills_and_insufficient_data_over_cap(tmp_path):
+    fills = _many_fills(60)
+    ok = fp.look_report(_run({fp.FAMILY_4HR: fills}), {"observed_completed_days": 130},
+                        as_of=datetime(2027, 6, 1, tzinfo=UTC), step0_report_path=_passing_step0(tmp_path),
+                        gap_days=["2026-09-25"])
+    s7 = ok["section7"]
+    assert s7["terminal_fills"] == 59
+    assert s7["descriptive_table"]["void_gap_day_fills_by_family"] == {fp.FAMILY_4HR: 1}
+    assert s7["gap_days"]["cap_exceeded"] is False
+    many = [(date(2026, 9, 24) + timedelta(days=i)).isoformat() for i in range(0, 60, 3)]  # 20 gap days
+    bad = fp.look_report(_run({fp.FAMILY_4HR: fills}), {"observed_completed_days": 130},
+                         as_of=datetime(2027, 6, 1, tzinfo=UTC), step0_report_path=_passing_step0(tmp_path),
+                         gap_days=many)
+    assert bad["section7"]["gap_days"]["cap_exceeded"] is True  # 20/150 > 10%
+    assert bad["section7"]["h1_verdict"] == "INSUFFICIENT_DATA"
+    assert bad["section7"]["h2"]["verdict"] == "NOT CONFIRMED"
+
+
+def test_holiday_boundary_class_is_narrow():
+    mm = [
+        {"id": "x1", "family": "F", "kind": "ATTEMPT_ONLY_IN_FROZEN", "ts": "2026-07-06T14:00:00+00:00"},
+        {"id": "x2", "family": "F", "kind": "ATTEMPT_ONLY_IN_FROZEN", "ts": "2026-07-09T14:00:00+00:00"},
+        {"id": "x3", "family": "F", "kind": "FIELD_DIFF",
+         "frozen": {"signal_ts": "2026-06-22T14:00:00+00:00", "eligible_fill_ts": "2026-06-22T14:05:00+00:00"},
+         "rebuilt": {"signal_ts": "2026-06-22T14:00:00+00:00", "eligible_fill_ts": "2026-06-22T14:05:00+00:00"}},
+        {"id": "x4", "family": "F", "kind": "ADAPTER_FAILED_CLOSED", "ts": "2026-07-06T14:00:00+00:00"},
+    ]
+    diffs = {"2026-07-06": ["previous_day_low", "vwap"], "2026-06-22": ["daily_bar_type", "ftfc_aligned"]}
+    assert set(s0.holiday_boundary_explanations(mm, diffs)) == {"x1", "x3"}
+    # Any non-boundary difference anywhere disables the class entirely.
+    assert s0.holiday_boundary_explanations(mm, {**diffs, "2026-07-14": ["ema_200"]}) == {}
+    assert s0.holiday_boundary_explanations(mm, {**diffs, "2026-07-06": ["close"]}) == {}
+    # A listed day with no recorded diff is not explained.
+    assert s0.holiday_boundary_explanations(mm, {"2026-06-22": ["vwap"]}) == {"x3": s0.HOLIDAY_CLASS_TEXT}
+
+
+def test_corpus_field_diffs_by_day(tmp_path):
+    for name, low in (("a", 1.0), ("b", 0.5)):
+        leaf = tmp_path / name / "MNQ"
+        leaf.mkdir(parents=True)
+        rows = [{"timestamp": "2026-07-06T14:00:00+00:00", "open": 2, "previous_day_low": low},
+                {"timestamp": "2026-07-07T14:00:00+00:00", "open": 2, "previous_day_low": 1.0}]
+        for r in rows:
+            (leaf / f"MNQ_{r['timestamp'][:10]}.jsonl").write_text(json.dumps(r) + "\n")
+    got = s0.corpus_field_diffs(tmp_path / "a", tmp_path / "b", date(2026, 7, 1), date(2026, 7, 31))
+    assert got == {"2026-07-06": ["previous_day_low"]}
+
+
+class _FakeBar:
+    def __init__(self, ts, o, h, l, c, v):
+        self.ts, self.open, self.high, self.low, self.close, self.volume = ts, o, h, l, c, v
+
+
+class _FakeClient:
+    configured = True
+
+    def __init__(self, start: datetime, days: int, drop: set[int] = frozenset()):
+        self.start, self.days, self.drop = start, days, drop
+        self.calls = []
+
+    def fetch_continuous(self, symbol, start, end, tf, roll_days=8):
+        self.calls.append((symbol, start, end, tf, roll_days))
+        out, px = [], 20000.0
+        t = self.start
+        while t < self.start + timedelta(days=self.days):
+            et = t.astimezone(fp.ET)
+            trading = not (et.weekday() == 5 or (et.weekday() == 6 and et.hour < 18)
+                           or (et.weekday() == 4 and et.hour >= 17) or et.hour == 17)
+            if trading and int(t.timestamp()) not in self.drop:
+                c = px + (1.0 if (t.minute // tf) % 3 else -0.75)
+                out.append(_FakeBar(t, px, max(px, c) + 0.5, min(px, c) - 0.5, c, 100.0))
+                px = c
+            t += timedelta(minutes=tf)
+        return out
+
+
+def test_build_polygon_corpus_settles_removes_gap_days_and_records_hashes(tmp_path):
+    hole = int(datetime(2026, 9, 10, 18, 0, tzinfo=UTC).timestamp())
+    client = _FakeClient(datetime(2026, 8, 30, 22, 0, tzinfo=UTC), 14, drop={hole})
+    res = fc.build_polygon_corpus(
+        tmp_path / "out", date(2026, 9, 8), preroll_days=10,
+        fetched_at=datetime(2026, 9, 13, 12, 0, tzinfo=UTC), client=client,
+    )
+    fw = res["forward"]
+    assert fw["settled_cutoff"] == "2026-09-11T21:00:00+00:00"  # Fri 09-11 close is > 24h old
+    assert [g["obs_day"] for g in fw["gap_days"]] == ["2026-09-10"]
+    assert all(call[4] == 8 and call[1] == date(2026, 8, 29) for call in client.calls)
+    for tf in (5, 15):
+        rows = [json.loads(line) for f in sorted((tmp_path / "out" / f"{tf}m" / "MNQ").glob("*.jsonl"))
+                for line in f.read_text().splitlines()]
+        stamps = [r["timestamp"] for r in rows]
+        assert stamps[0][:10] >= "2026-09-08"
+        assert not [t for t in stamps if "2026-09-09T22:00" <= t < "2026-09-10T22:00"]  # obs day 09-10 removed
+        assert max(stamps) < "2026-09-11T21:00"  # settlement cutoff
+        assert fc.load_gap_days(tmp_path / "out" / f"{tf}m") == ["2026-09-10"]
+        man = res["timeframes"][f"{tf}m"]
+        assert len(man["raw_sha256_after_settlement"]) == 64 and man["candles_removed_as_gap_days"] > 0
+    assert json.loads((tmp_path / "out" / "FORWARD_MANIFEST.json").read_text())["source"] == "polygon"
