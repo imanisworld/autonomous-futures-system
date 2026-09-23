@@ -52,6 +52,8 @@ MAX_SPREAD_PERCENT = 10.0
 MIN_OPTION_VOLUME = 100.0
 MIN_OPEN_INTEREST = 500.0
 DELTA_MIN, DELTA_MAX = 0.30, 0.70
+MIN_DTE = 14
+MAX_SANITY_DTE = 730
 MIN_REMAINING_RR = 1.0
 
 
@@ -108,6 +110,7 @@ class Episode:
     entry_ask: Optional[float]
     entry_bid: Optional[float]
     premium_stop: Optional[float]
+    planned_risk_dollars: Optional[float]
     geometry: Optional[str]
     stored_status: str
     stored_outcome: dict
@@ -138,6 +141,7 @@ def load_episodes(conn: sqlite3.Connection) -> list[Episode]:
             first_price=_f(si.get("price")),
             entry_ask=_f(sc.get("entry_quote") or sc.get("option_mark") or sc.get("option_ask")),
             entry_bid=_f(sc.get("option_bid")), premium_stop=_f(sc.get("premium_stop")),
+            planned_risk_dollars=_f(sc.get("planned_risk_dollars")),
             geometry=sc.get("paper_entry_geometry") or si.get("paper_entry_geometry"),
             stored_status=str(status), stored_outcome=oc,
         )
@@ -234,7 +238,7 @@ def reclaimed(direction: str, price: Optional[float], trigger: float) -> bool:
 
 
 def eligibility(ep: Episode) -> tuple[bool, str]:
-    if ep.opened_at is None or ep.opened_at < FORWARD_START:
+    if ep.opened_at is None or ep.opened_at <= FORWARD_START:
         return False, "before_forward_start"
     if not ep.contract:
         return False, "no_exact_contract"
@@ -257,17 +261,40 @@ def _remaining_rr(direction, price, stop, target) -> Optional[float]:
     return None if risk <= 0 else reward / risk
 
 
+def _planned_risk(entry_ask: Optional[float]) -> Optional[float]:
+    """Exact V1 planned-risk arithmetic from build_v1_contract_fields."""
+    if entry_ask is None or entry_ask <= 0:
+        return None
+    premium_stop = round(entry_ask * PREMIUM_STOP_MULTIPLIER, 4)
+    return round((entry_ask - premium_stop) * CONTRACT_MULTIPLIER, 2)
+
+
+def _dte_valid(expiry: Optional[str], at: datetime) -> bool:
+    if not expiry:
+        return False
+    try:
+        expiry_date = date.fromisoformat(expiry[:10])
+    except ValueError:
+        return False
+    dte = (expiry_date - at.astimezone(ET).date()).days
+    return MIN_DTE <= dte <= MAX_SANITY_DTE
+
+
 def aggregate_open_risk_at(episodes: list[Episode], at: datetime, exclude_id: int) -> float:
-    """Planned risk of other ACTIVE rows open at ``at`` (entry ask x 25% x 100, opened <= at < resolved)."""
+    """Exact stored/rederived planned risk of other ACTIVE rows open at ``at``."""
     total = 0.0
     for e in episodes:
-        if e.shadow_id == exclude_id or e.entry_ask is None or e.opened_at is None or e.opened_at > at:
+        if e.shadow_id == exclude_id or e.opened_at is None or e.opened_at > at:
             continue
         c = control_arm(e)
         closed_at = c.get("at") if c.get("state") == "RESOLVED" else None
         if closed_at is not None and closed_at <= at:
             continue
-        total += e.entry_ask * (1 - PREMIUM_STOP_MULTIPLIER) * CONTRACT_MULTIPLIER
+        risk = e.planned_risk_dollars
+        if risk is None:
+            risk = _planned_risk(e.entry_ask)
+        if risk is not None:
+            total += risk
     return round(total, 2)
 
 
@@ -277,19 +304,21 @@ def reclaim_gates(ep: Episode, s: Snapshot, episodes: list[Episode]) -> list[str
     rr = _remaining_rr(ep.direction, s.price, ep.stop, ep.target)
     if rr is None or rr < MIN_REMAINING_RR:
         fails.append("remaining_rr_below_1")
-    spread = (s.ask - s.bid) / ((s.ask + s.bid) / 2) * 100 if s.ask and s.bid else None
-    if spread is None or spread > MAX_SPREAD_PERCENT:
+    spread = (s.ask - s.bid) / ((s.ask + s.bid) / 2) * 100
+    if spread > MAX_SPREAD_PERCENT:
         fails.append("spread")
-    if s.volume is not None and s.volume < MIN_OPTION_VOLUME:
+    if s.volume is None or s.volume < MIN_OPTION_VOLUME:
         fails.append("volume")
-    if s.open_interest is not None and s.open_interest < MIN_OPEN_INTEREST:
+    if s.open_interest is None or s.open_interest < MIN_OPEN_INTEREST:
         fails.append("open_interest")
     if s.delta is not None and not (DELTA_MIN <= abs(s.delta) <= DELTA_MAX):
         fails.append("delta")
-    risk = s.ask * (1 - PREMIUM_STOP_MULTIPLIER) * CONTRACT_MULTIPLIER
-    if risk > MAX_TRADE_RISK_DOLLARS:
+    if not _dte_valid(ep.expiry, s.ts):
+        fails.append("dte")
+    risk = _planned_risk(s.ask)
+    if risk is None or risk <= 0 or risk > MAX_TRADE_RISK_DOLLARS:
         fails.append("trade_risk_cap")
-    if aggregate_open_risk_at(episodes, s.ts, ep.shadow_id) + risk > MAX_AGGREGATE_OPEN_RISK_DOLLARS:
+    elif aggregate_open_risk_at(episodes, s.ts, ep.shadow_id) + risk > MAX_AGGREGATE_OPEN_RISK_DOLLARS:
         fails.append("aggregate_risk_cap")
     return fails
 
@@ -308,8 +337,8 @@ def reclaim_arm(ep: Episode, episodes: list[Episode]) -> dict:
                     "resolved_at": s.ts, "ineligible_reclaims_skipped": skipped}
         if not reclaimed(ep.direction, s.price, ep.trigger):
             continue
-        if s.ask is None or s.bid is None or s.ask <= 0 or s.bid <= 0 or not s.quote_ts:
-            return {"state": "BLOCKED", "reason": "missing_quote_at_reclaim", "at": s.ts}
+        if s.ask is None or s.bid is None or s.bid <= 0 or s.ask <= s.bid or not s.quote_ts:
+            return {"state": "BLOCKED", "reason": "missing_or_invalid_quote_at_reclaim", "at": s.ts}
         fails = reclaim_gates(ep, s, episodes)
         if fails:
             skipped.append({"at": s.ts.isoformat(), "failed": fails})
@@ -372,6 +401,7 @@ def reproduction(episodes: list[Episode], contract_symbols: dict[int, set]) -> d
                      "contract": ep.contract})
     n_ok = sum(r["match"] for r in rows)
     return {"rows": rows, "matched": n_ok, "total": len(rows),
+            "fixture_ids": [r["shadow_id"] for r in rows],
             "verdict": "PASS" if rows and n_ok == len(rows) else "FAIL"}
 
 
