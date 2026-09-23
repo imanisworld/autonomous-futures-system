@@ -54,9 +54,35 @@ def test_flatten_reports_success_on_clean_liquidate(monkeypatch):
     monkeypatch.setattr(b, "get_position", _open_pos)
     monkeypatch.setattr(b, "_find_contract_id", lambda inst: 123)
     monkeypatch.setattr(b, "_cancel_working_orders", lambda: 1)
-    monkeypatch.setattr(b, "_post", lambda p, body, **k: {"orderId": 555})
+    monkeypatch.setattr(
+        b,
+        "_post",
+        lambda p, body, **k: {"failureReason": "Success", "orderId": 555},
+    )
+    monkeypatch.setattr(b, "get_position_snapshot", lambda: (True, None))
     result = b.flatten_position()
     assert result["close_sent"] is True
+    assert result["flat_confirmed"] is True
+
+
+def test_flatten_accepted_but_position_still_open_is_not_confirmed(monkeypatch):
+    b = _broker(monkeypatch)
+    pos = _open_pos()
+    monkeypatch.setattr(b, "get_position", lambda: pos)
+    monkeypatch.setattr(b, "_find_contract_id", lambda inst: 123)
+    monkeypatch.setattr(b, "_cancel_working_orders", lambda: 1)
+    monkeypatch.setattr(
+        b,
+        "_post",
+        lambda p, body, **k: {"failureReason": "Success", "orderId": 555},
+    )
+    monkeypatch.setattr(b, "get_position_snapshot", lambda: (True, pos))
+    monkeypatch.setattr("execution.tradovate_broker.time.sleep", lambda *_a, **_k: None)
+
+    result = b.flatten_position()
+
+    assert result["close_sent"] is True
+    assert result["flat_confirmed"] is False
 
 
 # ── #2: naked-position handler fails closed ──────────────────────────────────

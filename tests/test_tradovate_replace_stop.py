@@ -5,6 +5,7 @@ atomic /order/modifyorder. The safety-critical invariants:
   - NEVER loosens (LONG stop only rises, SHORT stop only falls)
   - tick-rounds the new price (off-tick stops get rejected by Tradovate)
   - fail-safe: any reject/exception leaves the OLD stop resting, returns False
+  - accepted modifications must be read back from broker state before local state changes
   - honours the LIVE_TRADING_ENABLED guard when env == "live"
 """
 
@@ -22,15 +23,29 @@ def _broker(monkeypatch, *, direction="LONG", stop=5893.0, resp=None, raises=Fal
     broker._last_order_ids = {"instrument": "MES", "entry": 1, "target": 2, "stop": 99}
 
     calls = []
+    last_post = {}
 
     def _post(path, body, **kw):
         calls.append((path, body))
+        last_post.clear()
+        last_post.update(body)
         if raises:
             raise RuntimeError("network down")
         return resp if resp is not None else {"orderId": 99}
 
+    def _get(path, **kw):
+        if "/order/item?id=" in path:
+            return {
+                "id": int(path.split("id=")[1]),
+                "ordStatus": "Working",
+                "stopPrice": last_post.get("stopPrice", stop),
+            }
+        return []
+
     monkeypatch.setattr(broker, "_post", _post)
+    monkeypatch.setattr(broker, "_get", _get)
     monkeypatch.setattr(broker, "_authenticate", lambda: True)
+    monkeypatch.setattr("execution.tradovate_broker.time.sleep", lambda *_a, **_k: None)
     return broker, calls
 
 
@@ -77,6 +92,31 @@ def test_replace_stop_tick_rounds(monkeypatch):
     # off-grid request snaps to the MES 0.25 tick grid
     assert broker.replace_stop(5905.13) is True
     assert calls[0][1]["stopPrice"] == 5905.25
+
+
+def test_replace_stop_documented_success_marker_is_not_a_rejection(monkeypatch):
+    broker, _ = _broker(
+        monkeypatch, direction="LONG", stop=5893.0,
+        resp={"failureReason": "Success", "orderId": 99},
+    )
+    assert broker.replace_stop(5905.0) is True
+    assert broker._last_position.stop == 5905.0
+
+
+def test_replace_stop_accepted_but_not_reflected_keeps_local_state(monkeypatch):
+    broker, _ = _broker(
+        monkeypatch, direction="LONG", stop=5893.0,
+        resp={"failureReason": "Success", "orderId": 99},
+    )
+    monkeypatch.setattr(
+        broker,
+        "_get",
+        lambda path, **kw: {"id": 99, "ordStatus": "Working", "stopPrice": 5893.0},
+    )
+
+    assert broker.replace_stop(5905.0) is False
+    assert broker._last_position.stop == 5893.0
+    assert broker._last_order_ids["stop"] == 99
 
 
 def test_replace_stop_fail_safe_on_reject(monkeypatch):

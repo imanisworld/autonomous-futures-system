@@ -486,6 +486,47 @@ def test_ambiguous_submission_blocks_retry_until_reconciled(monkeypatch):
     assert calls["n"] == 1                      # no blind re-fire
 
 
+@pytest.mark.parametrize("malformed", [None, []])
+def test_malformed_placeoso_response_poisoned_as_ambiguous(monkeypatch, malformed):
+    b = _broker(monkeypatch)
+    calls = {"n": 0}
+
+    def malformed_post(path, body, **k):
+        calls["n"] += 1
+        return malformed
+
+    monkeypatch.setattr(b, "_post", malformed_post)
+
+    first = b.execute_bracket(_long_order(client_order_id="AFS-malformed"))
+    assert first.result == "CANCELLED"
+    assert first.exit_reason == "TRADOVATE_NO_ORDER_ID"
+
+    retry = b.execute_bracket(_long_order(client_order_id="AFS-malformed"))
+    assert retry.result == "CANCELLED"
+    assert retry.exit_reason == "SUBMIT_AMBIGUOUS_UNRECONCILED"
+    assert calls["n"] == 1
+
+
+def test_documented_success_failure_reason_does_not_reject_placeoso(monkeypatch):
+    b = _broker(monkeypatch)
+    cap = _capture_body(
+        monkeypatch,
+        b,
+        result={
+            "failureReason": "Success",
+            "orderId": 11,
+            "oso1Id": 12,
+            "oso2Id": 13,
+        },
+    )
+    monkeypatch.setattr(b, "_verify_bracket_children", lambda **k: (True, True))
+
+    fill = b.execute_bracket(_long_order())
+
+    assert fill.result == "OPEN"
+    assert cap["calls"] == 1
+
+
 def test_explicit_rejection_frees_identity_for_future_signals(monkeypatch):
     b = _broker(monkeypatch)
     cap = _capture_body(monkeypatch, b, result={"failureReason": "NoQuote"})
