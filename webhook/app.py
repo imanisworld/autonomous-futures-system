@@ -51,10 +51,6 @@ from agent.daily_summary import DailySummaryAgent, validate_review_date
 from config.settings import load_config
 from webhook import log_redaction as _log_redaction  # noqa: F401 — installs uvicorn.access secret redaction on import
 from context.futures_session import futures_session_active, feed_stale_after_minutes, product_of
-from context.futures_product_session import (
-    SUPPORTED_INSTRUMENTS as STRICT_NOTIFICATION_SESSION_ROOTS,
-    product_session_status,
-)
 from execution.tradovate_supervisor import (
     reliability_snapshot,
     run_tradovate_supervisor,
@@ -641,18 +637,12 @@ def _decision_notification_market_gate(
     except Exception:
         return False, "INVALID_SIGNAL_TIMESTAMP", root
 
-    # MNQ/MES have a reviewed fail-closed holiday/special-session guard.
-    # Other known products keep the existing normal-session calendar until a
-    # product-specific special-session calendar is proven for them.
-    def _notification_session_open(moment: datetime) -> bool:
-        if root in STRICT_NOTIFICATION_SESSION_ROOTS:
-            return product_session_status(root, moment).is_open
-        return product_session_active(root, moment) is True
-
-    if not _notification_session_open(signal_ts):
+    signal_open = product_session_active(root, signal_ts)
+    if signal_open is not True:
         return False, "MARKET_CLOSED_AT_SIGNAL", root
 
-    if not _notification_session_open(now or datetime.now(timezone.utc)):
+    send_open = product_session_active(root, now or datetime.now(timezone.utc))
+    if send_open is not True:
         return False, "MARKET_CLOSED_BEFORE_SEND", root
 
     return True, None, root
