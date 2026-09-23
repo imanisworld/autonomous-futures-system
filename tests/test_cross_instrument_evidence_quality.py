@@ -78,9 +78,10 @@ def test_complete_m2k_dated_contract_window_is_quality_eligible(tmp_path):
     assert quality["code_provenance"]["detector_dependency_count"] == 8
 
 
-def test_continuous_m2k_window_spanning_observed_2026_09_14_roll_fails_closed(tmp_path):
-    # The saved live-feed check observed the M2K continuous switch at
-    # 2026-09-14 22:00Z, later than the repo's historical roll convention.
+def test_continuous_m2k_window_with_unproven_intraday_roll_fails_closed(tmp_path):
+    # This synthetic continuous-ticker window straddles a period where exact
+    # intraday dated-contract identity is not proven. TradingView later established
+    # the M2K U6→Z6 switch date as 2026-09-16, but not an exact UTC switch instant.
     # A continuous ticker cannot prove which dated contract supplied the bars,
     # so this complete window must remain roll-provenance unknown rather than
     # receiving false-clean credit.
