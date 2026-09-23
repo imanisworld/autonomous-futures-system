@@ -54,6 +54,53 @@ def test_notification_gate_blocks_known_mnq_closures(when, reason):
 @pytest.mark.parametrize(
     "when",
     [
+        datetime(2026, 9, 7, 10, 0, tzinfo=_ET),   # Labor Day
+        datetime(2026, 11, 27, 13, 5, tzinfo=_ET), # day-after-Thanksgiving early close
+        datetime(2026, 4, 3, 10, 0, tzinfo=_ET),   # Good Friday: unknown -> fail closed
+        datetime(2026, 9, 6, 18, 30, tzinfo=_ET),  # evening before Labor Day: unknown -> fail closed
+    ],
+)
+def test_notification_gate_blocks_mnq_special_session_closures(when):
+    from webhook.app import _decision_notification_market_gate
+
+    allowed, reason, root = _decision_notification_market_gate(
+        _payload(when),
+        _trade_result(),
+        now=when,
+    )
+
+    assert allowed is False
+    assert reason == "MARKET_CLOSED_AT_SIGNAL"
+    assert root == "MNQ"
+
+
+def test_notification_gate_keeps_mgc_normal_session_fallback():
+    from webhook.app import _decision_notification_market_gate
+
+    when = datetime(2026, 9, 21, 17, 30, tzinfo=_ET)
+    payload = AlertPayload(
+        ticker="MGC1!",
+        timestamp=when.isoformat(),
+        timeframe="15",
+        open=2500.0,
+        high=2502.0,
+        low=2498.0,
+        close=2501.0,
+    )
+    allowed, reason, root = _decision_notification_market_gate(
+        payload,
+        _trade_result(instrument="MGC"),
+        now=when,
+    )
+
+    assert allowed is False
+    assert reason == "MARKET_CLOSED_AT_SIGNAL"
+    assert root == "MGC"
+
+
+@pytest.mark.parametrize(
+    "when",
+    [
         datetime(2026, 9, 21, 10, 0, tzinfo=_ET),
         # CME removed the 16:15–16:30 ET equity-index halt effective 2021-06-28.
         datetime(2026, 9, 21, 16, 20, tzinfo=_ET),
