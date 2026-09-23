@@ -81,26 +81,29 @@ def test_action_card_matches_the_operator_layout(monkeypatch):
     first = "2026-09-14T17:05:01+00:00"
     text = w._action_card_text("feed_MNQ_stale", FEED_MNQ, _tick(("daily_22_5k",), mnq_age_min=35), first)
     lines = text.splitlines()
-    assert lines[0] == "🛑 **ACTION REQUIRED — MNQ FEED STALE**"
-    assert lines[1] == "**Exposure:** Daily 2-2 paper SHORT is OPEN @ 29338.25"
-    assert lines[2] == "**Problem:** No MNQ bars for 35 min"
-    assert lines[3] == "**Impact:** Stop/target cannot be evaluated while feed is down"
-    assert lines[4] == "**Do now:** Check TradingView alerts / webhook delivery"
-    assert lines[5] == "**Since:** 1:05 PM ET"
-    assert lines[6] == "`feed_MNQ_stale · read-only`"
-    assert len(lines) == 7
+    assert lines[0] == "🛑 ACTION NEEDED — no Micro Nasdaq prices for 35 min"
+    assert lines[1] == "Open practice position: Daily 2-2 sell at 29,338.25"
+    assert lines[2] == "Why it matters: The bot can't check the stop-loss or profit target while prices are missing"
+    assert lines[3] == "Do now: Check that the TradingView alerts are still on and reaching the bot"
+    assert lines[4] == "Since: 1:05 PM ET"
+    assert lines[5] == "-# feed_MNQ_stale · read-only"
+    assert len(lines) == 6
     # the card never carries the paragraph-style telemetry of the plain text
-    assert "What to check" not in text and "Snapshot:" not in text
+    assert "What to check" not in text and "snapshot" not in text
+    # plain English: no raw ids, UTC stamps or trader jargon in the readable part
+    readable = "\n".join(l for l in lines if not l.startswith("-# "))
+    for jargon in ("SHORT", "MNQ", "UTC", "Z ", "feed_", "@"):
+        assert jargon not in readable
 
 
 def test_resolved_card_reports_duration_and_remaining_exposure():
     first = w.iso(w.now_utc() - timedelta(minutes=295))
     text = w._resolved_card_text("feed_MNQ_stale", first, _tick(("daily_22_5k",), mnq_age_min=0))
     assert text.splitlines() == [
-        "✅ **RESOLVED — MNQ FEED RECOVERED**",
-        "Bars flowing again after 295 min.",
-        "Daily 2-2 paper position remains OPEN (SHORT @ 29338.25).",
-        "`feed_MNQ_stale · read-only`",
+        "✅ Micro Nasdaq prices are back",
+        "Down for: 4 hr 55 min",
+        "Still open: Daily 2-2 sell at 29,338.25",
+        "-# feed_MNQ_stale · read-only",
     ]
 
 
@@ -123,14 +126,14 @@ def test_feed_stale_with_open_lane_raises_a_card_and_resolves_as_a_card(monkeypa
 
     raised = _run(monkeypatch, state, findings, _tick(("daily_22_5k",)))
     assert raised[0][0] == "DISCORD_ROUTE_ERROR"
-    assert raised[0][1].startswith("🛑 **ACTION REQUIRED — MNQ FEED STALE**")
+    assert raised[0][1].startswith("🛑 ACTION NEEDED — no Micro Nasdaq prices for")
     assert state["blocked"]["feed_MNQ_stale"]["action_required"] is True
     # the finding itself is untouched: same key, same summary, still BLOCKED
     assert findings.blocked()[0]["summary"] == FEED_MNQ["summary"]
 
     cleared = _run(monkeypatch, state, w.Findings(), _tick(("daily_22_5k",), mnq_age_min=0))
-    assert cleared[0][1].startswith("✅ **RESOLVED — MNQ FEED RECOVERED**")
-    assert "Daily 2-2 paper position remains OPEN" in cleared[0][1]
+    assert cleared[0][1].startswith("✅ Micro Nasdaq prices are back")
+    assert "Still open: Daily 2-2 sell at 29,338.25" in cleared[0][1]
     assert state["blocked"] == {}
 
 
@@ -140,11 +143,11 @@ def test_feed_stale_without_exposure_keeps_the_plain_blocked_text(monkeypatch):
     findings.add("BLOCKED", "feed_MNQ_stale", FEED_MNQ["summary"])
 
     raised = _run(monkeypatch, state, findings, _tick(()))
-    assert raised[0][1].startswith("🛑 **STATUS: CRITICAL**\n**ISSUE:** Feed mnq stale")
+    assert raised[0][1].startswith("🛑 Micro Nasdaq prices have stopped\n")
     assert state["blocked"]["feed_MNQ_stale"]["action_required"] is False
 
     cleared = _run(monkeypatch, state, w.Findings(), _tick(()))
-    assert cleared[0][1].startswith("✅ **STATUS: RECOVERED**\n**ISSUE:** Feed mnq stale")
+    assert cleared[0][1].startswith("✅ Resolved: Micro Nasdaq prices have stopped\n")
 
 
 def test_exposure_appearing_later_promotes_to_a_card_once(monkeypatch):
@@ -153,10 +156,10 @@ def test_exposure_appearing_later_promotes_to_a_card_once(monkeypatch):
     findings.add("BLOCKED", "feed_MNQ_stale", FEED_MNQ["summary"])
 
     first = _run(monkeypatch, state, findings, _tick(()))
-    assert first[0][1].startswith("🛑 **STATUS: CRITICAL**")
+    assert first[0][1].startswith("🛑 Micro Nasdaq prices have stopped")
     # lane opens while the feed is still stale: re-notify immediately as a card
     second = _run(monkeypatch, state, findings, _tick(("daily_22_5k",)))
-    assert len(second) == 1 and second[0][1].startswith("🛑 **ACTION REQUIRED —")
+    assert len(second) == 1 and second[0][1].startswith("🛑 ACTION NEEDED —")
     # and only once — the reminder cadence takes over from here
     third = _run(monkeypatch, state, findings, _tick(("daily_22_5k",)))
     assert third == []

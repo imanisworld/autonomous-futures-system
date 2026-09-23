@@ -89,6 +89,10 @@ def test_expected_commit_mismatch_is_red_alarm():
         assert "pinned commit mismatch" in result.stdout
         assert "EXPECTED_LIVE_COMMIT=wrong manifest_commit=abc123" in result.stdout
         assert "RED_ALERT:" in result.stdout
+        # Discord text: plain headline first; pin names and SHAs only as a small "-#" detail line
+        assert "RED_ALERT:🚨 Server is running a different version than expected:" in result.stdout
+        assert "-# EXPECTED_LIVE_COMMIT=wrong manifest_commit=abc123" in result.stdout
+        assert "-# READ ONLY" in result.stdout
 
 def test_main_ahead_is_informational_and_non_failing():
     with tempfile.TemporaryDirectory() as tmp:
