@@ -83,10 +83,18 @@ def test_summarize_empty_week_is_safe():
 def test_format_report_contains_key_numbers():
     data = wr.summarize_week(_journal_week(), _option_rows())
     text = wr.format_report(data, week="2026-W26", monday=date(2026, 6, 22), sunday=date(2026, 6, 28))
-    assert "Weekly review — 2026-W26" in text
-    assert "fill rate **75%**" in text
-    assert "2W / 1L" in text
-    assert "$69.50" in text
+    assert "Weekly review · Week of Jun 22–28" in text
+    assert "Orders filled: **3 of 4** (75%)" in text
+    assert "**2 won, 1 lost**" in text
+    assert "Profit: **+$69.50**" in text
+    assert "most common skip: signa daily neutral" in text
+    # Plain English: no ISO week label, no W/L shorthand, no snake codes.
+    for jargon in ("2026-W26", "2W", "1L", "signa_daily_neutral", "P&L"):
+        assert jargon not in text, jargon
+
+
+def test_week_words_across_months():
+    assert wr.week_words(date(2026, 6, 29), date(2026, 7, 5)) == "Week of Jun 29–Jul 5"
 
 
 def test_load_option_rows_filters_by_week(tmp_path):

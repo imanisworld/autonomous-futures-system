@@ -34,14 +34,15 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from ops.evidence_registry import build_registry, format_registry_lines
+from notifications import plain_english as pe
+from ops.evidence_registry import REGISTRY_HEADER, build_registry, format_registry_lines
 
 
 NY_TZ = ZoneInfo("America/New_York")
 RTH_CLOSE = time(16, 0)
 # Collectors whose silence is by design; never raised as attention.
 EXPECTED_QUIET = {
-    "options companion": "disabled by design (OPTIONS_COMPANION_ENABLED=false)",
+    "options companion": "turned off on purpose",
 }
 # Collectors that only advance during regular trading hours; judged against the
 # session close of the report window, not against the wall clock at 17:10 ET.
@@ -248,7 +249,7 @@ def _effective_status(item: dict[str, Any], *, session_end: date) -> tuple[str, 
     The census is a wall-clock freshness test. At 17:10 ET the market has been
     closed for over an hour, so a session-bound collector is judged against the
     session close instead; a collector that is quiet by design is reported as
-    such rather than raised as attention.
+    such rather than raised as attention. Notes are plain-English display text.
     """
     name = str(item.get("name") or "")
     status = str(item.get("status") or "UNKNOWN")
@@ -260,8 +261,8 @@ def _effective_status(item: dict[str, Any], *, session_end: date) -> tuple[str, 
         if last is not None and isinstance(limit, (int, float)):
             close = _session_close_utc(session_end)
             if close - timedelta(minutes=float(limit)) <= last <= close + timedelta(minutes=float(limit)):
-                return "FRESH_AT_CLOSE", f"last {last.astimezone(NY_TZ).strftime('%H:%M')} ET vs close"
-            return status, f"last {last.astimezone(NY_TZ).strftime('%Y-%m-%d %H:%M')} ET, not within {int(limit)} min of close"
+                return "FRESH_AT_CLOSE", f"last update {pe.et_time(last, with_day=False)}, at market close"
+            return status, f"last update {pe.et_time(last)} — more than {int(limit)} min from market close"
     return status, ""
 
 
@@ -301,24 +302,74 @@ def _top(counter: dict[str, int], limit: int = 5) -> str:
 
 
 # Presentation aliases only: journal identifiers and counters remain unchanged.
+# Plain English for a phone reader (docs/discord-operator-message-style.md).
 _DISPLAY_NAMES = {
-    "strat_22_continuation_observed": "2-2 continuation",
-    "strat_22_reversal_observed": "2-2 reversal",
-    "ema_pullback_trend": "EMA pullback",
-    "impulse_first_pullback_observed": "Impulse first pullback",
-    "orb_false_break_fade": "ORB false-break fade",
-    "SHADOW_OUTCOME": "shadow observations",
-    "BAR_CLAIM": "bar claims",
-    "DECISION": "decisions",
-    "shadow_setups": "Shadow setups",
-    "range_signal": "Range signals",
+    "ema_pullback_trend": "Pullback in a trend",
+    "SHADOW_OUTCOME": "practice results",
+    "BAR_CLAIM": "price bars received",
+    "DECISION": "bot decisions",
+    "shadow_setups": "Practice setups",
+    "range_signal": "Sideways-market signals",
+    # decisions
+    "NO_TRADE": "No setup",
+    "TRADE": "Practice trade taken",
+    "SHADOW_NO_ORDER": "Setup seen, no order (practice only)",
+    "RISK_REJECTED": "Skipped by risk limits",
+    "BLOCKED_MAX_TRADES": "Skipped — today's trade limit",
+    "BLOCKED_LOSS_LOCKOUT": "Skipped — paused after losses",
+    "ORDER_SUPPRESSED": "Order held back",
+    # results / row statuses
+    "WIN": "won",
+    "LOSS": "lost",
+    "NO_FILL": "never filled",
+    "OPEN": "still open",
+    "WATCH": "watching",
+    "ACTIVE": "active",
 }
+
+# Collector health words (census status codes → short words).
+_HEALTH_WORDS = {
+    "FRESH": "up to date",
+    "FRESH_AT_CLOSE": "up to date at market close",
+    "QUIET_BY_DESIGN": "off on purpose",
+    "OFF_SESSION": "market closed",
+    "STALE": "running late",
+    "DEAD": "stopped",
+    "ABSENT": "missing",
+    "UNKNOWN": "unknown",
+}
+
+_FOOTER = "READ ONLY · practice tracking only · nothing was traded or switched on"
 
 
 def _display_name(value: str) -> str:
     # Bound and neutralize data-derived labels in Discord markdown.
-    label = _DISPLAY_NAMES.get(value, value.replace("_", " ").capitalize())
+    label = _DISPLAY_NAMES.get(value)
+    if label is None:
+        key = str(value)
+        for suffix in ("_observed", "_observer"):
+            if key.endswith(suffix):
+                key = key[: -len(suffix)]
+        known = pe.SETUPS.get(key)
+        label = (known[0].upper() + known[1:]) if known else str(value).replace("_", " ").capitalize()
     return label.translate(str.maketrans("", "", "*`~|<>\\"))[:80]
+
+
+def _health_words(status: str) -> str:
+    return _HEALTH_WORDS.get(status) or _display_name(status).lower()
+
+
+def _window_words(start: date, end: date) -> str:
+    """``Wed Sep 16`` or ``Mon Sep 14 – Fri Sep 18``."""
+    if start == end:
+        return pe.et_date(start)
+    return f"{pe.et_date(start)} – {pe.et_date(end)}"
+
+
+def _window_cutoff(end: date) -> str:
+    """Journals are UTC-dated: say in ET when the report day actually ends."""
+    midnight_utc = datetime.combine(end + timedelta(days=1), time(0), tzinfo=timezone.utc)
+    return pe.et_time(midnight_utc, with_day=False)
 
 
 def _count_lines(counter: dict[str, int], *, limit: int = 5) -> str:
@@ -327,7 +378,8 @@ def _count_lines(counter: dict[str, int], *, limit: int = 5) -> str:
     ordered = sorted(counter.items(), key=lambda item: (-item[1], item[0]))
     lines = [f"**{count:,}** · {_display_name(name)}" for name, count in ordered[:limit]]
     if len(ordered) > limit:
-        lines.append(f"+ {sum(n for _, n in ordered[limit:]):,} across {len(ordered) - limit} other categories")
+        rest = len(ordered) - limit
+        lines.append(f"+ {sum(n for _, n in ordered[limit:]):,} more across {rest} other type{'' if rest == 1 else 's'}")
     return "\n".join(lines)
 
 
@@ -337,10 +389,10 @@ def _registry_field(registry: dict[str, Any] | None, *, system: str) -> dict[str
     lines = format_registry_lines(registry, system=system, max_entries=8)
     if not lines:
         return None
-    value = "\n".join(lines[1:] if lines[0] == "evidence registry:" else lines)
+    value = "\n".join(lines[1:] if lines[0] == REGISTRY_HEADER else lines)
     if len(value) > 900:
-        value = value[:850] + "\n… Full registry in the JSON artifact."
-    return {"name": "Evidence registry", "value": value or "No registry entries"}
+        value = value[:850] + "\n… Full list in the saved report file."
+    return {"name": "What we're tracking", "value": value or "Nothing being tracked"}
 
 
 def _collector_health(census: dict[str, Any], *, options: bool, end: date) -> tuple[dict[str, Any], bool]:
@@ -354,24 +406,25 @@ def _collector_health(census: dict[str, Any], *, options: bool, end: date) -> tu
     counts = Counter(status for _, status, _ in statuses)
     lines = []
     for item, status, note in attention[:5]:
-        lines.append(f"**{_display_name(str(item.get('name') or 'Unnamed collector'))}** — {_display_name(status).lower()}")
+        lines.append(f"**{_display_name(str(item.get('name') or 'Unnamed collector'))}** — {_health_words(status)}")
         last = _parse_ts(item.get("last"))
-        lines.append(note or (f"Last seen {last.astimezone(timezone.utc).strftime('%b %d %H:%M UTC')}" if last else "Last seen unavailable"))
+        lines.append(note or (f"Last update {pe.et_time(last)}" if last else "Last update unknown"))
     if len(attention) > 5:
-        lines.append(f"+ {len(attention) - 5} more needing review")
+        lines.append(f"+ {len(attention) - 5} more to look at")
     if statuses:
-        lines.append(" · ".join(f"{n} {_display_name(k).lower()}" for k, n in sorted(counts.items())))
+        lines.append(" · ".join(f"{n} {_health_words(k)}" for k, n in sorted(counts.items())))
     else:
-        lines.append("Collector health unavailable — review the census.")
+        lines.append("Can't tell if the data collectors are working — the health check didn't answer.")
     for item, status, note in statuses:
         if note and status in {"FRESH_AT_CLOSE", "QUIET_BY_DESIGN"}:
             lines.append(f"{_display_name(str(item.get('name') or 'Collector'))}: {note}")
     if attention or not statuses:
-        lines.append("Check: collector census and the affected collector logs.")
+        lines.append("Next step: check that data collector's logs on the server.")
     value = "\n".join(lines)
     if len(value) > 900:
-        value = value[:800] + "\n… Full collector details in the JSON artifact."
-    return {"name": "⚠ Collector attention" if attention or not statuses else "✓ Collector health", "value": value}, bool(attention) or not statuses
+        value = value[:800] + "\n… Full details in the saved report file."
+    name = "⚠ Data collectors need a look" if attention or not statuses else "✓ Data collectors OK"
+    return {"name": name, "value": value}, bool(attention) or not statuses
 
 
 def _table_rows(table: dict[str, Any]) -> int | None:
@@ -403,21 +456,21 @@ def futures_discord_payload(
         outcome_lines.append(_count_lines(other_outcomes))
     outcome_text = "\n".join(outcome_lines) or "None recorded"
 
-    collection = f"**{summary['rows']:,}** journal rows\n" + _count_lines(summary.get("row_types") or {}, limit=4)
+    collection = f"**{summary['rows']:,}** records saved\n" + _count_lines(summary.get("row_types") or {}, limit=4)
     if summary.get("instruments"):
-        collection += "\nInstrument rows: " + " · ".join(
+        collection += "\nBy market: " + " · ".join(
             f"{_display_name(k).upper()} **{v:,}**" for k, v in sorted(summary["instruments"].items())[:6]
         )
     if summary["rows"] == 0:
-        collection += "\n⚠ zero futures journal rows in the report window"
+        collection += "\n⚠ nothing was recorded for futures in this window"
 
     fields = [
         health_field,
-        {"name": "Decisions", "value": _count_lines(summary.get("decisions") or {}), "inline": True},
-        {"name": "Shadow outcomes", "value": outcome_text + "\nObserved setups · not executed trades", "inline": True},
-        {"name": "Shadow activity · top 5", "value": _count_lines(summary.get("shadow_strategies") or {})},
-        {"name": "Collection", "value": collection},
-        {"name": "Observation lanes", "value": _count_lines(summary.get("shadow_lanes") or {})},
+        {"name": "Bot decisions", "value": _count_lines(summary.get("decisions") or {}), "inline": True},
+        {"name": "Practice results", "value": outcome_text + "\nPractice tracking · not real trades", "inline": True},
+        {"name": "Most active setups", "value": _count_lines(summary.get("shadow_strategies") or {})},
+        {"name": "Activity recorded", "value": collection},
+        {"name": "Where setups came from", "value": _count_lines(summary.get("shadow_lanes") or {})},
     ]
     if period == "eow":
         field = _registry_field(registry, system="futures")
@@ -426,18 +479,15 @@ def futures_discord_payload(
     # Bounded fields keep the card inside Discord's per-field and total limits.
     for field in fields:
         if len(field["value"]) > 900:
-            field["value"] = field["value"][:850] + "\n… Full counts in the JSON artifact."
-    window = start.strftime("%b %d, %Y")
-    if start != end:
-        window += " → " + end.strftime("%b %d, %Y")
+            field["value"] = field["value"][:850] + "\n… Full counts in the saved report file."
     return {
         "allowed_mentions": {"parse": []},
         "embeds": [{
-            "title": "Futures · " + ("Daily paper report" if period == "eod" else "Weekly paper report"),
-            "description": window + " · UTC journal window",
+            "title": "📋 Futures practice report · " + ("daily" if period == "eod" else "weekly"),
+            "description": f"{_window_words(start, end)} · counts up to {_window_cutoff(end)}",
             "color": 0xF0B232 if warning else 0x5865F2,
             "fields": fields,
-            "footer": {"text": "READ ONLY · Evidence collection · No promotion or execution action"},
+            "footer": {"text": _FOOTER},
         }],
     }
 
@@ -461,6 +511,9 @@ def format_futures_report(
     return "\n\n".join(sections)
 
 
+_DB_WORDS = {"OK": "readable", "MISSING_DB": "database file missing"}
+
+
 def options_discord_payload(
     summary: dict[str, Any], census: dict[str, Any], *, period: str,
     start: date, end: date, registry: dict[str, Any] | None = None,
@@ -480,15 +533,15 @@ def options_discord_payload(
     blockers: list[str] = []
     warnings: list[str] = []
     if db_status != "OK":
-        blockers.append(f"Scanner database: {_display_name(db_status)}. Check database availability and read access.")
+        blockers.append(f"Can't read the scanner database ({_DB_WORDS.get(db_status, _display_name(db_status).lower())}). Check the file is there and readable.")
     if db_status == "OK" and scans_status != "OK":
-        blockers.append(f"Scans: window count unavailable ({_display_name(scans_status)}). Check table and timestamp-column shape.")
+        blockers.append(f"Can't count this window's scans ({_display_name(scans_status)}). The scans table layout may have changed.")
     if db_status == "OK" and journal_status != "OK":
-        blockers.append(f"Shadow journal: window count unavailable ({_display_name(journal_status)}). Check table and timestamp-column shape.")
+        blockers.append(f"Can't count this window's practice setups ({_display_name(journal_status)}). The table layout may have changed.")
     if scans_status == "OK" and scan_rows == 0:
-        warnings.append("zero option scans in this report window. Check the session calendar and scanner logs.")
+        warnings.append("No option scans in this window. Check the market calendar and the scanner logs.")
     if journal_status == "OK" and journal_rows == 0:
-        warnings.append("zero shadow-journal rows in this report window. That can be valid only if no setups were recorded.")
+        warnings.append("No practice setups logged in this window. Fine only if no setups showed up.")
 
     no_data = (
         db_status == "OK"
@@ -498,86 +551,67 @@ def options_discord_payload(
         and (journal_rows or 0) == 0
     )
     if blockers:
-        badge = "FAIL"
-        color = 0xED4245
+        badge, icon, color = "Can't read the data", "🔴", 0xED4245
     elif no_data:
-        badge = "NO DATA"
-        color = 0xF0B232
+        badge, icon, color = "No data", "⚠️", 0xF0B232
     elif health_warning or warnings:
-        badge = "WARN"
-        color = 0xF0B232
+        badge, icon, color = "Needs a look", "⚠️", 0xF0B232
     else:
-        badge = "PASS"
-        color = 0x57F287
+        badge, icon, color = "All good", "✅", 0x57F287
 
-    collection_lines = [f"Database: **{_display_name(db_status)}**"]
+    collection_lines = [f"Scanner database: **{_DB_WORDS.get(db_status, _display_name(db_status).lower())}**"]
     if scans_status == "OK" and scan_rows is not None:
-        collection_lines.append(f"Scans: **{scan_rows:,}** rows")
+        collection_lines.append(f"Scans run: **{scan_rows:,}**")
     else:
-        collection_lines.append(f"Scans: unavailable ({_display_name(scans_status)})")
+        collection_lines.append(f"Scans run: can't count ({_display_name(scans_status).lower()})")
     if journal_status == "OK" and journal_rows is not None:
-        collection_lines.append(f"Shadow journal: **{journal_rows:,}** rows")
+        collection_lines.append(f"Practice setups logged: **{journal_rows:,}**")
     else:
-        collection_lines.append(f"Shadow journal: unavailable ({_display_name(journal_status)})")
+        collection_lines.append(f"Practice setups logged: can't count ({_display_name(journal_status).lower()})")
+    collection_lines.append("Counts only · not trade recommendations")
 
-    signal_lines = []
-    if scans_status == "OK" and scan_rows is not None:
-        signal_lines.append(f"**{scan_rows:,}** scanner rows found")
-    else:
-        signal_lines.append("Scanner rows unavailable")
-    if journal_status == "OK" and journal_rows is not None:
-        signal_lines.append(f"**{journal_rows:,}** shadow-journal rows found")
-    else:
-        signal_lines.append("Shadow-journal rows unavailable")
-    signal_lines.append("Counts are collection evidence only · not trade recommendations")
-
-    error_lines = blockers + warnings
-    if not error_lines and not health_warning:
-        error_lines.append("No data blockers reported by the paper-collection pass.")
-    if not error_lines:
-        error_lines.append("None reported")
+    problem_lines = blockers + warnings
+    if not problem_lines and not health_warning:
+        problem_lines.append("No problems found.")
+    if not problem_lines:
+        problem_lines.append("None found")
 
     if blockers:
-        next_action = "Fix the database/table read blocker first, then rerun the EOD pass with `--no-discord` before posting."
+        next_action = "Fix the database read problem first, then re-run the report without posting to check it."
     elif health_warning:
-        next_action = "Review collector health and timestamps before treating the pass as complete."
+        next_action = "Check the data collectors above before trusting this report."
     elif no_data:
-        next_action = "Confirm whether Options should have produced scans today; if yes, inspect scanner logs and the session calendar."
+        next_action = "Check whether options should have been scanned today; if yes, look at the scanner logs and market calendar."
     elif warnings:
-        next_action = "Review the warning above; if expected, no trading-system action is implied."
+        next_action = "Look at the problem above; if it's expected, nothing needs doing."
     else:
-        next_action = "No repo action from this card. Keep collecting evidence."
+        next_action = "Nothing to do. Keep collecting."
 
     journal_statuses = (_count_lines(journal.get("status_counts") or {})
-                        if journal_status == "OK" else "Unavailable — see data attention")
+                        if journal_status == "OK" else "Can't count — see Problems")
 
     fields = [
-        {"name": "Status", "value": f"**{badge}** · read-only Options paper collection"},
-        {"name": "Collection status", "value": "\n".join(collection_lines)},
-        {"name": "Signals found", "value": "\n".join(signal_lines)},
-        {"name": "Errors / blocked channels", "value": "\n".join(error_lines[:8])},
-        {"name": "Next action", "value": next_action},
+        {"name": "Status", "value": f"**{badge}** · options practice tracking"},
+        {"name": "What was collected", "value": "\n".join(collection_lines)},
+        {"name": "Problems", "value": "\n".join(problem_lines[:8])},
+        {"name": "Next step", "value": next_action},
         health,
-        {"name": "Journal row statuses", "value": journal_statuses + "\nRow status only · NOT option P&L outcomes"},
+        {"name": "Practice setups by status", "value": journal_statuses + "\nSetup status only · not option profit or loss"},
     ]
     if period == "eow":
         field = _registry_field(registry, system="options")
         if field:
             fields.append(field)
-    fields.append({"name": "Troubleshooting reference", "value": f"paper_collection_{period}_{end.isoformat()}.json\nRaw counts and collector timestamps · in the configured report log directory"})
     for field in fields:
         if len(field["value"]) > 900:
-            field["value"] = field["value"][:850] + "\n… Full details in the JSON artifact."
-    window = start.strftime("%b %d, %Y")
-    if start != end:
-        window += " → " + end.strftime("%b %d, %Y")
-    title = "Options · " + ("Read-only daily pass" if period == "eod" else "Read-only weekly pass")
+            field["value"] = field["value"][:850] + "\n… Full details in the saved report file."
+    title = f"{icon} Options practice report · " + ("daily" if period == "eod" else "weekly")
     return {"allowed_mentions": {"parse": []}, "embeds": [{
         "title": title,
-        "description": f"{window} · UTC database window · **{badge}**",
+        "description": f"{_window_words(start, end)} · **{badge}**",
         "color": color,
         "fields": fields,
-        "footer": {"text": "READ ONLY · Evidence collection · No promotion or execution action"},
+        "footer": {"text": f"{_FOOTER} · details: paper_collection_{period}_{end.isoformat()}.json"},
     }]}
 
 

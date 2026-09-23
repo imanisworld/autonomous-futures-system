@@ -66,7 +66,9 @@ def test_feed_over_31_minutes_is_stale(tmp_path):
     seed_both_fresh(tmp_path, T0, age_min=32)
     msgs, _ = run(tmp_path, T0)
     assert len(msgs) == 2  # one per instrument
-    assert all("FEED GAP" in m for m in msgs)
+    assert all(m.startswith("🚨 No new 15-minute price bars for") for m in msgs)
+    for jargon in ("FEED GAP", "stale", "15m", "blind"):
+        assert all(jargon not in m for m in msgs), jargon
 
 
 def test_threshold_constant_is_31(tmp_path):
@@ -93,7 +95,7 @@ def test_recovery_of_one_instrument_does_not_reset_the_other(tmp_path):
     # MES recovers, MNQ still dark.
     write_bar(tmp_path, "MES", T0 + timedelta(minutes=5))
     msgs, _ = run(tmp_path, T0 + timedelta(minutes=10))
-    assert len(msgs) == 1 and "RECOVERED" in msgs[0] and "MES" in msgs[0]
+    assert len(msgs) == 1 and msgs[0] == "✅ 15-minute price bars are back for MES (Micro S&P 500)"
     state = load_state(tmp_path)
     assert state["instruments"]["MNQ"]["status"] == "stale"
     assert state["instruments"]["MES"]["status"] == "healthy"
@@ -114,7 +116,7 @@ def test_reminder_fires_at_120_minutes(tmp_path):
     msgs, _ = run(tmp_path, T0 + timedelta(minutes=119))
     assert msgs == []
     msgs, _ = run(tmp_path, T0 + timedelta(minutes=121))
-    assert len(msgs) == 2 and all("ongoing" in m for m in msgs)
+    assert len(msgs) == 2 and all(m.startswith("🚨 Still no 15-minute price bars") for m in msgs)
 
 
 def test_reminder_clock_resets_after_each_reminder(tmp_path):
@@ -130,7 +132,7 @@ def test_recovery_notice_sent_once_per_instrument(tmp_path):
     run(tmp_path, T0)
     seed_both_fresh(tmp_path, T0 + timedelta(minutes=10), age_min=0)
     msgs, _ = run(tmp_path, T0 + timedelta(minutes=15))
-    assert len(msgs) == 2 and all("RECOVERED" in m for m in msgs)
+    assert len(msgs) == 2 and all("price bars are back" in m for m in msgs)
     # Healthy -> healthy: silence.
     msgs, _ = run(tmp_path, T0 + timedelta(minutes=20))
     assert msgs == []

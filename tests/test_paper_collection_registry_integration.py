@@ -50,7 +50,10 @@ def test_eow_registry_appears_only_in_weekly_output():
         end=date(2026, 9, 18),
         registry=_registry(),
     )
-    assert any(field["name"] == "Evidence registry" for field in weekly["embeds"][0]["fields"])
+    assert any(field["name"] == "What we're tracking" for field in weekly["embeds"][0]["fields"])
+    registry_text = next(f["value"] for f in weekly["embeds"][0]["fields"] if f["name"] == "What we're tracking")
+    assert "Asia session daily-trend lane: collecting · 4 so far · 4 this week · 1 trading day" in registry_text
+    assert "n=" not in registry_text and "week+=" not in registry_text
     daily = report.futures_discord_payload(
         futures,
         census,
@@ -59,7 +62,7 @@ def test_eow_registry_appears_only_in_weekly_output():
         end=date(2026, 9, 18),
         registry=_registry(),
     )
-    assert not any(field["name"] == "Evidence registry" for field in daily["embeds"][0]["fields"])
+    assert not any(field["name"] == "What we're tracking" for field in daily["embeds"][0]["fields"])
 
     options = {
         "status": "OK",
@@ -76,7 +79,7 @@ def test_eow_registry_appears_only_in_weekly_output():
         end=date(2026, 9, 18),
         registry=_registry(),
     )
-    assert "**Evidence registry**" in weekly_text
+    assert "**What we're tracking**" in weekly_text
     assert "2-1-2 reversal" in weekly_text
 
 

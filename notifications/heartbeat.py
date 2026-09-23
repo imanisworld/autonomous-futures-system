@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 from zoneinfo import ZoneInfo
 
+from notifications import plain_english as pe
 from notifications.discord_notifier import send_discord_alert
 
 logger = logging.getLogger(__name__)
@@ -44,15 +45,22 @@ def build_heartbeat_message(
     trades_today: int,
     pnl_today: float,
 ) -> str:
-    """Compose the one-line heartbeat summary (pure / testable)."""
-    age = f"last bar {round(last_bar_age_s / 60)}m ago" if last_bar_age_s is not None else "no bars yet"
-    position = "in position" if has_open_position else "flat"
-    return " · ".join([
-        f"\U0001FAC0 heartbeat · {session} session",
-        age,
-        position,
-        f"{trades_today} trade(s) today",
-        f"P&L ${pnl_today:.2f}",
+    """Compose the heartbeat card text (pure / testable).
+
+    Plain English for a phone reader (docs/discord-operator-message-style.md):
+    line 1 is the card title, the ``Key: value`` lines become card fields.
+    """
+    if last_bar_age_s is not None:
+        age = pe.ago(last_bar_age_s / 60)
+    else:
+        age = "none yet"
+    return "\n".join([
+        "\U0001FAC0 Bot is running",
+        f"Market: {pe.session(session)}",
+        f"Last price update: {age}",
+        f"Open positions: {'yes' if has_open_position else 'none'}",
+        f"Trades today: {trades_today}",
+        f"Profit today: {pe.money(pnl_today)}",
     ])
 
 

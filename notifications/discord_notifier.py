@@ -10,13 +10,14 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import re
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Callable, Optional
-from zoneinfo import ZoneInfo
 
 from config.settings import SystemConfig, load_config
+from notifications import plain_english as pe
 from webhook.payload import AlertPayload
 
 
@@ -127,38 +128,120 @@ def _should_notify(result: dict, allowed_decisions: list[str]) -> bool:
     return decision in allowed_decisions
 
 
-# ─── Strategy label lookup ────────────────────────────────────────────────────
+# ─── Plain-English presentation (docs/discord-operator-message-style.md) ─────
+#
+# Presentation only: every helper below reads an already-made decision and
+# turns internal codes into short words for a phone reader. Nothing here can
+# change the decision, the journal, risk state or the broker.
 
+# Setup names the shared plain_english map doesn't cover (local, display only).
 _STRATEGY_LABELS: dict[str, str] = {
-    "strat_212":                 "strat_212 (2-1-2 Continuation)",
-    "strat_122":                 "strat_122 (1-2-2 Reversal)",
-    "strat_inside_break":        "strat_inside_break (Inside Bar Breakout)",
-    "strat_outside_continuation":"strat_outside_continuation (Outside Bar Follow-Through)",
-    "strat_4hr_retrigger":       "strat_4hr_retrigger (4HR Re-Trigger)",
-    "orb_reclaim":               "orb_reclaim (ORB High Reclaim)",
-    "orb_rejection":             "orb_rejection (ORB High Rejection)",
-    "vwap_reclaim":              "vwap_reclaim (VWAP Reclaim)",
-    "vwap_hold":                 "vwap_hold (VWAP Resistance Hold)",
-    "pdh_reclaim":               "pdh_reclaim (PDH Reclaim)",
-    "pdl_reclaim":               "pdl_reclaim (PDL Reclaim)",
-    "continuation_pullback":     "continuation_pullback (VWAP Pullback)",
+    "strat_212_reversal":         "2-1-2 reversal",
+    "strat_inside_break":         "inside-bar breakout",
+    "strat_outside_continuation": "follow-through after an outside bar",
+    "orb_rejection":              "turned away at the opening-range high",
+    "vwap_reclaim":               "back above the day's average price",
+    "pdh_reclaim":                "back above yesterday's high",
+    "pdl_reclaim":                "back above yesterday's low",
+    "continuation_pullback":      "pullback to the day's average price",
 }
+
+_DECISION_WORDS: dict[str, str] = {
+    "TRADE": "Practice trade taken",
+    "TRADE_INTENT": "Practice trade planned",
+    "RISK_REJECTED": "Skipped — risk limits",
+    "BLOCKED_MAX_TRADES": "Skipped — already hit today's trade limit",
+    "BLOCKED_LOSS_LOCKOUT": "Skipped — paused after losses",
+    "BLOCKED_OPEN_POSITION": "Skipped — already in a trade",
+    "BLOCKED_DATA_QUALITY": "Skipped — bad price data",
+    "BLOCKED_DUPLICATE_BAR": "Skipped — same price bar seen twice",
+    "BLOCKED_EXECUTION_FAILED": "Order FAILED — not placed",
+    "BLOCKED_ORDER_CONFIRMATION_MISSING": "Order not confirmed by the broker",
+    "SHADOW_NO_ORDER": "Setup seen — practice only, no order sent",
+    "ORDER_SUPPRESSED": "Setup seen — order held back",
+    "NO_TRADE": "No trade",
+    "IGNORED": "Ignored",
+    "DUPLICATE_IGNORED": "Ignored — duplicate alert",
+    "MAINTENANCE_MODE": "Paused — maintenance mode",
+    "CONFIG_BLOCKED": "Skipped — settings don't allow it",
+}
+
+# risk.failed_rule codes (risk/risk_engine.py) → short words.
+_RULE_WORDS: dict[str, str] = {
+    "session_window": "outside trading hours",
+    "session_cutoff": "too late in the session",
+    "session_not_allowed": "not allowed in this session",
+    "session_trade_limit": "hit the trade limit for this session",
+    "daily_trade_limit": "hit today's trade limit",
+    "daily_trade_limit_bonus_grade": "hit today's trade limit",
+    "max_daily_loss": "hit today's loss limit",
+    "max_drawdown": "account is down too far from its high",
+    "consecutive_loss_limit": "too many losses in a row",
+    "circuit_breaker": "safety stop is on",
+    "early_session_loss_floor": "lost too much early in the session",
+    "profit_protect_gate": "protecting today's profit",
+    "rr_below_minimum": "target too small for the risk",
+    "target_too_close": "target too close",
+    "stop_too_wide": "stop-loss too far away",
+    "stop_equals_target": "stop-loss and target are the same",
+    "entry_equals_stop": "entry and stop-loss are the same",
+    "entry_equals_target": "entry and target are the same",
+    "incomplete_bracket": "missing stop-loss or target",
+    "invalid_direction": "unknown buy/sell direction",
+    "instrument_not_allowed": "market not allowed",
+    "open_position_exists": "already in a trade",
+    "max_contracts_exceeded": "too many contracts",
+    "win_streak_contracts_exceeded": "too many contracts",
+    "position_sizing_contracts": "couldn't size the trade",
+    "position_sizing_instrument": "couldn't size the trade",
+    "position_sizing_no_tier": "couldn't size the trade",
+    "countertrend_risk_cap": "too much risk against the trend",
+    "min_confluence_grade": "setup quality too low",
+    "news_blackout": "news event nearby",
+    "news_release_window": "news event nearby",
+    "news_blackout_cutoff": "news event nearby",
+    "news_blackout_trade_limit": "news event nearby",
+    "stale_alert": "chart alert arrived too late",
+    "alert_timestamp_missing": "chart alert had no time",
+    "alert_timestamp_future": "chart alert time is in the future",
+    "contract_metadata_missing": "unknown contract",
+}
+
+_GRADE_WORDS = {"A+": "very strong", "A": "strong", "B": "good", "C": "fair", "WEAK": "weak"}
+_CONDITION_WORDS = {"TRENDING": "trending", "RANGE_BOUND": "moving sideways", "CHOPPY": "choppy"}
+_LEVEL_WORDS = {
+    "PDH": "yesterday's high", "PDL": "yesterday's low",
+    "PWH": "last week's high", "PWL": "last week's low",
+    "HOD": "today's high", "LOD": "today's low",
+    "ORH": "opening-range high", "ORL": "opening-range low",
+    "VWAP": "the day's average price",
+}
+_CODE = re.compile(r"^[A-Za-z0-9]+(?:_[A-Za-z0-9]+)+$")
+_POINTS_SUFFIX = re.compile(r"\s*\([+-]\d+\)\s*$")
+
+
+def _words(code: object) -> str:
+    """snake/UPPER codes → lower-case words; free text passes through."""
+    text = str(code or "").strip()
+    if _CODE.match(text):
+        return text.replace("_", " ").lower()
+    return text
 
 
 def _strategy_label(strategy: str) -> str:
-    return _STRATEGY_LABELS.get(strategy, strategy)
+    key = str(strategy or "").strip()
+    return _STRATEGY_LABELS.get(key) or pe.setup(key)
 
 
 def _format_price(value) -> str:
     if value is None:
         return "?"
-    try:
-        return f"{float(value):.2f}"
-    except (TypeError, ValueError):
-        return str(value)
+    text = pe.price(value)
+    return str(value) if text == "?" else text
 
 
 def _format_bar_time(timestamp) -> str:
+    """``10:30 AM ET, Sat May 23``; raw text when unparseable."""
     if timestamp is None:
         return "unknown"
     raw = str(timestamp)
@@ -170,10 +253,9 @@ def _format_bar_time(timestamp) -> str:
             dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=timezone.utc)
-        # 12-hour clock with AM/PM, e.g. "2026-06-03 11:14 PM ET".
-        return dt.astimezone(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %I:%M %p ET")
-    except (OSError, ValueError):
+    except (OSError, ValueError, OverflowError):
         return raw
+    return pe.et_time(dt)
 
 
 def _bar_close_label(payload: AlertPayload, context: dict) -> str:
@@ -181,6 +263,20 @@ def _bar_close_label(payload: AlertPayload, context: dict) -> str:
     context_close = context.get("close")
     close = context_close if context_close is not None else payload.close
     return _format_price(close)
+
+
+def _decision_words(decision: str) -> str:
+    return _DECISION_WORDS.get(decision) or _words(decision).capitalize() or "Unknown"
+
+
+def _decision_icon(decision: str) -> str:
+    if decision == "BLOCKED_EXECUTION_FAILED":
+        return "🚨"
+    if decision == "TRADE":
+        return "✅"
+    if "REJECT" in decision or decision.startswith("BLOCKED"):
+        return "⛔"
+    return "👀" if decision in ("SHADOW_NO_ORDER", "ORDER_SUPPRESSED") else "⚪"
 
 
 def _reference_price_line(live_quote: Optional[dict]) -> Optional[str]:
@@ -197,44 +293,58 @@ def _reference_price_line(live_quote: Optional[dict]) -> Optional[str]:
     age = live_quote.get("age_seconds")
     if price is None or status == "unavailable":
         return "Reference price: unavailable"
-    # Show the age only when the quote isn't fresh — staleness is the useful signal.
-    age_str = f" · {age}s ago" if isinstance(age, int) and status != "fresh" else ""
-    return f"Reference price: {_format_price(price)} (live · {status}{age_str})"
+    if status == "fresh":
+        note = "live"
+    elif isinstance(age, int):
+        note = f"{status}, {age} sec old"
+    else:
+        note = status
+    return f"Reference price: {_format_price(price)} ({note}; index price, not the order price)"
+
+
+def _rule_words(rule: object) -> str:
+    key = str(rule or "").strip()
+    return _RULE_WORDS.get(key) or _words(key)
 
 
 def _risk_line(risk: dict) -> str:
-    """`Risk: REJECTED — <why>` instead of a bare result.
+    """`Risk check: blocked — <why>` instead of a bare result code.
 
     The risk dict already carries the human-readable `reason` (and `failed_rule`)
-    from RiskEngine.validate; surface it so a rejection explains itself in
-    Discord instead of just saying REJECTED. Approved trades carry no reason, so
-    they stay `Risk: APPROVED`.
+    from RiskEngine.validate; surface it so a rejection explains itself.
+    Approved trades carry no reason, so they stay `Risk check: passed`.
     """
-    result = risk.get("result")
-    reason = risk.get("reason") or risk.get("failed_rule")
-    return f"Risk: {result} — {reason}" if reason else f"Risk: {result}"
+    result = str(risk.get("result") or "").upper()
+    verdict = {"APPROVED": "passed", "REJECTED": "blocked"}.get(result, _words(result).lower() or "unknown")
+    reason = risk.get("reason") or (_rule_words(risk.get("failed_rule")) if risk.get("failed_rule") else None)
+    return f"Risk check: {verdict} — {reason}" if reason else f"Risk check: {verdict}"
 
 
 def _candidate_line(candidate: dict) -> str:
     """One-line near-miss snapshot: the would-be trade that was rejected.
 
     Audit-only — ``candidate`` is a read of an already-rejected decision; nothing
-    here can place, queue, or retry an order. Shown so a rejection answers
-    "did it see that move, and what would the trade have been?" in Discord.
+    here can place, queue, or retry an order.
     """
-    direction = candidate.get("direction") or "?"
+    side = pe.side(candidate.get("direction"))
     symbol = candidate.get("symbol") or "?"
-    entry = candidate.get("entry")
-    stop = candidate.get("stop")
-    target = candidate.get("target")
     gate = candidate.get("blocking_gate") or candidate.get("reject_code")
-    why = gate.replace("_", " ").lower() if gate else (candidate.get("reject_reason") or "rejected")
-    icon = "🟢" if direction == "LONG" else "🔴"
+    why = _rule_words(gate) if gate else (candidate.get("reject_reason") or "rejected")
     return (
-        f"⚠️ Almost traded — {icon} {symbol} {direction} "
-        f"{_format_price(entry)} / stop {_format_price(stop)} / target {_format_price(target)} "
-        f"· skipped: {why}"
+        f"Almost traded: {side} {symbol} at {_format_price(candidate.get('entry'))}, "
+        f"stop-loss {_format_price(candidate.get('stop'))}, target {_format_price(candidate.get('target'))} "
+        f"— skipped: {why}"
     )
+
+
+def _gate_words(reason: str) -> str:
+    text = str(reason or "").strip()
+    if text.startswith("always_on_shadow"):
+        return "practice-only mode — orders are never sent"
+    head, sep, rest = text.partition(":")
+    if sep and _CODE.match(head.strip()):
+        return f"{_words(head)}:{rest}"
+    return _words(text)
 
 
 def _decision_reason_line(result: dict) -> Optional[str]:
@@ -244,9 +354,154 @@ def _decision_reason_line(result: dict) -> Optional[str]:
         if isinstance(failed, str):
             failed = [failed]
         if failed:
-            reason = ", ".join(str(item) for item in failed)
-    return f"Why: {reason}" if reason else None
+            reason = ", ".join(_rule_words(item) for item in failed)
+    return f"Why: {_gate_words(reason)}" if reason else None
 
+
+def _factor_words(text: str) -> str:
+    """Confluence reason (strategy/confluence_scorer.py) → plain words, score dropped."""
+    item = _POINTS_SUFFIX.sub("", str(text or "")).strip()
+    m = re.match(r"^Trend (UP|DOWN) (\w+)$", item)
+    if m:
+        return f"trend is {m.group(1).lower()} ({m.group(2).lower()})"
+    m = re.match(r"^Against trend (\w+)$", item)
+    if m:
+        return f"goes against the trend ({m.group(1).lower()})"
+    m = re.match(r"^Strat (\S+) confirmed$", item)
+    if m:
+        name = _strategy_label(m.group(1))
+        return f"{name} confirmed" if "pattern" in name else f"{name} pattern confirmed"
+    if re.match(r"^Strat direction \w+ contradicts \w+$", item):
+        return "the chart pattern points the other way"
+    m = re.match(r"^Volume ([\d.]+)x avg$", item)
+    if m:
+        return f"trading volume {m.group(1)}× normal"
+    m = re.match(r"^Low volume ([\d.]+)x$", item)
+    if m:
+        return f"low trading volume ({m.group(1)}× normal)"
+    m = re.match(r"^Near (LOD|HOD) ([\d.,]+)", item)
+    if m:
+        where = "today's low" if m.group(1) == "LOD" else "today's high"
+        return f"near {where} ({_format_price(m.group(2).replace(',', ''))})"
+    m = re.match(r"^Target near (\S+)$", item)
+    if m:
+        levels = " / ".join(_LEVEL_WORDS.get(code, code) for code in m.group(1).split("/"))
+        return f"target is near {levels}"
+    fixed = {
+        "VWAP aligned": "on the right side of the day's average price",
+        "Strong trend bonus": "strong trend",
+        "NY session": "New York session",
+        "ORB confirms direction": "opening range agrees with the direction",
+        "EMA 9/21 crossover aligned": "short-term trend lines agree",
+        "EMA 9/21 crossover against direction": "short-term trend lines disagree",
+        "EMA 55 bias aligned": "medium-term trend agrees",
+        "EMA 200 macro bias aligned": "long-term trend agrees",
+    }
+    return fixed.get(item, item)
+
+
+def _quality_words(confluence: dict) -> Optional[str]:
+    score = confluence.get("score")
+    grade = str(confluence.get("grade") or "")
+    if score is None and not grade:
+        return None
+    words = _GRADE_WORDS.get(grade, grade.lower() or "unknown")
+    return f"{words} ({score} of 10)" if score is not None else words
+
+
+def _dollars(symbol: object, entry, other, contracts) -> Optional[float]:
+    """Dollar distance entry→other for the contract count; None when unknown."""
+    try:
+        from config.futures_contracts import symbol_economics
+
+        tick, value = symbol_economics(symbol)
+        n = int(contracts) if contracts is not None else 1
+        return abs(float(entry) - float(other)) * (value / tick) * max(n, 1)
+    except Exception:  # noqa: BLE001 — display only; fall back to a ratio
+        return None
+
+
+def _risk_reward_words(symbol: object, fill: dict) -> str:
+    entry, stop, target = fill.get("entry"), fill.get("stop"), fill.get("target")
+    contracts = fill.get("contracts")
+    risk = _dollars(symbol, entry, stop, contracts)
+    reward = _dollars(symbol, entry, target, contracts)
+    if risk is not None and reward is not None:
+        return f"{pe.money(risk, signed=False)} to make {pe.money(reward, signed=False)}"
+    rr = fill.get("rr_ratio")
+    if isinstance(rr, (int, float)):
+        return f"target is {rr:g}× the risk"
+    return "not known"
+
+
+def _root(symbol: str) -> str:
+    text = str(symbol or "").strip()
+    if text.endswith("1!"):
+        text = text[:-2]
+    return text.rstrip("!") or str(symbol)
+
+
+def _plain_fields(payload: AlertPayload, result: dict) -> tuple[str, list[tuple[str, str]]]:
+    """(title, [(label, value)]) — the one plain-English view both formats render."""
+    decision = str(result.get("decision") or "UNKNOWN")
+    context = result.get("context") or {}
+    risk = result.get("risk") or {}
+    fill = result.get("fill") or {}
+    candidate = result.get("candidate") or {}
+    confluence = result.get("confluence") or {}
+    root = _root(context.get("instrument") or payload.ticker)
+    session = context.get("session") or ""
+    fields: list[tuple[str, str]] = [
+        ("Market", f"{pe.market(root)} · {pe.session(session) if session else 'session unknown'}"),
+    ]
+    if decision == "TRADE":
+        side = pe.side(fill.get("direction"))
+        title = f"{_decision_icon(decision)} {root} practice {side.lower()} taken"
+        fields.append(("Direction", f"{side} {pe.contracts(fill.get('contracts') or 1)}"))
+        fields.append(("Setup", _strategy_label(str(fill.get("strategy") or "?"))))
+        quality = _quality_words(confluence)
+        if quality:
+            fields.append(("Setup quality", quality))
+        fields.append((
+            "Prices",
+            f"in at {_format_price(fill.get('entry'))}, stop-loss {_format_price(fill.get('stop'))}, "
+            f"target {_format_price(fill.get('target'))}",
+        ))
+        fields.append(("Risk", _risk_reward_words(root, fill)))
+        if risk:
+            fields.append(("Risk check", _risk_line(risk).split(": ", 1)[1]))
+        good = [f"✅ {_factor_words(item)}" for item in (confluence.get("factors") or [])]
+        bad = [f"⚠️ {_factor_words(item)}" for item in (confluence.get("penalties") or [])]
+        if good or bad:
+            fields.append(("Why it looked good", "\n".join(good + bad)))
+        condition = context.get("market_condition")
+        if condition:
+            fields.append(("Price action", _CONDITION_WORDS.get(str(condition), _words(condition))))
+    else:
+        title = f"{_decision_icon(decision)} {root}: {_decision_words(decision)}"
+        reason = _decision_reason_line(result)
+        if reason:
+            fields.append(("Why", reason.replace("Why: ", "", 1)))
+        if risk:
+            fields.append(("Risk check", _risk_line(risk).split(": ", 1)[1]))
+        if candidate:
+            fields.append(("Almost traded", _candidate_line(candidate).split(": ", 1)[1]))
+
+    fields.append((
+        "Price when decided",
+        f"{_bar_close_label(payload, context)} at {_format_bar_time(payload.timestamp)}",
+    ))
+    ref_line = _reference_price_line(result.get("live_quote"))
+    if ref_line:
+        fields.append(("Reference price", ref_line.split(": ", 1)[1]))
+    resolution = result.get("resolution")
+    if resolution:
+        fields.append(("How it ended", pe.exit_reason(resolution)))
+    return title, fields
+
+
+_FOOTER = "READ ONLY · practice account decision · nothing is ever placed from Discord"
+_SMOKE = "🧪 TEST MESSAGE — made-up example, not a real decision and not saved"
 
 
 def _truncate(value: str, limit: int = 900) -> str:
@@ -256,230 +511,50 @@ def _truncate(value: str, limit: int = 900) -> str:
     return text[: max(0, limit - 35)] + "\n… Full details in the journal/artifact."
 
 
-def _line_join(lines: list[str], *, empty: str = "None") -> str:
-    filtered = [line for line in lines if line]
-    return "\n".join(filtered) if filtered else empty
-
-
 def _discord_payload(payload: AlertPayload, result: dict) -> dict:
-    """Paper-collection-style Discord card for paper decisions.
+    """Paper-collection-style Discord card for paper decisions, in plain English.
 
     Presentation only. It never changes the decision result, risk state, broker
-    state, journal state, or execution path. The old plain text formatter remains
-    available for CLI dry-runs and tests that inspect exact content.
+    state, journal state, or execution path.
     """
-    decision = result.get("decision") or "UNKNOWN"
+    decision = str(result.get("decision") or "UNKNOWN")
     context = result.get("context") or {}
-    risk = result.get("risk") or {}
-    fill = result.get("fill") or {}
-    candidate = result.get("candidate") or {}
-    confluence = result.get("confluence") or {}
-    symbol = context.get("instrument") or payload.ticker
-    session = context.get("session") or "unknown_session"
-    session_label = "New York Open" if session == "new_york" else str(session).replace("_", " ").title()
-    bar_time = _format_bar_time(payload.timestamp)
-    ref_line = _reference_price_line(result.get("live_quote"))
-    color = 0xED4245 if "REJECT" in str(decision) or decision.startswith("BLOCKED") else (0x57F287 if decision == "TRADE" else 0xF0B232)
-
-    fields: list[dict] = [
-        {"name": "Decision", "value": f"**{decision}**", "inline": True},
-        {"name": "Instrument", "value": f"{symbol} · {session_label}", "inline": True},
+    color = 0xED4245 if "REJECT" in decision or decision.startswith("BLOCKED") else (0x57F287 if decision == "TRADE" else 0xF0B232)
+    title, pairs = _plain_fields(payload, result)
+    fields = [
+        {"name": name, "value": _truncate(value), "inline": len(value) <= 40 and "\n" not in value}
+        for name, value in pairs
     ]
-    if ref_line:
-        fields.append({"name": "Reference", "value": ref_line, "inline": False})
-
-    if decision == "TRADE":
-        direction = fill.get("direction") or "?"
-        dir_icon = "🟢" if direction == "LONG" else "🔴"
-        strategy = fill.get("strategy") or "?"
-        score = confluence.get("score", "?")
-        grade = confluence.get("grade", "?")
-        setup_lines = [
-            f"{dir_icon} {symbol} {direction}",
-            f"{grade} setup · score {score}/10",
-            _strategy_label(str(strategy)),
-        ]
-        fields.append({"name": "Setup", "value": _line_join(setup_lines)})
-        fields.append({
-            "name": "Levels",
-            "value": (
-                f"Entry **{_format_price(fill.get('entry'))}**\n"
-                f"Stop **{_format_price(fill.get('stop'))}**\n"
-                f"Target **{_format_price(fill.get('target'))}**"
-            ),
-            "inline": True,
-        })
-        size_bits = []
-        contracts = fill.get("contracts")
-        if contracts is not None:
-            size_bits.append(f"{contracts} contract" + ("s" if contracts != 1 else ""))
-        rr = fill.get("rr_ratio")
-        size_bits.append(f"R:R {rr:.1f}" if rr is not None else "R:R ?")
-        if risk:
-            size_bits.append(_risk_line(risk))
-        fields.append({"name": "Risk", "value": "\n".join(size_bits), "inline": True})
-        factors = [f"✅ {item}" for item in (confluence.get("factors") or [])]
-        penalties = [f"⚠ {item}" for item in (confluence.get("penalties") or [])]
-        if factors or penalties:
-            fields.append({"name": "Confluence", "value": _truncate("\n".join(factors + penalties))})
-    else:
-        reason = _decision_reason_line(result)
-        if risk:
-            fields.append({"name": "Risk", "value": _risk_line(risk)})
-        if reason:
-            fields.append({"name": "Why", "value": reason.replace("Why: ", "", 1)})
-        if candidate:
-            direction = str(candidate.get("direction") or "?")
-            icon = "🟢" if direction == "LONG" else "🔴"
-            skipped = candidate.get("blocking_gate") or candidate.get("reject_code") or candidate.get("reject_reason") or "rejected"
-            fields.append({
-                "name": "Candidate skipped",
-                "value": (
-                    f"{icon} {candidate.get('symbol') or symbol} {direction}\n"
-                    f"Entry **{_format_price(candidate.get('entry'))}** · "
-                    f"Stop **{_format_price(candidate.get('stop'))}** · "
-                    f"Target **{_format_price(candidate.get('target'))}**\n"
-                    f"Skipped: {str(skipped).replace('_', ' ').lower()}"
-                ),
-            })
-
-    fields.append({
-        "name": "Bar context",
-        "value": f"Bar close **{_bar_close_label(payload, context)}**\nBar time {bar_time}",
-    })
-    resolution = result.get("resolution")
-    if resolution:
-        fields.append({"name": "Resolution", "value": str(resolution)})
-    for field in fields:
-        field["value"] = _truncate(field.get("value", ""))
-    prefix = "DISCORD SMOKE TEST · NOT JOURNALED" if result.get("smoke_test") else ""
-    description = f"{symbol} · {session_label}"
-    if prefix:
-        description = prefix + "\n" + description
+    description = f"{pe.market(_root(context.get('instrument') or payload.ticker))} · {_decision_words(decision)}"
+    if result.get("smoke_test"):
+        description = _SMOKE + "\n" + description
     return {
         "allowed_mentions": {"parse": []},
         "embeds": [{
-            "title": "Futures · Paper decision",
+            "title": title,
             "description": description,
             "color": color,
             "fields": fields,
-            "footer": {"text": "READ ONLY · Paper decision · No Discord-driven execution"},
+            "footer": {"text": _FOOTER},
         }],
     }
 
+
 def _format_message(payload: AlertPayload, result: dict) -> str:
-    decision = result.get("decision") or "UNKNOWN"
-    prefix = []
+    """Plain-text version of the same card (CLI dry-run / tests)."""
+    title, pairs = _plain_fields(payload, result)
+    lines: list[str] = []
     if result.get("smoke_test"):
-        prefix.extend([
-            "DISCORD SMOKE TEST - NOT A JOURNALED TRADE",
-            "Synthetic notification preview only.",
-            "",
-        ])
-
-    # ── Non-TRADE: keep the existing minimal format ───────────────────────────
-    if decision != "TRADE":
-        context = result.get("context") or {}
-        risk = result.get("risk") or {}
-        resolution = result.get("resolution")
-        symbol = context.get("instrument") or payload.ticker
-        session = context.get("session") or "unknown_session"
-
-        lines = [
-            f"Vantage Point paper decision: {decision}",
-            f"{symbol} | {session}",
-        ]
-        ref_line = _reference_price_line(result.get("live_quote"))
-        if ref_line:
-            lines.append(ref_line)
-        lines.append(f"Bar close: {_bar_close_label(payload, context)}")
-        lines.append(f"Bar time: {_format_bar_time(payload.timestamp)}")
-        if resolution:
-            lines.append(f"Resolution: {resolution}")
-        reason_line = _decision_reason_line(result)
-        if reason_line:
-            lines.append(reason_line)
-        if risk:
-            lines.append(_risk_line(risk))
-        candidate = result.get("candidate")
-        if candidate:
-            lines.append(_candidate_line(candidate))
-        return "\n".join(prefix + lines)
-
-    # ── TRADE: rich format with confluence score ──────────────────────────────
-    context = result.get("context") or {}
-    fill = result.get("fill") or {}
-    risk = result.get("risk") or {}
-    confluence = result.get("confluence") or {}
-    resolution = result.get("resolution")
-
-    score = confluence.get("score", 0)
-    grade = confluence.get("grade", "?")
-    factors: list = confluence.get("factors") or []
-    penalties: list = confluence.get("penalties") or []
-
-    symbol = context.get("instrument") or payload.ticker
-    session = context.get("session") or "unknown_session"
-    session_label = (
-        "New York Open" if session == "new_york"
-        else session.replace("_", " ").title()
-    )
-
-    direction = fill.get("direction", "?")
-    strategy = fill.get("strategy", "?")
-    entry = fill.get("entry")
-    stop = fill.get("stop")
-    target = fill.get("target")
-    rr = fill.get("rr_ratio")
-    market_condition = context.get("market_condition") or "?"
-
-    dir_icon = "🟢" if direction == "LONG" else "🔴"
-    contracts = fill.get("contracts")
-
-    stop_label = (
-        f" (-{abs(entry - stop):.2f})" if entry is not None and stop is not None else ""
-    )
-    target_label = (
-        f" (+{abs(target - entry):.2f})" if target is not None and entry is not None else ""
-    )
-    rr_str = f"{rr:.1f}" if rr is not None else "?"
-
-    # Compact, options-lane-style layout: the same fields as before, grouped onto
-    # `·`-separated lines instead of a divider-wrapped aligned block. Every value
-    # the previous format carried is still here — this is presentation only.
-    lines = [
-        f"Vantage Point paper decision: {decision}",
-        f"{dir_icon} Futures OPEN — {symbol} {direction}",
-        f"{grade} SETUP · Score: {score}/10 · {_strategy_label(strategy)} · {session_label}",
-        f"Entry {_format_price(entry)} · Stop {_format_price(stop)}{stop_label} · "
-        f"Target {_format_price(target)}{target_label}",
-    ]
-
-    size_bits = []
-    if contracts is not None:
-        size_bits.append(f"{contracts} contract" + ("s" if contracts != 1 else ""))
-    size_bits.append(f"R:R {rr_str}")
-    if risk:
-        size_bits.append(_risk_line(risk))
-    lines.append(" · ".join(size_bits))
-
-    for f in factors:
-        lines.append(f"✅ {f}")
-    for p in penalties:
-        lines.append(f"⚠️  {p}")
-
-    if resolution:
-        lines.append(f"Resolution: {resolution}")
-
-    lines.append(
-        f"Market: {market_condition} | Bar close: {_bar_close_label(payload, context)} | "
-        f"Bar time: {_format_bar_time(payload.timestamp)}"
-    )
-    ref_line = _reference_price_line(result.get("live_quote"))
-    if ref_line:
-        lines.append(ref_line)
-
-    return "\n".join(prefix + lines)
+        lines.extend([_SMOKE, ""])
+    lines.append(title)
+    for name, value in pairs:
+        if "\n" in value:
+            lines.append(f"{name}:")
+            lines.extend(value.split("\n"))
+        else:
+            lines.append(f"{name}: {value}")
+    lines.append(_FOOTER)
+    return "\n".join(lines)
 
 
 def _post_json(url: str, body: bytes, headers: dict[str, str]) -> None:

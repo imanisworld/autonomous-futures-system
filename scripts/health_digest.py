@@ -32,6 +32,12 @@ try:  # card layout when run from a release; plain text from a standalone copy
 except ImportError:  # pragma: no cover - standalone copy without the package
     _post_card_or_text = None
 
+try:  # shared plain-English wording; a standalone copy keeps working without it
+    from notifications.plain_english import et_date as _et_date
+except ImportError:  # pragma: no cover - standalone copy without the package
+    def _et_date(value: object) -> str:
+        return str(value)
+
 DISK_WARN_PCT = 80.0
 DISK_ALERT_PCT = 90.0
 _BASE = "http://127.0.0.1:8000"
@@ -96,31 +102,31 @@ def evaluate_health(checks: dict) -> dict:
 
     if not checks.get("service_ok"):
         esc("ALERT")
-        problems.append("service unreachable")
+        problems.append("trading bot is not answering")
         # If the service is down nothing else is meaningful.
         return {"status": "ALERT", "problems": problems, "notes": notes}
 
     if not checks.get("broker_reachable", True):
         esc("ALERT")
-        problems.append("broker status unreachable")
+        problems.append("can't reach the broker (Tradovate) to check the account")
     auth = checks.get("auth_state")
     if auth and auth != "HEALTHY":
         esc("ALERT")
-        problems.append(f"Tradovate auth {auth}")
+        problems.append(f"broker login: {_auth_words(auth)}")
 
     errors = checks.get("errors_today")
     if isinstance(errors, int) and errors > 0:
         esc("WARN")
-        problems.append(f"{errors} real error(s) today")
+        problems.append(f"{errors} error{'' if errors == 1 else 's'} in today's log")
 
     disk = checks.get("disk_pct")
     if isinstance(disk, (int, float)):
         if disk >= DISK_ALERT_PCT:
             esc("ALERT")
-            problems.append(f"disk {disk:.0f}% full")
+            problems.append(f"server disk is {disk:.0f}% full")
         elif disk >= DISK_WARN_PCT:
             esc("WARN")
-            problems.append(f"disk {disk:.0f}% full")
+            problems.append(f"server disk is {disk:.0f}% full")
 
     # ── Pipeline-visibility escalations (the proven monitoring gap) ──────────
     # Broker says flat while the local journal still shows an open slot — the
@@ -129,19 +135,18 @@ def evaluate_health(checks: dict) -> dict:
     if checks.get("broker_local_drift"):
         esc("ALERT")
         problems.append(
-            "broker FLAT but local shows an OPEN position — state drift, reconcile/verify"
+            "broker says no open position but the bot thinks one is open — "
+            "records don't match, check Tradovate"
         )
     # A held position past the stale threshold is stuck, not resolving.
     if checks.get("block_stale"):
         esc("ALERT")
-        problems.append("open position unresolved past threshold — stuck, not resolving")
+        problems.append("a position has been open too long without closing — it may be stuck")
     # Bars kept arriving while every decision was blocked — the pipeline is blind
     # (the 2026-07-22 signature: 184 bars, 0 authorized decisions).
     if checks.get("bars_without_decisions"):
         esc("ALERT")
-        problems.append(
-            "bars arriving but ALL candidate evaluation blocked — pipeline blind"
-        )
+        problems.append("prices are arriving but no setups are being checked")
 
     flat = checks.get("position_flat")
     if flat is False:
@@ -151,40 +156,51 @@ def evaluate_health(checks: dict) -> dict:
         working = checks.get("working_orders")
         if working == 0:
             esc("ALERT")
-            problems.append(
-                "position OPEN with ZERO working orders — NAKED, "
-                "flatten/verify in Tradovate"
-            )
+            problems.append("OPEN POSITION WITH NO STOP-LOSS — check Tradovate now")
         elif working is None:
             esc("WARN")
-            problems.append("position OPEN, protection state unknown")
+            problems.append("a position is open, but can't tell if it has a stop-loss")
         else:
-            notes.append(f"position OPEN ({working} working order(s))")
+            notes.append(
+                f"a position is open with its stop-loss/target orders in place "
+                f"({working} order{'' if working == 1 else 's'})"
+            )
 
     return {"status": level, "problems": problems, "notes": notes}
 
 
+_AUTH_WORDS = {"HEALTHY": "working", "OUTAGE": "down", "DEGRADED": "unstable"}
+_STATUS_WORDS = {"OK": "all good", "WARN": "needs a look", "ALERT": "PROBLEM — needs attention now"}
+
+
+def _auth_words(state: object) -> str:
+    text = str(state or "").strip().upper()
+    return _AUTH_WORDS.get(text) or (text.replace("_", " ").lower() if text else "unknown")
+
+
 def format_digest(verdict: dict, checks: dict, *, day_iso: str) -> str:
+    """Plain-English card text (docs/discord-operator-message-style.md)."""
     icon = {"OK": "\U0001F7E2", "WARN": "\U0001F7E1", "ALERT": "\U0001F534"}[verdict["status"]]
-    position = "flat" if checks.get("position_flat") else "position open" if checks.get("position_flat") is False else "position unknown"
+    flat = checks.get("position_flat")
+    position = "none" if flat else "yes" if flat is False else "unknown"
     disk = f"{checks.get('disk_pct'):.0f}%" if isinstance(checks.get("disk_pct"), (int, float)) else "unknown"
+    errors = checks.get("errors_today")
     lines = [
-        f"{icon} **Box health · {day_iso}**",
-        "",
-        "**Status**",
-        verdict["status"],
-        "",
-        "**Runtime**",
-        f"Service {'up' if checks.get('service_ok') else 'DOWN'} · auth {checks.get('auth_state') or '?'} · {position}",
-        "",
-        "**Safety checks**",
-        f"Errors today {checks.get('errors_today', '?')} · disk {disk}",
+        f"{icon} **Server health · {_et_date(day_iso)}**",
+        f"Overall: {_STATUS_WORDS.get(verdict['status'], verdict['status'])}",
+        f"Trading bot: {'running' if checks.get('service_ok') else 'NOT RUNNING'}",
+        f"Broker login: {_auth_words(checks.get('auth_state'))}",
+        f"Open positions: {position}",
+        f"Errors in log today: {errors if errors is not None else 'unknown'}",
+        f"Disk space used: {disk}",
     ]
     if verdict["problems"]:
-        lines.extend(["", "**Attention**", "\n".join(f"- {item}" for item in verdict["problems"])])
+        # The unprotected-position warning is the one to act on first: list it on top.
+        problems = sorted(verdict["problems"], key=lambda item: not item.startswith("OPEN POSITION"))
+        lines.extend(["", "**Needs attention**", "\n".join(f"- {item}" for item in problems)])
     if verdict["notes"]:
         lines.extend(["", "**Notes**", "\n".join(f"- {item}" for item in verdict["notes"])])
-    lines.extend(["", "READ ONLY · Daily health check · No restart or execution action"])
+    lines.extend(["", "READ ONLY · daily health check · nothing was restarted or traded"])
     return "\n".join(lines)
 
 

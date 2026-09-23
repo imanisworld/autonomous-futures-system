@@ -42,6 +42,21 @@ except ImportError:  # pragma: no cover - standalone copy without the package
     _post_card_or_text = None
 
 INSTRUMENTS = ("MNQ", "MES")
+# Plain-English display names (docs/discord-operator-message-style.md). Kept
+# local: this file is byte-copied to the box and must stay stdlib-only.
+_MARKET_NAMES = {"MNQ": "MNQ (Micro Nasdaq)", "MES": "MES (Micro S&P 500)"}
+
+
+def _market(instrument: str) -> str:
+    return _MARKET_NAMES.get(instrument, instrument)
+
+
+def _minutes_words(minutes: float) -> str:
+    total = int(round(minutes))
+    if total < 60:
+        return f"{total} min"
+    hours, mins = divmod(total, 60)
+    return f"{hours} hr {mins} min" if mins else f"{hours} hr"
 THRESHOLD_MIN = 31
 REMINDER_MIN = 120
 USER_AGENT = "afs-ops/1.0"
@@ -255,10 +270,11 @@ def run_once(
                 entry["stale_since"] = now.isoformat(timespec="seconds")
                 entry["last_alert_utc"] = now.isoformat(timespec="seconds")
                 emit(
-                    f"🚨 FEED GAP: {instrument} 15m bars stale "
-                    f"(>{THRESHOLD_MIN}m during market hours; age {age_min:.0f}m). "
-                    "Decision engine is blind on this instrument's 15m until "
-                    "delivery resumes. Read-only alarm; no action taken."
+                    f"🚨 No new 15-minute price bars for {_market(instrument)} "
+                    f"in {_minutes_words(age_min)}\n"
+                    "The market is open, but price bars stopped arriving, so the bot "
+                    "can't see this market until they come back.\n"
+                    "READ ONLY · alarm only, nothing was changed"
                 )
             else:
                 since_alert = _minutes_since(now, entry["last_alert_utc"])
@@ -266,17 +282,17 @@ def run_once(
                     entry["last_alert_utc"] = now.isoformat(timespec="seconds")
                     stale_for = _minutes_since(now, entry["stale_since"])
                     emit(
-                        f"⏰ FEED GAP ongoing: {instrument} 15m bars still stale "
-                        f"({stale_for:.0f}m and counting)."
+                        f"🚨 Still no 15-minute price bars for {_market(instrument)} "
+                        f"— {_minutes_words(stale_for)} so far"
                         if stale_for is not None else
-                        f"⏰ FEED GAP ongoing: {instrument} 15m bars still stale."
+                        f"🚨 Still no 15-minute price bars for {_market(instrument)}"
                     )
         else:
             if entry["status"] == "stale":
                 entry["status"] = "healthy"
                 entry["stale_since"] = None
                 entry["last_alert_utc"] = None
-                emit(f"✅ FEED RECOVERED: {instrument} 15m bars flowing again (age {age_min:.0f}m).")
+                emit(f"✅ 15-minute price bars are back for {_market(instrument)}")
 
     statuses = "; ".join(
         f"{name}={state['instruments'][name]['status']}" for name in INSTRUMENTS

@@ -130,9 +130,12 @@ def test_registry_surfaces_growth_gaps_and_options_summary(tmp_path):
 
     futures_lines = format_registry_lines(registry, system="futures")
     options_lines = format_registry_lines(registry, system="options")
-    assert any("vwap_hold/control" in line for line in futures_lines)
+    assert any("A/B test: holding the day's average price (control)" in line for line in futures_lines)
     assert any("2-1-2 reversal" in line for line in options_lines)
-    assert any("least-certain" in line for line in futures_lines)
+    assert any("Least sure about" in line for line in futures_lines)
+    assert not any("n=" in line or "week+=" in line for line in futures_lines + options_lines)
+    # Display only: the registry data keeps its raw ids and codes.
+    assert by_lane["forward_ab:vwap_hold/control"]["status"] == "COLLECTING"
 
 
 def test_missing_family_summary_is_explicit_not_zero(tmp_path):

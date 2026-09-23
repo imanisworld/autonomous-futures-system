@@ -236,7 +236,7 @@ def test_mnq_signal_route_and_watchdog_error_route_are_unchanged(monkeypatch, tm
     monkeypatch.setenv("DISCORD_ROUTE_OBSERVATION", "https://obs.invalid/route")
     router = DiscordRouter()
     assert router.send("signal", "MNQ TRADE (existing signal path)") is True
-    assert router.send("error", "🚨 RiskSentinel feed watchdog — INSTRUMENT FEED STALE") is True
+    assert router.send("error", "🚨 No price updates for some markets") is True
     assert [u for u, _ in capture_router] == ["https://signal.invalid/route", "https://error.invalid/route"]
     # The watchdog module never references the observation route.
     wd = (ROOT / "scripts" / "feed_watchdog.py").read_text(encoding="utf-8")

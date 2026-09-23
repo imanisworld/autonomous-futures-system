@@ -58,4 +58,16 @@ def test_main_writes_json_and_prints_digest(tmp_path, capsys):
     (tmp_path / gcr.CAMPAIGN_FILE).write_text("\n".join(json.dumps(r) for r in rows) + "\n")
     assert gcr.main(["--log-dir", str(tmp_path)]) == 0
     assert (tmp_path / "gate_condition_report_latest.json").exists()
-    assert "GATE EVIDENCE" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "Trending-only rule check" in out
+    assert "not enough data yet (needs 30 finished trades while sideways)" in out
+
+
+def test_digest_is_plain_english(tmp_path):
+    rows = [_cand("c1", "MNQ", "RANGE_BOUND"), _out("c1", "WIN", 2.0, 100.0),
+            _cand("c2", "MNQ", "TRENDING"), _out("c2", "LOSS", -1.0, -50.0)]
+    text = gcr.format_digest(gcr.build_report(rows))
+    assert "When trending (allowed): 1 trade, 0 won, 1 lost, -$52 after costs" in text
+    assert "When sideways (blocked): 1 trade, 1 won, 0 lost, +$98 after costs" in text
+    for jargon in ("n=", "R ", "W/", "RANGE_BOUND", "NOT_ENOUGH_DATA", "2026-09-16"):
+        assert jargon not in text, jargon

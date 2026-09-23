@@ -36,6 +36,7 @@ except ImportError:  # pragma: no cover - standalone copy without the package
     _post_card_or_text = None
 
 from execution.forward_evidence_campaign import COMMISSION_DOLLARS, SLIPPAGE_TICKS  # noqa: E402
+from notifications import plain_english as pe  # noqa: E402
 
 CAMPAIGN_FILE = "cross_instrument_observation_v1.jsonl"
 COSTED_INSTRUMENTS = ("MNQ", "MES")
@@ -145,28 +146,46 @@ def _verdict(mnq: dict) -> dict:
     }
 
 
+_READ_WORDS = {
+    "NOT_ENOUGH_DATA": "not enough data yet (needs {n} finished trades while sideways)",
+    "RANGE_BOUND_POSITIVE": "trading while sideways would have made money",
+    "RANGE_BOUND_NOT_POSITIVE": "trading while sideways would NOT have made money — keep the rule",
+}
+
+
+def _bucket_words(b: dict) -> str:
+    """'12 trades, 7 won, 5 lost, +$210 after costs' — plain English, dollars only."""
+    trades = f"{b['n']} trade{'' if b['n'] == 1 else 's'}"
+    if b["n"] == 0:
+        return f"{trades} yet"
+    if b["net_usd"] is not None:
+        dollars = f"{pe.money(round(b['net_usd']))[:-3]} after costs"
+    else:
+        dollars = f"{pe.money(round(b['gross_usd']))[:-3]} before costs"
+    return f"{trades}, {b['wins']} won, {b['losses']} lost, {dollars}"
+
+
 def format_digest(report: dict) -> str:
+    """Plain-English card text (docs/discord-operator-message-style.md)."""
     v = report["verdict"]
     rb, tr = v["mnq_range_bound"], v["mnq_trending"]
-
-    def line(label: str, b: dict) -> str:
-        net = "n/a" if b["net_usd"] is None else f"${b['net_usd']:+.0f}"
-        return f"{label}: n={b['n']} {b['wins']}W/{b['losses']}L {b['r']:+.1f}R net {net}"
-
+    read = _READ_WORDS.get(v["state"], str(v["state"]).replace("_", " ").lower())
     others = []
     for inst, conds in report["by_instrument"].items():
         if inst == "MNQ":
             continue
         n = sum(b["n"] for b in conds.values())
-        r = sum(b["r"] for b in conds.values())
-        others.append(f"{inst} n={n} {r:+.1f}R")
+        gross = sum(b["gross_usd"] for b in conds.values())
+        others.append(f"{inst}: {n} trade{'' if n == 1 else 's'}, {pe.money(round(gross))[:-3]}")
     return (
-        f"**GATE EVIDENCE · MNQ trending-only rule** (since {report['since'][:10]}, evidence only)\n"
-        f"{line('TRENDING (allowed)', tr)}\n"
-        f"{line('RANGE_BOUND (blocked)', rb)}\n"
-        f"Read: {v['state']} (needs ≥{v['min_resolved_for_read']} resolved RANGE_BOUND)\n"
-        f"Others gross: {' · '.join(others) if others else '—'}\n"
-        f"[read-only · no rule change · decision after 2026-09-30]"
+        f"📊 **Trending-only rule check · {pe.market('MNQ')}**\n"
+        f"Question: should it also trade when the market is moving sideways?\n"
+        f"When trending (allowed): {_bucket_words(tr)}\n"
+        f"When sideways (blocked): {_bucket_words(rb)}\n"
+        f"Answer so far: {read.format(n=v['min_resolved_for_read'])}\n"
+        f"Other markets (before costs): {' · '.join(others) if others else 'none yet'}\n"
+        f"Counting since: {pe.et_date(report['since'])}\n"
+        f"[practice tracking only · no rule change · decision after Sep 30]"
     )
 
 

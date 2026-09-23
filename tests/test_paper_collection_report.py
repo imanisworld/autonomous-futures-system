@@ -118,8 +118,8 @@ def test_format_reports_show_zero_activity_and_health():
         start=date(2026, 9, 16),
         end=date(2026, 9, 16),
     )
-    assert "zero futures journal rows" in f
-    assert "1 fresh" in f
+    assert "nothing was recorded for futures in this window" in f
+    assert "1 up to date" in f
 
     o = report.format_options_report(
         {
@@ -134,10 +134,10 @@ def test_format_reports_show_zero_activity_and_health():
         start=date(2026, 9, 16),
         end=date(2026, 9, 16),
     )
-    assert "zero option scans" in o
-    assert "NOT option P&L outcomes" in o
-    assert "⚠ Collector attention" in o
-    assert "**Options scans** — stale" in o
+    assert "No option scans in this window" in o
+    assert "not option profit or loss" in o
+    assert "⚠ Data collectors need a look" in o
+    assert "**Options scans** — running late" in o
 
 
 def test_off_session_collectors_are_healthy_not_attention():
@@ -156,10 +156,10 @@ def test_off_session_collectors_are_healthy_not_attention():
 
     assert futures_warn is False
     assert options_warn is False
-    assert futures_field["name"] == "✓ Collector health"
-    assert options_field["name"] == "✓ Collector health"
-    assert "off session" in futures_field["value"]
-    assert "off session" in options_field["value"]
+    assert futures_field["name"] == "✓ Data collectors OK"
+    assert options_field["name"] == "✓ Data collectors OK"
+    assert "market closed" in futures_field["value"]
+    assert "market closed" in options_field["value"]
 
 
 def test_post_discord_uses_only_supplied_url(monkeypatch):
@@ -219,17 +219,24 @@ def test_futures_card_prioritizes_attention_without_claiming_executed_results():
     assert payload["allowed_mentions"] == {"parse": []}
     assert embed["color"] == 0xF0B232
     assert "Proof backup" in embed["fields"][0]["value"]
-    assert "12 fresh" in embed["fields"][0]["value"]
+    assert "12 up to date" in embed["fields"][0]["value"]
     assert "options scans" not in json.dumps(embed)
     fields = {f["name"]: f["value"] for f in embed["fields"]}
-    assert "**49** win · **119** loss" in fields["Shadow outcomes"]
-    assert "**30** no fill · **20** open" in fields["Shadow outcomes"]
-    assert "not executed trades" in fields["Shadow outcomes"]
-    assert "**554** journal rows" in fields["Collection"]
-    assert "MNQ **285**" in fields["Collection"]
-    assert "2-2 continuation" in fields["Shadow activity · top 5"]
-    assert "+ 14 across 1 other categories" in fields["Shadow activity · top 5"]
+    assert "**49** won · **119** lost" in fields["Practice results"]
+    assert "**30** never filled · **20** still open" in fields["Practice results"]
+    assert "not real trades" in fields["Practice results"]
+    assert "**554** records saved" in fields["Activity recorded"]
+    assert "MNQ **285**" in fields["Activity recorded"]
+    assert "2-2 continuation" in fields["Most active setups"]
+    assert "Pullback in a trend" in fields["Most active setups"]
+    assert "+ 14 more across 1 other type" in fields["Most active setups"]
     assert "resolved" not in json.dumps(embed).lower()
+    assert embed["description"] == "Wed Sep 16 · counts up to 8:00 PM ET"
+    assert embed["footer"]["text"].startswith("READ ONLY")
+    # Plain English: no UTC, no shadow/journal/bar-claim jargon, no raw ids.
+    text = json.dumps(embed, ensure_ascii=False)
+    for jargon in ("UTC", "Shadow", "shadow", "journal rows", "bar claims", "strat_", "EMA", "ORB", "NO_TRADE"):
+        assert jargon not in text, jargon
     assert json.dumps(summary, sort_keys=True) == before
 
 
@@ -240,9 +247,9 @@ def test_futures_card_missing_health_and_long_unknown_categories_stay_visible_an
     payload = report.futures_discord_payload(summary, {"status": "ERROR"}, period="eow", start=date(2026, 9, 14), end=date(2026, 9, 18))
     embed = payload["embeds"][0]
     assert embed["color"] == 0xF0B232
-    assert "unavailable" in embed["fields"][0]["value"]
-    assert "Weekly" in embed["title"]
-    assert "Sep 14, 2026 → Sep 18, 2026" in embed["description"]
+    assert "Can't tell if the data collectors are working" in embed["fields"][0]["value"]
+    assert "weekly" in embed["title"]
+    assert "Mon Sep 14 – Fri Sep 18" in embed["description"]
     assert "**7** · Unknown" in embed["fields"][2]["value"]
     assert all(len(f["value"]) <= 1024 for f in embed["fields"])
     assert sum(len(f["name"]) + len(f["value"]) for f in embed["fields"]) + len(embed["title"]) + len(embed["description"]) + len(embed["footer"]["text"]) < 6000
@@ -301,16 +308,19 @@ def test_options_card_matches_screenshot_counts_and_close_context():
     payload = report.options_discord_payload(summary, census, period="eod", start=date(2026, 9, 17), end=date(2026, 9, 17))
     embed = payload["embeds"][0]
     fields = {f["name"]: f["value"] for f in embed["fields"]}
-    assert embed["title"] == "Options · Read-only daily pass"
+    assert embed["title"] == "✅ Options practice report · daily"
     assert embed["color"] == 0x57F287
-    assert fields["Status"].startswith("**PASS**")
-    assert "15:57 ET" in fields["✓ Collector health"]
-    assert "disabled by design" in fields["✓ Collector health"]
-    assert "**3,165**" in fields["Collection status"]
-    assert "**3,165** scanner rows found" in fields["Signals found"]
-    assert "No data blockers" in fields["Errors / blocked channels"]
-    assert "**51** · Win" in fields["Journal row statuses"]
-    assert "NOT option P&L outcomes" in fields["Journal row statuses"]
+    assert fields["Status"].startswith("**All good**")
+    assert "3:57 PM ET" in fields["✓ Data collectors OK"]
+    assert "turned off on purpose" in fields["✓ Data collectors OK"]
+    assert "Scans run: **3,165**" in fields["What was collected"]
+    assert "No problems found" in fields["Problems"]
+    assert "**51** · won" in fields["Practice setups by status"]
+    assert "not option profit or loss" in fields["Practice setups by status"]
+    assert "paper_collection_eod_2026-09-17.json" in embed["footer"]["text"]
+    text = json.dumps(embed, ensure_ascii=False)
+    for jargon in ("UTC", "PASS", "shadow", "--no-discord", "OPTIONS_COMPANION_ENABLED"):
+        assert jargon not in text, jargon
     assert "futures journal" not in json.dumps(payload)
     assert payload["allowed_mentions"] == {"parse": []}
     assert json.dumps([summary, census], sort_keys=True) == before
@@ -324,7 +334,7 @@ def test_options_unscoped_or_missing_data_never_looks_like_healthy_window_counts
         assert card["color"] == 0xED4245
         assert status.replace("_", " ").capitalize() in text
         assert "5,000" not in text
-        assert "window count unavailable" in text
+        assert "Can't count this window's scans" in text
         assert all(len(f["value"]) <= 1024 for f in card["fields"])
         assert sum(len(f["name"]) + len(f["value"]) for f in card["fields"]) < 5500
 
@@ -338,5 +348,5 @@ def test_main_routes_options_card_and_keeps_missing_db_diagnostic(tmp_path, monk
     assert report.main(["--period", "eod", "--date", "2026-09-17", "--log-dir", str(tmp_path), "--options-db", str(tmp_path / "missing.sqlite")]) == 0
     assert len(posts) == 1
     assert posts[0][0] == "https://example.invalid/options"
-    assert "Missing db" in json.dumps(posts[0][1])
-    assert posts[0][1]["embeds"][0]["title"] == "Options · Read-only daily pass"
+    assert "Can't read the scanner database (database file missing)" in json.dumps(posts[0][1])
+    assert posts[0][1]["embeds"][0]["title"] == "🔴 Options practice report · daily"

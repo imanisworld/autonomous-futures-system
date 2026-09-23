@@ -18,6 +18,11 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
+try:  # display-only setup names; a standalone copy keeps its raw lane ids
+    from notifications.plain_english import SETUPS as SETUP_WORDS
+except ImportError:  # pragma: no cover - standalone copy without the package
+    SETUP_WORDS = {}
+
 
 FORWARD_REVIEW_GATE = (
     "20 trading days + 30 resolved filled outcomes/variant; no automatic promotion"
@@ -442,26 +447,67 @@ def build_registry(
     }
 
 
+# Display words only: the registry JSON keeps its codes and lane ids.
+REGISTRY_HEADER = "What we're tracking:"
+_STATUS_WORDS = {
+    "COLLECTING": "collecting",
+    "COLLECTING_WITH_REPAIR_PROVENANCE": "collecting (some data was repaired)",
+    "QUIET_THIS_WEEK": "quiet this week",
+    "NO_EVIDENCE_YET": "no data yet",
+    "NOT_STARTED": "not started",
+    "OPEN_PAPER_POSITION": "practice position open",
+    "TRACKING": "tracking",
+    "QUIET_EVENT_DRIVEN": "quiet (waits for its setup)",
+    "NO_LEDGER": "no records file",
+    "ATTENTION": "⚠ needs a look",
+    "SUMMARY_NOT_CENTRALIZED": "summary not available",
+}
+_LANE_WORDS = {
+    "asia_d_ema": "Asia session daily-trend lane",
+    "session_22c": "session 2-2 continuation lane",
+    "coverage_collector": "options coverage collector",
+}
+
+
+def _lane_words(lane: object) -> str:
+    text = str(lane or "?")
+    if text in _LANE_WORDS:
+        return _LANE_WORDS[text]
+    if text.startswith("forward_ab:"):
+        setup, _, arm = text[len("forward_ab:"):].partition("/")
+        name = SETUP_WORDS.get(setup, setup.replace("_", " "))
+        return f"A/B test: {name}" + (f" ({arm.replace('_', ' ')})" if arm else "")
+    return SETUP_WORDS.get(text, text.replace("_", " "))
+
+
+def _status_words(status: object) -> str:
+    text = str(status or "?")
+    return _STATUS_WORDS.get(text) or text.replace("_", " ").lower()
+
+
 def format_registry_lines(registry: dict[str, Any], *, system: str, max_entries: int = 12) -> list[str]:
-    """Compact Discord-safe lines for one system."""
+    """Compact Discord-safe plain-English lines for one system (display only)."""
     entries = [row for row in registry.get("entries", []) if row.get("system") == system]
     if not entries:
-        return ["evidence registry: no entries"]
-    lines = ["evidence registry:"]
+        return ["Nothing being tracked yet"]
+    lines = [REGISTRY_HEADER]
     for row in entries[:max_entries]:
-        n = "?" if row.get("evidence_n") is None else str(row["evidence_n"])
-        week = "?" if row.get("window_n") is None else str(row["window_n"])
-        sessions = "?" if row.get("sessions_window") is None else str(row["sessions_window"])
-        lines.append(
-            f"• {row['lane']}: {row['status']} · n={n} · week+={week} · sessions={sessions}"
-        )
+        bits = [_status_words(row.get("status"))]
+        if row.get("evidence_n") is not None:
+            bits.append(f"{row['evidence_n']} so far")
+        if row.get("window_n") is not None:
+            bits.append(f"{row['window_n']} this week")
+        if row.get("sessions_window") is not None:
+            n = row["sessions_window"]
+            bits.append(f"{n} trading day{'' if n == 1 else 's'}")
+        lines.append(f"• {_lane_words(row.get('lane'))}: " + " · ".join(bits))
     if len(entries) > max_entries:
-        lines.append(f"• +{len(entries) - max_entries} more registry entries in JSON artifact")
+        lines.append(f"• +{len(entries) - max_entries} more (full list in the saved report file)")
     uncertain = [u for u in registry.get("uncertainty", []) if u.get("system") == system]
     if uncertain:
         lines.append(
-            "least-certain: " + "; ".join(
-                f"{u['lane']} ({u['reason']})" for u in uncertain[:5]
+            "Least sure about: " + "; ".join(
+                f"{_lane_words(u['lane'])} ({u['reason']})" for u in uncertain[:5]
             )
         )
     return lines
