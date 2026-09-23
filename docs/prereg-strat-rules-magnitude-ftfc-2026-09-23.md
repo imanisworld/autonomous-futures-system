@@ -47,6 +47,47 @@ rules (see §7).
 - **#911 (closed REJECT):** trend-consolidation break: 484 trades, PF 0.749,
   both halves negative. 2-2 continuation: PF 1.107, first half negative.
 
+**Prior tests of these same Strat families. Read these before expecting a pass:**
+
+- **2026-07-31, shadow-lane null test on this same 313-day corpus:** 41,750
+  candidates, 11 families, MNQ and MES, with the observer's bracket (prior-bar
+  break, opposite-side stop).
+  - Pooled PF was 0.944. It beat its own direction-flipped null (0.863,
+    p<0.001), so the detectors carry some direction, but both arms lose.
+  - **Target sweep at 0.5 / 1 / 1.5 / 2 / 3R:** "no geometry rescues it". The
+    MNQ peak was 1.5R at PF 1.02 before costs. The MES detectors were worse
+    than their own flipped null at every R.
+  - Conclusion recorded: "the binding lever is entry-trigger quality, not
+    exits".
+  - Only the memory record survives; the harness was deleted.
+- **2026-07-16, tranche 2 (`docs/strat-shadow-tranche2-2026-07-16.md`, PR
+  #287), 622 days:** runner exit with market entry, after cost, one position at
+  a time. **Every** family was REJECTED: 2-2 reversal, 2-2 continuation, 3-1-2,
+  3-2-2 reversal and EMA pullback, on MNQ and MES, ALL and NY. The best cell
+  (MNQ 2-2 reversal NY, PF 1.02) sign-flipped between halves.
+- **2026-06-29, runner-edge finding:** a "minor lift" from an FTFC filter,
+  "big for 312/reversals, neutral on 122/continuation". That FTFC was the
+  `context/htf_loader.py` **daily + 4H trend-confluence** proxy, **not** the
+  Strat definition of price versus the monthly, weekly, daily and 60-minute
+  opens. It also ran under the legacy fill model that was later shown to
+  manufacture edge (`docs/ioc-faithful-baseline-622d-2026-07-06.md`).
+
+**What is genuinely untested, and is the only reason this study exists:**
+
+1. The Strat **structural magnitude** target, meaning the extreme of a specific
+   prior bar. Earlier sweeps only used fixed R multiples.
+2. The Strat **stop at the entry bar's extreme**. Earlier work only used the
+   opposite side of the prior bar.
+3. **Open-based FTFC** (monthly / weekly / daily / 60-minute) as an *entry*
+   filter under the honest IOC fill model. Entry-trigger quality is the lever
+   the 07-31 test pointed to.
+4. **Hammer/shooter** as a standalone setup.
+
+Given the record above, the expected result is **DOES NOT CLEAR** for arms A
+and S. The FTFC arms (A+F, S+F) are the ones with a live prior. A clean
+rejection is still worth recording: it closes the "the observer isn't using
+the real Strat rules" question for good.
+
 The arms below come from the **published source rules**, chosen before any
 result of this study was seen. They were not chosen from the losses above.
 
