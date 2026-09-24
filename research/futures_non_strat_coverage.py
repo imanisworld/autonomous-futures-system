@@ -93,7 +93,13 @@ def load_rth_session(path: Path) -> tuple[list[Bar], dict[str, Any] | None]:
                     low=float(row["low"]),
                     close=float(row["close"]),
                     volume=float(row.get("volume") or 0.0),
-                    vwap=float(row["vwap"]) if row.get("vwap") is not None else None,
+                    # Per-bar volume-weighted price = typical price (hlc3). The
+                    # payload's ``vwap`` is ALREADY the cumulative RTH session
+                    # VWAP; feeding it here made ``session_vwap`` average the
+                    # running VWAP again (a lagged line). The prereg says the
+                    # payload field is not used; sum(hlc3*v)/sum(v) over RTH
+                    # bars reproduces that cumulative VWAP (verified 2026-09-24).
+                    vwap=(float(row["high"]) + float(row["low"]) + float(row["close"])) / 3.0,
                 )
             )
     return sorted(bars, key=lambda b: b.start_utc), first_payload
