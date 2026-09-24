@@ -4,6 +4,7 @@ from alert_ranker.causal_bars import Bar
 from research.mnq_orb_rework_stage_a import (
     _aggregate_15m,
     detect_events,
+    summarize,
 )
 
 
