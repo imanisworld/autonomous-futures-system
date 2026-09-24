@@ -62,8 +62,17 @@ Rulings:
 
 - **vwap_hold control: REVIEWED — gate met, negative, NO PROMOTION.** H1 +$45.74 (3 wins / 20), H2 −$356.58 (0 wins / 21). This confirms the 2026-09-07 BROKEN verdict under honest decision-time fills rather than overturning it.
 - **The A/B is not a matched comparison.** Only 4 of 70 vwap_hold events carry both arms (pairing rate 5.7%; 48 control-only, 18 modified-only). Control fires in New York only; modified fires in Asia (7), London (11) and New York (4). Both arms are short-only. A modified-minus-control result cannot be read as a treatment effect.
-- **Modified-arm fill realism is unverified.** Modified candidates are created already `FILLED` at the 5m confirmation-bar close (`webhook/runner.py`, `variant="modified"`, `fillable_state="FILLED"`); only 1 tick round-trip cost is applied and reachability of that price is never checked. Control must have its resting entry touched (11 expired unfilled). Part of the modified edge may come from the easier fill rule. This is not look-ahead, but it must be addressed before any modified result is trusted.
-- **Modified arm: keep collecting, WAIT.** Internally consistent so far (H1 +$353, H2 +$346; top-3 trades 35% of net; positive in every session). Review only when its own gate is met, and under the fill-realism caveat above. No promotion from this campaign as structured.
+- **Modified-arm fill realism: checked 2026-09-24. The booked price is NOT the 5m close.** Modified candidates are created already `FILLED` when the 5m confirmation bar closes (`webhook/runner.py`, `variant="modified"`, `fillable_state="FILLED"`), but the booked price (`hypothetical_fill_price`) is the canonical `_try_vwap_hold` entry, **VWAP − 2 ticks** (`strategy/signal_engine.py`). The row label `entry_policy="confirmed_5m_close"` describes *when* the fill is booked, not *at what price*. These shorts are already below VWAP, so the booked price sits above the market: a median of +14.65 pts (about 2R) above the confirmation-bar close, above the bar's high in 5 of 22, and an IOC sell limit at that price at decision time fills **0 of 22**. Only 1 tick round-trip cost is applied. Control must have its resting entry touched (11 expired unfilled).
+  Re-scored on the same 22 candidates (research only; no campaign change):
+
+  | Fill model | W/L | Net | PF | Max DD |
+  |---|---|---|---|---|
+  | As booked (VWAP − 2 ticks) | 16/6 | +$698.95 | 7.86 | −$33.96 |
+  | Honest: next 5m open | 13/9 | +$413.12 | 2.24 | −$192.52 |
+  | Conservative (+1 tick entry, +2 ticks exits) | 13/9 | +$392.87 | 2.15 | −$199.77 |
+
+  The honest result is fragile. It stays positive only because the stop stays at VWAP + 7 pts, so risk per trade is about 2.7x the nominal 7.5 pts. With the nominal 7.5-pt risk kept, the result is −$134.06. The top 3 trades are 85% of the honest net. The booked figures are not usable evidence; read this arm on honest fills only. Verdict: **EDGE WEAKENS BUT SURVIVES (barely)**.
+- **Modified arm: keep collecting, WAIT.** The as-booked halves (H1 +$353, H2 +$346; top-3 trades 35% of net) do not hold under honest fills (+$137 / +$277, the second half driven by one trade). Review only when its own gate is met, and under the fill-realism caveat above. No promotion from this campaign as structured.
 - **orb_reclaim arms: DEAD.** `orb_reclaim` is not in `enabled_concepts`, so both arms can only ever record rejected candidates and will never reach the gate. Treat them as retired populations of this campaign.
 - A fair vwap_hold A/B (same NY 15m events, realistic fill rule for both arms) would need a **new prereg**. Do not retrofit this campaign.
 
