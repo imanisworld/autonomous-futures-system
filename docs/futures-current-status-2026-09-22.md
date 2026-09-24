@@ -45,6 +45,30 @@ Future futures work should focus on lanes that are live or paper-observable now,
 - asia_d_ema paper lane (`asia_d_ema_2026_09_v1`)
 - session_22c paper lane (`session_22c_paper_2026_09_v1`)
 
+## Forward A/B campaign `forward_ab_2026_08_v1` — review (2026-09-24 read-only audit)
+
+Source: raw `logs/forward_ab_2026_08_v1.jsonl` parsed directly and cross-checked against `ops/forward_campaign_report.py` run on the box (identical results). Evidence integrity OK: no duplicate, conflicting or invalid rows.
+
+**Gate definition, settled.** `ops/forward_campaign_report.py` counts a "trading day" as a distinct UTC calendar date with at least one **candidate** (not a fill). The gate is ≥20 such days **and** ≥30 resolved filled economic outcomes per variant. No automatic promotion.
+
+| Population | Resolved fills | Days | Gate | Net (1 tick) | PF | Net (3 ticks) | W / L |
+|---|---|---|---|---|---|---|---|
+| vwap_hold control (15m, NY only) | 41 | 22 | **MET** | −$310.84 | 0.52 | −$351.84 | 3 / 38 |
+| vwap_hold modified (5m) | 22 | 13 | not met | +$698.95 | 7.86 | +$676.95 | 16 / 6 |
+| orb_reclaim control / modified | 0 / 0 | 2 / 2 | not met | — | — | — | 2 REJECTED candidates each |
+| vwap_rejection observer | 5 | 3 | not met | −$64.90 | 0.00 | −$69.90 | 0 / 5 |
+
+Rulings:
+
+- **vwap_hold control: REVIEWED — gate met, negative, NO PROMOTION.** H1 +$45.74 (3 wins / 20), H2 −$356.58 (0 wins / 21). This confirms the 2026-09-07 BROKEN verdict under honest decision-time fills rather than overturning it.
+- **The A/B is not a matched comparison.** Only 4 of 70 vwap_hold events carry both arms (pairing rate 5.7%; 48 control-only, 18 modified-only). Control fires in New York only; modified fires in Asia (7), London (11) and New York (4). Both arms are short-only. A modified-minus-control result cannot be read as a treatment effect.
+- **Modified-arm fill realism is unverified.** Modified candidates are created already `FILLED` at the 5m confirmation-bar close (`webhook/runner.py`, `variant="modified"`, `fillable_state="FILLED"`); only 1 tick round-trip cost is applied and reachability of that price is never checked. Control must have its resting entry touched (11 expired unfilled). Part of the modified edge may come from the easier fill rule. This is not look-ahead, but it must be addressed before any modified result is trusted.
+- **Modified arm: keep collecting, WAIT.** Internally consistent so far (H1 +$353, H2 +$346; top-3 trades 35% of net; positive in every session). Review only when its own gate is met, and under the fill-realism caveat above. No promotion from this campaign as structured.
+- **orb_reclaim arms: DEAD.** `orb_reclaim` is not in `enabled_concepts`, so both arms can only ever record rejected candidates and will never reach the gate. Treat them as retired populations of this campaign.
+- A fair vwap_hold A/B (same NY 15m events, realistic fill rule for both arms) would need a **new prereg**. Do not retrofit this campaign.
+
+Code provenance: rows span 11 control and 7 modified code SHAs. The only scoring change during the campaign was #582 (2026-09-15, per-contract economics); the report re-derives every row's net from gross and matches the stored net, so MNQ scoring is unchanged. The PaperBroker bracket guard (#508) does not apply: the campaign scores fills itself.
+
 ## Runtime update — 2026-09-24 02:43 UTC (read-only box check)
 
 This block supersedes the 2026-09-23 runtime blocks below, which are kept as provenance. Nothing was changed by this check.

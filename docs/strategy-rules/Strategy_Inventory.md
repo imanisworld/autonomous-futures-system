@@ -84,6 +84,11 @@ Execution posture is recorded separately and may include **research only**, **ob
 ### ORB Reclaim — current/first_cross
 **Verdict: BROKEN — negative evidence**
 
+> **Forward A/B note (2026-09-24):** both `orb_reclaim` arms of
+> `forward_ab_2026_08_v1` are dead — `orb_reclaim` is not in `enabled_concepts`,
+> so they have recorded only 2 rejected candidates each and can never reach the
+> campaign gate.
+
 - Binding evidence: PR #368 isolated the currently implemented `first_cross` rule on its own account under IOC-faithful execution.
 - Result: n=38 resolved, net −$213.74, PF 0.858; MNQ −$164.44 and MES −$49.30.
 - The strategy's own drawdown breaker stops the second half; the older MES PAPER PROOF / MNQ PROMISING figures are superseded for the executable rule.
@@ -147,6 +152,15 @@ Execution posture is recorded separately and may include **research only**, **ob
 
 ### VWAP Hold — MNQ NY
 **Verdict: BROKEN — negative evidence** (downgraded from PROMISING BUT UNPROVEN, 2026-09-07)
+
+> **Forward A/B review (2026-09-24, `forward_ab_2026_08_v1`):** the control arm
+> (15m NY, canonical resting entry) met the campaign gate (41 resolved fills,
+> 22 candidate days) and is **negative: −$310.84, PF 0.52, H2 −$356.58 with 0
+> wins in 21** — confirming BROKEN; no promotion. The modified arm (5m confirmed
+> close) is +$698.95 on 22 fills / 13 days (gate not met) but is **not a matched
+> comparison** (4 of 70 events paired; different sessions) and its fills are
+> assumed at the confirmation close without a reachability check. WAIT; a fair
+> A/B needs a new prereg. See `docs/futures-current-status-2026-09-22.md`.
 
 > **Reconciliation (2026-09-07, `docs/vwap-hold-reconciliation-2026-09-07.md`,
 > `scripts/vwap_hold_reconciliation_2026-09-07.py`):** the 2026-07-26 NY-only
