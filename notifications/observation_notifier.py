@@ -134,6 +134,12 @@ MAX_RETRY_WAIT = 30.0                # longest honored 429 wait (background only
 MAX_QUEUE_MESSAGES = 50              # ~500 cards; beyond this, drop + log.
 MAX_MESSAGE_AGE = 600.0              # seconds; stale messages are dropped.
 
+def _redact(exc: BaseException) -> str:
+    from notifications.discord_router import redact_webhooks
+
+    return redact_webhooks(exc)
+
+
 # "background" (production) or "inline" (tests, and callers that pass a router).
 DELIVERY_MODE = "background"
 
@@ -217,9 +223,10 @@ class _Dispatcher:
                 else:
                     self.dropped_cards += cards
                     logger.error("observation Discord delivery failed; %d card(s) dropped.", cards)
-            except Exception:  # noqa: BLE001 - the worker must survive anything
+            except Exception as exc:  # noqa: BLE001 - the worker must survive anything
                 self.dropped_cards += cards
-                logger.warning("observation Discord worker error; %d card(s) dropped.", cards, exc_info=True)
+                logger.warning("observation Discord worker error; %d card(s) dropped: %s: %s",
+                               cards, type(exc).__name__, _redact(exc))
             finally:
                 self._queue.task_done()
                 self._sleep(MIN_SEND_INTERVAL)
@@ -265,6 +272,6 @@ def notify_observation(events: Iterable[dict], *, router=None) -> int:
             if router.send(ROUTE_NAME, body):
                 sent += cards
         return sent
-    except Exception:  # noqa: BLE001 — notification is a side effect; observation must continue
-        logger.warning("observation Discord notification skipped", exc_info=True)
+    except Exception as exc:  # noqa: BLE001 — notification is a side effect; observation must continue
+        logger.warning("observation Discord notification skipped: %s: %s", type(exc).__name__, _redact(exc))
         return 0

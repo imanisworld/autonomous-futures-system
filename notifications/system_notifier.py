@@ -43,7 +43,9 @@ def notify_system(
             source="system health",
         )
     except Exception as exc:  # pragma: no cover - exact urllib errors vary
-        logger.warning("Discord system notification failed: %s", exc)
+        from notifications.discord_router import redact_webhooks
+
+        logger.warning("Discord system notification failed: %s", redact_webhooks(exc))
         return SystemNotificationResult(sent=False, reason="send_failed")
     return SystemNotificationResult(sent=True, reason="sent")
 

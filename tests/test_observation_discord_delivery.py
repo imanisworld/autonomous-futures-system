@@ -261,3 +261,94 @@ def test_stale_messages_are_dropped_not_sent(monkeypatch):
     gate.set()
     assert d.join(5)
     assert len(requests) == 1 and d.delivered_cards == 10 and d.dropped_cards == 5
+
+
+# ── 5. every other direct Discord sender redacts its failure log ─────────────
+
+def _assert_no_secret(caplog):
+    assert caplog.records, "the failure must still be logged"
+    for record in caplog.records:
+        text = record.getMessage() + (logging.Formatter().formatException(record.exc_info) if record.exc_info else "")
+        assert SECRET not in text and WEBHOOK not in text, text
+
+
+def test_system_notifier_failure_log_is_redacted(caplog):
+    from notifications.system_notifier import notify_system
+
+    class Cfg:
+        discord_notifications_enabled = True
+        discord_webhook_url = WEBHOOK
+
+    def transport(url, body, headers):
+        raise _status_error(503)
+
+    with caplog.at_level(logging.DEBUG):
+        assert notify_system("health", config=Cfg(), transport=transport).sent is False
+    _assert_no_secret(caplog)
+
+
+def test_options_companion_failure_log_is_redacted(caplog, monkeypatch):
+    import notifications.discord_notifier as dn
+    from options_companion import notify as companion
+
+    def boom(url, body, headers):
+        raise _status_error(429, body={"retry_after": 1})
+
+    monkeypatch.setattr(dn, "_post_json", boom)
+    monkeypatch.setenv("DISCORD_OPTIONS_ERROR", WEBHOOK)
+    with caplog.at_level(logging.DEBUG):
+        assert companion._post("DISCORD_OPTIONS_ERROR", "hello") is False
+    _assert_no_secret(caplog)
+
+
+def test_tradovate_session_alert_failure_log_is_redacted(caplog, monkeypatch):
+    import requests
+
+    from execution import tradovate_broker as tb
+
+    def boom(url, json=None, timeout=None):
+        raise requests.HTTPError(f"429 Client Error: Too Many Requests for url: {url}")
+
+    monkeypatch.setattr(tb.requests, "post", boom)
+    monkeypatch.setenv("DISCORD_WEBHOOK_URL", WEBHOOK)
+    with caplog.at_level(logging.DEBUG):
+        tb.TradovateBroker._send_session_alert(object(), "Tradovate session down")
+    _assert_no_secret(caplog)
+
+
+def test_force_close_legacy_fallback_failure_log_is_redacted(caplog, monkeypatch):
+    import notifications.discord_notifier as dn
+    from webhook import runner
+
+    class RunNow:
+        def __init__(self, target, daemon=None):
+            self._target = target
+
+        def start(self):
+            self._target()
+
+    class Cfg:
+        discord_notifications_enabled = True
+        discord_webhook_url = WEBHOOK
+
+    def boom(url, body, headers):
+        raise _status_error(500)
+
+    monkeypatch.setattr("threading.Thread", RunNow)            # runner imports threading locally
+    monkeypatch.setattr(dn, "_post_json", boom)
+    monkeypatch.delenv("DISCORD_ROUTE_ERROR", raising=False)
+    with caplog.at_level(logging.DEBUG):
+        runner._notify_force_close(instrument="MNQ", reason="STALE_FEED", contracts=1, pnl_dollars=-5.0, config=Cfg())
+    _assert_no_secret(caplog)
+
+
+def test_observation_worker_error_log_is_redacted(dispatcher, caplog):
+    class Exploding:
+        def send(self, *a, **k):
+            raise RuntimeError(f"unexpected failure posting to {WEBHOOK}")
+
+    with caplog.at_level(logging.DEBUG):
+        dispatcher.submit(Exploding(), obs.build_messages([obs.format_event(_events(1)[0])]))
+        assert dispatcher.join(5)
+    assert dispatcher.dropped_cards == 1
+    _assert_no_secret(caplog)

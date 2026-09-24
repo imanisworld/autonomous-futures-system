@@ -57,8 +57,11 @@ def _post(env_var: str, content: str) -> bool:
             source="options companion",
         )
         return True
-    except Exception:  # noqa: BLE001 — notification must never affect the lane
-        logger.warning("companion discord post failed (%s)", env_var, exc_info=True)
+    except Exception as exc:  # noqa: BLE001 — notification must never affect the lane
+        from notifications.discord_router import redact_webhooks
+
+        # No traceback: the HTTP error text carries the webhook URL (token).
+        logger.warning("companion discord post failed (%s): %s: %s", env_var, type(exc).__name__, redact_webhooks(exc))
         return False
 
 
