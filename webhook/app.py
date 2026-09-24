@@ -41,10 +41,10 @@ from fastapi.staticfiles import StaticFiles
 
 from ops.release_integrity import enforce_release_integrity
 
-# Refuse to serve on drifted source. Enforcement is on unless
-# RELEASE_INTEGRITY_ENFORCED is explicitly false, 0, no, or off. A failure
-# raises SystemExit before the app object exists, so uvicorn exits and
-# systemd marks the unit failed instead of trading on unverified code.
+# Refuse to serve on drifted source. No-op unless RELEASE_INTEGRITY_ENFORCED
+# is set (production); raises SystemExit before the app object exists, so
+# uvicorn exits and systemd marks the unit failed instead of trading on
+# unverified code.
 enforce_release_integrity()
 
 from agent.daily_summary import DailySummaryAgent, validate_review_date

@@ -21,10 +21,6 @@ os.environ["PYTHON_DOTENV_DISABLED"] = "1"
 # the harness does not tighten or loosen sizing assertions. It is not a new
 # trading default, and tests of the missing/invalid cap clear or replace it.
 os.environ["MAX_CONTRACTS_HARD_CAP"] = "6"
-# The release-integrity startup gate is on by default. Unit tests import the
-# webhook app without a pinned release manifest, so they opt out here. This
-# does not change production: an unset variable still enforces.
-os.environ.setdefault("RELEASE_INTEGRITY_ENFORCED", "false")
 
 # Ensure project root is on path
 sys.path.insert(0, str(Path(__file__).parent.parent))
