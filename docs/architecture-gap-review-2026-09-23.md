@@ -6,6 +6,17 @@ This document records a clean-sheet architecture review against the **current re
 
 **Original audit basis:** `main@e4c6f0d81559bbeb0c3dc2846580f0771e990576` (2026-09-23). **Current reconciliation basis:** `main@e75c8d088f6536811efaa2e42b770f42bfb41114` after PRs #952, #954, and #953 merged. Historical findings are preserved with their original basis; current-state statements below are reconciled to the later main SHA. PR #954 hardens the options reclaim evaluator's one-look receipt storage, and #953 records the corrected MCL research result; neither closes the trial-ledger, system-level fault-injection, or universal report-identity gaps identified here.
 
+**Post-implementation reconciliation — 2026-09-24:** two findings below have moved.
+PR #962 bootstrapped the append-only research trial ledger, frozen manifests, and
+`tests/test_research_trial_ledger.py`; current CI checks out full history and runs the
+ledger test, so the former trial-ledger gap is **CLOSED / ESTABLISHED** at repository
+level. The fault-injection finding is also materially narrower: current `main` now has a
+consolidated `tests/fault_injection/` suite covering broker ambiguity/position truth,
+cancel failures, bad/out-of-order bars, demo-lane failure branches, journal/collector
+state corruption, restart/dedup guards, live/account-pin guards, and journal/ledger write
+failures. Treat that item as **MOSTLY ESTABLISHED / HARDENING**, not as “no consolidated
+suite”; additional failure classes and deployment/runtime proof remain separate work.
+
 **Important boundary:** repository state is not proof of deployed/VPS state. Runtime claims still require box verification.
 
 ---
@@ -26,10 +37,10 @@ The current architecture already contains most of the controls the clean-sheet r
 - fail-closed execution controls;
 - explicit no-execution research lanes.
 
-The remaining architecture gaps are narrower:
+The remaining architecture work is narrower:
 
-1. **REAL GAP — repo-enforced experiment/trial history.**
-2. **REAL GAP — system-level fault-injection suite.**
+1. **CLOSED / ESTABLISHED — repo-enforced experiment/trial history** (#962 + `tests/test_research_trial_ledger.py`).
+2. **MOSTLY ESTABLISHED / HARDENING — system-level fault injection** (consolidated suite now exists; continue coverage mapping and promotion integration).
 3. **PARTIAL — automatic post-rejection counterfactual follow-through.**
 4. **PARTIAL — standing three-way execution calibration: replay vs conservative internal sim vs broker paper/demo.**
 5. **HARDENING — require complete evidence identity at report-generation time.**
@@ -45,11 +56,11 @@ The prior external review was useful, but several items were incorrectly labeled
 | Claimed gap | Current repo reality | Status |
 |---|---|---|
 | Formal hypothesis/preregistration registry | Present and actively used. At the current reconciliation basis `docs/` contains **24** files named `prereg-*.md`; current studies explicitly freeze hypotheses, populations, thresholds, allowed variants, data windows, and prohibited retuning before the run. | **ESTABLISHED** |
-| Trial / multiple-testing ledger | Per-study cell counts and family-wise/null thresholds exist, but there is no single repo-enforced pre-run ledger that guarantees every attempted variant is recorded before execution. | **REAL GAP** |
+| Trial / multiple-testing ledger | Implemented by #962: append-only ledger, frozen variant manifests, canonical evidence path, and CI enforcement of register-before-evidence / new-prereg linkage. | **ESTABLISHED** |
 | Null / placebo testing | Present. Current research uses the fixed null baseline **p95 PF 1.94 / max-of-500 2.55**, and newer work also uses direction/time nulls where preregistered. | **ESTABLISHED** |
 | Rejected-candidate counterfactual data | Rejections/no-trades are logged and have already supported gate-attribution studies. The weakness is that post-rejection outcome follow-through is not a universal automatic field/process. | **MOSTLY ESTABLISHED / PARTIAL AUTOMATION GAP** |
 | Cross-strategy thesis deduplication | Important before multiple simultaneous executable strategies exist, but not a present blocker when the executable set is empty or tightly isolated. | **DEFERRED PRECONDITION** |
-| Fault-injection suite | Some lane-specific fault-injection tests exist, including crash-safe/idempotent persistence tests. There is no consolidated system-level suite covering the major operational failure classes experienced across the project. | **REAL GAP** |
+| Fault-injection suite | A consolidated `tests/fault_injection/` suite now covers the major broker/state/data/restart/write-failure classes exercised in the 2026-09-24 FI campaign. Remaining work is coverage completeness/promotion integration, not invention of the suite. | **MOSTLY ESTABLISHED / HARDENING** |
 | Shadow execution calibration | Lane-specific slippage/parity work exists, but no standing three-way comparator continuously reconciles replay, conservative internal simulation, and broker paper/demo behavior. | **PARTIAL** |
 | Immutable evidence identity | Strong provenance exists in many studies: code SHA, script hash, data fingerprints, source-drift checks, prereg references. It is not uniformly mandatory for every generated report. | **MOSTLY ESTABLISHED / HARDENING** |
 
@@ -141,7 +152,12 @@ The remaining issue is **uniform enforcement**, not invention of provenance from
 
 ---
 
-## 4. Real gap #1 — repo-enforced experiment/trial ledger
+## 4. Closed gap #1 — repo-enforced experiment/trial ledger
+
+> **2026-09-24 reconciliation:** the historical text in this section describes the
+> pre-#962 state. #962 implemented the ledger, frozen manifests, canonical evidence
+> boundary, and CI enforcement in `tests/test_research_trial_ledger.py`. The gap is
+> closed at repository level; runtime/deployment authority is unrelated.
 
 ### What exists
 
@@ -192,7 +208,14 @@ The enforcement question should be solved before adding sophisticated statistics
 
 ---
 
-## 5. Real gap #2 — system-level fault-injection suite
+## 5. Hardening item #2 — system-level fault-injection suite
+
+> **2026-09-24 reconciliation:** the historical text below predates the consolidated
+> `tests/fault_injection/` campaign. The repository now has a reusable system-level
+> fault suite for the principal broker, state, data, restart/dedup, live-guard/account,
+> and write-failure classes exercised in FI phase 1/2. The remaining work is to extend
+> explicit coverage to any still-unmapped failure classes and keep the suite promotion-
+> relevant. This is no longer a missing architecture layer.
 
 ### What exists
 
