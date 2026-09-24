@@ -533,14 +533,18 @@ string event_type  = has_signal ? "signal" : "heartbeat"
 // The dated contract this bar's prices came from, e.g. "MNQZ2026". Emitted ONLY
 // when proven on this bar: syminfo.current_contract names the contract TradingView
 // is using now (it is NOT a per-bar history), so the named contract's own close
-// must equal this continuous chart's close. Anything unproven -> null. MNQ/MES only.
+// must match this continuous chart's close to within CC_TOL_TICKS. Exact equality
+// failed on ~half of live 15m bars (2026-09-24: request.security lags the chart by
+// a tick at bar close); a few ticks absorbs that lag while any other quarterly
+// contract sits hundreds of ticks away (calendar spread). Unproven -> null. MNQ/MES only.
 // No roll dates, no candidates, no price conversion. The backend only logs it
 // against the routed Tradovate contract (observe-only); nothing blocks on it yet.
 string cc_name      = syminfo.current_contract
 bool   cc_supported = not na(cc_name) and (str.startswith(cc_name, "MNQ") or str.startswith(cc_name, "MES"))
 string cc_symbol    = cc_supported ? syminfo.prefix + ":" + cc_name : syminfo.tickerid
 float  cc_close     = request.security(cc_symbol, timeframe.period, close, ignore_invalid_symbol=true)
-bool   cc_proven    = cc_supported and not na(cc_close) and cc_close == close
+int    CC_TOL_TICKS = 8
+bool   cc_proven    = cc_supported and not na(cc_close) and math.abs(cc_close - close) / syminfo.mintick <= CC_TOL_TICKS
 string contract_hint = cc_proven ? cc_name : na
 
 // ─── BUILD JSON ───────────────────────────────────────────────────────────────
