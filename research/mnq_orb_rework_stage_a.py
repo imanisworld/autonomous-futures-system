@@ -39,6 +39,8 @@ STUDY_VERSION = "orb-a-v0.1"
 INSTRUMENT = "MNQ"
 OR_DURATIONS = (15, 30, 60)
 CONFIRM_MINUTES = (5, 15)
+FAMILIES = ("BREAKOUT", "WICK_REJECTION", "BREAK_RETEST", "ACCEPTANCE", "FAILED_BREAKOUT_INVERSE")
+DIRECTIONS = ("LONG", "SHORT")
 HORIZONS = (15, 30, 60)
 VOLUME_LOOKBACK = 20
 INVERSE_WINDOW = timedelta(minutes=30)
@@ -320,10 +322,13 @@ def summarize(events: Sequence[Event], outcomes: Sequence[Outcome]) -> dict[str,
     primary: dict[str, Any] = {}
     volume: dict[str, Any] = {}
 
-    cells = sorted({
-        (e.or_minutes, e.confirm_minutes, e.family, e.direction)
-        for e in events
-    })
+    cells = [
+        (or_minutes, confirm_minutes, family, direction)
+        for or_minutes in OR_DURATIONS
+        for confirm_minutes in CONFIRM_MINUTES
+        for family in FAMILIES
+        for direction in DIRECTIONS
+    ]
     for or_minutes, confirm_minutes, family, direction in cells:
         evs = [
             e for e in events
