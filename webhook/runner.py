@@ -19,6 +19,7 @@ Tradovate (or paper simulation).
 from __future__ import annotations
 
 import logging
+import math
 import os
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -4045,8 +4046,20 @@ def _bar_timeframe_minutes(payload: AlertPayload, cfg: SystemConfig) -> int:
 def _check_payload_quality(payload: AlertPayload, cfg: SystemConfig) -> Optional[str]:
     """
     Return a rejection reason string if the bar data is clearly bad, else None.
-    Checks: contradictory OHLC (high < low), and stale bar timestamp.
+    Checks: non-finite or non-positive OHLC, contradictory OHLC (high < low),
+    and stale bar timestamp.
     """
+    # Before the high/low comparison: every comparison with NaN is False, so a
+    # NaN price would otherwise pass (FI-5a/5b). TradingView renders an unset
+    # Pine value as "NaN" in the alert body.
+    for field_name in ("open", "high", "low", "close"):
+        value = getattr(payload, field_name, None)
+        try:
+            ok = value is not None and math.isfinite(float(value)) and float(value) > 0
+        except (TypeError, ValueError):
+            ok = False
+        if not ok:
+            return f"Invalid OHLC: {field_name} {value!r} is not a finite positive price"
     if payload.high < payload.low:
         return f"Contradictory OHLC: high {payload.high} < low {payload.low}"
 
