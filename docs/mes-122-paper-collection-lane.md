@@ -7,7 +7,7 @@ at the end of this file.
 
 Approved after PR #553's per-leg execution-realism gate: at a genuine 1 adverse tick
 per leg the corrected 40-trade population is **+$32.05 / PF 1.035**, population stable
-(0 bracket-invalid, 0 disappeared). Status: **PROMISING BUT UNPROVEN**. Forward paper
+(0 bracket-invalid, 0 disappeared). Status: ~~PROMISING BUT UNPROVEN~~ → **BROKEN — execution/fill realism (2026-09-23)**; see `docs/daily22-mes122-retirement-audit-2026-09-23.md`. Forward paper
 evidence only — not validation, not a promotion path.
 
 ## Campaign contract (pinned in `tests/test_mes_122_paper_lane.py`)

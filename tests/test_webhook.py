@@ -1522,7 +1522,7 @@ def test_dashboard_strategy_inventory_keeps_evidence_and_authority_separate(monk
     assert "PAPER" not in four_hr["verdict"].upper()
 
     mes_122 = by_name["MES 1-2-2 (`strat_122`)"]
-    assert mes_122["classification"] == "PROMISING BUT UNPROVEN"
+    assert mes_122["classification"] == "BROKEN"  # 2026-09-23 retirement audit (#986)
     assert "PAPER EVIDENCE ONLY" in mes_122["posture"].upper()
     assert "NO BROKER ROUTE" in mes_122["posture"].upper()
     assert mes_122["authority"] == "NO EXECUTION AUTHORITY"
