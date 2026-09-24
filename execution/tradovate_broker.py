@@ -1043,6 +1043,25 @@ class TradovateBroker(BrokerInterface):
     def is_live(self) -> bool:
         return self.config.env == "live"
 
+    def _observe_contract_identity(self, order: BracketOrder, routed_symbol: str) -> None:
+        """Log alert-hint vs routed contract. Never raises, never blocks."""
+        try:
+            from execution.contract_identity import MATCH, compare
+
+            verdict = compare(
+                getattr(order, "contract_hint", None), routed_symbol, context_date=self._trading_date()
+            )
+            log = logger.info if verdict.status == MATCH else logger.warning
+            log(
+                "CONTRACT_IDENTITY observe: status=%s alert=%s routed=%s (normalized %s vs %s) "
+                "instrument=%s strategy=%s — not enforced",
+                verdict.status, verdict.hint, verdict.routed,
+                verdict.hint_normalized, verdict.routed_normalized,
+                order.instrument, order.strategy,
+            )
+        except Exception:  # noqa: BLE001 - observation must never affect submission
+            logger.warning("CONTRACT_IDENTITY observe failed", exc_info=True)
+
     def execute_bracket(self, order: BracketOrder) -> Fill:
         """Place entry market order with attached stop and target (OSO bracket)."""
         try:
@@ -1112,6 +1131,10 @@ class TradovateBroker(BrokerInterface):
             # Tradovate placeOSO needs the specific contract symbol (e.g. MESM6),
             # NOT the root (MES) — the root is rejected with UnknownReason.
             contract_symbol = self._contract_symbol_cache.get(root, root)
+            # #960 / design #966: compare the alert's asserted dated contract with
+            # the routed one. OBSERVE ONLY — the verdict is logged, the order
+            # proceeds unchanged. Enforcement is a separate, later change.
+            self._observe_contract_identity(order, contract_symbol)
             action = "Buy" if order.direction == "LONG" else "Sell"
             close_action = "Sell" if order.direction == "LONG" else "Buy"
             qty = max(1, int(order.contracts or 1))
