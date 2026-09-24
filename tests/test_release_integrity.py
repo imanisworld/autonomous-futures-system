@@ -162,9 +162,16 @@ def test_fingerprint_pin_match_ok(tmp_path, monkeypatch):
     assert verify_release(repo_root=tmp_path)["ok"] is True
 
 
-def test_enforce_noop_when_unset(tmp_path, monkeypatch):
+def test_enforce_on_by_default_when_unset(tmp_path, monkeypatch):
     monkeypatch.delenv(ENFORCE_ENV, raising=False)
-    # Broken tree (no manifest at all) — still must not raise when not enforced.
+    with pytest.raises(SystemExit, match="RELEASE INTEGRITY FAILURE"):
+        enforce_release_integrity(repo_root=tmp_path)
+
+
+@pytest.mark.parametrize("raw", ["false", "0", "no", "off", "FALSE"])
+def test_enforce_noop_when_explicitly_disabled(tmp_path, monkeypatch, raw):
+    monkeypatch.setenv(ENFORCE_ENV, raw)
+    # Broken tree (no manifest at all) — an explicit disable must not raise.
     assert enforce_release_integrity(repo_root=tmp_path) is None
 
 
