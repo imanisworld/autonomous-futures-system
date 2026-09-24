@@ -1,0 +1,8 @@
+{
+  "name": "Autonomous Futures Paper-Trading System",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "user": "ubuntu",
+  "install": "bash .cursor/install.sh"
+}
