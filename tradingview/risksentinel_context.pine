@@ -268,6 +268,34 @@ if not ny_runtime_active and ny_runtime_active[1]
     orb_done := false
 orb_status = orb_status_for(orb_h, orb_l)
 
+// ─── OVERNIGHT H/L + RTH OPEN ────────────────────────────────────────────────
+// Overnight = CME reopen (18:00 ET) through the 09:30 ET RTH open. The range
+// freezes at 09:30 and stays available through the NY runtime session, then
+// expires at its end (same fail-closed pattern as the ORB above) so a stale
+// overnight range can never leak into the next day's payloads. rth_open is
+// the open of the first bar at/after 09:30 ET. These feed the shadow-only
+// _overnight_sweep_reclaim / _gap_fill observers in strategy/shadow_setups.py,
+// which read overnight_high / overnight_low / rth_open from the payload.
+ovn_active = not na(time(timeframe.period, "1800-0930", "America/New_York"))
+ovn_start  = ovn_active and not ovn_active[1]
+var float ovn_h    = na
+var float ovn_l    = na
+var float rth_open = na
+if ovn_start
+    ovn_h    := high
+    ovn_l    := low
+    rth_open := na
+else if ovn_active
+    ovn_h := math.max(nz(ovn_h, high), high)
+    ovn_l := math.min(nz(ovn_l, low), low)
+if ny_start
+    rth_open := open
+if not ny_runtime_active and ny_runtime_active[1]
+    ovn_h    := na
+    ovn_l    := na
+    rth_open := na
+
+
 // ─── LONDON ORB ───────────────────────────────────────────────────────────────
 in_london    = not na(time(timeframe.period, i_london_session, "America/New_York"))
 // Runtime/replay route the London ORB through 09:30 ET; expire it as NY begins
@@ -635,6 +663,9 @@ msg := msg + "\"demand_wavg\":"         + f2j(demand_wavg,   "#.##") + ","
 // HOD / LOD / Weekly
 msg := msg + "\"hod\":"            + f2j(hod, "#.##") + ","
 msg := msg + "\"lod\":"            + f2j(lod, "#.##") + ","
+msg := msg + "\"overnight_high\":" + f2j(ovn_h, "#.##") + ","
+msg := msg + "\"overnight_low\":"  + f2j(ovn_l, "#.##") + ","
+msg := msg + "\"rth_open\":"       + f2j(rth_open, "#.##") + ","
 msg := msg + "\"prev_week_high\":" + f2j(pw_high, "#.##") + ","
 msg := msg + "\"prev_week_low\":"  + f2j(pw_low,  "#.##") + ","
 // EMAs
