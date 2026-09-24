@@ -114,13 +114,18 @@ import execution.tradovate_broker as tb
 def _mock_oso(monkeypatch, b, entry_status, posts=None):
     """placeOSO succeeds (ids 111/222/333); /order/item returns entry_status."""
     posts = posts if posts is not None else []
+    cancelled = set()
     def fake_post(path, body, **k):
         posts.append((path, body))
         if path == "/order/placeOSO":
             return {"orderId": 111, "oso1Id": 222, "oso2Id": 333}
+        if path == "/order/cancelorder":
+            cancelled.add(body.get("orderId"))  # the cancel takes effect
         return {}
     def fake_get(path, **k):
         if "/order/item" in path:
+            if int(path.split("id=")[1]) in cancelled:
+                return {"ordStatus": "Canceled"}
             return {"ordStatus": entry_status}
         return []
     monkeypatch.setattr(b, "_post", fake_post)
@@ -265,6 +270,7 @@ def test_unknown_entry_confirmed_filled_by_position(monkeypatch):
 
 def test_unknown_entry_confirmed_flat_cancels_all(monkeypatch):
     b, posts = _unknown_entry_broker(monkeypatch, [(True, None)])
+    monkeypatch.setattr(b, "_cancel_confirmed", lambda oid: True)  # the cancel took effect
     fill = b.execute_bracket(_long_order())
     assert fill.result == "CANCELLED"
     assert fill.exit_reason == "ENTRY_NOT_FILLED"

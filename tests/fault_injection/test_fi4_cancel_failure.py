@@ -7,12 +7,10 @@ unresolved and blocks new execution until broker truth is known.
 """
 from __future__ import annotations
 
-import pytest
-
 from execution.broker_interface import BracketOrder
 from tests.fault_injection._harness import (
-    ENTRY_ID, FakeBook, FaultRecord, journal_open, make_broker, mes_payload, outcomes,
-    real_broker_cfg, run_alert,
+    ENTRY_ID, STOP_ID, TARGET_ID, FakeBook, FaultRecord, journal_open, journal_rows, make_broker,
+    mes_payload, outcomes, patch_broker_class, real_broker_cfg, run_alert,
 )
 
 SECOND_BAR = "2026-05-23T14:45:00+00:00"
@@ -29,8 +27,6 @@ def _entry_working(book: FakeBook) -> bool:
     return book.orders.get(ENTRY_ID, {}).get("ordStatus") == "Working"
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="KNOWN DEFECT FI-4: failed cancel is reported as ENTRY_NOT_FILLED")
 def test_fi4_broker_does_not_report_no_fill_when_cancel_failed(monkeypatch):
     book = _resting_book(monkeypatch)
     broker = make_broker(monkeypatch, book)
@@ -56,8 +52,6 @@ def test_fi4_broker_does_not_report_no_fill_when_cancel_failed(monkeypatch):
     assert not (fill.result == "CANCELLED" and fill.exit_reason == "ENTRY_NOT_FILLED"), str(rec)
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="KNOWN DEFECT FI-4: runner books CANCELLED while the entry is still working")
 def test_fi4_runner_does_not_book_flat_while_entry_still_working(config, tmp_path, monkeypatch):
     book = _resting_book(monkeypatch)
     broker = make_broker(monkeypatch, book)
@@ -82,11 +76,13 @@ def test_fi4_runner_does_not_book_flat_while_entry_still_working(config, tmp_pat
     assert not booked_flat, str(rec)
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="KNOWN DEFECT FI-4: the leftover entry fills later with no journal row")
 def test_fi4_late_fill_of_uncancelled_entry_is_not_left_unrecorded(config, tmp_path, monkeypatch):
     book = _resting_book(monkeypatch)
     broker = make_broker(monkeypatch, book)
+    monkeypatch.setenv("BROKER", "tradovate")  # production path; make_broker clears it
+    patch_broker_class(monkeypatch, book)
+    monkeypatch.setattr("notifications.discord_notifier.send_operational_alert",
+                        lambda *a, **k: None)
     cfg = real_broker_cfg(config, working_order_recheck=True)
     log_dir = tmp_path / "logs"
     run_alert(monkeypatch, broker, cfg, log_dir, mes_payload())
@@ -110,3 +106,77 @@ def test_fi4_late_fill_of_uncancelled_entry_is_not_left_unrecorded(config, tmp_p
         journal_broker_diverge=str(not journal_open(log_dir) and book.net_pos != 0),
     )
     assert journal_open(log_dir) or book.net_pos == 0, str(rec)
+
+
+# ── FI-4 fix: only an observed dead order is a definitive no-fill ─────────────
+def _limit_order():
+    return BracketOrder(
+        instrument="MES", direction="LONG", entry=5898.5, stop=5896.0,
+        target=5904.0, rr_ratio=2.2, strategy="orb_breakout",
+    )
+
+
+def test_fi4_cancel_error_but_order_observed_canceled_is_a_no_fill(monkeypatch):
+    """The cancel POST errors AFTER taking effect; the re-read shows Canceled,
+    so ENTRY_NOT_FILLED is correct (no phantom)."""
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS", "2")
+    book = FakeBook(place_mode="rest", children=True)
+    book.post_faults["/order/cancelorder"] = RuntimeError("reply lost")
+    broker = make_broker(monkeypatch, book)
+    fill = broker.execute_bracket(_limit_order())
+    book.require(book.orders[ENTRY_ID]["ordStatus"] == "Canceled", "cancel took effect")
+    assert (fill.result, fill.exit_reason) == ("CANCELLED", "ENTRY_NOT_FILLED")
+    assert broker._last_order_ids is None
+
+
+def test_fi4_entry_fills_during_cancel_is_journaled_open_with_ids(config, tmp_path, monkeypatch):
+    """The resting entry fills while we try to cancel it: CANCEL_UNCONFIRMED,
+    and the runner journals an open AMBIGUOUS_SUBMIT trade with the OSO ids."""
+    monkeypatch.setattr("notifications.discord_notifier.send_operational_alert",
+                        lambda *a, **k: None)
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS", "2")
+    book = FakeBook(place_mode="rest", children=True)
+
+    def _fills_then_rejects(_path):
+        book.orders[ENTRY_ID]["ordStatus"] = "Filled"
+        book.seed_position(1, 5899.0)
+        raise RuntimeError("cancel rejected: order already filled")
+
+    book.post_rejects["/order/cancelorder"] = _fills_then_rejects
+    broker = make_broker(monkeypatch, book)
+    log_dir = tmp_path / "logs"
+    result = run_alert(monkeypatch, broker, real_broker_cfg(config, working_order_recheck=True),
+                       log_dir, mes_payload())
+    book.require(book.net_pos == 1, "fake broker holds the late fill")
+    trade = next(r for r in journal_rows(log_dir) if r.get("decision") == "TRADE")
+    ids = next(r for r in journal_rows(log_dir) if r.get("type") == "ORDER_IDS")
+    assert result["decision"] == "AMBIGUOUS_SUBMIT_OPEN"
+    assert trade["ambiguous_submit"] == {
+        "reason": "CANCEL_UNCONFIRMED", "broker_truth": "position_open",
+    }
+    assert ids["order_ids"]["entry"] == ENTRY_ID
+    assert {ids["order_ids"]["target"], ids["order_ids"]["stop"]} == {TARGET_ID, STOP_ID}
+    assert journal_open(log_dir) and outcomes(log_dir) == []
+
+
+def test_fi4_unreadable_entry_with_unconfirmed_cancel_stays_unconfirmed(monkeypatch):
+    """Entry status unreadable, broker position flat: the cancel cannot be
+    observed, so the result is ENTRY_UNCONFIRMED (ambiguous), not a no-fill."""
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS", "2")
+    book = FakeBook(place_mode="rest", children=True)
+    book.get_faults["/order/item"] = ConnectionError("order read failed")
+    broker = make_broker(monkeypatch, book)
+    fill = broker.execute_bracket(_limit_order())
+    assert (fill.result, fill.exit_reason) == ("CANCELLED", "ENTRY_UNCONFIRMED")
+
+
+def test_fi4_demo_lane_treats_cancel_unconfirmed_as_ambiguous():
+    from context.wide_stop_demo_runtime_core import _definitive_no_fill
+    from execution.broker_interface import Fill
+
+    fill = Fill(
+        instrument="MNQ", direction="LONG", contracts=1, entry_price=30000.0,
+        exit_price=None, exit_reason="CANCEL_UNCONFIRMED", result="CANCELLED",
+        pnl_ticks=None, pnl_dollars=None,
+    )
+    assert _definitive_no_fill(fill) is False

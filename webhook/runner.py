@@ -3389,6 +3389,7 @@ _AMBIGUOUS_SUBMIT_REASONS = frozenset({
     "TRADOVATE_ORDER_ERROR",
     "TRADOVATE_NO_ORDER_ID",
     "ENTRY_UNCONFIRMED",
+    "CANCEL_UNCONFIRMED",  # FI-4: a resting entry's cancel was not confirmed
 })
 
 
