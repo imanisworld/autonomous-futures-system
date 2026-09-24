@@ -32,8 +32,8 @@
       "paper_mode": true
     }
   },
-  "fingerprint_sha256": "67e7fcf9f5deb46e2e42f4a9cf158f2b9f00384f50c8f51e10e9724b525ceae0",
-  "generated_at": "2026-09-23T02:04:12.299926+00:00",
+  "fingerprint_sha256": "657ff7c8ea6d7083dce988f5ad6967b4a643ac832d6c2a7888d38c8ece57b0e5",
+  "generated_at": "2026-09-24T04:05:28.797543+00:00",
   "proof_critical_runtime_overrides": {
     "ASIA_D_EMA_PAPER_EPOCH_START": {
       "expected": null,
@@ -451,14 +451,14 @@
     }
   },
   "repo": {
-    "branch": "release/options-a6f79d7-932",
-    "commit": "86f7b85c36b0a3e6b1954a92f54bc14485b27204",
+    "branch": "release/options-5b7be0f7-989",
+    "commit": "52718315d7658b8b5519705758a51a81c1422453",
     "dirty": false,
     "dirty_paths": []
   },
   "risk_rules_sha256": "ea3d55372a70b418fc0b5fe25857dfc752717667ed32abcde964048f3c0614b6",
   "schema_version": 1,
-  "source_file_count": 1467,
+  "source_file_count": 1468,
   "source_files": {
     ".agents/skills/source-command-futures-cancelled-audit/SKILL.md": "e497c67c20edbe20529e28e1585c8dab895b5b88cd9b67a6579f64155649c708",
     ".agents/skills/source-command-futures-deployment-safety-audit/SKILL.md": "14b69bfba551c2a7767a0ec6fec15bbbfb5cca563e5cb33d2fd0a18b02c1f607",
@@ -540,7 +540,7 @@
     "alert_ranker/bar_context.py": "a734850f73e03afb2449b5103dd6f8bba3e28413dfd8fbec213690d06385020e",
     "alert_ranker/bar_provider.py": "cb1d2db47789634fdc3510e4ca50868edceb613ceec41fbe72b44b8704e3ed7d",
     "alert_ranker/causal_bars.py": "656befa79aedc12427dedec71d0c080c844afc5efa42e4d0a6b1963b3c32fc61",
-    "alert_ranker/config.py": "4cd3061850b4251437d4c44448071eb2daa05a8815375cf80f6ddb63722aaa1d",
+    "alert_ranker/config.py": "029e0260471519a7d4c6c9a85c02db924d1a01cfe36b3f6ee655004bc2a407f9",
     "alert_ranker/contract_marks.py": "d948d6d2aec878aa3930ab47c74e1a1967958787248df8d9385591cbf939b64e",
     "alert_ranker/coverage_collector.py": "f1c9ffd841292617d1e9161f6ec85904b6592b898d3c7c5a5d57480aedc12355",
     "alert_ranker/coverage_episodes.py": "0c136c837105340894cd1ee0b9d4a5497f4d3f937e8f7dd44415cedc310f418d",
@@ -566,7 +566,7 @@
     "alert_ranker/rh_client.py": "749d48b005c8342b7b15ba3206aef4f7b9f4cf1738ec0e36c2940763907c18c1",
     "alert_ranker/rh_options.py": "ebe5418fa6ded5a67da6886c238f71162d299402cbfa250de106bff220cd872d",
     "alert_ranker/scanner.py": "4bb828282e065476192682468135eafc87d2c872c12b185854442604735bbe1f",
-    "alert_ranker/scanner_legacy.py": "9dfd85e41d653611481ffef0476aa4b562b8012af8b885ae98ccb5ee2ed3f101",
+    "alert_ranker/scanner_legacy.py": "47d2c646b5f993da97129c82c41d19ec530e16b54fd5e6bc5c773afb37960475",
     "alert_ranker/scorer.py": "6c61b03a808151e333a355e019b8ed5f2fa06dce924252caf6de3f0b5102241a",
     "alert_ranker/session_calendar.py": "3c4866fea72ba45a76d64c09251e928f7158f226cabd063abf60fe1b9bf14c5f",
     "alert_ranker/setup_authority.py": "0df6bf8a5906c45bec607a40e27a00f9e6c343e0f0973b13bc9c63cf6e51eaa6",
@@ -1133,6 +1133,7 @@
     "options_manager/validation/watchlist_lifecycle.py": "70b19a87edb2f5cd6a96f33c06257f2f8ec26d85cfef9cf38d0cf9c31d8b87fb",
     "quotes/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "quotes/live_index.py": "0679574fcb59bfa303cc9a044fa751081f35004764de8dcc174daddab37aa801",
+    "release_manifest.json": "838db1cfa493df3432685a27d0fe347b4fbafaf665b96b46de554d67c1a6711c",
     "replay/__init__.py": "7b0210b132e048ea9e6cb21b6524f33347d887f7c5a46e088a87b3b0bb2aa456",
     "replay/__main__.py": "0068bd8d1c7cc524c4f27ab7680eb55f9d14e3faf82d745453c7931ed8adc5b2",
     "replay/candle_loader.py": "675e43a69a3bd6ea18359b137f7d4ca2d307d44bdcc8d5fdfe710305bb80b5f1",
@@ -1420,7 +1421,7 @@
     "sources/gex_shadow_analysis.py": "2048e2d24fe901312ae10cb3f9579b54586efa527a312a69654f2f0516829fbb",
     "sources/polygon_client.py": "3959cc1b41e7c0edcde909364b82fb9bc39577ff5dc264153767f8aaf3ac5896",
     "sources/scout.py": "ba314d1b6bfe8356f4a013432cd7740d9d2e606e33f24cadbbd631b980c2fd6b",
-    "sources/signa_client.py": "f542005ab826596c702d0fd19d34d34137203e8226384641cb14d5f4dbaae0cf",
+    "sources/signa_client.py": "eccca5a61a5a62403b84efbfdc99072817f6251188f47e496420fafad687ceee",
     "sources/signa_discovery.py": "963c017d9823484806ba821feccf3c0423ffa2628613357906390cb7712d2453",
     "sources/signa_intelligence.py": "d2de87f4b4cd9b786bb6935c422c8418c6c0cae73ed751735c4c4b665a1151e5",
     "sources/signa_observation.py": "882b3fe6b61c35c8c5e7dfb226e117f25074e581f3081919798962ac28a9ea2d",
@@ -1478,7 +1479,7 @@
     "tests/test_afs_watcher_sanctioned_restart.py": "783593e8e43f7fb89d2d17f0356e686f87dc3d70b244049a2679296a428ece94",
     "tests/test_afs_watcher_startup_readiness.py": "7f729c0c2448cef6b99573283a2d7b6e3fb21351acbc4ac36ed25878500cc5e4",
     "tests/test_afs_watcher_triage.py": "beee538ee8a6cc397ff86cfed0628488d2fede196f415b36db091c43ca9a9f7a",
-    "tests/test_alert_ranker.py": "73ffd9683fb02548e0860d1101237c7034137e99df77dec503f7c114bd2673c9",
+    "tests/test_alert_ranker.py": "cb2b4967feed8f117ca85dac493c8074d3e57b0633232d91754dab13200fa442",
     "tests/test_alert_ranker_lifecycle.py": "ecc04cc7d720d236b97c5be390298a4efcce9ac523e636b6f5ce66f5bca4f562",
     "tests/test_alert_ranker_pr_e_cleanup.py": "d9b01e45c1e916cd3438832c5125b14621a95fc2a2857824edf8039bb4de146d",
     "tests/test_alert_ranker_preflight.py": "24eda6f95aba28ba1ea731673f8baa4a3196f3ee1a52f31a332bfc01e4dd117a",
@@ -1822,7 +1823,7 @@
     "tests/test_shadow_setups.py": "b10e291a847a99b1e7b66f72e61e56a909f332b8630c69302cec6935fd1f0303",
     "tests/test_signa_api_config.py": "bd646f9dd395cddda9146d6dc453b05a5c54ed9411015227044780066e28bdd2",
     "tests/test_signa_capability_probe.py": "c243a9b2fa23e2d7eb3415f6a44d917e1626d489d38def7acf242bf5c1d00c08",
-    "tests/test_signa_client.py": "c89cef6bf8e449f66584348350be3451a633275754de8c1c3fa2e11ff6a100b0",
+    "tests/test_signa_client.py": "630f5bb01225352b7d55c80341442fe609f357095339702a45cfd8664af0f086",
     "tests/test_signa_context_store.py": "b9098daa8778eb3a5128138a4f3b592c80504aa3c4f19861d002307e0e392b7a",
     "tests/test_signa_context_store_fd_leak.py": "cf4992ac300b75b4f6fc7e278eccd714ab3e768213d3b0bdf67cdbc8696d0fcc",
     "tests/test_signa_discovery.py": "fd04d27d4a65704b3fa8c8f99f20b6a0b2c24299f022ec255fe63c42def8d4d2",
