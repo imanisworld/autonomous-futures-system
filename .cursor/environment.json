@@ -1,0 +1,4 @@
+{
+  "name": "AFS credential-free tests",
+  "install": "bash .cursor/cloud-agent-install.sh"
+}
