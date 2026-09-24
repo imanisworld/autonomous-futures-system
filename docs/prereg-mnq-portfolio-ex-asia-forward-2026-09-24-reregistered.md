@@ -1,8 +1,12 @@
-# MNQ Five-Family Shared-Account Portfolio (ex-Asia D+EMA), Forward — Preregistration (2026-09-23)
+<!-- trial_id: T-2026-09-24-prereg-mnq-portfolio-ex-asia-forward-2026-09-24-reregistered-01 -->
+
+# MNQ Five-Family Shared-Account Portfolio (ex-Asia D+EMA), Forward — Re-registration (2026-09-24)
 
 > **Re-registered 2026-09-24 per AFS-0041.** This document re-registers and
 > supersedes `docs/prereg-mnq-portfolio-ex-asia-forward-2026-09-23.md`.
-> SHA-256 of that file on main:
+> Ledger trial `T-2026-09-24-prereg-mnq-portfolio-ex-asia-forward-2026-09-24-reregistered-01`
+> supersedes `T-2026-09-23-prereg-mnq-portfolio-ex-asia-forward-2026-09-23-01`.
+> SHA-256 of the superseded file on main:
 > `29300038525a3ac92d4f47ea8386b4d7b9b48306f5faaf745dba35fe59c8c52f`.
 
 **RESEARCH / AUDIT ONLY. NO EXECUTION AUTHORITY.** Nothing in this document
@@ -70,6 +74,10 @@ merges; exact timestamp filled at merge: [TBD at merge]. A portfolio fill
 counts only if its causal signal *and* its fill are both at or after this
 instant.
 
+**Unscored gap.** Forward data from 2026-09-23 18:00 ET until the new scoring
+start is scored under neither this prereg nor
+`docs/prereg-mnq-portfolio-ex-asia-forward-2026-09-23.md`.
+
 **Historical window 2026-06-27 → 2026-07-23 is NOT scored.** It lies outside
 the #915 common window, but #911, #912 and the 313-day grid have already
 examined those bars. It would also yield only about 4 expected ex-Asia fills.
@@ -107,7 +115,10 @@ itself happens once.
 `resolve_bracket` in `scripts/edge_decomposition_audit.py` on PR #1025
 (https://github.com/imanisworld/autonomous-futures-system/pull/1025), blob
 `230ec92e69168d34c310baae4e37bf50bb05cc7f`. If that file changes before merge,
-replace this blob at merge. The 3-2-2 full-window control pinned by the
+replace this blob at merge. The portfolio script pin is
+`scripts/mnq_combined_portfolio_audit.py` blob
+`53df87ea161900867381c33a39ba9afce1e96384`. `research/mnq_combined_portfolio_audit.py`
+is unchanged from 5a9f14b. The 3-2-2 full-window control pinned by the
 2026-09-23 prereg (33 fills / 2742.66) is 33 fills / 2503.64, derived, pending
 corpus re-run. The only permitted
 changes are:
@@ -356,17 +367,20 @@ computed or read.**
 SHA-256 of `docs/prereg-mnq-portfolio-ex-asia-forward-2026-09-23.md` on main:
 `29300038525a3ac92d4f47ea8386b4d7b9b48306f5faaf745dba35fe59c8c52f`.
 
-The only substantive changes are the resolver pin, the scoring start, and the
-one expected control that depended on the buggy resolver. Every other line of
-the 2026-09-23 text is unchanged. The re-registration header and this section
-are administrative.
+The study-rule changes are the resolver pin, the scoring start, and the one
+expected control that depended on the buggy resolver. The title, the unscored
+gap, the portfolio-script blob, and the ledger `trial_id` are administrative
+and do not change a hypothesis, family, threshold, sample, deadline, look, gap
+rule, or step-0 check.
 
-1. **Header (administrative).** Added after the title:
-
-   > Re-registered 2026-09-24 per AFS-0041. This document re-registers and
-   > supersedes `docs/prereg-mnq-portfolio-ex-asia-forward-2026-09-23.md`.
-   > SHA-256 of that file on main:
-   > `29300038525a3ac92d4f47ea8386b4d7b9b48306f5faaf745dba35fe59c8c52f`.
+1. **Title and header (administrative).** The heading is
+   `Re-registration (2026-09-24)`, not the 2026-09-23 preregistration title.
+   The header cites ledger trial
+   `T-2026-09-24-prereg-mnq-portfolio-ex-asia-forward-2026-09-24-reregistered-01`,
+   which supersedes
+   `T-2026-09-23-prereg-mnq-portfolio-ex-asia-forward-2026-09-23-01`, and records
+   the SHA-256 of the superseded file on main:
+   `29300038525a3ac92d4f47ea8386b4d7b9b48306f5faaf745dba35fe59c8c52f`.
 
 2. **Scoring start (§3).** Replaced:
 
@@ -375,6 +389,9 @@ are administrative.
 
    The following sentence is unchanged: a portfolio fill counts only if its
    causal signal and its fill are both at or after this instant.
+
+   **Unscored gap (added).** Forward data from 2026-09-23 18:00 ET until the
+   new scoring start is scored under neither prereg.
 
 3. **Scoring start, restated in §6.** Replaced the prohibition that named the
    old instant:
@@ -395,7 +412,10 @@ are administrative.
    - New: those two files stay the evaluator. Day-only resolution uses the
      fixed `resolve_bracket` in `scripts/edge_decomposition_audit.py` on PR
      #1025, blob `230ec92e69168d34c310baae4e37bf50bb05cc7f`. If that file
-     changes before merge, replace this blob at merge.
+     changes before merge, replace this blob at merge. The portfolio script
+     pin is `scripts/mnq_combined_portfolio_audit.py` blob
+     `53df87ea161900867381c33a39ba9afce1e96384`.
+     `research/mnq_combined_portfolio_audit.py` is unchanged from 5a9f14b.
 
 6. **Dependent expected control (same Evaluator paragraph).** The 2026-09-23
    text did not print this number; the pin carried it inside
