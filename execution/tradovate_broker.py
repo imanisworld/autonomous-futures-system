@@ -271,11 +271,10 @@ class TradovateConfig:
     # Tradovate guidance (renew well before the 90-minute token lapses); the
     # reliability supervisor's 60s heartbeat drives the actual renewal call.
     token_refresh_buffer: int = 900
-    # Optional pin: the Tradovate account id this deployment expects to trade.
-    # account/list can return more than one account under the same login (e.g.
-    # multiple demo sub-accounts), and nothing before this pin verified WHICH
-    # one _resolve_account_id's accounts[0] picked. Unset (None) = no pin, the
-    # legacy accounts[0] behavior is unchanged and this is visibility-only.
+    # Required order-routing pin: the Tradovate account id this deployment
+    # expects to trade. Read-only account/status paths may remain unpinned, but
+    # execute_bracket fails closed when this is unset. This prevents automated
+    # order submission from ever guessing accounts[0] under a multi-account login.
     expected_account_id: Optional[int] = None
 
     @classmethod
@@ -729,8 +728,9 @@ class TradovateBroker(BrokerInterface):
         second copy of this logic is how a periodic heartbeat could silently
         re-select accounts[0] even after a pin was configured.
 
-        Pin unset (TRADOVATE_EXPECTED_ACCOUNT_ID not set): legacy behavior —
-        accounts[0], visibility logging only. Unchanged for compatibility.
+        Pin unset (TRADOVATE_EXPECTED_ACCOUNT_ID not set): read-only callers
+        may still resolve accounts[0] for visibility/status compatibility, but
+        execute_bracket independently refuses order submission without a pin.
 
         Pin configured: search the FULL list for an exact id match and
         select it regardless of list position. Fail closed (return None,
@@ -790,14 +790,10 @@ class TradovateBroker(BrokerInterface):
         contract lookup or order body is built.
 
         Returns None to proceed, or a _cancelled_fill reason string to block.
-        Enforcement only activates once TRADOVATE_EXPECTED_ACCOUNT_ID is set —
-        unset means no pin exists yet and this call is visibility-only (still
-        logs, never blocks), so it is safe to deploy before that env var is
-        configured on the box. Once a pin IS set, _resolve_account_id has
-        already searched the full account list for an exact match (see
-        _select_account_id) — self._account_id here is either the confirmed
-        matching account or None; this method never falls back to
-        accounts[0] itself.
+        Order submission requires TRADOVATE_EXPECTED_ACCOUNT_ID. If it is unset,
+        fail closed before any account is guessed or any broker order endpoint
+        can be reached. Once a pin is set, _resolve_account_id searches the full
+        account list for an exact match (see _select_account_id).
         """
         if self._account_id is None:
             self._resolve_account_id()
@@ -808,10 +804,11 @@ class TradovateBroker(BrokerInterface):
             expected if expected is not None else "unset",
         )
         if expected is None:
-            if self._account_id is None:
-                logger.error("BLOCKED order: Tradovate account ID could not be resolved.")
-                return "ACCOUNT_UNRESOLVED"
-            return None
+            logger.error(
+                "BLOCKED order: TRADOVATE_EXPECTED_ACCOUNT_ID is not configured "
+                "-- automated order submission requires an exact account pin."
+            )
+            return "ACCOUNT_PIN_REQUIRED"
         if self._account_id is None:
             logger.error(
                 "BLOCKED order: TRADOVATE_EXPECTED_ACCOUNT_ID=%s could not be "
