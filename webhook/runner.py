@@ -872,8 +872,7 @@ def process_alert(
                 source_ticker=payload.ticker,
                 contract_hint=payload.contract_hint,
             )
-            if payload.contract_hint:
-                _observe_alert_contract_identity(payload, state.instrument, log_dir)
+            _observe_alert_contract_identity(payload, state.instrument, log_dir)
             # Window regime: include this just-recorded bar in the lookback.
             state.window_direction = BarHistory.window_direction(
                 bar_hist.recent(state.instrument, 6, for_date=for_date)
@@ -3387,12 +3386,19 @@ def _observe_alert_contract_identity(payload: AlertPayload, instrument: str, log
     Gives roll-seam evidence while no orders are sent (shadow mode). Uses the
     broker's existing `_front_month_symbol` and its ET trading date — no new
     roll rule, no network. Never raises and never changes the decision.
+
+    Recorded for every MNQ/MES bar, WITH OR WITHOUT a hint: a missing hint is a
+    CONTRACT_IDENTITY_UNKNOWN row, so the Pine price-proof's false-null rate is
+    measurable (#968 §8). Other roots are recorded only if they carry a hint.
     """
     try:
         from zoneinfo import ZoneInfo
 
-        from execution.contract_identity import compare, record_observation, verdict_row
+        from execution.contract_identity import SUPPORTED_ROOTS, compare, record_observation, verdict_row
         from execution.tradovate_broker import _front_month_symbol
+
+        if not payload.contract_hint and str(instrument).upper() not in SUPPORTED_ROOTS:
+            return
 
         today_et = datetime.now(ZoneInfo("America/New_York")).date()
         routed = _front_month_symbol(instrument, today_et)

@@ -303,6 +303,7 @@ def test_blocked_bar_writes_no_isolated_lane_ledger(config, tmp_path):
         "strategy_context_observations",         # observe-only context feed
         "bars_",                                 # bar history cache
         "latest_webhook",                        # last-payload snapshot
+        "contract_identity_observe",             # observe-only contract identity row (#969), written at bar ingest
     )
     unexpected = {p for p in created if not p.startswith(allowed_prefixes)}
     assert not unexpected, f"blocked bar must not touch isolated lane files: {sorted(unexpected)}"
