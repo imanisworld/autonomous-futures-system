@@ -50,7 +50,7 @@ Verified futures-bot runtime facts:
 - `CROSS_INSTRUMENT_OBSERVATION=cross_instrument_observation_v1`;
 - `ASIA_D_EMA_PAPER_MODE=paper_sim`.
 
-Therefore the box must not be summarized as globally paper-only: **live execution is disabled, but the isolated wide-stop DEMO route is armed.** Paper evidence and Tradovate DEMO evidence remain separate.
+Therefore the box must not be summarized as globally paper-only: **live execution is disabled, but the isolated wide-stop DEMO route is armed.** Paper evidence and Tradovate DEMO evidence remain separate. **2026-09-24: the operator confirmed this DEMO arming is intentional** (approved Tradovate demo execution, not live). See the wide-stop DEMO section in `docs/futures-current-status-2026-09-22.md`.
 
 **#644 is merged** as `455037c`: the Backtest -> DEMO qualification gate is now on `main`. It is an acceptance gate, not strategy proof.
 
