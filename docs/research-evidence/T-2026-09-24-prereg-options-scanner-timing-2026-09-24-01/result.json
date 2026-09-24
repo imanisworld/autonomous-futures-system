@@ -1,0 +1,385 @@
+{
+  "disposition": "RETIRE",
+  "halves": {
+    "H1": [
+      "2025-10-01",
+      "2026-03-17"
+    ],
+    "H2": [
+      "2026-03-18",
+      "2026-08-31"
+    ]
+  },
+  "metrics": {
+    "v0_baseline_sip_960_close_confirm": {
+      "H1": {
+        "detected_episodes": 378,
+        "detection_latency_minutes": {
+          "median": 50.75,
+          "n": 378,
+          "p25": 45.0,
+          "p75": 80.75
+        },
+        "eligible_episodes": 131,
+        "false_positive_checked": 0,
+        "false_positive_rate": null,
+        "late_episodes": 247,
+        "late_rate": 0.6534391534391535,
+        "late_split": {
+          "past_stop": 8,
+          "past_target": 67,
+          "remaining_rr_below_1": 172
+        },
+        "null_draws": 500,
+        "null_p95_expectancy_R": 0.1823741601501927,
+        "outcomes_n": 131,
+        "r_remaining_at_first_detection": {
+          "median": 0.7031669234682355,
+          "n": 370,
+          "p25": 0.18458015033577885,
+          "p75": 1.2861786424107597
+        },
+        "resolutions": {
+          "horizon": 2,
+          "stop": 83,
+          "target": 46
+        },
+        "target_before_detection": 108,
+        "target_before_detection_rate": 0.2857142857142857,
+        "underlying_structural_expectancy_R": 0.05064621184443666
+      },
+      "H2": {
+        "detected_episodes": 395,
+        "detection_latency_minutes": {
+          "median": 50.75,
+          "n": 395,
+          "p25": 47.75,
+          "p75": 110.75
+        },
+        "eligible_episodes": 161,
+        "false_positive_checked": 0,
+        "false_positive_rate": null,
+        "late_episodes": 234,
+        "late_rate": 0.5924050632911393,
+        "late_split": {
+          "past_stop": 2,
+          "past_target": 56,
+          "remaining_rr_below_1": 176
+        },
+        "null_draws": 500,
+        "null_p95_expectancy_R": 0.14625042447810707,
+        "outcomes_n": 161,
+        "r_remaining_at_first_detection": {
+          "median": 0.7772727272727283,
+          "n": 393,
+          "p25": 0.2550852116547578,
+          "p75": 1.3971935295264146
+        },
+        "resolutions": {
+          "data_end": 2,
+          "horizon": 2,
+          "stop": 100,
+          "target": 57
+        },
+        "target_before_detection": 106,
+        "target_before_detection_rate": 0.2683544303797468,
+        "underlying_structural_expectancy_R": 0.09231083213025226
+      }
+    },
+    "v1_iex_feed_60s_close_confirm": {
+      "H1": {
+        "detected_episodes": 392,
+        "detection_latency_minutes": {
+          "median": 35.75,
+          "n": 392,
+          "p25": 31.5,
+          "p75": 65.75
+        },
+        "eligible_episodes": 131,
+        "false_positive_checked": 392,
+        "false_positive_rate": 0.05612244897959184,
+        "late_episodes": 261,
+        "late_rate": 0.6658163265306123,
+        "late_split": {
+          "past_stop": 2,
+          "past_target": 79,
+          "remaining_rr_below_1": 180
+        },
+        "null_draws": 500,
+        "null_p95_expectancy_R": 0.17129732205062642,
+        "outcomes_n": 131,
+        "r_remaining_at_first_detection": {
+          "median": 0.6838532828612407,
+          "n": 391,
+          "p25": 0.15051647298927984,
+          "p75": 1.2410258384009452
+        },
+        "resolutions": {
+          "horizon": 2,
+          "stop": 81,
+          "target": 48
+        },
+        "target_before_detection": 122,
+        "target_before_detection_rate": 0.3112244897959184,
+        "underlying_structural_expectancy_R": 0.03835375388448949
+      },
+      "H2": {
+        "detected_episodes": 411,
+        "detection_latency_minutes": {
+          "median": 35.75,
+          "n": 411,
+          "p25": 34.75,
+          "p75": 95.75
+        },
+        "eligible_episodes": 156,
+        "false_positive_checked": 411,
+        "false_positive_rate": 0.0535279805352798,
+        "late_episodes": 255,
+        "late_rate": 0.6204379562043796,
+        "late_split": {
+          "past_stop": 1,
+          "past_target": 70,
+          "remaining_rr_below_1": 184
+        },
+        "null_draws": 500,
+        "null_p95_expectancy_R": 0.11285689849934456,
+        "outcomes_n": 156,
+        "r_remaining_at_first_detection": {
+          "median": 0.7274848343443803,
+          "n": 407,
+          "p25": 0.18617507921053084,
+          "p75": 1.3631918175126683
+        },
+        "resolutions": {
+          "data_end": 1,
+          "horizon": 2,
+          "stop": 95,
+          "target": 58
+        },
+        "target_before_detection": 106,
+        "target_before_detection_rate": 0.25790754257907544,
+        "underlying_structural_expectancy_R": 0.19273152541516675
+      }
+    },
+    "v2_daily_at_open_live_cross": {
+      "H1": {
+        "detected_episodes": 400,
+        "detection_latency_minutes": {
+          "median": 48.75,
+          "n": 357,
+          "p25": 30.75,
+          "p75": 78.75
+        },
+        "eligible_episodes": 142,
+        "false_positive_checked": 0,
+        "false_positive_rate": null,
+        "late_episodes": 258,
+        "late_rate": 0.645,
+        "late_split": {
+          "past_stop": 6,
+          "past_target": 67,
+          "remaining_rr_below_1": 185
+        },
+        "null_draws": 500,
+        "null_p95_expectancy_R": 0.20826282535576437,
+        "outcomes_n": 142,
+        "r_remaining_at_first_detection": {
+          "median": 0.7986049355268934,
+          "n": 394,
+          "p25": 0.23764073191526747,
+          "p75": 1.1507386346670019
+        },
+        "resolutions": {
+          "horizon": 3,
+          "stop": 82,
+          "target": 57
+        },
+        "target_before_detection": 100,
+        "target_before_detection_rate": 0.25,
+        "underlying_structural_expectancy_R": 0.1131951868224383
+      },
+      "H2": {
+        "detected_episodes": 427,
+        "detection_latency_minutes": {
+          "median": 50.75,
+          "n": 345,
+          "p25": 34.75,
+          "p75": 108.75
+        },
+        "eligible_episodes": 160,
+        "false_positive_checked": 0,
+        "false_positive_rate": null,
+        "late_episodes": 267,
+        "late_rate": 0.6252927400468384,
+        "late_split": {
+          "past_stop": 2,
+          "past_target": 51,
+          "remaining_rr_below_1": 214
+        },
+        "null_draws": 500,
+        "null_p95_expectancy_R": 0.04227838698711825,
+        "outcomes_n": 160,
+        "r_remaining_at_first_detection": {
+          "median": 0.814779270633397,
+          "n": 425,
+          "p25": 0.34578616352200864,
+          "p75": 1.2178582534025388
+        },
+        "resolutions": {
+          "data_end": 2,
+          "horizon": 4,
+          "stop": 98,
+          "target": 56
+        },
+        "target_before_detection": 88,
+        "target_before_detection_rate": 0.20608899297423888,
+        "underlying_structural_expectancy_R": 0.0522919793807791
+      }
+    },
+    "v3_30m_intrabar_live_cross": {
+      "H1": {
+        "detected_episodes": 397,
+        "detection_latency_minutes": {
+          "median": 50.75,
+          "n": 397,
+          "p25": 30.75,
+          "p75": 80.75
+        },
+        "eligible_episodes": 132,
+        "false_positive_checked": 105,
+        "false_positive_rate": 0.14285714285714285,
+        "late_episodes": 265,
+        "late_rate": 0.6675062972292192,
+        "late_split": {
+          "past_stop": 5,
+          "past_target": 82,
+          "remaining_rr_below_1": 178
+        },
+        "null_draws": 500,
+        "null_p95_expectancy_R": 0.1484532687584031,
+        "outcomes_n": 132,
+        "r_remaining_at_first_detection": {
+          "median": 0.6289877942350206,
+          "n": 394,
+          "p25": 0.12296946068874463,
+          "p75": 1.225121350270732
+        },
+        "resolutions": {
+          "horizon": 2,
+          "stop": 83,
+          "target": 47
+        },
+        "target_before_detection": 118,
+        "target_before_detection_rate": 0.2972292191435768,
+        "underlying_structural_expectancy_R": 0.03507625169376161
+      },
+      "H2": {
+        "detected_episodes": 418,
+        "detection_latency_minutes": {
+          "median": 50.75,
+          "n": 418,
+          "p25": 31.0,
+          "p75": 110.75
+        },
+        "eligible_episodes": 158,
+        "false_positive_checked": 95,
+        "false_positive_rate": 0.2,
+        "late_episodes": 260,
+        "late_rate": 0.6220095693779905,
+        "late_split": {
+          "past_stop": 1,
+          "past_target": 84,
+          "remaining_rr_below_1": 175
+        },
+        "null_draws": 500,
+        "null_p95_expectancy_R": 0.10863348292570194,
+        "outcomes_n": 158,
+        "r_remaining_at_first_detection": {
+          "median": 0.6944766639049706,
+          "n": 416,
+          "p25": 0.07142857142856547,
+          "p75": 1.3397884766469819
+        },
+        "resolutions": {
+          "data_end": 2,
+          "horizon": 2,
+          "stop": 95,
+          "target": 59
+        },
+        "target_before_detection": 122,
+        "target_before_detection_rate": 0.291866028708134,
+        "underlying_structural_expectancy_R": 0.13908324265344518
+      }
+    }
+  },
+  "overall": "NO IMPROVEMENT",
+  "scoring_window": [
+    "2025-10-01",
+    "2026-08-31"
+  ],
+  "sessions": 230,
+  "trial_id": "T-2026-09-24-prereg-options-scanner-timing-2026-09-24-01",
+  "verdicts": {
+    "v1_iex_feed_60s_close_confirm": {
+      "checks": {
+        "H1_eligible_ge_2x_v0": false,
+        "H1_expectancy_ge_v0_minus_0.05": true,
+        "H1_expectancy_gt_0": true,
+        "H1_expectancy_gt_null_p95": false,
+        "H1_false_positive_le_15pct": true,
+        "H1_median_rr_ge_1": false,
+        "H1_target_before_detection_le_10pct": false,
+        "H2_eligible_ge_2x_v0": false,
+        "H2_expectancy_ge_v0_minus_0.05": true,
+        "H2_expectancy_gt_0": true,
+        "H2_expectancy_gt_null_p95": true,
+        "H2_false_positive_le_15pct": true,
+        "H2_median_rr_ge_1": false,
+        "H2_target_before_detection_le_10pct": false,
+        "eligible_total_ge_60": true
+      },
+      "eligible_total": 287,
+      "verdict": "NO IMPROVEMENT"
+    },
+    "v2_daily_at_open_live_cross": {
+      "checks": {
+        "H1_eligible_ge_2x_v0": false,
+        "H1_expectancy_ge_v0_minus_0.05": true,
+        "H1_expectancy_gt_0": true,
+        "H1_expectancy_gt_null_p95": false,
+        "H1_median_rr_ge_1": false,
+        "H1_target_before_detection_le_10pct": false,
+        "H2_eligible_ge_2x_v0": false,
+        "H2_expectancy_ge_v0_minus_0.05": true,
+        "H2_expectancy_gt_0": true,
+        "H2_expectancy_gt_null_p95": true,
+        "H2_median_rr_ge_1": false,
+        "H2_target_before_detection_le_10pct": false,
+        "eligible_total_ge_60": true
+      },
+      "eligible_total": 302,
+      "verdict": "NO IMPROVEMENT"
+    },
+    "v3_30m_intrabar_live_cross": {
+      "checks": {
+        "H1_eligible_ge_2x_v0": false,
+        "H1_expectancy_ge_v0_minus_0.05": true,
+        "H1_expectancy_gt_0": true,
+        "H1_expectancy_gt_null_p95": false,
+        "H1_false_positive_le_15pct": true,
+        "H1_median_rr_ge_1": false,
+        "H1_target_before_detection_le_10pct": false,
+        "H2_eligible_ge_2x_v0": false,
+        "H2_expectancy_ge_v0_minus_0.05": true,
+        "H2_expectancy_gt_0": true,
+        "H2_expectancy_gt_null_p95": true,
+        "H2_false_positive_le_15pct": false,
+        "H2_median_rr_ge_1": false,
+        "H2_target_before_detection_le_10pct": false,
+        "eligible_total_ge_60": true
+      },
+      "eligible_total": 290,
+      "verdict": "NO IMPROVEMENT"
+    }
+  }
+}
