@@ -178,14 +178,19 @@ class FakeBook:
         return {}
 
 
-def make_broker(monkeypatch, book: FakeBook) -> TradovateBroker:
+def make_broker(
+    monkeypatch, book: FakeBook, *, expected_account_id: int | None = ACCOUNT_ID
+) -> TradovateBroker:
     """A real TradovateBroker (demo) whose HTTP calls all go to ``book``."""
     monkeypatch.setenv("TRADOVATE_ENV", "demo")
     monkeypatch.setenv("TRADOVATE_USERNAME", "x")
     monkeypatch.setenv("TRADOVATE_PASSWORD", "x")
     monkeypatch.setenv("TRADOVATE_API_KEY_ID", "1")
     monkeypatch.setenv("TRADOVATE_API_KEY_SECRET", "x")
-    monkeypatch.delenv("TRADOVATE_EXPECTED_ACCOUNT_ID", raising=False)
+    if expected_account_id is None:
+        monkeypatch.delenv("TRADOVATE_EXPECTED_ACCOUNT_ID", raising=False)
+    else:
+        monkeypatch.setenv("TRADOVATE_EXPECTED_ACCOUNT_ID", str(expected_account_id))
     monkeypatch.delenv("EXPECTED_TRADOVATE_ACCOUNT_ID", raising=False)
     monkeypatch.delenv("BROKER", raising=False)  # keeps runner alerts off
     # The client-order-id registry is CLASS-level (process-wide); isolate tests.
