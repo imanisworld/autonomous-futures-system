@@ -176,7 +176,7 @@ def test_fi18_unpinned_multi_account_login_refuses_to_guess(monkeypatch):
     assert book.place_calls() == 0, str(rec)
 
 
-def test_fi18_unpinned_account_still_gets_the_balance_check(monkeypatch):
+def test_fi18_account_pin_and_balance_are_both_fail_closed(monkeypatch):
     def zero_balance_broker(pin):
         book = FakeBook(place_mode="fill", children=True)
         book.get_faults["/cashBalance"] = [{"totalCashValue": 0.0}]
@@ -185,9 +185,12 @@ def test_fi18_unpinned_account_still_gets_the_balance_check(monkeypatch):
         return book, broker
 
     pinned_book, pinned = zero_balance_broker(ACCOUNT_ID)
-    control = pinned.execute_bracket(_mes_order())
-    require(control.exit_reason == "ACCOUNT_NONPOSITIVE_BALANCE" and pinned_book.place_calls() == 0,
-            "control: a pinned account with zero balance is refused")
+    pinned_fill = pinned.execute_bracket(_mes_order())
+    require(
+        pinned_fill.exit_reason == "ACCOUNT_NONPOSITIVE_BALANCE"
+        and pinned_book.place_calls() == 0,
+        "a pinned account still requires a verified positive balance",
+    )
     book, unpinned = zero_balance_broker(None)
     fill = unpinned.execute_bracket(_mes_order())
     rec = FaultRecord(
@@ -195,7 +198,8 @@ def test_fi18_unpinned_account_still_gets_the_balance_check(monkeypatch):
         initial_journal="n/a (broker level)",
         initial_broker="one account, cash balance 0; pin unset",
         injected_failure="none — ordinary order",
-        expected_safe_state="refused as ACCOUNT_NONPOSITIVE_BALANCE, like the pinned path",
+        expected_safe_state="refused as ACCOUNT_PIN_REQUIRED before order submission",
         actual_state=f"placeOSO={book.place_calls()} result={fill.result}/{fill.exit_reason}",
     )
+    assert fill.exit_reason == "ACCOUNT_PIN_REQUIRED", str(rec)
     assert book.place_calls() == 0, str(rec)
