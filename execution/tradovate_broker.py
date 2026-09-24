@@ -1061,6 +1061,16 @@ class TradovateBroker(BrokerInterface):
     def execute_bracket(self, order: BracketOrder) -> Fill:
         """Place entry market order with attached stop and target (OSO bracket)."""
         try:
+            # Refuse before any auth or order POST. Never resize the quantity.
+            from config.settings import hard_cap_order_refusal
+
+            refusal = hard_cap_order_refusal(
+                1 if order.contracts is None else order.contracts
+            )
+            if refusal:
+                logger.error("BLOCKED Tradovate order: %s", refusal)
+                return self._cancelled_fill(order, refusal)
+
             # ── Safety: TRADOVATE_ENV=live requires explicit LIVE_TRADING_ENABLED=true ──
             if self.config.env == "live":
                 live_enabled = os.getenv("LIVE_TRADING_ENABLED", "false").strip().lower()

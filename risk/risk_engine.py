@@ -181,6 +181,7 @@ class RiskEngine:
             self._check_alert_freshness,
             self._check_position_sizing,
             self._check_max_contracts,
+            self._check_hard_contract_cap,
             self._check_win_streak_contracts,
             self._check_session,
             self._check_session_window,
@@ -298,6 +299,33 @@ class RiskEngine:
             )
         return None
 
+    def _check_hard_contract_cap(
+        self, setup: TradeSetup, daily_state: DailyState
+    ) -> Optional[RiskResult]:
+        """Refuse new entries unless quantity is within a positive hard cap.
+
+        Missing, non-integer, zero, and negative caps refuse. A quantity above
+        the cap refuses. This check does not resize the order.
+        """
+        cap = getattr(self.config, "max_contracts_hard_cap", None)
+        if isinstance(cap, bool) or not isinstance(cap, int) or cap <= 0:
+            return RiskResult(
+                result="REJECTED",
+                failed_rule="max_contracts_hard_cap_invalid",
+                reason=(
+                    "MAX_CONTRACTS_HARD_CAP is missing or not a positive integer; "
+                    "refusing new entries."
+                ),
+            )
+        if int(setup.contracts or 0) > cap:
+            return RiskResult(
+                result="REJECTED",
+                failed_rule="max_contracts_hard_cap_exceeded",
+                reason=(
+                    f"Contracts {setup.contracts} exceed MAX_CONTRACTS_HARD_CAP={cap}."
+                ),
+            )
+        return None
 
     def _check_position_sizing(
         self, setup: TradeSetup, daily_state: DailyState
@@ -381,12 +409,17 @@ class RiskEngine:
         return self._cap_contracts(int(self.config.max_contracts_per_instrument.get(instrument, 1)))
 
     def _cap_contracts(self, n: int) -> int:
-        """Apply the hard contract ceiling (e.g. 1 for demo/live) on top of
-        balance-tiered sizing. None = no cap."""
+        """Clamp a recommended size down to a positive hard cap.
+
+        A missing or non-positive cap is not treated as unlimited here: this
+        helper returns the unclamped recommendation only so callers can journal
+        it, and RiskEngine.validate refuses the entry. Never increases n except
+        for the existing floor of 1 when the cap itself is positive.
+        """
         cap = getattr(self.config, "max_contracts_hard_cap", None)
-        if cap is not None and cap > 0:
-            return max(1, min(int(n), int(cap)))
-        return int(n)
+        if isinstance(cap, bool) or not isinstance(cap, int) or cap <= 0:
+            return int(n)
+        return max(1, min(int(n), int(cap)))
 
     def _check_instrument(
         self, setup: TradeSetup, daily_state: DailyState

@@ -51,6 +51,53 @@ class ConfigError(ValueError):
     """Raised when configuration is invalid or incomplete."""
 
 
+def parse_max_contracts_hard_cap(raw: str | None) -> int:
+    """Return a positive integer contract cap, or raise ConfigError.
+
+    Missing, blank, non-numeric, zero, and negative values refuse. This never
+    returns None and never substitutes another limit.
+    """
+    if raw is None or str(raw).strip() == "":
+        raise ConfigError(
+            "MAX_CONTRACTS_HARD_CAP is missing or empty; refusing to trade"
+        )
+    text = str(raw).strip()
+    if not text.isdigit():
+        raise ConfigError(
+            "MAX_CONTRACTS_HARD_CAP must be a positive integer "
+            f"(got {text!r}); refusing to trade"
+        )
+    value = int(text)
+    if value <= 0:
+        raise ConfigError(
+            "MAX_CONTRACTS_HARD_CAP must be a positive integer "
+            f"(got {value}); refusing to trade"
+        )
+    return value
+
+
+def hard_cap_order_refusal(quantity: int) -> str | None:
+    """Reason to refuse an order, or None when quantity is within the env cap.
+
+    Does not resize. A missing or invalid cap refuses; a quantity above the
+    cap refuses. Callers must not submit or increase the quantity.
+    """
+    try:
+        cap = parse_max_contracts_hard_cap(os.getenv("MAX_CONTRACTS_HARD_CAP"))
+    except ConfigError as exc:
+        return str(exc)
+    try:
+        qty = int(quantity)
+    except (TypeError, ValueError):
+        return "order quantity is not an integer; refusing to submit"
+    if qty > cap:
+        return (
+            f"contracts {qty} exceed MAX_CONTRACTS_HARD_CAP={cap}; "
+            "refusing order without resizing"
+        )
+    return None
+
+
 # ─── Config Dataclass ────────────────────────────────────────────────────────
 
 
@@ -326,8 +373,10 @@ class SystemConfig:
     max_contracts_per_instrument: dict = field(default_factory=dict)
     position_sizing: PositionSizingConfig = field(default_factory=PositionSizingConfig)
     # Hard ceiling applied AFTER dynamic sizing — caps contracts regardless of
-    # account balance. None = no cap. Used to keep demo/live execution at 1
-    # contract while the balance-tiered rules still scale paper sizing.
+    # account balance. load_config() requires MAX_CONTRACTS_HARD_CAP to be a
+    # positive integer; None, zero, and negative are not a trading configuration
+    # (RiskEngine.validate and the broker guard refuse them). The numeric value
+    # is whatever the environment sets. There is no substitute default.
     max_contracts_hard_cap: Optional[int] = None
     # Opt-in ranked strategy selection. "first_match" = default live behavior.
     # "ranked" = score all candidates and pick the highest-ranked one.
@@ -791,10 +840,8 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         averaging_down_allowed=position.get("averaging_down", False),
         max_contracts_per_instrument=position.get("max_contracts_per_instrument", {}),
         position_sizing=_parse_position_sizing(sizing),
-        max_contracts_hard_cap=(
-            int(os.getenv("MAX_CONTRACTS_HARD_CAP"))
-            if (os.getenv("MAX_CONTRACTS_HARD_CAP") or "").strip().isdigit()
-            else position.get("max_contracts_hard_cap")
+        max_contracts_hard_cap=parse_max_contracts_hard_cap(
+            os.getenv("MAX_CONTRACTS_HARD_CAP")
         ),
         daily_profit_protect_threshold=float(
             daily.get("daily_profit_protect_threshold", 0.0) or 0.0
