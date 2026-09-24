@@ -3,8 +3,9 @@
 Prereg:
 docs/prereg-mnq-orb-rework-stage-a-2026-09-23.md
 
-This runner measures raw directional behavior only. It does not import strategy,
-risk, broker, execution, webhook, scheduler, or deployment code.
+This runner measures raw directional behavior only. It does not import or call
+strategy evaluation, risk, broker, execution, webhook, scheduler, or deployment paths.
+It reuses the repository's existing Bar type and read-only futures replay loaders.
 
 Example:
     python research/mnq_orb_rework_stage_a.py --out logs/mnq_orb_stage_a
