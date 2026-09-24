@@ -154,6 +154,45 @@ That rejected row is 2026-05-12 SHORT. The target is 1 tick from the trigger:
 2025-02-12 LONG is the positive day-only flatten, not a target hit:
 DAY_ONLY_FLATTEN at the exact 15:55 ET bar (2025-02-12T20:55Z), fill 21,701.75,
 exit at the bar close 21,801.75, +$198.52 at 3 ticks. The target was 21,848.5.
+One of the 32 wins is this flatten.
+
+Net at 1 / 2 / 3 ticks is $2,503.64 / $2,487.64 / $2,471.64. Derived from exit
+timestamps, pending corpus re-run.
+
+Reward:risk, side by side, derived and pending corpus re-run:
+
+| Variant | Median R:R |
+|---|---:|
+| 32 resolved rows, fill-based | **0.229** (interpolated between 0.1951 and 0.2629) |
+| 33 rows including 2025-01-20 (MLK) | **0.263** |
+| 32 resolved rows, trigger-based | **0.237** |
+
+Mean R:R on the 32 resolved rows is **0.330**.
+
+### Blast radius (AFS-0051)
+
+Read from `scripts/edge_decomposition_audit_results_candidates.jsonl.gz`. The
+stored `bracket` is the plan fill (the 3-2-2 resolved nets sum to the
+as-booked plan 1-tick total 2532.66).
+
+- 3-2-2 MNQ plan fill changes only on 2025-01-20 SHORT: booked TARGET_HIT at
+  19:50 ET, net +239.02. That row becomes UNRESOLVED / EOD_BAR_MISSING. No
+  other 3-2-2 plan-fill exit is after 15:55 ET.
+- 4HR MNQ plan fills are clean: 80 resolved, none exit after 15:55 ET.
+  2026-06-19 LONG is already UNRESOLVED / EOD_BAR_MISSING.
+- 4HR MES plan fill: 76 rows, 74 resolved, 1 no-fill (2024-10-09
+  ENTRY_BRACKET_INVALID_AT_FILL), 1 already UNRESOLVED / EOD_BAR_MISSING
+  (2025-05-26 SHORT, no exit timestamp). No 4HR MES plan-fill exit is after
+  15:55 ET, so no plan-fill outcome changes. Resting-fill and IOC exits are
+  not in the per-row file. The aggregate 4HR MES resting fill has
+  `eod_bar_missing` 0 and 51 resolved, which does not identify an evening
+  exit. Those models stay unverified.
+- The edge-audit 3-2-2 resting fill (20 fills, net 1886.40, `eod_bar_missing`
+  0) is LIKELY affected. The per-row file does not store that model, so
+  whether 2025-01-20 filled there is not visible.
+- The 4HR pre-armed A/B uses `scripts/four_hr_retrigger_stop_study.py`, which
+  calls `execution.day_only_exit.is_after_eod_close`. This PR does not change
+  that resolver.
 
 2024-08-30 SHORT is an open rule ambiguity. Frozen behavior is unchanged. Stop
 19,603. The 10AM-hour high 19,628 traded 100 ticks through the stop before the

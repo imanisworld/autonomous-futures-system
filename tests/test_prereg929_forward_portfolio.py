@@ -26,7 +26,8 @@ UTC = timezone.utc
 # Git blob SHA-1s of the ported files at archive/pr915 5a9f14baf714947b98a38a19b45f04a8d18fb365.
 # scripts/mnq_combined_portfolio_audit.py is not in this map. AFS-0041 changes
 # only its 60M_322_FIRST_LIVE control (33 fills / 2742.66 -> 33 fills / 2503.64,
-# derived, pending corpus re-run). The prior blob was
+# derived, pending corpus re-run). AFS-0051 adds the comment that cites the
+# 322 erratum and the re-registered prereg. The 5a9f14b blob was
 # c24f82ef60e4c70dcea46dcdc1e5dadf58ec6406. See
 # docs/prereg-mnq-portfolio-ex-asia-forward-2026-09-23.md (superseded) and
 # docs/prereg-mnq-portfolio-ex-asia-forward-2026-09-24-reregistered.md.
@@ -37,7 +38,7 @@ PORTED_BLOBS_5A9F14B = {
     "scripts/mnq_sustained_trend_continuation_v1.py": "909fc10e4168b5956533dea1346e412015bae719",
 }
 AFS_0041_PORTFOLIO_SCRIPT = "scripts/mnq_combined_portfolio_audit.py"
-AFS_0041_PORTFOLIO_SCRIPT_BLOB = "7e46a34cada2fccf342c1eb1524070b0fb97d46f"
+AFS_0041_PORTFOLIO_SCRIPT_BLOB = "53df87ea161900867381c33a39ba9afce1e96384"
 
 
 def _git_blob_sha(path: Path) -> str:

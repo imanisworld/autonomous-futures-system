@@ -30,6 +30,8 @@ EXPECTED_N = 34
 TICK = 0.25
 IOC_TOLERANCE = 32.0
 # ERRATUM 2026-09-24 (docs/prereg-322-trigger-timing-ab-2026-09-18.md).
+# Also cited by the re-registered forward prereg
+# docs/prereg-mnq-portfolio-ex-asia-forward-2026-09-24-reregistered.md.
 # The sealed reproduction gates included the 2025-01-20 evening-bar target:
 # day-only resolve_bracket walked same-ET-date bars after the exact 15:55 ET bar.
 # Original EXPECTED_PLAN = {"filled": 33, "net": 2532.66, "h1_net": 1383.34, "h2_net": 1149.32}

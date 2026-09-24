@@ -104,7 +104,11 @@ def test_data_gap_at_1555_is_not_filled_by_a_later_same_date_bar():
 
 def test_no_earlier_bar_is_substituted_as_the_close():
     # Early close at 13:00 ET with nothing afterwards: the 12:55 bar is NOT a
-    # flatten bar (no substitution rule is pre-registered).
+    # flatten bar (no substitution rule is pre-registered). This case also
+    # passes on the old date-only guard, because the walk simply runs out of
+    # bars. The same-date bars after 15:55 in
+    # tests/test_resolve_bracket_exact_eod_qa.py are the checks that fail on
+    # that guard.
     day = datetime(2025, 11, 28, tzinfo=ET)
     rows = _span(day.replace(hour=10, minute=40), day.replace(hour=12, minute=55),
                  (100.0, 100.5, 99.5, 100.25))

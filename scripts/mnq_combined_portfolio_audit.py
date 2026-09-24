@@ -72,11 +72,14 @@ DEFAULT_OUT = REPO / "logs/mnq_combined_portfolio_audit_2026-09-22.json"
 # portfolio pass/fail thresholds.
 EXPECTED = {
     "4HR_RETRIGGER": {"fills": 80, "eod_bar_missing": 1, "net": 1414.60, "pf": 1.299},
-    # AFS-0041. The 2026-09-23 prereg pinned 33 fills / 2742.66, which included
-    # the 2025-01-20 evening-bar target. Corrected net is derived, pending
-    # corpus re-run. Fills stay 33: UNRESOLVED still counts as filled.
-    # docs/prereg-mnq-portfolio-ex-asia-forward-2026-09-23.md (superseded)
+    # ERRATUM 2026-09-24 (docs/prereg-322-trigger-timing-ab-2026-09-18.md) and
+    # AFS-0041 re-registration
     # docs/prereg-mnq-portfolio-ex-asia-forward-2026-09-24-reregistered.md
+    # (supersedes docs/prereg-mnq-portfolio-ex-asia-forward-2026-09-23.md).
+    # The 2026-09-23 pin was 33 fills / 2742.66, the 1-tick pre-armed total
+    # that included the 2025-01-20 evening target. Corrected net 2503.64 is
+    # derived, pending corpus re-run (corrected_aggregates: 1tick
+    # prearmed_touch FIXED). Fills stay 33: UNRESOLVED still counts as filled.
     "60M_322_FIRST_LIVE": {"fills": 33, "net": 2503.64},
     "DAILY_22_COMPLETED_CLOSE": {"fills": 34, "net": 13571.68, "pf": 1.9482},
     "12HR_MIYAGI": {"fills": 8, "net": 425.33, "pf": 2.322},
