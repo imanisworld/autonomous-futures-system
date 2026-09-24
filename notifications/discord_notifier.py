@@ -18,6 +18,7 @@ from typing import Callable, Optional
 
 from config.settings import SystemConfig, load_config
 from notifications import plain_english as pe
+from notifications.discord_router import redact_webhooks
 from webhook.payload import AlertPayload
 
 
@@ -59,7 +60,7 @@ def notify_discord(
     try:
         sender(config.discord_webhook_url, body, headers)
     except Exception as exc:  # pragma: no cover - exact urllib errors vary
-        logger.warning("Discord notification failed: %s", exc)
+        logger.warning("Discord notification failed: %s", redact_webhooks(exc))
         return NotificationResult(sent=False, reason="send_failed")
 
     return NotificationResult(sent=True, reason="sent")
@@ -90,7 +91,7 @@ def send_discord_alert(
             source="operational alert",
         )
     except Exception as exc:  # pragma: no cover - exact urllib errors vary
-        logger.warning("Discord alert failed: %s", exc)
+        logger.warning("Discord alert failed: %s", redact_webhooks(exc))
         return NotificationResult(sent=False, reason="send_failed")
     return NotificationResult(sent=True, reason="sent")
 

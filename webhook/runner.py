@@ -3473,7 +3473,9 @@ def _notify_force_close(
                 source="force-close",
             )
         except Exception as exc:
-            logger.warning("Force-close Discord notification failed: %s", exc)
+            from notifications.discord_router import redact_webhooks
+
+            logger.warning("Force-close Discord notification failed: %s", redact_webhooks(exc))
 
     threading.Thread(target=_send, daemon=True).start()
 

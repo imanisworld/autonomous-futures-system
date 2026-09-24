@@ -484,7 +484,9 @@ class TradovateBroker(BrokerInterface):
 
             post_card_or_text(_post, content, source="Tradovate session")
         except Exception as exc:  # noqa: BLE001 - an alert must never break the auth path
-            logger.warning("Tradovate session alert to Discord failed: %s", exc)
+            from notifications.discord_router import redact_webhooks
+
+            logger.warning("Tradovate session alert to Discord failed: %s", redact_webhooks(exc))
 
     @staticmethod
     def _http_failure_result(exc: Exception, *, login: bool = False) -> AuthResult:
