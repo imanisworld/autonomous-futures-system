@@ -32,11 +32,15 @@ def test_hint_is_emitted_in_the_alert_json_as_nullable_string():
     assert 's2j(v)            => na(v) or v == "" ? "null"' in PINE
 
 
-def test_hint_requires_current_contract_and_exact_close_proof():
+def test_hint_requires_current_contract_and_close_proof_within_tick_tolerance():
     block = _block()
     assert "syminfo.current_contract" in block
     assert re.search(r"request\.security\(cc_symbol, timeframe\.period, close, ignore_invalid_symbol=true\)", block)
-    assert "cc_close == close" in block
+    assert "math.abs(cc_close - close) / syminfo.mintick <= CC_TOL_TICKS" in block
+    # Tolerance absorbs bar-close request.security lag only. It must stay far below
+    # the smallest MNQ/MES quarterly calendar spread (MES ~200 ticks at 2026 carry).
+    tol = int(re.search(r"int\s+CC_TOL_TICKS\s*=\s*(\d+)", block).group(1))
+    assert 1 <= tol <= 10
     assert "string contract_hint = cc_proven ? cc_name : na" in block
     assert 'str.startswith(cc_name, "MNQ") or str.startswith(cc_name, "MES")' in block
 
