@@ -464,9 +464,11 @@ else if not na(orb_h) and not na(orb_l) and orb_status == "reclaimed_high" and t
     signal_stop  := math.max(orb_l - tick * 4, signal_entry - tick * max_stop_ticks)
     raw_target   := signal_entry + (signal_entry - signal_stop) * 2.5
 
-// 4. VWAP Rejection SHORT (NEW)
-// Price attempted to reclaim VWAP from below but closed back under it — failed reclaim = bearish
-else if vwap_reclaimed and close < vwap_val and trend_dir == "DOWN"
+// 4. VWAP Rejection SHORT
+// The bar AFTER a VWAP reclaim closes back below VWAP — failed reclaim = bearish.
+// Mirrors the backend gate (_try_vwap_rejection: failed_reclaim + trend DOWN, PR #308).
+// A same-bar "crossover and close < vwap" test can never be true, so the label never fired.
+else if vwap_failed_reclaim and trend_dir == "DOWN"
     signal_strategy := "vwap_rejection"
     signal_direction := "SHORT"
     signal_entry := vwap_val - tick * 2
