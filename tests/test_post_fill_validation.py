@@ -93,8 +93,9 @@ def test_paper_and_runtime_use_same_formula_when_parity_gate_requested():
 def _tradovate(monkeypatch, actual_fill, flatten):
     monkeypatch.setenv("TRADOVATE_ENV", "demo")
     monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ", "32")
-    broker = TradovateBroker(config=TradovateConfig(env="demo"))
+    broker = TradovateBroker(config=TradovateConfig(env="demo", expected_account_id=1))
     broker._account_id = 1
+    monkeypatch.setattr(broker, "get_account_balance", lambda: 50_000.0)
     broker._contract_symbol_cache["MNQ"] = "MNQU6"
     monkeypatch.setattr(broker, "_authenticate", lambda: True)
     monkeypatch.setattr(broker, "_find_contract_id", lambda _: 99)
