@@ -39,3 +39,108 @@ Branches deleted after the above tags were pushed and remote-verified:
 Also deleted this cleanup (unrelated to the above): `claude/feed-gap-alarm`
 (local-only, superseded in full by the merged `claude/feed-gap-alarm-v2` /
 PR #297 — same file, later fully rewritten).
+
+
+---
+
+## 2026-09-24 cleanup (post-PR #1018)
+
+Main at audit: `e32d33b1ea814c7cfe3627d0bbd46f28f099971b`; re-checked against
+`34177183d2a2abbb2442b4bd2dee3f6579875140` before deletion.
+
+Disposition audit method (the repo squash-merges, so commit ancestry is never
+used as proof of landing): every file each branch adds or modifies was compared
+by blob to `main` at the same path and then to `main`'s whole tree by blob hash
+(`absent` = branch blobs found nowhere on `main`); containment was checked
+against all `archive/*`, `release/*` and `release-scope/*` refs; supersession
+was taken from PR closure comments, blob comparison with the superseding
+commits, and the private handoff log. Each tag below was pushed and
+remote-verified (`ls-remote` peel == archived SHA) before its branch was
+deleted, and each deletion was a lease on that exact SHA, except
+`archive/codex-options-risk-opposite-direction-fixture-2026-09-24` and
+`archive/codex-options-selector-stale-audit-2026-09-24`, tagged after deletion.
+Tag messages carry the same Purpose and Disposition text.
+
+Squash-merged branches count as no content loss when (a) GitHub records the PR
+as merged, (b) its merge_commit_sha is reachable from main, and (c) the row
+notes 'squash-merged, commit history retained only in refs/pull/N/head'. A
+literal ancestry test is not required (PM ruling, AFS-0038 follow-up).
+
+The same cleanup also deleted 36 branches without tags: 35 whose tip equalled
+their merged PR's head SHA (squash-merged, commit history retained only in
+refs/pull/N/head), and `research/mnq-combined-portfolio-audit-20260922`
+(`5a9f14b`), already preserved byte-for-byte by
+`archive/pr915-mnq-combined-portfolio-audit-5a9f14b`.
+
+| Original branch | Archived SHA | Archive tag | Purpose | Disposition |
+|---|---|---|---|---|
+| `audit/counterfactual-producer` | `22a96b34fdfd4470014d708ba84d4588f9c74cdf` | `archive/audit-counterfactual-producer-2026-09-24` | MNQ missed-opportunity counterfactual producer + reproduction scripts/tests (#593) | HISTORICAL: Closed unmerged; #593 closure asks to preserve as provenance. Tip is also contained in `research/mes-asian-d-ema-baseline`. No landed equivalent on main. |
+| `audit/options-nonstrat-paper-track` | `18a0fb7d06eb3df3aaad00266d729c037335224c` | `archive/audit-options-nonstrat-paper-track-2026-09-24` | Options non-Strat fail-closed internal paper track + journal (#875, with #880 review fixes merged into this branch) | HISTORICAL: #875 closed 2026-09-23 as stale implementation; later geometry prereg on main replaced it. Code never landed. Contains `rebuild/options-nonstrat-paper-track-clean`. |
+| `audit/options-shared-infra-acceptance-spec` | `1757e6176102f8df6e0679addf12ce5f5fc1f9a0` | `archive/audit-options-shared-infra-acceptance-spec-2026-09-24` | Docs: options shared-infrastructure acceptance spec (#654) | SUPERSEDED: Superseded by merged #655 (`ef508b3`), the stronger 60-blocker acceptance spec. |
+| `audit/transition-repair` | `63b3ad8aa8382c785bebde1d05ba86922e4532f4` | `archive/audit-transition-repair-2026-09-24` | Transition repair IOC audit script, results JSON and probe tests (#528) | SUPERSEDED: Superseded by #659 (`research/transition-400t-canonicalization` `53cf721`), final verdict recorded on main by #666 (`cfc4d01`). Results JSON exists only here. |
+| `brand/afsvp-palette-manifest` | `0a8faf83a0bdd816443f27b09520ef93ce00c147` | `archive/brand-afsvp-palette-manifest-2026-09-24` | AFSVP palette + manifest identity attempt (#837) | SUPERSEDED: Closed as contaminated diff; clean redo merged as #839 (`32a5240`). |
+| `chatgpt/contract-identity-guard-implementation-20260924` | `9b2e2c84560f50799a38c4dcfec382eea89119e0` | `archive/chatgpt-contract-identity-guard-implementation-20260924-2026-09-24` | Draft contract-identity guard primitives + BracketOrder.contract_hint (#967) | SUPERSEDED: Superseded by merged #969 (`45d1a95`) observe-only guard and #976 (`ea928c6`); review items carried to future enforcement PR. |
+| `chatgpt/paper-collection-rollups` | `f75b9ffcd14574871b9a4aea9236fdd42639a152` | `archive/chatgpt-paper-collection-rollups-2026-09-24` | EOD/EOW paper collection rollup script + systemd timers (#602) | SUPERSEDED: Superseded by merged #603 (`d93c580`) paper-collection Discord rollups. |
+| `chatgpt/parallel-safety-backlog` | `b4933b84e91cc1cdea8f9fdc81ea8fc75aa556e0` | `archive/chatgpt-parallel-safety-backlog-2026-09-24` | Docs: parallel-safe futures backlog, C14 proof prereg, post-freeze release gate (#628) | SUPERSEDED: Superseded by merged #626 (`03b1a5c`); C14 later closed by #646/#647. |
+| `claude/cross-market-paper-admission` | `73fb4162f0dd87b121d17d7db4af6de610951178` | `archive/claude-cross-market-paper-admission-pr945-closed-2026-09-24` | Archive of claude/cross-market-paper-admission (PR #945) | closed unmerged |
+| `claude/discord-plain-english-a` | `8b2a8bbb9c7cbda7196947f626958dbf521774e9` | `archive/claude-discord-plain-english-a-2026-09-24` | Discord plain-English batch A (no PR) | SUPERSEDED: Superseded by merged #932 (`799a89e`), which combined batches A-D; 26/28 branch blobs identical to #932. tip-at-deletion UNVERIFIED (no PR head to compare). Tag commit is an ancestor of #932 head `c37cb118`. |
+| `claude/discord-plain-english-b` | `8a2341a24429c96f4217265444e489f66b73bcbe` | `archive/claude-discord-plain-english-b-2026-09-24` | Discord plain-English batch B: watcher/drift-gate text (no PR) | SUPERSEDED: Superseded by merged #932 (`799a89e`); 14/15 branch blobs identical to #932. tip-at-deletion UNVERIFIED (no PR head to compare). Tag commit is an ancestor of #932 head `c37cb118`. |
+| `claude/discord-plain-english-c` | `d4d141fc6f75095ace88463da1928582a3f98c6a` | `archive/claude-discord-plain-english-c-2026-09-24` | Discord plain-English batch C: broker-safety/trade-close/live-switch text (no PR) | SUPERSEDED: Superseded by merged #932 (`799a89e`); 12/14 branch blobs identical to #932. tip-at-deletion UNVERIFIED (no PR head to compare). Tag commit is an ancestor of #932 head `c37cb118`. |
+| `claude/discord-plain-english-d` | `105c918bfaff0fb86eef833d5dbef9d4607f1a47` | `archive/claude-discord-plain-english-d-2026-09-24` | Discord plain-English batch D: options cards (no PR) | SUPERSEDED: Superseded by merged #932 (`799a89e`); 16/18 branch blobs identical to #932. tip-at-deletion UNVERIFIED (no PR head to compare). Tag commit is an ancestor of #932 head `c37cb118`. |
+| `claude/futures-orb-geometry-first-run` | `d93019b805a653f2a5efe8265cb1d73325bb90af` | `archive/claude-futures-orb-geometry-first-run-2026-09-24` | fng-v0.1 first-run record + orbx-v0.1 time-exit prereg and runner (#885) | HISTORICAL: Closed: auditor ruled not trusted evidence (prior-session bridging defect). orbx result recorded nowhere on main. |
+| `claude/futures-signa-shadow-context-rebased` | `d29b9f9035130f1975b7c58e627e2e5a1c0f97a6` | `archive/claude-futures-signa-shadow-context-rebased-2026-09-24` | Futures Signa shadow-context collector + exact-join report, rebased (#574) | HISTORICAL: Closed as parked. All 5 files blob-identical to existing tag `archive/audit-futures-signa-shadow-context-2026-09-15`, but that tag does not contain this tip; tag preserves the #574 commit identity. |
+| `claude/futures-signal-embed` | `7d5d8ac30831be66ae3b5720869d132be9316a08` | `archive/claude-futures-signal-embed-2026-09-24` | Futures Discord signal as embed card (#563) | HISTORICAL: Closed as parked presentation-only work; no superseder on main. |
+| `claude/observer-strat-ftfc-labels` | `4b7a2ac6c95391231f14a7757ad2335c2d8ab8b7` | `archive/claude-observer-strat-ftfc-labels-pr940-closed-2026-09-24` | Archive of claude/observer-strat-ftfc-labels (PR #940) | closed unmerged |
+| `claude/ong-v01-run-checkpoint` | `38c7604dc7e1a29e0b24f1be7fa9e73564db05b1` | `archive/claude-ong-v01-run-checkpoint-2026-09-24` | ong-v0.1 options non-Strat geometry raw report JSON + checkpoint (#886) | HISTORICAL: Closed; final audit (PR comment) REJECT for all 16 families. Raw report exists only on this branch. |
+| `claude/paper-collection-digest` | `abfb8d6db0263699468f28b8d9085b00da8295fe` | `archive/claude-paper-collection-digest-2026-09-24` | Paper collection digest + systemd timers + notification route (#605) | SUPERSEDED: Superseded by merged #603 (`d93c580`) reporter/rollups (handoff 09-16). |
+| `claude/supersede-859` | `8fce33c5908cf5508b5752fd48a55ff012dc781d` | `archive/claude-supersede-859-2026-09-24` | Doc marker: fast-regime-from-5m study SUPERSEDED, do not run (#861) | HISTORICAL: Closed "handled in the other thread", but the marker never landed: main still says PREREGISTERED STUDY, NOT RUN. |
+| `codex/options-morning-handoff-status` | `48f6c2a1cc543febc9ff697765d0faed2d49f43a` | `archive/codex-options-morning-handoff-status-2026-09-24` | Options morning handoff refresh (#683) | SUPERSEDED: Superseded by merged #708 (`a07f28b`). |
+| `codex/options-probe-direct-exec` | `9a08361cd257dfe307e224054385fdb462f5773f` | `archive/codex-options-probe-direct-exec-2026-09-24` | Public timestamp probe direct-exec fix (#688) | SUPERSEDED: Duplicate of merged #687 (`b15a3be`). |
+| `codex/options-risk-opposite-direction-fixture` | `3836bec5c3dd61db1e74034c18a3b97fdf06262c` | `archive/codex-options-risk-opposite-direction-fixture-2026-09-24` | Opposite-direction averaging-guard fixture (#685) | HISTORICAL: Closed unmerged; its one file is byte-identical to main `34177183`. |
+| `codex/options-selector-stale-audit` | `6e4a7b09f7a95127f60aaae09f41f96609f950c3` | `archive/codex-options-selector-stale-audit-2026-09-24` | Canonical selector stale-quote rejection + provider regression (#699) | HISTORICAL: Closed unmerged; all 4 files are byte-identical to main. |
+| `codex/options-v1-universe-preflight` | `684bbf0620be46cbf89b8ebd78130022b9b83a8e` | `archive/codex-options-v1-universe-preflight-2026-09-24` | Options V1 149-symbol universe/capacity/contract preflight tooling (#583) | HISTORICAL: Closed as parked groundwork; no superseder. |
+| `feature/mnq-trend-day-paper-cohort-20260922` | `cd784ddd2c8484a4dc340aae211618a8800c7c39` | `archive/feature-mnq-trend-day-paper-cohort-20260922-2026-09-24` | Default-off MNQ trend-day paper cohort + prereg (#910) | HISTORICAL: Closed: prerequisite #911 audit found no family clearing the gate; PR says preserve as abandoned design/reference. |
+| `fix/options-212r-collector-causal-timing` | `efea64e04245fbce42087e48243bc75b1e38ae6a` | `archive/fix-options-212r-collector-causal-timing-2026-09-24` | 212R prospective collector causal-timing tightening (#734) | SUPERSEDED: Superseded by merged #735 (`ae056ca`) on top of #730 (`4816aa4`). |
+| `release/options-a6f79d7-932` | `5b7be0f77057c0792d3085f8a5984d696b54eda8` | `archive/release-options-a6f79d7-932-2026-09-24` | options scanner release a6f79d7 + #932 cards, with release manifest | Archive of release/options-a6f79d7-932 |
+| `research/asian-precursor-audit` | `98e101352083255ed0f3b657e25119d8b9f7fbb0` | `archive/research-asian-precursor-audit-2026-09-24` | Asian-session pre-signal precursor audit (#596) | HISTORICAL: Closed unmerged; code absent from main; no superseder. |
+| `research/bos-mss-retest-event-study` | `a2799ef115b9cb1c2037f1376326e9b59d723eb3` | `archive/research-bos-mss-retest-event-study-2026-09-24` | Causal BOS/MSS first-retest event study (#594) | HISTORICAL: Closed as parked; PR asks to preserve as provenance. Never run. |
+| `research/intraday-momentum-replication-v01` | `f3959fc82f8cae934a5f140f35a8ab5ed3e50a1c` | `archive/research-intraday-momentum-replication-v01-2026-09-24` | fim-v0.1 intraday-momentum replication prereg + runner (#887) | HISTORICAL: Closed after scored run; result recorded only in the PR comment, not on main. |
+| `research/mes-asian-d-ema-baseline` | `af85df786b41451e09a0d4c473bf838b4a772e42` | `archive/research-mes-asian-d-ema-baseline-2026-09-24` | MES Asian D+EMA baseline portability producer + tests (#598) | HISTORICAL: Closed unmerged; Asia D+EMA lane retired 2026-09-24. Contains `audit/counterfactual-producer`. |
+| `research/mnq-orb-rework-stage-a-20260923` | `f268f3dd02db0dd51501bb4ff5d0c72200490bb9` | `archive/research-mnq-orb-rework-stage-a-20260923-2026-09-24` | MNQ ORB Stage A v0.1 raw-signal prereg + runner (#984) | SUPERSEDED: Superseded by open #994 (`research/mnq-orb-stage-a-v02-20260924` `0776a9d`), same 60-cell screen at v0.2. |
+| `research/mnq-orb-rework-stage-a-current-20260924` | `aedcaecc956efea3ad6c36a0778cdfbe19368ae3` | `archive/research-mnq-orb-rework-stage-a-current-20260924-2026-09-24` | MNQ ORB Stage A v0.1 on current main + trial ledger/manifest (#990) | SUPERSEDED: Closed as superseded by open #994 (`0776a9d`); diff to #994 is only v0.1 to v0.2 renames (4 files, 9 lines). |
+| `research/mnq-orb-rework-stage-a-ledger-20260923` | `5b377d3e8da4fdc1451b6b5e26c3cb4279033016` | `archive/research-mnq-orb-rework-stage-a-ledger-20260923-2026-09-24` | MNQ ORB Stage A v0.1 with trial registration on stale base (#985) | SUPERSEDED: Superseded by #990, then open #994 (`0776a9d`). |
+| `research/mnq-pdl-sweep-reclaim-execution-20260924` | `3fbaaf16ffc46744e599abe7d929f798af9b0cd2` | `archive/research-mnq-pdl-sweep-reclaim-execution-20260924-2026-09-24` | pdl-sr-b-v0.1 MNQ PDL sweep-reclaim honest-fill prereg, manifest, runner (#991) | HISTORICAL: Closed after scored run: BROKEN, retire. Trial-ledger row and result not on main; runner has a known 16:00 ET exit defect. |
+| `research/mnq-pdl-sweep-reclaim-friction-20260924` | `d901e3ab12f79cfa84dfc614ce6a687e065fef95` | `archive/research-mnq-pdl-sweep-reclaim-friction-20260924-2026-09-24` | MNQ PDL sweep-reclaim friction screen prereg + runner (#995) | SUPERSEDED: Closed as duplicate of #991 (`research/mnq-pdl-sweep-reclaim-execution-20260924` `3fbaaf1`); never scored. |
+| `research/mnq-sustained-trend-v1-prereg-20260922` | `dd853e70eb2a726f1da81cf7837e508e7aaf0d27` | `archive/research-mnq-sustained-trend-v1-prereg-20260922-2026-09-24` | MNQ sustained-trend continuation v1 prereg, detector spec, closure, tests (#912) | HISTORICAL: Closed DOES_NOT_CLEAR. Evaluator code is on main and #914 (`c2b3be3`) records the verdict, but prereg/spec/closure docs are absent. |
+| `research/mnq-trend-day-existing-strategy-audit-20260922` | `e68e2da1a9509295295d2dcab3b9862b61eaf27e` | `archive/research-mnq-trend-day-existing-strategy-audit-20260922-2026-09-24` | MNQ trend-day existing-strategy frozen audit prereg + script (#911) | HISTORICAL: Closed; verdict referenced on main, but prereg and script are absent. |
+| `research/mnq-vwap-delayed-failed-reclaim-stage-a-20260924` | `562d422422ac0ccc6ed966a3c6f649c973041a9a` | `archive/research-mnq-vwap-delayed-failed-reclaim-stage-a-20260924-2026-09-24` | MNQ delayed VWAP failed-reclaim prereg + runner (#996) | SUPERSEDED: Closed as duplicate of #992 (`research/mnq-vwap-failed-reclaim-3bar-20260924` `337698e`); never scored. |
+| `research/mnq-vwap-failed-reclaim-3bar-20260924` | `337698e43d6a5ce092d9a6dd478e910ff447e22f` | `archive/research-mnq-vwap-failed-reclaim-3bar-20260924-2026-09-24` | vwap-fr3-a-v0.1 MNQ VWAP failed-reclaim <=3 bars prereg, manifest, runner (#992) | HISTORICAL: Closed after scored run: BROKEN, retire. Trial-ledger row and result not on main. |
+| `research/thestrat-reference-audit-v01` | `f053c7b16686932aa6d5f2c0e5dd14234aeb591a` | `archive/research-thestrat-reference-audit-v01-2026-09-24` | TheStrat reference spec audit + 2-1-2 reversal v0.1 prereg and runner (#890) | HISTORICAL: Closed: H2 instability on both instruments. Tip is 4 commits past the PR head `2bfea35`; the tag keeps both. |
+| `research/transition-400t-canonicalization` | `53cf721280d82288f0495d7b14e91af10ee9a189` | `archive/research-transition-400t-canonicalization-2026-09-24` | Transition 400t/30m canonicalization, parity/contract audits, slippage-stress results (#659) | HISTORICAL: Closed: WAIT, fails slippage robustness. #659 says final evidence is preserved on this branch; #666 (`cfc4d01`) holds only the summary. |
+
+Three tags in the table were archived earlier than the 2026-09-24 13:29 -0400 batch: `archive/claude-cross-market-paper-admission-pr945-closed-2026-09-24` and `archive/claude-observer-strat-ftfc-labels-pr940-closed-2026-09-24` at 2026-09-23 23:28:21 -0400, and `archive/release-options-a6f79d7-932-2026-09-24` at 2026-09-23 23:30:46 -0400.
+
+Branches deleted after the 2026-09-24 13:29 -0400 tags were pushed and remote-verified: every
+branch in the table above except those three earlier archives, plus:
+- `rebuild/options-nonstrat-paper-track-clean` (`5c71e21`) — **no separate
+  tag** (its tip is an ancestor of `audit/options-nonstrat-paper-track`, so it
+  is fully contained in `archive/audit-options-nonstrat-paper-track-2026-09-24`)
+
+`archive/codex-options-risk-opposite-direction-fixture-2026-09-24` and `archive/codex-options-selector-stale-audit-2026-09-24` were tagged after those branches had already been deleted. The commits were recovered from `refs/pull/685/head` and `refs/pull/699/head`.
+
+Kept, not deleted:
+- `claude/452-runtime-memory-gate` — KEEP: handoff holds it until 2026-09-30;
+  the runner-side memory gate is not on `main`.
+- `claude/hotfix-c7798d4-plus-849` — KEEP: named as a rollback release ref in
+  the handoff (same patch as merged #849). Could become a `release/*` ref.
+- `hold/fixed-daily-loss-cap` — NEEDS REVIEW: same patch as #830 (closed "not
+  approved") but deliberately kept as a `hold/` branch; needs an operator ruling.
+
+Notes for the record:
+- The trial-ledger rows for the scored-and-retired trials #991 (pdl-sr-b-v0.1)
+  and #992 (vwap-fr3-a-v0.1), and for the ORB v0.1 trial
+  `T-2026-09-24-prereg-mnq-orb-rework-stage-a-2026-09-23-01`, exist only in
+  their archived branches, not in `main`'s `docs/research-trial-ledger.jsonl`.
+- The three `research/mnq-orb-rework-stage-a-*` tags are superseded by #994,
+  which is still open; if #994 closes unmerged they are the only copies of the
+  v0.1 prereg.
