@@ -1,6 +1,7 @@
 {
   "secret": "",
   "ticker": "{{ticker}}",
+  "contract_hint": "MNQZ2026",
   "timestamp": "{{time}}",
   "open": {{open}},
   "high": {{high}},
