@@ -10,9 +10,8 @@ intends to trade — if that login has more than one account (e.g. multiple
 demo sub-accounts), whichever one Tradovate lists first silently becomes the
 account every order is sent to.
 
-TRADOVATE_EXPECTED_ACCOUNT_ID (optional) fixes this rather than merely
-detecting it:
-  - unset: legacy accounts[0] selection, UNCHANGED, visibility-only logging.
+TRADOVATE_EXPECTED_ACCOUNT_ID is required for automated order submission:
+  - unset: execute_bracket fails closed before any order is submitted.
   - set: the FULL /account/list is searched for the exact matching id and
     that account is selected regardless of list position -- never
     accounts[0] once a pin exists. Fails closed (no account resolved, no
@@ -119,27 +118,22 @@ def test_parse_expected_account_id_rejects_non_numeric():
         _parse_expected_account_id("not-a-number")
 
 
-# ── pin unset: legacy accounts[0] selection, unchanged for compatibility ──
+# ── pin unset: order submission fails closed ─────────────────────────────
 
-def test_no_pin_configured_order_proceeds_unchanged(monkeypatch, caplog):
+def test_no_pin_configured_blocks_order_submission(monkeypatch, caplog):
     b = _broker(monkeypatch, expected_account_id=None, resolved_account_id=999)
     cap = _capture_post(monkeypatch, b)
-    with caplog.at_level(logging.INFO):
-        b.execute_bracket(_order())
-    # The account guard did not block: the parent order was submitted at all
-    # (fill-confirmation/naked-position handling beyond that is out of scope
-    # here and covered by test_tradovate_execution_modes.py).
-    assert cap["calls"] >= 1
-    assert any(
-        "Order account check: env=demo account_id=999 expected=unset" in r.message
-        for r in caplog.records
-    )
+    with caplog.at_level(logging.ERROR):
+        fill = b.execute_bracket(_order())
+    assert cap["calls"] == 0
+    assert fill.result == "CANCELLED"
+    assert fill.exit_reason == "ACCOUNT_PIN_REQUIRED"
+    assert any("requires an exact account pin" in r.message for r in caplog.records)
 
 
-def test_pin_unset_resolution_still_picks_accounts_0_in_a_multi_account_list(monkeypatch):
-    # Compatibility requirement: with no pin configured, resolving a REAL
-    # multi-account /account/list response must still behave exactly as
-    # before this fix -- accounts[0], no search, no filtering.
+def test_pin_unset_read_only_resolution_remains_available(monkeypatch):
+    # Read-only status/reliability callers retain legacy visibility behavior;
+    # the order guard above is the hard boundary that refuses unpinned trading.
     b = _broker(monkeypatch, expected_account_id=None, resolved_account_id=None)
     monkeypatch.setattr(b._session, "get", lambda url, **k: _FakeAccountListResp(_TWO_ACCOUNTS))
     b._resolve_account_id()
