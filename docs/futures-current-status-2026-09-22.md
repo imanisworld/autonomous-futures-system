@@ -260,6 +260,41 @@ The duplicate research work did not create a journal repair requirement.
 
 ~~No deployment or restart is authorized merely to pick up #918/#920.~~ Superseded 2026-09-23: both reached the box in the operator-approved `88e89e4` release (see "Runtime reconciliation"). Strategy, risk, and broker order behavior are unchanged by them; any further trading-path change still needs its own approved release.
 
+## Wide-stop Tradovate DEMO route — intentionally armed (operator confirmed 2026-09-24)
+
+**Status: INTENTIONALLY ARMED FOR TRADOVATE DEMO EXECUTION. NOT LIVE.** The operator confirmed on 2026-09-24 that this lane is approved to place Tradovate **demo** orders. Keep the arm flags as they are; do not disarm, edit `.env`, or restart to change this without a new operator decision.
+
+Verified read-only 2026-09-24 02:33 UTC (release `45290e03`, pid `2975357`):
+
+| Condition | Value |
+|---|---|
+| Arm flags | `WIDE_STOP_DEMO_EXECUTION_ENABLED=true`, `EXPECTED_PROOF_WIDE_STOP_DEMO_EXECUTION_ENABLED=true` |
+| Route | `WIDE_STOP_LEDGER_EXECUTION_ROUTE=tradovate_demo` (proof-pinned) |
+| Broker environment | `TRADOVATE_ENV=demo`; `LIVE_TRADING_ENABLED=false` |
+| Account pin | `TRADOVATE_EXPECTED_ACCOUNT_ID` set (the broker accepts only an exact single match) |
+| Size | `MAX_CONTRACTS_HARD_CAP=1`; the lane itself always submits 1 contract |
+| Broker state | flat (cached `/status/broker-account`); 0 working orders at the last preflight read |
+| Lane state | `demo_state.json`: `pending=null`, `position=null` |
+
+What the lane does:
+
+- Strategies: MNQ **4HR Re-Trigger** (`wide_stop_4k`) and MNQ **60M 3-2-2 First Live** (`wide_stop_6k`) only.
+- Entries: New York session only (`WIDE_STOP_DEMO_SESSIONS` default); detection 09:30–11:00 ET (4HR) and 10:00–11:00 ET (3-2-2); at most 3 slots per day and $450 planned risk per trade.
+- By design the lane passes its own schedule mode to the execution gate and **does not follow the box-wide `SCHEDULE_MODE=always_on_shadow`**. `always_on_shadow` still blocks every other lane.
+- Exits: the lane's own 15:55 ET flatten, plus the 16:02 ET `afs-wide-stop-demo-eod-fallback` timer. Both act only on an exactly matching lane position.
+
+Order history: **0 demo orders so far.** The only two candidates (2026-09-11 3-2-2 and 2026-09-15 4HR) were blocked by `REGIME_RESTRICTED`. `BLOCK_RESTRICTED_REGIME=false` since 2026-09-21, so the next eligible candidate is expected to place a real demo order.
+
+Next check: read-only reconciliation after the **first actual demo order**:
+- `logs/tradovate_demo_evidence/hypothetical_ledger/tradovate_demo/demo_state.json` (`client_order_id`, `broker_order_ids`);
+- `logs/tradovate_demo_evidence/hypothetical_ledger/{wide_stop_4k,wide_stop_6k}/journal_*.jsonl` (`CANDIDATE` / `OUTCOME` rows);
+- cached broker status, and the matching paper-ledger row.
+
+Known edge cases, not fixed (should-fix, not blocking while one pinned account is flat):
+- pending-order reconcile can adopt any same-direction MNQ 1-lot from an unfiltered position list;
+- working-order cancel does not filter by account when no account ID is resolved;
+- a lane position that goes flat without a matching fill is never cleared automatically and blocks the next day until reconciled by hand.
+
 ## Current evidence gates
 
 0. **Options 1-2-2 collector fix (#922, release `db9bc7e2`).**
