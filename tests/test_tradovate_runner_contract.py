@@ -23,6 +23,7 @@ def _broker(monkeypatch, response):
     broker._contract_symbol_cache["MES"] = "MESU6"
     monkeypatch.setattr(broker, "_authenticate", lambda: True)
     monkeypatch.setattr(broker, "_find_contract_id", lambda _: 99)
+    monkeypatch.setattr(broker, "get_account_balance", lambda: 50_000.0)
     monkeypatch.setattr(supervisor, "tradovate_order_ready", lambda: True)
     captured = {}
 
