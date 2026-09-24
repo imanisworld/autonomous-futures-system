@@ -1,5 +1,7 @@
 # PREREG (FROZEN): independent validation of MNQ S/D zone "L_FULL hold, 2R"
 
+**Trial ID:** `T-2026-09-24-prereg-mnq-sd-zone-lfull-hold-validation-2026-09-24-01` (PLANNED in `docs/research-trial-ledger.jsonl`).
+
 Frozen on 2026-09-24, **before any validation-period outcome was computed or opened**. This is research only: nothing here is wired into any lane, config or deploy, and a PASS authorizes nothing beyond writing a separate forward-paper prereg, which would need an explicit operator GO.
 
 **Source of the hypothesis:** the Round-4 discovery study (`docs/options-sd-zone-round4-audit-2026-09-24.md`). It is **PROMISING BUT UNPROVEN**. The study is causal and reproducible, but it failed its frozen null gate (91st vs 95th percentile), MES disagrees, 96 tests have been run cumulatively, and its out-of-sample window was not blind. **This is one confirmatory test with a hard retire rule.**
