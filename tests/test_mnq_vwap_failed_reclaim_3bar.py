@@ -12,6 +12,7 @@ def _bar(ts, close, *, high=None, low=None, volume=100.0):
         low=float(low if low is not None else close - 0.5),
         close=float(close),
         volume=float(volume),
+        vwap=float(close),
     )
 
 
