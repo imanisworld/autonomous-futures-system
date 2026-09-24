@@ -143,7 +143,7 @@ The full frozen grid is part of the trial count:
 - × 2 directions
 - = **60 primary directional cells**, before descriptive volume decomposition.
 
-Volume bins are descriptive subdivisions, not additional rescue trials.
+Volume bins are descriptive subdivisions, not additional rescue trials. **Volume cannot rescue a failing primary cell and does not participate in the Stage-A advancement gate.**
 
 No cell can be promoted from Stage A. A cell can only earn a separately preregistered
 Stage-B execution study.
@@ -157,8 +157,7 @@ A primary cell is eligible for Stage B only if all are true:
 3. mean signed 60m return > 0 in **both** halves;
 4. median signed 60m return >= 0 in **both** halves;
 5. median 60m MFE > median 60m MAE in **both** halves;
-6. the result is not dependent on one volume bin containing all positive directionality;
-7. no causality, aggregation, timestamp, roll, or population-identity defect is found.
+6. no causality, aggregation, timestamp, roll, or population-identity defect is found.
 
 Passing this rule means **PROMISING BUT UNPROVEN / eligible for Stage B only**.
 
