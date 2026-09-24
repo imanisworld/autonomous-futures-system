@@ -4,8 +4,9 @@ Companion to ops/release_manifest.py. The manifest is built once, from a clean
 checkout of canonical main, and shipped with the release. At service startup
 this module re-hashes every file the manifest lists and scans the runtime
 package dirs for first-party modules the manifest does NOT list. Any mismatch,
-missing file, or unexpected extra module refuses startup when
-RELEASE_INTEGRITY_ENFORCED is set.
+missing file, unexpected extra module, or missing out-of-band fingerprint pin
+refuses startup. Enforcement is on unless RELEASE_INTEGRITY_ENFORCED is
+explicitly false, 0, no, or off.
 
 Deliberately git-free at runtime: the live box's git worktree is not a release
 identifier (it is permanently dirty by deploy history), so verification relies
@@ -88,11 +89,6 @@ def _sha256(path: Path) -> str | None:
         return digest.hexdigest()
     except OSError:
         return None
-
-
-def _env_truthy(name: str) -> bool:
-    value = os.getenv(name)
-    return bool(value and value.strip().lower() in {"1", "true", "yes"})
 
 
 def manifest_fingerprint(manifest: dict[str, Any]) -> str:
@@ -244,16 +240,28 @@ def verify_release(
     return report
 
 
+def _release_integrity_enforced() -> bool:
+    """Enforcement is on unless the operator explicitly turns it off.
+
+    Unset or blank is on. Only 0, false, no, and off disable the gate.
+    """
+    raw = os.getenv(ENFORCE_ENV)
+    if raw is None or raw.strip() == "":
+        return True
+    return raw.strip().lower() not in {"0", "false", "no", "off"}
+
+
 def enforce_release_integrity(
     repo_root: str | Path | None = None,
     manifest_path: str | Path | None = None,
 ) -> dict[str, Any] | None:
-    """Startup gate. No-op unless RELEASE_INTEGRITY_ENFORCED is truthy.
+    """Startup gate. On by default.
 
-    When enforced, any integrity problem raises SystemExit so the service
-    never comes up on drifted source (systemd will mark the unit failed).
+    Set RELEASE_INTEGRITY_ENFORCED=false to skip. When enforced, any integrity
+    problem, including an unpinned fingerprint, raises SystemExit so the
+    service never comes up on drifted source (systemd will mark the unit failed).
     """
-    if not _env_truthy(ENFORCE_ENV):
+    if not _release_integrity_enforced():
         return None
     report = verify_release(repo_root=repo_root, manifest_path=manifest_path)
     if report["ok"]:
