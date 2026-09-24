@@ -29,6 +29,11 @@ class BracketOrder:
     strategy: str
     contracts: int = 1
     notes: Optional[str] = None
+    # Optional dated contract identity asserted by the alert-side price source.
+    # Examples: MNQZ6, MNQZ2026, CME_MINI:MNQZ2026. None means the alert could
+    # not prove which dated contract its prices came from. Broker adapters that
+    # enforce contract identity must fail closed when this is missing/mismatched.
+    contract_hint: Optional[str] = None
     # Per-order overrides for the MNQ orb_reclaim proof mode (Stage 2,
     # 2026-07-11, see context/mnq_orb_reclaim_proof.py). Both default False —
     # every other order in the system is unaffected. Broker adapters that
