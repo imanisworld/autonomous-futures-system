@@ -50,6 +50,16 @@ REQUIRED = {
     "recorded_at",
     "recorded_by",
     "prereg_path",
+    "family_id",
+    "family_label",
+    "population",
+    "variant_set",
+    "prior_exposed",
+}
+# Trial-definition fields fixed by the first line; every later line for the same
+# trial_id must restate them byte-for-byte (or omit an optional one identically).
+FROZEN = {
+    "prereg_path",
     "prereg_commit",
     "family_id",
     "family_label",
@@ -57,6 +67,11 @@ REQUIRED = {
     "variant_set",
     "prior_exposed",
 }
+# Stored commit SHAs are informational only. Branch commit SHAs do not survive a
+# squash merge onto main, so provenance is always derived from `git log` on the
+# checked-out history (see _first_add_commit / _first_trial_commit), never from
+# a SHA written into a ledger row.
+OPTIONAL_SHA_FIELDS = ("prereg_commit", "result_commit")
 
 
 def _git(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -170,12 +185,16 @@ def test_trial_ledger_schema_and_family_counts() -> None:
         assert prior_raw == family_id, f"family_id collision: {prior_raw!r} vs {family_id!r}"
 
         prereg_path = row["prereg_path"]
-        prereg_commit = row["prereg_commit"]
+        prereg_commit = row.get("prereg_commit")
         if event == "UNREGISTERED_ATTEMPT":
             assert prereg_path is None and prereg_commit is None
         else:
             assert isinstance(prereg_path, str) and prereg_path.startswith("docs/prereg")
-            assert isinstance(prereg_commit, str) and SHA40_RE.fullmatch(prereg_commit)
+        for key in OPTIONAL_SHA_FIELDS:
+            value = row.get(key)
+            assert value is None or (isinstance(value, str) and SHA40_RE.fullmatch(value)), (
+                f"line {lineno}: {key} must be null or a 40-hex commit"
+            )
 
         variant = row["variant_set"]
         assert isinstance(variant, dict)
@@ -202,13 +221,17 @@ def test_trial_ledger_schema_and_family_counts() -> None:
             assert event not in {"PLANNED", "ADOPTED"}, f"{trial_id}: repeated first-only event {event}"
             assert "attempts_in_family_before" not in row
             assert "pre_ledger_attempts" not in row
+            first = first_by_trial[trial_id]
+            for key in sorted(FROZEN):
+                assert row.get(key) == first.get(key), (
+                    f"line {lineno}: {trial_id}: frozen field {key!r} differs from the first line"
+                )
 
         if event in TERMINAL_EVENTS:
             assert row.get("disposition") in DISPOSITIONS
             assert "result_artifact" in row
             if event in {"COMPLETED", "UNREGISTERED_ATTEMPT"}:
                 assert isinstance(row.get("result_artifact"), str) and row["result_artifact"]
-                assert isinstance(row.get("result_commit"), str) and SHA40_RE.fullmatch(row["result_commit"])
             if event == "ABORTED" and row.get("result_artifact") is None:
                 assert isinstance(row.get("reason"), str) and row["reason"].strip()
 
@@ -312,17 +335,23 @@ def test_canonical_research_evidence_is_registered_before_counting() -> None:
         assert len(matching) == 1, f"{rel}: expected exactly one terminal ledger event"
         terminal = matching[0]
 
+        # Provenance is derived from history, not from SHAs stored in the row: after a
+        # squash merge the branch commits that added the artifact / prereg no longer
+        # exist on main, so a stored SHA could never match here.
         artifact_commit = _first_add_commit(rel)
-        assert terminal.get("result_commit") == artifact_commit, f"{rel}: result_commit mismatch"
 
         first_event = first[trial_id]["event"]
         if terminal["event"] == "COMPLETED":
             assert first_event in {"PLANNED", "ADOPTED"}
             if first_event == "PLANNED":
                 ledger_commit = _first_trial_commit(trial_id)
-                prereg_commit = first[trial_id]["prereg_commit"]
-                assert ledger_commit != artifact_commit and _is_ancestor(ledger_commit, artifact_commit)
-                assert prereg_commit != artifact_commit and _is_ancestor(prereg_commit, artifact_commit)
+                prereg_commit = _first_add_commit(first[trial_id]["prereg_path"])
+                assert ledger_commit != artifact_commit and _is_ancestor(ledger_commit, artifact_commit), (
+                    f"{rel}: PLANNED line must be committed strictly before the artifact"
+                )
+                assert prereg_commit != artifact_commit and _is_ancestor(prereg_commit, artifact_commit), (
+                    f"{rel}: prereg must be committed strictly before the artifact"
+                )
                 prereg_text = (ROOT / first[trial_id]["prereg_path"]).read_text(encoding="utf-8")
                 assert trial_id in prereg_text, f"{trial_id}: prereg must cite its trial_id"
 
