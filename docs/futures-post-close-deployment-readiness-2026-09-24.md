@@ -1,8 +1,16 @@
 # Futures post-close deployment readiness — 2026-09-24
 
+## Status of this document
+
+**Superseded-by-report for runtime identity.** This HOLD was frozen at 10:25 AM ET on 2026-09-24 (`87b6a4296837da0441d55dcc54e0c9971fb3b17a`, #1016) against promoting `44202701` (#1015) while the last verified runtime named here was `cddef4a` (#1007).
+
+A later private handoff entry reports that curated release `41ae1881655c235a26288244c81b8df2a7c8c968` on branch `release/futures-cddef4a-curated-20260924` went live at 16:46:34Z the same day (12:46 PM ET). That statement is **HANDOFF-REPORTED, NOT INDEPENDENTLY VERIFIED**. Nobody has re-checked the server for this note. The branch/commit relationship is confirmed in git; the box is not. See `docs/futures-docs-reconciliation-2026-09-24.md`.
+
+This file is not a server check and does not authorize a deploy. The HOLD text below is the morning gate record. Do not treat `cddef4a` as the current runtime identity after that report, and do not treat the report as a box check.
+
 ## Verdict
 
-**HOLD / AUDIT ONLY.**
+**HOLD / AUDIT ONLY.** (morning record; runtime identity is superseded-by-report above)
 
 This document is a deployment-readiness plan only. It does not authorize a deploy, service restart, TradingView change, broker-env mutation, strategy activation, or cleanup.
 

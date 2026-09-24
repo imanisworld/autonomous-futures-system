@@ -1,16 +1,16 @@
 # Autonomous Futures Paper-Trading System
 
 [![CI](https://github.com/imanisworld/autonomous-futures-system/actions/workflows/ci.yml/badge.svg)](https://github.com/imanisworld/autonomous-futures-system/actions/workflows/ci.yml)
-[![Paper Only](https://img.shields.io/badge/execution-paper--only-blue)](#paper-only-system)
+[![Live blocked](https://img.shields.io/badge/live%20trading-blocked-blue)](#paper-and-demo-only)
 [![License](https://img.shields.io/badge/license-all%20rights%20reserved-lightgrey)](LICENSE)
 
-A local, paper-only autonomous trading system for a limited futures universe. Designed for disciplined, low-frequency trading with strict risk enforcement, session filters, and full decision journaling.
+A local futures automation engine for a limited universe. Live trading is blocked at config load. The default path is paper simulation, and a gated Tradovate demo route exists. Decisions are journaled.
 
 ---
 
-## Public Use Notice
+## Repository
 
-This repository is published for educational review and paper-trading
+This repository is **private**. It is for educational review and paper/demo
 demonstration only. It is not financial advice, does not promise profitability,
 and does not provide live-trading support.
 
@@ -29,45 +29,61 @@ Shareable course and learning documents live in
 [`share/learning/`](share/learning/COURSE_README.md).
 
 Private strategy doctrine, production configuration, operational notes, and
-credentials are intentionally not part of this public repository.
+credentials are not stored in this repository. Access to the repository is
+private.
 
 ---
 
-## Paper-Only System
+## Paper and demo only
 
-**Live trading is disabled and cannot be activated without explicit future safeguards.**
-`LIVE_TRADING_ENABLED` defaults to `false` in every config file and environment. Any attempt to enable live trading in Phase 1 raises a hard error.
+**Live trading is blocked at config load.** `config/settings.py` raises
+`LiveTradingBlockedError` if `risk_rules.yaml` sets
+`trading_mode.live_trading_enabled` or if `LIVE_TRADING_ENABLED` is true.
+`risk_rules.yaml` v1.2.2 keeps `live_trading_enabled: false`.
+
+The default order path is local paper simulation. A gated Tradovate **DEMO**
+route also exists for the wide-stop evidence lane (`tradovate_demo` in
+`context/wide_stop_execution.py`). It can place demo orders only when the
+route, its proof pin, the lane arming pins, `BROKER=tradovate`, and
+`TRADOVATE_ENV=demo` all agree, and it refuses a live broker. That route is
+not live trading. It does not mean this process never talks to a broker.
 
 ---
 
-## Allowed Instruments
+## Instruments
 
-| Symbol | Name |
-|--------|------|
-| MNQ | Micro E-mini NASDAQ-100 |
-| MES | Micro E-mini S&P 500 |
-| MGC | Micro Gold |
-| MCL | Micro Crude Oil |
+`risk_rules.yaml` v1.2.2 `instruments.allowed` is **MNQ only**. MES, MGC, and
+MCL are commented out of that list. Do not read the table below as the live
+allow-list.
 
-## Allowed Sessions
+| Symbol | Name | In `instruments.allowed` (v1.2.2) |
+|--------|------|-----------------------------------|
+| MNQ | Micro E-mini NASDAQ-100 | yes |
+| MES | Micro E-mini S&P 500 | no |
+| MGC | Micro Gold | no |
+| MCL | Micro Crude Oil | no |
 
-| Session | Active Hours (ET) |
-|---------|-------------------|
-| Asian | 19:00 - 03:00 |
-| London | 03:00 – 08:30 |
-| New York | 09:30 – 12:00 |
+## Sessions
 
-**Asian session is currently enabled for testing.** Disable it in
-`risk_rules.yaml` before NY-only paper trading if you do not want overnight
-signals using the daily trade budget. Trading outside allowed sessions =
-NO_TRADE.
+v1.2.2 is a 24-hour session set. Asian, London, and New York are all allowed.
+`session_windows` and `session_cutoffs_et` are empty, so there is no extra
+time-window gate and no session cutoff.
+
+| Session | `session_hours_et` |
+|---------|--------------------|
+| Asian | 18:00 – 03:00 |
+| London | 03:00 – 09:30 |
+| New York | 09:30 – 17:00 |
+
+Trading outside the allowed sessions is NO_TRADE. There is no separate
+"disable Asian before NY-only paper" switch in the current file.
 
 ---
 
 ## Risk Rules Summary
 
-- Max **3 trades/day**
-- Stop after **2 consecutive losses**
+- Max **3 trades/day** (`max_trades_per_day: 3`, a provisional cap)
+- Consecutive-loss stop is **off** (`max_consecutive_losses: 9999`). The circuit breaker is also off (`circuit_breaker_losses: 0`). Every entry still needs a fresh valid signal.
 - Future real-capital planning assumes **$500-$1k** starting capital
 - Future per-trade risk defaults to **1%** of account value
 - **One open position** at a time
@@ -140,8 +156,10 @@ python -m agent.daily_summary --date 2026-05-23 --mode eod
 ## TradingView Webhook
 
 The webhook layer accepts TradingView bar-close alerts and routes them through
-the same paper-only engine. It does not connect to a broker or place live
-orders.
+the same engine. Live orders are blocked at config load. The default broker is
+paper simulation. If `BROKER=tradovate` and the wide-stop DEMO route is armed
+and proof-pinned, that lane can send orders to a Tradovate demo account. It
+cannot send live orders.
 
 ```bash
 python -m webhook
@@ -299,4 +317,5 @@ paper-execution phase explicitly requires otherwise.
 - Later: IBKR paper adapter for future options/stocks/futures expansion
 - Later: Performance analytics and strategy backtesting
 
-Live broker execution remains out of scope.
+A gated Tradovate DEMO route now exists, as described above. Live broker
+execution stays blocked at config load.

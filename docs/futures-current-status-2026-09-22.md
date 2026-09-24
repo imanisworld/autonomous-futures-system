@@ -2,6 +2,8 @@
 
 This is the concise operator-facing source of truth for the futures system. Historical audit documents remain evidence records; where an older summary conflicts with this file, this file governs current status unless a later dated current-status document explicitly supersedes it.
 
+**Runtime identity after 12:46 PM ET on 2026-09-24 is not the block below.** The latest runtime block in this file names release `45290e03` at 02:17Z. A later private handoff reports curated release `41ae1881655c235a26288244c81b8df2a7c8c968` live at 16:46:34Z. That report is **HANDOFF-REPORTED, NOT INDEPENDENTLY VERIFIED**. Git confirms the branch; this file is not a server check. See `docs/futures-docs-reconciliation-2026-09-24.md`. Daily 2-2, MES 1-2-2, and Asia D+EMA are retired as promotion candidates by `60bb47d8` (#986). The Asia and Session 2-2 lines in the focus list below are telemetry history, not promotion cases.
+
 ## Verdict
 
 **PAPER / SHADOW / GUARDED DEMO EVIDENCE ONLY. NO LIVE EXECUTION APPROVED.**
@@ -42,8 +44,8 @@ Future futures work should focus on lanes that are live or paper-observable now,
 
 - vwap_hold forward A/B (`forward_ab_2026_08_v1`)
 - wide-stop demo lane (the only route currently armed to Tradovate demo)
-- asia_d_ema paper lane (`asia_d_ema_2026_09_v1`)
-- session_22c paper lane (`session_22c_paper_2026_09_v1`)
+- asia_d_ema paper lane (`asia_d_ema_2026_09_v1`) — **retired as a promotion candidate** by `60bb47d8` (#986); collector stop is a separate GO
+- session_22c paper lane (`session_22c_paper_2026_09_v1`) — **retired as a promotion candidate** by the same commit; collector stop is a separate GO
 
 ## Forward A/B campaign `forward_ab_2026_08_v1` — review (2026-09-24 read-only audit)
 
