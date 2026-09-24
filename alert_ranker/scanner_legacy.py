@@ -776,10 +776,17 @@ class OptionsScanner:
                 "signa_raw_payload": context.get("signa_raw_payload"),
             }
         symbol = self._signa_symbol_for(ticker)
-        client = self.signa_client or SignaClient(
-            base_url=self.config.signa_base_url,
-            timeout=self.config.signa_timeout_seconds,
-        )
+        client = self.signa_client
+        if client is None:
+            # One long-lived client so its TTL cache survives across scan
+            # cycles; it also honours the process-wide 429 cooldown that the
+            # v2 observer and context pull already share.
+            client = self.signa_client = SignaClient(
+                base_url=self.config.signa_base_url,
+                timeout=self.config.signa_timeout_seconds,
+                cache_ttl_seconds=self.config.signa_cache_ttl_seconds,
+                respect_account_backoff=True,
+            )
         signal = await asyncio.to_thread(client.fetch_signal, symbol)
         provenance = signal.provenance_fields()
         if not signal.ok:
