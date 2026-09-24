@@ -11,12 +11,21 @@ Returns RiskResult(APPROVED) or RiskResult(REJECTED, failed_rule, reason).
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass, field
 from datetime import datetime, time as _time, timedelta, timezone
 from typing import Dict, Optional
 from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
+
+
+def _is_positive_finite_price(value) -> bool:
+    try:
+        price = float(value)
+    except (TypeError, ValueError):
+        return False
+    return math.isfinite(price) and price > 0
 
 _ET = ZoneInfo("America/New_York")
 
@@ -974,20 +983,21 @@ class RiskEngine:
     def _check_bracket_completeness(
         self, setup: TradeSetup, daily_state: DailyState
     ) -> Optional[RiskResult]:
-        """Entry, stop, and target must all be present and non-zero."""
-        missing = []
-        if not setup.entry or setup.entry <= 0:
-            missing.append("entry")
-        if not setup.stop or setup.stop <= 0:
-            missing.append("stop")
-        if not setup.target or setup.target <= 0:
-            missing.append("target")
+        """Entry, stop, and target must all be present, finite and positive.
+
+        NaN and infinity must be caught explicitly: every comparison with NaN
+        is False, so `NaN <= 0` alone would let a NaN price through (FI-5c).
+        """
+        missing = [
+            name for name in ("entry", "stop", "target")
+            if not _is_positive_finite_price(getattr(setup, name))
+        ]
 
         if missing:
             return RiskResult(
                 result="REJECTED",
                 failed_rule="incomplete_bracket",
-                reason=f"Bracket order is incomplete. Missing or zero: {missing}",
+                reason=f"Bracket order is incomplete. Missing, zero or non-finite: {missing}",
             )
         return None
 
