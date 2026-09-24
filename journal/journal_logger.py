@@ -67,6 +67,10 @@ class JournalWriteError(OSError):
     """A critical journal row could not be written, even after one retry."""
 
 
+class JournalCorruptionError(ValueError):
+    """A journal row is unreadable; safety-sensitive readers must fail closed."""
+
+
 # Process-wide fail-closed latch (FI-5 fix, operator F1/F2). Set when a critical
 # row cannot be written; never cleared in-process — a restart clears it, after
 # the disk is fixed. Callers read it through journal_write_failed().
@@ -439,8 +443,10 @@ class JournalLogger:
                             continue
                         try:
                             entry = json.loads(line)
-                        except json.JSONDecodeError:
-                            continue
+                        except json.JSONDecodeError as exc:
+                            raise JournalCorruptionError(
+                                f"unreadable journal row in {path.name}"
+                            ) from exc
                         if entry.get("instrument") != instrument:
                             continue
                         if entry.get("ts") != bar_ts:
@@ -566,8 +572,10 @@ class JournalLogger:
                         continue
                     try:
                         entries.append(json.loads(line))
-                    except json.JSONDecodeError:
-                        continue
+                    except json.JSONDecodeError as exc:
+                        raise JournalCorruptionError(
+                            f"unreadable journal row in {path.name}"
+                        ) from exc
         JournalLogger._entries_cache.pop(key, None)
         JournalLogger._entries_cache[key] = (sig, entries)
         while len(JournalLogger._entries_cache) > _MAX_PARSED_JOURNAL_CACHE_FILES:
