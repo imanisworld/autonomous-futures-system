@@ -52,6 +52,8 @@ from execution.tradovate_broker import TradovateBroker, TradovateConfig
 from journal.journal_logger import journal_write_failed
 from risk.risk_engine import RiskEngine
 
+logger = logging.getLogger(__name__)
+
 _AMBIGUOUS_REASONS = {
     "TRADOVATE_ORDER_ERROR",
     "TRADOVATE_NO_ORDER_ID",
@@ -285,6 +287,8 @@ def _pending_reconcile(
     snapshot = _recovery_working_order_ids(broker)
     if snapshot is not None:
         pending["recovered_working_order_ids"] = snapshot
+        if not snapshot:
+            _alert_recovered_without_protection(cfg, pending)
     state["position"] = pending
     state["pending"] = None
     demo_state.confirm_slot(state, str(pending["candidate_key"]), str(pending["strategy"]))
@@ -309,6 +313,29 @@ def _pending_reconcile(
     if ledger is not None:
         collector._journal(log_dir, ledger, audit, for_date)
     return audit
+
+
+def _alert_recovered_without_protection(cfg, position: dict[str, Any]) -> None:
+    """A restart-recovered demo position with no working stop or target is
+    unprotected until the 16:00 ET flatten (FI-8 D2). Never raises."""
+    try:
+        from notifications import plain_english as pe
+        from notifications.discord_notifier import send_operational_alert
+
+        send_operational_alert(
+            cfg,
+            "⚠️ Demo position has no stop or target\n"
+            f"Position: {pe.side(position.get('direction'))} "
+            f"{pe.contracts(position.get('contracts'))} {pe.market(position.get('instrument'))} "
+            f"at {pe.price(position.get('entry'))}\n"
+            "What happened: after a restart the bot found this demo position open, "
+            "but no stop or target orders are working\n"
+            "What the bot did: it is tracking the position and will close it at 4:00 PM ET\n"
+            "What to do: add a stop in the Tradovate demo account, or close the position by hand\n"
+            "-# details: WIDE_STOP_DEMO_RECOVERED_UNPROTECTED",
+        )
+    except Exception as exc:  # pragma: no cover - alerting must never affect recovery
+        logger.warning("wide-stop demo unprotected-position alert failed: %s", exc)
 
 
 def _recovery_working_order_ids(broker) -> Optional[list]:

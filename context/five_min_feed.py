@@ -309,9 +309,39 @@ def record_five_min(payload, log_dir: str, for_date=None) -> dict:
                     log_dir=log_dir,
                     for_date=for_date,
                 )
-            except Exception:  # noqa: BLE001 — demo must never break paper or ingestion
+            except Exception as exc:  # noqa: BLE001 — demo must never break paper or ingestion
                 logger.warning("wide-stop demo lane failed closed", exc_info=True)
+                _alert_demo_lane_failed(cfg, exc, for_date)
     return record
+
+
+# Trading days already alerted for a failed demo lane in this process (FI-9):
+# a lane that fails on every 5M bar sends one alert per day, not one per bar.
+_demo_lane_failure_alerted: set[str] = set()
+
+
+def _alert_demo_lane_failed(cfg, exc: BaseException, for_date=None) -> None:
+    """Tell the operator the armed demo lane has stopped. Never raises."""
+    try:
+        day = str(for_date or datetime.now(timezone.utc).date())
+        if day in _demo_lane_failure_alerted:
+            return
+        _demo_lane_failure_alerted.add(day)
+        from notifications.discord_notifier import send_operational_alert
+
+        detail = f"{type(exc).__name__}: {exc}"[:300]
+        send_operational_alert(
+            cfg,
+            "🚨 Demo trading lane stopped — no new demo trades\n"
+            "What happened: the wide-stop demo lane hit an error and refused to trade\n"
+            "What the bot did: paper tracking continues; the demo lane stays stopped "
+            "until the cause is fixed\n"
+            "What to do: check the Tradovate demo account for open positions and "
+            "orders, then check the demo lane state\n"
+            f"-# details: WIDE_STOP_DEMO_LANE_FAILED {detail}",
+        )
+    except Exception as alert_exc:  # pragma: no cover - alerting must never affect ingestion
+        logger.warning("wide-stop demo lane alert failed: %s", alert_exc)
 
 
 def recent_five_min(

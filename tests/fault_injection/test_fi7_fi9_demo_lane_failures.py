@@ -29,6 +29,25 @@ from tests.fault_injection._p2_harness import (
 )
 
 EOD = datetime(2026, 9, 8, 20, 2, tzinfo=timezone.utc)  # 16:02 ET
+
+
+@pytest.fixture(autouse=True)
+def alerts(monkeypatch) -> list[str]:
+    """No test in this file may reach real Discord; the FI-9 once-per-day
+    latch is reset so tests stay independent."""
+    from context import five_min_feed
+
+    sent: list[str] = []
+    monkeypatch.setattr(
+        "notifications.discord_notifier.send_operational_alert",
+        lambda cfg, msg, *a, **k: sent.append(msg),
+    )
+    monkeypatch.setattr(
+        "notifications.system_notifier.notify_system",
+        lambda msg, *a, **k: sent.append(msg) or type("R", (), {"sent": False, "reason": "test"})(),
+    )
+    monkeypatch.setattr(five_min_feed, "_demo_lane_failure_alerted", set())
+    return sent
 NEXT_BAR = "2026-09-08T14:10:00+00:00"
 
 
@@ -285,7 +304,6 @@ def test_fi8_recovered_position_without_working_orders_is_flattened(tmp_path, mo
 
 
 # ── FI-9: the lane dies with only a log line ──────────────────────────────────
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="KNOWN DEFECT FI-9")
 def test_fi9_dead_demo_lane_sends_an_operational_alert(tmp_path, monkeypatch, caplog):
     from context import five_min_feed
 
@@ -323,3 +341,54 @@ def test_fi9_dead_demo_lane_sends_an_operational_alert(tmp_path, monkeypatch, ca
         actual_state=f"alerts_sent={sent}",
     )
     assert sent, str(rec)
+
+
+def test_fi9_repeated_failures_same_day_alert_once(tmp_path, monkeypatch, alerts):
+    from context import five_min_feed
+
+    demo_env(monkeypatch)
+    save_open_demo_position(tmp_path)
+    next_day = DAY + timedelta(days=1)
+    for ts in ("2026-09-09T14:05:00+00:00", "2026-09-09T14:10:00+00:00"):
+        five_min_feed.record_five_min(demo_payload(ts), str(tmp_path), for_date=next_day)
+    demo_alerts = [m for m in alerts if "WIDE_STOP_DEMO_LANE_FAILED" in m]
+    assert len(demo_alerts) == 1
+
+
+def test_fi9_failed_alert_never_breaks_ingestion_or_paper(tmp_path, monkeypatch):
+    from context import five_min_feed
+    import context.wide_stop_forward_router as router
+
+    demo_env(monkeypatch)
+    save_open_demo_position(tmp_path)
+    paper_calls: list = []
+    monkeypatch.setattr(router, "process_paper_five_min_bar",
+                        lambda **kw: paper_calls.append(kw["payload"].timestamp))
+
+    def broken(*a, **k):
+        raise RuntimeError("discord down")
+
+    monkeypatch.setattr("notifications.discord_notifier.send_operational_alert", broken)
+    record = five_min_feed.record_five_min(
+        demo_payload("2026-09-09T14:05:00+00:00"), str(tmp_path), for_date=DAY + timedelta(days=1),
+    )
+    assert record["ts"].startswith("2026-09-09T14:05")
+    assert paper_calls == ["2026-09-09T14:05:00+00:00"]
+
+
+# ── FI-8 D2: a recovered position with nothing protecting it is announced ─────
+def test_fi8_recovered_position_without_protection_alerts_once(tmp_path, monkeypatch, alerts):
+    demo_env(monkeypatch)
+    naked = eod_broker()
+    naked.orders = []
+    position = _recover(tmp_path, naked)
+    assert position["recovered_working_order_ids"] == []
+    unprotected = [m for m in alerts if "WIDE_STOP_DEMO_RECOVERED_UNPROTECTED" in m]
+    assert len(unprotected) == 1
+    assert "Buy 1 contract MNQ" in unprotected[0]
+
+
+def test_fi8_recovered_position_with_working_orders_does_not_alert(tmp_path, monkeypatch, alerts):
+    demo_env(monkeypatch)
+    _recover(tmp_path, eod_broker())
+    assert not [m for m in alerts if "WIDE_STOP_DEMO_RECOVERED_UNPROTECTED" in m]
