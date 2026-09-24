@@ -1,0 +1,9 @@
+{
+  "trial_id": "T-2026-09-24-prereg-mnq-vwap-failed-reclaim-3bar-2026-09-24-01",
+  "variants": [
+    {
+      "id": "vwap_failed_reclaim_within_3_bars_short"
+    }
+  ],
+  "results_sha256": null
+}
