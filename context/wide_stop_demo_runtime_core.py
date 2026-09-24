@@ -263,6 +263,13 @@ def _pending_reconcile(
         return None
     pending = dict(pending)
     pending["entry"] = float(position.entry_price)
+    # A recovered position has no bracket ids (they were never recorded), so
+    # snapshot the account's working orders now: at EOD the flatten may cancel
+    # exactly these and nothing that appeared later (FI-8). No snapshot when the
+    # list is unreadable, so EOD stays blocked (fail closed).
+    snapshot = _recovery_working_order_ids(broker)
+    if snapshot is not None:
+        pending["recovered_working_order_ids"] = snapshot
     state["position"] = pending
     state["pending"] = None
     demo_state.confirm_slot(state, str(pending["candidate_key"]), str(pending["strategy"]))
@@ -289,14 +296,35 @@ def _pending_reconcile(
     return audit
 
 
+def _recovery_working_order_ids(broker) -> Optional[list]:
+    """Ids of every non-terminal order on the account, or None if the order
+    list is unreadable or a working row has no id."""
+    try:
+        working = [
+            row for row in _list_orders(broker)
+            if _order_status(row) not in TERMINAL_ORDER_STATUSES
+        ]
+    except Exception:
+        return None
+    ids = [row.get("id") for row in working]
+    if any(oid is None for oid in ids):
+        return None
+    return sorted(ids, key=str)
+
+
 def _eod_exclusive_gate(broker, position: dict[str, Any]) -> tuple[bool, str]:
     ids = position.get("broker_order_ids")
-    if not isinstance(ids, dict) or not ids:
+    recovered = position.get("recovered_working_order_ids")
+    if isinstance(ids, dict) and ids:
+        allowed_ids = {ids.get("target"), ids.get("stop")}
+        allowed_ids.discard(None)
+        if not allowed_ids:
+            return False, "missing_protective_order_ids_for_eod_flatten"
+    elif isinstance(recovered, list):
+        # Restart-recovered position: only orders already working at recovery.
+        allowed_ids = set(recovered)
+    else:
         return False, "missing_broker_order_ids_for_eod_flatten"
-    allowed_ids = {ids.get("target"), ids.get("stop")}
-    allowed_ids.discard(None)
-    if not allowed_ids:
-        return False, "missing_protective_order_ids_for_eod_flatten"
     try:
         positions = _list_positions(broker)
         orders = _list_orders(broker)
