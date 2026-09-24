@@ -272,6 +272,32 @@ def reconcile_open_position(
             "pnl_dollars": fill.pnl_dollars,
         }
 
+    # FI-4: a flat position is not enough — an entry whose cancel was never
+    # confirmed can still be resting and fill later. Clear only when the
+    # account has no live order; an unreadable order book is not "none".
+    try:
+        from execution.live_preflight import (
+            TERMINAL_ORDER_STATUSES,
+            _list_orders,
+            _order_status,
+        )
+
+        _account_id = getattr(broker, "_account_id", None)
+        _live_orders = [
+            o for o in _list_orders(broker)
+            if _order_status(o) not in TERMINAL_ORDER_STATUSES
+            and (_account_id is None or o.get("accountId") in (None, _account_id))
+        ]
+    except Exception as exc:
+        logger.warning("reconcile: order list unreadable, not clearing: %s", exc)
+        return {"action": "orders_unreadable"}
+    if _live_orders:
+        logger.error(
+            "reconcile: journal open, broker flat, but %d live order(s) on the account "
+            "— not clearing (an unconfirmed entry may still fill)", len(_live_orders),
+        )
+        return {"action": "orders_working", "live_orders": len(_live_orders)}
+
     # Journal OPEN, broker FLAT, position stale → clear the phantom (CANCELLED,
     # exactly what a manual reconcile does — no P&L/win-rate impact).
     journal.log_outcome(

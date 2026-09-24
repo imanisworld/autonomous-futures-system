@@ -1429,6 +1429,25 @@ class TradovateBroker(BrokerInterface):
                     # Safe: an unfilled entry means the children are inactive,
                     # so there is NO naked position to protect.
                     n = self._cancel_oso(order_id, target_id, stop_id)
+                    if not self._cancel_confirmed(order_id):
+                        # FI-4: the entry may still be live (or filled during the
+                        # cancel). Never report a definitive no-fill; keep the ids
+                        # so the caller can record and reconcile the order.
+                        logger.error(
+                            "%s entry cancel NOT confirmed (n=%d) — order %s may still be "
+                            "live; reporting CANCEL_UNCONFIRMED. %s %s cap=%s",
+                            entry_leg.get("orderType"), n, order_id, root, order.direction,
+                            entry_px_desc,
+                        )
+                        self._last_position = None
+                        self._last_order_ids = {
+                            "instrument": order.instrument, "entry": order_id,
+                            "target": target_id, "stop": stop_id,
+                        }
+                        return self._cancelled_fill(
+                            order, "CANCEL_UNCONFIRMED",
+                            entry_status="working", order_type=entry_leg.get("orderType"),
+                        )
                     logger.warning(
                         "%s entry resting unfilled — OSO cancelled (n=%d), no position. %s %s cap=%s",
                         entry_leg.get("orderType"), n, root, order.direction, entry_px_desc,
@@ -1876,6 +1895,27 @@ class TradovateBroker(BrokerInterface):
                 logger.warning("limit-entry cancel: cancelorder id=%s failed: %s", oid, exc)
         return n
 
+    _CANCEL_CONFIRM_RETRIES = 3
+    _CANCEL_CONFIRM_DELAY = 0.4
+
+    def _cancel_confirmed(self, order_id) -> bool:
+        """True ONLY when a re-read shows the order dead (canceled / rejected /
+        expired). Filled, still live, or unreadable → False: a cancel attempt
+        (or a swallowed cancel error in _cancel_oso) is never proof (FI-4)."""
+        for attempt in range(self._CANCEL_CONFIRM_RETRIES):
+            try:
+                o = self._get(f"/order/item?id={order_id}")
+                st = str((o or {}).get("ordStatus", "")).lower()
+                if st in self._DEAD_ORDER_STATUSES:
+                    return True
+                if st == "filled":
+                    return False
+            except Exception:
+                pass  # unreadable this poll — keep polling, never assume dead
+            if attempt + 1 < self._CANCEL_CONFIRM_RETRIES:
+                time.sleep(self._CANCEL_CONFIRM_DELAY)
+        return False
+
     _ENTRY_FILL_RETRIES = 5
     _ENTRY_FILL_DELAY = 0.4
 
@@ -1945,6 +1985,12 @@ class TradovateBroker(BrokerInterface):
             return "dead"
         if status == "working":
             self._cancel_oso(order_id, target_id, stop_id)
+            if not self._cancel_confirmed(order_id):
+                logger.error(
+                    "Entry confirm: %s resting unfilled; cancel NOT confirmed — unknown",
+                    order_id,
+                )
+                return "unknown"
             logger.warning(
                 "Entry confirm: %s resting unfilled on extended poll — OSO cancelled", order_id,
             )
@@ -1962,6 +2008,12 @@ class TradovateBroker(BrokerInterface):
             return "filled"
         if confirmed and position is None:
             self._cancel_oso(order_id, target_id, stop_id)
+            if not self._cancel_confirmed(order_id):
+                logger.error(
+                    "Entry confirm: order %s unreadable, broker FLAT, cancel NOT confirmed "
+                    "— unknown", order_id,
+                )
+                return "unknown"
             logger.warning(
                 "Entry confirm: order %s unreadable, broker confirmed FLAT — OSO cancelled", order_id,
             )

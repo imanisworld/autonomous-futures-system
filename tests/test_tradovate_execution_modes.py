@@ -600,6 +600,7 @@ def test_stop_entry_unfilled_cancels_oso_and_fails_closed(monkeypatch):
     monkeypatch.setattr(
         b, "_cancel_oso", lambda *ids: cancelled.update(ids=ids) or 3
     )
+    monkeypatch.setattr(b, "_cancel_confirmed", lambda oid: True)  # the cancel took effect
     fill = b.execute_bracket(_long_order())
     assert fill.result == "CANCELLED"
     assert fill.exit_reason == "ENTRY_NOT_FILLED"

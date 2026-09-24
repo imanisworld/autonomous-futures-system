@@ -39,6 +39,11 @@ class _FakeBroker:
     def entry_order_filled(self, order_id):
         return self._entry_filled
 
+    def _get(self, path, **kw):
+        if path.startswith("/order/list"):
+            return list(getattr(self, "_orders", []))  # no live orders unless a test sets them
+        return []
+
     def resolve_position(self):
         self.resolve_calls += 1
         return self._resolve_fill
@@ -517,3 +522,24 @@ def test_e2e_naked_open_position_alerts_via_real_census(
     assert res["states"] == {"target": "expired", "stop": "expired"}
     assert len(alerts) == 1 and "NAKED" in alerts[0]
     assert j.get_open_position(yesterday) is not None      # journal untouched
+
+
+# ── FI-4: never clear a phantom while an order may still be live ──────────────
+def test_live_order_on_account_blocks_phantom_clear(monkeypatch, tmp_path, config):
+    _tradovate(monkeypatch)
+    j = _seed_open(tmp_path, age_min=30)
+    broker = _FakeBroker(authed=True, position=None)
+    broker._orders = [{"id": 111, "ordStatus": "Working", "accountId": None}]
+    res = reconcile_open_position(config, str(tmp_path), now=_NOW, broker=broker)
+    assert res["action"] == "orders_working"
+    assert j.get_open_position(_NOW.date()) is not None      # left open
+
+
+def test_unreadable_order_list_blocks_phantom_clear(monkeypatch, tmp_path, config):
+    _tradovate(monkeypatch)
+    j = _seed_open(tmp_path, age_min=30)
+    broker = _FakeBroker(authed=True, position=None)
+    broker._get = lambda path, **kw: {"errorText": "unavailable"}   # non-list
+    res = reconcile_open_position(config, str(tmp_path), now=_NOW, broker=broker)
+    assert res["action"] == "orders_unreadable"
+    assert j.get_open_position(_NOW.date()) is not None
