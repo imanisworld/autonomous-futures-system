@@ -1,5 +1,7 @@
 # Session-scoped 2-2 continuation forward paper lane (H6 / H7)
 
+> **RETIRED as a promotion candidate 2026-09-24** — both cells lose on the untouched months before the grid corpus under every fill model (as built PF 0.76 Asia / 0.66 Sunday). See `docs/strat22rev-session22c-asiadema-retirement-audit-2026-09-24.md`. The lane and its registered one-look are unchanged.
+
 **Built 2026-09-21 from the pre-registration in
 `prereg-mnq-volume-label-and-sunday-reopen-2026-09-21.md` (H6, H7). Default OFF.
 Paper-only by construction. Arming it is an `.env` change + restart and

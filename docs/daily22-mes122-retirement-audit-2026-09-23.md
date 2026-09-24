@@ -16,6 +16,13 @@ deployment change was made. Both paper lanes are still running unchanged. Stoppi
 a separate runtime change that needs its own explicit operator GO. Do not build replacement
 variants from this document.
 
+**Registered preregs are not modified.** `docs/prereg-mnq-portfolio-ex-asia-forward-2026-09-23.md`
+keeps `DAILY_22_COMPLETED_CLOSE` in its frozen family set (its §6 forbids removing families). The
+roll-adjustment finding here is a caveat on that family's historical numbers, not a change to the
+prereg.
+
+Companion: `docs/strat22rev-session22c-asiadema-retirement-audit-2026-09-24.md`.
+
 ## Daily 2-2
 
 Forward since the 2026-09-09 epoch: 2 closed trades, 0 wins, ledger $3,613.54 (27.73%
