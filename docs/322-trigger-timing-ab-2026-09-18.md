@@ -84,6 +84,21 @@ Exact reproduction: **PASS**.
 
 Exact reproduction: **PASS**.
 
+### ERRATUM 2026-09-24 — reproduction gates
+
+The PASS lines above are preserved. They matched a resolver that walked
+post-16:00 ET bars on 2025-01-20 and booked a 19:50 ET target. See
+`docs/prereg-322-trigger-timing-ab-2026-09-18.md`, section
+"ERRATUM 2026-09-24". Corrected values are derived from exit timestamps,
+pending corpus re-run. Filled counts are unchanged.
+
+- Legacy plan, 1 tick: 31W-1L + 1 EOD_BAR_MISSING, net **+$2,293.64**, PF
+  **12.38**, H1 **+$1,144.32**, H2 **+$1,149.32**.
+- Completed-5m IOC32, 1 tick: 18W-1L + 1 EOD_BAR_MISSING, net **+$1,622.38**,
+  PF **10.75**, H1 **+$831.66**, H2 **+$790.72**.
+
+The Operator approves this erratum at merge review. Corpus re-run: HOLD.
+
 ## Completed-5m latency
 
 At the completed crossing-bar close, adverse distance from the original First
@@ -110,26 +125,105 @@ therefore arms a resting stop-entry before the crossing bar:
 
 ### Results
 
+#### Superseded (as sealed 2026-09-18)
+
+These rows are the table sealed on 2026-09-18. They include the 2025-01-20
+evening-bar target. They are not the corrected record.
+
 | Slippage | Fills | Resolved | W-L | Net | PF | H1 | H2 |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | 1 tick | 33 | 33 | 33-0 | **+$2,742.66** | ∞ | +$1,383.34 | +$1,359.32 |
 | 2 ticks | 33 | 33 | 33-0 | **+$2,726.16** | ∞ | +$1,374.84 | +$1,351.32 |
 | 3 ticks | 33 | 33 | 33-0 | **+$2,709.66** | ∞ | +$1,366.34 | +$1,343.32 |
 
+#### Corrected (derived from exit timestamps, pending corpus re-run)
+
+Record reissue: 33 fills / 32 resolved, 32-0, 1 EOD_BAR_MISSING (2025-01-20),
+1 bracket-invalid no-fill (2026-05-12). Net +$2,503.64 at 1 tick and
++$2,471.64 at 3 ticks. The 32 wins are 31 targets + 1 positive 15:55 flatten
+(2025-02-12). Corpus re-run: HOLD.
+
+| Slippage | Fills | Resolved | W-L | Net | PF | H1 | H2 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 1 tick | 33 | 32 (1 EOD_BAR_MISSING) | 32-0 | **+$2,503.64** | ∞ | +$1,144.32 | +$1,359.32 |
+| 2 ticks | 33 | 32 (1 EOD_BAR_MISSING) | 32-0 | **+$2,487.64** | ∞ | +$1,136.32 | +$1,351.32 |
+| 3 ticks | 33 | 32 (1 EOD_BAR_MISSING) | 32-0 | **+$2,471.64** | ∞ | +$1,128.32 | +$1,343.32 |
+
 At 3 ticks:
 - LONG: 17 resolved, **+$1,754.34**
-- SHORT: 16 resolved, **+$955.32**
+- SHORT: 15 resolved, **+$717.30** (2025-01-20 SHORT is UNRESOLVED / EOD_BAR_MISSING: 13:00 ET holiday close, no 15:55 bar)
 - both chronological halves positive
-- max drawdown in the resolved ledger: $0 because all 33 resolved rows were
-  positive
+- max drawdown in the resolved ledger: $0 because all 32 resolved rows were positive (31 TARGET_HIT + 1 positive DAY_ONLY_FLATTEN, 2025-02-12)
 - one candidate rejected as `ENTRY_BRACKET_INVALID_AT_FILL`
 
-That rejected row is 2026-05-12 SHORT:
+That rejected row is 2026-05-12 SHORT. The target is 1 tick from the trigger:
 - trigger 29113.50
 - target 29113.25
-- adverse slippage makes the entry incompatible with the 0.25-point target
-  geometry
-- fail-closed behavior is correct.
+- stop 29295.75
+- adverse slippage of at least 1 tick lands the fill at or through the target
+- all three models book `ENTRY_BRACKET_INVALID_AT_FILL`
+- fail-closed behavior is correct; the row is neither a win nor a loss
+
+2025-02-12 LONG is the positive day-only flatten, not a target hit:
+DAY_ONLY_FLATTEN at the exact 15:55 ET bar (2025-02-12T20:55Z), fill 21,701.75,
+exit at the bar close 21,801.75, +$198.52 at 3 ticks. The target was 21,848.5.
+One of the 32 wins is this flatten.
+
+Net at 1 / 2 / 3 ticks is $2,503.64 / $2,487.64 / $2,471.64. Derived from exit
+timestamps, pending corpus re-run.
+
+Reward:risk, side by side, derived from
+`scripts/322_trigger_timing_ab_2026-09-18.json` and pending corpus re-run.
+The 0.229 / 0.263 / 0.237 figures and the mean 0.330 are **3-tick** values.
+0.229, 0.263, and 0.330 are fill-based (entry is the 3-tick pre-armed fill).
+0.237 is trigger-based on those same 32 resolved rows; slippage does not
+enter that ratio. `RiskEngine.calculate_rr` rounds each row to 4 decimals.
+An even-count median is the average of the two middle values.
+
+| Variant | Median R:R |
+|---|---:|
+| 32 resolved rows, 3-tick fill-based | **0.229** (interpolated between 0.1951 and 0.2629) |
+| 33 rows including 2025-01-20 (MLK), 3-tick fill-based | **0.263** (the middle value is 0.2629) |
+| 32 resolved rows, trigger-based (same 3-tick resolved set) | **0.237** (interpolated between 0.205 and 0.2696; 0.2373 before rounding) |
+| 32 resolved rows, 1-tick fill-based | **0.23455** (interpolated between 0.2017 and 0.2674) |
+
+Mean R:R on the 32 resolved rows at 3-tick fill is **0.330** (0.329925 before rounding to 3 decimals).
+
+### Blast radius (AFS-0051)
+
+Read from `scripts/edge_decomposition_audit_results_candidates.jsonl.gz`. The
+stored `bracket` is the plan fill (the 3-2-2 resolved nets sum to the
+as-booked plan 1-tick total 2532.66).
+
+- 3-2-2 MNQ plan fill changes only on 2025-01-20 SHORT: booked TARGET_HIT at
+  19:50 ET, net +239.02. That row becomes UNRESOLVED / EOD_BAR_MISSING. No
+  other 3-2-2 plan-fill exit is after 15:55 ET.
+- 4HR MNQ plan fills are clean: 80 resolved, none exit after 15:55 ET.
+  2026-06-19 LONG is already UNRESOLVED / EOD_BAR_MISSING.
+- 4HR MES plan fill: 76 rows, 74 resolved, 1 no-fill (2024-10-09
+  ENTRY_BRACKET_INVALID_AT_FILL), 1 already UNRESOLVED / EOD_BAR_MISSING
+  (2025-05-26 SHORT, no exit timestamp). No 4HR MES plan-fill exit is after
+  15:55 ET, so no plan-fill outcome changes. Resting-fill and IOC exits are
+  not in the per-row file. The aggregate 4HR MES resting fill has
+  `eod_bar_missing` 0 and 51 resolved, which does not identify an evening
+  exit. Those models stay unverified.
+- The edge-audit 3-2-2 resting fill (20 fills, net 1886.40, `eod_bar_missing`
+  0) is LIKELY affected. The per-row file does not store that model, so
+  whether 2025-01-20 filled there is not visible.
+- The 4HR pre-armed A/B uses `scripts/four_hr_retrigger_stop_study.py`, which
+  calls `execution.day_only_exit.is_after_eod_close`. This PR does not change
+  that resolver.
+
+2024-08-30 SHORT is an open rule ambiguity. Frozen behavior is unchanged. Stop
+19,603. The 10AM-hour high 19,628 traded 100 ticks through the stop before the
+10:55 ET trigger bar. It is booked TARGET_HIT +$6.52 (target 19,508.25, 4 points
+(16 ticks) from the 3-tick fill 19,512.25). Sixteen ticks at $0.50 is $8.00
+gross; after the $1.48 round-trip commission the net is $6.52. The prereg
+covers same-trigger-bar stop-before-target only, and
+is silent on an earlier-bar stop-side excursion. Not changed; it needs its own
+Operator ruling. Same class, recorded only and not changed: 2026-06-11 SHORT
+(stop 29,295.5, 120 ticks through before the 10:55 trigger), booked TARGET_HIT
++$7.02.
 
 ## Same-trigger-bar audit
 
@@ -170,6 +264,8 @@ Results:
 - completed-close IOC: later STOP, **−$168.48**
 - pre-armed First Live: same-bar TARGET, **+$7.52**
 
+This row is a win only under pre-armed. Plan and IOC book a later stop.
+
 The completed-close models miss the rule-defined target because the order is
 not considered active until after the crossing bar closes.
 
@@ -187,7 +283,7 @@ It does **not** validate the strategy.
 
 Major remaining blockers:
 - only 34 historical candidates;
-- 33/33 resolved wins under the corrected model is an extreme small-sample flag,
+- 32/32 resolved wins (31 target hits + 1 day-only flatten; 1 EOD_BAR_MISSING unresolved) under the corrected model is an extreme small-sample flag,
   not evidence to trust blindly;
 - the historical population is consumed evidence;
 - prospective confirmation is still required;

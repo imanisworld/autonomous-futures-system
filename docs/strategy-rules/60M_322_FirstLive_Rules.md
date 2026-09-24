@@ -2,10 +2,12 @@
 **Complete Trading Rules — MNQ Futures Only**
 *Status: PROMISING BUT UNPROVEN — MNQ n=34. The 2026-09-18 trigger-timing
 audit supersedes completed-5m IOC as the final entry-timing model: causal
-pre-armed First Live produced 33 fills / 33 resolved wins / 1 bracket-invalid
-no-fill and +$2,709.66 at 3 adverse ticks, with both chronological halves
-positive. Current real-account stop/R:R constraints still block execution.
-See §7 and `docs/322-trigger-timing-ab-2026-09-18.md`.*
+pre-armed First Live produced 33 fills / 32 resolved wins (31 target, 1
+day-only flatten) / 1 EOD_BAR_MISSING unresolved (2025-01-20 holiday early
+close) / 1 bracket-invalid no-fill and +$2,471.64 at 3 adverse ticks
+(derived from exit timestamps, pending corpus re-run), with both
+chronological halves positive. Current real-account stop/R:R constraints
+still block execution. See §7 and `docs/322-trigger-timing-ab-2026-09-18.md`.*
 
 ---
 
@@ -139,9 +141,12 @@ Frozen 34-candidate A/B:
   date/direction/trigger/stop/target;
 - at the completed crossing-bar close, **13/34 (38.24%)** were more than the
   32-tick IOC tolerance adversely detached from the First Live trigger;
-- causal pre-armed First Live at 3 adverse ticks: **33 fills / 33 resolved
-  wins / 1 bracket-invalid no-fill, +$2,709.66**;
-- H1 **+$1,366.34**, H2 **+$1,343.32**;
+- causal pre-armed First Live at 3 adverse ticks: **33 fills / 32 resolved
+  wins / 1 EOD_BAR_MISSING / 1 bracket-invalid no-fill, +$2,471.64**
+  (derived from exit timestamps, pending corpus re-run);
+- 1 tick net **+$2,503.64**; the 32 wins are 31 TARGET_HIT + 1 positive
+  DAY_ONLY_FLATTEN (2025-02-12);
+- H1 **+$1,128.32**, H2 **+$1,343.32**;
 - 12 same-trigger-bar target resolutions; all 12 had open → trigger → target
   causally ordered; zero trigger bars touched both stop and target.
 

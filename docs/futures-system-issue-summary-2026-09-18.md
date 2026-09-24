@@ -65,14 +65,14 @@ The timing/identity instability is independently proven and sufficient to block 
 The formerly planned 4HR zone-clipped-target A/B is **BLOCKED / DO NOT RUN**
 under LC_ZONE v1. Any replacement zone definition requires a new preregistration.
 
-### 3. 3-2-2 trigger timing — CLOSED AS AN OFFLINE MECHANISM QUESTION
+### 3. 3-2-2 trigger timing — CLOSED AS AN OFFLINE MECHANISM QUESTION (record reissued under AFS-0025: resolver walked post-16:00 ET bars on one holiday row)
 
 The frozen 34-candidate First Live A/B is complete.
 
 - completed-5m close exceeded the 32-tick adverse IOC tolerance on **13/34 (38.24%)** candidates;
-- pre-armed First Live at 3 adverse ticks: **33 fills / 33 resolved wins / 1 bracket-invalid no-fill**;
-- net **+$2,709.66**;
-- H1 **+$1,366.34** / H2 **+$1,343.32**;
+- pre-armed First Live at 3 adverse ticks: **33 fills / 32 resolved wins / 1 EOD_BAR_MISSING / 1 bracket-invalid no-fill**;
+- net **+$2,471.64** (derived from exit timestamps, pending corpus re-run);
+- H1 **+$1,128.32** / H2 **+$1,343.32**;
 - zero same-trigger-bar both-stop-and-target ambiguities.
 
 Classification: **TIMING EDGE SURVIVES / PROMISING BUT UNPROVEN.**

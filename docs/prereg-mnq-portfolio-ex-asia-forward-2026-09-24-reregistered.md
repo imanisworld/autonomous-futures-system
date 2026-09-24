@@ -1,4 +1,13 @@
-# MNQ Five-Family Shared-Account Portfolio (ex-Asia D+EMA), Forward — Preregistration (2026-09-23)
+<!-- trial_id: T-2026-09-24-prereg-mnq-portfolio-ex-asia-forward-2026-09-24-reregistered-01 -->
+
+# MNQ Five-Family Shared-Account Portfolio (ex-Asia D+EMA), Forward — Re-registration (2026-09-24)
+
+> **Re-registered 2026-09-24 per AFS-0041.** This document re-registers and
+> supersedes `docs/prereg-mnq-portfolio-ex-asia-forward-2026-09-23.md`.
+> Ledger trial `T-2026-09-24-prereg-mnq-portfolio-ex-asia-forward-2026-09-24-reregistered-01`
+> supersedes `T-2026-09-23-prereg-mnq-portfolio-ex-asia-forward-2026-09-23-01`.
+> SHA-256 of the superseded file on main:
+> `29300038525a3ac92d4f47ea8386b4d7b9b48306f5faaf745dba35fe59c8c52f`.
 
 **RESEARCH / AUDIT ONLY. NO EXECUTION AUTHORITY.** Nothing in this document
 enables, disables, promotes, demotes, or re-parameterizes any strategy, lane,
@@ -60,10 +69,14 @@ ledger and its own evaluation.
 
 ## 3. Data (forward only)
 
-**Scoring start:** the first completed MNQ 5m bar with timestamp
-**≥ 2026-09-23T22:00:00Z** (CME observation day beginning 18:00 ET Wednesday
-2026-09-23). A portfolio fill counts only if its causal signal *and* its fill
-are both at or after this instant.
+**Scoring start:** first session open after the resolve_bracket fix (AFS-0034)
+merges; exact timestamp filled at merge: [TBD at merge]. A portfolio fill
+counts only if its causal signal *and* its fill are both at or after this
+instant.
+
+**Unscored gap.** Forward data from 2026-09-23 18:00 ET until the new scoring
+start is scored under neither this prereg nor
+`docs/prereg-mnq-portfolio-ex-asia-forward-2026-09-23.md`.
 
 **Historical window 2026-06-27 → 2026-07-23 is NOT scored.** It lies outside
 the #915 common window, but #911, #912 and the 313-day grid have already
@@ -98,7 +111,16 @@ attempt is recorded in §6. Step 0 may be re-run before the look; the look
 itself happens once.
 
 **Evaluator.** Reuse `research/mnq_combined_portfolio_audit.py` and
-`scripts/mnq_combined_portfolio_audit.py` from `5a9f14b`. The only permitted
+`scripts/mnq_combined_portfolio_audit.py`. Day-only resolution uses the fixed
+`resolve_bracket` in `scripts/edge_decomposition_audit.py` on PR #1025
+(https://github.com/imanisworld/autonomous-futures-system/pull/1025), blob
+`230ec92e69168d34c310baae4e37bf50bb05cc7f`. If that file changes before merge,
+replace this blob at merge. The portfolio script pin is
+`scripts/mnq_combined_portfolio_audit.py` blob
+`53df87ea161900867381c33a39ba9afce1e96384`. `research/mnq_combined_portfolio_audit.py`
+is unchanged from 5a9f14b. The 3-2-2 full-window control pinned by the
+2026-09-23 prereg (33 fills / 2742.66) is 33 fills / 2503.64, derived, pending
+corpus re-run. The only permitted
 changes are:
 
 - accept a corpus directory and a date range as inputs;
@@ -182,7 +204,8 @@ happens then and H1 is `INSUFFICIENT_SAMPLE`, whatever the P&L.
 
 ## 6. What is NOT allowed
 
-- Scoring any bar or fill before 2026-09-23T22:00:00Z.
+- Scoring any bar or fill before the scoring start in §3 (exact timestamp
+  filled at merge: [TBD at merge]).
 - Changing any family's detector, bracket, fill model, costs, or tie order.
   Removing a second family after the look is also forbidden: that would be a
   new post-hoc selection and needs its own prereg.
@@ -258,7 +281,7 @@ computed or read.**
   Candles are then derived as `polygon_to_replay` does, with its own 10-day
   pre-roll on top.
 - For the forward run the corpus starts **2026-07-25**. Candidates before
-  2026-09-23T22:00:00Z are still dropped before the shared-account replay (§3).
+  the scoring start in §3 are still dropped before the shared-account replay (§3).
 - For step 0 the rebuilt overlap uses `--warmup-days 60`. With that setting
   every EMA field matches the frozen corpora exactly. With the 10-day default,
   `ema_200` drifted until 07-13.
@@ -339,11 +362,69 @@ computed or read.**
 - Every other line of §6 stands.
 - Further amendments are forbidden after the scoring start.
 
-## SUPERSEDED 2026-09-24 (AFS-0041)
+## Diff summary vs 2026-09-23
 
-This prereg is superseded by
-`docs/prereg-mnq-portfolio-ex-asia-forward-2026-09-24-reregistered.md` and
-ledger AFS-0041. The pinned resolver walked past 15:55 ET on same-date
-halt/reopen sessions, for example 2025-01-20, and the scoring window includes
-2027-01-18 and 2027-02-15. Forward data from 2026-09-23 18:00 ET until the new
-scoring start is scored under neither prereg.
+SHA-256 of `docs/prereg-mnq-portfolio-ex-asia-forward-2026-09-23.md` on main:
+`29300038525a3ac92d4f47ea8386b4d7b9b48306f5faaf745dba35fe59c8c52f`.
+
+The study-rule changes are the resolver pin, the scoring start, and the one
+expected control that depended on the buggy resolver. The title, the unscored
+gap, the portfolio-script blob, and the ledger `trial_id` are administrative
+and do not change a hypothesis, family, threshold, sample, deadline, look, gap
+rule, or step-0 check.
+
+1. **Title and header (administrative).** The heading is
+   `Re-registration (2026-09-24)`, not the 2026-09-23 preregistration title.
+   The header cites ledger trial
+   `T-2026-09-24-prereg-mnq-portfolio-ex-asia-forward-2026-09-24-reregistered-01`,
+   which supersedes
+   `T-2026-09-23-prereg-mnq-portfolio-ex-asia-forward-2026-09-23-01`, and records
+   the SHA-256 of the superseded file on main:
+   `29300038525a3ac92d4f47ea8386b4d7b9b48306f5faaf745dba35fe59c8c52f`.
+
+2. **Scoring start (§3).** Replaced:
+
+   - Old: `the first completed MNQ 5m bar with timestamp ≥ 2026-09-23T22:00:00Z (CME observation day beginning 18:00 ET Wednesday 2026-09-23).`
+   - New: `first session open after the resolve_bracket fix (AFS-0034) merges; exact timestamp filled at merge: [TBD at merge].`
+
+   The following sentence is unchanged: a portfolio fill counts only if its
+   causal signal and its fill are both at or after this instant.
+
+   **Unscored gap (added).** Forward data from 2026-09-23 18:00 ET until the
+   new scoring start is scored under neither prereg.
+
+3. **Scoring start, restated in §6.** Replaced the prohibition that named the
+   old instant:
+
+   - Old: `Scoring any bar or fill before 2026-09-23T22:00:00Z.`
+   - New: `Scoring any bar or fill before the scoring start in §3 (exact timestamp filled at merge: [TBD at merge]).`
+
+4. **Scoring start, restated in §9.2.** The warm-up corpus start stays
+   2026-07-25. Replaced only the drop cutoff:
+
+   - Old: `Candidates before 2026-09-23T22:00:00Z are still dropped before the shared-account replay (§3).`
+   - New: `Candidates before the scoring start in §3 are still dropped before the shared-account replay (§3).`
+
+5. **Resolver pin (§3 Evaluator).** Replaced `from 5a9f14b` with a pin to the
+   fixed resolver:
+
+   - Old: `Reuse research/mnq_combined_portfolio_audit.py and scripts/mnq_combined_portfolio_audit.py from 5a9f14b.`
+   - New: those two files stay the evaluator. Day-only resolution uses the
+     fixed `resolve_bracket` in `scripts/edge_decomposition_audit.py` on PR
+     #1025, blob `230ec92e69168d34c310baae4e37bf50bb05cc7f`. If that file
+     changes before merge, replace this blob at merge. The portfolio script
+     pin is `scripts/mnq_combined_portfolio_audit.py` blob
+     `53df87ea161900867381c33a39ba9afce1e96384`.
+     `research/mnq_combined_portfolio_audit.py` is unchanged from 5a9f14b.
+
+6. **Dependent expected control (same Evaluator paragraph).** The 2026-09-23
+   text did not print this number; the pin carried it inside
+   `scripts/mnq_combined_portfolio_audit.py`.
+
+   - Old pinned control: 33 fills / 2742.66.
+   - New: 33 fills / 2503.64, derived, pending corpus re-run.
+
+7. **This section (administrative).** Added. It is not a study-rule change.
+
+No hypothesis, family, shared-account rule, threshold, minimum sample,
+deadline, single look, gap rule, or step-0 threshold changed.

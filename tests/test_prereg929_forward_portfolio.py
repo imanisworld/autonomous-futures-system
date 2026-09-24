@@ -24,13 +24,21 @@ REPO = Path(__file__).resolve().parents[1]
 UTC = timezone.utc
 
 # Git blob SHA-1s of the ported files at archive/pr915 5a9f14baf714947b98a38a19b45f04a8d18fb365.
+# scripts/mnq_combined_portfolio_audit.py is not in this map. AFS-0041 changes
+# only its 60M_322_FIRST_LIVE control (33 fills / 2742.66 -> 33 fills / 2503.64,
+# derived, pending corpus re-run). AFS-0051 adds the comment that cites the
+# 322 erratum and the re-registered prereg. The 5a9f14b blob was
+# c24f82ef60e4c70dcea46dcdc1e5dadf58ec6406. See
+# docs/prereg-mnq-portfolio-ex-asia-forward-2026-09-23.md (superseded) and
+# docs/prereg-mnq-portfolio-ex-asia-forward-2026-09-24-reregistered.md.
 PORTED_BLOBS_5A9F14B = {
     "research/mnq_combined_portfolio_audit.py": "82ee6cfa3f356bba368ec7302036da1f111e1ba7",
-    "scripts/mnq_combined_portfolio_audit.py": "c24f82ef60e4c70dcea46dcdc1e5dadf58ec6406",
     "tests/test_mnq_combined_portfolio_audit.py": "e29bde144c97d2eaeca0d31547c57d15cc716a73",
     "research/mnq_sustained_trend_continuation_v1.py": "289f0ab9aaf7c18b09de387bd131e6a59cade0d4",
     "scripts/mnq_sustained_trend_continuation_v1.py": "909fc10e4168b5956533dea1346e412015bae719",
 }
+AFS_0041_PORTFOLIO_SCRIPT = "scripts/mnq_combined_portfolio_audit.py"
+AFS_0041_PORTFOLIO_SCRIPT_BLOB = "53df87ea161900867381c33a39ba9afce1e96384"
 
 
 def _git_blob_sha(path: Path) -> str:
@@ -43,6 +51,10 @@ def _git_blob_sha(path: Path) -> str:
 @pytest.mark.parametrize("rel,blob", sorted(PORTED_BLOBS_5A9F14B.items()))
 def test_ported_915_files_are_byte_identical_to_5a9f14b(rel, blob):
     assert _git_blob_sha(REPO / rel) == blob, f"{rel} drifted from 5a9f14b"
+
+
+def test_portfolio_script_blob_is_the_afs_0041_control_update():
+    assert _git_blob_sha(REPO / AFS_0041_PORTFOLIO_SCRIPT) == AFS_0041_PORTFOLIO_SCRIPT_BLOB
 
 
 def test_prereg_h1_tie_order_is_frozen_order_minus_asia():
