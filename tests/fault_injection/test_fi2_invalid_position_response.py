@@ -35,8 +35,6 @@ def _open_broker(monkeypatch, book: FakeBook):
     return b
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="KNOWN DEFECT FI-2: malformed /position/list read as flat -> FORCE_CLOSE_UNMATCHED")
 @pytest.mark.parametrize("shape", list(MALFORMED))
 def test_fi2_malformed_position_list_never_books_a_close(monkeypatch, shape):
     book = FakeBook()
@@ -102,3 +100,23 @@ def test_fi2_runner_rebuilds_resolver_each_bar_so_malformed_list_books_nothing(
     )
     assert outcomes(log_dir) == [], str(rec)
     assert journal_open(log_dir), str(rec)
+
+
+@pytest.mark.parametrize("shape", list(MALFORMED))
+def test_fi2_malformed_fill_list_on_flat_position_books_nothing(monkeypatch, shape):
+    """D1: the position is genuinely flat (valid empty list) but /fill/list is
+    malformed on every resolve. Nothing may be booked — in particular no
+    fabricated FORCE_CLOSE_UNMATCHED — until real fills can be read."""
+    book = FakeBook()
+    b = _open_broker(monkeypatch, book)
+    book.seed_position(0, 0.0)
+    book.get_faults["/fill/list"] = MALFORMED[shape]
+    fills = [b.resolve_position() for _ in range(3)]
+    assert fills == [None, None, None]
+    assert b._last_position is not None and b._last_position.open
+
+    # Once fills are readable the real exit is attributed by order id.
+    book.get_faults.clear()
+    book.fills.append({"orderId": STOP_ID, "contractId": 4242, "price": 5896.0, "qty": 1})
+    fill = b.resolve_position()
+    assert (fill.result, fill.exit_reason) == ("LOSS", "STOP_HIT")
