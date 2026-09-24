@@ -1,4 +1,6 @@
-"""FI-5 — journal write failure around a broker order (#950 audit gap 11).
+"""JW — journal write failure around a broker order (#950 audit gap 11).
+
+Formerly "FI-5" (#999); renamed because #1000 uses FI-5..FI-9 for other cases.
 
 The runner sends the order (``webhook/runner.py`` ~3066) BEFORE it writes the
 authoritative ``decision="TRADE"`` row (~3321) — the only row any reader treats
@@ -14,6 +16,10 @@ Safe requirement (operator D1/D2/D3, 2026-09-24):
   (iii) the call that lost its TRADE row does not report a clean OPEN trade;
   D2    a failed pre-submit (TRADE_INTENT) write means no order is sent;
   D3    the same holds on the PaperBroker path.
+
+Fixed by the JW fix (operator F1 process-wide latch, F2 cleared only by a
+restart, F3 one retry, F4 OUTCOME is critical where the journal feeds a
+RiskEngine). The six former strict-xfail defect tests now pass.
 """
 from __future__ import annotations
 
@@ -32,7 +38,18 @@ from tests.fault_injection._harness import (
 )
 
 SECOND_BAR = "2026-05-23T14:45:00+00:00"
-KNOWN_DEFECT = pytest.mark.xfail(strict=True, raises=AssertionError, reason="FI-5 defect (unfixed)")
+
+
+@pytest.fixture(autouse=True)
+def _clean_latch():
+    """The journal-write latch and its alert flag are process-wide by design
+    (F1/F2); every test must start and end with a clean process."""
+    from webhook import runner
+    jl._reset_write_failure_latch()
+    runner._journal_alert_sent = False
+    yield
+    jl._reset_write_failure_latch()
+    runner._journal_alert_sent = False
 
 
 class _DiskFull:
@@ -40,9 +57,11 @@ class _DiskFull:
     JSON row matches ``row_pred`` raise ENOSPC; ``error_log_fails`` makes the
     error-log append raise too. Reads and the lock file pass through."""
 
-    def __init__(self, row_pred: Callable[[dict], bool], *, error_log_fails: bool = False):
+    def __init__(self, row_pred: Callable[[dict], bool], *, error_log_fails: bool = False,
+                 max_faults: int | None = None):
         self.row_pred = row_pred
         self.error_log_fails = error_log_fails
+        self.max_faults = max_faults
         self.row_faults = 0
         self.error_log_faults = 0
 
@@ -62,7 +81,7 @@ class _DiskFull:
             row = json.loads(data)
         except ValueError:
             return
-        if self.row_pred(row):
+        if self.row_pred(row) and (self.max_faults is None or self.row_faults < self.max_faults):
             self.row_faults += 1
             raise OSError(errno.ENOSPC, "No space left on device")
 
@@ -157,7 +176,7 @@ def _record(case: str, injected: str, expected: str) -> FaultRecord:
 # ── JW-1: TRADE row lost, error log writable ──────────────────────────────────
 @pytest.mark.parametrize("recheck", [
     pytest.param(True, id="recheck_on"),  # FI-3 broker-position recheck is the only backstop
-    pytest.param(False, id="recheck_off", marks=KNOWN_DEFECT),
+    pytest.param(False, id="recheck_off"),
 ])
 def test_jw1_lost_trade_row_never_leads_to_second_entry(config, tmp_path, monkeypatch, recheck):
     book, broker, cfg, log_dir, first, _, _, _ = _first_trade(
@@ -174,7 +193,6 @@ def test_jw1_lost_trade_row_never_leads_to_second_entry(config, tmp_path, monkey
     assert book.place_calls() == 1, str(rec)
 
 
-@KNOWN_DEFECT
 def test_jw1_lost_trade_row_raises_durable_signal(config, tmp_path, monkeypatch):
     book, _, _, log_dir, first, _, alerts, _ = _first_trade(
         monkeypatch, config, tmp_path, recheck=True)
@@ -188,7 +206,6 @@ def test_jw1_lost_trade_row_raises_durable_signal(config, tmp_path, monkeypatch)
     assert alerts, str(rec)
 
 
-@KNOWN_DEFECT
 def test_jw1_lost_trade_row_not_reported_as_clean_open(config, tmp_path, monkeypatch):
     book, _, _, log_dir, first, _, _, _ = _first_trade(monkeypatch, config, tmp_path, recheck=True)
     fill = first.get("fill") or {}
@@ -201,7 +218,6 @@ def test_jw1_lost_trade_row_not_reported_as_clean_open(config, tmp_path, monkeyp
 
 
 # ── JW-2: TRADE row lost AND the error log is unwritable (disk full) ──────────
-@KNOWN_DEFECT
 def test_jw2_disk_full_after_submit_is_handled(config, tmp_path, monkeypatch):
     book, broker, cfg, log_dir, first, raised, alerts, fault = _first_trade(
         monkeypatch, config, tmp_path, recheck=True, error_log_fails=True)
@@ -219,7 +235,6 @@ def test_jw2_disk_full_after_submit_is_handled(config, tmp_path, monkeypatch):
 
 
 # ── JW-3: pre-submit (TRADE_INTENT) write fails — D2: no order is sent ────────
-@KNOWN_DEFECT
 def test_jw3_failed_intent_write_sends_no_order(config, tmp_path, monkeypatch):
     book, broker, cfg = _tradovate(monkeypatch, config, recheck=True)
     _capture_alerts(monkeypatch)
@@ -246,7 +261,6 @@ def _paper_trades(results: list[dict]) -> int:
     return sum(1 for r in results if r.get("decision") == "TRADE")
 
 
-@KNOWN_DEFECT
 def test_jw4_paper_lost_trade_row_never_leads_to_second_entry(config, tmp_path, monkeypatch):
     from webhook import runner
     monkeypatch.delenv("BROKER", raising=False)
@@ -318,3 +332,94 @@ def test_jwc2_lost_outcome_row_keeps_journal_open(config, tmp_path, monkeypatch)
                         f"journal_open={journal_open(log_dir)} broker {book.describe()}")
     assert journal_open(log_dir), str(rec)
     assert book.place_calls() == 1, str(rec)
+
+
+# ── JW fix behaviour (prereg tests a–e) ───────────────────────────────────────
+def test_jw_fix_a_noncritical_row_failure_does_not_latch(config, tmp_path, monkeypatch):
+    """(a) Telemetry rows keep the historical swallow: they never halt trading."""
+    from journal.journal_logger import JournalLogger
+    fault = _DiskFull(lambda r: r.get("type") == "BLOCK_VISIBILITY")
+    monkeypatch.setattr(jl, "open", fault, raising=False)
+    JournalLogger(log_dir=str(tmp_path / "logs")).log_block_visibility({"why": "test"})
+    monkeypatch.setattr(jl, "open", builtins.open, raising=False)
+    if fault.row_faults < 1:
+        raise FaultSetupError("the BLOCK_VISIBILITY write was never attempted")
+    assert jl.journal_write_failed() is None
+
+
+def test_jw_fix_b_single_failure_then_retry_success_is_clean(config, tmp_path, monkeypatch):
+    """(b) One transient failure on the TRADE row is absorbed by the retry."""
+    book, broker, cfg = _tradovate(monkeypatch, config, recheck=True)
+    alerts = _capture_alerts(monkeypatch)
+    fault = _DiskFull(_is_trade, max_faults=1)
+    monkeypatch.setattr(jl, "open", fault, raising=False)
+    log_dir = tmp_path / "logs"
+    first = run_alert(monkeypatch, broker, cfg, log_dir, mes_payload())
+    monkeypatch.setattr(jl, "open", builtins.open, raising=False)
+    if fault.row_faults != 1:
+        raise FaultSetupError(f"expected exactly one injected fault, got {fault.row_faults}")
+    assert first["decision"] == "TRADE"
+    assert _trade_rows(log_dir) == 1
+    assert jl.journal_write_failed() is None
+    assert alerts == []
+    assert book.place_calls() == 1
+
+
+def test_jw_fix_c_latch_blocks_entries_but_not_resolution(config, tmp_path, monkeypatch):
+    """(c) With the latch set, an open paper position still resolves (its
+    OUTCOME row is written) while no new entry is taken."""
+    from webhook import runner
+    monkeypatch.delenv("BROKER", raising=False)
+    _capture_alerts(monkeypatch)
+    cfg = _paper_cfg(config)
+    log_dir = tmp_path / "logs"
+    first = runner.process_alert(mes_payload(), config=cfg, log_dir=str(log_dir))
+    if first.get("decision") != "TRADE" or not journal_open(log_dir):
+        raise FaultSetupError(f"needs an open paper trade first: {first.get('decision')}")
+    jl._latch_write_failure("test: latched by a lost critical row")
+    # A later bar that trades through the target (5904.0) resolves the position.
+    far = mes_payload(SECOND_BAR).model_copy(update={"high": 5930.0, "close": 5925.0})
+    second = runner.process_alert(far, config=cfg, log_dir=str(log_dir))
+    outcomes_written = [r for r in journal_rows(log_dir) if r.get("type") == "OUTCOME"]
+    assert outcomes_written, f"resolution was blocked: second={second.get('decision')}"
+    assert second.get("resolution") is not None
+    assert _trade_rows(log_dir) == 1, "no new entry while latched"
+
+
+def test_jw_fix_d_restart_with_flat_journal_is_caught_by_fi3(config, tmp_path, monkeypatch):
+    """(d) Documents the restart limit (F2): a new process has no latch, so on
+    Tradovate the FI-3 broker-position recheck is what stops a second entry."""
+    book, broker, cfg, log_dir, _, _, _, _ = _first_trade(monkeypatch, config, tmp_path, recheck=True)
+    from webhook import runner
+    jl._reset_write_failure_latch()  # simulate the restart
+    runner._journal_alert_sent = False
+    second = run_alert(monkeypatch, broker, cfg, log_dir, mes_payload(SECOND_BAR))
+    assert book.place_calls() == 1, f"second={second['decision']} broker {book.describe()}"
+    assert second["decision"] == "ORDER_SUPPRESSED"
+
+
+def test_jw_fix_e_lost_main_book_outcome_latches_and_alerts(config, tmp_path, monkeypatch):
+    """(e) F4: a lost OUTCOME in the main book (whose journal feeds the
+    RiskEngine) latches and alerts; the journal stays open (safe direction)."""
+    from webhook import runner
+    monkeypatch.delenv("BROKER", raising=False)
+    alerts = _capture_alerts(monkeypatch)
+    cfg = _paper_cfg(config)
+    log_dir = tmp_path / "logs"
+    first = runner.process_alert(mes_payload(), config=cfg, log_dir=str(log_dir))
+    if first.get("decision") != "TRADE":
+        raise FaultSetupError(f"needs an open paper trade first: {first.get('decision')}")
+    fault = _DiskFull(lambda r: r.get("type") == "OUTCOME")
+    monkeypatch.setattr(jl, "open", fault, raising=False)
+    far = mes_payload(SECOND_BAR).model_copy(update={"high": 5930.0, "close": 5925.0})
+    runner.process_alert(far, config=cfg, log_dir=str(log_dir))
+    monkeypatch.setattr(jl, "open", builtins.open, raising=False)
+    if fault.row_faults < 1:
+        raise FaultSetupError("the resolution never attempted an OUTCOME write")
+    assert jl.journal_write_failed() is not None
+    assert journal_open(log_dir)
+    third = runner.process_alert(
+        mes_payload("2026-05-23T15:00:00+00:00"), config=cfg, log_dir=str(log_dir))
+    assert third["decision"] in ("BLOCKED_OPEN_POSITION", "BLOCKED_JOURNAL_UNWRITABLE")
+    assert _trade_rows(log_dir) == 1
+    assert alerts, "an operator alert must be sent"

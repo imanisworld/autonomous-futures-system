@@ -57,6 +57,39 @@ def _aware_utc(value: datetime) -> datetime:
     return value.astimezone(timezone.utc)
 
 
+# Rows whose loss would let the book diverge from the broker or understate its
+# own risk: the pre-submit intent and the open-position TRADE row. OUTCOME rows
+# become critical only when a caller whose journal feeds a RiskEngine says so.
+CRITICAL_DECISIONS = frozenset({"TRADE_INTENT", "TRADE"})
+
+
+class JournalWriteError(OSError):
+    """A critical journal row could not be written, even after one retry."""
+
+
+# Process-wide fail-closed latch (FI-5 fix, operator F1/F2). Set when a critical
+# row cannot be written; never cleared in-process — a restart clears it, after
+# the disk is fixed. Callers read it through journal_write_failed().
+_write_failed_reason: Optional[str] = None
+
+
+def journal_write_failed() -> Optional[str]:
+    """The reason the journal became unwritable in this process, or None."""
+    return _write_failed_reason
+
+
+def _latch_write_failure(reason: str) -> None:
+    global _write_failed_reason
+    if _write_failed_reason is None:
+        _write_failed_reason = reason
+
+
+def _reset_write_failure_latch() -> None:
+    """Tests only: the latch is process-wide, so each test starts clean."""
+    global _write_failed_reason
+    _write_failed_reason = None
+
+
 class JournalLogger:
     """
     Append-only JSONL decision and trade journal.
@@ -110,7 +143,7 @@ class JournalLogger:
         if risk_result:
             entry["risk_check"] = risk_result
         entry.setdefault("outcome", None)
-        self._append(entry, for_date)
+        self._append(entry, for_date, critical=entry.get("decision") in CRITICAL_DECISIONS)
 
     def log_outcome(
         self,
@@ -145,10 +178,16 @@ class JournalLogger:
         paper_order_id: Optional[str] = None,
         client_order_id: Optional[str] = None,
         execution_audit: Optional[dict] = None,
+        critical: bool = False,
     ) -> None:
         """
         Append a trade outcome entry to today's journal.
         Called after paper broker resolves a position.
+
+        ``critical=True`` (callers whose journal feeds a RiskEngine): a failed
+        write latches the process fail-closed instead of being swallowed. It
+        never raises — a lost OUTCOME leaves the position open in the journal,
+        which already blocks new entries, and resolution must not be broken.
         """
         entry = {
             "ts": datetime.now(timezone.utc).isoformat(),
@@ -182,7 +221,10 @@ class JournalLogger:
                 "execution_audit": execution_audit,
             },
         }
-        self._append(entry, for_date)
+        try:
+            self._append(entry, for_date, critical=critical)
+        except JournalWriteError:
+            pass  # latched in _append; the journal stays open (safe direction)
 
     def log_day_only_exit_issue(
         self,
@@ -318,9 +360,12 @@ class JournalLogger:
         line = f"[{ts}] ERROR: {message}"
         if exc:
             line += f" | {type(exc).__name__}: {exc}"
-        with self._locked():
-            with open(self._error_log, "a") as f:
-                f.write(line + "\n")
+        try:
+            with self._locked():
+                with open(self._error_log, "a") as f:
+                    f.write(line + "\n")
+        except Exception as log_exc:  # noqa: BLE001 — the error log must never raise
+            line += f" | error log unwritable: {type(log_exc).__name__}: {log_exc}"
         logger.error(line)
 
     def log_scout(self, entry: dict, for_date: Optional[date] = None) -> None:
@@ -419,15 +464,31 @@ class JournalLogger:
                 f.write(json.dumps(entry) + "\n")
             return True
 
-    def _append(self, entry: dict, for_date: Optional[date] = None) -> None:
-        """Append a single JSON entry to today's journal file."""
+    def _append(
+        self, entry: dict, for_date: Optional[date] = None, *, critical: bool = False
+    ) -> None:
+        """Append a single JSON entry to today's journal file.
+
+        Non-critical rows keep the historical behaviour: a failure is logged and
+        swallowed. A critical row is retried once; if that also fails, the
+        process-wide latch is set and JournalWriteError is raised.
+        """
         path = self._journal_path(for_date)
-        try:
-            with self._locked():
-                with open(path, "a") as f:
-                    f.write(json.dumps(entry) + "\n")
-        except Exception as e:
-            self.log_error(f"Failed to write journal entry: {entry}", exc=e)
+        attempts = 2 if critical else 1
+        last_exc: Optional[Exception] = None
+        for _ in range(attempts):
+            try:
+                with self._locked():
+                    with open(path, "a") as f:
+                        f.write(json.dumps(entry) + "\n")
+                return
+            except Exception as e:  # noqa: BLE001
+                last_exc = e
+        self.log_error(f"Failed to write journal entry: {entry}", exc=last_exc)
+        if critical:
+            label = entry.get("decision") or entry.get("type") or "row"
+            _latch_write_failure(f"{label} write failed: {type(last_exc).__name__}: {last_exc}")
+            raise JournalWriteError(f"critical journal row not written: {label}") from last_exc
 
     # ── Read / Reconstruct ────────────────────────────────────────────────────
 
