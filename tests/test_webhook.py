@@ -694,31 +694,31 @@ def test_real_broker_open_with_order_ids_confirms_and_counts(config, tmp_path, m
     assert ds.trade_count == 1
 
 
-def test_real_broker_open_without_order_ids_fails_closed(config, tmp_path, monkeypatch):
+def test_real_broker_open_without_order_ids_is_journaled_open_as_ambiguous(config, tmp_path, monkeypatch):
     from journal.journal_logger import JournalLogger
     from webhook import runner
 
-    # Broker reports OPEN but returns NO order ids -> must fail closed.
+    # A real broker reports OPEN but returns NO order ids. The position exists;
+    # only its identity is missing, so it must NOT be booked flat (FI-1): it is
+    # journaled OPEN, marked AMBIGUOUS_SUBMIT, and counted.
     fake = _FakeRealBroker(_open_fill(), None)
     monkeypatch.setattr(runner, "_make_broker", lambda **kw: fake)
     log_dir = str(tmp_path / "logs")
     result = runner.process_alert(_mes_orb_payload(), config=_mes_real_broker_cfg(config), log_dir=log_dir)
 
-    assert result["decision"] == "BLOCKED_ORDER_CONFIRMATION_MISSING"
+    assert result["decision"] == "AMBIGUOUS_SUBMIT_OPEN"
     rows = _read_journal_rows(tmp_path)
-    assert [r for r in rows if r.get("decision") == "TRADE"] == []  # NO confirmed trade
     intent = next(r for r in rows if r.get("decision") == "TRADE_INTENT")
-    cancelled = next(
-        r for r in rows
-        if r.get("type") == "OUTCOME"
-        and (r.get("outcome") or {}).get("result") == "CANCELLED"
-        and (r.get("outcome") or {}).get("no_fill_reason") == "ORDER_CONFIRMATION_MISSING"
-    )
-    assert intent["client_order_id"].startswith("AFS-")
-    assert cancelled["outcome"]["client_order_id"] == intent["client_order_id"]
+    trade = next(r for r in rows if r.get("decision") == "TRADE")
+    assert trade["execution_state"] == "AMBIGUOUS_SUBMIT"
+    assert trade["ambiguous_submit"] == {
+        "reason": "ORDER_CONFIRMATION_MISSING", "broker_truth": "broker_reported_open",
+    }
+    assert trade["client_order_id"] == intent["client_order_id"]
+    assert [r for r in rows if r.get("type") == "OUTCOME"] == []  # nothing booked flat
     ds = JournalLogger(log_dir=log_dir).get_daily_state(_journal_date(tmp_path))
-    assert ds.has_open_position is False
-    assert ds.trade_count == 0
+    assert ds.has_open_position is True
+    assert ds.trade_count == 1
 
 
 def test_real_broker_non_open_writes_cancelled_no_confirmed_trade(config, tmp_path, monkeypatch):

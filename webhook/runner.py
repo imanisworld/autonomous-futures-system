@@ -3081,7 +3081,30 @@ def process_alert(
         "BROKER_RESULT",
         broker_result=fill.result,
     )
-    if fill.result != "OPEN":
+    # ── Ambiguous submit (FI-1): the order may exist at the broker ──────────
+    # A timeout / missing orderId / unconfirmed entry is NOT proof of "no
+    # position". Look at the broker once: only a definitive flat position AND
+    # no live order on the account books CANCELLED; anything else journals the
+    # attempt as an OPEN trade marked AMBIGUOUS_SUBMIT, which the per-bar
+    # resolver (real exit) or the reconciler (phantom clear) then settles.
+    _ambiguous_submit = None
+    _flat_confirmed_audit = None
+    if (
+        fill.result != "OPEN"
+        and not isinstance(broker, PaperBroker)
+        and str(getattr(fill, "exit_reason", "") or "") in _AMBIGUOUS_SUBMIT_REASONS
+    ):
+        _truth = _ambiguous_submit_broker_truth(broker)
+        _audit = {"reason": fill.exit_reason, "broker_truth": _truth}
+        if _truth == "flat_confirmed":
+            _flat_confirmed_audit = {
+                **(getattr(fill, "execution_audit", None) or {}),
+                "ambiguous_submit": _audit,
+            }
+        else:
+            _ambiguous_submit = _audit
+
+    if fill.result != "OPEN" and _ambiguous_submit is None:
         # Broker did NOT establish a position. A CANCELLED result is an EXPECTED
         # IOC limit no-fill (the broker accepted the order; the limit just didn't
         # fill) — log it at WARNING so it doesn't pollute error counts / alerting.
@@ -3152,7 +3175,11 @@ def process_alert(
             best_ask_at_submit=None,
             ticks_moved_from_entry=None,
             client_order_id=order.client_order_id,
-            execution_audit=getattr(fill, "execution_audit", None),
+            execution_audit=(
+                _flat_confirmed_audit
+                if _flat_confirmed_audit is not None
+                else getattr(fill, "execution_audit", None)
+            ),
         )
         daily_state.has_open_position = False
         result["decision"] = "BLOCKED_EXECUTION_FAILED"
@@ -3177,7 +3204,14 @@ def process_alert(
         (_requires_order_ids and not _order_ids)
         or (isinstance(broker, PaperBroker) and not _paper_order_id)
     )
-    if _confirmation_missing:
+    if _confirmation_missing and _requires_order_ids and _ambiguous_submit is None:
+        # A real broker SAID the position is open; missing ids make it
+        # untraceable, not flat (FI-1). Journal it open as AMBIGUOUS_SUBMIT.
+        _ambiguous_submit = {
+            "reason": "ORDER_CONFIRMATION_MISSING",
+            "broker_truth": "broker_reported_open",
+        }
+    if _confirmation_missing and _ambiguous_submit is None:
         logger.error(
             "ORDER_CONFIRMATION_MISSING: %s %s — broker returned OPEN but no order "
             "ids; failing closed (not marking open, not counting the trade).",
@@ -3245,6 +3279,16 @@ def process_alert(
     # the authoritative decision="TRADE" row — the ONLY row any reader treats as an
     # open, counted position — carrying the same full payload as the TRADE_INTENT row.
     journal_entry["decision"] = "TRADE"
+    if _ambiguous_submit is not None:
+        journal_entry["execution_state"] = "AMBIGUOUS_SUBMIT"
+        journal_entry["ambiguous_submit"] = _ambiguous_submit
+        logger.error(
+            "AMBIGUOUS_SUBMIT: %s %s — %s (broker_truth=%s); journaling OPEN until "
+            "the resolver or reconciler proves the broker state",
+            order.instrument, order.direction,
+            _ambiguous_submit["reason"], _ambiguous_submit["broker_truth"],
+        )
+        _send_ambiguous_submit_alert(cfg, order, _ambiguous_submit)
     if (
         mnq_breakout_inverse_decision is not None
         and mnq_breakout_inverse_decision.apply_override
@@ -3263,7 +3307,9 @@ def process_alert(
     # position) and P&L both resolve from THIS row's setup.entry, so the
     # confirmed row must carry the actual fill; the anchored plan remains on
     # the TRADE_INTENT row and in the proof audit's would_be_setup.
-    _proof_fill_entry = getattr(fill, "entry_price", None)
+    _proof_fill_entry = (
+        None if _ambiguous_submit is not None else getattr(fill, "entry_price", None)
+    )
     if _proof_fill_entry is not None and isinstance(journal_entry.get("setup"), dict):
         journal_entry["requested_entry"] = order.entry
         journal_entry["setup"] = {**journal_entry["setup"], "entry": _proof_fill_entry}
@@ -3320,6 +3366,13 @@ def process_alert(
         "execution_audit": getattr(fill, "execution_audit", None),
     }
 
+    if _ambiguous_submit is not None:
+        # Unconfirmed position: no companion candidate from it.
+        result["decision"] = "AMBIGUOUS_SUBMIT_OPEN"
+        result["fill"]["status"] = "AMBIGUOUS_OPEN"
+        result["fill"]["ambiguous_submit"] = _ambiguous_submit
+        return result
+
     # Companion options paper lane: a fully-approved, OPENED futures trade derives an
     # internal paper options candidate (Signa-gated). Fail-soft, audit-only; never
     # mutates futures state/journal/counts. No-op unless the lane is enabled.
@@ -3328,6 +3381,66 @@ def process_alert(
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
+
+# Broker results where the order may have reached Tradovate even though no
+# position was confirmed (FI-1). DUPLICATE_CLIENT_ORDER_ID and
+# SUBMIT_AMBIGUOUS_UNRECONCILED are refusals to re-send: nothing new was sent.
+_AMBIGUOUS_SUBMIT_REASONS = frozenset({
+    "TRADOVATE_ORDER_ERROR",
+    "TRADOVATE_NO_ORDER_ID",
+    "ENTRY_UNCONFIRMED",
+})
+
+
+def _ambiguous_submit_broker_truth(broker) -> str:
+    """One read-only look after an ambiguous submit. Only a definitive flat
+    position read AND no live order on the account is "flat_confirmed"."""
+    try:
+        from execution.live_preflight import (
+            TERMINAL_ORDER_STATUSES,
+            _list_orders,
+            _order_status,
+        )
+
+        confirmed, position = broker.get_position_snapshot()
+        if not confirmed:
+            return "position_unconfirmed"
+        if position is not None:
+            return "position_open"
+        account_id = getattr(broker, "_account_id", None)
+        live = [
+            o for o in _list_orders(broker)
+            if _order_status(o) not in TERMINAL_ORDER_STATUSES
+            and (account_id is None or o.get("accountId") in (None, account_id))
+        ]
+        return "orders_working" if live else "flat_confirmed"
+    except Exception as exc:
+        logger.warning("Ambiguous-submit broker read failed: %s", exc)
+        return "broker_state_unreadable"
+
+
+def _send_ambiguous_submit_alert(cfg, order, ambiguous: dict) -> None:
+    if os.getenv("BROKER", "paper").strip().lower() != "tradovate":
+        return
+    try:
+        from notifications.discord_notifier import send_operational_alert
+        send_operational_alert(
+            cfg,
+            "🚨 Order status unknown — check Tradovate now\n"
+            f"Trade: {_pe.side(order.direction)} {_pe.contracts(order.contracts)} "
+            f"{_pe.market(order.instrument)}\n"
+            f"Prices: entry {_pe.price(order.entry)}, stop-loss {_pe.price(order.stop)}, "
+            f"profit target {_pe.price(order.target)}\n"
+            "What happened: the bot could not confirm whether Tradovate accepted this order\n"
+            "What the bot did: it is treating this as an OPEN trade until Tradovate confirms, "
+            "and it will not place another order meanwhile\n"
+            "What to do: open Tradovate and check whether a position is open\n"
+            f"-# details: AMBIGUOUS_SUBMIT {ambiguous.get('reason')} "
+            f"broker_truth={ambiguous.get('broker_truth')}",
+        )
+    except Exception as exc:  # pragma: no cover - notification must never affect trading
+        logger.warning("Ambiguous-submit Discord alert failed: %s", exc)
+
 
 
 def _companion_provider_and_store(cfg: SystemConfig):
