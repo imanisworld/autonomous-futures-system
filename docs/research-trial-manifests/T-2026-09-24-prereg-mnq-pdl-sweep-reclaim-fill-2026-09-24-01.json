@@ -1,0 +1,24 @@
+{
+  "trial_id": "T-2026-09-24-prereg-mnq-pdl-sweep-reclaim-fill-2026-09-24-01",
+  "variants": [
+    {
+      "id": "target_vwap_at_signal_slip1"
+    },
+    {
+      "id": "target_vwap_at_signal_slip2"
+    },
+    {
+      "id": "target_vwap_at_signal_slip3"
+    },
+    {
+      "id": "target_prior_day_midpoint_slip1"
+    },
+    {
+      "id": "target_prior_day_midpoint_slip2"
+    },
+    {
+      "id": "target_prior_day_midpoint_slip3"
+    }
+  ],
+  "results_sha256": null
+}
