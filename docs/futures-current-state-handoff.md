@@ -458,7 +458,7 @@ state byte-identical across the restart.
 ## Other strategy status — outside the four active lanes
 
 - **12HR Miyagi:** shadow/research only; no fills.
-- **Inverse ORB:** old positive headline retired after decision-time/bracket-geometry correction; do not revive from the invalid baseline.
+- **Inverse ORB:** **RETIRED / BROKEN; NOT ACTIVE** since #517 (2026-09-08); the operator confirmed on 2026-09-24 that the retirement stands. Old positive headline retired after decision-time/bracket-geometry correction; do not revive from the invalid baseline. Zero current valid forward evidence. The `MNQ_ORB_BREAKOUT_INVERSE_*` env pins are accounting isolation only, not activation. See `docs/futures-current-status-2026-09-22.md`.
 - **VWAP Hold:** corrected decision-time evidence negative; no promotion.
 - **Transition reclaim:** separate repair investigation; not part of these four lanes.
 - **ORB Reclaim / source ORB Breakout:** negative/weak corrected evidence; not part of this campaign. `orb_breakout` retired from the real book by #517, leaving the MNQ 15m executable set empty on purpose (section G).
