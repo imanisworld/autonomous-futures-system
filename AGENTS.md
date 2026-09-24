@@ -28,7 +28,7 @@ Unless the user explicitly authorizes otherwise:
 - no broker-state mutation
 - no feature expansion without proving the need
 
-The running futures bot uses a Tradovate demo lane (`PAPER_MODE=false`, `BROKER=tradovate`, `TRADOVATE_ENV=demo`, `LIVE_TRADING_ENABLED=false`, 1 contract). That lane is demo, not live. Do not treat its existence as a violation of this section or as permission to expand non-paper routing or move toward live. Live broker execution remains forbidden without explicit Operator authorization.
+The running futures bot uses an Operator-authorized Tradovate demo lane (`PAPER_MODE=false`, `BROKER=tradovate`, `TRADOVATE_ENV=demo`, `LIVE_TRADING_ENABLED=false`, 1 contract). That lane is demo, not live. Do not treat its existence as a violation of this section or as permission to expand non-paper routing or size, or to move toward live. Live broker execution remains forbidden without explicit Operator authorization.
 
 ## Allowed Agent Actions
 
