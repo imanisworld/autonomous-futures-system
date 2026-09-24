@@ -458,8 +458,9 @@ def _tradovate_order(**overrides):
 
 def _tradovate_broker(monkeypatch, response):
     monkeypatch.setenv("TRADOVATE_ENV", "demo")
-    broker = TradovateBroker(config=TradovateConfig(env="demo"))
+    broker = TradovateBroker(config=TradovateConfig(env="demo", expected_account_id=1))
     broker._account_id = 1
+    monkeypatch.setattr(broker, "get_account_balance", lambda: 50_000.0)
     broker._contract_symbol_cache["MNQ"] = "MNQU6"
     monkeypatch.setattr(broker, "_authenticate", lambda: True)
     monkeypatch.setattr(broker, "_find_contract_id", lambda _: 99)
