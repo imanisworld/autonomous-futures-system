@@ -238,14 +238,13 @@ All of this is research or reporting only. No runtime, strategy, risk or broker 
   - Only daily 2-2 reversal with magnitude + FTFC looked strong: PF 4.0 on 23 trades. It is prior-exposed (the Daily 2-2 lane), so it is forward-only context.
   - The integrity check caught a holiday-calendar bug before scoring. It was fixed with `context.cme_trading_day`: 461/461 daily parity.
 - **No variants of either study may be run on the same data.**
-- **#940 (DRAFT, not released): Strat FTFC labels on every observer row, plus a MNQ 2-2 reversal "lined-up only" tracker.**
-  - It is a label view on the Discord cards and the Friday report. It filters nothing.
-  - Opens are not roll-adjusted (a follow-up is needed before the December roll).
-  - The release needs the futures release plus the `paper_collection/current` snapshot, and an **operator GO**.
+- **#940: CLOSED unmerged (2026-09-23 17:45 UTC), never released.** It would have added Strat FTFC labels on every observer row, plus a MNQ 2-2 reversal "lined-up only" tracker.
+  - It was a label view on the Discord cards and the Friday report. It filtered nothing.
+  - Reviving it means reopening it on purpose. It would then need a rebase on current `main`, the roll-adjustment follow-up before the December roll, the futures release plus the `paper_collection/current` snapshot, and an **operator GO**.
 - **#942 (merged `8b2700c`): observer signal grading, a forward test.**
   - The grade: A = FTFC aligned + New York session + not DEAD; B = aligned; C = conflict; D = against.
   - It is judged once on cost-adjusted live outcomes: when MNQ A ≥ 60 on ≥ 30 days and B/C/D ≥ 30 each, or at 2027-03-31.
-  - Evaluator #943 (merged `7808fe8`) is counts-only until that look. Collection starts when #940 is live.
+  - Evaluator #943 (merged `7808fe8`) is counts-only until that look. Collection needs the `strat_ftfc` label from #940. With #940 closed, **no grading data is being collected**.
 
 ## Journal delta — 2026-09-22 duplicate-work audit
 
@@ -311,12 +310,15 @@ Known edge cases, not fixed (should-fix, not blocking while one pinned account i
 ## Current evidence gates
 
 0. **Options 1-2-2 collector fix (#922, release `db9bc7e2`).**
-   - Its last run (2026-09-22 20:59 UTC) failed with `journal_setup_fingerprint_drift_58`. That run predates the fix going live at 22:52 UTC.
-   - The first run on the fix is the 13:00 UTC timer on 2026-09-23. Read-only checks are scheduled for 13:05, 13:20 and 13:45 UTC.
-   - #940's release waits for this verdict and an operator GO.
+   - **FIX PROVEN (2026-09-23).** Three read-only checks passed, at 13:05, 13:20 and 13:45 UTC, plus a recheck at 22:27 UTC:
+     - The 13:00 UTC first run exited 0 in 6.18s. `journal_setup_fingerprint_drift_58` did not recur. The first 58 journal lines are byte-identical to the baseline. 0 failed runs from 13:00 to 22:27 UTC.
+     - All 5 pending delayed-SIP setups reconciled `PROVEN` at 13:00:01 UTC (4 `CONFIRMED_SAME_REVERSAL`, 1 `MISS_NO_PROVISIONAL`). `690ee090` stays a terminal drifted block.
+     - RTH collection resumed at 13:30 UTC. The first new setup was TLT `8c74477e`, which armed and reversed on the 13:30 bar. It later reconciled `CONFIRMED_SAME_REVERSAL` / `PROVEN`.
+   - The lane still has almost no evidence (one new setup). Gate 1 below still applies.
 1. **1-2-2:** wait for the natural RTH chain:
    `ARMED -> IEX reversal -> selector capture <=120s -> production replay parity -> delayed SIP reconciliation`.
 2. **Signa #892:** wait for natural market-hours scanner traffic and verify shared 429 circuit, cooldown, snapshot reuse, and truthful provider-health telemetry.
+   - 2026-09-23: **recovered.** Fresh snapshots have been flowing since 13:30:52 UTC: 29 OK, 1 ReadTimeout (13:40:44 UTC), 0 × 429, and telemetry labels fresh vs blocked truthfully. A natural backoff expiry is **not** proven, because a manual options-scanner restart at 06:55:43 UTC (same release `5b7be0f7`, pid 2362174, from a root SSH session) reset the in-memory backoff. That restart is not explained in the handoff log.
 3. **PR #875:** remains **Draft**. Its branch is stale relative to current `main`; do not merge from the old head. It must first satisfy its source-data/market-hours gate, be rebuilt/refreshed from current `main`, have the exact diff re-reviewed, and rerun CI. Webull submission remains blocked pending the separate sandbox round-trip lifecycle proof.
 
 ## Do not touch
