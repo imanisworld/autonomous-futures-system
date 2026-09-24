@@ -157,7 +157,7 @@ def test_fi17_halted_mes_122_lane_refuses_entry(config, tmp_path, monkeypatch):
 # ── FI-18: no account pin -> first account, no balance check ──────────────────
 def test_fi18_unpinned_multi_account_login_refuses_to_guess(monkeypatch):
     book = FakeBook(place_mode="fill", children=True)
-    broker = make_broker(monkeypatch, book)  # pin unset
+    broker = make_broker(monkeypatch, book, expected_account_id=None)  # pin unset
     broker._account_id = None
     monkeypatch.setattr(broker, "_resolve_account_id", lambda: setattr(
         broker, "_account_id",
@@ -180,8 +180,7 @@ def test_fi18_account_pin_and_balance_are_both_fail_closed(monkeypatch):
     def zero_balance_broker(pin):
         book = FakeBook(place_mode="fill", children=True)
         book.get_faults["/cashBalance"] = [{"totalCashValue": 0.0}]
-        broker = make_broker(monkeypatch, book)
-        broker.config.expected_account_id = pin
+        broker = make_broker(monkeypatch, book, expected_account_id=pin)
         return book, broker
 
     pinned_book, pinned = zero_balance_broker(ACCOUNT_ID)
