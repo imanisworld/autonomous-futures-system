@@ -174,6 +174,12 @@ class AlertPayload(BaseModel):
     # ── Key levels: intraday + weekly + EMAs ────────────────────────────────
     hod: Optional[float] = None              # High of Day (running, resets daily)
     lod: Optional[float] = None              # Low of Day  (running, resets daily)
+    # Overnight (18:00 ET reopen → 09:30 ET) range and the 09:30 ET RTH open.
+    # Read only by the shadow-only observers in strategy/shadow_setups.py
+    # (_overnight_sweep_reclaim, _gap_fill); null outside the NY runtime session.
+    overnight_high: Optional[float] = None
+    overnight_low: Optional[float] = None
+    rth_open: Optional[float] = None
     prev_week_high: Optional[float] = None   # Previous week high — swing target
     prev_week_low: Optional[float] = None    # Previous week low  — swing target
     ema_9: Optional[float] = None
