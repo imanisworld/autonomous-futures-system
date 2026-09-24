@@ -2935,6 +2935,30 @@ def process_alert(
             logger.warning("Working-order recheck failed to read broker state: %s", exc)
             _wo_reason = f"order_state_unreadable: {exc}"
 
+        # Position recheck (FI-3): the journal's open-position gate already
+        # stopped every position we KNOW about, so any open position the broker
+        # still reports here is unreconciled (a lost submit, an uncancelled
+        # order that filled later, manual activity). Never stack a new entry on
+        # it. Same fail-closed rule: an unreadable position list is not flat.
+        if not _wo_reason:
+            try:
+                from execution.live_preflight import _list_positions, _position_qty
+
+                _account_id = getattr(broker, "_account_id", None)
+                _open_positions = [
+                    p for p in _list_positions(broker)
+                    if (_account_id is None or p.get("accountId") in (None, _account_id))
+                    and abs(_position_qty(p)) > 0
+                ]
+                if _open_positions:
+                    _wo_reason = (
+                        f"broker_position_unreconciled: {len(_open_positions)} "
+                        "open position(s) on account"
+                    )
+            except Exception as exc:
+                logger.warning("Position recheck failed to read broker state: %s", exc)
+                _wo_reason = f"position_state_unreadable: {exc}"
+
         if _wo_reason:
             logger.info("Order suppressed by working-order recheck: %s", _wo_reason)
             result["decision"] = "ORDER_SUPPRESSED"
