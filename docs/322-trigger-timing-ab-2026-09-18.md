@@ -84,6 +84,21 @@ Exact reproduction: **PASS**.
 
 Exact reproduction: **PASS**.
 
+### ERRATUM 2026-09-24 — reproduction gates
+
+The PASS lines above are preserved. They matched a resolver that walked
+post-16:00 ET bars on 2025-01-20 and booked a 19:50 ET target. See
+`docs/prereg-322-trigger-timing-ab-2026-09-18.md`, section
+"ERRATUM 2026-09-24". Corrected values are derived from exit timestamps,
+pending corpus re-run. Filled counts are unchanged.
+
+- Legacy plan, 1 tick: 31W-1L + 1 EOD_BAR_MISSING, net **+$2,293.64**, PF
+  **12.38**, H1 **+$1,144.32**, H2 **+$1,149.32**.
+- Completed-5m IOC32, 1 tick: 18W-1L + 1 EOD_BAR_MISSING, net **+$1,622.38**,
+  PF **10.75**, H1 **+$831.66**, H2 **+$790.72**.
+
+The Operator approves this erratum at merge review. Corpus re-run: HOLD.
+
 ## Completed-5m latency
 
 At the completed crossing-bar close, adverse distance from the original First
@@ -110,26 +125,44 @@ therefore arms a resting stop-entry before the crossing bar:
 
 ### Results
 
+Record reissue, derived from exit timestamps, pending corpus re-run: 33 fills
+/ 32 resolved, 32-0, 1 EOD_BAR_MISSING (2025-01-20), 1 bracket-invalid no-fill
+(2026-05-12). Net +$2,503.64 at 1 tick and +$2,471.64 at 3 ticks. The 32 wins
+are 31 targets + 1 positive 15:55 flatten (2025-02-12). Corpus re-run: HOLD.
+
 | Slippage | Fills | Resolved | W-L | Net | PF | H1 | H2 |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| 1 tick | 33 | 33 | 33-0 | **+$2,742.66** | ∞ | +$1,383.34 | +$1,359.32 |
-| 2 ticks | 33 | 33 | 33-0 | **+$2,726.16** | ∞ | +$1,374.84 | +$1,351.32 |
-| 3 ticks | 33 | 33 | 33-0 | **+$2,709.66** | ∞ | +$1,366.34 | +$1,343.32 |
+| 1 tick | 33 | 32 (1 EOD_BAR_MISSING) | 32-0 | **+$2,503.64** | ∞ | +$1,144.32 | +$1,359.32 |
+| 2 ticks | 33 | 32 (1 EOD_BAR_MISSING) | 32-0 | **+$2,487.64** | ∞ | +$1,136.32 | +$1,351.32 |
+| 3 ticks | 33 | 32 (1 EOD_BAR_MISSING) | 32-0 | **+$2,471.64** | ∞ | +$1,128.32 | +$1,343.32 |
 
 At 3 ticks:
 - LONG: 17 resolved, **+$1,754.34**
-- SHORT: 16 resolved, **+$955.32**
+- SHORT: 15 resolved, **+$717.30** (2025-01-20 SHORT is UNRESOLVED / EOD_BAR_MISSING: 13:00 ET holiday close, no 15:55 bar)
 - both chronological halves positive
-- max drawdown in the resolved ledger: $0 because all 33 resolved rows were
-  positive
+- max drawdown in the resolved ledger: $0 because all 32 resolved rows were positive (31 TARGET_HIT + 1 positive DAY_ONLY_FLATTEN, 2025-02-12)
 - one candidate rejected as `ENTRY_BRACKET_INVALID_AT_FILL`
 
-That rejected row is 2026-05-12 SHORT:
+That rejected row is 2026-05-12 SHORT. The target is 1 tick from the trigger:
 - trigger 29113.50
 - target 29113.25
-- adverse slippage makes the entry incompatible with the 0.25-point target
-  geometry
-- fail-closed behavior is correct.
+- stop 29295.75
+- adverse slippage of at least 1 tick lands the fill at or through the target
+- all three models book `ENTRY_BRACKET_INVALID_AT_FILL`
+- fail-closed behavior is correct; the row is neither a win nor a loss
+
+2025-02-12 LONG is the positive day-only flatten, not a target hit:
+DAY_ONLY_FLATTEN at the exact 15:55 ET bar (2025-02-12T20:55Z), fill 21,701.75,
+exit at the bar close 21,801.75, +$198.52 at 3 ticks. The target was 21,848.5.
+
+2024-08-30 SHORT is an open rule ambiguity. Frozen behavior is unchanged. Stop
+19,603. The 10AM-hour high 19,628 traded 100 ticks through the stop before the
+10:55 ET trigger bar. It is booked TARGET_HIT +$6.52 (target 19,508.25, 4 ticks
+from the fill). The prereg covers same-trigger-bar stop-before-target only, and
+is silent on an earlier-bar stop-side excursion. Not changed; it needs its own
+Operator ruling. Same class, recorded only and not changed: 2026-06-11 SHORT
+(stop 29,295.5, 120 ticks through before the 10:55 trigger), booked TARGET_HIT
++$7.02.
 
 ## Same-trigger-bar audit
 
@@ -170,6 +203,8 @@ Results:
 - completed-close IOC: later STOP, **−$168.48**
 - pre-armed First Live: same-bar TARGET, **+$7.52**
 
+This row is a win only under pre-armed. Plan and IOC book a later stop.
+
 The completed-close models miss the rule-defined target because the order is
 not considered active until after the crossing bar closes.
 
@@ -187,7 +222,7 @@ It does **not** validate the strategy.
 
 Major remaining blockers:
 - only 34 historical candidates;
-- 33/33 resolved wins under the corrected model is an extreme small-sample flag,
+- 32/32 resolved wins (31 target hits + 1 day-only flatten; 1 EOD_BAR_MISSING unresolved) under the corrected model is an extreme small-sample flag,
   not evidence to trust blindly;
 - the historical population is consumed evidence;
 - prospective confirmation is still required;

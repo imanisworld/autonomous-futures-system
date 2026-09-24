@@ -29,8 +29,15 @@ END = date(2026, 6, 26)
 EXPECTED_N = 34
 TICK = 0.25
 IOC_TOLERANCE = 32.0
-EXPECTED_PLAN = {"filled": 33, "net": 2532.66, "h1_net": 1383.34, "h2_net": 1149.32}
-EXPECTED_IOC = {"filled": 20, "net": 1859.40, "h1_net": 1068.68, "h2_net": 790.72}
+# ERRATUM 2026-09-24 (docs/prereg-322-trigger-timing-ab-2026-09-18.md).
+# The sealed reproduction gates included the 2025-01-20 evening-bar target:
+# day-only resolve_bracket walked same-ET-date bars after the exact 15:55 ET bar.
+# Original EXPECTED_PLAN = {"filled": 33, "net": 2532.66, "h1_net": 1383.34, "h2_net": 1149.32}
+# Original EXPECTED_IOC = {"filled": 20, "net": 1859.40, "h1_net": 1068.68, "h2_net": 790.72}
+# Corrected values below are derived from exit timestamps, pending corpus re-run.
+# Filled counts are unchanged. The Operator approves the erratum at merge review.
+EXPECTED_PLAN = {"filled": 33, "net": 2293.64, "h1_net": 1144.32, "h2_net": 1149.32}
+EXPECTED_IOC = {"filled": 20, "net": 1622.38, "h1_net": 831.66, "h2_net": 790.72}
 
 
 def tree_sha(root: Path) -> str:

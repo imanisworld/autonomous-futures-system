@@ -178,9 +178,9 @@ Two hour-boundary candidates also proved that detecting the trigger at the later
 Result:
 - exact 34-candidate parity between the accepted research detector and canonical state machine;
 - completed-5m close was more than the 32-tick IOC tolerance adversely detached on **13/34 (38.24%)** candidates;
-- causal pre-armed First Live model at 3 adverse ticks: **33 fills / 33 resolved wins / 1 bracket-invalid no-fill, +$2,709.66**;
-- H1 **+$1,366.34** and H2 **+$1,343.32**;
-- LONG **+$1,754.34**, SHORT **+$955.32**;
+- causal pre-armed First Live model at 3 adverse ticks: **33 fills / 32 resolved wins / 1 EOD_BAR_MISSING / 1 bracket-invalid no-fill, +$2,471.64** (derived from exit timestamps, pending corpus re-run);
+- H1 **+$1,128.32** and H2 **+$1,343.32**;
+- LONG **+$1,754.34** (17), SHORT **+$717.30** (15 resolved + 1 EOD_BAR_MISSING);
 - zero same-trigger-bar both-stop-and-target ambiguities.
 
 Timing classification: **TIMING EDGE SURVIVES / PROMISING BUT UNPROVEN.**
@@ -440,7 +440,7 @@ Do not:
 
 ## Late 2026-09-18 addendum — mechanical fix + parity/state audits
 
-See `docs/futures-causal-parity-and-state-audits-2026-09-18.md`. Summary: the 3-2-2 First Live `DailyState` journal/restore omission is fixed in PR #771 (not deployed); 3-2-2 remains 0/33 compatible with the account stop-width / R:R caps under corrected pre-armed timing; #778 independently fixes Daily 2-2 epoch identity/state provenance repo-side (not deployed; preserve the existing epoch on any future sanctioned release); generic 2-1-2/1-2-2 does not share the decision-close IOC defect; replay 4H bars are UTC-anchored while TradingView 4H bars are CME-session-anchored — no decision authority today (HTF gate off, `require_htf_alignment` false) but a blocker for ever enabling that gate with `htf_direction_source=payload`. The subsequent Daily 2-2 timing audit closes its previously unmeasured entry-identity question: completed-close/favorable-pullback evidence reproduces, while true-touch under unchanged target/R:R rules has zero admissible realistic fills.
+See `docs/futures-causal-parity-and-state-audits-2026-09-18.md`. Summary: the 3-2-2 First Live `DailyState` journal/restore omission is fixed in PR #771 (not deployed); 3-2-2 remains 0/33 filled rows compatible (32 resolved + 1 EOD_BAR_MISSING) with the account stop-width / R:R caps under corrected pre-armed timing; #778 independently fixes Daily 2-2 epoch identity/state provenance repo-side (not deployed; preserve the existing epoch on any future sanctioned release); generic 2-1-2/1-2-2 does not share the decision-close IOC defect; replay 4H bars are UTC-anchored while TradingView 4H bars are CME-session-anchored — no decision authority today (HTF gate off, `require_htf_alignment` false) but a blocker for ever enabling that gate with `htf_direction_source=payload`. The subsequent Daily 2-2 timing audit closes its previously unmeasured entry-identity question: completed-close/favorable-pullback evidence reproduces, while true-touch under unchanged target/R:R rules has zero admissible realistic fills.
 
 ## Safe next work order
 

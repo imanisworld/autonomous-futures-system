@@ -24,11 +24,17 @@ def test_classification_survives_only_when_both_halves_positive():
     )
 
 
-def test_reproduction_constants_are_frozen():
+def test_reproduction_constants_match_erratum_2026_09_24():
+    # Original sealed nets stay in the prereg and in the harness comment:
+    # plan 2532.66 / H1 1383.34, IOC 1859.40 / H1 1068.68.
     assert m.EXPECTED_N == 34
     assert m.IOC_TOLERANCE == 32.0
-    assert m.EXPECTED_PLAN["net"] == 2532.66
-    assert m.EXPECTED_IOC["net"] == 1859.40
+    assert m.EXPECTED_PLAN == {
+        "filled": 33, "net": 2293.64, "h1_net": 1144.32, "h2_net": 1149.32,
+    }
+    assert m.EXPECTED_IOC == {
+        "filled": 20, "net": 1622.38, "h1_net": 831.66, "h2_net": 790.72,
+    }
 
 
 def test_reproduction_gate_accepts_frozen_values():

@@ -188,3 +188,38 @@ Do not:
 - add 1m historical reconstruction after reading results.
 
 Any follow-up is a new preregistered study.
+
+## ERRATUM 2026-09-24
+
+The sealed reproduction-gate lines in "Reproduction gates" above are preserved
+unchanged. They embedded a resolver defect. Day-only `resolve_bracket` in
+`scripts/edge_decomposition_audit.py` walked same-ET-date bars after the exact
+15:55 ET bar. On 2025-01-20 the cash session halted at 13:00 ET and Globex
+reopened at 18:00 ET the same calendar day, so there is no 15:55 ET bar. The
+walk booked a 19:50 ET target on all three fill models. The frozen contract
+(execution/day_only_exit.py; "Common Day-Only Exit" in
+`docs/strategy-rules/60M_322_FirstLive_Rules.md`) resolves stop and target only
+up to and including that exact bar, then fails closed as UNRESOLVED /
+EOD_BAR_MISSING when the bar is absent. No earlier bar is a substitute, and
+evening bars are not walked.
+
+Original sealed text, still in place above:
+
+- completed-5m IOC at 1 tick: fills = 20; net ≈ +$1,859.40; H1 ≈ +$1,068.68;
+  H2 ≈ +$790.72;
+- legacy plan model at 1 tick: net ≈ +$2,532.66; H1 ≈ +$1,383.34;
+  H2 ≈ +$1,149.32.
+
+Corrected expected values, derived from exit timestamps in
+`scripts/322_trigger_timing_ab_2026-09-18.json`, pending corpus re-run. Filled
+counts are unchanged. 2025-01-20 is in the first chronological half, so H2 is
+unchanged.
+
+- legacy plan at 1 tick: filled 33; net 2293.64; H1 1144.32; H2 1149.32;
+- completed-5m IOC at 1 tick: filled 20; net 1622.38; H1 831.66; H2 790.72.
+
+`scripts/322_trigger_timing_ab_2026_09_18.py` `EXPECTED_PLAN` and
+`EXPECTED_IOC` follow these corrected values. The original sealed numbers
+remain visible in that file's comment. The Operator approves this erratum at
+merge review. Corpus re-run: HOLD. A differing row other than the nine
+2025-01-20 cells (3 models × 3 slippages) is a finding, not a silent update.
