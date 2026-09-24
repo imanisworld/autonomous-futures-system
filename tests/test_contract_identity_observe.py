@@ -109,7 +109,9 @@ def _broker(monkeypatch):
     for k in ("TRADOVATE_ENTRY_EXECUTION_MODE", "ENTRY_SLIPPAGE_TOLERANCE_TICKS",
               "ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ", "EXIT_MODE"):
         monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv("TRADOVATE_EXPECTED_ACCOUNT_ID", "999")
     b = TradovateBroker(config=TradovateConfig.from_env())
+    monkeypatch.setattr(b, "get_account_balance", lambda: 50_000.0)
     monkeypatch.setattr(b, "_authenticate", lambda: True)
     monkeypatch.setattr(supervisor, "tradovate_order_ready", lambda: True)
     monkeypatch.setattr(TradovateBroker, "_trading_date", staticmethod(lambda: D))

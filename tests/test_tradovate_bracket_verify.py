@@ -42,8 +42,9 @@ def _broker(monkeypatch, items_by_id):
     oso1Id/oso2Id that placeOSO returns (NOT scanned from /order/list, which
     omits orderType).
     """
-    broker = TradovateBroker(config=TradovateConfig())
+    broker = TradovateBroker(config=TradovateConfig(expected_account_id=555))
     broker._account_id = 555
+    monkeypatch.setattr(broker, "get_account_balance", lambda: 50_000.0)
 
     def _get(path, **kw):
         if "id=" in path:
@@ -84,8 +85,9 @@ def test_execute_bracket_sends_tick_rounded_children(monkeypatch):
     Otherwise Tradovate rejects the Stop child and the market entry is left
     naked — the repeated "NAKED POSITION … STOP" auto-flattens in production.
     """
-    broker = TradovateBroker(config=TradovateConfig())
+    broker = TradovateBroker(config=TradovateConfig(expected_account_id=555))
     broker._account_id = 555
+    monkeypatch.setattr(broker, "get_account_balance", lambda: 50_000.0)
     captured = {}
 
     monkeypatch.setattr(broker, "_authenticate", lambda: True)
@@ -154,8 +156,9 @@ def test_rejected_child_is_not_live(monkeypatch):
 
 def test_item_read_failure_fails_closed(monkeypatch):
     """If /order/item is unreadable, treat the child as unconfirmed."""
-    broker = TradovateBroker(config=TradovateConfig())
+    broker = TradovateBroker(config=TradovateConfig(expected_account_id=555))
     broker._account_id = 555
+    monkeypatch.setattr(broker, "get_account_balance", lambda: 50_000.0)
 
     def _boom(path, **kw):
         raise RuntimeError("network down")
@@ -172,8 +175,9 @@ def test_child_404_then_live_within_window_confirms(monkeypatch):
     """A child id that 404s for the first polls then resolves to Working must
     confirm — NOT be flattened as naked. This is the exact prod failure that
     booked trades to $0 ('/order/item id=… failed: 404')."""
-    broker = TradovateBroker(config=TradovateConfig())
+    broker = TradovateBroker(config=TradovateConfig(expected_account_id=555))
     broker._account_id = 555
+    monkeypatch.setattr(broker, "get_account_balance", lambda: 50_000.0)
     state = {"stop_calls": 0}
 
     def _get(path, **kw):
@@ -195,8 +199,9 @@ def test_child_404_then_live_within_window_confirms(monkeypatch):
 def test_child_404_but_present_in_order_list_confirms(monkeypatch):
     """If /order/item?id= keeps 404ing but the order is visible in /order/list,
     the list fallback confirms it live (the list often updates before item-by-id)."""
-    broker = TradovateBroker(config=TradovateConfig())
+    broker = TradovateBroker(config=TradovateConfig(expected_account_id=555))
     broker._account_id = 555
+    monkeypatch.setattr(broker, "get_account_balance", lambda: 50_000.0)
 
     def _get(path, **kw):
         if "/order/list" in path:
@@ -210,8 +215,9 @@ def test_child_404_but_present_in_order_list_confirms(monkeypatch):
 
 def test_child_dead_in_order_list_fails_immediately(monkeypatch):
     """A child that 404s by id but shows Rejected in /order/list is genuinely dead."""
-    broker = TradovateBroker(config=TradovateConfig())
+    broker = TradovateBroker(config=TradovateConfig(expected_account_id=555))
     broker._account_id = 555
+    monkeypatch.setattr(broker, "get_account_balance", lambda: 50_000.0)
 
     def _get(path, **kw):
         if "/order/list" in path:
@@ -226,8 +232,9 @@ def test_child_dead_in_order_list_fails_immediately(monkeypatch):
 def test_child_404_entire_window_fails_closed(monkeypatch):
     """If neither /order/item nor /order/list ever confirms within the window,
     still fail closed → naked-flatten path. Safety is preserved."""
-    broker = TradovateBroker(config=TradovateConfig())
+    broker = TradovateBroker(config=TradovateConfig(expected_account_id=555))
     broker._account_id = 555
+    monkeypatch.setattr(broker, "get_account_balance", lambda: 50_000.0)
 
     def _get(path, **kw):
         if "/order/list" in path:
@@ -248,8 +255,9 @@ def test_default_confirm_window_is_wider_than_legacy(monkeypatch):
 
 
 def test_flatten_liquidates_before_cancel(monkeypatch):
-    broker = TradovateBroker(config=TradovateConfig())
+    broker = TradovateBroker(config=TradovateConfig(expected_account_id=555))
     broker._account_id = 555
+    monkeypatch.setattr(broker, "get_account_balance", lambda: 50_000.0)
     calls = []
     pos = Position(
         instrument="MES",
@@ -284,7 +292,7 @@ def test_flatten_liquidates_before_cancel(monkeypatch):
 
 
 def test_flatten_repolls_position_before_deciding_no_liquidation(monkeypatch):
-    broker = TradovateBroker(config=TradovateConfig())
+    broker = TradovateBroker(config=TradovateConfig(expected_account_id=555))
     calls = []
 
     monkeypatch.setattr(broker, "_authenticate", lambda: True)
@@ -300,7 +308,7 @@ def test_flatten_repolls_position_before_deciding_no_liquidation(monkeypatch):
 # ── escalation: alert + auto-flatten ──────────────────────────────────────────
 
 def test_handle_naked_position_alerts_flattens_and_returns_cancelled(monkeypatch):
-    broker = TradovateBroker(config=TradovateConfig())
+    broker = TradovateBroker(config=TradovateConfig(expected_account_id=555))
     alerts, flattens = [], []
     monkeypatch.setattr(broker, "_alert_naked_position",
                         lambda order, *, stop_ok, target_ok: alerts.append((stop_ok, target_ok)))
@@ -316,7 +324,7 @@ def test_handle_naked_position_alerts_flattens_and_returns_cancelled(monkeypatch
 
 
 def test_handle_naked_position_survives_flatten_failure(monkeypatch):
-    broker = TradovateBroker(config=TradovateConfig())
+    broker = TradovateBroker(config=TradovateConfig(expected_account_id=555))
     monkeypatch.setattr(broker, "_alert_naked_position", lambda *a, **k: None)
 
     def _boom():
@@ -354,8 +362,9 @@ def test_execute_bracket_children_are_gtc(monkeypatch):
     its stop AND target expire at session close, leaving the position naked
     (observed live: MES 2026-07-21, unprotected through the next session).
     """
-    broker = TradovateBroker(config=TradovateConfig())
+    broker = TradovateBroker(config=TradovateConfig(expected_account_id=555))
     broker._account_id = 555
+    monkeypatch.setattr(broker, "get_account_balance", lambda: 50_000.0)
     captured = _capture_oso(monkeypatch, broker)
 
     broker.execute_bracket(_BRACKET)
@@ -367,8 +376,9 @@ def test_execute_bracket_children_are_gtc(monkeypatch):
 
 def test_execute_bracket_runner_live_stop_child_is_gtc(monkeypatch):
     """runner_live's single Stop child (bracket1, no bracket2) is GTC too."""
-    broker = TradovateBroker(config=TradovateConfig())
+    broker = TradovateBroker(config=TradovateConfig(expected_account_id=555))
     broker._account_id = 555
+    monkeypatch.setattr(broker, "get_account_balance", lambda: 50_000.0)
     captured = _capture_oso(monkeypatch, broker)
 
     order = BracketOrder(instrument="MES", direction="LONG", entry=5900.0,
@@ -386,8 +396,9 @@ def test_execute_bracket_runner_live_stop_child_is_gtc(monkeypatch):
 def test_replace_stop_restates_gtc(monkeypatch):
     """The trail modify must restate GTC — an omitted timeInForce on
     /order/modifyorder drops the child back to Day (session-close expiry)."""
-    broker = TradovateBroker(config=TradovateConfig())
+    broker = TradovateBroker(config=TradovateConfig(expected_account_id=555))
     broker._account_id = 555
+    monkeypatch.setattr(broker, "get_account_balance", lambda: 50_000.0)
     broker._last_position = Position(instrument="MES", direction="LONG",
                                      entry_price=5900.0, stop=5893.0,
                                      target=None, quantity=1, open=True)

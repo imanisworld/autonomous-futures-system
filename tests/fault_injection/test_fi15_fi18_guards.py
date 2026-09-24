@@ -1,11 +1,9 @@
 """FI-15..FI-18 — existing guards that had no direct test, plus the account pin
 (#950 audit gaps 5, 7, 8 and 10).
 
-FI-15..FI-17 are coverage: each guard already fails closed. FI-18 is a known
-defect (operator D1, 2026-09-24): with no account pin the broker trades the
-first account it sees and skips the balance check. Two existing tests in
-tests/test_tradovate_account_pin.py assert that fail-open behaviour; they are
-left untouched here and belong to the fix, which first needs a policy call.
+FI-15..FI-17 are coverage: each guard already fails closed. FI-18 is regression
+coverage for the fail-closed account-routing policy: automated orders require
+an exact account pin, and the pinned path verifies a positive balance.
 """
 from __future__ import annotations
 
@@ -157,10 +155,9 @@ def test_fi17_halted_mes_122_lane_refuses_entry(config, tmp_path, monkeypatch):
 
 
 # ── FI-18: no account pin -> first account, no balance check ──────────────────
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="KNOWN DEFECT FI-18")
 def test_fi18_unpinned_multi_account_login_refuses_to_guess(monkeypatch):
     book = FakeBook(place_mode="fill", children=True)
-    broker = make_broker(monkeypatch, book)  # pin unset
+    broker = make_broker(monkeypatch, book, expected_account_id=None)  # pin unset
     broker._account_id = None
     monkeypatch.setattr(broker, "_resolve_account_id", lambda: setattr(
         broker, "_account_id",
@@ -179,19 +176,20 @@ def test_fi18_unpinned_multi_account_login_refuses_to_guess(monkeypatch):
     assert book.place_calls() == 0, str(rec)
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="KNOWN DEFECT FI-18")
-def test_fi18_unpinned_account_still_gets_the_balance_check(monkeypatch):
+def test_fi18_account_pin_and_balance_are_both_fail_closed(monkeypatch):
     def zero_balance_broker(pin):
         book = FakeBook(place_mode="fill", children=True)
         book.get_faults["/cashBalance"] = [{"totalCashValue": 0.0}]
-        broker = make_broker(monkeypatch, book)
-        broker.config.expected_account_id = pin
+        broker = make_broker(monkeypatch, book, expected_account_id=pin)
         return book, broker
 
     pinned_book, pinned = zero_balance_broker(ACCOUNT_ID)
-    control = pinned.execute_bracket(_mes_order())
-    require(control.exit_reason == "ACCOUNT_NONPOSITIVE_BALANCE" and pinned_book.place_calls() == 0,
-            "control: a pinned account with zero balance is refused")
+    pinned_fill = pinned.execute_bracket(_mes_order())
+    require(
+        pinned_fill.exit_reason == "ACCOUNT_NONPOSITIVE_BALANCE"
+        and pinned_book.place_calls() == 0,
+        "a pinned account still requires a verified positive balance",
+    )
     book, unpinned = zero_balance_broker(None)
     fill = unpinned.execute_bracket(_mes_order())
     rec = FaultRecord(
@@ -199,7 +197,8 @@ def test_fi18_unpinned_account_still_gets_the_balance_check(monkeypatch):
         initial_journal="n/a (broker level)",
         initial_broker="one account, cash balance 0; pin unset",
         injected_failure="none — ordinary order",
-        expected_safe_state="refused as ACCOUNT_NONPOSITIVE_BALANCE, like the pinned path",
+        expected_safe_state="refused as ACCOUNT_PIN_REQUIRED before order submission",
         actual_state=f"placeOSO={book.place_calls()} result={fill.result}/{fill.exit_reason}",
     )
+    assert fill.exit_reason == "ACCOUNT_PIN_REQUIRED", str(rec)
     assert book.place_calls() == 0, str(rec)
