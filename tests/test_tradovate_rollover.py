@@ -72,6 +72,7 @@ def _broker(monkeypatch):
     monkeypatch.setenv("TRADOVATE_PASSWORD", "x")
     monkeypatch.setenv("TRADOVATE_API_KEY_ID", "1")
     monkeypatch.setenv("TRADOVATE_API_KEY_SECRET", "x")
+    monkeypatch.setenv("TRADOVATE_EXPECTED_ACCOUNT_ID", "999")
     monkeypatch.delenv("TRADOVATE_ENTRY_EXECUTION_MODE", raising=False)
     monkeypatch.delenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS", raising=False)
     monkeypatch.delenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MES", raising=False)
