@@ -28,6 +28,8 @@ Unless the user explicitly authorizes otherwise:
 - no broker-state mutation
 - no feature expansion without proving the need
 
+The running futures bot uses a Tradovate demo lane (`PAPER_MODE=false`, `BROKER=tradovate`, `TRADOVATE_ENV=demo`, `LIVE_TRADING_ENABLED=false`, 1 contract). That lane is demo, not live. Do not treat its existence as a violation of this section or as permission to expand non-paper routing or move toward live. Live broker execution remains forbidden without explicit Operator authorization.
+
 ## Allowed Agent Actions
 
 Agents may, when scoped to the assigned task:
@@ -100,7 +102,7 @@ Verify, where applicable:
 
 Default futures posture:
 
-- max 3 trades/day
+- max trades per day is the value in `risk_rules.yaml` (`daily_limits.max_trades_per_day`) as loaded by `config/settings.py` (`load_config`); if this document and that configuration disagree, the configuration governs
 - no averaging down
 - no revenge trades
 - no trades without a stop
@@ -154,7 +156,7 @@ Before claiming a code change is complete:
 1. Identify the exact behavior being changed.
 2. Add or run the smallest relevant regression test.
 3. Run the relevant existing test subset.
-4. Run broader tests only when justified by impact.
+4. Before any merge, the full test suite (CI) must be green on the final head. Never report a hand-picked subset as "tests pass". When CI cannot run, say so explicitly; a local subset is not that proof.
 5. Report exact commands and results.
 6. Distinguish:
    - verified
@@ -190,10 +192,7 @@ Do not:
 
 Preferred futures instruments:
 
-1. MNQ
-2. MES
-
-Only later evaluate MGC or MCL after current lanes are stable.
+MNQ, MES, M2K, MGC, MBT, and MCL already run. No new instrument without evidence.
 
 ## Monitoring and Evidence
 
