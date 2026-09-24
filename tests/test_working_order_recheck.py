@@ -82,7 +82,10 @@ class _FakeLiveBroker:
         )
 
 
-def _run_with_fake_broker(monkeypatch, tmp_path, *, list_orders_impl, config_overrides=None):
+def _run_with_fake_broker(
+    monkeypatch, tmp_path, *, list_orders_impl, config_overrides=None,
+    list_positions_impl=lambda broker: [],
+):
     """Drive process_alert() with paper_mode=False so _make_broker's non-paper
     branch is taken, monkeypatched to return our fake broker instead of a real
     TradovateBroker (no network/auth needed to prove the gate's wiring)."""
@@ -93,6 +96,9 @@ def _run_with_fake_broker(monkeypatch, tmp_path, *, list_orders_impl, config_ove
     monkeypatch.setattr(runner_module, "_make_broker", lambda **kwargs: fake_broker)
     monkeypatch.setattr(
         "execution.live_preflight._list_orders", list_orders_impl
+    )
+    monkeypatch.setattr(
+        "execution.live_preflight._list_positions", list_positions_impl
     )
 
     # Explicit permissive universe: this test exercises the live-broker
@@ -199,6 +205,43 @@ def test_terminal_order_status_does_not_block_execute_bracket(monkeypatch, tmp_p
         monkeypatch,
         tmp_path,
         list_orders_impl=lambda broker: [{"ordStatus": "Filled", "accountId": None}],
+    )
+    assert fake_broker.execute_bracket_called is True
+    assert result["decision"] == "TRADE", result
+
+
+# ── Position recheck (FI-3): an unreconciled broker position blocks entry ──
+def test_open_broker_position_prevents_execute_bracket(monkeypatch, tmp_path):
+    result, fake_broker = _run_with_fake_broker(
+        monkeypatch,
+        tmp_path,
+        list_orders_impl=lambda broker: [],
+        list_positions_impl=lambda broker: [{"netPos": 1, "accountId": None}],
+    )
+    assert fake_broker.execute_bracket_called is False
+    assert result["decision"] == "ORDER_SUPPRESSED", result
+    assert "broker_position_unreconciled" in result.get("gate_reason", "")
+    assert not result.get("fill")
+
+
+def test_position_read_failure_prevents_execute_bracket(monkeypatch, tmp_path):
+    def _boom(broker):
+        raise ValueError("/position/list returned non-list broker state")
+
+    result, fake_broker = _run_with_fake_broker(
+        monkeypatch, tmp_path, list_orders_impl=lambda broker: [], list_positions_impl=_boom,
+    )
+    assert fake_broker.execute_bracket_called is False
+    assert result["decision"] == "ORDER_SUPPRESSED", result
+    assert "position_state_unreadable" in result.get("gate_reason", "")
+
+
+def test_flat_position_rows_do_not_block_execute_bracket(monkeypatch, tmp_path):
+    result, fake_broker = _run_with_fake_broker(
+        monkeypatch,
+        tmp_path,
+        list_orders_impl=lambda broker: [],
+        list_positions_impl=lambda broker: [{"netPos": 0, "accountId": None}],
     )
     assert fake_broker.execute_bracket_called is True
     assert result["decision"] == "TRADE", result

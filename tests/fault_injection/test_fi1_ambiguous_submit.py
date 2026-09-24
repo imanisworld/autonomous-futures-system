@@ -9,7 +9,7 @@ from __future__ import annotations
 import pytest
 
 from tests.fault_injection._harness import (
-    FakeBook, FaultRecord, journal_open, make_broker, mes_payload, outcomes,
+    ENTRY_ID, STOP_ID, TARGET_ID, FakeBook, FaultRecord, journal_open, make_broker, mes_payload, outcomes,
     real_broker_cfg, run_alert,
 )
 
@@ -35,8 +35,13 @@ def _inject(book: FakeBook, kind: str) -> None:
     elif kind == "post_garbage":
         book.post_faults["/order/placeOSO"] = "<html>502</html>"
     elif kind == "unreadable":
-        book.get_faults["/order/item"] = ConnectionError("order read failed")
-        book.get_faults["/position/list"] = ConnectionError("position read failed")
+        # The entry fills, THEN reads go dark: arm the read faults only once
+        # placeOSO has been applied, and return the normal OSO response.
+        def _go_dark(_path):
+            book.get_faults["/order/item"] = ConnectionError("order read failed")
+            book.get_faults["/position/list"] = ConnectionError("position read failed")
+            return {"orderId": ENTRY_ID, "oso1Id": TARGET_ID, "oso2Id": STOP_ID}
+        book.post_faults["/order/placeOSO"] = _go_dark
 
 
 def _submit(monkeypatch, config, tmp_path, case: str, *, children: bool):
@@ -76,8 +81,6 @@ def test_fi1_ambiguous_submit_is_not_booked_flat(config, tmp_path, monkeypatch, 
     assert not booked_flat, str(rec)
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="KNOWN DEFECT FI-1: with no working children nothing blocks the next entry")
 @pytest.mark.parametrize("case", list(CASES))
 def test_fi1_next_entry_blocked_without_working_children(config, tmp_path, monkeypatch, case):
     book, broker, cfg, log_dir, _, rec = _submit(monkeypatch, config, tmp_path, case, children=False)

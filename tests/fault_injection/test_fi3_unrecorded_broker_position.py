@@ -8,15 +8,11 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-import pytest
-
 from tests.fault_injection._harness import (
     FakeBook, FaultRecord, journal_open, make_broker, mes_payload, real_broker_cfg, run_alert,
 )
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="KNOWN DEFECT FI-3: runner never reads broker positions before entry")
 def test_fi3_unrecorded_broker_position_blocks_new_entry(config, tmp_path, monkeypatch):
     book = FakeBook(place_mode="fill", children=True)
     book.seed_position(1, 5890.0)
