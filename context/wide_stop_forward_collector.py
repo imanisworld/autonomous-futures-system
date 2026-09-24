@@ -445,6 +445,7 @@ def _resolve_one_position(
     # reconstruction reads OUTCOME.pnl_dollars, so putting gross here would
     # systematically understate drawdown and overstate account balance.
     journal.log_outcome(
+        critical=True,  # LW fix: this lane journal feeds the lane RiskEngine checks
         instrument=fill.instrument,
         session=str(position.get("session") or "new_york"),
         result=economic_result,

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 from datetime import date, datetime, timezone
 from types import SimpleNamespace
@@ -48,6 +49,7 @@ from execution.live_preflight import (
     _position_qty,
 )
 from execution.tradovate_broker import TradovateBroker, TradovateConfig
+from journal.journal_logger import journal_write_failed
 from risk.risk_engine import RiskEngine
 
 _AMBIGUOUS_REASONS = {
@@ -59,6 +61,18 @@ _AMBIGUOUS_REASONS = {
     "DUPLICATE_CLIENT_ORDER_ID",
 }
 
+
+
+logger = logging.getLogger(__name__)
+
+
+def _send_journal_write_alert(cfg, reason: str) -> None:
+    """The runner's once-per-process operator alert (lazy import: no cycle)."""
+    try:
+        from webhook.runner import _send_journal_write_alert as _send
+        _send(cfg, reason)
+    except Exception:  # noqa: BLE001 — an alert must never affect trading
+        logger.warning("journal-write alert failed", exc_info=True)
 
 def _broker_factory() -> TradovateBroker:
     broker = TradovateBroker(config=TradovateConfig.from_env())
@@ -193,6 +207,7 @@ def _record_outcome(
     result = "WIN" if net > 0 else "LOSS" if net < 0 else "BREAKEVEN"
     exit_reason = str(reason_override or fill.exit_reason or "UNKNOWN")
     collector._lane_journal(log_dir, ledger).log_outcome(
+        critical=True,  # LW fix: this lane journal feeds the lane RiskEngine checks
         instrument=fill.instrument,
         session=str(position.get("session") or "new_york"),
         result=result,
@@ -653,6 +668,21 @@ def process_demo_five_min_bar(
                     key=key, log_dir=log_dir, for_date=for_date, state=state,
                     failed_rule=failed,
                     reason=(decision.reason if decision is not None else "signal evaluation unavailable"),
+                )
+                demo_state.save_state(log_dir, state)
+                events.append(audit)
+                continue
+
+            _journal_failure = journal_write_failed()
+            if _journal_failure is not None:
+                # LW fix: a critical journal row was lost in this process, so the
+                # lane's own balance/drawdown/daily-loss state cannot be trusted.
+                _send_journal_write_alert(cfg, _journal_failure)
+                audit = _journal_block(
+                    cfg=cfg, ledger=ledger, strategy=strategy, candidate=candidate,
+                    key=key, log_dir=log_dir, for_date=for_date, state=state,
+                    failed_rule="journal_unwritable",
+                    reason="a trade journal could not be written; new entries are blocked until restart",
                 )
                 demo_state.save_state(log_dir, state)
                 events.append(audit)
