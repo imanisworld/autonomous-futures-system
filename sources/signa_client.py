@@ -8,11 +8,15 @@ of blocking the webhook pipeline.
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+import threading
+import time
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Callable
 
 import httpx
+
+from .signa_request_budget import account_backoff_remaining, mark_account_rate_limited
 
 
 @dataclass(frozen=True)
@@ -38,6 +42,9 @@ class SignaSignal:
     raw_engine_score: Any = None
     raw_engine_direction: Any = None
     raw_data_direction: Any = None
+    # True when this client served the signal from its own TTL cache (no
+    # provider request). Distinct from `cached`, which is the provider's flag.
+    client_cached: bool | None = None
 
     def to_payload_fields(self) -> dict[str, Any]:
         return {
@@ -60,6 +67,7 @@ class SignaSignal:
             "signa_raw_engine_score": self.raw_engine_score,
             "signa_raw_engine_direction": self.raw_engine_direction,
             "signa_raw_data_direction": self.raw_data_direction,
+            "signa_client_cached": self.client_cached,
         }
 
     def to_dict(self) -> dict[str, Any]:
@@ -84,6 +92,7 @@ class SignaSignal:
             "raw_engine_score": self.raw_engine_score,
             "raw_engine_direction": self.raw_engine_direction,
             "raw_data_direction": self.raw_data_direction,
+            "client_cached": self.client_cached,
         }
 
 
@@ -94,11 +103,40 @@ class SignaClient:
         base_url: str = "https://app.getsigna.ai",
         timeout: float = 3.0,
         client: httpx.Client | None = None,
+        cache_ttl_seconds: float = 0.0,
+        respect_account_backoff: bool = False,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self.api_key = (api_key if api_key is not None else os.getenv("SIGNA_API_KEY", "")).strip()
         self.base_url = (base_url or "https://app.getsigna.ai").rstrip("/")
         self.timeout = timeout
         self._client = client
+        # Both quota guards are opt-in so existing callers (the futures webhook
+        # enrichment) keep their exact request behaviour.
+        self.cache_ttl_seconds = max(0.0, float(cache_ttl_seconds or 0.0))
+        self.respect_account_backoff = bool(respect_account_backoff)
+        self._clock = clock
+        self._cache: dict[tuple[str, str], tuple[float, SignaSignal]] = {}
+        self._cache_lock = threading.Lock()
+
+    def _cached(self, symbol: str, timeframe: str) -> SignaSignal | None:
+        if self.cache_ttl_seconds <= 0:
+            return None
+        with self._cache_lock:
+            entry = self._cache.get((symbol, timeframe))
+            if entry is None:
+                return None
+            stored_at, signal = entry
+            if self._clock() - stored_at >= self.cache_ttl_seconds:
+                self._cache.pop((symbol, timeframe), None)
+                return None
+        return replace(signal, client_cached=True)
+
+    def _store(self, signal: SignaSignal, timeframe: str) -> None:
+        if self.cache_ttl_seconds <= 0 or not signal.ok:
+            return
+        with self._cache_lock:
+            self._cache[(signal.symbol, timeframe)] = (self._clock(), signal)
 
     @property
     def configured(self) -> bool:
@@ -124,6 +162,17 @@ class SignaClient:
                 requested_timeframe=requested_timeframe,
                 retrieved_at=retrieved_at,
             )
+        cached = self._cached(symbol, requested_timeframe)
+        if cached is not None:
+            return cached
+        if self.respect_account_backoff and account_backoff_remaining(self.base_url, self.api_key) > 0:
+            return SignaSignal(
+                symbol=symbol,
+                ok=False,
+                error="account_backoff_active",
+                requested_timeframe=requested_timeframe,
+                retrieved_at=retrieved_at,
+            )
 
         close_client = False
         client = self._client
@@ -141,13 +190,21 @@ class SignaClient:
             )
             response.raise_for_status()
             payload = response.json()
-            return parse_signa_signal(
+            signal = parse_signa_signal(
                 symbol=symbol,
                 payload=payload,
                 requested_timeframe=requested_timeframe,
                 retrieved_at=retrieved_at,
             )
+            self._store(signal, requested_timeframe)
+            return signal
         except httpx.HTTPStatusError as exc:
+            if self.respect_account_backoff and exc.response.status_code == 429:
+                mark_account_rate_limited(
+                    self.base_url,
+                    self.api_key,
+                    retry_after=exc.response.headers.get("retry-after"),
+                )
             return SignaSignal(
                 symbol=symbol,
                 ok=False,

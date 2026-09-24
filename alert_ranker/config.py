@@ -110,6 +110,10 @@ class ScannerConfig:
     signa_api_key_configured: bool = False
     signa_base_url: str = "https://app.getsigna.ai"
     signa_timeout_seconds: float = 3.0
+    # Legacy /api/v1/signal TTL cache. The grade/score come from Signa's nightly
+    # engine, so re-fetching every 5-minute scan only burns the shared
+    # 1,000/day quota (it ran out by ~16:05Z on 2026-09-21..23). 0 disables.
+    signa_cache_ttl_seconds: float = 3600.0
     signa_symbol_map: dict[str, str] = field(default_factory=dict)
     signa_context_pull_enabled: bool = False
     signa_context_pull_interval_minutes: int = 15
@@ -250,6 +254,7 @@ def load_config(environ: Iterable[tuple[str, str]] | None = None) -> ScannerConf
         signa_api_key_configured=bool(env.get("SIGNA_API_KEY", "").strip()),
         signa_base_url=env.get("SIGNA_BASE_URL", "https://app.getsigna.ai").strip().rstrip("/"),
         signa_timeout_seconds=_as_float(env.get("SIGNA_TIMEOUT_SECONDS"), 3.0),
+        signa_cache_ttl_seconds=_as_non_negative_float(env.get("OPTIONS_SIGNA_CACHE_TTL_SECONDS"), 3600.0),
         signa_symbol_map=_symbol_map(env.get("SIGNA_SYMBOL_MAP")),
         signa_context_pull_enabled=_as_bool(env.get("OPTIONS_SIGNA_CONTEXT_PULL_ENABLED"), False),
         signa_context_pull_interval_minutes=_as_int(env.get("OPTIONS_SIGNA_CONTEXT_PULL_INTERVAL_MINUTES"), 15),

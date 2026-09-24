@@ -176,3 +176,106 @@ def test_signa_flow_watchlist_degrades_safely_on_auth_failure():
         assert signal.error == "http_401"
         assert signal.grade is None
         assert signal.to_payload_fields()["signa_grade"] is None
+
+
+# --- quota guards (opt-in TTL cache + shared account backoff) ---------------
+
+from sources.signa_request_budget import account_backoff_remaining, clear_account_backoff
+
+
+def _counting_client(status=200, headers=None, **kwargs):
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(dict(request.url.params)["sym"])
+        if status != 200:
+            return httpx.Response(status, headers=headers or {}, json={"error": "x"})
+        return httpx.Response(200, json={"ok": True, "engine": {"grade": "B", "score": 70, "direction": "BULLISH"}})
+
+    client = SignaClient(
+        api_key=kwargs.pop("api_key", "quota-test-key"),
+        client=httpx.Client(base_url="https://app.getsigna.ai", transport=httpx.MockTransport(handler)),
+        **kwargs,
+    )
+    return client, calls
+
+
+def test_default_client_has_no_cache_and_ignores_backoff():
+    clear_account_backoff("https://app.getsigna.ai", "quota-default-key")
+    client, calls = _counting_client(api_key="quota-default-key")
+    client.fetch_signal("SPY")
+    client.fetch_signal("SPY")
+    assert calls == ["SPY", "SPY"]
+
+    limited, limited_calls = _counting_client(status=429, api_key="quota-default-key")
+    assert limited.fetch_signal("SPY").error == "http_429"
+    assert account_backoff_remaining("https://app.getsigna.ai", "quota-default-key") == 0.0
+    assert limited.fetch_signal("SPY").error == "http_429"
+    assert limited_calls == ["SPY", "SPY"]
+
+
+def test_ttl_cache_serves_repeat_requests_until_expiry():
+    now = [1000.0]
+    client, calls = _counting_client(cache_ttl_seconds=3600, clock=lambda: now[0])
+
+    first = client.fetch_signal("SPY")
+    second = client.fetch_signal("SPY")
+    assert calls == ["SPY"]
+    assert first.client_cached is None and second.client_cached is True
+    assert second.retrieved_at == first.retrieved_at
+    assert second.provenance_fields()["signa_client_cached"] is True
+    assert second.grade == "B"
+
+    client.fetch_signal("QQQ")
+    assert calls == ["SPY", "QQQ"]
+
+    now[0] += 3600
+    third = client.fetch_signal("SPY")
+    assert calls == ["SPY", "QQQ", "SPY"]
+    assert third.client_cached is None
+
+
+def test_ttl_cache_does_not_store_failures():
+    client, calls = _counting_client(status=500, cache_ttl_seconds=3600)
+    assert client.fetch_signal("SPY").ok is False
+    assert client.fetch_signal("SPY").ok is False
+    assert calls == ["SPY", "SPY"]
+
+
+def test_429_opens_shared_account_backoff_and_later_calls_skip_the_request():
+    key = "quota-backoff-key"
+    clear_account_backoff("https://app.getsigna.ai", key)
+    try:
+        limited, calls = _counting_client(
+            status=429, headers={"retry-after": "120"}, api_key=key, respect_account_backoff=True,
+        )
+        assert limited.fetch_signal("SPY").error == "http_429"
+        remaining = account_backoff_remaining("https://app.getsigna.ai", key)
+        assert 0 < remaining <= 120
+
+        skipped = limited.fetch_signal("QQQ")
+        assert skipped.ok is False and skipped.error == "account_backoff_active"
+        assert calls == ["SPY"]
+
+        # The circuit is per account, shared across client instances in the process.
+        other, other_calls = _counting_client(api_key=key, respect_account_backoff=True)
+        assert other.fetch_signal("SPY").error == "account_backoff_active"
+        assert other_calls == []
+    finally:
+        clear_account_backoff("https://app.getsigna.ai", key)
+
+
+def test_cache_hit_is_served_even_while_backoff_is_active():
+    key = "quota-cache-backoff-key"
+    clear_account_backoff("https://app.getsigna.ai", key)
+    try:
+        client, calls = _counting_client(api_key=key, cache_ttl_seconds=3600, respect_account_backoff=True)
+        client.fetch_signal("SPY")
+        from sources.signa_request_budget import mark_account_rate_limited
+        mark_account_rate_limited("https://app.getsigna.ai", key, retry_after="600")
+        hit = client.fetch_signal("SPY")
+        assert hit.ok is True and hit.client_cached is True
+        assert client.fetch_signal("QQQ").error == "account_backoff_active"
+        assert calls == ["SPY"]
+    finally:
+        clear_account_backoff("https://app.getsigna.ai", key)
