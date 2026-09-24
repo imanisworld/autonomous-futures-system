@@ -125,10 +125,23 @@ therefore arms a resting stop-entry before the crossing bar:
 
 ### Results
 
-Record reissue, derived from exit timestamps, pending corpus re-run: 33 fills
-/ 32 resolved, 32-0, 1 EOD_BAR_MISSING (2025-01-20), 1 bracket-invalid no-fill
-(2026-05-12). Net +$2,503.64 at 1 tick and +$2,471.64 at 3 ticks. The 32 wins
-are 31 targets + 1 positive 15:55 flatten (2025-02-12). Corpus re-run: HOLD.
+#### Superseded (as sealed 2026-09-18)
+
+These rows are the table sealed on 2026-09-18. They include the 2025-01-20
+evening-bar target. They are not the corrected record.
+
+| Slippage | Fills | Resolved | W-L | Net | PF | H1 | H2 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 1 tick | 33 | 33 | 33-0 | **+$2,742.66** | ∞ | +$1,383.34 | +$1,359.32 |
+| 2 ticks | 33 | 33 | 33-0 | **+$2,726.16** | ∞ | +$1,374.84 | +$1,351.32 |
+| 3 ticks | 33 | 33 | 33-0 | **+$2,709.66** | ∞ | +$1,366.34 | +$1,343.32 |
+
+#### Corrected (derived from exit timestamps, pending corpus re-run)
+
+Record reissue: 33 fills / 32 resolved, 32-0, 1 EOD_BAR_MISSING (2025-01-20),
+1 bracket-invalid no-fill (2026-05-12). Net +$2,503.64 at 1 tick and
++$2,471.64 at 3 ticks. The 32 wins are 31 targets + 1 positive 15:55 flatten
+(2025-02-12). Corpus re-run: HOLD.
 
 | Slippage | Fills | Resolved | W-L | Net | PF | H1 | H2 |
 |---|---:|---:|---:|---:|---:|---:|---:|
@@ -159,15 +172,22 @@ One of the 32 wins is this flatten.
 Net at 1 / 2 / 3 ticks is $2,503.64 / $2,487.64 / $2,471.64. Derived from exit
 timestamps, pending corpus re-run.
 
-Reward:risk, side by side, derived and pending corpus re-run:
+Reward:risk, side by side, derived from
+`scripts/322_trigger_timing_ab_2026-09-18.json` and pending corpus re-run.
+The 0.229 / 0.263 / 0.237 figures and the mean 0.330 are **3-tick** values.
+0.229, 0.263, and 0.330 are fill-based (entry is the 3-tick pre-armed fill).
+0.237 is trigger-based on those same 32 resolved rows; slippage does not
+enter that ratio. `RiskEngine.calculate_rr` rounds each row to 4 decimals.
+An even-count median is the average of the two middle values.
 
 | Variant | Median R:R |
 |---|---:|
-| 32 resolved rows, fill-based | **0.229** (interpolated between 0.1951 and 0.2629) |
-| 33 rows including 2025-01-20 (MLK) | **0.263** |
-| 32 resolved rows, trigger-based | **0.237** |
+| 32 resolved rows, 3-tick fill-based | **0.229** (interpolated between 0.1951 and 0.2629) |
+| 33 rows including 2025-01-20 (MLK), 3-tick fill-based | **0.263** (the middle value is 0.2629) |
+| 32 resolved rows, trigger-based (same 3-tick resolved set) | **0.237** (interpolated between 0.205 and 0.2696; 0.2373 before rounding) |
+| 32 resolved rows, 1-tick fill-based | **0.23455** (interpolated between 0.2017 and 0.2674) |
 
-Mean R:R on the 32 resolved rows is **0.330**.
+Mean R:R on the 32 resolved rows at 3-tick fill is **0.330** (0.329925 before rounding to 3 decimals).
 
 ### Blast radius (AFS-0051)
 
@@ -196,8 +216,10 @@ as-booked plan 1-tick total 2532.66).
 
 2024-08-30 SHORT is an open rule ambiguity. Frozen behavior is unchanged. Stop
 19,603. The 10AM-hour high 19,628 traded 100 ticks through the stop before the
-10:55 ET trigger bar. It is booked TARGET_HIT +$6.52 (target 19,508.25, 4 ticks
-from the fill). The prereg covers same-trigger-bar stop-before-target only, and
+10:55 ET trigger bar. It is booked TARGET_HIT +$6.52 (target 19,508.25, 4 points
+(16 ticks) from the 3-tick fill 19,512.25). Sixteen ticks at $0.50 is $8.00
+gross; after the $1.48 round-trip commission the net is $6.52. The prereg
+covers same-trigger-bar stop-before-target only, and
 is silent on an earlier-bar stop-side excursion. Not changed; it needs its own
 Operator ruling. Same class, recorded only and not changed: 2026-06-11 SHORT
 (stop 29,295.5, 120 ticks through before the 10:55 trigger), booked TARGET_HIT

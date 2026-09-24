@@ -130,6 +130,34 @@ def test_stop_before_1555_on_normal_day_unchanged():
     assert bars.et(res["exit_idx"]).strftime("%H:%M") == "11:05"
 
 
+def test_next_calendar_day_bars_are_not_walked():
+    # The trade date is 2026-03-02. The next calendar date's 10:00 bar trades
+    # through the target. Day-only resolution must not book that target.
+    # This also passes on the old date-only guard: a later ET date already
+    # stops the walk. The same-date bars after 15:55 are what that guard misses.
+    trade = datetime(2026, 3, 2, tzinfo=ET)
+    nxt = datetime(2026, 3, 3, 10, 0, tzinfo=ET)
+    quiet = (100.0, 100.5, 99.5, 100.25)
+    target_bar = (nxt, 100.0, 111.0, 99.5, 110.5)
+
+    present = _span(trade.replace(hour=15, minute=40), trade.replace(hour=15, minute=55), quiet)
+    present.append(target_bar)
+    bars = _bars(present)
+    res = _run(L322, bars, 0, "LONG", 100.0, 95.0, 110.0)
+    assert res["status"] == "RESOLVED" and res["exit_reason"] == audit.DAY_ONLY_EXIT_REASON
+    exit_et = bars.et(res["exit_idx"])
+    assert exit_et.date() == trade.date() and (exit_et.hour, exit_et.minute) == (15, 55)
+    assert res["result"] != "WIN"
+
+    missing = _span(trade.replace(hour=15, minute=40), trade.replace(hour=15, minute=50), quiet)
+    missing.append(target_bar)
+    bars = _bars(missing)
+    res = _run(L322, bars, 0, "LONG", 100.0, 95.0, 110.0)
+    assert res["status"] == "UNRESOLVED" and res["reason"] == audit.EOD_BAR_MISSING
+    assert "exit_bar_ts" not in res and "result" not in res and res.get("exit_reason") is None
+    assert bars.et(res["exit_idx"]).date() == nxt.date()
+
+
 def test_non_day_only_lane_still_carries_past_1600_and_overnight():
     d = datetime(2026, 3, 2, tzinfo=ET)
     rows = _span(d.replace(hour=15, minute=15), d.replace(hour=15, minute=45), (100.0, 100.5, 99.5, 100.25), step=15)
