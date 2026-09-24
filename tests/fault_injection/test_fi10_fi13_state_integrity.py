@@ -42,7 +42,6 @@ def _read_or_fail_closed(fn):
 
 
 # ── FI-10: a torn TRADE row hides an open position ────────────────────────────
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="KNOWN DEFECT FI-10")
 def test_fi10_torn_trade_row_is_not_read_as_flat(config, tmp_path, monkeypatch):
     book = FakeBook(place_mode="fill", children=True)
     broker = make_broker(monkeypatch, book)
@@ -80,7 +79,6 @@ def _rows_lenient(path: Path) -> list[dict]:
 
 
 # ── FI-11: a torn claim row lets the same bar be claimed twice ────────────────
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="KNOWN DEFECT FI-11")
 def test_fi11_torn_bar_claim_is_not_claimed_again(tmp_path):
     from journal.journal_logger import JournalLogger
 
@@ -105,7 +103,6 @@ def test_fi11_torn_bar_claim_is_not_claimed_again(tmp_path):
 
 
 # ── FI-13: corrupt collector state silently resets ────────────────────────────
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="KNOWN DEFECT FI-13")
 def test_fi13_corrupt_collector_state_does_not_reset_silently(tmp_path):
     from context import wide_stop_forward_collector as collector
     from context import wide_stop_ledger_paper as contract
