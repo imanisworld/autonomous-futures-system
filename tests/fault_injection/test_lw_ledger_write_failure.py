@@ -17,6 +17,11 @@ Safe requirement: (i) the next candidate is not approved while the lane's true
 loss is at or past its limit, and (ii) the operator is alerted.
 
 Formerly drafted as "FI-6"; renamed because #1000 uses FI-5..FI-9.
+
+Fixed by the LW fix: both lanes write OUTCOME with ``critical=True`` (same
+F1-F4 design as the JW fix), and both check the process latch before any new
+entry. The lost write now goes through each lane's REAL outcome writer
+(``_record_outcome`` for the demo lane, ``_resolve_one_position`` for paper).
 Not duplicated from #1000: pending-save/submit-raise branches (FI-7c..7f).
 """
 from __future__ import annotations
@@ -35,7 +40,6 @@ from tests.fault_injection._harness import FaultSetupError
 from tests.fault_injection import _p2_harness as p2
 from tests.fault_injection._p2_harness import FakeDemoBroker, fixture_bars, run_fixture_bar
 
-KNOWN_DEFECT = pytest.mark.xfail(strict=True, raises=AssertionError, reason="LW defect (unfixed)")
 STRATEGY = "strat_322_first_live"
 
 
@@ -117,6 +121,70 @@ def _loss(tmp_path, dollars: float, day, monkeypatch=None, *, paper: bool = Fals
     return _outcome(tmp_path, -abs(dollars), day, monkeypatch, paper=paper)
 
 
+@pytest.fixture(autouse=True)
+def _clean_latch():
+    """The journal-write latch and its alert flag are process-wide by design."""
+    from webhook import runner
+    jl._reset_write_failure_latch()
+    runner._journal_alert_sent = False
+    yield
+    jl._reset_write_failure_latch()
+    runner._journal_alert_sent = False
+
+
+LOST_POINTS = 125.0  # 125 MNQ points = $250 before costs on one contract
+
+
+def _lost_demo_loss(config, tmp_path, monkeypatch, day) -> int:
+    """A demo LOSS recorded by the demo lane's own writer, under a full disk."""
+    import context.wide_stop_demo_runtime_core as core
+    from execution.broker_interface import Fill
+    position = {
+        "candidate_key": "lw-lost", "strategy": STRATEGY, "session": "new_york",
+        "planned_entry": 20_000.0, "entry": 20_000.0, "stop": 20_000.0 - LOST_POINTS,
+        "target": 20_000.0 + 2 * LOST_POINTS, "rr_ratio": 2.0,
+        "entry_time": f"{day.isoformat()}T14:00:00+00:00", "client_order_id": "AFS-lw-lost",
+    }
+    fill = Fill(
+        instrument="MNQ", direction="LONG", contracts=1, entry_price=20_000.0,
+        exit_price=20_000.0 - LOST_POINTS, exit_reason="STOP_HIT", result="LOSS",
+        pnl_ticks=-LOST_POINTS * 4, pnl_dollars=-LOST_POINTS * 2,
+    )
+    fault = _DiskFull()
+    monkeypatch.setattr(jl, "open", fault, raising=False)
+    core._record_outcome(
+        cfg=p2.fixture_cfg(config), ledger=_ledger(), log_dir=_lane_root(tmp_path),
+        for_date=day, position=position, fill=fill, valid_outcome=True,
+    )
+    monkeypatch.setattr(jl, "open", builtins.open, raising=False)
+    return fault.faults
+
+
+def _lost_paper_loss(config, tmp_path, monkeypatch, day) -> int:
+    """An open paper position stopped out by the paper collector's own resolver,
+    whose OUTCOME write fails under a full disk."""
+    from datetime import datetime, timezone
+    monkeypatch.setenv("WIDE_STOP_LEDGER_EPOCH_START", p2.FIXTURE_EPOCH)
+    collector._save_state(tmp_path, _ledger(), {
+        "filled_date": day.isoformat(), "filled_count": 0, "seen": [],
+        "position": {
+            "strategy": STRATEGY, "session": "new_york", "direction": "LONG",
+            "planned_entry": 20_000.0, "entry": 20_000.0, "stop": 20_000.0 - LOST_POINTS,
+            "target": 20_000.0 + 2 * LOST_POINTS, "rr_ratio": 2.0,
+            "entry_time": f"{day.isoformat()}T14:00:00+00:00", "candidate_key": "lw-lost",
+        },
+    })
+    fault = _DiskFull()
+    monkeypatch.setattr(jl, "open", fault, raising=False)
+    collector._resolve_one_position(
+        cfg=p2.fixture_cfg(config), ledger=_ledger(), log_dir=tmp_path, for_date=day,
+        current_ts=datetime.fromisoformat(f"{day.isoformat()}T14:05:00+00:00"),
+        bar={"open": 19_990.0, "high": 19_995.0, "low": 19_850.0, "close": 19_860.0},
+    )
+    monkeypatch.setattr(jl, "open", builtins.open, raising=False)
+    return fault.faults
+
+
 def _capture_alerts(monkeypatch) -> list[str]:
     sent: list[str] = []
     monkeypatch.setattr(
@@ -162,11 +230,10 @@ def test_lw_daily_control_recorded_losses_block_at_cap(config, tmp_path, monkeyp
     assert "max_daily_loss" in rules, rules
 
 
-@KNOWN_DEFECT
 def test_lw_daily_lost_outcome_does_not_reopen_the_lane(config, tmp_path, monkeypatch):
     alerts = _capture_alerts(monkeypatch)
     _daily_seed(tmp_path)
-    if _loss(tmp_path, DAILY_LOST, p2.FIXTURE_DAY, monkeypatch) < 1:
+    if _lost_demo_loss(config, tmp_path, monkeypatch, p2.FIXTURE_DAY) < 1:
         raise FaultSetupError("the lost OUTCOME write was never attempted")
     broker, rules = _run(config, tmp_path, monkeypatch)
     state = f"execute_calls={broker.execute_calls} rules={rules} alerts={len(alerts)}"
@@ -202,12 +269,11 @@ def test_lw_drawdown_control_recorded_losses_hit_the_halt(config, tmp_path, monk
     assert "max_drawdown" in rules, rules
 
 
-@KNOWN_DEFECT
 def test_lw_drawdown_lost_outcome_does_not_reopen_the_lane(config, tmp_path, monkeypatch):
     alerts = _capture_alerts(monkeypatch)
     day = _earlier_epoch(monkeypatch)
     _loss(tmp_path, DD_SEEN, day)
-    if _loss(tmp_path, DD_LOST, day, monkeypatch) < 1:
+    if _lost_demo_loss(config, tmp_path, monkeypatch, day) < 1:
         raise FaultSetupError("the lost OUTCOME write was never attempted")
     broker, rules = _run(config, tmp_path, monkeypatch)
     state = f"execute_calls={broker.execute_calls} rules={rules} alerts={len(alerts)}"
@@ -242,11 +308,10 @@ def test_lw_paper_control_recorded_losses_block_at_cap(config, tmp_path, monkeyp
     assert "max_daily_loss" in rules, rules
 
 
-@KNOWN_DEFECT
 def test_lw_paper_lost_outcome_does_not_reopen_the_ledger(config, tmp_path, monkeypatch):
     alerts = _capture_alerts(monkeypatch)
     _daily_seed(tmp_path, paper=True)
-    if _loss(tmp_path, DAILY_LOST, p2.FIXTURE_DAY, monkeypatch, paper=True) < 1:
+    if _lost_paper_loss(config, tmp_path, monkeypatch, p2.FIXTURE_DAY) < 1:
         raise FaultSetupError("the lost OUTCOME write was never attempted")
     opened, rules = _run_paper(config, tmp_path, monkeypatch)
     state = f"opened={len(opened)} rules={rules} alerts={len(alerts)}"
@@ -280,3 +345,31 @@ def test_lw_c1_failed_presubmit_state_save_sends_no_order(config, tmp_path, monk
     if calls["pending_saves"] < 1:
         raise FaultSetupError("the pre-submit pending save was never attempted")
     assert broker.execute_calls == 0, f"order sent despite failed intent save; raised={raised!r}"
+
+
+# ── The latch never blocks exits: an open paper position still resolves ──────
+def test_lw_latch_does_not_block_paper_resolution(config, tmp_path, monkeypatch):
+    from datetime import datetime
+    day = p2.FIXTURE_DAY
+    monkeypatch.setenv("WIDE_STOP_LEDGER_EPOCH_START", p2.FIXTURE_EPOCH)
+    collector._save_state(tmp_path, _ledger(), {
+        "filled_date": day.isoformat(), "filled_count": 1, "seen": [],
+        "position": {
+            "strategy": STRATEGY, "session": "new_york", "direction": "LONG",
+            "planned_entry": 20_000.0, "entry": 20_000.0, "stop": 20_000.0 - LOST_POINTS,
+            "target": 20_000.0 + 2 * LOST_POINTS, "rr_ratio": 2.0,
+            "entry_time": f"{day.isoformat()}T14:00:00+00:00", "candidate_key": "lw-open",
+        },
+    })
+    jl._latch_write_failure("test: latched by an earlier lost critical row")
+    collector._resolve_one_position(
+        cfg=p2.fixture_cfg(config), ledger=_ledger(), log_dir=tmp_path, for_date=day,
+        current_ts=datetime.fromisoformat(f"{day.isoformat()}T14:05:00+00:00"),
+        bar={"open": 19_990.0, "high": 19_995.0, "low": 19_850.0, "close": 19_860.0},
+    )
+    rows = [
+        json.loads(x) for f in (collector._lane_journal(tmp_path, _ledger()).log_dir).glob("journal_*.jsonl")
+        for x in f.read_text().splitlines() if x.strip()
+    ]
+    assert any(r.get("type") == "OUTCOME" for r in rows), "resolution was blocked by the latch"
+    assert collector._load_state(tmp_path, _ledger())["position"] is None

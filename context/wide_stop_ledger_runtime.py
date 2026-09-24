@@ -18,11 +18,20 @@ from typing import Optional
 from context import wide_stop_ledger_paper as contract
 from execution.broker_interface import BracketOrder
 from execution.paper_broker import PaperBroker
-from journal.journal_logger import JournalLogger
+from journal.journal_logger import JournalLogger, journal_write_failed
 from risk.risk_engine import RiskEngine, TradeSetup
 
 logger = logging.getLogger(__name__)
 
+
+
+def _send_journal_write_alert(cfg, reason: str) -> None:
+    """The runner's once-per-process operator alert (lazy import: no cycle)."""
+    try:
+        from webhook.runner import _send_journal_write_alert as _send
+        _send(cfg, reason)
+    except Exception:  # noqa: BLE001 — an alert must never affect trading
+        logger.warning("journal-write alert failed", exc_info=True)
 
 def _epoch(cfg) -> Optional[datetime]:
     raw = contract.epoch_start(cfg)
@@ -131,6 +140,19 @@ def _evaluate_on_ledger(
     epoch = _epoch(cfg)
     if epoch is None:
         raise ValueError("wide-stop ledger lane active without a valid epoch start")
+
+    _journal_failure = journal_write_failed()
+    if _journal_failure is not None:
+        # LW fix: a critical journal row was lost in this process, so this
+        # ledger's balance/drawdown/daily-loss state cannot be trusted.
+        _send_journal_write_alert(cfg, _journal_failure)
+        audit.update(
+            lane_result="BLOCKED_JOURNAL_UNWRITABLE",
+            lane_failed_rule="journal_unwritable",
+            lane_reason="a trade journal could not be written; new entries are blocked until restart",
+        )
+        _journal(log_dir, ledger, audit, for_date)
+        return audit
 
     journal = _lane_journal(log_dir, ledger)
     balance, peak = journal.get_account_state_since(
