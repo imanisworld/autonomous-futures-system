@@ -242,6 +242,27 @@ def retest_triggered(
     return False
 
 
+class OutOfOrderBarError(ValueError):
+    """A 5M bar older than the newest stored bar for the same instrument."""
+
+
+def _reject_out_of_order(payload, log_dir: str, for_date=None) -> None:
+    """Refuse a bar strictly older than the stored tail (FI-6). A resend of the
+    tail itself stays allowed (BarHistory.record keeps it idempotent)."""
+    new_ts = _parse_dt(str(payload.timestamp))
+    if new_ts is None:
+        return
+    tail = _history(log_dir).recent(
+        _root(payload.ticker), 1, for_date=for_date or new_ts.date(), lookback_days=2,
+    )
+    last_ts = _parse_dt(str(tail[-1].get("ts"))) if tail else None
+    if last_ts is not None and new_ts < last_ts:
+        raise OutOfOrderBarError(
+            f"5m bar {new_ts.isoformat()} is older than the stored bar "
+            f"{last_ts.isoformat()} for {_root(payload.ticker)}; not stored"
+        )
+
+
 def record_five_min(payload, log_dir: str, for_date=None) -> dict:
     """Append one 5M bar-close and feed the wide-stop lanes.
 
@@ -250,7 +271,11 @@ def record_five_min(payload, log_dir: str, for_date=None) -> dict:
     only path that reaches Daily 2-2. The Tradovate demo lane runs additively
     afterwards when separately armed, in its own error boundary, so a demo
     failure can never stop paper from processing the same bar.
+
+    Raises OutOfOrderBarError for a bar older than the stored tail, so it is
+    neither stored nor fed to any lane; both callers catch and log it.
     """
+    _reject_out_of_order(payload, log_dir, for_date)
     record = _history(log_dir).record(
         _root(payload.ticker),
         ts=payload.timestamp,
