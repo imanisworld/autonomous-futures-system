@@ -86,3 +86,30 @@ direction — MNQ H1 +1.27 / H2 +2.22, MES H1 +1.27 / H2 +1.44 (n ≈ 16k / 11k)
    fills — exactly what the July study found.
 3. Volume-ratio/EMA20 history uses 4 prior RTH sessions only; the first
    ~20 bars of each session have a shorter baseline than the options lane.
+
+## Correction — 2026-09-24: the VWAP families above used a lagged line, not VWAP
+
+This run's VWAP was **not** the prereg's cumulative RTH VWAP.
+
+**What went wrong**
+- `load_rth_session` fed the replay payload's `vwap` field into `session_vwap` as if it were a per-bar price.
+- That field is **already** the cumulative RTH session VWAP. Across 37,986 RTH bars, it matches sum(hlc3·v)/sum(v) to within 1 tick.
+- `session_vwap` then volume-averaged it a second time, producing a smoothed, lagging line.
+- This contradicts the frozen-definitions row above, which says the payload's `vwap` field is not used.
+
+**What is affected**
+- **Suspect:** every VWAP family in this record (`VWAP_FAILED_RECLAIM_SHORT`, `VWAP_RECLAIM_LONG`, `VWAP_TEST_HOLD_LONG`, `VWAP_TEST_HOLD_SHORT`). This includes the `VWAP_TEST_HOLD_LONG` "prereg pass, drift-explained" row.
+- **Also affected:** PR #992, which was built on this path.
+- **Not affected:** the non-VWAP families.
+
+**Fix**
+- The loader now uses each bar's typical price, (high + low + close) / 3.
+- `session_vwap` therefore rebuilds the true cumulative RTH VWAP, which is the prereg's own definition.
+- `tests/test_futures_non_strat_coverage_vwap.py` pins this.
+
+**What was already rerun**
+- #992 (VWAP failed reclaim within 3 bars) was rerun under both constructions on 2026-09-24, in research only. It fails its frozen gate either way: BROKEN, with no raw edge and H2 flipping sign.
+
+**What was not rerun**
+- The other VWAP rows above were **not** rescored. They stay as recorded and are flagged, not replaced.
+- Any rescoring is a new study under a new prereg. The fns-v0.1 identity is unchanged, and nothing is pooled across the two VWAP constructions.
