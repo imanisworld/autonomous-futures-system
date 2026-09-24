@@ -67,12 +67,15 @@ def _empty_state() -> dict[str, Any]:
 
 
 def _load_state(log_dir: str | Path, ledger: contract.Ledger) -> dict[str, Any]:
+    path = _state_path(log_dir, ledger)
     try:
-        raw = json.loads(_state_path(log_dir, ledger).read_text())
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        raw = json.loads(path.read_text())
+    except FileNotFoundError:
         return _empty_state()
+    except (json.JSONDecodeError, OSError) as exc:
+        raise RuntimeError(f"unreadable collector state: {path}") from exc
     if not isinstance(raw, dict):
-        return _empty_state()
+        raise RuntimeError(f"invalid collector state shape: {path}")
     return {
         "filled_date": raw.get("filled_date"),
         "filled_count": max(0, int(raw.get("filled_count") or 0)),
