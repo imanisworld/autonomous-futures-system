@@ -1670,6 +1670,7 @@ def test_status_diagnostics_reports_bad_tradovate_env(monkeypatch, tmp_path):
 
     _isolate_app_logs(monkeypatch, tmp_path)
     monkeypatch.setenv("BROKER", "tradovate")
+    monkeypatch.setenv("TRADOVATE_ENV", "demo")
     monkeypatch.setenv("WEBHOOK_SECRET", "test-secret")
     monkeypatch.setenv("TRADOVATE_API_KEY_ID", "cid: 13833, secret: pasted")
 
@@ -1699,6 +1700,7 @@ def test_diagnostics_live_preflight_exception_message_not_exposed(monkeypatch, t
 
     _isolate_app_logs(monkeypatch, tmp_path)
     monkeypatch.setenv("BROKER", "tradovate")
+    monkeypatch.setenv("TRADOVATE_ENV", "demo")
     monkeypatch.setenv("WEBHOOK_SECRET", "test-secret")
     monkeypatch.setattr(app_module._config, "discord_notifications_enabled", False)
 
@@ -1825,6 +1827,7 @@ def test_broker_account_endpoint_offloads_and_decorates(monkeypatch, tmp_path):
 
     _isolate_app_logs(monkeypatch, tmp_path)
     monkeypatch.setenv("BROKER", "tradovate")
+    monkeypatch.setenv("TRADOVATE_ENV", "demo")
     app_module._ACCOUNT_CACHE.clear()  # ignore any cached summary from other tests
     monkeypatch.setattr(app_module, "_account_summary_blocking",
                         lambda: {"ok": True, "equity": 50000.0})
@@ -1915,6 +1918,7 @@ def test_live_preflight_run_endpoint_passes_clean_broker(monkeypatch, tmp_path):
     monkeypatch.setattr(live_preflight, "live_box_drift_report", lambda **_: {"ok": True, "summary": "guard ok"})
     monkeypatch.setattr(app_module, "_TV_BROKER", FakeBroker())
     monkeypatch.setenv("BROKER", "tradovate")
+    monkeypatch.setenv("TRADOVATE_ENV", "demo")
     monkeypatch.setenv("WEBHOOK_SECRET", "test-secret")
 
     resp = TestClient(app).post(
@@ -1969,6 +1973,7 @@ def test_diagnostics_items_carry_stable_codes(monkeypatch, tmp_path):
 
     _isolate_app_logs(monkeypatch, tmp_path)
     monkeypatch.setenv("BROKER", "tradovate")
+    monkeypatch.setenv("TRADOVATE_ENV", "demo")
     monkeypatch.setenv("WEBHOOK_SECRET", "test-secret")
     monkeypatch.setattr(app_module, "_feed_window_active", lambda *a, **k: True)
 
