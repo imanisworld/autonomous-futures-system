@@ -45,6 +45,19 @@ Future futures work should focus on lanes that are live or paper-observable now,
 - asia_d_ema paper lane (`asia_d_ema_2026_09_v1`)
 - session_22c paper lane (`session_22c_paper_2026_09_v1`)
 
+## Runtime update — 2026-09-24 02:43 UTC (read-only box check)
+
+This block supersedes the 2026-09-23 runtime blocks below, which are kept as provenance. Nothing was changed by this check.
+
+- **Futures release `45290e03d201`** (`main` at #970), released 2026-09-24 02:17:26 UTC by another session.
+  - PID `2975357`, active, `NRestarts=0`.
+  - `/root/autonomous-futures-system` points to `/root/afs-releases/45290e03d201-20260923-221700`.
+  - Release integrity **OK, 1,531 files**; `RELEASE_INTEGRITY_ENFORCED=true`; health 200.
+- Release history since the 2026-09-23 block: `991df5f` (09-23 21:06Z, #952) → `a7e6515` (09-24 00:50Z, #963) → `45290e03` (09-24 02:17Z, #969 observe-only contract identity + #970 Pine `contract_hint`).
+- Environment: `BROKER=tradovate`, `TRADOVATE_ENV=demo`, `LIVE_TRADING_ENABLED=false`, `SCHEDULE_MODE=always_on_shadow`, `EXIT_MODE=static`, `MAX_CONTRACTS_HARD_CAP=1`, `BLOCK_RESTRICTED_REGIME=false`.
+- The wide-stop Tradovate DEMO route is armed on purpose (`WIDE_STOP_DEMO_EXECUTION_ENABLED=true`, route `tradovate_demo`); see "Wide-stop Tradovate DEMO route — intentionally armed" below. It has placed 0 demo orders; broker demo account flat.
+- MNQ inverse ORB is retired and not active; see the section near the top of this file.
+
 ## Runtime update — 2026-09-23 03:50 UTC (read-only box check)
 
 - **Futures release is now `799a89e2db2d`** (#932, plain-English Discord on every channel). It was released at 01:59:58 UTC by another session, so the service block below is one release behind.
