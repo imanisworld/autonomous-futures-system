@@ -90,7 +90,6 @@ def test_fi5_control_clean_fixture_submits_a_real_demo_order(config, tmp_path, m
     assert _prices_sane(broker.last_order)
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="KNOWN DEFECT FI-5c")
 def test_fi5c_nan_stop_candidate_is_never_submitted(config, tmp_path, monkeypatch):
     from context import wide_stop_forward_collector as collector
 
@@ -119,6 +118,29 @@ def test_fi5c_nan_stop_candidate_is_never_submitted(config, tmp_path, monkeypatc
         ),
     )
     assert broker.execute_calls == 0, str(rec)
+    blocked = [e.get("lane_failed_rule") for e in events if e.get("lane_result") == "BLOCKED_DEMO"]
+    assert blocked == ["incomplete_bracket"], str(rec)
+
+
+@pytest.mark.parametrize("field", ["entry", "stop", "target"])
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")],
+                         ids=["nan", "inf", "neg_inf"])
+def test_fi5c_risk_engine_rejects_non_finite_bracket_price(config, field, value):
+    from datetime import datetime, timezone
+
+    from risk.risk_engine import DailyState, RiskEngine, TradeSetup
+
+    prices = {"entry": 20_000.0, "stop": 19_950.0, "target": 20_070.0}
+    prices[field] = value
+    setup = TradeSetup(
+        direction="LONG", rr_ratio=1.4, strategy="strat_4hr_retrigger", instrument="MNQ",
+        session="new_york", contracts=1, confluence_grade="B",
+        entry_time=datetime(2026, 9, 8, 14, 5, tzinfo=timezone.utc), **prices,
+    )
+    engine = RiskEngine(config=config)
+    result = engine._check_bracket_completeness(setup, DailyState())
+    assert result is not None and result.failed_rule == "incomplete_bracket"
+    assert field in result.reason
 
 
 @pytest.mark.parametrize("bad_low", [float("nan"), 0.0], ids=["low_nan", "low_zero"])
