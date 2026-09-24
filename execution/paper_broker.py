@@ -37,7 +37,7 @@ from execution.trailing import compute_trailed_stop
 
 # Price metadata is not broker or strategy eligibility.
 from config.futures_contracts import TICK_SIZE, TICK_VALUE, contract_economics
-from config.settings import hard_cap_order_refusal
+from config.settings import guarded_hard_cap_refusal
 
 
 @dataclass
@@ -155,14 +155,12 @@ class PaperBroker(BrokerInterface):
         """Simulate the bracket, then (flag-gated, fire-and-forget) mirror an
         established entry to the Webull sandbox futures paper account. The
         mirror never changes the returned Fill."""
-        refusal = hard_cap_order_refusal(
-            1 if order.contracts is None else order.contracts
-        )
+        refusal = guarded_hard_cap_refusal(order.contracts)
         if refusal:
             return Fill(
                 instrument=order.instrument,
                 direction=order.direction,
-                contracts=int(order.contracts or 0),
+                contracts=order.contracts,
                 entry_price=order.entry,
                 exit_price=None,
                 exit_reason=refusal,

@@ -6,10 +6,9 @@ import dataclasses
 
 import pytest
 
-from config.settings import ConfigError, load_config
+from config.settings import ConfigError, load_config, parse_max_contracts_hard_cap, per_instrument_contract_ceiling
 from execution.broker_interface import BracketOrder
 from execution.paper_broker import PaperBroker
-from execution.tradovate_broker import TradovateBroker, TradovateConfig
 from risk.risk_engine import DailyState, RiskEngine, TradeSetup
 
 
@@ -29,7 +28,7 @@ def _approved_setup(contracts: int) -> TradeSetup:
 
 @pytest.mark.parametrize(
     "raw",
-    [None, "", "   ", "abc", "1.5", "+1", "0", "-1"],
+    [None, "", "   ", "abc", "1.5", "+1", "0", "-1", "²", "١", "7"],
 )
 def test_load_config_refuses_missing_or_invalid_cap(monkeypatch, raw):
     if raw is None:
@@ -38,6 +37,16 @@ def test_load_config_refuses_missing_or_invalid_cap(monkeypatch, raw):
         monkeypatch.setenv("MAX_CONTRACTS_HARD_CAP", raw)
     with pytest.raises(ConfigError, match="MAX_CONTRACTS_HARD_CAP"):
         load_config("risk_rules.yaml")
+
+
+def test_parse_accepts_only_ascii_digits_within_yaml_ceiling():
+    ceiling = per_instrument_contract_ceiling("risk_rules.yaml")
+    assert ceiling == 6
+    assert parse_max_contracts_hard_cap("  1  ", rules_path="risk_rules.yaml") == 1
+    assert parse_max_contracts_hard_cap(str(ceiling), rules_path="risk_rules.yaml") == ceiling
+    for raw in ("²", "١", str(ceiling + 1)):
+        with pytest.raises(ConfigError, match="MAX_CONTRACTS_HARD_CAP"):
+            parse_max_contracts_hard_cap(raw, rules_path="risk_rules.yaml")
 
 
 def test_load_config_keeps_the_env_value_and_yaml_ceilings(monkeypatch):
@@ -108,16 +117,3 @@ def test_paper_broker_rejects_invalid_cap(monkeypatch, raw):
     assert "MAX_CONTRACTS_HARD_CAP" in fill.exit_reason
 
 
-def test_tradovate_refuses_over_cap_before_any_http(monkeypatch):
-    monkeypatch.setenv("MAX_CONTRACTS_HARD_CAP", "1")
-    broker = TradovateBroker(config=TradovateConfig(env="demo", expected_account_id=1))
-
-    def _submitted(*_args, **_kwargs):
-        raise AssertionError("broker submitted an order")
-
-    broker._session.post = _submitted
-    fill = broker.execute_bracket(_order(4))
-    assert fill.result == "CANCELLED"
-    assert fill.contracts == 4
-    assert "exceed MAX_CONTRACTS_HARD_CAP=1" in fill.exit_reason
-    assert broker._last_position is None

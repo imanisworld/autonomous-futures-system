@@ -51,10 +51,75 @@ class ConfigError(ValueError):
     """Raised when configuration is invalid or incomplete."""
 
 
-def parse_max_contracts_hard_cap(raw: str | None) -> int:
+def _risk_rules_path(rules_path: str | Path | None = None) -> Path:
+    """Path of the risk_rules file used to bound the contract cap.
+
+    An explicit path is used as given. Otherwise the file shipped beside this
+    package is preferred over a cwd-relative path, so a broker gate does not
+    depend on the process working directory.
+    """
+    if rules_path is not None:
+        return Path(rules_path)
+    packaged = Path(__file__).resolve().parents[1] / "risk_rules.yaml"
+    if packaged.is_file():
+        return packaged
+    return Path("risk_rules.yaml")
+
+
+def per_instrument_contract_ceiling(rules_path: str | Path | None = None) -> int:
+    """Highest ``position_rules.max_contracts_per_instrument`` value.
+
+    This is the sanity bound for ``MAX_CONTRACTS_HARD_CAP``. The number is
+    read from risk_rules.yaml. A missing or non-integer map raises ConfigError
+    instead of substituting a literal.
+    """
+    path = _risk_rules_path(rules_path)
+    try:
+        loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, yaml.YAMLError) as exc:
+        raise ConfigError(
+            "MAX_CONTRACTS_HARD_CAP ceiling cannot be read from "
+            f"{path}: {exc}; refusing to trade"
+        ) from exc
+    if not isinstance(loaded, dict):
+        raise ConfigError(
+            "MAX_CONTRACTS_HARD_CAP ceiling cannot be read: "
+            f"{path} did not contain a mapping; refusing to trade"
+        )
+    position = loaded.get("position_rules")
+    ceilings = (
+        position.get("max_contracts_per_instrument")
+        if isinstance(position, dict)
+        else None
+    )
+    if not isinstance(ceilings, dict) or not ceilings:
+        raise ConfigError(
+            "MAX_CONTRACTS_HARD_CAP ceiling cannot be read: "
+            "position_rules.max_contracts_per_instrument is missing; "
+            "refusing to trade"
+        )
+    values: list[int] = []
+    for name, raw_ceiling in ceilings.items():
+        if isinstance(raw_ceiling, bool) or not isinstance(raw_ceiling, int):
+            raise ConfigError(
+                "MAX_CONTRACTS_HARD_CAP ceiling cannot be read: "
+                f"max_contracts_per_instrument[{name!s}] is not an integer; "
+                "refusing to trade"
+            )
+        values.append(raw_ceiling)
+    return max(values)
+
+
+def parse_max_contracts_hard_cap(
+    raw: str | None,
+    *,
+    rules_path: str | Path | None = None,
+) -> int:
     """Return a positive integer contract cap, or raise ConfigError.
 
-    Missing, blank, non-numeric, zero, and negative values refuse. This never
+    Missing, blank, non-ASCII, zero, and negative values refuse. ``str.isdigit``
+    is not used: it accepts ``²`` and ``١``. The value must also be at or
+    below the per-instrument contract ceiling in risk_rules.yaml. This never
     returns None and never substitutes another limit.
     """
     if raw is None or str(raw).strip() == "":
@@ -62,9 +127,9 @@ def parse_max_contracts_hard_cap(raw: str | None) -> int:
             "MAX_CONTRACTS_HARD_CAP is missing or empty; refusing to trade"
         )
     text = str(raw).strip()
-    if not text.isdigit():
+    if not text.isascii() or not text.isdigit():
         raise ConfigError(
-            "MAX_CONTRACTS_HARD_CAP must be a positive integer "
+            "MAX_CONTRACTS_HARD_CAP must be a positive ASCII integer "
             f"(got {text!r}); refusing to trade"
         )
     value = int(text)
@@ -73,29 +138,55 @@ def parse_max_contracts_hard_cap(raw: str | None) -> int:
             "MAX_CONTRACTS_HARD_CAP must be a positive integer "
             f"(got {value}); refusing to trade"
         )
+    ceiling = per_instrument_contract_ceiling(rules_path)
+    if value > ceiling:
+        raise ConfigError(
+            f"MAX_CONTRACTS_HARD_CAP {value} exceeds the per-instrument "
+            f"contract ceiling {ceiling} in risk_rules.yaml; refusing to trade"
+        )
     return value
 
 
-def hard_cap_order_refusal(quantity: int) -> str | None:
+def hard_cap_order_refusal(quantity: object) -> str | None:
     """Reason to refuse an order, or None when quantity is within the env cap.
 
-    Does not resize. A missing or invalid cap refuses; a quantity above the
-    cap refuses. Callers must not submit or increase the quantity.
+    Does not resize. A missing or invalid cap, including a parse ValueError,
+    refuses. None, zero, negative, and non-int quantities (bool included)
+    refuse. Callers must not submit or increase the quantity.
     """
     try:
         cap = parse_max_contracts_hard_cap(os.getenv("MAX_CONTRACTS_HARD_CAP"))
-    except ConfigError as exc:
-        return str(exc)
-    try:
-        qty = int(quantity)
-    except (TypeError, ValueError):
-        return "order quantity is not an integer; refusing to submit"
-    if qty > cap:
+    except (ConfigError, ValueError, TypeError) as exc:
+        text = str(exc)
+        if "MAX_CONTRACTS_HARD_CAP" not in text:
+            text = f"MAX_CONTRACTS_HARD_CAP: {text}"
+        return text
+    # bool is an int subclass; type() rejects it without coercing True to 1.
+    if type(quantity) is not int or quantity <= 0:
         return (
-            f"contracts {qty} exceed MAX_CONTRACTS_HARD_CAP={cap}; "
+            f"order quantity {quantity!r} is not a positive integer; "
+            "MAX_CONTRACTS_HARD_CAP refusal"
+        )
+    if quantity > cap:
+        return (
+            f"contracts {quantity} exceed MAX_CONTRACTS_HARD_CAP={cap}; "
             "refusing order without resizing"
         )
     return None
+
+
+def guarded_hard_cap_refusal(quantity: object) -> str | None:
+    """Same as hard_cap_order_refusal, but a parse error never propagates.
+
+    execute_bracket must return a CANCELLED fill instead of raising.
+    """
+    try:
+        refusal = hard_cap_order_refusal(quantity)
+    except Exception as exc:
+        refusal = f"MAX_CONTRACTS_HARD_CAP refusal: {type(exc).__name__}: {exc}"
+    if refusal and "MAX_CONTRACTS_HARD_CAP" not in refusal:
+        return f"MAX_CONTRACTS_HARD_CAP: {refusal}"
+    return refusal
 
 
 # ─── Config Dataclass ────────────────────────────────────────────────────────
@@ -841,7 +932,8 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
         max_contracts_per_instrument=position.get("max_contracts_per_instrument", {}),
         position_sizing=_parse_position_sizing(sizing),
         max_contracts_hard_cap=parse_max_contracts_hard_cap(
-            os.getenv("MAX_CONTRACTS_HARD_CAP")
+            os.getenv("MAX_CONTRACTS_HARD_CAP"),
+            rules_path=rules_path,
         ),
         daily_profit_protect_threshold=float(
             daily.get("daily_profit_protect_threshold", 0.0) or 0.0
