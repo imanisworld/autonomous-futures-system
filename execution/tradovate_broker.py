@@ -2538,7 +2538,12 @@ class TradovateBroker(BrokerInterface):
             except Exception:
                 our_cid = None
             positions = self._get("/position/list")
-            positions = positions if isinstance(positions, list) else []
+            if not isinstance(positions, list):
+                # FI-2: a malformed read is UNKNOWN, never flat. Raise into the
+                # handler below: position stays open, orphan escalation counts it.
+                raise ValueError(
+                    f"/position/list returned non-list broker state: {type(positions).__name__}"
+                )
             our_open = False
             for p in positions:
                 if (p.get("netPos", 0) or 0) == 0:
@@ -2569,8 +2574,14 @@ class TradovateBroker(BrokerInterface):
             # "the last fill", which grabs an unrelated entry and fabricates wins
             # (the 30208.75-on-two-trades bug).
             fills = self._get(f"/fill/list?accountId={self._account_id}")
+            if not isinstance(fills, list):
+                # FI-2: an unreadable fill list must not become "no fills" (which
+                # ends in a fabricated FORCE_CLOSE_UNMATCHED); wait for real fills.
+                raise ValueError(
+                    f"/fill/list returned non-list broker state: {type(fills).__name__}"
+                )
             ours = [
-                f for f in (fills if isinstance(fills, list) else [])
+                f for f in fills
                 if (our_cid is None or f.get("contractId") == our_cid) and f.get("price") is not None
             ]
 
