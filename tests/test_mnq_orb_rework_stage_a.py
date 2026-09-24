@@ -103,3 +103,13 @@ def test_failed_breakout_after_30_minutes_does_not_create_inverse():
         confirm_minutes=5,
     )
     assert not any(e.family == "FAILED_BREAKOUT_INVERSE" for e in events)
+
+
+def test_summary_keeps_all_60_zero_event_cells_visible():
+    report = summarize([], [])
+    assert len(report["primary_cells"]) == 60
+    assert all(
+        row["overall_60m"]["n"] == 0
+        and row["stage_b_eligible_metrics_only"] is False
+        for row in report["primary_cells"].values()
+    )
