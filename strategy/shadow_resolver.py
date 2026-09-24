@@ -32,7 +32,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
 from context.bar_history import BarHistory, _parse_dt
-from journal.journal_logger import JournalLogger
+from journal.journal_logger import JournalCorruptionError, JournalLogger
 from strategy.shadow_setups import ShadowSetupCandidate, resolve_shadow_candidate
 
 logger = logging.getLogger(__name__)
@@ -188,7 +188,14 @@ def resolve_pending_shadow_outcomes(
     resolved_keys: set[str] = set()
     days = [today - timedelta(days=k) for k in range(max(1, lookback_days))]
     for d in days:
-        for row in journal.read_day(d):
+        try:
+            day_rows = journal.read_day(d)
+        except JournalCorruptionError as exc:
+            # Observation-only resolver: a corrupt journal day is unusable
+            # evidence, but must not break ingestion or trading-state safety.
+            logger.warning("shadow resolver skipped corrupt journal day %s: %s", d, exc)
+            continue
+        for row in day_rows:
             if not isinstance(row, dict):
                 continue
             if row.get("type") == "SHADOW_OUTCOME":
