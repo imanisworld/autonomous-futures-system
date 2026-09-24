@@ -2,6 +2,20 @@
 
 _As of 2026-09-24 (runtime and current decisions: see the 2026-09-24 blocks in `docs/futures-current-status-2026-09-22.md`). This is the long futures handoff. Historical audit docs remain evidence records, but they do not override the latest dated current-status file. Repository state is not proof of VPS/deployment state; verify the box separately before claiming anything is running._
 
+## Source-state refresh — 2026-09-24 after FI phase 2B/2C fixes
+
+**Repository main at this refresh:** `501b7b9f0e89aa20042693c71eab07a4a438416c` after PR #1014. **Last verified deployed futures release remains the operator-audited `cddef4a4b6583f31007268789545c7be24345d75` (#1007).** Nothing in this source refresh proves or authorizes a newer VPS release.
+
+- **#1010** — merged as `6f2d75b4cc7cf3a24dde0a177dd2d7fe8c64a383`, **not proven deployed in `cddef4a`**. Adds `overnight_high`, `overnight_low`, and `rth_open` to the Pine/payload path so the existing shadow overnight-sweep and gap-fill observers can receive their required inputs. TradingView script save / alert recreation remains a separate operator action; merge is not activation.
+- **#1011** — merged as `223f5cde32d127a5a6fcb4b0991c52c6be37cf91`. Tests-only phase 2B/2C fault injection proved FI-10, FI-11, FI-13, and FI-18 while directly covering FI-15/FI-16/FI-17.
+- **#1013** — merged as `cfd3313f2139c1aafc784bd253de50451c2f03ec`, **not proven deployed in `cddef4a`**. Fixes FI-18: automated Tradovate order submission now requires an exact account pin and the pinned path retains positive-balance verification. Before any future broker-connected deployment, the box must independently prove the correct `TRADOVATE_EXPECTED_ACCOUNT_ID`; do not guess or infer it.
+- **#1014** — merged as `501b7b9f0e89aa20042693c71eab07a4a438416c`, **not proven deployed in `cddef4a`**. Fixes FI-10/FI-11/FI-13 by failing closed on unreadable trading-state journal rows / duplicate-bar claims and corrupt wide-stop collector state, while preserving fail-soft behavior for the observation-only shadow resolver. Exact-head CI passed before merge.
+- The known defects introduced by the #1011 phase 2B/2C test PR are therefore fixed in **source**. That is not deployment proof.
+- **#990 is closed. #994 remains the open MNQ ORB Stage-A research PR.** Do not recreate or duplicate the closed lane.
+- **#1008 remains a live-data-path change that has not been proven deployed in `cddef4a`.** Do not deploy current `main` wholesale merely to pick up one fix; any runtime promotion needs its own exact candidate, diff, environment, account-pin, health, and rollback proof.
+
+**Current safe posture:** source safety work is ahead of the verified runtime. No deployment, service restart, TradingView alert recreation, broker-env mutation, strategy activation, or cleanup is authorized by this documentation update.
+
 ## Repository/runtime refresh — 2026-09-24
 
 **Verified repository main during this refresh:** `08b2cffebc9dcc6d2c36565b85f30fe4220069d3` after PR #1009. **Verified deployed futures release from the operator audit:** `cddef4a4b6583f31007268789545c7be24345d75` (#1007), deployed at 13:19Z with PID 3185879 and no deploy lock remaining. Repository state still does not prove runtime state; this block records the verified split rather than inferring deployment from merge status.
