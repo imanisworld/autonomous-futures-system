@@ -156,11 +156,15 @@ Execution posture is recorded separately and may include **research only**, **ob
 > **Forward A/B review (2026-09-24, `forward_ab_2026_08_v1`):** the control arm
 > (15m NY, canonical resting entry) met the campaign gate (41 resolved fills,
 > 22 candidate days) and is **negative: −$310.84, PF 0.52, H2 −$356.58 with 0
-> wins in 21** — confirming BROKEN; no promotion. The modified arm (5m confirmed
-> close) is +$698.95 on 22 fills / 13 days (gate not met) but is **not a matched
-> comparison** (4 of 70 events paired; different sessions) and its fills are
-> assumed at the confirmation close without a reachability check. WAIT; a fair
-> A/B needs a new prereg. See `docs/futures-current-status-2026-09-22.md`.
+> wins in 21** — confirming BROKEN; no promotion. The modified arm (5m) is
+> +$698.95 as booked on 22 fills / 13 days (gate not met) but is **not a matched
+> comparison** (4 of 70 events paired; different sessions). Its fills are booked
+> when the confirmation bar closes but **priced at VWAP − 2 ticks, not at that
+> close** — a median of about 2R above the market for these shorts; IOC at that price
+> fills 0 of 22. Re-scored at the next 5m open (2026-09-24): +$413.12, PF 2.24,
+> top 3 trades 85% of net, and −$134.06 if the nominal 7.5-pt risk is kept.
+> WAIT; read the arm on honest fills only, and a fair A/B needs a new prereg. See
+> `docs/futures-current-status-2026-09-22.md`.
 
 > **Reconciliation (2026-09-07, `docs/vwap-hold-reconciliation-2026-09-07.md`,
 > `scripts/vwap_hold_reconciliation_2026-09-07.py`):** the 2026-07-26 NY-only
