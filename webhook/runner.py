@@ -121,7 +121,7 @@ from config.futures_contracts import (
     round_to_tick as _contract_round_to_tick,
     symbol_economics as _symbol_economics,
 )
-from journal.journal_logger import JournalLogger
+from journal.journal_logger import JournalLogger, JournalWriteError, journal_write_failed
 from notifications import plain_english as _pe
 from risk.risk_engine import DailyState, RiskEngine, RiskResult, TradeSetup
 from strategy.confluence_scorer import score_setup as _score_setup
@@ -1703,6 +1703,7 @@ def process_alert(
                         payload.close, position_age_hours, pnl_dollars,
                     )
                     journal.log_outcome(
+                        critical=True,  # FI-5 fix (F4): this journal feeds the RiskEngine
                         instrument=open_pos.get("instrument") or state.instrument,
                         session=state.session,
                         result=exit_result,
@@ -1740,6 +1741,7 @@ def process_alert(
 
             if fill is not None:
                 journal.log_outcome(
+                    critical=True,  # FI-5 fix (F4): this journal feeds the RiskEngine
                     instrument=fill.instrument,
                     session=state.session,
                     result=fill.result,
@@ -1791,7 +1793,18 @@ def process_alert(
     # the second layer behind it.
     execution_block = None
     total_daily_capacity = cfg.max_trades_per_day + int(getattr(cfg, "bonus_trades_after_max", 0) or 0)
-    if daily_state.trade_count >= total_daily_capacity:
+    _journal_failure = journal_write_failed()
+    if _journal_failure is not None:
+        # FI-5 fix: a critical journal row was lost earlier in this process, so
+        # the book's own position/risk state can no longer be trusted. Block all
+        # new entries until a restart; resolution above has already run.
+        execution_block = {
+            "code": "BLOCKED_JOURNAL_UNWRITABLE",
+            "reason": "The trade journal could not be written; new entries are blocked until restart.",
+            "journal_failure": _journal_failure,
+        }
+        _send_journal_write_alert(cfg, _journal_failure)
+    elif daily_state.trade_count >= total_daily_capacity:
         execution_block = {
             "code": "BLOCKED_MAX_TRADES",
             "reason": "Daily trade capacity reached; setup observed, execution blocked.",
@@ -2084,7 +2097,10 @@ def process_alert(
             journal_entry["mnq_orb_breakout_inverse_audit"] = mnq_breakout_inverse_audit
         if mnq_vwap_hold_proof_audit is not None:
             journal_entry["mnq_vwap_hold_proof_audit"] = mnq_vwap_hold_proof_audit
-        journal.log_decision(journal_entry, None, for_date=today)
+        try:
+            journal.log_decision(journal_entry, None, for_date=today)
+        except JournalWriteError as _jw_exc:  # no order on this path; latch is set
+            _send_journal_write_alert(cfg, str(_jw_exc))
         if decision.setup is not None:
             result["candidate"] = _candidate_snapshot(
                 setup=decision.setup,
@@ -2358,7 +2374,10 @@ def process_alert(
                 journal_entry["range_state"] = _range_state_dict
             if _range_signal_dict:
                 journal_entry["range_signal"] = _range_signal_dict
-        journal.log_decision(journal_entry, None, for_date=today)
+        try:
+            journal.log_decision(journal_entry, None, for_date=today)
+        except JournalWriteError as _jw_exc:  # no order on this path; latch is set
+            _send_journal_write_alert(cfg, str(_jw_exc))
         if decision.setup is not None:
             result["candidate"] = _candidate_snapshot(
                 setup=decision.setup,
@@ -2652,7 +2671,14 @@ def process_alert(
         # any reader treats as an open position — is written ONLY after the broker
         # confirms an OPEN position with order ids, further below.
         journal_entry["decision"] = "TRADE_INTENT"
-    journal.log_decision(journal_entry, risk_dict, for_date=today)
+    try:
+        journal.log_decision(journal_entry, risk_dict, for_date=today)
+    except JournalWriteError as _jw_exc:
+        # FI-5 fix (D2): if the intent cannot be recorded, nothing is sent.
+        _send_journal_write_alert(cfg, str(_jw_exc))
+        result["decision"] = "BLOCKED_JOURNAL_UNWRITABLE"
+        result["reason"] = "The trade journal could not be written; no order was sent."
+        return result
 
     if not risk_result.approved:
         result["decision"] = "RISK_REJECTED"
@@ -2724,6 +2750,7 @@ def process_alert(
             fill = broker.force_resolve(_pre["result"], float(_pre["exit_price"]))
             fill.exit_reason = _pre["exit_reason"]
             journal.log_outcome(
+                critical=True,  # FI-5 fix (F4): this journal feeds the RiskEngine
                 instrument=fill.instrument,
                 session=state.session,
                 result=fill.result,
@@ -2771,11 +2798,17 @@ def process_alert(
             ),
         }
         journal_entry["context"] = _market_state_context(state, _decision_direction(decision))
-        journal.log_decision(
-            journal_entry,
-            {"result": "APPROVED"},
-            for_date=today,
-        )
+        try:
+            journal.log_decision(
+                journal_entry,
+                {"result": "APPROVED"},
+                for_date=today,
+            )
+        except JournalWriteError as _jw_exc:
+            _send_journal_write_alert(cfg, str(_jw_exc))
+            result["decision"] = "BLOCKED_JOURNAL_UNWRITABLE"
+            result["reason"] = "The trade journal could not be written; the position was not recorded."
+            return result
         daily_state.trade_count += 1
         daily_state.has_open_position = True
         result["decision"] = "TRADE"
@@ -3143,6 +3176,7 @@ def process_alert(
         # reconciler's own clear, and via CANCELLED-not-counted it also un-counts
         # the failed attempt from the daily/session trade limits.
         journal.log_outcome(
+            critical=True,  # FI-5 fix (F4): this journal feeds the RiskEngine
             instrument=order.instrument,
             session=state.session,
             result="CANCELLED",
@@ -3239,6 +3273,7 @@ def process_alert(
         # exactly like the non-OPEN path. no_fill_reason distinguishes it from a
         # plain IOC no-fill for the taxonomy.
         journal.log_outcome(
+            critical=True,  # FI-5 fix (F4): this journal feeds the RiskEngine
             instrument=order.instrument,
             session=state.session,
             result="CANCELLED",
@@ -3318,7 +3353,14 @@ def process_alert(
             journal_entry["proof_fill_entry_price"] = _proof_fill_entry
     if getattr(fill, "execution_audit", None) is not None:
         journal_entry["execution_audit"] = fill.execution_audit
-    journal.log_decision(journal_entry, risk_dict, for_date=today)
+    _trade_row_lost = None
+    try:
+        journal.log_decision(journal_entry, risk_dict, for_date=today)
+    except JournalWriteError as _jw_exc:
+        # FI-5 fix: the order is already at the broker but the book has no
+        # record of it. The latch (set in _append) blocks every new entry;
+        # report it as unrecorded, never as a clean TRADE.
+        _trade_row_lost = str(_jw_exc)
 
     logger.info(
         "TRADE: %s %s %sc @ %s stop %s target %s",
@@ -3365,6 +3407,13 @@ def process_alert(
         "paper_order_id": _paper_order_id,
         "execution_audit": getattr(fill, "execution_audit", None),
     }
+
+    if _trade_row_lost is not None:
+        _send_journal_write_alert(cfg, _trade_row_lost, order=order)
+        result["decision"] = "JOURNAL_WRITE_FAILED_OPEN"
+        result["reason"] = "The order was sent but the trade journal could not record it."
+        result["fill"]["status"] = "UNRECORDED"
+        return result
 
     if _ambiguous_submit is not None:
         # Unconfirmed position: no companion candidate from it.
@@ -3418,6 +3467,38 @@ def _ambiguous_submit_broker_truth(broker) -> str:
     except Exception as exc:
         logger.warning("Ambiguous-submit broker read failed: %s", exc)
         return "broker_state_unreadable"
+
+
+_journal_alert_sent = False
+
+
+def _send_journal_write_alert(cfg, reason: str, order=None) -> None:
+    """One operator alert per process when the trade journal becomes unwritable
+    (FI-5 fix, operator D1). Sent whatever the broker is: the paper path has no
+    broker-side backstop at all."""
+    global _journal_alert_sent
+    if _journal_alert_sent:
+        return
+    _journal_alert_sent = True
+    trade = ""
+    if order is not None:
+        trade = (
+            f"Trade sent but NOT recorded: {_pe.side(order.direction)} "
+            f"{_pe.contracts(order.contracts)} {_pe.market(order.instrument)}\n"
+        )
+    try:
+        from notifications.discord_notifier import send_operational_alert
+        send_operational_alert(
+            cfg,
+            "🚨 Trade journal cannot be written — new trades stopped\n"
+            f"{trade}"
+            "What happened: the bot could not save a trade record (usually a full disk)\n"
+            "What the bot did: it has stopped opening new trades; exits still run\n"
+            "What to do: free disk space, check the broker for open positions, then restart the bot\n"
+            f"-# details: JOURNAL_WRITE_FAILED {reason}",
+        )
+    except Exception as exc:  # pragma: no cover - notification must never affect trading
+        logger.warning("Journal-write Discord alert failed: %s", exc)
 
 
 def _send_ambiguous_submit_alert(cfg, order, ambiguous: dict) -> None:
