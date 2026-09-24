@@ -8,6 +8,43 @@ This is the concise operator-facing source of truth for the futures system. Hist
 
 Core rule remains: **No proof, no run.**
 
+## MNQ inverse ORB — retired, not active (2026-09-24 read-only audit)
+
+Operator decision 2026-09-24: the 2026-09-08 retirement stands. Do not reactivate.
+
+| Field | Status |
+|---|---|
+| Inverse ORB status | **RETIRED / BROKEN** — retired 2026-09-08 by #517 (`212512e`); see `docs/inverse-orb-decision-time-replay-2026-09-08.md` |
+| Deployment status | **NOT ACTIVE** — inactive by design, not config drift |
+| Evidence status | **ZERO CURRENT VALID FORWARD EVIDENCE** — 0 inverse evaluations and 0 trades since either epoch; the old positive baselines (+$1,026.64 / PF 5.28 and +$745.72 / PF 2.39) are retired and must not be pooled |
+| Env pin status | **ACCOUNTING ISOLATION ONLY / NOT ACTIVATION** |
+| Safe action | **DO NOT REACTIVATE WITHOUT NEW PREREG, safety fixes, and replay/live parity proof** |
+
+Why the lane cannot fire (verified at release `a7e6515`):
+
+- `risk_rules.yaml` `disabled_concepts_per_instrument.MNQ` lists `orb_breakout`, so the MNQ executable set is empty ("No enabled strategy for MNQ").
+- `strategy_permission_gate` sets `orb_breakout: SHADOW_ONLY`.
+- `webhook/runner.py` runs the inverse lane only after an MNQ `orb_breakout` `TRADE` decision, which the two gates above prevent.
+- `SCHEDULE_MODE=always_on_shadow` refuses every order, paper included.
+
+Env pins that remain on the box and must not be read as activation:
+
+- `MNQ_ORB_BREAKOUT_INVERSE_MODE=paper_sim` and `MNQ_ORB_BREAKOUT_INVERSE_EPOCH_START=2026-09-05T17:45:00Z` (with their `EXPECTED_PROOF_*` pins) are still read by code. `webhook/runner.py` scopes the **main runner's** daily state (daily loss, loss streak, balance, peak, drawdown) from that epoch. That is why the pin must not be removed or changed without a separate review; removing it would switch main-runner risk accounting back to all history.
+- The box file `logs/mnq_orb_breakout_inverse_evidence_epoch.json` (epoch 2026-09-03T22:17:33Z, release `bbdb85e`) is obsolete. No code reads it, and by its own terms (release `bbdb85e`, `SCHEDULE_MODE=current`, `EXIT_MODE=runner_shadow`) it no longer describes the runtime. It is left in place; this note is the record.
+
+Known safety gaps that would have to be fixed before any future reactivation (not fixed; not blocking while the lane is retired):
+
+- An MNQ `orb_breakout` `TRADE` on a bar that is neither 15m nor a 5m retest skips the inverse block and uses the configured broker.
+- An open inverse row missing its paper audit marker is resolved against Tradovate, and the day-only close path can call `flatten_position` outside the shadow gate.
+- Paper/replay entry-fill parity is unverified for this lane.
+
+Future futures work should focus on lanes that are live or paper-observable now, not inverse ORB:
+
+- vwap_hold forward A/B (`forward_ab_2026_08_v1`)
+- wide-stop demo lane (the only route currently armed to Tradovate demo)
+- asia_d_ema paper lane (`asia_d_ema_2026_09_v1`)
+- session_22c paper lane (`session_22c_paper_2026_09_v1`)
+
 ## Runtime update — 2026-09-23 03:50 UTC (read-only box check)
 
 - **Futures release is now `799a89e2db2d`** (#932, plain-English Discord on every channel). It was released at 01:59:58 UTC by another session, so the service block below is one release behind.

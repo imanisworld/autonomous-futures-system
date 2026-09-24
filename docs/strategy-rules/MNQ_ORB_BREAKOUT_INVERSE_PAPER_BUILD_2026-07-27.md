@@ -1,6 +1,15 @@
 # MNQ ORB Breakout inverse — paper-build contract
 
-Status: **PROMISING BUT UNPROVEN — APPROVED FOR PAPER BUILD**
+> **SUPERSEDED — RETIRED / BROKEN (2026-09-08, #517).** This build contract is
+> provenance only. Deployment status: **NOT ACTIVE**. Evidence status: **ZERO
+> CURRENT VALID FORWARD EVIDENCE**; the research result below is retired (see
+> `docs/inverse-orb-decision-time-replay-2026-09-08.md`). The
+> `MNQ_ORB_BREAKOUT_INVERSE_*` env pins still on the box are **ACCOUNTING
+> ISOLATION ONLY / NOT ACTIVATION**. **DO NOT REACTIVATE WITHOUT NEW PREREG,
+> safety fixes, and replay/live parity proof.** Current status:
+> `docs/futures-current-status-2026-09-22.md`.
+
+Status (original, 2026-07-27): **PROMISING BUT UNPROVEN — APPROVED FOR PAPER BUILD**
 
 Research preregistration:
 `eda2c3344304fe2f9daf74da6505acdf1256fad4`.
