@@ -28,6 +28,8 @@ narrower question first:
 
 No old journal-approved population is used to select the events.
 
+Within each session and each OR-duration × confirmation-timeframe definition, only the **first causal occurrence of each event-family × direction** is scored. Later same-day recurrences of that same primary cell are ignored. This is frozen before the first run to limit serially-correlated intraday duplicates.
+
 ## Frozen research axes
 
 ### A. Opening-range duration
