@@ -58,18 +58,29 @@ def _assert_blocked(case, overrides, result, stored):
     assert stored == [], str(rec)
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="KNOWN DEFECT FI-5a")
 @pytest.mark.parametrize("case", list(BAD_VALUES))
 def test_fi5a_non_finite_price_bar_is_blocked(config, tmp_path, monkeypatch, case):
     result, stored = _run(config, tmp_path, monkeypatch, mnq_5m(BAR_TS, **BAD_VALUES[case]))
     _assert_blocked(case, BAD_VALUES[case], result, stored)
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="KNOWN DEFECT FI-5b")
 @pytest.mark.parametrize("case", list(NON_POSITIVE_LOWS))
 def test_fi5b_non_positive_low_bar_is_blocked(config, tmp_path, monkeypatch, case):
     result, stored = _run(config, tmp_path, monkeypatch, mnq_5m(BAR_TS, **NON_POSITIVE_LOWS[case]))
     _assert_blocked(case, NON_POSITIVE_LOWS[case], result, stored)
+
+
+def test_fi5_non_finite_price_on_a_15m_bar_is_blocked(config, tmp_path, monkeypatch):
+    result, _ = _run(config, tmp_path, monkeypatch,
+                     mnq_5m(BAR_TS, timeframe="15m", low=float("nan")))
+    assert result["decision"] == "BLOCKED_DATA_QUALITY"
+    assert "low" in result["failed_gates"][0]
+
+
+def test_fi5_infinite_high_is_blocked(config, tmp_path, monkeypatch):
+    result, stored = _run(config, tmp_path, monkeypatch, mnq_5m(BAR_TS, high=float("inf")))
+    assert result["decision"] == "BLOCKED_DATA_QUALITY"
+    assert stored == []
 
 
 # ── demo lane: no order with a non-finite or non-positive price ───────────────
@@ -160,7 +171,6 @@ def test_fi5d_bad_low_in_bar_history_never_becomes_a_bad_order(config, tmp_path,
 
 
 # ── FI-6: out-of-order bar ────────────────────────────────────────────────────
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="KNOWN DEFECT FI-6")
 def test_fi6_older_bar_is_not_appended_after_newer(config, tmp_path, monkeypatch):
     newer = BAR_TS
     older = BAR_TS - timedelta(minutes=5)
@@ -177,3 +187,22 @@ def test_fi6_older_bar_is_not_appended_after_newer(config, tmp_path, monkeypatch
         actual_state=f"second decision={second['decision']} stored order={order}",
     )
     assert order == sorted(order), str(rec)
+
+
+def test_fi6_stale_bar_reaches_no_lane_and_the_next_bar_is_stored(config, tmp_path, monkeypatch):
+    import context.wide_stop_forward_router as router
+
+    monkeypatch.setenv("WIDE_STOP_LEDGER_MODE", "paper_sim")
+    monkeypatch.setenv("WIDE_STOP_LEDGER_EPOCH_START", "2026-06-01T00:00:00+00:00")
+    monkeypatch.setenv("DAILY_22_EPOCH_START", "2026-06-01T00:00:00+00:00")
+    fed: list[str] = []
+    monkeypatch.setattr(router, "process_paper_five_min_bar",
+                        lambda **kw: fed.append(kw["payload"].timestamp))
+    newer, older, following = BAR_TS, BAR_TS - timedelta(minutes=5), BAR_TS + timedelta(minutes=5)
+    for ts in (newer, older, following):
+        _run(config, tmp_path, monkeypatch, mnq_5m(ts))
+    _, stored = _run(config, tmp_path, monkeypatch, mnq_5m(following))  # resend: still fine
+    require(len(fed) >= 2, "the paper lane is fed live bars in this setup")
+    assert [b["ts"] for b in stored] == [newer.isoformat(), following.isoformat()]
+    assert older.isoformat() not in fed
+    assert fed[:2] == [newer.isoformat(), following.isoformat()]
