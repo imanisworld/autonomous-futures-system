@@ -788,6 +788,8 @@ def process_demo_five_min_bar(
                 # this same process has set for another Tradovate strategy.
                 entry_execution_mode_override=execution.DEMO_ENTRY_EXECUTION_MODE,
                 entry_slippage_tolerance_ticks_override=execution.FROZEN_MNQ_IOC_TICKS,
+                # Dated contract asserted by this bar's alert (#966, observe-only).
+                contract_hint=getattr(payload, "contract_hint", None),
             )
             fill = broker.execute_bracket(order)
             actual_fill = _actual_entry_happened(fill)

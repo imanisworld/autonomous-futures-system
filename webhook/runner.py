@@ -870,7 +870,10 @@ def process_alert(
                 volume=state.volume.current_bar if state.volume else None,
                 timeframe=state.ohlc.timeframe,
                 source_ticker=payload.ticker,
+                contract_hint=payload.contract_hint,
             )
+            if payload.contract_hint:
+                _observe_alert_contract_identity(payload, state.instrument, log_dir)
             # Window regime: include this just-recorded bar in the lookback.
             state.window_direction = BarHistory.window_direction(
                 bar_hist.recent(state.instrument, 6, for_date=for_date)
@@ -2827,6 +2830,7 @@ def process_alert(
         notes=decision.setup.notes,
         contracts=contracts,
         client_order_id=_client_order_id,
+        contract_hint=payload.contract_hint,
         force_market_entry=bool(_active_mnq_proof_decision and _active_mnq_proof_decision.force_market_entry),
         force_runner_exit=bool(_active_mnq_proof_decision and _active_mnq_proof_decision.force_runner_exit),
         min_rr_ratio=float(getattr(cfg, "min_rr_ratio", 2.0)),
@@ -3374,6 +3378,36 @@ def _maybe_resolve_companions(cfg: SystemConfig, state) -> None:
         run_companion_resolve(provider, store, now=state.timestamp)
     except Exception:  # noqa: BLE001 — never break ingestion on a companion error
         logger.warning("companion resolve hook failed", exc_info=True)
+
+
+def _observe_alert_contract_identity(payload: AlertPayload, instrument: str, log_dir: str) -> None:
+    """#960 / design #966, OBSERVE ONLY: record the alert's asserted dated contract
+    against the symbol the Tradovate adapter's own rule would route to today.
+
+    Gives roll-seam evidence while no orders are sent (shadow mode). Uses the
+    broker's existing `_front_month_symbol` and its ET trading date — no new
+    roll rule, no network. Never raises and never changes the decision.
+    """
+    try:
+        from zoneinfo import ZoneInfo
+
+        from execution.contract_identity import compare, record_observation, verdict_row
+        from execution.tradovate_broker import _front_month_symbol
+
+        today_et = datetime.now(ZoneInfo("America/New_York")).date()
+        routed = _front_month_symbol(instrument, today_et)
+        verdict = compare(payload.contract_hint, routed, context_date=today_et)
+        record_observation(log_dir, verdict_row(
+            verdict,
+            source="alert",
+            instrument=instrument,
+            ticker=payload.ticker,
+            bar_ts=_safe_bar_ts(payload),
+            timeframe=payload.timeframe,
+            routed_basis="_front_month_symbol(ET date) — the adapter's routing rule, predicted",
+        ))
+    except Exception:  # noqa: BLE001 — observation must never affect ingestion
+        logger.warning("contract identity alert observation failed", exc_info=True)
 
 
 def _maybe_enrich_payload_with_signa(payload: AlertPayload, cfg: SystemConfig) -> None:

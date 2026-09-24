@@ -103,6 +103,7 @@ class BarHistory:
         for_date: Optional[date] = None,
         source: Optional[str] = None,
         source_ticker: Optional[str] = None,
+        contract_hint: Optional[str] = None,
     ) -> dict:
         """Append one bar-close record. Idempotent on the LAST timestamp: if the
         most recent stored bar for this instrument/day has the same ts (a resend),
@@ -112,6 +113,8 @@ class BarHistory:
         "polygon" backfill); live bars omit it. `source_ticker` preserves the
         exact contract/continuous symbol that produced a live bar so evidence
         quality can detect roll contamination without changing price logic.
+        `contract_hint` stores the dated contract the alert asserted (#966) so a
+        later check can see when a lookback spans two contracts; omitted if absent.
         """
         d = for_date or _ts_date(ts)
         self.log_dir.mkdir(parents=True, exist_ok=True)
@@ -129,6 +132,8 @@ class BarHistory:
             rec["source"] = source
         if source_ticker:
             rec["source_ticker"] = str(source_ticker)
+        if contract_hint:
+            rec["contract_hint"] = str(contract_hint)
         existing = self._read_bars(path)
         if existing and existing[-1].get("ts") == rec["ts"]:
             return existing[-1]

@@ -117,6 +117,12 @@ class AlertPayload(BaseModel):
     has_signal: Optional[bool] = None
     event_type: Optional[str] = None
 
+    # ── Optional dated-contract identity (#960 / design #966) ────────────────
+    # The dated contract the alert's prices came from, e.g. "CME_MINI:MNQZ2026".
+    # Observe-only today: logged against the broker's routed contract, never
+    # used to change a decision. None when the alert does not (or cannot) prove it.
+    contract_hint: Optional[str] = None
+
     # ── Optional correlation id (preserved if valid, else generated) ─────────
     event_id: Optional[str] = None
     alert_name: Optional[str] = None

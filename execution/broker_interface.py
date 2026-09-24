@@ -56,6 +56,10 @@ class BracketOrder:
     # originating signal/event identity by the caller. Optional — brokers that
     # support it use it for submit idempotency; PaperBroker/replay ignore it.
     client_order_id: Optional[str] = None
+    # Dated contract the alert asserts its prices came from (#966). Carried
+    # unchanged from the payload; the Tradovate adapter compares it with the
+    # contract it routes to. Observe-only: it never alters or blocks an order.
+    contract_hint: Optional[str] = None
 
 
 @dataclass
