@@ -1,6 +1,6 @@
 # Futures — Current State Handoff
 
-_As of 2026-09-23. This is the long futures handoff. Historical audit docs remain evidence records, but they do not override the latest dated current-status file. Repository state is not proof of VPS/deployment state; verify the box separately before claiming anything is running._
+_As of 2026-09-24 (runtime and current decisions: see the 2026-09-24 blocks in `docs/futures-current-status-2026-09-22.md`). This is the long futures handoff. Historical audit docs remain evidence records, but they do not override the latest dated current-status file. Repository state is not proof of VPS/deployment state; verify the box separately before claiming anything is running._
 
 ## Repository refresh — 2026-09-23
 
