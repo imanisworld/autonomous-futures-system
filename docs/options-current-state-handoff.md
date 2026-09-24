@@ -1,8 +1,20 @@
 # Options — Current State Handoff
 
-_As of 2026-09-23 (the dated "Operational refresh" sections at the bottom supersede older release statements). This is the single current-state authority for the options lane._
+_As of 2026-09-24. The newest dated repository refresh below governs source state; the latest verified box-specific sections govern runtime state until a fresh VPS check is performed. This is the single current-state authority for the options lane._
 
 Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`; the read-only coverage evidence lane (observer, reducer, outcome study, after-close collector) is described in `docs/options-coverage-observer.md`.
+
+## Repository refresh — 2026-09-24
+
+**Repository main at this refresh:** `87b6a4296837da0441d55dcc54e0c9971fb3b17a`. **No options-scanner/VPS deployment, service restart, environment change, strategy change, or broker/order change was performed or inferred by this documentation refresh.** The latest box-specific operational sections below remain runtime authority until a fresh server check.
+
+- **#980 — 1-2-2 collector recovery: MERGED / FIX PROVEN.** Read-only checks proved the `db9bc7e2` collector fix on the natural schedule: the prior fingerprint-drift crash loop did not recur, delayed SIP backlog reconciled, RTH collection resumed, and the first new setup was recorded without changing the frozen `122-IEX-E1` policy. This closes the repair task, **not** the evidence requirement; the lane still needs natural forward sessions.
+- **#982 — options scanner timing replay: COMPLETE / RETIRE.** The single frozen scoring read found **NO IMPROVEMENT** for v1, v2, or v3 versus v0. None passed the preregistered eligibility, median-R-remaining, or target-before-detection requirements in both halves; v3 also failed its H2 false-positive limit. Do not tune, rerun, or promote those timing variants without a new preregistered hypothesis.
+- **#989 — Signa request control: MERGED IN SOURCE / DEPLOYMENT NOT PROVEN HERE.** The options scanner now has source support for a long-lived cached legacy Signa client and the shared 429 cooldown, reducing projected legacy request volume materially while keeping Signa observational only. This merge is **not** proof that the options-scanner runtime is on #989; deployment verification is deferred to a later VPS pass.
+- **#951/#954 — CONTROL vs RECLAIM forward evaluation:** remain governed by the frozen forward boundary and one-look evidence receipt. Do not expose or score forward P&L early, retrofit the cohort, or let source changes alter the frozen evaluator contract.
+- **Completed work should not be reopened by default.** The 1-2-2 repair, scanner-timing study, and Signa source fix are separate questions with separate evidence. Do not recreate them merely because deployment verification is still pending.
+
+**Current safe posture:** continue untouched options evidence collection; preserve cohort/source boundaries; keep Webull/real-money automation blocked; treat #989 as source-only until later box proof; and do not start another scanner-timing rescue cycle. Strategy edge remains unproven.
 
 ## Repository refresh — 2026-09-23
 
