@@ -816,6 +816,42 @@ def test_options_scanner_enriches_with_signa_context(tmp_path):
     assert outcome.result.components["signa"] == 0
 
 
+def test_options_scanner_reuses_one_quota_guarded_signa_client(tmp_path, monkeypatch):
+    import alert_ranker.scanner_legacy as scanner_legacy
+
+    built = []
+
+    class RecordingSignaClient(FakeSignaClient):
+        def __init__(self, **kwargs):
+            super().__init__()
+            built.append(kwargs)
+
+    monkeypatch.setattr(scanner_legacy, "SignaClient", RecordingSignaClient)
+    cfg = scanner_config(tmp_path)
+    object.__setattr__(cfg, "signa_api_enabled", True)
+    object.__setattr__(cfg, "signa_symbol_map", {"SPXW": "SPY"})
+    object.__setattr__(cfg, "signa_cache_ttl_seconds", 1234.0)
+    storage = ScanStorage(cfg.sqlite_path)
+    tasty = TastytradeClient(cfg, client=httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(500))))
+    discord = DiscordAlerter(cfg, storage, client=httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(204))))
+    scanner = OptionsScanner(cfg, tasty, storage, discord)
+
+    now = datetime(2026, 5, 29, 10, 0, tzinfo=ZoneInfo("America/New_York"))
+    for _ in range(2):
+        asyncio.run(scanner.scan_ticker("SPXW", source="test", context=setup_payload(ticker="SPXW"), now=now))
+
+    assert len(built) == 1
+    assert built[0]["cache_ttl_seconds"] == 1234.0
+    assert built[0]["respect_account_backoff"] is True
+
+
+def test_options_signa_cache_ttl_env():
+    assert load_config(environ=[]).signa_cache_ttl_seconds == 3600.0
+    assert load_config(environ=[("OPTIONS_SIGNA_CACHE_TTL_SECONDS", "0")]).signa_cache_ttl_seconds == 0.0
+    assert load_config(environ=[("OPTIONS_SIGNA_CACHE_TTL_SECONDS", "900")]).signa_cache_ttl_seconds == 900.0
+    assert load_config(environ=[("OPTIONS_SIGNA_CACHE_TTL_SECONDS", "junk")]).signa_cache_ttl_seconds == 3600.0
+
+
 def test_discord_payload_shows_signa_observational_context_field():
     result = score_setup(setup_payload(
         ticker="QQQ",
