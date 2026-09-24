@@ -209,7 +209,7 @@ def test_empty_or_malformed_account_list_blocks_when_pin_configured(monkeypatch,
     assert fill.exit_reason == "ACCOUNT_MISMATCH"
 
 
-# ── fail-closed: unresolved account (pin unset) never reaches the broker ──
+# ── fail-closed: missing pin wins before unresolved-account routing ────────
 
 def test_unresolved_account_blocks_before_any_broker_call(monkeypatch):
     b = _broker(monkeypatch, expected_account_id=None, resolved_account_id=None)
@@ -218,7 +218,7 @@ def test_unresolved_account_blocks_before_any_broker_call(monkeypatch):
     fill = b.execute_bracket(_order())
     assert cap["calls"] == 0
     assert fill.result == "CANCELLED"
-    assert fill.exit_reason == "ACCOUNT_UNRESOLVED"
+    assert fill.exit_reason == "ACCOUNT_PIN_REQUIRED"
 
 
 # ── fail-closed: non-positive balance blocks ───────────────────────────────
