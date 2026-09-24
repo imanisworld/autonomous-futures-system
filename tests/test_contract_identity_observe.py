@@ -195,7 +195,10 @@ def test_alert_observation_records_verdict_and_never_changes_the_decision(tmp_pa
                       log_dir=str(tmp_path / "b"), for_date=D)
     assert a.get("decision") == b.get("decision")
     assert a.get("failed_gates") == b.get("failed_gates")
-    assert _read_rows(tmp_path / "a") == []                        # no hint → no observation row
+    # MNQ without a hint still gets a row: UNKNOWN, so false-null rates are visible.
+    missing = _read_rows(tmp_path / "a")
+    assert len(missing) == 1 and missing[0]["status"] == ci.UNKNOWN and missing[0]["hint"] is None
+    assert missing[0]["instrument"] == "MNQ" and missing[0]["enforced"] is False
     rows = _read_rows(tmp_path / "b")
     assert len(rows) == 1
     row = rows[0]
@@ -220,3 +223,16 @@ def test_no_roll_constant_or_price_conversion_added():
     src = open(ci.__file__, encoding="utf-8").read()
     assert "_ROLL_DAYS" not in src.replace("``_ROLL_DAYS``", "") and "timedelta" not in src
     assert "roll_days" not in src
+
+
+def test_alert_observation_scope_unsupported_root_without_hint_writes_nothing(tmp_path):
+    from webhook.runner import _observe_alert_contract_identity
+
+    _observe_alert_contract_identity(_payload(ticker="ES1!", close=6000, open=6000, high=6001, low=5999),
+                                     "ES", str(tmp_path))
+    assert _read_rows(tmp_path) == []
+    _observe_alert_contract_identity(_payload(ticker="MES1!", close=6000, open=6000, high=6001, low=5999),
+                                     "MES", str(tmp_path))
+    rows = _read_rows(tmp_path)
+    assert len(rows) == 1 and rows[0]["instrument"] == "MES" and rows[0]["status"] == ci.UNKNOWN
+    assert rows[0]["routed"] and rows[0]["routed"].startswith("MES")
