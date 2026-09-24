@@ -1,6 +1,6 @@
 # Security Policy
 
-This public repository contains a reusable, paper-trading-focused engine.
+This private repository contains a reusable, paper-trading-focused engine.
 
 ## Never Commit
 
