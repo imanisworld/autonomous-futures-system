@@ -214,7 +214,6 @@ def test_fi7j_planned_risk_over_450_blocks_entry(tmp_path, monkeypatch):
 
 
 # ── FI-8: a position recovered after restart is never exited at EOD ───────────
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="KNOWN DEFECT FI-8")
 def test_fi8_recovered_position_is_flattened_at_eod(tmp_path, monkeypatch):
     demo_env(monkeypatch)
     _save_pending(tmp_path)
@@ -236,6 +235,53 @@ def test_fi8_recovered_position_is_flattened_at_eod(tmp_path, monkeypatch):
     )
     assert broker.flatten_calls == 1, str(rec)
     assert _state(tmp_path)["position"] is None, str(rec)
+
+
+def _recover(tmp_path, broker):
+    """Next-bar recovery of the saved pending record (as after a restart)."""
+    root = _save_pending(tmp_path)
+    event = demo._pending_reconcile(
+        cfg=demo_cfg(), log_dir=root, for_date=DAY, day=DAY,
+        state=demo_state.load_state(root, DAY), broker_factory=lambda: broker,
+    )
+    require(event is not None and event["lane_result"] == "RECOVERED_PENDING_POSITION",
+            "the pending record was recovered into a position")
+    return _state(tmp_path)["position"]
+
+
+def test_fi8_order_appearing_after_recovery_still_blocks_eod_flatten(tmp_path, monkeypatch):
+    demo_env(monkeypatch)
+    position = _recover(tmp_path, eod_broker())
+    require(position.get("recovered_working_order_ids") == [12, 13], "snapshot taken")
+    broker = eod_broker()
+    broker.orders.append({"id": 99, "ordStatus": "Working"})  # not ours
+    result = _eod(tmp_path, broker)
+    assert result["reason"] == "UNRESOLVED_EOD_ACCOUNT_NOT_EXCLUSIVE"
+    assert broker.flatten_calls == 0
+    assert _state(tmp_path)["position"] is not None
+
+
+def test_fi8_unreadable_orders_at_recovery_keeps_eod_blocked(tmp_path, monkeypatch):
+    demo_env(monkeypatch)
+    blind = eod_broker()
+    blind.unreadable = True  # /order/list (and /position/list) raise; snapshot still confirms
+    position = _recover(tmp_path, blind)
+    assert "recovered_working_order_ids" not in position
+    broker = eod_broker()
+    result = _eod(tmp_path, broker)
+    assert result["reason"] == "UNRESOLVED_EOD_ACCOUNT_NOT_EXCLUSIVE"
+    assert broker.flatten_calls == 0
+
+
+def test_fi8_recovered_position_without_working_orders_is_flattened(tmp_path, monkeypatch):
+    demo_env(monkeypatch)
+    _save_pending(tmp_path)
+    broker = eod_broker()
+    broker.orders = []  # protective children gone: the position is naked
+    result = _eod(tmp_path, broker)
+    assert broker.flatten_calls == 1
+    assert result["action"] == "DEMO_POSITION_RESOLVED"
+    assert _state(tmp_path)["position"] is None
 
 
 # ── FI-9: the lane dies with only a log line ──────────────────────────────────
