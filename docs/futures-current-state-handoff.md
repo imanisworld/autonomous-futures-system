@@ -2,6 +2,20 @@
 
 _As of 2026-09-24 (runtime and current decisions: see the 2026-09-24 blocks in `docs/futures-current-status-2026-09-22.md`). This is the long futures handoff. Historical audit docs remain evidence records, but they do not override the latest dated current-status file. Repository state is not proof of VPS/deployment state; verify the box separately before claiming anything is running._
 
+## Repository/runtime refresh — 2026-09-24
+
+**Verified repository main during this refresh:** `08b2cffebc9dcc6d2c36565b85f30fe4220069d3` after PR #1009. **Verified deployed futures release from the operator audit:** `cddef4a4b6583f31007268789545c7be24345d75` (#1007), deployed at 13:19Z with PID 3185879 and no deploy lock remaining. Repository state still does not prove runtime state; this block records the verified split rather than inferring deployment from merge status.
+
+- **#1003** — merged as `d6358e2614a356ea28b534d7a5d6de7afc873c57`. Pine advisory label fix for VWAP rejection; advisory/chart-side only.
+- **#1007** — merged as `cddef4a4b6583f31007268789545c7be24345d75` and is the current deployed futures release. Adds once-per-day operator alerts when the demo lane stops or recovers unprotected (FI-9).
+- **#1008** — merged as `58ab077c5d06aa2304381d7062edc4bf930606e9`, **not deployed in `cddef4a`**. Rejects non-finite/non-positive OHLC and out-of-order bars (FI-5a/5b/FI-6). This changes the trading data path and therefore requires a separate deployment GO before promotion.
+- **#1009** — merged as `08b2cffebc9dcc6d2c36565b85f30fe4220069d3`, **not deployed in `cddef4a`**. Research-only cumulative RTH VWAP correction; no runtime, strategy, risk, or broker path touched.
+- **#1010** — open, not merged. Adds `overnight_high`, `overnight_low`, and `rth_open` payload fields so shadow overnight-sweep and gap-fill observers can receive the data they already expect. Merge is not deployment; TradingView alert recreation remains a separate operator step.
+- Fault-injection work #993 through #1008 is now represented in source history; do not treat merged source as deployed unless the release SHA includes it.
+- Draft research PRs **#990** and **#994** remain open. Do not close either merely on the assumption that one supersedes the other; compare their preregistration/hypothesis scope first.
+
+**Current safe posture:** no deployment is authorized by this documentation refresh. In particular, do not deploy #1008/#1009 as a side effect. No strategy, risk, broker, scheduler, webhook, or execution logic is changed by this PR.
+
 ## Repository refresh — 2026-09-23
 
 **Repository main at this refresh:** `061b5ec25d5809cc13373a932260956f2d9b6a5d` after PR #955. **This refresh did not re-verify the VPS.** The last verified runtime identity remains the dated operational baseline below until the box is checked again; do not infer that merged source is deployed.
