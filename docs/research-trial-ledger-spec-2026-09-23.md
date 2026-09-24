@@ -1,8 +1,12 @@
 # Research Trial Ledger — minimal control specification (2026-09-23, rev 4)
 
-**Status: SPECIFICATION ONLY — NOT IMPLEMENTED. Docs-only. No code, no runtime, no
-strategy, risk, broker, collector or deployment change. Nothing in this document
-authorizes a research run, a promotion, or a change to any active forward campaign.**
+**Status: IMPLEMENTED / IN USE — CI ENFORCED.** The ledger file
+(`docs/research-trial-ledger.jsonl`) is on `main` and records `ADOPTED`, `PLANNED`,
+and terminal trial events. `tests/test_research_trial_ledger.py` is present on `main`
+and runs under the normal CI suite with full git history available, enforcing the
+register-before-evidence, append-only, frozen-manifest, artifact-identity, and new-prereg
+linkage rules described below. This document does not authorize a research run, promotion,
+runtime change, broker change, collector change, or deployment.
 
 Basis: `main@991df5ff0cc349a70dcfda72cc477e697c564c6a`. Read-only audit that established
 the gap: `docs/architecture-gap-review-2026-09-23.md` §4 and the 2026-09-23 falsification
@@ -212,9 +216,9 @@ ledger violation. The existing convention of keeping superseded artifacts side b
 (`scripts/strat_212_122_canonical_evidence_results_pre_pr338_superseded.json`) becomes the
 rule rather than a habit.
 
-## 7. Enforcement — one CI test
+## 7. Enforcement — CI test implemented
 
-`tests/test_research_trial_ledger.py` (to be written only after this spec is approved):
+`tests/test_research_trial_ledger.py` is present on `main` and enforces:
 
 1. **Ledger integrity:** file parses line-by-line; every line has the required fields for
    its event; every `trial_id`'s first line is `PLANNED`, `ADOPTED` or
@@ -304,16 +308,16 @@ an `origin/main` ref — the only workflow change; to be confirmed at implementa
 | 4 | Who appends? | **The study owner/agent**, in the same PR as the prereg, before any scoring. |
 | 5 | Start date? | **Merge of the ledger file.** Already-running lanes are `ADOPTED` (§8), not retro-`PLANNED`. |
 
-## 11. Ordered next steps
+## 11. Current operating state and next hardening
 
-1. Review this revision; confirm §10.
-2. If approved: one implementation PR containing the ledger with the three `ADOPTED`
-   lines, the required frozen JSON manifests for adopted multi-variant trials, the CI test,
-   and the minimal `fetch-depth` workflow change. No runtime, strategy, risk, broker,
-   collector, deployment, or unrelated files.
-3. The next new prereg is the first `PLANNED` entry and allocates a unique execution
-   ordinal; if it has more than one variant it includes the frozen JSON manifest.
-4. Later, separately: retention manifest for the 2026-09-23 grid; optional pre-run
-   hardening in study scripts (§5).
+1. **Bootstrap complete:** the ledger, adopted entries, frozen manifests, and CI enforcement
+   test are on `main`.
+2. New scored studies must enter as `PLANNED` before evidence; terminal artifacts must use
+   the canonical `docs/research-evidence/<trial_id>/` path and remain linked to the ledger.
+3. CI fail-closes append-only ledger history, family counts, frozen variant manifests,
+   register-before-evidence ancestry, artifact identity, and new-prereg linkage.
+4. Optional future hardening may add pre-run convenience checks in study scripts, but that
+   is not required for the existing repository evidence guarantee.
 
-No implementation is authorized by this document.
+This specification grants no runtime, strategy, risk, broker, collector, promotion, or
+deployment authority.
