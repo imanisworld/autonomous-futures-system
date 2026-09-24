@@ -795,20 +795,19 @@ class TradovateBroker(BrokerInterface):
         can be reached. Once a pin is set, _resolve_account_id searches the full
         account list for an exact match (see _select_account_id).
         """
-        if self._account_id is None:
-            self._resolve_account_id()
         expected = self.config.expected_account_id
-        logger.info(
-            "Order account check: env=%s account_id=%s expected=%s",
-            self.config.env, self._account_id,
-            expected if expected is not None else "unset",
-        )
         if expected is None:
             logger.error(
                 "BLOCKED order: TRADOVATE_EXPECTED_ACCOUNT_ID is not configured "
                 "-- automated order submission requires an exact account pin."
             )
             return "ACCOUNT_PIN_REQUIRED"
+        if self._account_id is None:
+            self._resolve_account_id()
+        logger.info(
+            "Order account check: env=%s account_id=%s expected=%s",
+            self.config.env, self._account_id, expected,
+        )
         if self._account_id is None:
             logger.error(
                 "BLOCKED order: TRADOVATE_EXPECTED_ACCOUNT_ID=%s could not be "
