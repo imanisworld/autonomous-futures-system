@@ -137,7 +137,143 @@ def test_execute_with_adapter_writes_evidence_and_metrics(tmp_path: Path):
     assert (evidence / "runner_report.json").is_file()
     assert (evidence / "baseline_raw.json").is_file()
     assert (evidence / "candidate_raw.json").is_file()
-    assert report.result == "INCONCLUSIVE"  # never auto-promotes
+    # Null criteria => mechanical classification is INCONCLUSIVE
+    assert report.result == "INCONCLUSIVE"
+
+
+def test_result_supported_by_mechanical_acceptance(tmp_path: Path):
+    report = _run_with_criteria(
+        tmp_path,
+        acceptance=["candidate.expectancy.value > baseline.expectancy.value"],
+        rejection=["population_size_differs"],
+        baseline_results=[1.0, -0.5],
+        candidate_results=[2.0, 0.5],
+    )
+    assert report.status == "VALID"
+    assert report.result == "SUPPORTED BY THIS EXPERIMENT"
+    assert report.artifacts["criteria_classification"]["authority"].startswith(
+        "classification only"
+    )
+
+
+def test_result_not_supported_when_rejection_fires(tmp_path: Path):
+    report = _run_with_criteria(
+        tmp_path,
+        acceptance=["candidate.expectancy.value > baseline.expectancy.value"],
+        rejection=["population_size_differs"],
+        baseline_results=[1.0, -0.5],
+        candidate_results=[2.0],  # different population size
+    )
+    assert report.status == "VALID"
+    assert report.result == "NOT SUPPORTED"
+
+
+def test_result_not_supported_when_acceptance_fails(tmp_path: Path):
+    report = _run_with_criteria(
+        tmp_path,
+        acceptance=["candidate.expectancy.value > baseline.expectancy.value"],
+        rejection=["population_size_differs"],
+        baseline_results=[2.0, 1.0],
+        candidate_results=[0.5, -0.5],
+    )
+    assert report.status == "VALID"
+    assert report.result == "NOT SUPPORTED"
+
+
+def test_result_inconclusive_when_criteria_unparseable(tmp_path: Path):
+    report = _run_with_criteria(
+        tmp_path,
+        acceptance=["Candidate expectancy strictly greater than baseline in prose"],
+        rejection=None,
+        baseline_results=[1.0],
+        candidate_results=[2.0],
+    )
+    assert report.status == "VALID"
+    assert report.result == "INCONCLUSIVE"
+
+
+def test_result_invalid_when_required_metrics_missing(tmp_path: Path):
+    root = tmp_path / "repo"
+    _seed_mini_repo(root)
+    head = runner._git(root, "rev-parse", "HEAD").stdout.strip()
+    spec_path = root / "docs" / "research-experiment-specs" / "E-2026-09-25-mini-01.json"
+    spec = json.loads(spec_path.read_text(encoding="utf-8"))
+    spec["baseline"]["commit_sha"] = head
+    spec["candidate"]["commit_sha"] = head
+    spec["required_metrics"] = ["population_size", "completed_trades", "not_a_real_metric"]
+    spec_path.write_text(json.dumps(spec, indent=2) + "\n", encoding="utf-8")
+
+    def adapter(ctx: runner.ExperimentContext) -> runner.ArmRawResult:
+        return runner.ArmRawResult(
+            arm=ctx.spec["_runner_arm"],
+            commit_sha=head,
+            members=[_member(result=1.0)],
+        )
+
+    runner.register_execution_adapter("demo_setup", adapter)
+    report = runner.execute_experiment(root, spec_path, write_evidence=False)
+    assert report.status == "INVALID"
+    assert report.result == "INVALID EXPERIMENT"
+
+
+def test_classify_experiment_result_unit_matrix():
+    baseline = {
+        "population_size": {"count": 2},
+        "expectancy": {"value": 0.5, "of": 2},
+        "_missing_required": [],
+    }
+    candidate_better = {
+        "population_size": {"count": 2},
+        "expectancy": {"value": 1.0, "of": 2},
+        "_missing_required": [],
+    }
+    candidate_worse = {
+        "population_size": {"count": 2},
+        "expectancy": {"value": 0.1, "of": 2},
+        "_missing_required": [],
+    }
+    candidate_diff_pop = {
+        "population_size": {"count": 3},
+        "expectancy": {"value": 1.0, "of": 3},
+        "_missing_required": [],
+    }
+
+    label, _ = runner.classify_experiment_result(
+        {
+            "acceptance_criteria": ["candidate.expectancy.value > baseline.expectancy.value"],
+            "rejection_criteria": ["population_size_differs"],
+        },
+        baseline,
+        candidate_better,
+    )
+    assert label == "SUPPORTED BY THIS EXPERIMENT"
+
+    label, _ = runner.classify_experiment_result(
+        {
+            "acceptance_criteria": ["candidate.expectancy.value > baseline.expectancy.value"],
+            "rejection_criteria": ["population_size_differs"],
+        },
+        baseline,
+        candidate_diff_pop,
+    )
+    assert label == "NOT SUPPORTED"
+
+    label, _ = runner.classify_experiment_result(
+        {
+            "acceptance_criteria": ["candidate.expectancy.value > baseline.expectancy.value"],
+            "rejection_criteria": None,
+        },
+        baseline,
+        candidate_worse,
+    )
+    assert label == "NOT SUPPORTED"
+
+    label, _ = runner.classify_experiment_result(
+        {"acceptance_criteria": None, "rejection_criteria": None},
+        baseline,
+        candidate_better,
+    )
+    assert label == "INCONCLUSIVE"
 
 
 def test_metrics_include_counts_beside_rates():
@@ -258,3 +394,32 @@ def _seed_mini_repo(root: Path) -> None:
 
 def null_safe():
     return None
+
+
+def _run_with_criteria(
+    tmp_path: Path,
+    *,
+    acceptance,
+    rejection,
+    baseline_results: list[float],
+    candidate_results: list[float],
+):
+    root = tmp_path / "repo"
+    _seed_mini_repo(root)
+    head = runner._git(root, "rev-parse", "HEAD").stdout.strip()
+    spec_path = root / "docs" / "research-experiment-specs" / "E-2026-09-25-mini-01.json"
+    spec = json.loads(spec_path.read_text(encoding="utf-8"))
+    spec["baseline"]["commit_sha"] = head
+    spec["candidate"]["commit_sha"] = head
+    spec["acceptance_criteria"] = acceptance
+    spec["rejection_criteria"] = rejection
+    spec_path.write_text(json.dumps(spec, indent=2) + "\n", encoding="utf-8")
+
+    def adapter(ctx: runner.ExperimentContext) -> runner.ArmRawResult:
+        arm = ctx.spec["_runner_arm"]
+        results = baseline_results if arm == "baseline" else candidate_results
+        members = [_member(result=r, exit_reason="target" if r >= 0 else "stop") for r in results]
+        return runner.ArmRawResult(arm=arm, commit_sha=head, members=members)
+
+    runner.register_execution_adapter("demo_setup", adapter)
+    return runner.execute_experiment(root, spec_path, write_evidence=False)

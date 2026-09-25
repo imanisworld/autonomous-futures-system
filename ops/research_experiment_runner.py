@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import platform
+import re
 import subprocess
 import sys
 from dataclasses import asdict, dataclass, field
@@ -768,6 +769,200 @@ def run_validation(
     )
 
 
+def _normalize_criteria(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        text = value.strip()
+        return [text] if text else []
+    if isinstance(value, list):
+        out: list[str] = []
+        for item in value:
+            if not isinstance(item, str):
+                return []
+            text = item.strip()
+            if text:
+                out.append(text)
+        return out
+    return []
+
+
+_CMP_RE = re.compile(
+    r"^(?P<left>baseline|candidate)\.(?P<lmetric>[A-Za-z0-9_]+)\.(?P<lfield>[A-Za-z0-9_]+)"
+    r"\s*(?P<op>>=|<=|==|!=|>|<)\s*"
+    r"(?:"
+    r"(?P<right>baseline|candidate)\.(?P<rmetric>[A-Za-z0-9_]+)\.(?P<rfield>[A-Za-z0-9_]+)"
+    r"|"
+    r"(?P<literal>-?\d+(?:\.\d+)?)"
+    r")$"
+)
+
+_NAMED_REJECTION = {
+    "population_size_differs": "population_size_differs",
+    "population size differs between arms": "population_size_differs",
+    "required_metric_missing": "required_metric_missing",
+    "required metric missing for either arm": "required_metric_missing",
+}
+
+
+def _metric_field(metrics: Mapping[str, Any], metric: str, field_name: str) -> Any:
+    block = metrics.get(metric)
+    if not isinstance(block, dict):
+        return None
+    return block.get(field_name)
+
+
+def _compare(left: Any, op: str, right: Any) -> bool | None:
+    if left is None or right is None:
+        return None
+    if op == "==":
+        return left == right
+    if op == "!=":
+        return left != right
+    if not isinstance(left, (int, float)) or not isinstance(right, (int, float)):
+        return None
+    if op == ">":
+        return left > right
+    if op == ">=":
+        return left >= right
+    if op == "<":
+        return left < right
+    if op == "<=":
+        return left <= right
+    return None
+
+
+def evaluate_criterion(
+    expression: str,
+    *,
+    baseline_metrics: Mapping[str, Any],
+    candidate_metrics: Mapping[str, Any],
+    kind: str,
+) -> tuple[str, bool | None, str]:
+    """Return (status, value, evidence) for one criterion expression."""
+    text = expression.strip()
+    named = _NAMED_REJECTION.get(text.lower())
+    if named == "population_size_differs":
+        b = _metric_field(baseline_metrics, "population_size", "count")
+        c = _metric_field(candidate_metrics, "population_size", "count")
+        if b is None or c is None:
+            return "unparseable", None, "population_size.count unavailable on an arm"
+        fired = b != c
+        return (
+            "ok",
+            fired if kind == "rejection" else (not fired),
+            f"population_size baseline={b} candidate={c}",
+        )
+    if named == "required_metric_missing":
+        missing = sorted(
+            set(baseline_metrics.get("_missing_required") or [])
+            | set(candidate_metrics.get("_missing_required") or [])
+        )
+        fired = bool(missing)
+        return (
+            "ok",
+            fired if kind == "rejection" else (not fired),
+            f"missing={missing}" if missing else "no missing required metrics",
+        )
+
+    match = _CMP_RE.fullmatch(text)
+    if not match:
+        return "unparseable", None, f"not a mechanical criterion: {text!r}"
+
+    arms = {"baseline": baseline_metrics, "candidate": candidate_metrics}
+    left = _metric_field(arms[match.group("left")], match.group("lmetric"), match.group("lfield"))
+    if match.group("literal") is not None:
+        right: Any = float(match.group("literal"))
+        if right.is_integer():
+            right = int(right)
+    else:
+        right = _metric_field(
+            arms[match.group("right")], match.group("rmetric"), match.group("rfield")
+        )
+    compared = _compare(left, match.group("op"), right)
+    if compared is None:
+        return "unparseable", None, f"cannot compare {left!r} {match.group('op')} {right!r}"
+    return "ok", compared, f"{text} => {compared}"
+
+
+def classify_experiment_result(
+    spec: Mapping[str, Any],
+    baseline_metrics: Mapping[str, Any],
+    candidate_metrics: Mapping[str, Any],
+) -> tuple[str, dict[str, Any]]:
+    """Mechanically classify against preregistered acceptance/rejection criteria.
+
+    Returns one of:
+      SUPPORTED BY THIS EXPERIMENT | NOT SUPPORTED | INCONCLUSIVE | INVALID EXPERIMENT
+
+    Classification is measurement-only. It never authorizes promotion, merge,
+    deploy, or strategy changes.
+    """
+    acceptance = _normalize_criteria(spec.get("acceptance_criteria"))
+    rejection = _normalize_criteria(spec.get("rejection_criteria"))
+    details: dict[str, Any] = {
+        "acceptance_criteria": [],
+        "rejection_criteria": [],
+        "authority": "classification only; zero promotion/merge/deploy/strategy authority",
+    }
+
+    if not acceptance and not rejection:
+        details["reason"] = "no preregistered acceptance/rejection criteria"
+        return "INCONCLUSIVE", details
+
+    unparseable = False
+    rejection_fired = False
+    for expr in rejection:
+        status, value, evidence = evaluate_criterion(
+            expr,
+            baseline_metrics=baseline_metrics,
+            candidate_metrics=candidate_metrics,
+            kind="rejection",
+        )
+        details["rejection_criteria"].append(
+            {"expression": expr, "status": status, "value": value, "evidence": evidence}
+        )
+        if status != "ok":
+            unparseable = True
+        elif value:
+            rejection_fired = True
+
+    acceptance_failed = False
+    acceptance_all_true = bool(acceptance)
+    for expr in acceptance:
+        status, value, evidence = evaluate_criterion(
+            expr,
+            baseline_metrics=baseline_metrics,
+            candidate_metrics=candidate_metrics,
+            kind="acceptance",
+        )
+        details["acceptance_criteria"].append(
+            {"expression": expr, "status": status, "value": value, "evidence": evidence}
+        )
+        if status != "ok":
+            unparseable = True
+            acceptance_all_true = False
+        elif not value:
+            acceptance_failed = True
+            acceptance_all_true = False
+
+    if unparseable:
+        details["reason"] = "one or more criteria are not mechanically evaluable"
+        return "INCONCLUSIVE", details
+    if rejection_fired:
+        details["reason"] = "one or more rejection criteria fired"
+        return "NOT SUPPORTED", details
+    if acceptance and acceptance_failed:
+        details["reason"] = "one or more acceptance criteria failed"
+        return "NOT SUPPORTED", details
+    if acceptance and acceptance_all_true:
+        details["reason"] = "all acceptance criteria passed; no rejection criteria fired"
+        return "SUPPORTED BY THIS EXPERIMENT", details
+
+    details["reason"] = "no acceptance criteria to support a positive claim"
+    return "INCONCLUSIVE", details
+
+
 def execute_experiment(
     root: Path,
     spec_path: Path,
@@ -849,6 +1044,9 @@ def execute_experiment(
         )
 
     delta = metric_delta(baseline_metrics, candidate_metrics)
+    result_label, classification = classify_experiment_result(
+        spec, baseline_metrics, candidate_metrics
+    )
     report = RunnerReport(
         status="VALID",
         experiment_id=spec.get("experiment_id"),
@@ -874,29 +1072,30 @@ def execute_experiment(
             "VERIFIED": [
                 "baseline and candidate metrics computed from this run's population members",
                 "integrity checks listed under integrity_checks",
+                "result classification is mechanical against preregistered criteria only",
             ],
             "INFERENCE": [
-                "Any claim that metric deltas imply a durable edge",
+                "Any claim that metric deltas imply a durable edge beyond this experiment",
             ],
             "UNKNOWN": [
                 "Whether the candidate should be promoted, merged, or deployed",
                 "Out-of-sample performance beyond the declared window",
             ],
         },
-        result="INCONCLUSIVE",
+        result=result_label,
         artifacts=dict(validation.artifacts),
         qa_handoff=validation.qa_handoff
         + [
             "Falsify identical-population claim between arms.",
             "Falsify that held_constant fields were actually held constant.",
             "Attempt to reproduce metrics from raw arm outputs alone.",
+            "Attempt to falsify the mechanical criteria evaluation.",
         ],
         warnings=baseline_arm.warnings + candidate_arm.warnings,
     )
-
-    # Acceptance/rejection criteria are recorded, never auto-promoted.
+    report.artifacts["criteria_classification"] = classification
     report.evidence_classification["VERIFIED"].append(
-        "runner does not interpret acceptance_criteria as promotion authority"
+        "runner has zero promotion/merge/deploy/strategy-change authority"
     )
 
     repro = (
