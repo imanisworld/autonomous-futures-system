@@ -250,6 +250,7 @@ class _StatusDispatcher:
         self._clock = clock
         self._lock = threading.Lock()
         self._thread: Optional[threading.Thread] = None
+        self._message_ids: dict[str, str] = {}
         self.delivered_events = 0
         self.dropped_events = 0
 
@@ -290,14 +291,17 @@ class _StatusDispatcher:
                         age, update.represented_events,
                     )
                     continue
+                current_id = self._message_ids.get(update.root) or update.message_id
                 delivered, message_id = router.upsert(
                     ROUTE_NAME,
                     update.text,
-                    message_id=update.message_id,
+                    message_id=current_id,
                     max_retry_wait=MAX_RETRY_WAIT,
                 )
                 if delivered:
                     self.delivered_events += update.represented_events
+                    if message_id:
+                        self._message_ids[update.root] = str(message_id)
                     record_message_id(update.root, message_id)
                 else:
                     self.dropped_events += update.represented_events
