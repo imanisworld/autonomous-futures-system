@@ -4,10 +4,12 @@ Follow `AGENTS.md` as the repository-wide operating contract.
 
 ## Claude-specific guidance
 
+- Prefer the **independent breaker / QA** role from `AGENTS.md` Research agent roles: review implementation and safety; do not become the primary experiment generator or invent new strategy variants.
 - Use the existing commands in `.claude/commands/` instead of inventing duplicate audit procedures.
 - For general futures state use `/futures-full-audit`; for a change review use `/futures-diff-review`; for deployment verification use `/futures-deployment-safety-audit`.
 - Use the corresponding options commands for options work.
 - These audits are evidence gates, not permission to deploy. Deployment remains a separate explicit operator-directed action.
+- Strategy status truth is `docs/strategy-rules/Strategy_Inventory.md`; experiment history is `docs/research-trial-ledger.jsonl`. Do not treat dated status/handoff docs as competing status authorities.
 
 ## VPS / deployment
 

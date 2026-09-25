@@ -1,10 +1,14 @@
-# Strategy Rules — Manual Setups (operator source of truth)
+# Strategy Rules — Manual Setups (rule-spec source of truth)
 
 Complete, executable trading rules for the operator's manual Strat-based setups.
-These are the authoritative rule specs referenced during validation and promotion
-into `strategy/`. The 4HR rule is wired through the canonical persisted state
-machine used by `strategy/signal_engine.py`; the other rules remain reference
-material. See `docs/vp-futures-strategy-snapshot.md` for the higher-level compilation.
+These files are the authoritative **rule specs** referenced during validation and
+promotion into `strategy/`. They are **not** the current strategy-status authority —
+that is `Strategy_Inventory.md` (evidence verdict + execution posture). Experiment
+history is `docs/research-trial-ledger.jsonl`. See `AGENTS.md` for the agent role lock.
+
+The 4HR rule is wired through the canonical persisted state machine used by
+`strategy/signal_engine.py`; the other rules remain reference material. See
+`docs/vp-futures-strategy-snapshot.md` for the higher-level compilation.
 
 | File | Strategy | Instruments | Documented stop |
 |---|---|---|---|

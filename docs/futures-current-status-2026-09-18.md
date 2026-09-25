@@ -1,9 +1,10 @@
 # Futures Current Status — 2026-09-18
 
-> **Superseded for current status (2026-09-20):** read `docs/futures-current-status-2026-09-20.md` first. This file is retained as the 2026-09-18 operator snapshot.
+> **Authority (governance, 2026-09-25):** dated provenance only. Strategy status → `docs/strategy-rules/Strategy_Inventory.md`. Experiment history → `docs/research-trial-ledger.jsonl`. This file does not govern current strategy status.
 
+> **Superseded as operator narrative (2026-09-20):** prefer later dated snapshots (`docs/futures-current-status-2026-09-20.md`, then `docs/futures-current-status-2026-09-22.md`). This file is retained as the 2026-09-18 operator snapshot.
 
-This is the concise operator-facing source of truth for the futures system as of the end of the 2026-09-18 work session. Historical audit documents remain evidence records; where an older summary conflicts with this file, this file governs current status unless a later dated document explicitly supersedes it.
+This is the dated operator snapshot as of the end of the 2026-09-18 work session. Historical audit documents remain evidence records.
 
 ## Verdict
 

@@ -2,6 +2,8 @@
 **Autonomous Futures System — Master Reference**
 *Evidence classifications reconciled through 2026-09-22; edge-decomposition audit verdicts applied 2026-09-07 with the 4HR trigger-timing correction and #798/#799/#807 observation lanes below. 12HR Miyagi evidence verdict updated 2026-09-24 from a handoff-reported study that is not committed in this repo; see the Miyagi profile.*
 
+> **Authority (governance, 2026-09-25):** this file is the **single current authority** for strategy evidence verdicts and execution-posture labels. Dated `docs/futures-current-status-*.md` files, handoffs, and reconciliation notes are provenance/narrative only and must not independently declare a competing current strategy status. Experiment/attempt history lives in `docs/research-trial-ledger.jsonl`. Runtime enablement remains box/config truth — never inferred from this inventory alone. Agent role lock: `AGENTS.md` (§ Research agent roles / Strategy / evidence source of truth).
+
 ---
 
 ## How to read this document

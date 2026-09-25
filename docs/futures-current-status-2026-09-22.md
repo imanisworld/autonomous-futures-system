@@ -1,8 +1,10 @@
 # Futures Current Status — 2026-09-22
 
-This is the concise operator-facing source of truth for the futures system. Historical audit documents remain evidence records; where an older summary conflicts with this file, this file governs current status unless a later dated current-status document explicitly supersedes it.
+> **Authority (governance, 2026-09-25):** this file is **operator narrative / dated provenance**, not the strategy-status source of truth. Current strategy evidence verdicts and execution posture: `docs/strategy-rules/Strategy_Inventory.md`. Experiment/attempt history: `docs/research-trial-ledger.jsonl`. Agent roles: `AGENTS.md`. Where this file's strategy wording conflicts with the inventory, **the inventory wins**. Runtime claims still require box verification.
 
-**Runtime identity after 12:46 PM ET on 2026-09-24 is not the block below.** The latest runtime block in this file names release `45290e03` at 02:17Z. A later private handoff reports curated release `41ae1881655c235a26288244c81b8df2a7c8c968` live at 16:46:34Z. That report is **HANDOFF-REPORTED, NOT INDEPENDENTLY VERIFIED**. Git confirms the branch; this file is not a server check. See `docs/futures-docs-reconciliation-2026-09-24.md`. Daily 2-2, MES 1-2-2, and Asia D+EMA are retired as promotion candidates by `60bb47d8` (#986). The Asia and Session 2-2 lines in the focus list below are telemetry history, not promotion cases.
+This is the concise dated operator snapshot for the futures system around 2026-09-22 (with later banners). Historical audit documents remain evidence records. It does not independently declare current strategy status.
+
+**Runtime identity after 12:46 PM ET on 2026-09-24 is not the block below.** The latest runtime block in this file names release `45290e03` at 02:17Z. A later private handoff reports curated release `41ae1881655c235a26288244c81b8df2a7c8c968` live at 16:46:34Z. That report is **HANDOFF-REPORTED, NOT INDEPENDENTLY VERIFIED**. Git confirms the branch; this file is not a server check. See `docs/futures-docs-reconciliation-2026-09-24.md`. Daily 2-2, MES 1-2-2, and Asia D+EMA are retired as promotion candidates by `60bb47d8` (#986) — inventory rows are authoritative for those verdicts. The Asia and Session 2-2 lines in the focus list below are telemetry history, not promotion cases.
 
 ## Verdict
 
