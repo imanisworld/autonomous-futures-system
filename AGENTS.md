@@ -78,13 +78,14 @@ External Grok (or other off-repo) research loops are unverified until explicitly
 
 | Concern | Authoritative record | Notes |
 |---|---|---|
-| Strategy evidence verdict + execution posture | `docs/strategy-rules/Strategy_Inventory.md` | Only place agents may treat as current strategy-status truth. `ops/project_check/daily.py` reads its Master Table. |
+| Futures strategy evidence verdict + execution posture | `docs/strategy-rules/Strategy_Inventory.md` | Futures strategy-status truth. `ops/project_check/daily.py` reads its Master Table. |
+| Options current state / evidence posture | `docs/options-current-state-handoff.md` | Options-lane current-state authority. Preserve frozen cohorts/evidence boundaries; dated options notes are provenance unless this file explicitly incorporates them. |
 | Experiment / trial history | `docs/research-trial-ledger.jsonl` | Append-only attempt history. Spec: `docs/research-trial-ledger-spec-2026-09-23.md`. |
 | Approved baseline-vs-candidate run contract | `docs/research-experiment-specs/` (+ schema/spec docs) | Sits *on top of* a ledger trial. Does not replace inventory or ledger. Contract only — not a runner. |
 | Active lane sample / ops memory | `ops/evidence_registry.py` summaries | Read-only operational memory of collected evidence. Not status authority. |
 | Runtime enablement / broker / release | Box config + release manifest | Never infer from docs or inventory alone. |
 
-Dated `docs/futures-current-status-*.md`, handoffs, and reconciliation notes are **provenance and operator narrative**. They must point at the inventory (strategy status) and trial ledger (experiment history) instead of independently declaring current strategy status. Other agents may **read** the authoritative records and **propose** updates; they must not silently maintain competing versions.
+Dated `docs/futures-current-status-*.md`, futures handoffs, and reconciliation notes are **provenance and operator narrative**. They must point at the futures inventory (strategy status) and trial ledger (experiment history) instead of independently declaring current futures strategy status. For options, `docs/options-current-state-handoff.md` remains the current-state authority; older options status/handoff notes are provenance unless incorporated there. Other agents may **read** the authoritative records and **propose** updates; they must not silently maintain competing versions.
 
 ## Output standard
 
