@@ -41,6 +41,27 @@ For observation-only lanes, include the relevant boundary in the message or foot
 - no deploy/restart action
 - no risk/order/execution authority
 
+## Observer status messages
+
+The observation route uses one persistent Discord message per ticker. New
+candidate/signal/outcome evidence updates that ticker's existing card instead
+of posting a new event card. The authoritative evidence remains the journal /
+campaign files; the Discord message is a presentation cache only.
+
+The card should answer:
+
+- what ticker is being watched;
+- how many setups/resolved observations exist for the current trading date;
+- current/last meaningful observer state;
+- most recent resolved result when available;
+- whether any operator action is required;
+- the observation-only safety boundary.
+
+Bars with no meaningful observation event remain silent. Critical system,
+transport, reconciliation, deployment, and safety alerts remain separate
+messages on their existing routes; they must never be hidden inside the
+persistent observer card.
+
 ## Standard examples
 
 ### Drift gate
