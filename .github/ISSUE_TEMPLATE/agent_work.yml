@@ -1,0 +1,133 @@
+name: Agent work
+description: Route bounded repository work through the shared agent handoff process.
+title: "[agent] "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for implementation, audit, QA, or research work that will be handed between agents.
+        One primary implementer owns the active unit of work. Consequential changes require an independent reviewer.
+
+  - type: input
+    id: work_owner
+    attributes:
+      label: Work owner
+      description: Human/operator or manager responsible for scope and final disposition.
+      placeholder: "Operator / ChatGPT / named owner"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: primary_agent
+    attributes:
+      label: Primary agent
+      description: The one agent currently responsible for this unit of work.
+      options:
+        - Cursor
+        - Claude
+        - ChatGPT
+        - Codex
+        - Grok
+        - Perplexity
+        - Human
+        - Other / unassigned
+    validations:
+      required: true
+
+  - type: dropdown
+    id: quota_state
+    attributes:
+      label: Quota state
+      description: Routing state from the global resource-routing policy.
+      options:
+        - AVAILABLE
+        - CONSERVE
+        - RESERVE ONLY
+        - EXHAUSTED
+        - Not applicable / unknown
+    validations:
+      required: true
+
+  - type: dropdown
+    id: cost_tier
+    attributes:
+      label: Cost tier
+      options:
+        - LOW
+        - MEDIUM
+        - HIGH
+    validations:
+      required: true
+
+  - type: dropdown
+    id: review_required
+    attributes:
+      label: Independent review required?
+      description: HIGH/consequential work should normally be YES.
+      options:
+        - "YES"
+        - "NO"
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: Exact bounded work to perform.
+      placeholder: "Files/behavior in scope; no broad rewrite."
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Concrete proof required before the work is considered complete.
+    validations:
+      required: true
+
+  - type: textarea
+    id: source_truth
+    attributes:
+      label: Source of truth / evidence
+      description: PR, files, issue, runtime evidence, external authoritative sources, or exact commit.
+      placeholder: "main SHA, PR number, files, test commands, runtime source"
+    validations:
+      required: true
+
+  - type: textarea
+    id: do_not_touch
+    attributes:
+      label: Do not touch
+      description: Explicit boundaries such as broker, risk, runtime, deploy, unrelated files.
+    validations:
+      required: true
+
+  - type: input
+    id: independent_reviewer
+    attributes:
+      label: Independent reviewer
+      description: Name the reviewer, or state N/A for non-consequential work.
+      placeholder: "Claude / Codex / N/A — non-consequential"
+    validations:
+      required: true
+
+  - type: textarea
+    id: next_action
+    attributes:
+      label: Required next action
+      description: The smallest next action after this owner finishes.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety confirmation
+      options:
+        - label: This task does not authorize merge, deploy, VPS/runtime mutation, broker mutation, live execution, or credential changes.
+          required: true
+        - label: Sensitive values will not be pasted into this issue or a public PR.
+          required: true
