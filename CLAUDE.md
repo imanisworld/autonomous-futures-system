@@ -9,7 +9,7 @@ Follow `AGENTS.md` as the repository-wide operating contract.
 - For general futures state use `/futures-full-audit`; for a change review use `/futures-diff-review`; for deployment verification use `/futures-deployment-safety-audit`.
 - Use the corresponding options commands for options work.
 - These audits are evidence gates, not permission to deploy. Deployment remains a separate explicit operator-directed action.
-- Strategy status truth is `docs/strategy-rules/Strategy_Inventory.md`; experiment history is `docs/research-trial-ledger.jsonl`. Do not treat dated status/handoff docs as competing status authorities.
+- Futures strategy-status truth is `docs/strategy-rules/Strategy_Inventory.md`; options current-state truth is `docs/options-current-state-handoff.md`; experiment history is `docs/research-trial-ledger.jsonl`. Do not treat dated status/handoff docs as competing authorities.
 
 ## VPS / deployment
 
