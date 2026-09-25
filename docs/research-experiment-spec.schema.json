@@ -1,0 +1,258 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/imanisworld/autonomous-futures-system/docs/research-experiment-spec.schema.json",
+  "title": "AFS approved experiment specification",
+  "description": "Machine-checkable contract that binds operator approval to an existing research trial before any Experiment Runner execution. Governance only: does not authorize strategy, risk, broker, or deployment changes.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "experiment_id",
+    "trial_id",
+    "status",
+    "hypothesis",
+    "prereg_path",
+    "baseline",
+    "candidate",
+    "data",
+    "population",
+    "setup_type",
+    "timeframe",
+    "changed_variables",
+    "held_constant",
+    "execution",
+    "required_metrics",
+    "evidence_path"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "experiment_id": {
+      "type": "string",
+      "pattern": "^E-[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9][a-z0-9-]*-[0-9]{2}$"
+    },
+    "trial_id": {
+      "type": "string",
+      "pattern": "^T-[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9][a-z0-9-]*-[0-9]{2}$"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["EXAMPLE", "DRAFT", "APPROVED", "REVOKED", "SUPERSEDED"]
+    },
+    "approved_by": {
+      "type": ["string", "null"],
+      "minLength": 1
+    },
+    "approved_at": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "supersedes": {
+      "type": ["string", "null"],
+      "pattern": "^E-[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9][a-z0-9-]*-[0-9]{2}$"
+    },
+    "hypothesis": {
+      "type": "string",
+      "minLength": 1
+    },
+    "prereg_path": {
+      "type": "string",
+      "pattern": "^docs/prereg-.+\\.md$"
+    },
+    "baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit_sha"],
+      "properties": {
+        "commit_sha": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit_sha", "change"],
+      "properties": {
+        "commit_sha": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "change": {
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "anyOf": [
+        {
+          "properties": {
+            "commit_sha": { "type": "string" }
+          }
+        },
+        {
+          "properties": {
+            "change": { "type": "string" }
+          }
+        }
+      ]
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "window", "dataset_id"],
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "window": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["start", "end"],
+          "properties": {
+            "start": {
+              "type": "string",
+              "minLength": 1
+            },
+            "end": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "dataset_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "dataset_hash": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "population": {
+      "type": "string",
+      "minLength": 1
+    },
+    "setup_type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "timeframe": {
+      "type": "string",
+      "minLength": 1
+    },
+    "changed_variables": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "baseline_value", "candidate_value"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "baseline_value": {
+            "type": ["string", "number", "boolean", "null"]
+          },
+          "candidate_value": {
+            "type": ["string", "number", "boolean", "null"]
+          }
+        }
+      }
+    },
+    "held_constant": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entry_logic",
+        "exit_logic",
+        "stop_logic",
+        "target_logic",
+        "sizing",
+        "friction"
+      ],
+      "properties": {
+        "entry_logic": { "type": "string", "minLength": 1 },
+        "exit_logic": { "type": "string", "minLength": 1 },
+        "stop_logic": { "type": "string", "minLength": 1 },
+        "target_logic": { "type": "string", "minLength": 1 },
+        "sizing": { "type": "string", "minLength": 1 },
+        "friction": { "type": "string", "minLength": 1 }
+      }
+    },
+    "required_metrics": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "acceptance_criteria": {
+      "type": ["string", "array", "null"],
+      "minLength": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "rejection_criteria": {
+      "type": ["string", "array", "null"],
+      "minLength": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "evidence_path": {
+      "type": "string",
+      "pattern": "^docs/research-evidence/T-[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9][a-z0-9-]*-[0-9]{2}/$"
+    },
+    "variant_manifest": {
+      "type": ["string", "null"],
+      "minLength": 1
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "status": { "const": "APPROVED" } }
+      },
+      "then": {
+        "required": ["approved_by", "approved_at"],
+        "properties": {
+          "approved_by": { "type": "string", "minLength": 1 },
+          "approved_at": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+          }
+        }
+      }
+    }
+  ]
+}
