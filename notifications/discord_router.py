@@ -33,7 +33,8 @@ import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Mapping, Optional
+from typing import Any, Callable, Mapping, Optional
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import yaml
 
@@ -42,6 +43,7 @@ logger = logging.getLogger(__name__)
 # transport(url, message) -> None ; must raise on failure. ``message`` is plain
 # text or an already-built webhook body (dict, e.g. an embed card).
 Transport = Callable[[str, "str | dict"], None]
+UpsertTransport = Callable[[str, "str | dict", Optional[str]], Optional[str]]
 
 _DEFAULT_ROUTES_PATH = Path(__file__).resolve().parent.parent / "config" / "notification_routes.yaml"
 
@@ -140,6 +142,56 @@ def _default_transport(url: str, message: "str | dict", *, source: str = "") -> 
     # back to the original text so layout can never drop an alert.
     post_card_or_text(_post, message, source=source)
 
+def _with_wait(url: str) -> str:
+    parts = urlsplit(url)
+    query = dict(parse_qsl(parts.query, keep_blank_values=True))
+    query["wait"] = "true"
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
+
+
+def _message_url(url: str, message_id: str) -> str:
+    parts = urlsplit(url)
+    path = parts.path.rstrip("/") + f"/messages/{message_id}"
+    return urlunsplit((parts.scheme, parts.netloc, path, parts.query, parts.fragment))
+
+
+def _default_upsert_transport(
+    url: str,
+    message: "str | dict",
+    message_id: Optional[str],
+    *,
+    source: str = "",
+) -> Optional[str]:
+    """Create or edit one Discord webhook message and return its message id.
+
+    A stale/deleted message id is repaired by creating a replacement. This is
+    presentation-only state and never feeds trading, risk, evidence, or broker
+    decisions.
+    """
+    import httpx
+
+    from notifications.discord_card import card_payload, text_payload
+
+    body = card_payload(message, source=source)
+
+    if message_id:
+        response = httpx.patch(_message_url(url, message_id), json=body, timeout=5)
+        if response.status_code == 404:
+            message_id = None
+        else:
+            if response.status_code == 400 and not isinstance(message, dict):
+                response = httpx.patch(_message_url(url, message_id), json=text_payload(message), timeout=5)
+            response.raise_for_status()
+            return str(message_id)
+
+    response = httpx.post(_with_wait(url), json=body, timeout=5)
+    if response.status_code == 400 and not isinstance(message, dict):
+        response = httpx.post(_with_wait(url), json=text_payload(message), timeout=5)
+    response.raise_for_status()
+    payload: Any = response.json()
+    value = payload.get("id") if isinstance(payload, dict) else None
+    return str(value) if value else None
+
 
 class DiscordRouter:
     """Resolves logical route names to env-configured URLs and delivers messages."""
@@ -149,11 +201,23 @@ class DiscordRouter:
         routes: Optional[Mapping[str, Route]] = None,
         routes_path: str | os.PathLike[str] | None = None,
         transport: Optional[Transport] = None,
+        upsert_transport: Optional[UpsertTransport] = None,
         env: Optional[Mapping[str, str]] = None,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         self.routes: dict[str, Route] = dict(routes) if routes is not None else load_routes(routes_path)
         self._transport = transport or _default_transport
+        if upsert_transport is not None:
+            self._upsert_transport = upsert_transport
+        elif transport is None:
+            self._upsert_transport = None
+        else:
+            # Custom transports historically support POST only. Keep tests and
+            # alternate transports fail-soft rather than performing real HTTP.
+            def _compat(url: str, message: "str | dict", message_id: Optional[str]) -> Optional[str]:
+                transport(url, message)
+                return message_id
+            self._upsert_transport = _compat
         self._env = env if env is not None else os.environ
         self._sleep = sleep
 
@@ -191,6 +255,79 @@ class DiscordRouter:
             )
 
     # ── Delivery ─────────────────────────────────────────────────────────────
+    def upsert(
+        self,
+        route_name: str,
+        message: "str | dict",
+        *,
+        message_id: Optional[str] = None,
+        max_retry_wait: float = DEFAULT_MAX_RETRY_WAIT,
+    ) -> tuple[bool, Optional[str]]:
+        """Create or edit one persistent message on a logical route.
+
+        Returns (delivered, message_id). Delivery problems are fail-soft,
+        matching send(). The returned id is presentation metadata only.
+        """
+        route = self.routes.get(route_name)
+        if route is None:
+            raise ValueError(
+                f"Unknown notification route '{route_name}'. "
+                f"Known routes: {', '.join(self.routes)}"
+            )
+
+        url = str(self._env.get(route.env_var, "")).strip()
+        if not url:
+            if route.required:
+                logger.error(
+                    "Discord route '%s' is required but %s is not set; message dropped.",
+                    route.name, route.env_var,
+                )
+            elif route.name not in _warned_disabled:
+                _warned_disabled.add(route.name)
+                logger.warning(
+                    "Discord route '%s' is optional and disabled (%s unset); skipping.",
+                    route.name, route.env_var,
+                )
+            return False, message_id
+
+        for attempt in (1, 2):
+            try:
+                if self._upsert_transport is None:
+                    new_id = _default_upsert_transport(
+                        url, message, message_id, source=f"{route.name} route"
+                    )
+                else:
+                    new_id = self._upsert_transport(url, message, message_id)
+                return True, (new_id or message_id)
+            except Exception as exc:
+                error = redact_webhooks(exc)
+                if attempt == 1:
+                    wait = retry_after_seconds(exc)
+                    if wait is not None and wait > max_retry_wait:
+                        logger.error(
+                            "Discord route '%s' rate limited (retry after %.2fs > %.2fs cap): %s; message dropped.",
+                            route.name, wait, max_retry_wait, error,
+                        )
+                        return False, message_id
+                    if wait is not None:
+                        logger.warning(
+                            "Discord route '%s' rate limited: %s; retrying once after %.2fs.",
+                            route.name, error, wait,
+                        )
+                        self._sleep(wait)
+                    else:
+                        logger.warning(
+                            "Discord route '%s' upsert attempt 1 failed: %s; retrying once.",
+                            route.name, error,
+                        )
+                    continue
+                logger.error(
+                    "Discord route '%s' upsert failed after retry: %s; message dropped.",
+                    route.name, error,
+                )
+                return False, message_id
+        return False, message_id
+
     def send(
         self,
         route_name: str,
