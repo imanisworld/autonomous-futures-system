@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "source": {
+    "repository": "imanisworld/autonomous-futures-system",
+    "ref": "62818f82210b1fc5a2680492e85c5f2ad1acab76",
+    "generated_on": "2026-09-25"
+  },
+  "policy": {
+    "default": "REVIEW",
+    "rule": "No matched KEEP path is publishable until public-candidate verification passes. PRIVATE paths are excluded by default."
+  },
+  "keep": {
+    "exact": [
+      ".gitignore",
+      ".python-version",
+      "CODE_OF_CONDUCT.md",
+      "LICENSE",
+      "decision_output.schema.json",
+      "main.py",
+      "market_state.schema.json",
+      "requirements-alpaca.txt",
+      "requirements-dev.txt",
+      "requirements.lock",
+      "requirements.txt"
+    ],
+    "prefixes": [
+      "adaptive/",
+      "agent/",
+      "alert_ranker/",
+      "context/",
+      "execution/",
+      "integrations/",
+      "journal/",
+      "notifications/",
+      "options_companion/",
+      "options_manager/",
+      "quotes/",
+      "replay/",
+      "risk/",
+      "sources/",
+      "stocks_advisory/",
+      "strategy/",
+      "tradingview/",
+      "webhook/",
+      "tests/"
+    ],
+    "exclusions_from_keep": [
+      "tests/fixtures/"
+    ]
+  },
+  "review": {
+    "exact": [
+      ".env.example",
+      ".env.local.example",
+      "CHANGELOG.md",
+      "CONTRIBUTING.md",
+      "README.md",
+      "RUNBOOK.md",
+      "SECURITY.md",
+      "risk_rules.yaml"
+    ],
+    "prefixes": [
+      ".github/",
+      "config/",
+      "interactive-course/",
+      "share/",
+      "site/",
+      "tests/fixtures/"
+    ]
+  },
+  "private": {
+    "prefixes": [
+      ".agents/",
+      ".claude/",
+      "data/",
+      "deploy/",
+      "docs/",
+      "logs/",
+      "ops/",
+      "research/",
+      "scripts/"
+    ],
+    "rationale": {
+      ".agents/": "agent prompts may encode operational/strategy assumptions; reintroduce only after public-safe review",
+      ".claude/": "agent commands may encode operational/strategy assumptions; reintroduce only after public-safe review",
+      "data/": "research/runtime/evidence datasets are private by default",
+      "deploy/": "deployment topology and service configuration are private by default",
+      "docs/": "historical audit, handoff, runtime, strategy, and operational documentation is private by default",
+      "logs/": "runtime evidence is private",
+      "ops/": "operational and box-management tooling is private by default",
+      "research/": "strategy research and evidence are private by default",
+      "scripts/": "mixed research/ops/admin tooling; selectively reintroduce only after review"
+    }
+  },
+  "first_pass_counts": {
+    "keep": 802,
+    "review": 48,
+    "private": 789,
+    "total": 1639
+  },
+  "publication_gates": [
+    "sanitize all REVIEW files before inclusion",
+    "run secret scan on exported tree",
+    "run public-operational-detail scan on exported tree",
+    "run tests against candidate and document missing private-only dependencies",
+    "verify no private/runtime evidence was copied",
+    "independent review of candidate tree",
+    "create new repository from candidate tree with no inherited refs/history",
+    "configure rulesets/branch protection before normal development",
+    "do not change source repository visibility"
+  ]
+}
