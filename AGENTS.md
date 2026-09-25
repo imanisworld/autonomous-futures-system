@@ -2,266 +2,68 @@
 
 ## Purpose
 
-This repository is a futures trading system. Agent work must preserve execution safety, auditability, reproducibility, and paper-first operation.
+This repository powers AFSVP futures/options research, paper/demo execution, evidence collection, and controlled releases. Treat changes as production-adjacent even when live trading is disabled.
 
-The system may miss trades. It may not take unverified trades.
+## Operating contract
 
-## Core rule
+- Evidence first. Inspect the current code, config, tests, logs, and runtime state before drawing conclusions.
+- No proof, no run. Mark anything not directly verified in the current session as unverified.
+- Do not claim a test, deploy, restart, health check, or runtime state succeeded without checking the result.
+- Prefer the smallest safe change. Do not broaden scope without evidence that it is required.
+- Preserve rollback paths and existing safety gates.
+- Never expose, print, commit, or copy production secrets, broker credentials, API keys, private SSH keys, or the contents of `/root/afs-shared/.env`.
+- Do not infer production behavior from `main` alone. Verify the deployed exact SHA and runtime state when production behavior matters.
 
-**No proof, no run.**
+## Repository workflow
 
-Missing data blocks validation.  
-Unclear signals block execution.  
-Conflicting logic blocks deployment.  
-Unverified backtests block trust.
+- Work from a normal Git checkout/worktree, not from the live release tree.
+- Do not edit `/root/autonomous-futures-system` or any directory under `/root/afs-releases` in place.
+- Use a branch for code changes. Read the complete relevant diff before commit, push, merge, or deploy.
+- Run the relevant tests and repo-specific audit/skill before proposing promotion.
+- Existing reusable agent skills live under `.agents/skills/`.
+- Claude command equivalents live under `.claude/commands/`.
 
-## Authority and source of truth
+## Futures safety
 
-- Current repository code and configuration are authoritative for code behavior.
-- Actual runtime, broker, environment, release, position, and order state must be verified from the authorized runtime source before making runtime claims.
-- Documentation, handoffs, PR descriptions, and prior chats are not proof of current box state.
-- Evidence classification is not deployment authority.
-- Project-local safety rules override global agent-collaboration defaults.
-- Global collaboration defaults, when available, live in `MYKNOWING-AI-System/global/AGENT_COLLABORATION.md`.
-
-## Default posture
+Before changes affecting futures execution, risk, broker routing, fills, strategy logic, journals, or deployment:
 
-Unless explicitly authorized and independently verified:
+1. Inspect the relevant current code/config.
+2. Run the matching audit/skill where available.
+3. Treat any new or broadened broker/order path as high risk.
+4. Keep live-trading gates fail-closed unless the operator explicitly authorizes a posture change.
+5. Do not place a real test order merely to validate code or connectivity.
 
-- paper / simulation / observation first;
-- advisory and monitor mode preferred;
-- no live broker execution;
-- no hidden execution routes;
-- no deployment or production/VPS mutation;
-- no broker-state mutation;
-- no feature expansion without proving the need.
+## Options safety
 
-A demo broker lane, if explicitly authorized, is not equivalent to live trading, but its exact broker, environment, account, contract cap, and live-disable state must be verified before use. Never infer those values from this file.
+- Options changes must preserve the existing human-confirmation and execution restrictions unless explicitly authorized.
+- A change that creates or broadens an options broker/order/execution path is a hard stop for independent review.
 
-## Agent collaboration
+## Deployment
 
-Use one primary implementer per unit of work.
+Deployments are explicit operator-directed actions, never an automatic consequence of finishing code.
 
-Default division:
+- Deploy exact reviewed commit SHAs, never a moving branch name.
+- Use the repository's sanctioned controlled-release tooling and deploy lock.
+- `scripts/atomic_release.sh` implements the immutable release build/verify/promote flow and must retain its safety gates.
+- Do not bypass the deploy lock, release-integrity checks, posture gates, or behavior-neutral gate.
+- Do not use `--force-lock` unless the lock has been independently proven stale/abandoned and the operator has authorized breaking it.
+- Pre-deploy: verify reviewed SHA, current deployed SHA, lock state, runtime posture, health, and relevant tests.
+- Post-deploy: verify the deployed SHA, service health, integrity, expected runtime posture, and that evidence/journal writing still works.
+- If verification fails, stop and report the exact failure; do not keep making changes until it "looks fixed."
 
-- **Cursor** — bounded implementation, rebase, tests, commits, PR updates.
-- **Claude** — independent QA/breaker, architecture and safety review.
-- **ChatGPT** — orchestration, connected-repository verification, final HOLD / MERGE / CLOSE / REBUILD assessment.
-- **Codex** — local/repository worker for filesystem, terminal, implementation, or independent QA when assigned.
-- **Perplexity** — external research when current outside facts are required.
-- **Grok** — current social/X context or additional bounded research/orchestration when it has the best access.
+## VPS access
 
-These are defaults, not exclusive assignments. Do not run multiple agents as competing implementers on the same branch unless explicitly requested.
+Agent-specific VPS accounts are intentionally separated. Do not reuse identities across tools.
 
-For consequential changes, the implementer cannot serve as the only independent verifier.
+- Never request or use unrestricted root access when the approved agent account and controlled command path are sufficient.
+- Do not weaken SSH restrictions or sudo rules to make an agent task easier.
+- Production secrets stay on the VPS; agents should consume redacted status/evidence surfaces or narrowly scoped controlled commands.
 
-Use the PR or issue thread as the durable handoff record.
+## Output standard
 
-## Allowed agent actions
-
-When scoped to the assigned task, agents may:
-
-- inspect repository code and history;
-- create a clean task-specific branch;
-- edit bounded files;
-- add or update tests;
-- run unit/integration tests that do not require unsafe external actions;
-- run linting, static analysis, replay tests, and local validation;
-- produce commits and pull requests;
-- report evidence, blockers, uncertainty, and unresolved risks.
-
-## Forbidden without explicit Operator authorization
-
-Do not:
-
-- merge pull requests;
-- deploy or promote releases;
-- SSH to or mutate the VPS;
-- restart or stop production services;
-- change production environment variables;
-- add or rotate deployment credentials;
-- connect to or mutate broker accounts;
-- submit, modify, cancel, or flatten orders or positions;
-- enable live execution;
-- create unsafe fallbacks;
-- bypass or weaken risk checks;
-- rewrite unrelated code;
-- broaden task scope without approval;
-- treat a green command as proof when that command's safety semantics are incomplete.
-
-If the task appears to require a forbidden action, stop and report exactly what is required.
-
-## Futures execution safety
-
-Before approving any futures-system change, verify where applicable:
-
-### Execution route
-- paper/sim/demo/live state is explicit;
-- exact broker adapter is known;
-- exact account routing is known;
-- exact ticker/contract routing is enforced;
-- no unintended path can reach live execution.
-
-### Signal validity
-- producing strategy is identified;
-- formulas are reproducible;
-- live/replay formulas match when parity is claimed;
-- no lookahead or future-data dependency exists;
-- conflicting system/chart state blocks execution.
-
-### Risk controls
-Verify the effective current values from code/config/runtime as applicable:
-- max contracts;
-- max trades per day;
-- daily loss limit;
-- per-trade stop;
-- session lockout;
-- news/session filters;
-- open-position limits;
-- bracket completeness;
-- instrument allowlist;
-- exact contract routing.
-
-Project default policy remains max **3 trades/day**, no averaging down, no revenge trades, and no trade without a stop. Runtime claims still require current verification.
-
-## Instrument scope
-
-Start with micros:
-
-- MNQ
-- MES
-
-Only after the current set is stable and evidence justifies expansion, evaluate:
-
-- MGC
-- MCL
-
-Do not claim an instrument is currently running merely because it appears in research, code, configuration history, or documentation.
-
-## Fill and replay realism
-
-Do not trust optimistic fills.
-
-Required principles:
-
-- no target-priority resolution when stop and target are touched on the same bar and path is unknown;
-- use pessimistic stop-first handling when price path cannot be established;
-- include slippage and commissions where required;
-- replay must not inflate win rate;
-- live/replay entry-fill semantics must match when parity is claimed;
-- paper wins and one-day performance are not validation.
-
-## Strategy evidence
-
-Use these classifications:
-
-- VALIDATED
-- PROMISING BUT UNPROVEN
-- BROKEN
-- OVERFIT
-- UNSAFE
-- WAIT
-
-Do not classify a strategy as VALIDATED unless evidence supports the relevant requirements:
-
-- multiple months or another justified independent sample;
-- realistic fills;
-- identical live/replay logic where required;
-- clear invalidation;
-- no lookahead bias;
-- session filters respected;
-- sufficient sample size;
-- controlled drawdown;
-- reproducible results.
-
-## Testing and proof
-
-Before claiming a change is complete:
-
-1. identify the exact behavior being changed;
-2. add or run the smallest relevant regression test;
-3. run the relevant existing test subset;
-4. for merge approval, require the repository's full required CI on the final head unless the Operator explicitly changes that gate;
-5. inspect the diff for unrelated edits;
-6. report exact commands/results and unresolved limitations;
-7. distinguish VERIFIED, LIKELY, UNVERIFIED, CONTRADICTED, and STALE/SUPERSEDED.
-
-A worker's own report is not independent proof for a consequential change.
-
-CI that fails before executing tests is not a test failure or a test pass; report it as infrastructure-blocked.
-
-## Branch and PR workflow
-
-1. read current `main`;
-2. create a fresh task-specific branch;
-3. make only bounded changes;
-4. run relevant tests;
-5. inspect the final diff;
-6. open/update the PR;
-7. record handoff fields in the PR;
-8. obtain independent review when consequential;
-9. do not merge unless explicitly authorized.
-
-Do not revive contaminated or heavily stale branches when a clean rebuild is safer.
-
-## Monitoring and auditability
-
-When relevant, verify:
-
-- logs exist;
-- journal records signal, state, reason, entry, stop, target, and outcome;
-- status endpoints work;
-- notifications are clear;
-- "why no trade" is visible;
-- runtime state can be reconciled with journal and broker state.
-
-Missing telemetry is a blocker when it prevents proof.
-
-## Secrets
-
-Do not request, add, print, or commit broker, VPS, production, webhook, or deployment secrets during ordinary development.
-
-Never expose credentials, passwords, API keys, tokens, SSH keys, or secret-derived values.
-
-## Required audit format
-
-For audits or consequential changes, report:
-
-### Verdict
-APPROVE / REJECT / HOLD / AUDIT ONLY / PAPER ONLY
-
-### Why
-2–5 decisive reasons.
-
-### What I Verified
-- files reviewed;
-- logic checked;
-- safety gates checked;
-- execution path checked.
-
-### Problems Found
-Separate blockers from minor cleanup.
-
-### Required Fixes
-- must-fix before run;
-- should-fix later;
-- do-not-touch items.
-
-### Safe Next Step
-The smallest safe action. No broad rewrites.
-
-## Stop conditions
-
-Stop and report instead of proceeding when:
-
-- required data is missing;
-- execution route is ambiguous;
-- paper/demo/live state is unclear;
-- live and replay logic disagree;
-- broker account routing is ambiguous;
-- a test result cannot be reproduced;
-- a safety gate is known to be unreliable;
-- a requested action exceeds authorization;
-- the diff includes unrelated behavior changes.
-
-When uncertain, choose the safer non-executing path.
+For substantial work, report:
+- what was verified,
+- what changed,
+- tests/checks run and their results,
+- remaining uncertainty or blockers,
+- exact next action when one is required.
