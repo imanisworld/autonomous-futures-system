@@ -12,6 +12,7 @@ logs_test/
 .env
 .env.*
 !.env.example
+!.env.local.example
 Trading_Intel_Architecture.docx
 autonomous-futures-system/
 clientportal.gw/
