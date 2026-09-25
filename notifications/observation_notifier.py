@@ -7,8 +7,7 @@ route is unset the router returns False and nothing else happens; when Discord
 fails the router logs and returns False. This module never raises into the
 observation pipeline and never reads or changes trading state.
 
-Only meaningful state changes are announced: a new CANDIDATE / SIGNAL row and
-a resolved structural OUTCOME. Bars that produce nothing are silent.
+Only meaningful state changes are reflected: a new CANDIDATE / SIGNAL row and\na resolved structural OUTCOME. Bars that produce nothing are silent. Instead\nof posting one message per event, the notifier maintains one persistent\nstatus message per ticker and edits it as observation state changes.
 
 Watchdog stale alerts, transport failures, runtime errors, service failures,
 recovery notices and safety blockers are NOT routed here — they keep their
@@ -242,21 +241,108 @@ class _Dispatcher:
 _DISPATCHER = _Dispatcher()
 
 
-def notify_observation(events: Iterable[dict], *, router=None) -> int:
-    """Announce the announceable events on the ``observation`` route.
+class _StatusDispatcher:
+    """Background updater for one persistent Discord message per ticker."""
 
-    Cards are grouped into at most ceil(n / MAX_EMBEDS_PER_MESSAGE) messages.
-    In ``background`` mode (the default when no router is passed) they are
-    queued for the background sender and the return value is the number of
-    cards accepted; nothing here waits on Discord. With an explicit router or
-    ``inline`` mode they are sent now and the return value is the number of
-    cards delivered. Never raises: a missing/disabled route, a missing routes
-    file, or a Discord failure all end here with a log line.
+    def __init__(self, *, sleep=time.sleep, clock=time.monotonic) -> None:
+        self._queue = queue.Queue(maxsize=MAX_QUEUE_MESSAGES)
+        self._sleep = sleep
+        self._clock = clock
+        self._lock = threading.Lock()
+        self._thread: Optional[threading.Thread] = None
+        self.delivered_events = 0
+        self.dropped_events = 0
+
+    def submit(self, router, updates) -> int:
+        self._ensure_thread()
+        accepted = 0
+        for update in updates:
+            try:
+                self._queue.put_nowait((router, update, self._clock()))
+                accepted += update.represented_events
+            except queue.Full:
+                self.dropped_events += update.represented_events
+                logger.error(
+                    "observation Discord status queue full (%d messages); %d event(s) dropped from Discord only.",
+                    MAX_QUEUE_MESSAGES, update.represented_events,
+                )
+        return accepted
+
+    def _ensure_thread(self) -> None:
+        with self._lock:
+            if self._thread is None or not self._thread.is_alive():
+                self._thread = threading.Thread(
+                    target=self._run, name="observation-discord-status", daemon=True
+                )
+                self._thread.start()
+
+    def _run(self) -> None:
+        from notifications.observation_status import record_message_id
+
+        while True:
+            router, update, queued_at = self._queue.get()
+            try:
+                age = self._clock() - queued_at
+                if age > MAX_MESSAGE_AGE:
+                    self.dropped_events += update.represented_events
+                    logger.error(
+                        "observation Discord status %.0fs old; %d event(s) dropped from Discord only.",
+                        age, update.represented_events,
+                    )
+                    continue
+                delivered, message_id = router.upsert(
+                    ROUTE_NAME,
+                    update.text,
+                    message_id=update.message_id,
+                    max_retry_wait=MAX_RETRY_WAIT,
+                )
+                if delivered:
+                    self.delivered_events += update.represented_events
+                    record_message_id(update.root, message_id)
+                else:
+                    self.dropped_events += update.represented_events
+                    logger.error(
+                        "observation Discord status delivery failed; %d event(s) not reflected.",
+                        update.represented_events,
+                    )
+            except Exception as exc:  # noqa: BLE001
+                self.dropped_events += update.represented_events
+                logger.warning(
+                    "observation Discord status worker error; %d event(s) not reflected: %s: %s",
+                    update.represented_events, type(exc).__name__, _redact(exc),
+                )
+            finally:
+                self._queue.task_done()
+                self._sleep(MIN_SEND_INTERVAL)
+
+    def join(self, timeout: float = 5.0) -> bool:
+        deadline = time.monotonic() + timeout
+        while self._queue.unfinished_tasks and time.monotonic() < deadline:
+            time.sleep(0.01)
+        return not self._queue.unfinished_tasks
+
+
+_STATUS_DISPATCHER = _StatusDispatcher()
+
+
+def notify_observation(events: Iterable[dict], *, router=None) -> int:
+    """Update one persistent observation status message per touched ticker.
+
+    The evidence rows are written before this function is called. This layer is
+    presentation-only and fail-soft. The return value is the number of new,
+    non-duplicate observation events represented by accepted/delivered status
+    updates, preserving the prior event-count semantics for callers.
     """
-    lines = [line for line in (format_event(e) for e in events if isinstance(e, dict)) if line]
-    if not lines:
+    clean_events = [e for e in events if isinstance(e, dict)]
+    if not clean_events:
         return 0
     try:
+        from notifications.observation_status import build_status_updates, record_message_id
+
+        updates, represented = build_status_updates(clean_events)
+        if not updates or represented == 0:
+            return 0
+
         inline = router is not None or DELIVERY_MODE == "inline"
         if router is None:
             from notifications.discord_router import DiscordRouter
@@ -264,14 +350,22 @@ def notify_observation(events: Iterable[dict], *, router=None) -> int:
             router = DiscordRouter()
         if not router.is_enabled(ROUTE_NAME):
             return 0
-        messages = build_messages(lines)
+
         if not inline:
-            return _DISPATCHER.submit(router, messages)
-        sent = 0
-        for body, cards in messages:
-            if router.send(ROUTE_NAME, body):
-                sent += cards
-        return sent
+            return _STATUS_DISPATCHER.submit(router, updates)
+
+        delivered_events = 0
+        for update in updates:
+            delivered, message_id = router.upsert(
+                ROUTE_NAME,
+                update.text,
+                message_id=update.message_id,
+                max_retry_wait=MAX_RETRY_WAIT,
+            )
+            if delivered:
+                record_message_id(update.root, message_id)
+                delivered_events += update.represented_events
+        return delivered_events
     except Exception as exc:  # noqa: BLE001 — notification is a side effect; observation must continue
         logger.warning("observation Discord notification skipped: %s: %s", type(exc).__name__, _redact(exc))
         return 0
