@@ -4,6 +4,12 @@ _As of 2026-09-24. The newest dated repository refresh below governs source stat
 
 Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`; the read-only coverage evidence lane (observer, reducer, outcome study, after-close collector) is described in `docs/options-coverage-observer.md`.
 
+## Research / agent governance
+
+Repository-wide research roles are locked in `AGENTS.md` and apply to the options lane as well: Grok (when used) proposes outside research/hypotheses; Cursor performs repository-aware mechanical work on already-defined trials; Claude/Codex act as independent breaker/QA; ChatGPT + operator reconcile conflicting evidence and approve status/progression decisions.
+
+This file remains the **options current-state authority**. Do not create a parallel options strategy inventory, experiment selector, or agent-maintained status file. Agents may read this file and propose updates, but must not silently maintain competing current-state truth. Existing frozen cohorts, forward boundaries, one-look rules, and evidence contracts remain controlling unless an explicitly reviewed options change replaces them.
+
 ## Repository refresh — 2026-09-24
 
 **Repository main at this refresh:** `87b6a4296837da0441d55dcc54e0c9971fb3b17a`. **No options-scanner/VPS deployment, service restart, environment change, strategy change, or broker/order change was performed or inferred by this documentation refresh.** The latest box-specific operational sections below remain runtime authority until a fresh server check.
