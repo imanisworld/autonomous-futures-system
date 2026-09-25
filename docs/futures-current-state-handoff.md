@@ -1,6 +1,8 @@
 # Futures — Current State Handoff
 
-_As of 2026-09-24 (runtime and current decisions: see the 2026-09-24 blocks in `docs/futures-current-status-2026-09-22.md`, then the reconciliation note below). This is the long futures handoff. Historical audit docs remain evidence records, but they do not override the latest dated current-status file. Repository state is not proof of VPS/deployment state; verify the box separately before claiming anything is running._
+> **Authority (governance, 2026-09-25):** long handoff / provenance only. **Strategy status** → `docs/strategy-rules/Strategy_Inventory.md`. **Experiment history** → `docs/research-trial-ledger.jsonl`. **Agent roles** → `AGENTS.md`. Dated status docs and this handoff must not independently declare competing current strategy status; where they conflict with the inventory, **the inventory wins**. Repository state is not proof of VPS/deployment state; verify the box separately before claiming anything is running.
+
+_As of 2026-09-24 (runtime and current decisions: see the 2026-09-24 blocks in `docs/futures-current-status-2026-09-22.md`, then the reconciliation note below). This is the long futures handoff. Historical audit docs remain evidence records._
 
 ## Docs reconciliation — 2026-09-24 (later the same day)
 

@@ -59,6 +59,34 @@ Agent-specific VPS accounts are intentionally separated. Do not reuse identities
 - Do not weaken SSH restrictions or sudo rules to make an agent task easier.
 - Production secrets stay on the VPS; agents should consume redacted status/evidence surfaces or narrowly scoped controlled commands.
 
+## Research agent roles
+
+Lock these roles. Do not invent a parallel research automation layer.
+
+| Role | Owner | Allowed | Forbidden |
+|---|---|---|---|
+| Outside research / hypotheses | Grok (when used) | Market/context discovery, alternative explanations, hypothesis proposals for human review | Declaring strategy status; launching experiments; maintaining a competing inventory or queue |
+| Repository-aware mechanical work | Cursor | Running *already registered* trials/replays; producing reproducible artifacts under the trial ledger / experiment-spec chain | Autonomously inventing or launching new strategy experiments; continuous variant search; promotion |
+| Independent breaker / QA | Claude and/or Codex | Implementation review, execution-safety review, live/replay parity, lookahead / optimistic-fill checks, spec-vs-code match | Being the primary experiment generator; silently updating strategy status |
+| Reconciliation and next-test decisions | ChatGPT + operator (human) | Resolve contradictory evidence; decide whether another experiment is justified; approve inventory classification changes; approve progression | Autopromotion to live; agent-only status edits without operator acknowledgment |
+
+No agent autonomously invents and launches new strategy experiments. No agent promotes anything to live execution. Prefer continuing already-defined campaigns and registered trials over restarting completed audits or building an "experiment selector."
+
+External Grok (or other off-repo) research loops are unverified until explicitly inventoried; their absence does **not** authorize a new autonomous loop.
+
+## Strategy / evidence source of truth
+
+| Concern | Authoritative record | Notes |
+|---|---|---|
+| Futures strategy evidence verdict + execution posture | `docs/strategy-rules/Strategy_Inventory.md` | Futures strategy-status truth. `ops/project_check/daily.py` reads its Master Table. |
+| Options current state / evidence posture | `docs/options-current-state-handoff.md` | Options-lane current-state authority. Preserve frozen cohorts/evidence boundaries; dated options notes are provenance unless this file explicitly incorporates them. |
+| Experiment / trial history | `docs/research-trial-ledger.jsonl` | Append-only attempt history. Spec: `docs/research-trial-ledger-spec-2026-09-23.md`. |
+| Approved baseline-vs-candidate run contract | `docs/research-experiment-specs/` (+ schema/spec docs) | Sits *on top of* a ledger trial. Does not replace inventory or ledger. Contract only — not a runner. |
+| Active lane sample / ops memory | `ops/evidence_registry.py` summaries | Read-only operational memory of collected evidence. Not status authority. |
+| Runtime enablement / broker / release | Box config + release manifest | Never infer from docs or inventory alone. |
+
+Dated `docs/futures-current-status-*.md`, futures handoffs, and reconciliation notes are **provenance and operator narrative**. They must point at the futures inventory (strategy status) and trial ledger (experiment history) instead of independently declaring current futures strategy status. For options, `docs/options-current-state-handoff.md` remains the current-state authority; older options status/handoff notes are provenance unless incorporated there. Other agents may **read** the authoritative records and **propose** updates; they must not silently maintain competing versions.
+
 ## Output standard
 
 For substantial work, report:

@@ -7,11 +7,13 @@ change, no broker action, no merge, and no deployment.
 
 Basis: existing research governance only —
 
+- `docs/strategy-rules/Strategy_Inventory.md` (strategy status authority — not replaced by this contract)
 - `docs/research-trial-ledger.jsonl`
 - `docs/research-trial-ledger-spec-2026-09-23.md`
 - `docs/prereg-*.md`
 - `docs/research-trial-manifests/`
 - `docs/research-evidence/`
+- `AGENTS.md` (agent role lock; no autonomous experiment invention)
 
 This is architecture plumbing, not strategy research. It does not invent
 hypotheses, optimize parameters, or promote candidates.

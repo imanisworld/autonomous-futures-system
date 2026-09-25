@@ -2,6 +2,8 @@
 
 **Docs only.** No code, config, yaml, tests, Pine, or env change. Nothing here is a server check, a deploy authorization, or a lane stop.
 
+> **Authority follow-up (2026-09-25):** strategy status truth is now locked to `docs/strategy-rules/Strategy_Inventory.md`; experiment history to `docs/research-trial-ledger.jsonl`; agent roles in `AGENTS.md`. This reconciliation note remains provenance for the 2026-09-24 fixes below — it is not a competing status authority.
+
 Repository head when this note was written: `34177183d2a2abbb2442b4bd2dee3f6579875140` (`main`).
 
 Where a claim comes from the private handoff log, it is marked **HANDOFF-REPORTED, NOT INDEPENDENTLY VERIFIED**. This note does not copy hostnames, addresses, account identifiers, balances, or secrets from that log. Git facts below were checked in this repository.
