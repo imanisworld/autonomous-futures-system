@@ -119,7 +119,7 @@ def test_extra_root_module_fails(tmp_path):
     assert report["extra_runtime_files"] == ["settings.py"]
 
 
-def test_extra_scan_ignores_pycache_and_non_runtime(tmp_path, monkeypatch):
+def test_extra_scan_ignores_non_runtime_and_flags_pycache(tmp_path, monkeypatch):
     _make_release(tmp_path)
     _write(tmp_path, "webhook/__pycache__/junk.py", "x = 1\n")
     _write(tmp_path, "webhook/__pycache__/runner.cpython-312.pyc", "x")
@@ -127,8 +127,12 @@ def test_extra_scan_ignores_pycache_and_non_runtime(tmp_path, monkeypatch):
     _write(tmp_path, "webhook/app.py.pre-routing", "old = 1\n")
     _pin(monkeypatch, tmp_path)
     report = verify_release(repo_root=tmp_path)
-    assert report["ok"] is True
-    assert report["extra_runtime_files"] == []
+    assert report["extra_runtime_files"] == [
+        "webhook/__pycache__/junk.py",
+        "webhook/__pycache__/runner.cpython-312.pyc",
+    ]
+    assert report["ok"] is False
+    assert report["status"] == "FAIL"
 
 
 def test_manifest_tamper_detected(tmp_path):
@@ -272,3 +276,91 @@ def test_round_trip_with_release_manifest_builder(tmp_path):
     assert report["missing"] == []
     assert report["fingerprint_ok"] is True
     assert report["files_checked"] == manifest["source_file_count"]
+
+
+def _add_shipped(root: Path, files: dict[str, str]) -> None:
+    """Add files to the fake release and recompute the manifest fingerprint."""
+    manifest_path = root / "release_manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    for rel, content in files.items():
+        _write(root, rel, content)
+        manifest["source_files"][rel] = _sha(content)
+    manifest["source_file_count"] = len(manifest["source_files"])
+    manifest["fingerprint_sha256"] = manifest_fingerprint(manifest)
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+
+def test_manifest_import_roots_outside_runtime_dirs_are_scanned(tmp_path, monkeypatch):
+    """agent, alert_ranker, integrations, options_manager, quotes, research.
+
+    A .py or .so dropped in those trees must fail a pinned verify. The
+    shipped file is in the manifest so the directory is derived from it;
+    the planted file is not.
+    """
+    _make_release(tmp_path)
+    _add_shipped(tmp_path, {
+        "agent/daily_summary.py": "AGENT = 1\n",
+        "alert_ranker/app.py": "RANKER = 1\n",
+        "integrations/webull_paper_config.py": "INT = 1\n",
+        "options_manager/app.py": "OM = 1\n",
+        "quotes/live_index.py": "Q = 1\n",
+        "research/__init__.py": "",
+    })
+    _pin(monkeypatch, tmp_path)
+    planted = [
+        "agent/evil.py",
+        "agent/evil.so",
+        "alert_ranker/evil.py",
+        "integrations/evil.so",
+        "options_manager/evil.py",
+        "quotes/evil.so",
+        "research/evil.py",
+    ]
+    for rel in planted:
+        _write(tmp_path, rel, "planed\n")
+    report = verify_release(repo_root=tmp_path)
+    assert report["ok"] is False
+    assert report["status"] == "FAIL"
+    for rel in planted:
+        assert rel in report["extra_runtime_files"]
+
+
+def test_pycache_next_to_manifest_source_is_refused(tmp_path, monkeypatch):
+    """A timestamp-valid .pyc whose .py is in the manifest is still a failure."""
+    _make_release(tmp_path)
+    _add_shipped(tmp_path, {"risk/risk_engine.py": "def size():\n    return 1\n"})
+    _pin(monkeypatch, tmp_path)
+    planted = "risk/__pycache__/risk_engine.cpython-313.pyc"
+    _write(tmp_path, planted, "malicious bytecode")
+    report = verify_release(repo_root=tmp_path)
+    assert report["ok"] is False
+    assert report["status"] == "FAIL"
+    assert planted in report["extra_runtime_files"]
+    assert "risk/risk_engine.py" not in report["mismatched"]
+
+
+def test_venv_site_hooks_flag_unrecorded_and_allow_record_pth(tmp_path, monkeypatch):
+    """RECORD-listed distutils-precedence.pth is allowed. Other site hooks are not."""
+    _make_release(tmp_path)
+    _pin(monkeypatch, tmp_path)
+    site = tmp_path / ".venv" / "lib" / "python3.13" / "site-packages"
+    dist = site / "setuptools-70.0.0.dist-info"
+    dist.mkdir(parents=True)
+    (site / "distutils-precedence.pth").write_text("import os; var = 'setuptools'\n", encoding="utf-8")
+    (site / "evil.pth").write_text("import evil\n", encoding="utf-8")
+    (site / "sitecustomize.py").write_text("print('site')\n", encoding="utf-8")
+    (site / "usercustomize.py").write_text("print('user')\n", encoding="utf-8")
+    (dist / "RECORD").write_text(
+        "distutils-precedence.pth,sha256=abc,20\n"
+        "sitecustomize.py,sha256=def,12\n",
+        encoding="utf-8",
+    )
+    report = verify_release(repo_root=tmp_path)
+    extras = report["extra_runtime_files"]
+    prefix = ".venv/lib/python3.13/site-packages/"
+    assert prefix + "distutils-precedence.pth" not in extras
+    assert prefix + "evil.pth" in extras
+    assert prefix + "sitecustomize.py" in extras
+    assert prefix + "usercustomize.py" in extras
+    assert report["ok"] is False
+    assert report["status"] == "FAIL"

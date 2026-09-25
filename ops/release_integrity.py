@@ -12,11 +12,18 @@ Deliberately git-free at runtime: the live box's git worktree is not a release
 identifier (it is permanently dirty by deploy history), so verification relies
 only on the manifest's SHA-256 entries. See
 docs/incident-2026-07-01-direction-and-phantom-fills.md, follow-up #8.
+
+Any ``__pycache__`` file inside the release fails verification. ``-B`` and
+``PYTHONDONTWRITEBYTECODE=1`` stop the interpreter from writing new bytecode;
+they do not stop it from loading a ``.pyc`` that is already on disk. The
+Operator has to add ``-B`` on the unit ``ExecStart`` and keep the release tree
+free of ``__pycache__``. This module does not edit the unit.
 """
 
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import json
 import os
@@ -49,10 +56,11 @@ RUNTIME_DIRS = (
 )
 RUNTIME_SUFFIXES = (".py", ".yaml", ".yml")
 # Extension modules, stray bytecode, and path hooks can shadow a shipped
-# module or inject import-time code. .pyc inside __pycache__ stays allowed.
+# module or inject import-time code. Any file under __pycache__ is refused:
+# a timestamp-valid .pyc can execute while its .py still matches the manifest.
 EXTRA_RISK_SUFFIXES = (".so", ".pyc", ".pth")
 CUSTOMIZE_MODULE_NAMES = {"sitecustomize.py", "usercustomize.py"}
-IGNORED_DIR_NAMES = {"__pycache__"}
+PYCACHE_DIR_NAME = "__pycache__"
 
 
 def _is_stray_env_file(name: str) -> bool:
@@ -73,11 +81,29 @@ def _flag_unexpected_file(path: Path) -> bool:
     return False
 
 
-def _skip_pycache_policy(rel: Path) -> bool:
-    """Ignore __pycache__ contents except extension modules, which can still shadow."""
-    if IGNORED_DIR_NAMES.intersection(rel.parts) and rel.suffix != ".so":
-        return True
-    return False
+def _scan_directories(listed: set[str]) -> list[str]:
+    """Directories whose unlisted modules can execute.
+
+    ``RUNTIME_DIRS`` is the historical floor. It does not name every import
+    root the service actually loads (``agent``, ``alert_ranker``,
+    ``integrations``, ``options_manager``, ``quotes``, ``research``, and
+    later packages). Those roots are taken from the manifest: every top-level
+    directory that ships a ``.py`` file. A hardcoded addition would drift the
+    same way ``RUNTIME_DIRS`` already did.
+    """
+    derived = set(RUNTIME_DIRS)
+    for rel in listed:
+        if not rel.endswith(".py") or "/" not in rel:
+            continue
+        top = rel.split("/", 1)[0]
+        if top and not top.startswith("."):
+            derived.add(top)
+    return sorted(derived)
+
+
+def _is_pycache(rel: Path) -> bool:
+    """True for any file inside a release ``__pycache__`` directory."""
+    return PYCACHE_DIR_NAME in rel.parts
 
 
 def _sha256(path: Path) -> str | None:
@@ -109,11 +135,15 @@ def _runtime_extras(root: Path, listed: set[str]) -> list[str]:
         if not path.is_file():
             return
         rel_path = path.relative_to(root)
-        if _skip_pycache_policy(rel_path):
+        rel = rel_path.as_posix()
+        # Refuse every __pycache__ file, including a .pyc whose .py is in the
+        # manifest. Python will load that bytecode when the header timestamp
+        # or source hash matches, without the bytecode matching the source.
+        if _is_pycache(rel_path):
+            extras.append(rel)
             return
         if not _flag_unexpected_file(path):
             return
-        rel = rel_path.as_posix()
         if rel not in listed:
             extras.append(rel)
 
@@ -122,13 +152,67 @@ def _runtime_extras(root: Path, listed: set[str]) -> list[str]:
     # box accumulated several root .py files from pre-release deploy history.
     for path in root.iterdir():
         consider(path)
-    for dirname in RUNTIME_DIRS:
+    for dirname in _scan_directories(listed):
         base = root / dirname
         if not base.is_dir():
             continue
         for path in base.rglob("*"):
             consider(path)
+    extras.extend(_venv_site_hook_extras(root))
     return sorted(set(extras))
+
+
+def _recorded_site_paths(venv: Path) -> set[str]:
+    """Absolute paths of files named by installed ``*.dist-info/RECORD`` entries.
+
+    ``python3 -m venv`` plus ``pip install -r requirements.txt`` (see
+    ``scripts/atomic_release.sh``) records legitimate ``.pth`` files here.
+    ``distutils-precedence.pth`` from setuptools is one. Editable installs
+    record their ``__editable__.*.pth`` the same way. ``sitecustomize.py`` and
+    ``usercustomize.py`` are not accepted from a RECORD: those names run at
+    interpreter start and are not part of a normal wheel.
+    """
+    allowed: set[str] = set()
+    for record in venv.rglob("RECORD"):
+        if "site-packages" not in record.parts or not record.parent.name.endswith(".dist-info"):
+            continue
+        site_packages = record.parent.parent
+        try:
+            text = record.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        for row in csv.reader(text.splitlines()):
+            if not row:
+                continue
+            raw = row[0].strip()
+            if not raw or raw.startswith("../"):
+                continue
+            allowed.add((site_packages / raw).resolve().as_posix())
+    return allowed
+
+
+def _venv_site_hook_extras(root: Path) -> list[str]:
+    """Flag venv site hooks the release manifest does not install.
+
+    The release venv is ``$RELEASES/$sha/.venv``. A ``*.pth``,
+    ``sitecustomize.py``, or ``usercustomize.py`` under its ``site-packages``
+    executes at interpreter start and is outside the manifest file list.
+    A ``.pth`` is allowed only when an installed dist RECORD names it.
+    """
+    venv = root / ".venv"
+    if not venv.is_dir():
+        return []
+    allowed = _recorded_site_paths(venv)
+    flagged: list[str] = []
+    for path in venv.rglob("*"):
+        if not path.is_file() or "site-packages" not in path.parts:
+            continue
+        name = path.name
+        if name not in CUSTOMIZE_MODULE_NAMES and path.suffix != ".pth":
+            continue
+        if name in CUSTOMIZE_MODULE_NAMES or path.resolve().as_posix() not in allowed:
+            flagged.append(path.relative_to(root).as_posix())
+    return flagged
 
 
 def verify_release(
