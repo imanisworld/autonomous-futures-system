@@ -4,7 +4,7 @@ import json
 
 from notifications import observation_notifier as obs
 from notifications import observation_status as status
-from notifications.discord_router import DiscordRouter, Route
+from notifications.discord_router import DiscordRouter, Route, _default_upsert_transport
 
 WEBHOOK = "https://discord.invalid/api/webhooks/1/token"
 ROUTES = {"observation": Route("observation", "DISCORD_ROUTE_OBSERVATION", False)}
@@ -117,3 +117,66 @@ def test_one_batch_produces_one_update_per_ticker(tmp_path, monkeypatch):
     assert len(calls) == 2
     assert any("MNQ observer · active" in message for _, message in calls)
     assert any("MES observer · active" in message for _, message in calls)
+
+
+class _Resp:
+    def __init__(self, status_code: int, payload=None):
+        self.status_code = status_code
+        self._payload = payload or {}
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            import httpx
+            request = httpx.Request("POST", WEBHOOK)
+            response = httpx.Response(self.status_code, request=request)
+            raise httpx.HTTPStatusError("status", request=request, response=response)
+
+    def json(self):
+        return self._payload
+
+
+def test_default_upsert_create_uses_wait_true_and_returns_message_id(monkeypatch):
+    calls = []
+
+    def fake_post(url, json=None, timeout=None):
+        calls.append((url, json, timeout))
+        return _Resp(200, {"id": "abc123"})
+
+    monkeypatch.setattr("httpx.post", fake_post)
+    out = _default_upsert_transport(WEBHOOK, "hello", None, source="test")
+    assert out == "abc123"
+    assert calls and "wait=true" in calls[0][0]
+    assert calls[0][1]["embeds"][0]["title"] == "hello"
+
+
+def test_default_upsert_edit_uses_message_endpoint(monkeypatch):
+    calls = []
+
+    def fake_patch(url, json=None, timeout=None):
+        calls.append((url, json, timeout))
+        return _Resp(200, {"id": "abc123"})
+
+    monkeypatch.setattr("httpx.patch", fake_patch)
+    out = _default_upsert_transport(WEBHOOK, "updated", "abc123", source="test")
+    assert out == "abc123"
+    assert calls[0][0].endswith("/messages/abc123")
+    assert calls[0][1]["embeds"][0]["title"] == "updated"
+
+
+def test_default_upsert_404_recreates_message(monkeypatch):
+    patches, posts = [], []
+
+    def fake_patch(url, json=None, timeout=None):
+        patches.append(url)
+        return _Resp(404)
+
+    def fake_post(url, json=None, timeout=None):
+        posts.append(url)
+        return _Resp(200, {"id": "replacement"})
+
+    monkeypatch.setattr("httpx.patch", fake_patch)
+    monkeypatch.setattr("httpx.post", fake_post)
+    out = _default_upsert_transport(WEBHOOK, "replacement body", "stale-id", source="test")
+    assert out == "replacement"
+    assert patches[0].endswith("/messages/stale-id")
+    assert "wait=true" in posts[0]
