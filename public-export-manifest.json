@@ -108,5 +108,18 @@
     "create new repository from candidate tree with no inherited refs/history",
     "configure rulesets/branch protection before normal development",
     "do not change source repository visibility"
-  ]
+  ],
+  "overrides": {
+    "README.md": "public-candidate-overrides/README.md",
+    "SECURITY.md": "public-candidate-overrides/SECURITY.md",
+    ".env.example": "public-candidate-overrides/.env.example",
+    ".env.local.example": "public-candidate-overrides/.env.local.example"
+  },
+  "candidate_rules": {
+    "RUNBOOK.md": "EXCLUDE_UNTIL_PUBLIC_SAFE_REWRITE",
+    "CHANGELOG.md": "EXCLUDE_UNTIL_PUBLIC_SAFE_REVIEW",
+    "risk_rules.yaml": "REVIEW_BEFORE_INCLUDE",
+    "config/": "REVIEW_BEFORE_INCLUDE",
+    ".github/": "REVIEW_BEFORE_INCLUDE"
+  }
 }
