@@ -26,6 +26,11 @@ ROUTES = {"observation": Route("observation", "DISCORD_ROUTE_OBSERVATION", False
 ENV = {"DISCORD_ROUTE_OBSERVATION": WEBHOOK}
 
 
+@pytest.fixture(autouse=True)
+def _isolated_status_state(tmp_path, monkeypatch):
+    monkeypatch.setenv("DISCORD_OBSERVATION_STATUS_STATE", str(tmp_path / "observer_status.json"))
+
+
 def _status_error(code: int, *, body=None, headers=None) -> httpx.HTTPStatusError:
     """The exact exception type the default transport raises (URL in its text)."""
     request = httpx.Request("POST", WEBHOOK)
@@ -153,11 +158,12 @@ def test_85_event_burst_becomes_nine_messages_with_every_card_intact():
         assert sum(obs._embed_text_len(e) for e in body["embeds"]) <= 6000
 
 
-def test_inline_burst_sends_nine_requests_not_85():
+def test_inline_burst_updates_one_status_message_per_ticker_not_85_posts():
     requests = []
     router = _router(lambda url, message: requests.append(message))
     assert obs.notify_observation(_events(85), router=router) == 85
-    assert len(requests) == 9
+    assert len(requests) == 6
+    assert all("observer · active" in str(message) for message in requests)
 
 
 # ── 4. background sender: non-blocking, bounded, survives failure ────────────
@@ -166,6 +172,14 @@ def test_inline_burst_sends_nine_requests_not_85():
 def dispatcher(monkeypatch):
     d = obs._Dispatcher(sleep=lambda s: None)
     monkeypatch.setattr(obs, "_DISPATCHER", d)
+    monkeypatch.setattr(obs, "DELIVERY_MODE", "background")
+    return d
+
+
+@pytest.fixture
+def status_dispatcher(monkeypatch):
+    d = obs._StatusDispatcher(sleep=lambda s: None)
+    monkeypatch.setattr(obs, "_STATUS_DISPATCHER", d)
     monkeypatch.setattr(obs, "DELIVERY_MODE", "background")
     return d
 
@@ -188,7 +202,7 @@ def test_background_delivery_never_blocks_the_caller(dispatcher):
     assert len(requests) == 9 and dispatcher.delivered_cards == 85
 
 
-def test_default_mode_notify_returns_immediately_while_discord_hangs(dispatcher, monkeypatch):
+def test_default_mode_notify_returns_immediately_while_discord_hangs(status_dispatcher, monkeypatch):
     gate = threading.Event()
     requests = []
 
@@ -203,7 +217,7 @@ def test_default_mode_notify_returns_immediately_while_discord_hangs(dispatcher,
     assert obs.notify_observation(_events(85)) == 85
     assert time.monotonic() - started < 0.5 and requests == []
     gate.set()
-    assert dispatcher.join(5) and len(requests) == 9
+    assert status_dispatcher.join(5) and len(requests) == 6
 
 
 def test_permanent_discord_failure_drops_locally_and_worker_survives(dispatcher, caplog):
