@@ -68,6 +68,11 @@ def armed(monkeypatch):
     monkeypatch.setenv(cio.EPOCH_ENV_NAME, EPOCH)
 
 
+@pytest.fixture(autouse=True)
+def _isolated_observer_status(tmp_path, monkeypatch):
+    monkeypatch.setenv("DISCORD_OBSERVATION_STATUS_STATE", str(tmp_path / "observer_status.json"))
+
+
 @pytest.fixture
 def capture_router(monkeypatch):
     """Route the real router at a fake transport; record (route, message)."""
@@ -175,7 +180,7 @@ def test_collection_only_detection_routes_to_observation_with_root_and_label(tmp
     for _, msg in capture_router:
         assert _is_observation_card(msg, "MGC")
         assert re.search(r"\bMGC\b", msg)
-    assert any("practice buy setup spotted" in m and "Setup: 2-1-2 pattern" in m for _, m in capture_router)
+    assert any("Current: Watching" in m and "2-1-2 pattern" in m for _, m in capture_router)
 
 
 def test_unset_observation_route_never_breaks_collection(tmp_path, config, armed, monkeypatch, capture_router):
@@ -197,7 +202,7 @@ def test_notifier_failure_is_swallowed(tmp_path, config, armed, monkeypatch):
     def boom(*a, **k):
         raise RuntimeError("discord down")
 
-    monkeypatch.setattr("notifications.discord_router.DiscordRouter.send", boom)
+    monkeypatch.setattr("notifications.discord_router.DiscordRouter.upsert", boom)
     for p in _strat_212_sequence("M2K1!", 2300.0):
         out = observe_collection_only_alert(p, config=config, log_dir=str(tmp_path), for_date=DAY)
         assert out["observation"]["transport_ok"] is True
@@ -321,7 +326,8 @@ def test_stale_pending_with_persisted_outcome_is_cleared_without_duplicate_event
     resolved = cio.resolve_pending(tmp_path, instrument="M2K", bars=[], current_bar_ts=_ts(15, 30))
     assert [r["candidate_id"] for r in resolved] == ["fresh-1"]
     assert obs.notify_observation(resolved) == 1 and len(capture_router) == 1
-    assert capture_router[0][1].startswith("🟢 M2K practice buy won")
+    assert capture_router[0][1].startswith("👀 M2K observer · active")
+    assert "Last observation resolved" in capture_router[0][1] and "won" in capture_router[0][1]
     assert cio.resolve_pending(tmp_path, instrument="M2K", bars=[], current_bar_ts=_ts(15, 45)) == []  # nothing left
 
 
@@ -349,7 +355,7 @@ def test_mnq_alert_processing_is_not_blocked_by_a_hung_observation_discord(tmp_p
 
     gate, sent = threading.Event(), []
     _hanging_router(monkeypatch, gate, sent)
-    monkeypatch.setattr(obs, "_DISPATCHER", obs._Dispatcher(sleep=lambda s: None))
+    monkeypatch.setattr(obs, "_STATUS_DISPATCHER", obs._StatusDispatcher(sleep=lambda s: None))
     monkeypatch.setattr(obs, "DELIVERY_MODE", "background")
     monkeypatch.setenv("DISCORD_ROUTE_OBSERVATION", "https://obs.invalid/route")
     cfg = replace(config, enabled_concepts=[])
@@ -361,7 +367,7 @@ def test_mnq_alert_processing_is_not_blocked_by_a_hung_observation_discord(tmp_p
     assert sent == []                              # Discord still "hung", alerts already processed
     assert any(r["record_type"] == "CANDIDATE" for r in cio.read_evidence(tmp_path))
     gate.set()
-    assert obs._DISPATCHER.join(5) and sent
+    assert obs._STATUS_DISPATCHER.join(5) and sent
 
 
 def test_permanent_discord_failure_leaves_observation_results_and_evidence_unchanged(tmp_path, config, armed, monkeypatch):
