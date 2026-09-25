@@ -127,6 +127,28 @@ python main.py --market-state data/sample_market_state.json
 pytest tests/ -v
 ```
 
+## Local Development Overrides
+
+The deploy box ships an `.env` tuned for the server (for example an absolute
+`LOG_DIR` and `PUBLIC_DEMO_MODE=true`, which hides everything except a sanitized
+read-only surface). For a local checkout, put the values that differ in a
+git-ignored `.env.local` and run through the `scripts/dev.sh` helper, which loads
+`.env.local` before the app reads `.env`:
+
+```bash
+cp .env.local.example .env.local   # LOG_DIR=logs, PUBLIC_DEMO_MODE=false, ...
+
+scripts/dev.sh engine --market-state data/sample_market_state.json
+scripts/dev.sh web                 # webhook + full dashboard on :8000
+scripts/dev.sh test                # tests/ suite
+```
+
+Because `config.settings` loads `.env` with `override=False`, any variable
+exported from `.env.local` wins over the box value — no need to edit `.env` or
+pass inline env vars on every command. When testing `/webhook/alert` locally,
+send the secret via the `X-Webhook-Secret` header (the legacy `?secret=` query
+param is rejected).
+
 ## Daily Reviews
 
 The review layer is read-only. It reads the JSONL journal and writes morning or
