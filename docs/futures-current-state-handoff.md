@@ -1,6 +1,20 @@
 # Futures — Current State Handoff
 
-_As of 2026-09-24 (runtime and current decisions: see the 2026-09-24 blocks in `docs/futures-current-status-2026-09-22.md`). This is the long futures handoff. Historical audit docs remain evidence records, but they do not override the latest dated current-status file. Repository state is not proof of VPS/deployment state; verify the box separately before claiming anything is running._
+_As of 2026-09-24 (runtime and current decisions: see the 2026-09-24 blocks in `docs/futures-current-status-2026-09-22.md`, then the reconciliation note below). This is the long futures handoff. Historical audit docs remain evidence records, but they do not override the latest dated current-status file. Repository state is not proof of VPS/deployment state; verify the box separately before claiming anything is running._
+
+## Docs reconciliation — 2026-09-24 (later the same day)
+
+Lane status, README/inventory conflicts, and runtime identity are reconciled in `docs/futures-docs-reconciliation-2026-09-24.md`. Open operator rulings are in that note. This section does not authorize a deploy, a restart, or a lane stop.
+
+**Runtime identity is HANDOFF-REPORTED, NOT INDEPENDENTLY VERIFIED.** The private handoff reports curated release `41ae1881655c235a26288244c81b8df2a7c8c968` (branch `release/futures-cddef4a-curated-20260924`: `cddef4a` plus six cherry-picks) went live at 16:46:34Z on 2026-09-24 (12:46 PM ET). Git confirms that branch tip and those cherry-picks. This repository has not checked the server. Blocks below that still name `cddef4a4b6583f31007268789545c7be24345d75` as the last verified deployed release are the morning record (HOLD #1016, 10:25 AM ET). They are kept as provenance. The morning HOLD is marked superseded-by-report in `docs/futures-post-close-deployment-readiness-2026-09-24.md`.
+
+**Lane evidence status, matching `60bb47d8` (#986), is no longer PROMISING for these three collectors.** How each collector was built is unchanged below. Stopping any of them is a separate runtime change and needs its own operator GO. The retirement audits say the collectors were still running when the audits were written.
+
+- MNQ Daily 2-2: **BROKEN for the current $5k design / retired as a promotion candidate.** `docs/daily22-mes122-retirement-audit-2026-09-23.md`.
+- MES 15m 1-2-2: **BROKEN — execution/fill realism / retired as a promotion candidate.** Same audit.
+- MNQ Asia D+EMA: **RETIRE / retired as a promotion candidate.** `docs/strat22rev-session22c-asiadema-retirement-audit-2026-09-24.md`.
+
+The same commit also retired Strat 2-2 reversal and Session 2-2 continuation. Those two do not have PROMISING campaign sections in this file.
 
 ## Source-state refresh — 2026-09-24 after FI phase 2B/2C fixes
 
@@ -174,7 +188,7 @@ The internal journal key `wide_stop_6k` is retained only for historical path con
 
 ### 3. MNQ Daily 2-2 continuation
 
-- status: **PROMISING BUT UNPROVEN / PAPER EVIDENCE / ENTRY ARCHITECTURE TIMING-SENSITIVE**
+- status: **BROKEN for the current $5k design / retired as a promotion candidate** (`60bb47d87b63369238aa7fb7241fa3aafa53e900`, #986; `docs/daily22-mes122-retirement-audit-2026-09-23.md`). The bullets below describe how the collector was built. They are not a promotion case. Stopping the collector needs its own operator GO.
 - Daily structural first break consumes the day's opportunity, but the active entry is **completed-5m close-confirmed**, not an immediate first-touch breakout
 - 1 MNQ contract
 - isolated hypothetical starting ledger: **$5,000**
@@ -204,9 +218,14 @@ Under the current #775 CME trading-day identity, the same completed-close archit
 
 Critical interpretation: all 34 current-identity fills occurred only after the completed trigger-bar close moved **2–202 ticks favorably** from the planned breakout entry (median **33 ticks favorable**). A separately preregistered causal first-touch model produced **0 admissible fills at 1/2/3 adverse entry ticks** because the fixed planned 2R target plus strict actual-fill R:R >=2 rule is mathematically incompatible with any adverse true-touch slippage.
 
-Therefore:
-- the completed-close / favorable-pullback hypothesis remains **PROMISING BUT UNPROVEN / PAPER ONLY**;
+Therefore, as this section stood before #986:
+- the completed-close / favorable-pullback hypothesis was labeled **PROMISING BUT UNPROVEN / PAPER ONLY**;
 - the immediate first-touch version under current rules is **BROKEN / ZERO ADMISSIBLE FILLS**;
+
+`60bb47d8` supersedes that PROMISING label. The 2026-09-23 retirement audit classifies Daily 2-2 as **BROKEN for the current $5k design**: roll-corrected historical PF falls from 1.95 to 1.56, a fresh $5,000 book on the out-of-sample half halts, and resampling the backtest's own trades gives an 82% chance of halting within 40 trades at $5,000. No tested variant was worth preregistering. The 34-fill timing study remains the record of what the completed-close identity did; it is not a reason to keep the lane as a promotion candidate.
+
+Still in force from the timing audit:
+
 - do not relabel the 34-trade historical result as first-touch evidence;
 - do not change target or R:R rules without a separate preregistered rule decision.
 
@@ -216,7 +235,7 @@ This is paper evidence, not a live-capital claim.
 
 ### 4. MES 15m 1-2-2 (isolated lane, added 2026-09-09 by #555)
 
-- status: **PROMISING BUT UNPROVEN / PAPER EVIDENCE**
+- status: **BROKEN — execution/fill realism / retired as a promotion candidate** (`60bb47d87b63369238aa7fb7241fa3aafa53e900`, #986; `docs/daily22-mes122-retirement-audit-2026-09-23.md`). Booked entry is the trigger price inside the watched bar, but the decision is only final at that bar's close. Entry at the decision close plus 1 tick turns the #547 year from +$26 to −$465. The older independent year (2024-09-23 → 2025-07-23) is 28 trades, −$89, PF 0.84 even on booked fills. The collector description below is unchanged. Stopping the lane needs its own operator GO.
 - canonical `strat_212_122` detector; do not retune entry, stop, target or filters
 - MES only, **15m only** (`expected_timeframe_minutes=15` pinned in the lane config, not inherited)
 - 1 MES contract; all sizing ladders and win-streak scaling off
@@ -248,8 +267,7 @@ observation, not an established edge.
 
 ### 5. MNQ Asia-session D+EMA forward paper cohort (isolated lane, added 2026-09-16 by #595)
 
-- status: **PROMISING BUT UNPROVEN / PAPER EVIDENCE** — an MNQ-specific, still-unproven effect
-  pending prospective evidence
+- status: **RETIRE / retired as a promotion candidate** (`60bb47d87b63369238aa7fb7241fa3aafa53e900`, #986; `docs/strat22rev-session22c-asiadema-retirement-audit-2026-09-24.md`). On the independent year the lane did not use (2025-07-24 → 2026-07-12), honest fill plus commission with roll nights removed is PF 1.07, about the 90th percentile of a matched random-direction null, and the second half is negative (PF 0.88). `ema_pullback_trend` on that year is PF 0.75. No declared variant passed. The collector description below is how the lane was built. Stopping it needs its own operator GO.
 - module `context/asia_d_ema_paper_cohort.py`; hooked in `webhook/runner.py` after the MNQ Strat
   evidence leg, on authoritative MNQ **15m** bars only, in its own error boundary
 - definition reproduces the archived offline producer **exactly** (parity test against 70 archived
