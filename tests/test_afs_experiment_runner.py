@@ -145,7 +145,7 @@ def test_result_supported_by_mechanical_acceptance(tmp_path: Path):
     report = _run_with_criteria(
         tmp_path,
         acceptance=["candidate.expectancy.value > baseline.expectancy.value"],
-        rejection=["population_size_differs"],
+        rejection=["candidate.expectancy.value < 0"],
         baseline_results=[1.0, -0.5],
         candidate_results=[2.0, 0.5],
     )
@@ -156,13 +156,24 @@ def test_result_supported_by_mechanical_acceptance(tmp_path: Path):
     )
 
 
-def test_result_not_supported_when_rejection_fires(tmp_path: Path):
+def test_result_invalid_when_population_size_differs(tmp_path: Path):
     report = _run_with_criteria(
         tmp_path,
         acceptance=["candidate.expectancy.value > baseline.expectancy.value"],
         rejection=["population_size_differs"],
         baseline_results=[1.0, -0.5],
         candidate_results=[2.0],  # different population size
+    )
+    assert report.result == "INVALID EXPERIMENT"
+
+
+def test_result_not_supported_when_performance_rejection_fires(tmp_path: Path):
+    report = _run_with_criteria(
+        tmp_path,
+        acceptance=["candidate.expectancy.value > baseline.expectancy.value"],
+        rejection=["candidate.expectancy.value < baseline.expectancy.value"],
+        baseline_results=[2.0, 1.0],
+        candidate_results=[0.5, -0.5],
     )
     assert report.status == "VALID"
     assert report.result == "NOT SUPPORTED"
@@ -172,7 +183,7 @@ def test_result_not_supported_when_acceptance_fails(tmp_path: Path):
     report = _run_with_criteria(
         tmp_path,
         acceptance=["candidate.expectancy.value > baseline.expectancy.value"],
-        rejection=["population_size_differs"],
+        rejection=["candidate.expectancy.value < 0"],
         baseline_results=[2.0, 1.0],
         candidate_results=[0.5, -0.5],
     )
@@ -241,7 +252,7 @@ def test_classify_experiment_result_unit_matrix():
     label, _ = runner.classify_experiment_result(
         {
             "acceptance_criteria": ["candidate.expectancy.value > baseline.expectancy.value"],
-            "rejection_criteria": ["population_size_differs"],
+            "rejection_criteria": ["candidate.expectancy.value < 0"],
         },
         baseline,
         candidate_better,
@@ -255,6 +266,16 @@ def test_classify_experiment_result_unit_matrix():
         },
         baseline,
         candidate_diff_pop,
+    )
+    assert label == "INVALID EXPERIMENT"
+
+    label, _ = runner.classify_experiment_result(
+        {
+            "acceptance_criteria": ["candidate.expectancy.value > baseline.expectancy.value"],
+            "rejection_criteria": ["candidate.expectancy.value < baseline.expectancy.value"],
+        },
+        baseline,
+        candidate_worse,
     )
     assert label == "NOT SUPPORTED"
 
@@ -274,6 +295,16 @@ def test_classify_experiment_result_unit_matrix():
         candidate_better,
     )
     assert label == "INCONCLUSIVE"
+
+    label, _ = runner.classify_experiment_result(
+        {
+            "acceptance_criteria": None,
+            "rejection_criteria": ["required_metric_missing"],
+        },
+        {**baseline, "_missing_required": ["mae"]},
+        candidate_better,
+    )
+    assert label == "INVALID EXPERIMENT"
 
 
 def test_metrics_include_counts_beside_rates():

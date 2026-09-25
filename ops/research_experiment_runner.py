@@ -804,6 +804,15 @@ _NAMED_REJECTION = {
     "required metric missing for either arm": "required_metric_missing",
 }
 
+# Named predicates that invalidate the experiment itself (integrity), rather than
+# counting as evidence against the candidate (performance/research rejection).
+_INTEGRITY_REJECTION_NAMES = frozenset(
+    {
+        "population_size_differs",
+        "required_metric_missing",
+    }
+)
+
 
 def _metric_field(metrics: Mapping[str, Any], metric: str, field_name: str) -> Any:
     block = metrics.get(metric)
@@ -895,6 +904,9 @@ def classify_experiment_result(
     Returns one of:
       SUPPORTED BY THIS EXPERIMENT | NOT SUPPORTED | INCONCLUSIVE | INVALID EXPERIMENT
 
+    Integrity failures (population mismatch, missing required metrics) are
+    INVALID EXPERIMENT — not evidence against the candidate.
+
     Classification is measurement-only. It never authorizes promotion, merge,
     deploy, or strategy changes.
     """
@@ -903,29 +915,84 @@ def classify_experiment_result(
     details: dict[str, Any] = {
         "acceptance_criteria": [],
         "rejection_criteria": [],
+        "integrity_checks": [],
         "authority": "classification only; zero promotion/merge/deploy/strategy authority",
     }
+
+    # Automatic integrity gates — always INVALID when they fail.
+    b_pop = _metric_field(baseline_metrics, "population_size", "count")
+    c_pop = _metric_field(candidate_metrics, "population_size", "count")
+    if b_pop is not None and c_pop is not None and b_pop != c_pop:
+        details["integrity_checks"].append(
+            {
+                "name": "population_size_differs",
+                "passed": False,
+                "evidence": f"population_size baseline={b_pop} candidate={c_pop}",
+            }
+        )
+        details["reason"] = "population mismatch between arms"
+        return "INVALID EXPERIMENT", details
+    details["integrity_checks"].append(
+        {
+            "name": "population_size_match",
+            "passed": True,
+            "evidence": f"population_size baseline={b_pop} candidate={c_pop}",
+        }
+    )
+
+    missing = sorted(
+        set(baseline_metrics.get("_missing_required") or [])
+        | set(candidate_metrics.get("_missing_required") or [])
+    )
+    if missing:
+        details["integrity_checks"].append(
+            {
+                "name": "required_metric_missing",
+                "passed": False,
+                "evidence": f"missing={missing}",
+            }
+        )
+        details["reason"] = "required metrics missing"
+        return "INVALID EXPERIMENT", details
+    details["integrity_checks"].append(
+        {
+            "name": "required_metrics_present",
+            "passed": True,
+            "evidence": "no missing required metrics",
+        }
+    )
 
     if not acceptance and not rejection:
         details["reason"] = "no preregistered acceptance/rejection criteria"
         return "INCONCLUSIVE", details
 
     unparseable = False
-    rejection_fired = False
+    performance_rejection_fired = False
     for expr in rejection:
+        named = _NAMED_REJECTION.get(expr.strip().lower())
         status, value, evidence = evaluate_criterion(
             expr,
             baseline_metrics=baseline_metrics,
             candidate_metrics=candidate_metrics,
             kind="rejection",
         )
-        details["rejection_criteria"].append(
-            {"expression": expr, "status": status, "value": value, "evidence": evidence}
-        )
+        entry = {
+            "expression": expr,
+            "status": status,
+            "value": value,
+            "evidence": evidence,
+            "class": "integrity" if named in _INTEGRITY_REJECTION_NAMES else "performance",
+        }
+        details["rejection_criteria"].append(entry)
         if status != "ok":
             unparseable = True
-        elif value:
-            rejection_fired = True
+            continue
+        if not value:
+            continue
+        if named in _INTEGRITY_REJECTION_NAMES:
+            details["reason"] = f"integrity rejection fired: {named}"
+            return "INVALID EXPERIMENT", details
+        performance_rejection_fired = True
 
     acceptance_failed = False
     acceptance_all_true = bool(acceptance)
@@ -949,14 +1016,16 @@ def classify_experiment_result(
     if unparseable:
         details["reason"] = "one or more criteria are not mechanically evaluable"
         return "INCONCLUSIVE", details
-    if rejection_fired:
-        details["reason"] = "one or more rejection criteria fired"
+    if performance_rejection_fired:
+        details["reason"] = "one or more performance/research rejection criteria fired"
         return "NOT SUPPORTED", details
     if acceptance and acceptance_failed:
         details["reason"] = "one or more acceptance criteria failed"
         return "NOT SUPPORTED", details
     if acceptance and acceptance_all_true:
-        details["reason"] = "all acceptance criteria passed; no rejection criteria fired"
+        details["reason"] = (
+            "all acceptance criteria passed; no performance rejection criteria fired"
+        )
         return "SUPPORTED BY THIS EXPERIMENT", details
 
     details["reason"] = "no acceptance criteria to support a positive claim"
