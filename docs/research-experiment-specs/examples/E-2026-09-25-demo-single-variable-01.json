@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "experiment_id": "E-2026-09-25-demo-single-variable-01",
+  "trial_id": "T-2026-09-25-prereg-demo-single-variable-01",
+  "status": "EXAMPLE",
+  "approved_by": null,
+  "approved_at": null,
+  "supersedes": null,
+  "hypothesis": "Holding population, friction, and exit logic fixed, changing only the entry delay from 0 bars to 1 bar does not improve expectancy on the declared demo population.",
+  "prereg_path": "docs/prereg-demo-single-variable.md",
+  "baseline": {
+    "commit_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "label": "entry_delay_0"
+  },
+  "candidate": {
+    "commit_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "change": "entry_delay: 0 -> 1 completed bar; all other rules unchanged",
+    "label": "entry_delay_1"
+  },
+  "data": {
+    "source": "demo/fixture corpus (EXAMPLE only — not a real dataset)",
+    "window": {
+      "start": "2024-07-02",
+      "end": "2026-06-26"
+    },
+    "dataset_id": "demo://example-corpus/MNQ/5m",
+    "dataset_hash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  },
+  "population": "EXAMPLE ONLY; MNQ; 2024-07-02..2026-06-26; demo fixture — not linked to the live ledger",
+  "setup_type": "demo_setup",
+  "timeframe": "5m",
+  "changed_variables": [
+    {
+      "name": "entry_delay_bars",
+      "baseline_value": 0,
+      "candidate_value": 1
+    }
+  ],
+  "held_constant": [
+    "population",
+    "setup_type",
+    "timeframe",
+    "entry_logic_except_delay",
+    "exit_logic",
+    "stop_logic",
+    "target_logic",
+    "sizing",
+    "friction",
+    "data_window",
+    "dataset_id"
+  ],
+  "execution": {
+    "entry_logic": "Enter on first valid setup; baseline delay 0 bars, candidate delay 1 completed bar.",
+    "exit_logic": "Exit at first stop, target, or session flat time — identical for both arms.",
+    "stop_logic": "Fixed stop at setup invalidation level — identical for both arms.",
+    "target_logic": "Fixed 2R target — identical for both arms.",
+    "sizing": "1 contract",
+    "friction": "Round-trip commission $1.48; adverse slippage 1 tick entry and exit"
+  },
+  "required_metrics": [
+    "population_size",
+    "setups_evaluated",
+    "rejection_counts_by_reason",
+    "activation_count",
+    "entry_count",
+    "completed_trades",
+    "win_rate",
+    "loss_rate",
+    "expectancy",
+    "median_result",
+    "total_result",
+    "average_winner",
+    "average_loser",
+    "payoff_ratio",
+    "mae",
+    "mfe",
+    "target_hit_rate",
+    "stop_hit_rate",
+    "drawdown",
+    "exposure",
+    "average_hold_time"
+  ],
+  "acceptance_criteria": "Candidate expectancy strictly greater than baseline on the full population with identical completed-trade count denominator rules.",
+  "rejection_criteria": [
+    "Population size differs between arms",
+    "Any held_constant field differs between arms",
+    "Required metric missing for either arm"
+  ],
+  "evidence_path": "docs/research-evidence/T-2026-09-25-prereg-demo-single-variable-01/",
+  "variant_manifest": null,
+  "notes": "EXAMPLE fixture only. Not approved. Not linked to docs/research-trial-ledger.jsonl. Do not execute."
+}
