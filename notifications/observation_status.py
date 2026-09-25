@@ -35,7 +35,7 @@ def _state_path() -> Path:
     if explicit:
         return Path(explicit)
     shared = str(os.getenv("AFS_SHARED_DIR", "")).strip()
-    base = Path(shared) if shared else Path("logs")
+    base = (Path(shared) / "logs") if shared else Path("logs")
     return base / "discord_observation_status.json"
 
 
