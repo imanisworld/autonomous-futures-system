@@ -43,7 +43,7 @@ jobs:
           placeholder = {"", "-", "tbd", "todo", "unknown"}
 
           for field in required_fields:
-              pattern = rf"(?im)^\*\*{re.escape(field)}:\*\*\s*(.*?)\s*$"
+              pattern = rf"(?im)^\*\*{re.escape(field)}:\*\*[ \t]*(.*?)[ \t]*$"
               match = re.search(pattern, body)
               if not match:
                   missing.append(f"{field} (missing)")
@@ -67,7 +67,7 @@ jobs:
               if not re.search(pattern, body):
                   missing.append(f"{section} section")
 
-          status = re.search(r"(?im)^\*\*Status:\*\*\s*(.*?)\s*$", body)
+          status = re.search(r"(?im)^\*\*Status:\*\*[ \t]*(.*?)[ \t]*$", body)
           if status:
               allowed = {"IMPLEMENTED", "QA", "BLOCKED", "READY FOR OPERATOR"}
               if status.group(1).strip().upper() not in allowed:
