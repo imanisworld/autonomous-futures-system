@@ -1,8 +1,12 @@
 # Futures — Current State Handoff
 
-> **Authority (governance, 2026-09-25):** long handoff / provenance only. **Strategy status** → `docs/strategy-rules/Strategy_Inventory.md`. **Experiment history** → `docs/research-trial-ledger.jsonl`. **Agent roles** → `AGENTS.md`. Dated status docs and this handoff must not independently declare competing current strategy status; where they conflict with the inventory, **the inventory wins**. Repository state is not proof of VPS/deployment state; verify the box separately before claiming anything is running.
+> **Authority (governance, 2026-09-25):** long handoff / provenance only. **Strategy status** → `docs/strategy-rules/Strategy_Inventory.md`. **Experiment history** → `docs/research-trial-ledger.jsonl`. **Approved experiment contract + runner** → `docs/research-experiment-specs/` + `ops/research_experiment_runner.py` (merged #1042/#1047; measure-only). **Agent roles** → `AGENTS.md`. Dated status docs and this handoff must not independently declare competing current strategy status; where they conflict with the inventory, **the inventory wins**. Repository state is not proof of VPS/deployment state; verify the box separately before claiming anything is running.
 
 _As of 2026-09-24 (runtime and current decisions: see the 2026-09-24 blocks in `docs/futures-current-status-2026-09-22.md`, then the reconciliation note below). This is the long futures handoff. Historical audit docs remain evidence records._
+
+## Shared research plumbing note — 2026-09-26
+
+Repo-wide (not a futures runtime change): approved experiment contract #1042 (`73eb8d2…`) and fail-closed Experiment Runner #1047 (`df58d55…`) are on `main`. No live `APPROVED` experiment specs exist yet. Options-lane narrative for continuing that work lives in `docs/options-current-state-handoff.md` § Repository refresh — 2026-09-26. This note authorizes no futures deploy, restart, strategy change, or broker mutation.
 
 ## Docs reconciliation — 2026-09-24 (later the same day)
 

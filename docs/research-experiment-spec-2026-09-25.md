@@ -188,19 +188,28 @@ runtime modules.
 
 ---
 
-## 8. Relation to the Experiment Runner (future)
+## 8. Relation to the Experiment Runner
 
-After this contract lands on `main`, a separate PR may add the runner. The
-runner must:
+Implemented on `main` by #1047 (`df58d556fb1c1a462b2e968f3a6e7f47e6a7117a`).
+
+CLI:
+
+- `python scripts/afs_experiment_runner.py discover`
+- `python scripts/afs_experiment_runner.py validate --spec …`
+- `python scripts/afs_experiment_runner.py run --experiment-id …`
+
+The runner must:
 
 - discover only `status=APPROVED` live specs;
 - refuse unchanged completed experiments unless explicitly requested,
-  baseline/data changed, or reproducibility verification is requested;
+  baseline/data changed, or reproducibility verification is being performed;
 - write evidence only under the declared `evidence_path`;
 - never alter production/paper strategy configuration;
 - never promote, merge, deploy, or submit broker orders.
 
-This document does not implement that runner.
+Result labels are mechanical against preregistered criteria. Integrity failures
+(`population_size_differs`, `required_metric_missing`, unresolved SHAs, etc.)
+are `INVALID EXPERIMENT`, not evidence against the candidate.
 
 ---
 

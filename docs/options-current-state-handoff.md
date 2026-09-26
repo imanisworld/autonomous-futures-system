@@ -1,6 +1,6 @@
 # Options — Current State Handoff
 
-_As of 2026-09-24. The newest dated repository refresh below governs source state; the latest verified box-specific sections govern runtime state until a fresh VPS check is performed. This is the single current-state authority for the options lane._
+_As of 2026-09-26. The newest dated repository refresh below governs source state; the latest verified box-specific sections govern runtime state until a fresh VPS check is performed. This is the single current-state authority for the options lane._
 
 Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`; the read-only coverage evidence lane (observer, reducer, outcome study, after-close collector) is described in `docs/options-coverage-observer.md`.
 
@@ -9,6 +9,75 @@ Historical dated notes and old/closed PRs are provenance only. They do not overr
 Repository-wide research roles are locked in `AGENTS.md` and apply to the options lane as well: Grok (when used) proposes outside research/hypotheses; Cursor performs repository-aware mechanical work on already-defined trials; Claude/Codex act as independent breaker/QA; ChatGPT + operator reconcile conflicting evidence and approve status/progression decisions.
 
 This file remains the **options current-state authority**. Do not create a parallel options strategy inventory, experiment selector, or agent-maintained status file. Agents may read this file and propose updates, but must not silently maintain competing current-state truth. Existing frozen cohorts, forward boundaries, one-look rules, and evidence contracts remain controlling unless an explicitly reviewed options change replaces them.
+
+Shared research execution plumbing (repo-wide, not options-scanner runtime):
+
+- Approved experiment contract: `docs/research-experiment-spec-2026-09-25.md` + `docs/research-experiment-spec.schema.json` + `docs/research-experiment-specs/`
+- Fail-closed runner: `ops/research_experiment_runner.py` / `scripts/afs_experiment_runner.py`
+- Trial history remains `docs/research-trial-ledger.jsonl`; evidence under `docs/research-evidence/<trial_id>/`
+
+## Repository refresh — 2026-09-26 (experiment contract + runner)
+
+**Repository main at this refresh:** `67f9082205c2145a58a1659e233864c1e184f687` (includes Discord observer status-card merge #1048 after the runner). **No options-scanner/VPS deployment, service restart, environment change, strategy change, broker/order path, or live experiment approval was performed by this documentation refresh.** Runtime box identity below is unchanged / not re-verified here.
+
+### Completed infrastructure (merged)
+
+| Item | PR | Merge commit | Notes |
+|---|---|---|---|
+| Approved experiment specification contract | [#1042](https://github.com/imanisworld/autonomous-futures-system/pull/1042) | `73eb8d2ea4cf41e6a4521445482d87e5a4527084` | Schema + human contract + EXAMPLE fixture + CI. Exactly 4 files. CI green then squash-merged. |
+| Fail-closed AFS Experiment Runner | [#1047](https://github.com/imanisworld/autonomous-futures-system/pull/1047) | `df58d556fb1c1a462b2e968f3a6e7f47e6a7117a` | Discover/validate/run CLI; schema + ledger linkage; SHA/dataset gates; adapter-gated execute; mechanical result classification. CI green then squash-merged. |
+
+Working branches used during build (now merged; do not continue them for new work unless resurrecting history):
+
+- `cursor/approved-experiment-contract-8c69` → #1042
+- `cursor/afs-experiment-runner-8c69` → #1047 (final head before squash: `3123b909836aa3245cce93fa0e51e5233ef6207e`)
+
+### Decisions locked
+
+1. **No approved experiment spec, no run.** Runner discovers only live `status=APPROVED` specs under `docs/research-experiment-specs/`.
+2. **Division of responsibility:** Strategy Lab / research layer designs hypotheses; Cursor executes/measures against the contract; QA/Evidence Breaker falsifies; operator approves progression. Regular off-repo Grok loops are not part of this automation path.
+3. **Result classification (mechanical only):**
+   - `SUPPORTED BY THIS EXPERIMENT` — parseable acceptance criteria pass; no performance rejection fires
+   - `NOT SUPPORTED` — experiment valid, but performance/research rejection fires or acceptance fails
+   - `INCONCLUSIVE` — valid but criteria absent/unparseable/insufficient
+   - `INVALID EXPERIMENT` — integrity failure (including `population_size_differs`, `required_metric_missing`, SHA/data/schema/linkage failures)
+4. Classification has **zero** promotion, merge, deploy, or strategy-change authority.
+5. `EXAMPLE` fixture is documentation-only; never executable.
+6. No live `APPROVED` experiment specs exist yet. No execution adapter is registered for a production `setup_type`.
+
+### Tests / CI verified
+
+- Contract PR #1042: 6 CI checks green before merge (handoff-fields, tests, CodeQL ×3 contexts).
+- Runner PR #1047: 6 CI checks green on final integrity-classification head before merge.
+- Local focused suite at merge time: `pytest tests/test_afs_experiment_runner.py tests/test_research_experiment_spec.py` → **22 passed**.
+- Demo only (non-executing):
+  - `python scripts/afs_experiment_runner.py discover` → `count: 0` APPROVED specs
+  - `validate --spec docs/research-experiment-specs/examples/E-2026-09-25-demo-single-variable-01.json` → `Status: VALID` (structural)
+  - `run` on that EXAMPLE → `Status: BLOCKED` (exit 2)
+
+### Exact runner commands
+
+```bash
+python scripts/afs_experiment_runner.py discover
+python scripts/afs_experiment_runner.py validate --spec docs/research-experiment-specs/<id>.json
+python scripts/afs_experiment_runner.py run --experiment-id E-YYYY-MM-DD-slug-01
+```
+
+### Unresolved / next for this track
+
+Infrastructure is done. Do **not** rebuild the contract or runner unless a blocking defect is found.
+
+**Exact next step (operator-authorized research, not more infra):** register the first real options experiment for the parked **30m 2-1-2 continuation / 59-episode population** question as:
+
+1. prereg under `docs/prereg-*.md`
+2. `PLANNED` (or later) line in `docs/research-trial-ledger.jsonl`
+3. live `docs/research-experiment-specs/<experiment_id>.json` with `status=APPROVED` only after operator approval
+4. a registered execution adapter for that `setup_type` wrapping existing replay/research tooling
+5. resolvable baseline/candidate SHAs + verifiable dataset identity/coverage
+
+Until those exist, `run` correctly finds nothing to execute. Do not invent or self-approve a live experiment. Do not alter scanner/runtime posture to obtain a favorable result.
+
+**Current safe posture:** keep options evidence collection / advisory posture unchanged; use the new runner only for explicitly approved experiment specs; no deploy/restart inferred from this refresh.
 
 ## Repository refresh — 2026-09-24
 
@@ -439,7 +508,9 @@ The pre-Monday host/reboot audit is complete. This was maintenance and verificat
 
 ## Next action
 
-There are now four separate evidence tracks and one infrastructure backlog item; they must not be conflated:
+There are now four separate evidence tracks, one shared experiment-execution track, and one infrastructure backlog item; they must not be conflated:
+
+**Shared experiment execution (repo-wide; merged 2026-09-25):** contract #1042 + runner #1047 are on `main`. Next work on this track is **not more infrastructure** — it is registering/running the first operator-approved live experiment (candidate: 30m 2-1-2 continuation / 59-episode population study). Until a live `APPROVED` spec + adapter + resolvable SHAs/dataset exist, the runner correctly executes nothing. See **Repository refresh — 2026-09-26**.
 
 **Market Hours v2 / Extended Equity Session Readiness:** the first RTH alert-safety slice is **deployed and proven** on options-scanner release `a0c34818faaad37b20d8c05249e8f5442d8d7141`. The shared NYSE RTH authority covers scheduled scans and the final Discord delivery boundary, including the scan-crosses-close case added in #825. Local proof on the curated release: 22 focused tests and 2,034 options regressions passed. VPS proof preserved the production DB and advisory/read-only posture, and a no-network 15:59 -> 16:01 test returned `market_closed` with zero HTTP requests. This does not authorize extended-hours alerts; overnight/pre-market/after-hours work remains separate observation-only backlog. See `docs/options-market-hours-alert-gate-2026-09-20.md`.
 
@@ -447,6 +518,7 @@ There are now four separate evidence tracks and one infrastructure backlog item;
 2. **1-2-2 prospective causal evidence:** epoch `122-IEX-E1` is now deployed/scheduled observation-only on release `36e73f1981850b66b043d849ce877c15bd1ab3e7`. Policy is frozen at 60s cadence, 120s IEX-trigger-to-selector capture limit, and delayed SIP reconciliation after 16 minutes. The next gate is the first natural RTH `ARMED -> IEX reversal -> selector capture <=120s -> production replay parity -> delayed SIP reconciliation` row. Do not tune after seeing outcomes. Strategy stop/target/runner remain unresolved, so this lane is not yet expectancy-capable.
 3. **Dedicated 212R prospective evidence:** exact-SIP collector v0.3 is merged in #739 but **not deployed or scheduled**, and current Alpaca entitlement still blocks real-time consolidated SIP. The alternative-source validation step is complete offline, but no 212R IEX collector is authorized/deployed. Keep the source cohorts separate.
 4. **Historical 212R option replay:** exact frozen trigger time/price and the production context-price path are proven (#733/#738), but exact historical selector/fill replay remains **DATA BLOCKED** on causal historical Delta and contract-level OI. Do not purchase data, synthesize analytics, or use current snapshots without separate authorization/evidence.
+5. **First approved offline experiment (NEW — ready when operator authorizes):** register then measure the parked 30m 2-1-2 continuation / 59-episode population question through the experiment-spec + runner chain. Do not expand into unconstrained optimization. Do not self-approve.
 
 212R market-context policy, source-target/runner management, and numeric slippage/stress qualification also remain explicit policy decisions; none is authorized by the collector build.
 
