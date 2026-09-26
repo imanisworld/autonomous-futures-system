@@ -81,7 +81,7 @@ External Grok (or other off-repo) research loops are unverified until explicitly
 | Futures strategy evidence verdict + execution posture | `docs/strategy-rules/Strategy_Inventory.md` | Futures strategy-status truth. `ops/project_check/daily.py` reads its Master Table. |
 | Options current state / evidence posture | `docs/options-current-state-handoff.md` | Options-lane current-state authority. Preserve frozen cohorts/evidence boundaries; dated options notes are provenance unless this file explicitly incorporates them. |
 | Experiment / trial history | `docs/research-trial-ledger.jsonl` | Append-only attempt history. Spec: `docs/research-trial-ledger-spec-2026-09-23.md`. |
-| Approved baseline-vs-candidate run contract | `docs/research-experiment-specs/` (+ schema/spec docs) | Sits *on top of* a ledger trial. Does not replace inventory or ledger. Contract only — not a runner. |
+| Approved baseline-vs-candidate run contract + fail-closed runner | `docs/research-experiment-specs/` (+ schema/spec docs); `ops/research_experiment_runner.py` / `scripts/afs_experiment_runner.py` | Sits *on top of* a ledger trial. Does not replace inventory or ledger. Runner executes only `APPROVED` specs; zero promotion/deploy authority. |
 | Active lane sample / ops memory | `ops/evidence_registry.py` summaries | Read-only operational memory of collected evidence. Not status authority. |
 | Runtime enablement / broker / release | Box config + release manifest | Never infer from docs or inventory alone. |
 
