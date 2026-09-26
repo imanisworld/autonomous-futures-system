@@ -111,6 +111,7 @@ def _run_tradovate_bar(config, tmp_path, monkeypatch, *, fill_answer, entry_orde
     from webhook.runner import process_alert
 
     monkeypatch.setenv("BROKER", "tradovate")
+    monkeypatch.setenv("TRADOVATE_ENV", "demo")
     monkeypatch.setenv("RUNNER_SHADOW_ENABLED", "true")
     monkeypatch.delenv("EXIT_MODE", raising=False)
     _FakeTradovateBroker.fill_answer = fill_answer

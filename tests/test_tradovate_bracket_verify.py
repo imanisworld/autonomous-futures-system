@@ -12,6 +12,7 @@ from execution.tradovate_broker import TradovateBroker, TradovateConfig, _round_
 
 
 def test_config_from_env_accepts_numeric_api_key_id(monkeypatch):
+    monkeypatch.setenv("TRADOVATE_ENV", "demo")
     monkeypatch.setenv("TRADOVATE_API_KEY_ID", "13833")
     monkeypatch.setenv("TRADOVATE_API_KEY_SECRET", "secret")
 
@@ -22,6 +23,7 @@ def test_config_from_env_accepts_numeric_api_key_id(monkeypatch):
 
 
 def test_config_from_env_rejects_pasted_cid_secret_combo(monkeypatch):
+    monkeypatch.setenv("TRADOVATE_ENV", "demo")
     monkeypatch.setenv(
         "TRADOVATE_API_KEY_ID",
         "cid: 13833, secret: 24b71877-b166-4f98-9fe0-7cb3266e6ee1",

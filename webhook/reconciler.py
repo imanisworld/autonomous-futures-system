@@ -348,4 +348,8 @@ async def run_reconciler_loop(
             logger.info("Phantom reconciler stopped")
             break
         except Exception as exc:
+            from execution.tradovate_broker import TradovateEnvConfigError
+
+            if isinstance(exc, TradovateEnvConfigError):
+                raise
             logger.warning("reconciler loop error: %s", exc)
