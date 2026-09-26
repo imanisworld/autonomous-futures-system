@@ -1,0 +1,12 @@
+{
+  "trial_id": "T-2026-09-25-prereg-options-212c-target-geometry-2026-09-25-01",
+  "variants": [
+    {
+      "id": "nearest_v1"
+    },
+    {
+      "id": "floor_ge1r"
+    }
+  ],
+  "results_sha256": null
+}

@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "experiment_id": "E-2026-09-25-options-212c-target-geometry-01",
+  "trial_id": "T-2026-09-25-prereg-options-212c-target-geometry-2026-09-25-01",
+  "status": "DRAFT",
+  "approved_by": null,
+  "approved_at": null,
+  "supersedes": null,
+  "hypothesis": "On the exact frozen 59-episode 30m STRAT_212_CONTINUATION population, the existing >=1R floor target geometry increases full-funnel WOULD_OTHERWISE_QUALIFY activations versus the current nearest-level V1 geometry, with all non-target inputs held constant.",
+  "prereg_path": "docs/prereg-options-212c-target-geometry-2026-09-25.md",
+  "baseline": {
+    "commit_sha": "69ea8a9021441a04bd2b08616f38aa2a90f05536",
+    "label": "nearest_v1 — current main before the experiment-specific adapter commit"
+  },
+  "candidate": {
+    "commit_sha": "6bf42dc2eab0721e0054f794a3c35cf3b0a4d3c2",
+    "change": "Use the existing floor geometry path (find_targets(min_target_rr=1.0)) instead of nearest-level V1 geometry on the identical 59 episode population.",
+    "label": "floor_ge1r — adapter-capable candidate commit; target rule differs only by declared arm"
+  },
+  "data": {
+    "source": "OPTIONS_COVERAGE_OUTCOMES out-v0.1 / ep-v0.1 frozen retrospective coverage evidence",
+    "window": {
+      "start": "2026-09-09",
+      "end": "2026-09-15"
+    },
+    "dataset_id": "coverage://options-30m-retrospective-20/2026-09-09_2026-09-15/out-v0.1",
+    "dataset_hash": "1963db73bccf0fd366eaaa077bb4e9582ed453ff220f1c5e789961096f3f113c"
+  },
+  "population": "Options 30m STRAT_212_CONTINUATION; exact 20-symbol V1 universe [AAPL, AMZN, BAC, COIN, GE, GOOGL, INTC, IWM, JPM, MRK, MSFT, NFLX, NVDA, PLTR, QQQ, SPY, TLT, TSLA, WMT, XOM]; retrospective sessions 2026-09-09..2026-09-15; full structurally selected 59-episode population",
+  "setup_type": "options_212c_target_geometry",
+  "timeframe": "30m",
+  "changed_variables": [
+    {
+      "name": "target_geometry_rule",
+      "baseline_value": "nearest_v1",
+      "candidate_value": "floor_ge1r"
+    }
+  ],
+  "held_constant": [
+    "exact 59 episode identities selected by family/symbol/date before outcomes",
+    "20-symbol V1 universe",
+    "2026-09-09..2026-09-15 retrospective sessions",
+    "trigger and invalidation",
+    "first-sight timestamp and price",
+    "SPY/QQQ/hourly/daily alignment inputs",
+    "gate ordering outside target-geometry-dependent fields",
+    "cov-v0.1 / ep-v0.1 / out-v0.1 semantics",
+    "no option contract/fill/sizing/P&L model"
+  ],
+  "execution": {
+    "entry_logic": "Coverage classification only. Each structurally selected episode is evaluated at its stored first-sight state; activation means the arm-specific gate bucket is WOULD_OTHERWISE_QUALIFY. No option order is entered.",
+    "exit_logic": "No synthetic trade exit or option P&L is created in this experiment.",
+    "stop_logic": "Stored trigger/invalidation and all non-target gate inputs remain unchanged between arms.",
+    "target_logic": "Baseline uses gate_bucket_nearest/current nearest-level V1 geometry. Candidate uses gate_bucket_floor/existing >=1R floor geometry. The floor rule's corresponding remaining-R/late check changes only because target geometry changes.",
+    "sizing": "None; coverage-only experiment.",
+    "friction": "No option fill model. Existing stored first-sight timing/price is used only by the already-recorded late gate."
+  },
+  "required_metrics": [
+    "population_size",
+    "setups_evaluated",
+    "rejection_counts_by_reason",
+    "activation_count"
+  ],
+  "acceptance_criteria": [
+    "candidate.activation_count.count > baseline.activation_count.count"
+  ],
+  "rejection_criteria": [
+    "candidate.activation_count.count <= baseline.activation_count.count"
+  ],
+  "evidence_path": "docs/research-evidence/T-2026-09-25-prereg-options-212c-target-geometry-2026-09-25-01/",
+  "variant_manifest": "docs/research-trial-manifests/T-2026-09-25-prereg-options-212c-target-geometry-2026-09-25-01.json",
+  "notes": "DRAFT ONLY. The authoritative manifest pins the expected frozen outcomes dataset SHA-256, but the 34 MB member file is not present in this checkout. Before APPROVED: restore/verify those exact bytes (or a provenance-preserving pre-score 59-row extract), prove exactly 59 unique episodes, and obtain explicit operator approval. Baseline and candidate SHAs are distinct/resolvable. This test can classify coverage rescue only; it cannot prove edge, option expectancy, or production readiness."
+}

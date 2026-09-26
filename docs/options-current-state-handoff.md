@@ -43,7 +43,7 @@ Working branches used during build (now merged; do not continue them for new wor
    - `INVALID EXPERIMENT` — integrity failure (including `population_size_differs`, `required_metric_missing`, SHA/data/schema/linkage failures)
 4. Classification has **zero** promotion, merge, deploy, or strategy-change authority.
 5. `EXAMPLE` fixture is documentation-only; never executable.
-6. No live `APPROVED` experiment specs exist yet. No execution adapter is registered for a production `setup_type`.
+6. No live `APPROVED` experiment specs exist yet. The first real experiment is now registered as a **DRAFT** for the exact 59-episode 30m 2-1-2 continuation target-geometry ablation, with a narrow research-only adapter. DRAFT registration is not approval to run.
 
 ### Tests / CI verified
 
@@ -67,15 +67,9 @@ python scripts/afs_experiment_runner.py run --experiment-id E-YYYY-MM-DD-slug-01
 
 Infrastructure is done. Do **not** rebuild the contract or runner unless a blocking defect is found.
 
-**Exact next step (operator-authorized research, not more infra):** register the first real options experiment for the parked **30m 2-1-2 continuation / 59-episode population** question as:
+**Exact next step (operator-authorized research, not more infra):** the first real options experiment is now **REGISTERED / DRAFT** under `T-2026-09-25-prereg-options-212c-target-geometry-2026-09-25-01` and `E-2026-09-25-options-212c-target-geometry-01`. The adapter exists and baseline/candidate SHAs are distinct and resolvable.
 
-1. prereg under `docs/prereg-*.md`
-2. `PLANNED` (or later) line in `docs/research-trial-ledger.jsonl`
-3. live `docs/research-experiment-specs/<experiment_id>.json` with `status=APPROVED` only after operator approval
-4. a registered execution adapter for that `setup_type` wrapping existing replay/research tooling
-5. resolvable baseline/candidate SHAs + verifiable dataset identity/coverage
-
-Until those exist, `run` correctly finds nothing to execute. Do not invent or self-approve a live experiment. Do not alter scanner/runtime posture to obtain a favorable result.
+The remaining gate is evidence identity, not architecture: restore the manifest-pinned `outcomes_2026-09-09_2026-09-15.json` (expected SHA-256 `1963db73bccf0fd366eaaa077bb4e9582ed453ff220f1c5e789961096f3f113c`) or create a provenance-preserving 59-row extract from those exact bytes before scoring; prove exactly 59 unique episodes; then obtain explicit operator approval and perform the one-look run. Until then the spec stays `DRAFT` and `run` must remain blocked. Do not invent a replacement dataset, self-approve, or alter scanner/runtime posture to obtain a favorable result.
 
 **Current safe posture:** keep options evidence collection / advisory posture unchanged; use the new runner only for explicitly approved experiment specs; no deploy/restart inferred from this refresh.
 
@@ -443,7 +437,7 @@ Operator ruling: most missing families are coverage, not edge, so **no broad det
 
 ### Parked, not authorized
 
-Target-geometry ablation on the full 2-1-2 continuation population, first-hour hourly-context audit, SPY/QQQ neutral-alignment ablation, legacy Signa timeout reliability audit, and option-chain snapshot retention. Each still needs a separate operator instruction. The three-session prospective precondition is now satisfied, but that does **not** authorize any of these parked studies automatically.
+The full-population 30m 2-1-2 continuation target-geometry ablation is now **REGISTERED / DRAFT, NOT APPROVED TO RUN** under trial `T-2026-09-25-prereg-options-212c-target-geometry-2026-09-25-01`: exact 59 structurally selected retrospective episodes, baseline nearest-level V1 geometry versus the existing >=1R floor geometry, coverage activation only (no option P&L/expectancy claim). The authoritative manifest pins the expected raw outcome file at SHA-256 `1963db73bccf0fd366eaaa077bb4e9582ed453ff220f1c5e789961096f3f113c`, but the file itself is not tracked in this checkout; restore/hash proof and 59/59 adapter reproduction remain required before approval. First-hour hourly-context audit, SPY/QQQ neutral-alignment ablation, legacy Signa timeout reliability audit, and option-chain snapshot retention remain parked and unauthorized.
 
 ## Retired / superseded options clutter
 
@@ -510,7 +504,7 @@ The pre-Monday host/reboot audit is complete. This was maintenance and verificat
 
 There are now four separate evidence tracks, one shared experiment-execution track, and one infrastructure backlog item; they must not be conflated:
 
-**Shared experiment execution (repo-wide; merged 2026-09-25):** contract #1042 + runner #1047 are on `main`. Next work on this track is **not more infrastructure** — it is registering/running the first operator-approved live experiment (candidate: 30m 2-1-2 continuation / 59-episode population study). Until a live `APPROVED` spec + adapter + resolvable SHAs/dataset exist, the runner correctly executes nothing. See **Repository refresh — 2026-09-26**.
+**Shared experiment execution (repo-wide; merged 2026-09-25):** contract #1042 + runner #1047 are on `main`. The first 30m 2-1-2 continuation / 59-episode experiment is now registered as **DRAFT** with its research-only adapter. The remaining prerequisite is restoring/verifying the manifest-pinned member dataset and proving 59/59 membership; only then may the operator set `APPROVED` and allow the one-look run. See **Repository refresh — 2026-09-26**.
 
 **Market Hours v2 / Extended Equity Session Readiness:** the first RTH alert-safety slice is **deployed and proven** on options-scanner release `a0c34818faaad37b20d8c05249e8f5442d8d7141`. The shared NYSE RTH authority covers scheduled scans and the final Discord delivery boundary, including the scan-crosses-close case added in #825. Local proof on the curated release: 22 focused tests and 2,034 options regressions passed. VPS proof preserved the production DB and advisory/read-only posture, and a no-network 15:59 -> 16:01 test returned `market_closed` with zero HTTP requests. This does not authorize extended-hours alerts; overnight/pre-market/after-hours work remains separate observation-only backlog. See `docs/options-market-hours-alert-gate-2026-09-20.md`.
 
@@ -518,7 +512,7 @@ There are now four separate evidence tracks, one shared experiment-execution tra
 2. **1-2-2 prospective causal evidence:** epoch `122-IEX-E1` is now deployed/scheduled observation-only on release `36e73f1981850b66b043d849ce877c15bd1ab3e7`. Policy is frozen at 60s cadence, 120s IEX-trigger-to-selector capture limit, and delayed SIP reconciliation after 16 minutes. The next gate is the first natural RTH `ARMED -> IEX reversal -> selector capture <=120s -> production replay parity -> delayed SIP reconciliation` row. Do not tune after seeing outcomes. Strategy stop/target/runner remain unresolved, so this lane is not yet expectancy-capable.
 3. **Dedicated 212R prospective evidence:** exact-SIP collector v0.3 is merged in #739 but **not deployed or scheduled**, and current Alpaca entitlement still blocks real-time consolidated SIP. The alternative-source validation step is complete offline, but no 212R IEX collector is authorized/deployed. Keep the source cohorts separate.
 4. **Historical 212R option replay:** exact frozen trigger time/price and the production context-price path are proven (#733/#738), but exact historical selector/fill replay remains **DATA BLOCKED** on causal historical Delta and contract-level OI. Do not purchase data, synthesize analytics, or use current snapshots without separate authorization/evidence.
-5. **First approved offline experiment (NEW — ready when operator authorizes):** register then measure the parked 30m 2-1-2 continuation / 59-episode population question through the experiment-spec + runner chain. Do not expand into unconstrained optimization. Do not self-approve.
+5. **First offline experiment:** the 30m 2-1-2 continuation / 59-episode target-geometry question is **REGISTERED / DRAFT** through the experiment-spec + runner chain. Restore and hash-verify the exact frozen member dataset, prove 59/59 population identity, then obtain operator approval and perform the one-look measurement. Do not expand into unconstrained optimization and do not self-approve.
 
 212R market-context policy, source-target/runner management, and numeric slippage/stress qualification also remain explicit policy decisions; none is authorized by the collector build.
 

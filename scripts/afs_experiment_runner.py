@@ -29,6 +29,10 @@ from ops.research_experiment_runner import (
     run_validation,
 )
 
+from ops.research_experiment_adapters import register_builtin_adapters
+
+register_builtin_adapters()
+
 
 def _resolve_spec_path(root: Path, args: argparse.Namespace) -> Path:
     if args.spec:
