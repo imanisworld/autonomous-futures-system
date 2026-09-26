@@ -251,10 +251,10 @@ def test_entry_mirrors_single_limit_leg_on_futures_account():
     assert "fut-id" not in repr(result)
 
 
-def test_entry_short_market_when_forced_and_quantity_capped():
+def test_entry_short_market_when_forced_and_quantity_within_max():
     client = FakeClient()
     result = mirror_entry(
-        bracket(direction="SHORT", force_market_entry=True, contracts=5),
+        bracket(direction="SHORT", force_market_entry=True, contracts=2),
         dict(SAFE_ENV, WEBULL_FUTURES_MIRROR_MAX_CONTRACTS="2"),
         today=TODAY,
         client_factory=lambda *_: client,
@@ -266,6 +266,25 @@ def test_entry_short_market_when_forced_and_quantity_capped():
     order = client.placed[0][1][0]
     assert "limit_price" not in order
     assert order["quantity"] == "2"
+
+
+def test_entry_refuses_quantity_above_mirror_max_without_resizing(tmp_path, monkeypatch):
+    monkeypatch.setenv("WEBULL_FUTURES_MIRROR_LOG_DIR", str(tmp_path))
+    result = mirror_entry(
+        bracket(contracts=5),
+        dict(SAFE_ENV, WEBULL_FUTURES_MIRROR_MAX_CONTRACTS="2"),
+        today=TODAY,
+        client_factory=forbidden,
+    )
+    assert result.status == "BLOCKED"
+    assert result.quantity == 5
+    assert "not resized" in (result.reason or "")
+    assert "WEBULL_FUTURES_MIRROR_MAX_CONTRACTS=2" in (result.reason or "")
+    journal = list(tmp_path.glob("webull_mirror_*.jsonl"))
+    assert journal, "refusal must be journaled"
+    text = journal[0].read_text(encoding="utf-8")
+    assert "mirror_refusal" in text
+    assert "not resized" in text
 
 
 def test_entry_blocks_instruments_outside_allow_list_before_client():

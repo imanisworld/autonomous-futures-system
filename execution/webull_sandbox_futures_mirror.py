@@ -14,9 +14,10 @@ Contract (mirror, not execution):
   paper config is paper-only-safe AND ``WEBULL_FUTURES_MIRROR_ENABLED`` is
   explicitly true. Default is off → every call returns BLOCKED without
   creating a client.
-- Orders are single legs (Webull futures have no OTO/OCO combos), quantity is
-  capped by ``WEBULL_FUTURES_MIRROR_MAX_CONTRACTS`` (default 1), and only
-  quarterly micro roots with a computable front month are mirrored.
+- Orders are single legs (Webull futures have no OTO/OCO combos). Quantity
+  above ``WEBULL_FUTURES_MIRROR_MAX_CONTRACTS`` (default 1) is refused and
+  not resized. Only quarterly micro roots with a computable front month
+  are mirrored.
 - No runtime module imports this file yet (guarded by tests). Wiring is a
   separate, flag-gated change.
 
@@ -27,6 +28,7 @@ preview on MNQZ6 all 200; no trading-hours restriction on futures.
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 from dataclasses import dataclass
 from datetime import date
@@ -35,6 +37,8 @@ from typing import Any, Callable, Literal, Mapping, Optional, Protocol
 from execution.broker_interface import BracketOrder, Fill
 from execution.tradovate_broker import _front_month_symbol
 from integrations.webull_paper_config import load_webull_paper_config
+
+logger = logging.getLogger(__name__)
 
 WEBULL_SANDBOX_FUTURES_BROKER = "webull_sandbox_futures_paper"
 _FUTURES_ACCOUNT_CLASS = "FUTURES"
@@ -376,7 +380,35 @@ def _submit(
         return MirrorOrderResult(status="BLOCKED", leg=leg, reason="front_month_unresolved")
     if side not in ("BUY", "SELL"):
         return MirrorOrderResult(status="BLOCKED", leg=leg, reason="direction_invalid")
-    quantity = min(int(contracts or 0), cfg.max_contracts)
+    if isinstance(contracts, bool) or not isinstance(contracts, int):
+        return MirrorOrderResult(status="BLOCKED", leg=leg, reason="quantity_invalid")
+    if contracts > cfg.max_contracts:
+        reason = (
+            f"refusing mirror: contracts {contracts} exceed "
+            f"WEBULL_FUTURES_MIRROR_MAX_CONTRACTS={cfg.max_contracts}; not resized"
+        )
+        logger.warning(reason)
+        try:
+            from execution.paper_mirror_hook import _record
+
+            _record({
+                "event": "mirror_refusal",
+                "leg": leg,
+                "instrument": instrument,
+                "contracts": contracts,
+                "max_contracts": cfg.max_contracts,
+                "status": "BLOCKED",
+                "reason": reason,
+            })
+        except Exception:
+            logger.warning("mirror refusal journal skipped", exc_info=True)
+        return MirrorOrderResult(
+            status="BLOCKED",
+            leg=leg,
+            reason=reason,
+            quantity=contracts,
+        )
+    quantity = contracts
     if quantity < 1:
         return MirrorOrderResult(status="BLOCKED", leg=leg, reason="quantity_invalid")
 
