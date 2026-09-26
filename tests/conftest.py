@@ -16,6 +16,10 @@ import pytest
 # Unit tests must never inherit deployment values from a developer's .env.
 # Individual tests still control environment variables through monkeypatch.
 os.environ["PYTHON_DOTENV_DISABLED"] = "1"
+# The release-integrity startup gate is on by default. Unit tests import the
+# webhook app without a pinned release manifest, so they opt out here. This
+# does not change production: an unset variable still enforces.
+os.environ.setdefault("RELEASE_INTEGRITY_ENFORCED", "false")
 
 # Ensure project root is on path
 sys.path.insert(0, str(Path(__file__).parent.parent))

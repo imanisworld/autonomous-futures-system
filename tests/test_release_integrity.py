@@ -52,13 +52,34 @@ def _make_release(root: Path) -> Path:
     return manifest_path
 
 
-def test_clean_release_verifies_ok(tmp_path):
+def _pin(monkeypatch, root: Path) -> str:
+    fingerprint = json.loads((root / "release_manifest.json").read_text(encoding="utf-8"))[
+        "fingerprint_sha256"
+    ]
+    monkeypatch.setenv(FINGERPRINT_PIN_ENV, fingerprint)
+    return fingerprint
+
+
+def test_clean_release_without_pin_is_unpinned_not_ok(tmp_path, monkeypatch):
     _make_release(tmp_path)
+    monkeypatch.delenv(FINGERPRINT_PIN_ENV, raising=False)
     report = verify_release(repo_root=tmp_path)
-    assert report["ok"] is True
+    assert report["ok"] is False
+    assert report["status"] == "UNPINNED"
     assert report["files_checked"] == 3
     assert report["fingerprint_ok"] is True
     assert report["release_commit"] == "a" * 40
+    assert report["problems"] == []
+    assert report["mismatched"] == []
+
+
+def test_clean_release_with_matching_pin_is_ok(tmp_path, monkeypatch):
+    _make_release(tmp_path)
+    _pin(monkeypatch, tmp_path)
+    report = verify_release(repo_root=tmp_path)
+    assert report["ok"] is True
+    assert report["status"] == "OK"
+    assert report["fingerprint_ok"] is True
     assert report["problems"] == []
 
 
@@ -98,13 +119,20 @@ def test_extra_root_module_fails(tmp_path):
     assert report["extra_runtime_files"] == ["settings.py"]
 
 
-def test_extra_scan_ignores_pycache_and_non_runtime(tmp_path):
+def test_extra_scan_ignores_non_runtime_and_flags_pycache(tmp_path, monkeypatch):
     _make_release(tmp_path)
     _write(tmp_path, "webhook/__pycache__/junk.py", "x = 1\n")
+    _write(tmp_path, "webhook/__pycache__/runner.cpython-312.pyc", "x")
     _write(tmp_path, "docs/notes.py", "x = 1\n")
     _write(tmp_path, "webhook/app.py.pre-routing", "old = 1\n")
+    _pin(monkeypatch, tmp_path)
     report = verify_release(repo_root=tmp_path)
-    assert report["ok"] is True
+    assert report["extra_runtime_files"] == [
+        "webhook/__pycache__/junk.py",
+        "webhook/__pycache__/runner.cpython-312.pyc",
+    ]
+    assert report["ok"] is False
+    assert report["status"] == "FAIL"
 
 
 def test_manifest_tamper_detected(tmp_path):
@@ -138,17 +166,26 @@ def test_fingerprint_pin_match_ok(tmp_path, monkeypatch):
     assert verify_release(repo_root=tmp_path)["ok"] is True
 
 
-def test_enforce_noop_when_unset(tmp_path, monkeypatch):
+def test_enforce_on_by_default_when_unset(tmp_path, monkeypatch):
     monkeypatch.delenv(ENFORCE_ENV, raising=False)
-    # Broken tree (no manifest at all) — still must not raise when not enforced.
+    with pytest.raises(SystemExit, match="RELEASE INTEGRITY FAILURE"):
+        enforce_release_integrity(repo_root=tmp_path)
+
+
+@pytest.mark.parametrize("raw", ["false", "0", "no", "off", "FALSE"])
+def test_enforce_noop_when_explicitly_disabled(tmp_path, monkeypatch, raw):
+    monkeypatch.setenv(ENFORCE_ENV, raw)
+    # Broken tree (no manifest at all) — an explicit disable must not raise.
     assert enforce_release_integrity(repo_root=tmp_path) is None
 
 
 def test_enforce_passes_clean_tree(tmp_path, monkeypatch):
     _make_release(tmp_path)
+    _pin(monkeypatch, tmp_path)
     monkeypatch.setenv(ENFORCE_ENV, "true")
     report = enforce_release_integrity(repo_root=tmp_path)
     assert report is not None and report["ok"] is True
+    assert report["status"] == "OK"
 
 
 def test_enforce_refuses_startup_on_drift(tmp_path, monkeypatch):
@@ -159,10 +196,70 @@ def test_enforce_refuses_startup_on_drift(tmp_path, monkeypatch):
         enforce_release_integrity(repo_root=tmp_path)
 
 
+def test_enforce_refuses_unpinned_clean_tree(tmp_path, monkeypatch):
+    _make_release(tmp_path)
+    monkeypatch.delenv(FINGERPRINT_PIN_ENV, raising=False)
+    monkeypatch.setenv(ENFORCE_ENV, "true")
+    with pytest.raises(SystemExit, match="UNPINNED"):
+        enforce_release_integrity(repo_root=tmp_path)
+
+
 def test_enforce_refuses_startup_without_manifest(tmp_path, monkeypatch):
     monkeypatch.setenv(ENFORCE_ENV, "true")
     with pytest.raises(SystemExit, match="RELEASE INTEGRITY FAILURE"):
         enforce_release_integrity(repo_root=tmp_path)
+
+
+def test_edit_manifest_and_refingerprint_is_unpinned_not_ok(tmp_path, monkeypatch):
+    """Updating the file, its manifest hash, and the fingerprint is not OK.
+
+    The tree is self-consistent, so only the original out-of-band pin catches it.
+    """
+    manifest_path = _make_release(tmp_path)
+    original = json.loads(manifest_path.read_text(encoding="utf-8"))["fingerprint_sha256"]
+    tampered = "RUNNER = 2  # tampered\n"
+    _write(tmp_path, "webhook/runner.py", tampered)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["source_files"]["webhook/runner.py"] = _sha(tampered)
+    manifest["fingerprint_sha256"] = manifest_fingerprint(manifest)
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    monkeypatch.delenv(FINGERPRINT_PIN_ENV, raising=False)
+    report = verify_release(repo_root=tmp_path)
+    assert report["fingerprint_ok"] is True
+    assert report["mismatched"] == []
+    assert report["ok"] is False
+    assert report["status"] == "UNPINNED"
+    assert manifest["fingerprint_sha256"] != original
+
+    monkeypatch.setenv(FINGERPRINT_PIN_ENV, original)
+    pinned = verify_release(repo_root=tmp_path)
+    assert pinned["ok"] is False
+    assert pinned["status"] == "FAIL"
+    assert any(FINGERPRINT_PIN_ENV in problem for problem in pinned["problems"])
+
+
+def test_unexpected_native_bytecode_path_and_env_files_fail(tmp_path, monkeypatch):
+    _make_release(tmp_path)
+    _pin(monkeypatch, tmp_path)
+    _write(tmp_path, "risk/risk_engine.so", "not a real extension\n")
+    _write(tmp_path, "webhook/runner.pyc", "loose bytecode\n")
+    _write(tmp_path, "webhook/extra.pth", "import evil\n")
+    _write(tmp_path, "sitecustomize.py", "print('site')\n")
+    _write(tmp_path, "usercustomize.py", "print('user')\n")
+    _write(tmp_path, ".env", "MAX_CONTRACTS_HARD_CAP=99\n")
+    _write(tmp_path, ".env.local", "SECRET=1\n")
+    report = verify_release(repo_root=tmp_path)
+    assert report["ok"] is False
+    assert report["status"] == "FAIL"
+    assert report["extra_runtime_files"] == [
+        ".env",
+        ".env.local",
+        "risk/risk_engine.so",
+        "sitecustomize.py",
+        "usercustomize.py",
+        "webhook/extra.pth",
+        "webhook/runner.pyc",
+    ]
 
 
 def test_round_trip_with_release_manifest_builder(tmp_path):
@@ -179,3 +276,91 @@ def test_round_trip_with_release_manifest_builder(tmp_path):
     assert report["missing"] == []
     assert report["fingerprint_ok"] is True
     assert report["files_checked"] == manifest["source_file_count"]
+
+
+def _add_shipped(root: Path, files: dict[str, str]) -> None:
+    """Add files to the fake release and recompute the manifest fingerprint."""
+    manifest_path = root / "release_manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    for rel, content in files.items():
+        _write(root, rel, content)
+        manifest["source_files"][rel] = _sha(content)
+    manifest["source_file_count"] = len(manifest["source_files"])
+    manifest["fingerprint_sha256"] = manifest_fingerprint(manifest)
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+
+def test_manifest_import_roots_outside_runtime_dirs_are_scanned(tmp_path, monkeypatch):
+    """agent, alert_ranker, integrations, options_manager, quotes, research.
+
+    A .py or .so dropped in those trees must fail a pinned verify. The
+    shipped file is in the manifest so the directory is derived from it;
+    the planted file is not.
+    """
+    _make_release(tmp_path)
+    _add_shipped(tmp_path, {
+        "agent/daily_summary.py": "AGENT = 1\n",
+        "alert_ranker/app.py": "RANKER = 1\n",
+        "integrations/webull_paper_config.py": "INT = 1\n",
+        "options_manager/app.py": "OM = 1\n",
+        "quotes/live_index.py": "Q = 1\n",
+        "research/__init__.py": "",
+    })
+    _pin(monkeypatch, tmp_path)
+    planted = [
+        "agent/evil.py",
+        "agent/evil.so",
+        "alert_ranker/evil.py",
+        "integrations/evil.so",
+        "options_manager/evil.py",
+        "quotes/evil.so",
+        "research/evil.py",
+    ]
+    for rel in planted:
+        _write(tmp_path, rel, "planed\n")
+    report = verify_release(repo_root=tmp_path)
+    assert report["ok"] is False
+    assert report["status"] == "FAIL"
+    for rel in planted:
+        assert rel in report["extra_runtime_files"]
+
+
+def test_pycache_next_to_manifest_source_is_refused(tmp_path, monkeypatch):
+    """A timestamp-valid .pyc whose .py is in the manifest is still a failure."""
+    _make_release(tmp_path)
+    _add_shipped(tmp_path, {"risk/risk_engine.py": "def size():\n    return 1\n"})
+    _pin(monkeypatch, tmp_path)
+    planted = "risk/__pycache__/risk_engine.cpython-313.pyc"
+    _write(tmp_path, planted, "malicious bytecode")
+    report = verify_release(repo_root=tmp_path)
+    assert report["ok"] is False
+    assert report["status"] == "FAIL"
+    assert planted in report["extra_runtime_files"]
+    assert "risk/risk_engine.py" not in report["mismatched"]
+
+
+def test_venv_site_hooks_flag_unrecorded_and_allow_record_pth(tmp_path, monkeypatch):
+    """RECORD-listed distutils-precedence.pth is allowed. Other site hooks are not."""
+    _make_release(tmp_path)
+    _pin(monkeypatch, tmp_path)
+    site = tmp_path / ".venv" / "lib" / "python3.13" / "site-packages"
+    dist = site / "setuptools-70.0.0.dist-info"
+    dist.mkdir(parents=True)
+    (site / "distutils-precedence.pth").write_text("import os; var = 'setuptools'\n", encoding="utf-8")
+    (site / "evil.pth").write_text("import evil\n", encoding="utf-8")
+    (site / "sitecustomize.py").write_text("print('site')\n", encoding="utf-8")
+    (site / "usercustomize.py").write_text("print('user')\n", encoding="utf-8")
+    (dist / "RECORD").write_text(
+        "distutils-precedence.pth,sha256=abc,20\n"
+        "sitecustomize.py,sha256=def,12\n",
+        encoding="utf-8",
+    )
+    report = verify_release(repo_root=tmp_path)
+    extras = report["extra_runtime_files"]
+    prefix = ".venv/lib/python3.13/site-packages/"
+    assert prefix + "distutils-precedence.pth" not in extras
+    assert prefix + "evil.pth" in extras
+    assert prefix + "sitecustomize.py" in extras
+    assert prefix + "usercustomize.py" in extras
+    assert report["ok"] is False
+    assert report["status"] == "FAIL"
