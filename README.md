@@ -10,7 +10,7 @@ A local futures automation engine for a limited universe. Live trading is blocke
 
 ## Repository
 
-This repository is **private**. It is for educational review and paper/demo
+This repository is **public** for educational review and paper/demo
 demonstration only. It is not financial advice, does not promise profitability,
 and does not provide live-trading support.
 
@@ -29,8 +29,8 @@ Shareable course and learning documents live in
 [`share/learning/`](share/learning/COURSE_README.md).
 
 Private strategy doctrine, production configuration, operational notes, and
-credentials are not stored in this repository. Access to the repository is
-private.
+credentials are not stored in this repository. Keep secrets and live
+operational material out of git; use local `.env` files only.
 
 ---
 

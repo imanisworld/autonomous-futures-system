@@ -1,6 +1,8 @@
 # Security Policy
 
-This private repository contains a reusable, paper-trading-focused engine.
+This public repository contains a reusable, paper-trading-focused engine.
+Visibility does not change the rules below: never commit credentials or
+operational secrets.
 
 ## Never Commit
 
