@@ -63,6 +63,9 @@ def test_supervisor_bounds_both_tmpfs_logs_and_preserves_watcher_exit_code():
     assert 'pipe_rc=("${PIPESTATUS[@]}")' in script
     assert 'rc="${pipe_rc[0]}"' in script
     assert 'sink_rc="${pipe_rc[1]}"' in script
+    assert 'bounded_sink_rc=$?' in script
+    assert 'cat >/dev/null' in script
+    assert 'exit "$bounded_sink_rc"' in script
 
 
 def test_install_script_ships_bounded_log_sink():
