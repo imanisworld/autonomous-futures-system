@@ -10,7 +10,8 @@ Required checks:
 - If deployed SHA differs from reviewed SHA: read the diff between them and confirm it is safe to have ridden along (additive-only, no execution/risk/broker/strategy/journal touch) before treating the deploy as clean — do not assume a rideal ong commit is safe without reading it, same discipline as `/futures-diff-review`
 - Service health: `systemctl is-active futures-bot` (or equivalent on the current box), `/health` endpoint
 - Status endpoints: `/status/today`, `/status/broker-account`, `/status/live-preflight`, `/status/strategy` — confirm they respond and their content matches expected config (not stale/cached from a prior release)
-- Env vars: `LIVE_TRADING_ENABLED` (must be `false` unless explicitly authorized), `PAPER_MODE` (must be `true` under current posture), `BROKER` (expected `tradovate`), `TRADOVATE_ENV`/account routing (expected `demo`, not `live`), `SCHEDULE_MODE`, `EXIT_MODE` (expected `static` under current posture)
+- Env vars: `LIVE_TRADING_ENABLED` (must be `false` unless explicitly authorized), `PAPER_MODE` (`true` passes; `false` is acceptable only when `TRADOVATE_ENV` is exactly `demo` AND `LIVE_TRADING_ENABLED=false`; any other value, or `false` outside that pair, is a STOP finding requiring the Operator), `BROKER` (expected `tradovate`), `TRADOVATE_ENV`/account routing (must be exactly `demo`; any other value, including blank, `prod`, or `live` in any case, is a STOP finding requiring the Operator), `SCHEDULE_MODE`, `EXIT_MODE` (expected `static` under current posture)
+- Contract size above 1 is a STOP finding
 - Live preflight armed state: `execution/live_preflight.py`'s state machine — confirm disarmed unless live trading has been explicitly authorized for this session
 - Current position state: confirm `has_open_position` matches what's expected (flat, unless a position is deliberately open) — an unexpected open position after a deploy/restart is a blocker, not a warning
 - `errors.log`: tail it, confirm no new errors since the last deploy that weren't already known
@@ -43,6 +44,7 @@ What I Verified:
 - any ride-along commits between them read and assessed
 - service health and status endpoints checked live
 - env vars (LIVE_TRADING_ENABLED, PAPER_MODE, BROKER, TRADOVATE_ENV, EXIT_MODE) checked live
+- contract size checked (above 1 is a STOP finding)
 - live preflight armed state checked
 - position state checked
 - errors.log tailed
@@ -67,6 +69,9 @@ Smallest safe action only.
 Safety gates:
 - If deployed SHA differs from reviewed SHA and the diff between them has not been read, verdict is capped at HOLD — never APPROVE on an unexamined gap.
 - `LIVE_TRADING_ENABLED=true` on the box, or reachable without explicit multi-layer authorization, is an automatic REJECT / UNSAFE regardless of any other finding.
+- `PAPER_MODE=true` passes. `PAPER_MODE=false` is acceptable only when `TRADOVATE_ENV` is exactly `demo` AND `LIVE_TRADING_ENABLED=false`. Any other `PAPER_MODE` value, or `PAPER_MODE=false` outside that pair, is a STOP finding requiring the Operator.
+- Any `TRADOVATE_ENV` other than exactly `demo` (including blank, `prod`, or `live` in any case) is a STOP finding requiring the Operator.
+- Contract size above 1 is a STOP finding.
 - An unexpected open position after a deploy/restart is a blocker, capping the verdict at HOLD until explained.
 - A broker auth-breaker trip or a webhook-validation failure caps the verdict at HOLD — the system may look "up" while silently unable to place or receive orders.
 - A stale/abandoned deploy lock is a warning, not automatically a blocker, but must be surfaced and explained, not silently cleared as part of this audit.
