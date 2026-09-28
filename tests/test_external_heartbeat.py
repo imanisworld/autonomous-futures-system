@@ -143,6 +143,7 @@ def test_systemd_units_are_opt_in_and_do_not_control_runtime():
     assert "NoNewPrivileges=true" in service
     assert "ProtectSystem=strict" in service
     assert "PrivateTmp=false" in service
+    assert "TimeoutStartSec=60s" in service
     assert "OnUnitActiveSec=5min" in timer
     assert "OnBootSec=8min" in timer
 
@@ -166,4 +167,24 @@ def test_non_finite_timing_config_is_rejected(monkeypatch, tmp_path, capsys):
     rc = hb.main(["--watcher-state", str(tmp_path / "unused.json")])
 
     assert rc == 2
-    assert "finite positive number" in capsys.readouterr().err
+    assert "finite number in" in capsys.readouterr().err
+
+
+def test_oversized_max_age_is_rejected(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv(hb.URL_ENV, "https://heartbeat.example.test/token")
+    monkeypatch.setenv(hb.MAX_AGE_ENV, "3600")
+
+    rc = hb.main(["--watcher-state", str(tmp_path / "unused.json")])
+
+    assert rc == 2
+    assert "1800" in capsys.readouterr().err
+
+
+def test_oversized_timeout_is_rejected(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv(hb.URL_ENV, "https://heartbeat.example.test/token")
+    monkeypatch.setenv(hb.TIMEOUT_ENV, "31")
+
+    rc = hb.main(["--watcher-state", str(tmp_path / "unused.json")])
+
+    assert rc == 2
+    assert "30" in capsys.readouterr().err
