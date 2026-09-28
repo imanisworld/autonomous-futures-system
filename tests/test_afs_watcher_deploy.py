@@ -26,6 +26,7 @@ def test_deploy_directory_has_expected_files():
         "run_ro.sh",
         "supervisor.sh",
         "bootstrap_tmp_state.sh",
+        "bounded_log_pipe.py",
         "afs-watcher.service",
         "install_afs_watcher_service.sh",
         "README.md",
@@ -34,7 +35,7 @@ def test_deploy_directory_has_expected_files():
     assert expected <= present
 
 
-@pytest.mark.parametrize("name", ["watcher.py", "watcher_memory_guard.py"])
+@pytest.mark.parametrize("name", ["watcher.py", "watcher_memory_guard.py", "bounded_log_pipe.py"])
 def test_python_sources_compile(tmp_path, name):
     py_compile.compile(str(DEPLOY_DIR / name), cfile=str(tmp_path / "out.pyc"), doraise=True)
 
@@ -50,6 +51,23 @@ def test_shell_scripts_pass_bash_syntax_check(name):
         text=True,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_supervisor_bounds_both_tmpfs_logs_and_preserves_watcher_exit_code():
+    script = (DEPLOY_DIR / "supervisor.sh").read_text()
+    assert "bounded_log_pipe.py" in script
+    assert 'WATCHER_STDOUT_MAX=$((4 * 1024 * 1024))' in script
+    assert 'WATCHER_STDOUT_KEEP=$((2 * 1024 * 1024))' in script
+    assert 'SUPERVISOR_LOG_MAX=$((1024 * 1024))' in script
+    assert 'SUPERVISOR_LOG_KEEP=$((512 * 1024))' in script
+    assert 'pipe_rc=("${PIPESTATUS[@]}")' in script
+    assert 'rc="${pipe_rc[0]}"' in script
+    assert 'sink_rc="${pipe_rc[1]}"' in script
+
+
+def test_install_script_ships_bounded_log_sink():
+    script = (DEPLOY_DIR / "install_afs_watcher_service.sh").read_text()
+    assert '"$SRC_DIR"/bounded_log_pipe.py' in script
 
 
 def test_systemd_unit_reuses_supervisor_and_restarts_on_boot():
