@@ -45,6 +45,17 @@ def test_ntp_sync_state_fails_closed_on_command_error(monkeypatch):
     assert "timedatectl exited 1" in got["error"]
 
 
+def test_ntp_sync_state_fails_closed_when_query_cannot_execute(monkeypatch):
+    def boom(_cmd, timeout=15):
+        raise FileNotFoundError("timedatectl missing")
+
+    monkeypatch.setattr(w, "run", boom)
+    got = w._ntp_sync_state()
+    assert got["synchronized"] is None
+    assert "timedatectl query failed" in got["error"]
+    assert "FileNotFoundError" in got["error"]
+
+
 def test_ntp_sync_state_fails_closed_on_unexpected_value(monkeypatch):
     monkeypatch.setattr(w, "run", lambda cmd, timeout=15: (0, "maybe\n"))
     got = w._ntp_sync_state()
