@@ -22,7 +22,7 @@ def test_resolver_uses_genuine_paper_broker():
     assert audit.PaperBroker is PaperBroker
     src = Path(pb_mod.__file__).read_bytes()
     import hashlib
-    assert hashlib.sha1(b"blob %d\0" % len(src) + src).hexdigest().startswith("2a67d276")
+    assert hashlib.sha1(b"blob %d\0" % len(src) + src).hexdigest().startswith("80af10cc")
 
 
 def _bars(rows_et, minutes=5):
