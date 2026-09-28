@@ -263,6 +263,18 @@ DAILY_DIR = STATE_DIR / "daily"
 INTERIM_DIR = STATE_DIR / "interim"
 NOTIFY_PREFIX = "[AFS WATCHER · read-only]"
 
+# Keep the watcher's own RAM-backed telemetry bounded. These two files are
+# diagnostic caches, not durable evidence; events/snapshots are handled by the
+# separate persistent archiver and are deliberately not capped here.
+STATE_LOG_CAP_BYTES = {
+    "memory.jsonl": 2 * 1024 * 1024,
+    "watcher.log": 4 * 1024 * 1024,
+}
+RESOURCE_SERVICES = ("futures-bot", "options-scanner")
+RESOURCE_FD_WARN_FRACTION = 0.75
+RESOURCE_STATE_FS_WARN_FRACTION = 0.80
+RESOURCE_LOG_FS_WARN_FRACTION = 0.90
+
 READ_ONLY_COMMANDS = ("systemctl", "journalctl", "readlink", "df", "pgrep", "ps")
 FORBIDDEN_TOKENS = (
     "systemctl restart", "systemctl stop", "systemctl start", "systemctl kill",
@@ -298,11 +310,37 @@ def state_replace(p: Path, text: str) -> None:
     os.replace(tmp, p)
 
 
+def _cap_state_file(p: Path, max_bytes: int) -> None:
+    """Keep non-durable watcher telemetry from growing without bound in tmpfs."""
+    try:
+        size = p.stat().st_size
+    except OSError:
+        return
+    if size <= max_bytes:
+        return
+    keep = max(65536, max_bytes // 2)
+    start = max(0, size - keep)
+    fd = os.open(p, os.O_RDONLY)
+    try:
+        os.lseek(fd, start, os.SEEK_SET)
+        data = os.read(fd, size - start)
+    finally:
+        os.close(fd)
+    if start:
+        first_newline = data.find(b"\n")
+        if first_newline >= 0:
+            data = data[first_newline + 1:]
+    state_replace(p, data.decode("utf-8", "replace"))
+
+
 def state_append(p: Path, text: str) -> None:
     p = _under_state(p)
     fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
     with os.fdopen(fd, "wt", encoding="utf-8") as fh:
         fh.write(text)
+    cap = STATE_LOG_CAP_BYTES.get(p.name)
+    if cap:
+        _cap_state_file(p, cap)
 
 
 def read_prod_bytes(p: Path, max_bytes: int | None = None) -> bytes:
@@ -1030,6 +1068,210 @@ def check_runtime(state: dict, f: Findings, tick: dict) -> None:
             f.add("BLOCKED", "live_trading_enabled", "status/today reports live_trading_enabled=true")
 
     settle_baseline(state, f, rt, base, restart, props, pid, cwd, live_pins)
+
+
+
+def _proc_status(pid: int, *, proc_root: Path = Path("/proc")) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for line in (proc_root / str(pid) / "status").read_text(encoding="utf-8").splitlines():
+        key, sep, value = line.partition(":")
+        if sep:
+            out[key] = value.strip()
+    return out
+
+
+def _status_kib(status: dict[str, str], key: str) -> int | None:
+    raw = status.get(key, "")
+    parts = raw.split()
+    if not parts or not parts[0].isdigit():
+        return None
+    return int(parts[0])
+
+
+def _open_file_soft_limit(pid: int, *, proc_root: Path = Path("/proc")) -> int | None:
+    for line in (proc_root / str(pid) / "limits").read_text(encoding="utf-8").splitlines():
+        if line.startswith("Max open files"):
+            parts = line.split()
+            if len(parts) >= 4 and parts[3].isdigit():
+                return int(parts[3])
+            return None
+    return None
+
+
+def _process_cgroup_dir(
+    pid: int,
+    *,
+    proc_root: Path = Path("/proc"),
+    cgroup_root: Path = Path("/sys/fs/cgroup"),
+) -> Path:
+    try:
+        rows = (proc_root / str(pid) / "cgroup").read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return cgroup_root
+    for line in rows:
+        parts = line.split(":", 2)
+        if len(parts) == 3 and parts[0] == "0" and parts[1] == "":
+            rel = parts[2].strip().lstrip("/")
+            return cgroup_root / rel if rel else cgroup_root
+    return cgroup_root
+
+
+def _read_int_map(path: Path) -> dict[str, int]:
+    out: dict[str, int] = {}
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return out
+    for line in lines:
+        key, _, value = line.partition(" ")
+        if key and value.strip().isdigit():
+            out[key] = int(value.strip())
+    return out
+
+
+def _read_pressure(path: Path = Path("/proc/pressure/memory")) -> dict[str, dict[str, float | int]]:
+    out: dict[str, dict[str, float | int]] = {}
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return out
+    for line in lines:
+        parts = line.split()
+        if not parts:
+            continue
+        metrics: dict[str, float | int] = {}
+        for token in parts[1:]:
+            key, sep, value = token.partition("=")
+            if not sep:
+                continue
+            try:
+                metrics[key] = int(value) if key == "total" else float(value)
+            except ValueError:
+                continue
+        out[parts[0]] = metrics
+    return out
+
+
+def _service_resource_snapshot(
+    pid: int,
+    *,
+    proc_root: Path = Path("/proc"),
+    cgroup_root: Path = Path("/sys/fs/cgroup"),
+) -> dict:
+    status = _proc_status(pid, proc_root=proc_root)
+    fd_count = len(list((proc_root / str(pid) / "fd").iterdir()))
+    fd_limit = _open_file_soft_limit(pid, proc_root=proc_root)
+    cgroup_dir = _process_cgroup_dir(pid, proc_root=proc_root, cgroup_root=cgroup_root)
+    current = None
+    try:
+        raw_current = (cgroup_dir / "memory.current").read_text(encoding="utf-8").strip()
+        current = int(raw_current) if raw_current.isdigit() else None
+    except OSError:
+        pass
+    return {
+        "pid": pid,
+        "rss_mb": round((_status_kib(status, "VmRSS") or 0) / 1024, 1),
+        "swap_mb": round((_status_kib(status, "VmSwap") or 0) / 1024, 1),
+        "threads": int(status["Threads"]) if status.get("Threads", "").isdigit() else None,
+        "fd_count": fd_count,
+        "fd_soft_limit": fd_limit,
+        "fd_fraction": round(fd_count / fd_limit, 4) if fd_limit else None,
+        "cgroup_memory_current_bytes": current,
+        "cgroup_memory_events": _read_int_map(cgroup_dir / "memory.events"),
+    }
+
+
+def _fs_usage(path: Path) -> dict | None:
+    try:
+        usage = shutil.disk_usage(path)
+    except OSError:
+        return None
+    used_fraction = usage.used / usage.total if usage.total else 0.0
+    return {
+        "total_bytes": usage.total,
+        "used_bytes": usage.used,
+        "free_bytes": usage.free,
+        "used_fraction": round(used_fraction, 4),
+    }
+
+
+def _top_memory_processes(limit: int = 5) -> list[dict]:
+    rc, out = run(["ps", "-eo", "pid=,comm=,rss=", "--sort=-rss"], timeout=20)
+    if rc != 0:
+        return []
+    rows: list[dict] = []
+    for line in out.splitlines():
+        parts = line.strip().split(None, 2)
+        if len(parts) != 3 or not parts[0].isdigit() or not parts[2].isdigit():
+            continue
+        rows.append({
+            "pid": int(parts[0]),
+            "command": parts[1],
+            "rss_mb": round(int(parts[2]) / 1024, 1),
+        })
+        if len(rows) >= limit:
+            break
+    return rows
+
+
+def check_resources(state: dict, f: Findings, tick: dict) -> None:
+    """Read-only host/process diagnostics. Adds warnings only; never gates runtime."""
+    resources: dict = {
+        "services": {},
+        "memory_pressure": _read_pressure(),
+        "state_fs": _fs_usage(STATE_DIR),
+        "logs_fs": _fs_usage(LOG_DIR),
+        "top_processes_by_rss": _top_memory_processes(),
+    }
+    tick["resources"] = resources
+
+    futures_props = tick.get("runtime", {}).get("service") or {}
+    for service in RESOURCE_SERVICES:
+        props = futures_props if service == "futures-bot" else {}
+        if service != "futures-bot":
+            rc, out = run([
+                "systemctl", "show", service,
+                "-p", "ActiveState", "-p", "ExecMainPID", "-p", "NRestarts",
+            ])
+            if rc == 0:
+                props = dict(line.split("=", 1) for line in out.splitlines() if "=" in line)
+        pid_text = str(props.get("ExecMainPID") or "0")
+        entry: dict = {
+            "active_state": props.get("ActiveState"),
+            "nrestarts": props.get("NRestarts"),
+        }
+        resources["services"][service] = entry
+        if not pid_text.isdigit() or int(pid_text) <= 0:
+            continue
+        try:
+            entry.update(_service_resource_snapshot(int(pid_text)))
+        except (OSError, ValueError) as exc:
+            entry["error"] = f"{type(exc).__name__}: {exc}"
+            continue
+        fraction = entry.get("fd_fraction")
+        if fraction is not None and fraction >= RESOURCE_FD_WARN_FRACTION:
+            key = "fd_pressure_futures_bot" if service == "futures-bot" else "fd_pressure_options_scanner"
+            f.add(
+                "WARN", key,
+                f"{service} has {entry['fd_count']} of {entry['fd_soft_limit']} file handles open "
+                f"({fraction:.0%}); prior scanner failure occurred at the descriptor limit",
+                service=service, resource=entry,
+            )
+
+    state_fs = resources.get("state_fs") or {}
+    if state_fs.get("used_fraction", 0.0) >= RESOURCE_STATE_FS_WARN_FRACTION:
+        f.add(
+            "WARN", "state_tmpfs_pressure",
+            f"watcher state filesystem is {state_fs['used_fraction']:.0%} full",
+            resource=state_fs,
+        )
+    logs_fs = resources.get("logs_fs") or {}
+    if logs_fs.get("used_fraction", 0.0) >= RESOURCE_LOG_FS_WARN_FRACTION:
+        f.add(
+            "WARN", "logs_disk_pressure",
+            f"shared logs filesystem is {logs_fs['used_fraction']:.0%} full",
+            resource=logs_fs,
+        )
 
 
 def _reading_from_dict(row: dict) -> MemoryReading:
@@ -1943,6 +2185,11 @@ def handle_memory_warning(state: dict, findings: Findings, tick: dict) -> None:
 
 MEM_FIXED_WARNING_KEYS = ("memory_rss_growth", "swap_used_warning", "swap_pressure_warning")
 
+RESOURCE_WARNING_KEYS = (
+    "fd_pressure_futures_bot", "fd_pressure_options_scanner",
+    "state_tmpfs_pressure", "logs_disk_pressure",
+)
+
 
 def handle_memory_fixed_warnings(state: dict, findings: Findings, tick: dict) -> None:
     """Route the fixed-check WARNINGs to Discord the same way the dynamic guard's
@@ -1970,6 +2217,40 @@ def handle_memory_fixed_warnings(state: dict, findings: Findings, tick: dict) ->
         notify(state, MEMORY_WARNING_ROUTE,
                _memory_discord_text("WARNING", key, warning, tick, str(snap)),
                f"memory-fixed-warning:{key}:{iso(now_utc())[:13]}")
+
+
+def handle_resource_warnings(state: dict, findings: Findings, tick: dict) -> None:
+    """Notify once per read-only resource-pressure episode and on recovery."""
+    active = state.setdefault("resource_warnings", {})
+    present = {row["key"]: row for row in findings.warns() if row["key"] in RESOURCE_WARNING_KEYS}
+    for key in list(active):
+        if key not in present and active[key].get("active"):
+            log(f"resource WARNING cleared: {key}")
+            notify(
+                state, MEMORY_WARNING_ROUTE,
+                _cleared_discord_text(key, active[key].get("first_utc"), tick),
+                f"resource-recovered:{key}:{iso(now_utc())}",
+            )
+            active[key] = {"active": False}
+    for key, warning in present.items():
+        if (active.get(key) or {}).get("active"):
+            continue
+        snap = capture_snapshot(f"WARNING_{key}", tick, findings)
+        active[key] = {
+            "active": True,
+            "first_utc": iso(now_utc()),
+            "snapshot": str(snap),
+            "summary": warning["summary"],
+        }
+        state_append(EVENTS_FILE, json.dumps({
+            "utc": iso(now_utc()), "kind": "WARNING", "key": key,
+            "summary": warning["summary"], "snapshot": str(snap),
+        }, sort_keys=True) + "\n")
+        notify(
+            state, MEMORY_WARNING_ROUTE,
+            _finding_discord_text("WARNING", key, warning, str(snap)),
+            f"resource-warning:{key}:{iso(now_utc())[:13]}",
+        )
 
 
 # Plain-English titles for finding keys (prefix match, first hit wins, so longer
@@ -2004,6 +2285,10 @@ _FINDING_TITLES = {
     "deploy_candidate_running": "Leftover update check still running",
     "feed_alarm_stale": "Price-gap checker has stopped",
     "feed_state_unreadable": "Price-gap checker file can't be read",
+    "fd_pressure_futures_bot": "Trading bot is running out of file handles",
+    "fd_pressure_options_scanner": "Options scanner is running out of file handles",
+    "state_tmpfs_pressure": "Watcher's RAM-backed storage is filling up",
+    "logs_disk_pressure": "Server log disk is filling up",
     "oom_kill_new": "Server ran out of memory and closed a program",
     "memory_critical": "Server memory is critically low",
     "memory_warning": "Server memory is getting low",
@@ -2064,6 +2349,9 @@ _FINDING_EXPLAIN = {
     "post_epoch_spans_releases": "Test records since the start came from more than one version of the bot.",
     "orb_reclaim_unpaired": "Each opening-range setup should be recorded under both the original and adjusted rules.",
     "feed_alarm_stale": "The checker that watches for gaps in prices hasn't updated.",
+    "fd_pressure_": "A monitored process is close to its open-file limit; this can make normal reads and database opens fail.",
+    "state_tmpfs_pressure": "The watcher's RAM-backed state filesystem is filling up.",
+    "logs_disk_pressure": "The filesystem holding shared logs is filling up.",
     "oom_kill_new": "The server ran out of memory and shut down a program to cope.",
     "memory_": "The server is running low on memory.",
     "swap_": "The server is running low on memory.",
@@ -2116,6 +2404,9 @@ def smallest_fix(key: str) -> str:
         "memory_rss_growth": "Nothing yet — the watcher will warn again if it gets worse",
         "swap_used_warning": "Nothing yet — the watcher will warn again if it gets worse",
         "swap_pressure_warning": "Nothing yet — the watcher will warn again if it gets worse",
+        "fd_pressure_": "Check for a file-handle leak before raising the process limit",
+        "state_tmpfs_pressure": "Check which watcher diagnostic file is growing; durable evidence is archived separately",
+        "logs_disk_pressure": "Free disk space without deleting trade or evidence records",
         "memory_": "Nothing yet — the watcher will warn again if it gets worse",
         "five_min_feed": "Check the 5-minute Micro Nasdaq alert in TradingView — every Micro Nasdaq practice position depends on it",
         "daily_22_collector_stalled": "Read the bot's log in the snapshot for the error",
@@ -2915,13 +3206,14 @@ def maybe_interim(state: dict, tick: dict) -> None:
 def tick_once(state: dict) -> dict:
     f = Findings()
     tick: dict = {"utc": iso(now_utc()), "tick": state["ticks"] + 1}
-    for name, fn in (("runtime", check_runtime), ("memory", check_memory), ("memory_fixed", check_memory_fixed), ("storage", check_storage), ("lanes", check_lanes), ("campaign", check_campaign), ("failed_reclaim", check_failed_reclaim)):
+    for name, fn in (("runtime", check_runtime), ("memory", check_memory), ("memory_fixed", check_memory_fixed), ("resources", check_resources), ("storage", check_storage), ("lanes", check_lanes), ("campaign", check_campaign), ("failed_reclaim", check_failed_reclaim)):
         try:
             fn(state, f, tick)
         except Exception as exc:  # noqa: BLE001
             f.add("WARN", f"watcher_check_error_{name}", f"{type(exc).__name__}: {exc}", tb=traceback.format_exc()[-800:])
     handle_memory_warning(state, f, tick)
     handle_memory_fixed_warnings(state, f, tick)
+    handle_resource_warnings(state, f, tick)
     handle_blocked(state, f, tick)
     try:
         maybe_daily(state, tick, f)
