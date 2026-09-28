@@ -60,6 +60,9 @@ def stream_to_bounded_log(
     _validate(max_bytes, keep_bytes)
     path.parent.mkdir(parents=True, exist_ok=True)
 
+    if path.exists() and path.stat().st_size > max_bytes:
+        _trim(path, keep_bytes)
+
     sink = path.open("ab", buffering=0)
     try:
         while True:
