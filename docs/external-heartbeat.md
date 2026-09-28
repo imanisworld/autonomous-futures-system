@@ -39,6 +39,10 @@ AFS_EXTERNAL_HEARTBEAT_MAX_AGE_SECONDS=720
 AFS_EXTERNAL_HEARTBEAT_TIMEOUT_SECONDS=10
 ```
 
+Maximum accepted values are 1800 seconds for watcher freshness and 30 seconds
+for the HTTP request timeout. Larger values fail configuration validation rather
+than weakening the dead-man check.
+
 The URL is treated as secret-like operational configuration. Do not commit it,
 paste it into issues/PRs, or include it in logs. The script never prints the
 configured URL, including on request failure.
@@ -48,7 +52,8 @@ HTTPS GET as a successful heartbeat can be used.
 
 ## Systemd units
 
-- `deploy/systemd/afs-external-heartbeat.service` — read-only oneshot request.
+- `deploy/systemd/afs-external-heartbeat.service` — read-only oneshot request,
+  bounded by `TimeoutStartSec=60s`.
 - `deploy/systemd/afs-external-heartbeat.timer` — starts eight minutes after
   boot and then every five minutes.
 
