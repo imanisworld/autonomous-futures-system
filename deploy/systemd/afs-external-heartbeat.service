@@ -5,6 +5,7 @@ After=network-online.target afs-watcher.service
 
 [Service]
 Type=oneshot
+TimeoutStartSec=60s
 WorkingDirectory=/root/autonomous-futures-system
 EnvironmentFile=-/root/afs-shared/.env
 Environment=PYTHONDONTWRITEBYTECODE=1
