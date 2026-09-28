@@ -1227,7 +1227,14 @@ def _top_memory_processes(limit: int = 5) -> list[dict]:
 def _ntp_sync_state() -> dict:
     """Read the kernel-backed NTP synchronization state through timedated."""
     cmd = ["timedatectl", "show", "--property=NTPSynchronized", "--value"]
-    rc, out = run(cmd, timeout=15)
+    try:
+        rc, out = run(cmd, timeout=15)
+    except Exception as exc:  # noqa: BLE001 — unverifiable time must fail closed
+        return {
+            "source": "timedatectl.NTPSynchronized",
+            "synchronized": None,
+            "error": f"timedatectl query failed: {type(exc).__name__}: {exc}",
+        }
     raw = out.strip().lower()
     result: dict = {
         "source": "timedatectl.NTPSynchronized",
