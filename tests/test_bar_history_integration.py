@@ -22,7 +22,7 @@ def _cfg():
     # Explicit permissive universe: this module tests bar-history/trend behavior
     # generally, not the shipped isolated-lane config.
     from tests.conftest import load_permissive_config
-    return load_permissive_config(max_staleness_seconds=10_000_000)
+    return load_permissive_config(max_staleness_seconds=10 ** 9)
 
 
 def _seed_downtrend(log_dir, base):
