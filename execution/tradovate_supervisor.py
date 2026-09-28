@@ -19,6 +19,7 @@ from execution.tradovate_broker import (
     AuthResult,
     TradovateBroker,
     TradovateConfig,
+    TradovateEnvConfigError,
 )
 
 logger = logging.getLogger(__name__)
@@ -247,6 +248,8 @@ async def run_tradovate_supervisor(
         except asyncio.CancelledError:
             logger.info("Tradovate reliability supervisor stopped")
             break
+        except TradovateEnvConfigError:
+            raise
         except Exception as exc:
             logger.warning("Tradovate reliability supervisor error: %s", exc)
             await asyncio.sleep(interval_s)
