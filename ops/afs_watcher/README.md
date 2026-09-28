@@ -1,8 +1,8 @@
 # afs-watcher deploy artifacts
 
-`watcher.py`, `watcher_memory_guard.py` (a standalone measurement-only copy —
-not the same module as `ops/watcher_memory_guard.py`, which is the runtime
-package's consumer-side gate), and `run_ro.sh`/`supervisor.sh` are a verbatim
+`watcher.py`, `watcher_memory_guard.py` (a deploy-local byte-identical copy of
+`ops/watcher_memory_guard.py`; the watcher itself uses only the sampling and
+evaluation primitives), and `run_ro.sh`/`supervisor.sh` are a verbatim
 capture of the box's live, hand-deployed `/tmp/afs_watcher/` watcher as of
 2026-09-03 (sha256 of `watcher.py`: `292bdcc4f43b0cb8d031f74e5283bc3bb672cf61d2874d2aa9fcf2ede4ea582c`).
 They previously existed only on the box, deployed by ad hoc SSH across
