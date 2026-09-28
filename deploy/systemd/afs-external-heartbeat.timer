@@ -1,0 +1,11 @@
+[Unit]
+Description=Send AFS external heartbeat every 5 minutes
+
+[Timer]
+OnBootSec=8min
+OnUnitActiveSec=5min
+AccuracySec=30s
+Unit=afs-external-heartbeat.service
+
+[Install]
+WantedBy=timers.target

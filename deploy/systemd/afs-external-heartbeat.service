@@ -1,0 +1,23 @@
+[Unit]
+Description=AFS external dead-man heartbeat
+Wants=network-online.target
+After=network-online.target afs-watcher.service
+
+[Service]
+Type=oneshot
+TimeoutStartSec=60s
+WorkingDirectory=/root/autonomous-futures-system
+EnvironmentFile=-/root/afs-shared/.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/root/autonomous-futures-system/.venv/bin/python /root/autonomous-futures-system/ops/external_heartbeat.py
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=false
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+StandardOutput=journal
+StandardError=journal

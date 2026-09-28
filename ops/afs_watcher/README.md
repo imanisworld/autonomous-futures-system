@@ -67,6 +67,35 @@ interval. Install with `install_events_archive.sh` (root, on the box; safe
 while the watcher is running).
 
 
+## Bounded tmpfs supervisor logs (repo-only, not deployed)
+
+The supervisor's two diagnostic logs live under the RAM-backed
+`/tmp/afs_watcher` directory, so they must not grow without bound.
+
+- `watcher.stdout.log`: maximum 4 MiB; when the limit is crossed the newest
+  approximately 2 MiB are retained.
+- `supervisor.log`: maximum 1 MiB; the newest approximately 512 KiB are
+  retained.
+
+`watcher.stdout.log` is streamed through `bounded_log_pipe.py`, which is the
+single writer for that file. This avoids copy-truncating a file while the
+watcher still holds an append descriptor to it. The helper also trims an
+already-oversized log immediately on startup. If the bounded-log helper itself
+fails, the supervisor keeps draining watcher stdout to `/dev/null` until that
+watcher process exits, so a diagnostic logging failure cannot SIGPIPE and kill
+the watcher. The supervisor then attempts to record the sink failure in
+`supervisor.log`.
+
+These files are non-durable diagnostics only. The durable watcher event and
+snapshot archive is unchanged and is not capped by this safeguard. The
+supervisor still preserves the watcher's own exit code through the logging
+pipeline and retains the existing 60-second restart delay.
+
+This change requires a separately approved watcher deployment/restart before it
+can affect the VPS. Merely merging the repository change does not alter the
+running watcher.
+
+
 ## Server resource diagnostics (repo-only, not deployed)
 
 The watcher also records a read-only resource snapshot every five minutes so
