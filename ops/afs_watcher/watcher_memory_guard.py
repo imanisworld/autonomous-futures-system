@@ -218,147 +218,25 @@ def sample_process_memory(
     )
 
 
-DEFAULT_STALE_AFTER_MINUTES = 30.0  # six 5-minute watcher ticks
-STALE_MINUTES_ENV = "AFS_WATCHER_STALE_MINUTES"
-CODE_MEMORY_CRITICAL = "MEMORY_CRITICAL"
-CODE_MEMORY_WARNING = "MEMORY_WARNING"
-CODE_STATE_MALFORMED = "WATCHER_STATE_MALFORMED"
-CODE_STATE_STALE = "WATCHER_STATE_STALE"
-CODE_STATE_MISSING = "WATCHER_STATE_MISSING"
-
-
-def _latest_state_timestamp(state: dict[str, Any]) -> datetime | None:
-    candidates: list[datetime] = []
-    for raw in (
-        state.get("last_tick_utc"),
-        ((state.get("memory_guard") or {}).get("reading") or {}).get("observed_utc"),
-    ):
-        if isinstance(raw, str) and raw:
-            try:
-                candidates.append(_parse_utc(raw))
-            except ValueError:
-                continue
-    return max(candidates) if candidates else None
-
-
-def _stale_after_minutes(override: float | None) -> float:
-    if override is not None:
-        return float(override)
-    raw = os.getenv(STALE_MINUTES_ENV)
-    if raw:
-        try:
-            value = float(raw)
-            if value > 0:
-                return value
-        except ValueError:
-            pass
-    return DEFAULT_STALE_AFTER_MINUTES
-
-
 def read_critical_memory_block(
     state_path: str | os.PathLike[str] | None = None,
-    *,
-    now: datetime | None = None,
-    stale_after_minutes: float | None = None,
 ) -> dict[str, Any] | None:
-    """Return the block that must stop new paper entries / deploys, or None.
+    """Return the watcher's active CRITICAL memory block, if present.
 
-    Fail-closed rules (every returned block carries a ``code``):
-      * ``MEMORY_CRITICAL``        — the watcher published CRITICAL (or a
-        ``memory_critical`` BLOCKED entry).  Stays authoritative until the
-        watcher writes a non-critical state, even if that state is stale.
-      * ``MEMORY_WARNING``        — the watcher published WARNING (or a
-        ``memory_warning`` BLOCKED entry).  Blocks new paper entries only;
-        existing positions keep resolving normally (callers never consult
-        this gate on the exit/management path).  A stale WARNING state is
-        reported as ``WATCHER_STATE_STALE`` instead, since — unlike
-        CRITICAL — a WARNING gives no reason to believe the watcher died.
-      * ``WATCHER_STATE_MISSING``   — no state file at all.  The watcher keeps
-        its state on tmpfs, so a reboot removes it; until the watcher is
-        re-armed and publishes a fresh tick, memory is unprotected and new
-        paper entries stay blocked.  Service startup is unaffected: this gate
-        is only consulted on the paper-entry path.
-      * ``WATCHER_STATE_MALFORMED`` — the state file exists but is unreadable,
-        not JSON, not an object, or carries no watcher timestamp.
-      * ``WATCHER_STATE_STALE``    — the newest watcher timestamp is older than
-        ``stale_after_minutes`` (default 30, env ``AFS_WATCHER_STALE_MINUTES``)
-        or more than five minutes in the future: the watcher is dead or the
-        clock is wrong, so memory is unprotected.
-    Only a present, parseable, fresh, non-critical state returns None.
+    Missing or malformed watcher state preserves legacy behavior.  Once the
+    watcher publishes CRITICAL, the block remains authoritative until that
+    same watcher writes a non-critical state.
     """
     path = Path(state_path or os.getenv("AFS_WATCHER_STATE_FILE", str(DEFAULT_WATCHER_STATE)))
-    if not path.exists():
-        return {
-            "level": "MISSING",
-            "code": CODE_STATE_MISSING,
-            "reason": (
-                f"afs-watcher state {path} does not exist; no fresh watcher tick "
-                "(watcher not armed since reboot?), failing closed"
-            ),
-        }
     try:
         state = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError, TypeError) as exc:
-        return {
-            "level": "UNKNOWN",
-            "code": CODE_STATE_MALFORMED,
-            "reason": f"afs-watcher state {path} unreadable ({type(exc).__name__}); failing closed",
-        }
-    if not isinstance(state, dict):
-        return {
-            "level": "UNKNOWN",
-            "code": CODE_STATE_MALFORMED,
-            "reason": f"afs-watcher state {path} is not a JSON object; failing closed",
-        }
-    observed = _latest_state_timestamp(state)
-    if observed is None:
-        return {
-            "level": "UNKNOWN",
-            "code": CODE_STATE_MALFORMED,
-            "reason": f"afs-watcher state {path} carries no watcher timestamp; failing closed",
-        }
-    current = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
-    age_minutes = (current - observed).total_seconds() / 60.0
-    limit = _stale_after_minutes(stale_after_minutes)
-    stale = age_minutes > limit or age_minutes < -5.0
-
+    except (OSError, ValueError, TypeError):
+        return None
     guard = state.get("memory_guard")
-    blocked = state.get("blocked")
-    critical_block: dict[str, Any] | None = None
     if isinstance(guard, dict) and guard.get("level") == "CRITICAL":
-        critical_block = dict(guard)
-    elif isinstance(blocked, dict) and "memory_critical" in blocked:
+        return guard
+    blocked = state.get("blocked")
+    if isinstance(blocked, dict) and "memory_critical" in blocked:
         detail = blocked["memory_critical"]
-        critical_block = dict(detail) if isinstance(detail, dict) else {"level": "CRITICAL"}
-    if critical_block is not None:
-        critical_block.setdefault("level", "CRITICAL")
-        critical_block["code"] = CODE_MEMORY_CRITICAL
-        critical_block["state_observed_utc"] = observed.isoformat()
-        critical_block["state_stale"] = stale
-        return critical_block
-    if stale:
-        return {
-            "level": "STALE",
-            "code": CODE_STATE_STALE,
-            "reason": (
-                f"afs-watcher state last updated {age_minutes:.0f} min ago "
-                f"(limit {limit:.0f} min); watcher appears dead, failing closed"
-                if age_minutes >= 0 else
-                f"afs-watcher state timestamp is {-age_minutes:.0f} min in the future; failing closed"
-            ),
-            "state_observed_utc": observed.isoformat(),
-        }
-
-    warning_block: dict[str, Any] | None = None
-    if isinstance(guard, dict) and guard.get("level") == "WARNING":
-        warning_block = dict(guard)
-    elif isinstance(blocked, dict) and "memory_warning" in blocked:
-        detail = blocked["memory_warning"]
-        warning_block = dict(detail) if isinstance(detail, dict) else {"level": "WARNING"}
-    if warning_block is not None:
-        warning_block.setdefault("level", "WARNING")
-        warning_block["code"] = CODE_MEMORY_WARNING
-        warning_block["state_observed_utc"] = observed.isoformat()
-        warning_block["state_stale"] = False
-        return warning_block
+        return detail if isinstance(detail, dict) else {"level": "CRITICAL"}
     return None
