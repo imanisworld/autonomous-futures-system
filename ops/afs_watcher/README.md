@@ -103,8 +103,8 @@ watcher process after an exit, while systemd restarts the supervisor itself.
 Because of that architecture, systemd `StartLimit*` settings alone cannot stop
 a watcher-only crash loop.
 
-The supervisor now keeps an in-memory rolling window of watcher exits. If it
-observes **5 exits within 10 minutes**, it:
+The supervisor now keeps an in-memory rolling window of watcher process exits
+(regardless of exit code). If it observes **5 exits within 10 minutes**, it:
 
 1. records a restart-storm diagnostic;
 2. writes the same diagnostic to stderr for journald visibility; and
