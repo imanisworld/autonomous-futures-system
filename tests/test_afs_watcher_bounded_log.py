@@ -87,3 +87,17 @@ def test_invalid_caps_fail_closed(tmp_path):
             pass
         else:
             raise AssertionError((max_bytes, keep_bytes))
+
+
+def test_oversized_existing_log_is_trimmed_even_with_empty_input(tmp_path):
+    path = tmp_path / "watcher.stdout.log"
+    path.write_bytes((b"old-line\n" * 2000))
+
+    logpipe.stream_to_bounded_log(
+        io.BytesIO(b""),
+        path,
+        max_bytes=4096,
+        keep_bytes=2048,
+    )
+
+    assert path.stat().st_size <= 4096
