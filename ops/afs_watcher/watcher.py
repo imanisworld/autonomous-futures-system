@@ -2183,8 +2183,9 @@ def handle_memory_warning(state: dict, findings: Findings, tick: dict) -> None:
     )
 
 
-MEM_FIXED_WARNING_KEYS = (
-    "memory_rss_growth", "swap_used_warning", "swap_pressure_warning",
+MEM_FIXED_WARNING_KEYS = ("memory_rss_growth", "swap_used_warning", "swap_pressure_warning")
+
+RESOURCE_WARNING_KEYS = (
     "fd_pressure_futures_bot", "fd_pressure_options_scanner",
     "state_tmpfs_pressure", "logs_disk_pressure",
 )
@@ -2216,6 +2217,40 @@ def handle_memory_fixed_warnings(state: dict, findings: Findings, tick: dict) ->
         notify(state, MEMORY_WARNING_ROUTE,
                _memory_discord_text("WARNING", key, warning, tick, str(snap)),
                f"memory-fixed-warning:{key}:{iso(now_utc())[:13]}")
+
+
+def handle_resource_warnings(state: dict, findings: Findings, tick: dict) -> None:
+    """Notify once per read-only resource-pressure episode and on recovery."""
+    active = state.setdefault("resource_warnings", {})
+    present = {row["key"]: row for row in findings.warns() if row["key"] in RESOURCE_WARNING_KEYS}
+    for key in list(active):
+        if key not in present and active[key].get("active"):
+            log(f"resource WARNING cleared: {key}")
+            notify(
+                state, MEMORY_WARNING_ROUTE,
+                _cleared_discord_text(key, active[key].get("first_utc"), tick),
+                f"resource-recovered:{key}:{iso(now_utc())}",
+            )
+            active[key] = {"active": False}
+    for key, warning in present.items():
+        if (active.get(key) or {}).get("active"):
+            continue
+        snap = capture_snapshot(f"WARNING_{key}", tick, findings)
+        active[key] = {
+            "active": True,
+            "first_utc": iso(now_utc()),
+            "snapshot": str(snap),
+            "summary": warning["summary"],
+        }
+        state_append(EVENTS_FILE, json.dumps({
+            "utc": iso(now_utc()), "kind": "WARNING", "key": key,
+            "summary": warning["summary"], "snapshot": str(snap),
+        }, sort_keys=True) + "\n")
+        notify(
+            state, MEMORY_WARNING_ROUTE,
+            _finding_discord_text("WARNING", key, warning, str(snap)),
+            f"resource-warning:{key}:{iso(now_utc())[:13]}",
+        )
 
 
 # Plain-English titles for finding keys (prefix match, first hit wins, so longer
@@ -2314,6 +2349,9 @@ _FINDING_EXPLAIN = {
     "post_epoch_spans_releases": "Test records since the start came from more than one version of the bot.",
     "orb_reclaim_unpaired": "Each opening-range setup should be recorded under both the original and adjusted rules.",
     "feed_alarm_stale": "The checker that watches for gaps in prices hasn't updated.",
+    "fd_pressure_": "A monitored process is close to its open-file limit; this can make normal reads and database opens fail.",
+    "state_tmpfs_pressure": "The watcher's RAM-backed state filesystem is filling up.",
+    "logs_disk_pressure": "The filesystem holding shared logs is filling up.",
     "oom_kill_new": "The server ran out of memory and shut down a program to cope.",
     "memory_": "The server is running low on memory.",
     "swap_": "The server is running low on memory.",
@@ -2366,6 +2404,9 @@ def smallest_fix(key: str) -> str:
         "memory_rss_growth": "Nothing yet — the watcher will warn again if it gets worse",
         "swap_used_warning": "Nothing yet — the watcher will warn again if it gets worse",
         "swap_pressure_warning": "Nothing yet — the watcher will warn again if it gets worse",
+        "fd_pressure_": "Check for a file-handle leak before raising the process limit",
+        "state_tmpfs_pressure": "Check which watcher diagnostic file is growing; durable evidence is archived separately",
+        "logs_disk_pressure": "Free disk space without deleting trade or evidence records",
         "memory_": "Nothing yet — the watcher will warn again if it gets worse",
         "five_min_feed": "Check the 5-minute Micro Nasdaq alert in TradingView — every Micro Nasdaq practice position depends on it",
         "daily_22_collector_stalled": "Read the bot's log in the snapshot for the error",
@@ -3172,6 +3213,7 @@ def tick_once(state: dict) -> dict:
             f.add("WARN", f"watcher_check_error_{name}", f"{type(exc).__name__}: {exc}", tb=traceback.format_exc()[-800:])
     handle_memory_warning(state, f, tick)
     handle_memory_fixed_warnings(state, f, tick)
+    handle_resource_warnings(state, f, tick)
     handle_blocked(state, f, tick)
     try:
         maybe_daily(state, tick, f)
