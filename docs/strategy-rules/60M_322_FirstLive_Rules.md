@@ -1,11 +1,14 @@
 # 60M 3-2-2 FIRST LIVE STRATEGY
 **Complete Trading Rules — MNQ Futures Only**
-*Status: PROMISING BUT UNPROVEN — MNQ n=34. The 2026-09-18 trigger-timing
-audit supersedes completed-5m IOC as the final entry-timing model: causal
-pre-armed First Live produced 33 fills / 33 resolved wins / 1 bracket-invalid
-no-fill and +$2,709.66 at 3 adverse ticks, with both chronological halves
-positive. Current real-account stop/R:R constraints still block execution.
-See §7 and `docs/322-trigger-timing-ab-2026-09-18.md`.*
+*Status: PROMISING BUT UNPROVEN — MNQ n=34 historical population. The
+2026-09-18 pre-armed aggregate is under an evidence erratum: #1057 proves the
+research day-only resolver could walk same-date evening bars when the exact EOD
+bar was missing. The prior 33 resolved wins / +$2,709.66 at 3 adverse ticks is
+historical provenance, not a current validated headline. Exact corrected totals
+remain pending an authorized corpus rerun. Current real-account stop/R:R
+constraints still block execution. See §7,
+`docs/322-trigger-timing-ab-2026-09-18.md`, and
+`docs/322-eod-resolver-erratum-2026-09-28.md`.*
 
 ---
 
