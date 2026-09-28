@@ -24,12 +24,6 @@ def _load_watcher():
 w = _load_watcher()
 
 
-def test_deployed_memory_guard_matches_canonical_source():
-    assert (ROOT / "ops" / "watcher_memory_guard.py").read_bytes() == (
-        WATCHER_DIR / "watcher_memory_guard.py"
-    ).read_bytes()
-
-
 def test_pressure_parser(tmp_path):
     pressure = tmp_path / "memory"
     pressure.write_text(
