@@ -720,10 +720,15 @@ class PaperBroker(BrokerInterface):
                 "PaperBroker.restore_pending_stop_entry: a position/order is "
                 "already loaded."
             )
+        refusal = guarded_hard_cap_refusal(contracts)
+        if refusal:
+            raise ValueError(
+                "PaperBroker.restore_pending_stop_entry: " + refusal
+            )
         contract_economics(order.instrument)
         self._pending_stop_entry = _PendingStopMarketEntry(
             order=order,
-            contracts=max(1, int(contracts or 1)),
+            contracts=contracts,
         )
         self._active_order_id = paper_order_id
 
