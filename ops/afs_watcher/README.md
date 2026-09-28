@@ -83,7 +83,8 @@ watcher still holds an append descriptor to it. The helper also trims an
 already-oversized log immediately on startup. If the bounded-log helper itself
 fails, the supervisor keeps draining watcher stdout to `/dev/null` until that
 watcher process exits, so a diagnostic logging failure cannot SIGPIPE and kill
-the watcher. The sink failure is then recorded in `supervisor.log`.
+the watcher. The supervisor then attempts to record the sink failure in
+`supervisor.log`.
 
 These files are non-durable diagnostics only. The durable watcher event and
 snapshot archive is unchanged and is not capped by this safeguard. The
