@@ -1,8 +1,8 @@
 # afs-watcher deploy artifacts
 
-`watcher.py`, `watcher_memory_guard.py` (a deploy-local byte-identical copy of
-`ops/watcher_memory_guard.py`; the watcher itself uses only the sampling and
-evaluation primitives), and `run_ro.sh`/`supervisor.sh` are a verbatim
+`watcher.py`, `watcher_memory_guard.py` (a standalone measurement-only copy —
+not the same module as `ops/watcher_memory_guard.py`, which is the runtime
+package's consumer-side gate), and `run_ro.sh`/`supervisor.sh` are a verbatim
 capture of the box's live, hand-deployed `/tmp/afs_watcher/` watcher as of
 2026-09-03 (sha256 of `watcher.py`: `292bdcc4f43b0cb8d031f74e5283bc3bb672cf61d2874d2aa9fcf2ede4ea582c`).
 They previously existed only on the box, deployed by ad hoc SSH across
@@ -87,7 +87,3 @@ RAM-backed watcher state directory. They are now size-bounded (2 MiB and
 4 MiB respectively) so the monitor cannot grow those files indefinitely while
 diagnosing a low-memory host. Durable event/snapshot evidence is unchanged and
 continues through the existing archive timer.
-
-The deploy-local `ops/afs_watcher/watcher_memory_guard.py` is intentionally
-byte-identical to the canonical `ops/watcher_memory_guard.py`; regression
-coverage fails if they drift.
