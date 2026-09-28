@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import sys
 import urllib.request
@@ -46,8 +47,8 @@ def _positive_number(raw: str | None, default: float) -> float:
     if raw is None or not raw.strip():
         return float(default)
     value = float(raw)
-    if value <= 0:
-        raise ValueError("value must be positive")
+    if not math.isfinite(value) or value <= 0:
+        raise ValueError("value must be a finite positive number")
     return value
 
 
