@@ -29,7 +29,9 @@ URL_ENV = "AFS_EXTERNAL_HEARTBEAT_URL"
 MAX_AGE_ENV = "AFS_EXTERNAL_HEARTBEAT_MAX_AGE_SECONDS"
 TIMEOUT_ENV = "AFS_EXTERNAL_HEARTBEAT_TIMEOUT_SECONDS"
 DEFAULT_MAX_AGE_SECONDS = 12 * 60
+MAX_AGE_CEILING_SECONDS = 30 * 60
 DEFAULT_TIMEOUT_SECONDS = 10.0
+TIMEOUT_CEILING_SECONDS = 30.0
 USER_AGENT = "afs-external-heartbeat/1"
 
 
@@ -43,12 +45,12 @@ def _utc(raw: str) -> datetime:
     return parsed.astimezone(timezone.utc)
 
 
-def _positive_number(raw: str | None, default: float) -> float:
+def _positive_number(raw: str | None, default: float, ceiling: float) -> float:
     if raw is None or not raw.strip():
         return float(default)
     value = float(raw)
-    if not math.isfinite(value) or value <= 0:
-        raise ValueError("value must be a finite positive number")
+    if not math.isfinite(value) or value <= 0 or value > ceiling:
+        raise ValueError(f"value must be a finite number in (0, {ceiling:g}]")
     return value
 
 
@@ -116,8 +118,12 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         url = validate_url(os.getenv(URL_ENV))
-        max_age = _positive_number(os.getenv(MAX_AGE_ENV), DEFAULT_MAX_AGE_SECONDS)
-        timeout = _positive_number(os.getenv(TIMEOUT_ENV), DEFAULT_TIMEOUT_SECONDS)
+        max_age = _positive_number(
+            os.getenv(MAX_AGE_ENV), DEFAULT_MAX_AGE_SECONDS, MAX_AGE_CEILING_SECONDS
+        )
+        timeout = _positive_number(
+            os.getenv(TIMEOUT_ENV), DEFAULT_TIMEOUT_SECONDS, TIMEOUT_CEILING_SECONDS
+        )
     except ValueError as exc:
         print(f"external heartbeat configuration error: {exc}", file=sys.stderr)
         return 2
