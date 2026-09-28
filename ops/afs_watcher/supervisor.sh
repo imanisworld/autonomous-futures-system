@@ -13,6 +13,10 @@ WATCHER_STDOUT_MAX=$((4 * 1024 * 1024))
 WATCHER_STDOUT_KEEP=$((2 * 1024 * 1024))
 SUPERVISOR_LOG_MAX=$((1024 * 1024))
 SUPERVISOR_LOG_KEEP=$((512 * 1024))
+STORM_WINDOW_SECONDS=600
+STORM_BURST=5
+STORM_EXIT_CODE=75
+restart_times=()
 
 mkdir -p "$STATE"
 
@@ -47,6 +51,25 @@ while true; do
   if [[ "$sink_rc" -ne 0 ]]; then
     append_supervisor_log "$(date -u +%FT%TZ) supervisor: bounded stdout sink exited rc=$sink_rc"
   fi
+
+  now_epoch="$(date -u +%s)"
+  cutoff_epoch=$((now_epoch - STORM_WINDOW_SECONDS))
+  recent_restarts=()
+  for ts in "${restart_times[@]}"; do
+    if (( ts >= cutoff_epoch )); then
+      recent_restarts+=("$ts")
+    fi
+  done
+  recent_restarts+=("$now_epoch")
+  restart_times=("${recent_restarts[@]}")
+
+  if (( ${#restart_times[@]} >= STORM_BURST )); then
+    storm_msg="$(date -u +%FT%TZ) supervisor: restart storm detected (${#restart_times[@]} watcher exits within ${STORM_WINDOW_SECONDS}s) — stopping automatic restarts with rc=${STORM_EXIT_CODE}"
+    append_supervisor_log "$storm_msg"
+    printf '%s\n' "$storm_msg" >&2
+    exit "$STORM_EXIT_CODE"
+  fi
+
   append_supervisor_log "$(date -u +%FT%TZ) supervisor: watcher exited rc=$rc — restarting in 60s"
   sleep 60
 done
