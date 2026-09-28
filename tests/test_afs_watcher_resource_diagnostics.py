@@ -141,3 +141,17 @@ def test_tmpfs_telemetry_append_is_bounded(monkeypatch, tmp_path):
         w.state_append(path, line)
     assert path.stat().st_size <= 131072
     assert path.read_text(encoding="utf-8").endswith("\n")
+
+
+def test_resource_warning_card_keeps_the_actual_fd_detail(monkeypatch):
+    monkeypatch.setattr(w, "RELEASE_SHA", "0123456789abcdef")
+    finding = {
+        "summary": "options-scanner has 800 of 1000 file handles open (80%)",
+        "detail": {},
+    }
+    text = w._finding_discord_text(
+        "WARNING", "fd_pressure_options_scanner", finding, "/tmp/snapshot"
+    )
+    assert "Options scanner is running out of file handles" in text
+    assert "800 of 1000 file handles open" in text
+    assert "file-handle leak" in text
