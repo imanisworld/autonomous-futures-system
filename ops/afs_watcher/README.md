@@ -80,7 +80,10 @@ The supervisor's two diagnostic logs live under the RAM-backed
 `watcher.stdout.log` is streamed through `bounded_log_pipe.py`, which is the
 single writer for that file. This avoids copy-truncating a file while the
 watcher still holds an append descriptor to it. The helper also trims an
-already-oversized log immediately on startup.
+already-oversized log immediately on startup. If the bounded-log helper itself
+fails, the supervisor keeps draining watcher stdout to `/dev/null` until that
+watcher process exits, so a diagnostic logging failure cannot SIGPIPE and kill
+the watcher. The sink failure is then recorded in `supervisor.log`.
 
 These files are non-durable diagnostics only. The durable watcher event and
 snapshot archive is unchanged and is not capped by this safeguard. The
