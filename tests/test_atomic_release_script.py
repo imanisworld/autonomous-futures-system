@@ -131,6 +131,9 @@ def test_promote_and_rollback_rearm_readonly_watcher_after_release_verification(
         assert "watcher_src='$CURRENT/ops/afs_watcher'" in block
         assert "systemctl show afs-watcher.service -p WorkingDirectory --value" in block
         assert "watcher_memory_guard.py run_ro.sh supervisor.sh bootstrap_tmp_state.sh" in block
+        assert 'if test -f "\$watcher_src/bounded_log_pipe.py"; then' in block
+        assert 'cp -f "\$watcher_src/bounded_log_pipe.py" "\$watcher_dest/bounded_log_pipe.py"' in block
+        assert 'cmp -s "\$watcher_src/bounded_log_pipe.py" "\$watcher_dest/bounded_log_pipe.py"' in block
         assert "cmp -s" in block
         assert "watcher_triage.py" in block
         assert "systemctl restart afs-watcher.service" in block
