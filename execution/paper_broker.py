@@ -37,6 +37,7 @@ from execution.trailing import compute_trailed_stop
 
 # Price metadata is not broker or strategy eligibility.
 from config.futures_contracts import TICK_SIZE, TICK_VALUE, contract_economics
+from config.settings import guarded_hard_cap_refusal
 
 
 @dataclass
@@ -154,6 +155,21 @@ class PaperBroker(BrokerInterface):
         """Simulate the bracket, then (flag-gated, fire-and-forget) mirror an
         established entry to the Webull sandbox futures paper account. The
         mirror never changes the returned Fill."""
+        refusal = guarded_hard_cap_refusal(order.contracts)
+        if refusal:
+            return Fill(
+                instrument=order.instrument,
+                direction=order.direction,
+                contracts=order.contracts,
+                entry_price=order.entry,
+                exit_price=None,
+                exit_reason=refusal,
+                result="CANCELLED",
+                pnl_ticks=None,
+                pnl_dollars=None,
+                no_fill_reason="MAX_CONTRACTS_HARD_CAP",
+                paper_order_id=paper_order_id,
+            )
         fill = self._execute_bracket_impl(order, market_price, paper_order_id=paper_order_id)
         try:
             paper_mirror_hook.after_entry(order, fill, lane=self.get_broker_name())
