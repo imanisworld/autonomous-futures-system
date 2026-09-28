@@ -26,10 +26,20 @@ append_supervisor_log() {
 while true; do
   append_supervisor_log "$(date -u +%FT%TZ) supervisor pid=$$ launching watcher in read-only namespace"
 
-  bash /tmp/afs_watcher/run_ro.sh 2>&1 | "$PYTHON_BIN" "$LOG_SINK" \
-    --path "$STATE/watcher.stdout.log" \
-    --max-bytes "$WATCHER_STDOUT_MAX" \
-    --keep-bytes "$WATCHER_STDOUT_KEEP"
+  bash /tmp/afs_watcher/run_ro.sh 2>&1 | {
+    "$PYTHON_BIN" "$LOG_SINK" \
+      --path "$STATE/watcher.stdout.log" \
+      --max-bytes "$WATCHER_STDOUT_MAX" \
+      --keep-bytes "$WATCHER_STDOUT_KEEP"
+    bounded_sink_rc=$?
+    # A diagnostic logging failure must not SIGPIPE/terminate the watcher.
+    # Keep consuming stdout, then return the original sink failure after the
+    # watcher exits so the supervisor can record it.
+    if [[ "$bounded_sink_rc" -ne 0 ]]; then
+      cat >/dev/null
+    fi
+    exit "$bounded_sink_rc"
+  }
   pipe_rc=("${PIPESTATUS[@]}")
   rc="${pipe_rc[0]}"
   sink_rc="${pipe_rc[1]}"
