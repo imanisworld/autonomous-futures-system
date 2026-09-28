@@ -94,3 +94,33 @@ pipeline and retains the existing 60-second restart delay.
 This change requires a separately approved watcher deployment/restart before it
 can affect the VPS. Merely merging the repository change does not alter the
 running watcher.
+
+
+## Restart-storm breaker (stacked safeguard, repo-only)
+
+The watcher is deliberately double-supervised: `supervisor.sh` restarts the
+watcher process after an exit, while systemd restarts the supervisor itself.
+Because of that architecture, systemd `StartLimit*` settings alone cannot stop
+a watcher-only crash loop.
+
+The supervisor now keeps an in-memory rolling window of watcher exits. If it
+observes **5 exits within 10 minutes**, it:
+
+1. records a restart-storm diagnostic;
+2. writes the same diagnostic to stderr for journald visibility; and
+3. exits with status **75** instead of restarting the watcher again.
+
+The systemd unit declares `RestartPreventExitStatus=75`, so that intentional
+safety stop is not automatically undone by `Restart=always`.
+
+As a separate layer, the unit also has
+`StartLimitIntervalSec=10min` / `StartLimitBurst=5` to bound repeated
+supervisor-level failures.
+
+This does not restart, stop, or alter `futures-bot.service`; it changes only
+how the read-only watcher supervises itself. Recovery after a restart storm is
+an operator decision. No automatic reset or service-control action is added.
+
+This safeguard is stacked on the bounded-log work and is not deployed merely by
+merging repository code. Any watcher deployment/restart still requires a
+separate explicit operator GO.
