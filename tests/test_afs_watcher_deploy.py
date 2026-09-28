@@ -76,12 +76,62 @@ def test_install_script_ships_bounded_log_sink():
 def test_systemd_unit_reuses_supervisor_and_restarts_on_boot():
     unit = (DEPLOY_DIR / "afs-watcher.service").read_text()
     assert "Restart=always" in unit
+    assert "RestartPreventExitStatus=75" in unit
+    assert "StartLimitIntervalSec=10min" in unit
+    assert "StartLimitBurst=5" in unit
     assert "WantedBy=multi-user.target" in unit
     assert "ExecStart=/bin/bash __AFS_WATCHER_SRC__/supervisor.sh" in unit
     assert "ExecStartPre=/bin/bash __AFS_WATCHER_SRC__/bootstrap_tmp_state.sh" in unit
     # No second watcher process type — the unit only ever launches supervisor.sh.
     assert "watcher.py" not in unit
     assert "tmux" not in unit
+
+
+def test_supervisor_stops_after_repeated_watcher_exits(tmp_path):
+    state = tmp_path / "state"
+    state.mkdir()
+    scratch = tmp_path / "supervisor"
+    scratch.mkdir()
+    helper = scratch / "bounded_log_pipe.py"
+    helper.write_bytes((DEPLOY_DIR / "bounded_log_pipe.py").read_bytes())
+
+    run_ro = tmp_path / "run_ro.sh"
+    counter = tmp_path / "count"
+    run_ro.write_text(
+        "#!/bin/bash\n"
+        f"count_file={counter!s}\n"
+        "n=0\n"
+        "[ -f \"$count_file\" ] && n=$(cat \"$count_file\")\n"
+        "n=$((n + 1))\n"
+        "printf '%s' \"$n\" > \"$count_file\"\n"
+        "echo watcher-run-$n\n"
+        "exit 9\n"
+    )
+    run_ro.chmod(0o700)
+
+    script = (DEPLOY_DIR / "supervisor.sh").read_text()
+    script = script.replace("STATE=/tmp/afs_watcher", f"STATE={state}")
+    script = script.replace(
+        "bash /tmp/afs_watcher/run_ro.sh",
+        f"bash {run_ro}",
+    )
+    script = script.replace("STORM_BURST=5", "STORM_BURST=3")
+    script = script.replace("sleep 60", "sleep 0")
+    supervisor = scratch / "supervisor.sh"
+    supervisor.write_text(script)
+
+    result = subprocess.run(
+        ["bash", str(supervisor)],
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+
+    assert result.returncode == 75
+    assert counter.read_text() == "3"
+    assert "restart storm detected" in result.stderr
+    assert "watcher exits within 600s" in result.stderr
+    assert "restart storm detected" in (state / "supervisor.log").read_text()
 
 
 def test_install_script_refuses_to_run_as_non_root_and_does_not_start_service():
