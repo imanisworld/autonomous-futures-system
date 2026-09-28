@@ -16,6 +16,11 @@ import pytest
 # Unit tests must never inherit deployment values from a developer's .env.
 # Individual tests still control environment variables through monkeypatch.
 os.environ["PYTHON_DOTENV_DISABLED"] = "1"
+# Harness only: production load_config() refuses to start unless this is a
+# positive integer. 6 is the shipped position_rules per-instrument ceiling, so
+# the harness does not tighten or loosen sizing assertions. It is not a new
+# trading default, and tests of the missing/invalid cap clear or replace it.
+os.environ["MAX_CONTRACTS_HARD_CAP"] = "6"
 
 # Ensure project root is on path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -138,6 +143,9 @@ def config() -> SystemConfig:
         max_open_positions=1,
         averaging_down_allowed=False,
         max_contracts_per_instrument={"MNQ": 2, "MES": 1, "MGC": 0, "MCL": 0},
+        # Above this fixture's per-instrument maxima so the hard-cap gate does
+        # not change existing approvals. Not a production default.
+        max_contracts_hard_cap=6,
         require_entry=True,
         require_stop=True,
         require_target=True,
