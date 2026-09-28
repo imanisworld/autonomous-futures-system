@@ -96,6 +96,28 @@ can affect the VPS. Merely merging the repository change does not alter the
 running watcher.
 
 
+## Server resource diagnostics (repo-only, not deployed)
+
+The watcher also records a read-only resource snapshot every five minutes so
+memory incidents can be attributed instead of inferred. It observes both
+`futures-bot` and `options-scanner` process RSS/swap, thread count, open file
+descriptors and soft descriptor limit, plus each process's cgroup v2
+`memory.current` / `memory.events` when available. Host context includes
+`/proc/pressure/memory`, the five largest RSS processes, the watcher tmpfs
+usage, and the shared-log filesystem usage.
+
+Descriptor use at or above 75% of the process soft limit is a WARNING only.
+Watcher tmpfs at or above 80% and shared-log storage at or above 90% are also
+WARNING only. These observations do not stop, restart, signal, deploy, or
+otherwise modify either runtime.
+
+`memory.jsonl` and `watcher.log` are non-durable telemetry under the
+RAM-backed watcher state directory. They are now size-bounded (2 MiB and
+4 MiB respectively) so the monitor cannot grow those files indefinitely while
+diagnosing a low-memory host. Durable event/snapshot evidence is unchanged and
+continues through the existing archive timer.
+
+
 ## Restart-storm breaker (stacked safeguard, repo-only)
 
 The watcher is deliberately double-supervised: `supervisor.sh` restarts the
