@@ -116,4 +116,24 @@ def test_paper_broker_rejects_invalid_cap(monkeypatch, raw):
     assert broker._position is None
     assert "MAX_CONTRACTS_HARD_CAP" in fill.exit_reason
 
+def test_restore_pending_stop_entry_rejects_over_cap_without_rearming(monkeypatch):
+    monkeypatch.setenv("MAX_CONTRACTS_HARD_CAP", "1")
+    broker = PaperBroker(entry_fill_model="stop_market")
+    with pytest.raises(ValueError, match="MAX_CONTRACTS_HARD_CAP"):
+        broker.restore_pending_stop_entry(_order(3), contracts=3)
+    assert broker.has_pending_entry() is False
+    assert broker.get_position() is None
+
+
+@pytest.mark.parametrize("raw", [None, "", "abc", "0", "-1"])
+def test_restore_pending_stop_entry_rejects_invalid_cap_without_rearming(monkeypatch, raw):
+    if raw is None:
+        monkeypatch.delenv("MAX_CONTRACTS_HARD_CAP", raising=False)
+    else:
+        monkeypatch.setenv("MAX_CONTRACTS_HARD_CAP", raw)
+    broker = PaperBroker(entry_fill_model="stop_market")
+    with pytest.raises(ValueError, match="MAX_CONTRACTS_HARD_CAP"):
+        broker.restore_pending_stop_entry(_order(1), contracts=1)
+    assert broker.has_pending_entry() is False
+    assert broker.get_position() is None
 
