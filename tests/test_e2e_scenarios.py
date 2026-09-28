@@ -155,6 +155,7 @@ def _base_config(tmp_path: Path) -> SystemConfig:
         max_open_positions=1,
         averaging_down_allowed=False,
         max_contracts_per_instrument={"MNQ": 1, "MES": 1},  # 1c only → loss maths are deterministic
+        max_contracts_hard_cap=1,
         require_entry=True,
         require_stop=True,
         require_target=True,
