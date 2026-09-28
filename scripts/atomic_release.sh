@@ -281,6 +281,10 @@ promote_release() {
         cp -f "\$watcher_src/\$watcher_file" "\$watcher_dest/\$watcher_file"
         cmp -s "\$watcher_src/\$watcher_file" "\$watcher_dest/\$watcher_file"
       done
+      if test -f "\$watcher_src/bounded_log_pipe.py"; then
+        cp -f "\$watcher_src/bounded_log_pipe.py" "\$watcher_dest/bounded_log_pipe.py"
+        cmp -s "\$watcher_src/bounded_log_pipe.py" "\$watcher_dest/bounded_log_pipe.py"
+      fi
       if test -f "\$watcher_src/watcher_triage.py"; then
         cp -f "\$watcher_src/watcher_triage.py" "\$watcher_dest/watcher_triage.py"
         cmp -s "\$watcher_src/watcher_triage.py" "\$watcher_dest/watcher_triage.py"
@@ -347,6 +351,10 @@ rollback_release() {
         cp -f "\$watcher_src/\$watcher_file" "\$watcher_dest/\$watcher_file"
         cmp -s "\$watcher_src/\$watcher_file" "\$watcher_dest/\$watcher_file"
       done
+      if test -f "\$watcher_src/bounded_log_pipe.py"; then
+        cp -f "\$watcher_src/bounded_log_pipe.py" "\$watcher_dest/bounded_log_pipe.py"
+        cmp -s "\$watcher_src/bounded_log_pipe.py" "\$watcher_dest/bounded_log_pipe.py"
+      fi
       if test -f "\$watcher_src/watcher_triage.py"; then
         cp -f "\$watcher_src/watcher_triage.py" "\$watcher_dest/watcher_triage.py"
         cmp -s "\$watcher_src/watcher_triage.py" "\$watcher_dest/watcher_triage.py"
