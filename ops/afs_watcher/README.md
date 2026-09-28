@@ -146,3 +146,34 @@ an operator decision. No automatic reset or service-control action is added.
 This safeguard is stacked on the bounded-log work and is not deployed merely by
 merging repository code. Any watcher deployment/restart still requires a
 separate explicit operator GO.
+
+
+## Clock / NTP health guard (repo-only, not deployed)
+
+The watcher now verifies host time health on every five-minute tick before the
+runtime/evidence checks that depend on timestamps.
+
+It uses two independent read-only signals:
+
+- `timedatectl show --property=NTPSynchronized --value` reports systemd's
+  kernel-backed NTP synchronization state. An explicit unsynchronized result is
+  **BLOCKED**. If synchronization cannot be verified, the watcher also fails
+  closed as **BLOCKED** instead of treating unknown time as healthy.
+- Wall-clock elapsed time is compared with Python's monotonic clock between
+  watcher ticks. A discontinuous difference of **2 seconds or more** in either
+  direction is **BLOCKED** as `clock_step_detected`. Normal gradual NTP clock
+  discipline is not treated as a time step.
+
+The check records its observations under `tick.clock` and keeps only the
+previous wall/monotonic sample in watcher state. If the monotonic clock appears
+to reset, the watcher starts a new comparison baseline rather than comparing
+across the reset.
+
+This safeguard never sets the clock, enables/disables NTP, restarts a time
+service, restarts the trading bot, or changes execution. `timedatectl` is
+allowlisted only for the exact read-only `NTPSynchronized` query; mutating
+timedatectl commands are rejected by the watcher's command guard.
+
+The existing sanctioned deploy already synchronizes `watcher.py`, so this
+change requires no new deploy artifact. It remains repo-only until a separately
+approved sanctioned promote/restart places the new watcher on the VPS.
