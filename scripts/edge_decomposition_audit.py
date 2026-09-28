@@ -586,10 +586,17 @@ def resolve_bracket(lane: Lane, bars: Bars, cand: Candidate, *, fill_model: str,
                     slippage_ticks: float, tolerance_ticks: float) -> dict:
     """Open the candidate's bracket with the real PaperBroker and walk forward.
 
-    Day-only lanes flatten on the exact EOD bar (stop/target first on that
-    bar) and fail closed as EOD_BAR_MISSING when that bar is absent, matching
-    execution/day_only_exit.py.  Other lanes carry until resolved, capped at
-    MAX_HOLD_TRADING_DAYS of bars (then OPEN).
+    Day-only lanes (frozen exact-EOD contract, execution/day_only_exit.py and
+    docs/strategy-rules/60M_322_FirstLive_Rules.md "Common Day-Only Exit"):
+    stop/target are resolved bar by bar up to and including the exact EOD bar
+    (15:55 ET for 5m, America/New_York wall time), stop first when a bar
+    touches both (PaperBroker pessimistic_both_hit=True), then
+    DAY_ONLY_FLATTEN at that bar's close.  No bar that starts after the EOD
+    bar is ever walked: if the exact EOD bar is absent (early close, halt,
+    data gap), the trade fails closed as UNRESOLVED / EOD_BAR_MISSING.  No
+    earlier bar is substituted as the close, and same-ET-date evening
+    (post-16:00 / Globex reopen) bars are never used.  Other lanes carry until
+    resolved, capped at MAX_HOLD_TRADING_DAYS of bars (then OPEN).
     """
     idx = cand.bar_idx
     row = bars.rows[idx]
@@ -616,10 +623,16 @@ def resolve_bracket(lane: Lane, bars: Bars, cand: Candidate, *, fill_model: str,
         return {"status": "NO_FILL", "reason": "ENTRY_BRACKET_INVALID_AT_FILL", "exit_idx": idx,
                 "decision_close": float(row["close"]), "fill_entry": fill_entry}
     day = bars.et(idx).date()
+    eod_hm = divmod(16 * 60 - lane.timeframe_minutes, 60)
     limit = len(bars.rows) if lane.day_only else min(len(bars.rows), idx + 1 + bars.bars_per_day * MAX_HOLD_TRADING_DAYS)
     for j in range(idx + 1, limit):
         bar = bars.rows[j]
-        if lane.day_only and bars.et(j).date() != day:
+        bar_et = bars.et(j)
+        # Day-only: never walk past the exact EOD bar.  A bar on a later ET
+        # date, or one starting after the EOD bar on the same ET date (e.g.
+        # the 18:00 ET Globex reopen after a 13:00 ET holiday close), means
+        # the exact EOD bar was never seen -> fail closed.
+        if lane.day_only and (bar_et.date() != day or (bar_et.hour, bar_et.minute) > eod_hm):
             if fill_entry is None:
                 return {"status": "NO_FILL", "reason": "ENTRY_NOT_TRIGGERED", "exit_idx": idx}
             broker.force_resolve("BREAKEVEN", fill_entry)
