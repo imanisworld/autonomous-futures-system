@@ -409,6 +409,9 @@ async def _lifespan(app: FastAPI):
             "A webhook secret is required but not set. Set WEBHOOK_SECRET "
             "(or TRADINGVIEW_WEBHOOK_SECRET) in the server .env before deploying."
         )
+    # BROKER=tradovate must not serve with a missing or inexact TRADOVATE_ENV.
+    # Paper and every other broker skip this read.
+    _require_tradovate_env_for_selected_broker()
     # Loud startup visibility for the loaded universe + decision timeframe. This
     # makes a stale in-memory config (e.g. MNQ silently dropped) obvious in the
     # service logs instead of only surfacing as per-bar NO_TRADE rejections.
@@ -5122,6 +5125,21 @@ def _payload_to_dict(payload: AlertPayload) -> dict:
     return payload.dict()
 
 
+def _require_tradovate_env_for_selected_broker() -> None:
+    """Refuse startup when the selected broker is Tradovate and TRADOVATE_ENV
+    is not exactly ``demo`` or ``live``.
+
+    Gate: ``os.getenv("BROKER", "paper").strip().lower() == "tradovate"``,
+    the same selector ``_make_broker`` uses. Any other value, including the
+    paper default and a missing BROKER, does not read TRADOVATE_ENV.
+    """
+    if os.getenv("BROKER", "paper").strip().lower() != "tradovate":
+        return
+    from execution.tradovate_broker import TradovateConfig
+
+    TradovateConfig.from_env()
+
+
 def _broker_status() -> dict:
     """Return broker connection and open position status."""
     import os as _os
@@ -5145,6 +5163,10 @@ def _broker_status() -> dict:
                 } if pos else None,
             }
         except Exception as exc:
+            from execution.tradovate_broker import TradovateEnvConfigError
+
+            if isinstance(exc, TradovateEnvConfigError):
+                raise
             return {"broker": "tradovate", "connected": False, "error": str(exc)}
     return {"broker": "paper", "connected": True, "position": None}
 
@@ -5174,6 +5196,10 @@ def _manual_close_all() -> dict:
             if "error" in flatten:
                 result["close_error"] = flatten["error"]
         except Exception as exc:
+            from execution.tradovate_broker import TradovateEnvConfigError
+
+            if isinstance(exc, TradovateEnvConfigError):
+                raise
             return {**result, "ok": False, "error": str(exc)}
     else:
         result["ok"] = True
