@@ -8,7 +8,7 @@ Environments:
     live → https://live.tradovateapi.com/v1   (real money)
 
 Required env vars:
-    TRADOVATE_ENV           — "demo" or "live" (default: "demo")
+    TRADOVATE_ENV           — exactly "demo" or "live" (case-sensitive; no default)
     TRADOVATE_USERNAME      — account email
     TRADOVATE_PASSWORD      — account password
     TRADOVATE_API_KEY_ID    — CID from Tradovate app credentials
@@ -258,8 +258,31 @@ def _parse_expected_account_id(value: str | None) -> Optional[int]:
 
 # ─── Config ───────────────────────────────────────────────────────────────────
 
+_ALLOWED_TRADOVATE_ENVS = ("demo", "live")
+
+
+class TradovateEnvConfigError(ValueError):
+    """TRADOVATE_ENV is missing or not exactly ``demo`` or ``live``."""
+
+
+def _exact_tradovate_env(raw: str | None) -> str:
+    """Return TRADOVATE_ENV only when it is exactly demo or live.
+
+    No default, no strip, and no case folding. The invalid value is never
+    included in the error: a misplaced secret must not be echoed.
+    """
+    if raw not in _ALLOWED_TRADOVATE_ENVS:
+        allowed = " or ".join(f'"{value}"' for value in _ALLOWED_TRADOVATE_ENVS)
+        raise TradovateEnvConfigError(
+            f"TRADOVATE_ENV must be exactly {allowed} "
+            "(case-sensitive; missing, blank, and whitespace-padded values are not allowed)"
+        )
+    return raw
+
+
 @dataclass
 class TradovateConfig:
+    # In-code construction only. The TRADOVATE_ENV read has no default.
     env: str = "demo"           # "demo" | "live"
     username: str = ""
     password: str = ""
@@ -280,7 +303,7 @@ class TradovateConfig:
     @classmethod
     def from_env(cls) -> "TradovateConfig":
         return cls(
-            env=os.getenv("TRADOVATE_ENV", "demo").strip().lower(),
+            env=_exact_tradovate_env(os.getenv("TRADOVATE_ENV")),
             username=os.getenv("TRADOVATE_USERNAME", "").strip(),
             password=os.getenv("TRADOVATE_PASSWORD", "").strip(),
             cid=_parse_api_key_id(os.getenv("TRADOVATE_API_KEY_ID", "0")),
