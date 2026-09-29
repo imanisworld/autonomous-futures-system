@@ -12,6 +12,14 @@ This is the concise dated operator snapshot for the futures system around 2026-0
 
 Core rule remains: **No proof, no run.**
 
+## Repo closeout / next operator phase — 2026-09-29
+
+Repository `main` is now `715e03956f402fd553107a84125537768841d97c` after merged PR #1068. The audited repo-side futures defect list remains empty. #1068 adds six-market daily evidence visibility for MNQ, MES, M2K, MBT, MCL, and MGC; it does **not** prove or update the VPS pinned reporter.
+
+The durable ordered next-actions list is `docs/futures-operator-todo.md`. The next phase is **VPS/access/runtime reconciliation**, starting read-only. Do not infer current deployed SHA, runtime pins, account state, reporter pin, or access restrictions from `main`. Do not remove existing operator access until a replacement MacBook/phone path and break-glass recovery are built and proven.
+
+No strategy, risk, broker, execution, environment, VPS, or live-trading posture changed as part of #1068 or this documentation closeout.
+
 ## Promotion-gate quantity-proof audit — 2026-09-29
 
 The earlier #893 repair remains valid: hard promotion blockers now make `project_check promotion` fail closed and return a non-zero result. The 2026-09-29 repo audit did **not** reproduce the old hard-blocker/exit-code defect.
