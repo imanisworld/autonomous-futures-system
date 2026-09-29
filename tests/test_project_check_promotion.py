@@ -290,6 +290,7 @@ def _complete_promotion_evidence() -> dict:
         },
         "execution": {
             "entry_attempts": 5,
+            "entry_attempt_contract_quantities": [1, 1, 1, 1, 1],
             "fills": 3,
             "cancellations": 1,
             "rejects_or_known_no_fills": 1,
@@ -378,11 +379,67 @@ def test_runtime_parity_false_is_a_blocker(tmp_path: Path, monkeypatch) -> None:
     assert any("replay/live logic parity" in b for b in report["classification"]["blockers"])
 
 
-def test_quantity_check_is_labeled_cap_compatibility_only(tmp_path: Path, monkeypatch) -> None:
+def test_quantity_check_requires_cap_and_observed_attempt_evidence(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ", "32")
     monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MES", "16")
     monkeypatch.setenv("ENTRY_FILL_MODEL", "ioc_limit")
     monkeypatch.setenv("MAX_CONTRACTS_HARD_CAP", "1")
     evidence = _write_evidence(tmp_path, _complete_promotion_evidence())
     report = build_promotion_report(strategy="x", repo_root=tmp_path, evidence_path=evidence)
-    assert "cap_compatibility_only" in report["execution_context"]["quantity_check_semantics"]
+    assert "two_layer" in report["execution_context"]["quantity_check_semantics"]
+    assert report["quantity_evidence"]["verified"] is True
+
+
+def test_claimed_quantity_without_observed_attempt_quantities_fails_closed(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ", "32")
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MES", "16")
+    monkeypatch.setenv("ENTRY_FILL_MODEL", "ioc_limit")
+    monkeypatch.setenv("MAX_CONTRACTS_HARD_CAP", "1")
+    payload = _complete_promotion_evidence()
+    del payload["execution"]["entry_attempt_contract_quantities"]
+    evidence = _write_evidence(tmp_path, payload)
+    report = build_promotion_report(strategy="x", repo_root=tmp_path, evidence_path=evidence)
+    assert report["gate_pass"] is False
+    assert report["quantity_evidence"]["verified"] is False
+    assert any(
+        "entry-attempt contract quantity evidence is unverified" in blocker
+        for blocker in report["classification"]["blockers"]
+    )
+
+
+def test_observed_attempt_quantity_must_match_claimed_quantity(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ", "32")
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MES", "16")
+    monkeypatch.setenv("ENTRY_FILL_MODEL", "ioc_limit")
+    monkeypatch.setenv("MAX_CONTRACTS_HARD_CAP", "2")
+    payload = _complete_promotion_evidence()
+    payload["execution"]["entry_attempt_contract_quantities"] = [1, 1, 2, 1, 1]
+    evidence = _write_evidence(tmp_path, payload)
+    report = build_promotion_report(strategy="x", repo_root=tmp_path, evidence_path=evidence)
+    assert report["gate_pass"] is False
+    assert any(
+        "do not all match claimed contract_qty 1" in problem
+        for problem in report["quantity_evidence"]["problems"]
+    )
+
+
+def test_observed_quantity_count_must_match_entry_attempts(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ", "32")
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MES", "16")
+    monkeypatch.setenv("ENTRY_FILL_MODEL", "ioc_limit")
+    monkeypatch.setenv("MAX_CONTRACTS_HARD_CAP", "1")
+    payload = _complete_promotion_evidence()
+    payload["execution"]["entry_attempt_contract_quantities"] = [1, 1]
+    evidence = _write_evidence(tmp_path, payload)
+    report = build_promotion_report(strategy="x", repo_root=tmp_path, evidence_path=evidence)
+    assert report["gate_pass"] is False
+    assert any(
+        "does not match entry_attempts 5" in problem
+        for problem in report["quantity_evidence"]["problems"]
+    )
