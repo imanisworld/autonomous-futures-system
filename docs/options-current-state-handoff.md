@@ -26,11 +26,21 @@ Three bounded PRs are now the active options workstream:
 - The Epoch-3 audit reads SQLite read-only, uses the epoch boundary from `docs/options_v1_evidence_epoch.json`, excludes pre-Epoch-3 rows, counts financial outcome from recorded `pnl_dollars` rather than structural WIN/LOSS labels, excludes entry-consumed non-outcomes, and keeps COUNTERFACTUAL rows out of ACTIVE P&L.
 - The previously quoted all-time `-$12` paper total is **not** an Epoch-3 verdict; it mixes cohorts. Exact Epoch-3 performance remains unverified until #1071 is run against the real SQLite.
 
+### Epoch-3 audit result — 2026-09-29
+
+#1071 has completed its real-data gate using a verified read-only copy of the production options database: 9,734 journal rows, latest timestamp `2026-09-29T19:46:18Z`, with 337 rows inside V1-EPOCH-3.
+
+- ACTIVE: 7 rows total; 5 priced closed; 1 financial winner / 4 financial losers; 2 OPEN; net `-$247.00`.
+- Structural target/stop events: 1 / 4. Entry-consumed non-outcomes: 0.
+- COUNTERFACTUAL: 330 observations. They remain descriptive only and are not trade expectancy.
+- Largest counterfactual groups: `setup_proof_incomplete:market_not_aligned` = 75 observations / 34 priced / `-$1,596` observed; `timeframe_observation_only` = 240 / 89 / `-$1,629` observed.
+- The clean cohort is still too small for a strategy-edge conclusion: only five priced ACTIVE closes. No V1 rule change is justified by this result alone.
+
 ### Remaining work before any activation
 
 Use `docs/options-next-actions.md` as the durable **operational checklist only**. This file remains the current-state authority.
 
-1. Run #1071 against the real local options SQLite; preserve exact Epoch-3 ACTIVE P&L plus rejection-reason grouped counterfactual observations.
+1. #1071 COMPLETE: Epoch-3 audit preserved as above; do not tune from the five-close sample.
 2. During RTH, run #1067 with real Public + Alpaca SIP/bar-context credentials. PASS requires 66/66 within the existing five-minute cadence with no critical failures, rate-limit failures, timeouts, or missing/stale causal-bar failures.
 3. With the SPXW lane still OFF, run #1069's real provider preflight for SPX snapshot + SPXW expirations/chain; then rerun the lifecycle regression set.
 4. If and only if the evidence passes, obtain operator approval before merge/deploy/enable actions; then record the activation boundary in the evidence-epoch/current-state docs.
