@@ -10,9 +10,9 @@ Repo audit narrowed an older promotion-gate concern instead of reopening complet
 
 One residual source-side gap remained: the gate checked a claimed `contract_qty` against configured quantity caps but did not require evidence of the quantities actually represented by each recorded entry attempt. A packet could therefore satisfy the cap check without independently proving submitted/observed quantity.
 
-Draft PR **#1070** adds a fail-closed evidence requirement: `execution.entry_attempt_contract_quantities` must provide one positive observed quantity per `entry_attempt`; its count must reconcile exactly; and every observed value must match `execution_context_claimed.contract_qty`. Cap compatibility remains a separate check.
+PR **#1070** merged to `main` as `37be78c5c965082185f7f06d1a85bc8db2eade3d` after independent APPROVE and exact-head CI (7,311 passed / 7 skipped). It adds a fail-closed evidence requirement: `execution.entry_attempt_contract_quantities` must provide one positive observed quantity per `entry_attempt`; its count must reconcile exactly; and every observed value must match `execution_context_claimed.contract_qty`. Cap compatibility remains a separate check.
 
-Scope is limited to the promotion evidence gate, regression tests, and current gate/status documentation. It does **not** change strategy formulas, risk rules, sizing behavior, broker/order code, execution routing, runtime env, deployment state, or strategy classification. No VPS action follows from this source change. #1070 remains source-only until independent review, exact-head CI, and merge.
+Scope is limited to the promotion evidence gate, regression tests, and current gate/status documentation. It does **not** change strategy formulas, risk rules, sizing behavior, broker/order code, execution routing, runtime env, deployment state, or strategy classification. #1070 is **repo-side proven only**; no VPS deploy, restart, repin, or broker/env mutation followed from the merge.
 
 ## Shared research plumbing note — 2026-09-26
 
