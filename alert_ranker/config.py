@@ -9,6 +9,8 @@ from typing import Iterable
 
 from dotenv import load_dotenv
 
+from alert_ranker.universe import resolve_watchlist
+
 
 DEFAULT_SIGNA_CONTEXT_PULL_INCLUDE: tuple[str, ...] = (
     "scan",
@@ -20,6 +22,7 @@ DEFAULT_SIGNA_CONTEXT_PULL_INCLUDE: tuple[str, ...] = (
 
 
 def _split_watchlist(value: str) -> list[str]:
+    """Parse an explicit CSV symbol list (empty -> empty; no default fill)."""
     return [item.strip().upper() for item in value.split(",") if item.strip()]
 
 
@@ -245,9 +248,9 @@ def load_config(environ: Iterable[tuple[str, str]] | None = None) -> ScannerConf
         alpaca_data_base_url=env.get("ALPACA_DATA_BASE_URL", "https://data.alpaca.markets").strip().rstrip("/"),
         port=_as_int(env.get("OPTIONS_SCANNER_PORT"), 8010),
         discord_webhook_url=env.get("OPTIONS_SCANNER_DISCORD_WEBHOOK_URL", ""),
-        watchlist=_split_watchlist(
-            env.get("OPTIONS_SCANNER_WATCHLIST", "AAPL,MSFT,NVDA,TSLA,SPY,QQQ")
-        ),
+        # Canonical default lives in alert_ranker.universe (CORE→EXPANDED→CONDITIONAL).
+        # Explicit OPTIONS_SCANNER_WATCHLIST overrides, de-duplicated, order preserved.
+        watchlist=resolve_watchlist(env.get("OPTIONS_SCANNER_WATCHLIST")),
         interval_minutes=_as_int(env.get("OPTIONS_SCANNER_INTERVAL_MINUTES"), 5),
         sqlite_path=Path(env.get("OPTIONS_SCANNER_SQLITE_PATH", "logs/options_scanner.sqlite")),
         signa_api_enabled=_as_bool(env.get("SIGNA_API_ENABLED"), False),
