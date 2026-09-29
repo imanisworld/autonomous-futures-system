@@ -4,6 +4,20 @@
 
 _As of 2026-09-24 (runtime and current decisions: see the 2026-09-24 blocks in `docs/futures-current-status-2026-09-22.md`, then the reconciliation note below). This is the long futures handoff. Historical audit docs remain evidence records._
 
+## Repository closeout handoff — 2026-09-29
+
+Current repository `main`: `715e03956f402fd553107a84125537768841d97c` after #1068.
+
+Repo-side safety work completed in this pass:
+- #1070: observed per-entry contract-quantity proof is mandatory for promotion and fails closed on missing/mismatched evidence.
+- #1072: the older cap-compatibility integer parser is strict and no longer truncates fractional quantities.
+- #1068: daily read-only evidence cards expose all six observation markets (MNQ, MES, M2K, MBT, MCL, MGC), including zero-evidence markets; this is source/reporting only until the VPS reporter is separately repinned and smoked.
+- The reconciled repo-side defect list has no remaining open item from the audited set.
+
+**Do not treat this as runtime proof.** No VPS deployment, service restart, env mutation, broker mutation, or reporter repin occurred in this repo closeout.
+
+Durable next actions are now tracked in `docs/futures-operator-todo.md`. Start with a **read-only VPS reconciliation and current-access map**, then build/prove replacement operator access before tightening or removing the old path. The TODO is an operations queue only; Strategy Inventory remains strategy-status authority.
+
 ## Promotion-gate quantity-proof refresh — 2026-09-29
 
 Repo audit narrowed an older promotion-gate concern instead of reopening completed work. #893 (`acadbf8`) already fixed the original hard-blocker success/exit-code semantics: blockers make the promotion report fail and the CLI return non-zero. Do **not** redo that repair.
