@@ -46,6 +46,18 @@ Use `docs/options-next-actions.md` as the durable **operational checklist only**
 4. If and only if the evidence passes, obtain operator approval before merge/deploy/enable actions; then record the activation boundary in the evidence-epoch/current-state docs.
 5. Resolve old draft #1026 (read-only options audit wrappers) during later repo/VPS cleanup: explicitly keep/install later or close as obsolete. It does not block the three validations above.
 
+### SPX/SPXW provider result — 2026-09-29
+
+#1069 real-provider validation **FAILED** on exact head `5bcfb4dc1ba30ddfd71c746c68e4aefe7354fdef`.
+
+- SPX snapshot returned `quote_unavailable`.
+- Public returned HTTP 400 for SPXW expirations: `Instrument SPXW is not available on Public.`
+- No eligible expirations or option chain were obtained; `has_0dte=false`, `has_1_plus=false`.
+- The lane remained OFF and produced no journal/Discord/broker/deploy side effects.
+- Offline lifecycle suite passed 27/27.
+
+The blocker is therefore the real provider market-data/symbol path. Lifecycle mechanics remain source-proven, but the lane is **not merge-ready or deploy-ready** until provider access succeeds.
+
 ### Current confidence
 
 **High confidence:** source architecture, isolation, fail-closed behavior, CI, V1 rule preservation, SPXW episode/lifecycle mechanics, and Epoch-3 accounting logic.
