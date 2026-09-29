@@ -316,7 +316,7 @@ The duplicate research work did not create a journal repair requirement.
 **CONFIRMED FIXED REPO-SIDE — do not carry forward as open repo defects**
 - Strategy Inventory taxonomy (#920 / `2e96e164624dc45996b45a2086b012c56ee5d43d`): evidence verdict and execution posture are now separate fields; `project_check daily` keeps the final evidence verdict as its safety classification while parsing posture separately, and the dashboard no longer infers execution authority from verdict text. Full CI passed before merge. **Deployed** since release `88e89e4` (2026-09-22 23:56 UTC); see "Runtime reconciliation" above.
 - normal PaperBroker vs ReplayEngine IOC entry-reference parity (#918 / `3e624693871cb725541e286b7feabf2633342228`): the normal webhook PaperBroker IOC path now supplies the causal decision-bar close, matching ReplayEngine; full CI passed before merge. **Deployed** since release `88e89e4`, but inert on the box (entry fill model is `market`).
-- promotion gate hard-blocker/exit-code success semantics (#893 / `acadbf8`) — still fixed; the separate observed-quantity proof completeness gap found 2026-09-29 is addressed by draft PR #1070;
+- promotion gate hard-blocker/exit-code success semantics (#893 / `acadbf8`) — still fixed; the separate observed-quantity proof completeness gap found 2026-09-29 was closed by merged PR #1070 (`37be78c5c965082185f7f06d1a85bc8db2eade3d`), with follow-up integer-cap hardening merged in #1072;
 - zero/dead forward-campaign arm visibility (#582 / `964099c`);
 - `project_check daily` critical-failure success semantics (#788/#790).
 

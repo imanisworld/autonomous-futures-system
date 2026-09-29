@@ -41,6 +41,7 @@ from ops.gate_condition_report import (  # noqa: E402
 )
 
 ET = ZoneInfo("America/New_York")
+REPORT_INSTRUMENTS = ("MNQ", "MES", "M2K", "MBT", "MCL", "MGC")
 
 
 def _empty() -> dict:
@@ -100,6 +101,10 @@ def build_report(rows: list[dict], day: date) -> dict:
         strat = str(row.get("strategy") or "?")
         for bucket in (by_inst[inst], by_strat[inst][strat], total):
             _add(bucket, inst, result, ticks)
+    # Always surface the full six-market observation universe, including zero-evidence markets.
+    for inst in REPORT_INSTRUMENTS:
+        by_inst[inst]
+        by_strat[inst]
     # Total net only counts costed markets; say so rather than mixing.
     return {
         "generated_at": datetime.now(ET).isoformat(),
@@ -134,26 +139,44 @@ def _line(b: dict) -> str:
     return f"{b['closed']} trades, {b['wins']} won, {b['losses']} lost, {_dollars(b)}{tail}"
 
 
+def _strategy_value(bucket: dict) -> float:
+    value = bucket["net_usd"] if bucket["net_usd"] is not None else bucket["gross_usd"]
+    return float(value or 0.0)
+
+
+def _strategy_extremes(report: dict, inst: str) -> tuple[str | None, str | None]:
+    ranked = [
+        (_strategy_value(bucket), strategy)
+        for strategy, bucket in (report.get("by_strategy", {}).get(inst) or {}).items()
+        if bucket["closed"]
+    ]
+    if not ranked:
+        return None, None
+    ranked.sort()
+    worst_value, worst_strategy = ranked[0]
+    best_value, best_strategy = ranked[-1]
+    best = f"{best_strategy} {pe.money(round(best_value))[:-3]}" if best_value > 0 else None
+    worst = f"{worst_strategy} {pe.money(round(worst_value))[:-3]}" if worst_value < 0 else None
+    return best, worst
+
+
 def format_digest(report: dict, *, top: int = 3) -> str:
-    lines = [f"🧮 **Shadow P&L · {pe.et_date(report['day'])}**"]
+    lines = [f"🧮 **Shadow P&L · all 6 futures · {pe.et_date(report['day'])}**"]
     if not report["candidates"]:
-        lines.append("No shadow trades recorded for this day.")
+        lines.append("No shadow outcomes recorded for this day; all six markets are shown below.")
     else:
         lines.append(f"All markets: {_line(report['total'])}")
-        for inst, b in report["by_instrument"].items():
-            lines.append(f"{pe.market(inst)}: {_line(b)}")
-        ranked = [
-            (b["net_usd"] if b["net_usd"] is not None else b["gross_usd"], inst, s)
-            for inst, strats in report["by_strategy"].items()
-            for s, b in strats.items()
-            if b["closed"]
-        ]
-        ranked.sort()
-        if ranked:
-            best = [f"{inst} {s} {pe.money(round(v))[:-3]}" for v, inst, s in reversed(ranked[-top:]) if v > 0]
-            worst = [f"{inst} {s} {pe.money(round(v))[:-3]}" for v, inst, s in ranked[:top] if v < 0]
-            lines.append(f"Best: {' · '.join(best) if best else 'none positive'}")
-            lines.append(f"Worst: {' · '.join(worst) if worst else 'none negative'}")
+    for inst in REPORT_INSTRUMENTS:
+        bucket = report["by_instrument"].get(inst) or _empty()
+        if not (bucket["closed"] or bucket["open"] or bucket["no_fill"]):
+            lines.append(f"**{pe.market(inst)}** — no shadow outcomes recorded")
+            continue
+        lines.append(f"**{pe.market(inst)}** — {_line(bucket)}")
+        best, worst = _strategy_extremes(report, inst)
+        if best or worst:
+            lines.append(
+                f"Best: {best or 'none positive'} · Worst: {worst or 'none negative'}"
+            )
     lines.append("[shadow only · 1 contract each · no orders · no rule change]")
     return "\n".join(lines)
 

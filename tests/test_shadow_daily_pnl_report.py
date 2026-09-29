@@ -66,11 +66,16 @@ def test_digest_plain_english_and_empty_day():
     rep = sdp.build_report([_row("w", "MNQ", "WIN", 40), _row("l", "MES", "LOSS", -8, strategy="ema_pullback_trend")], DAY)
     text = sdp.format_digest(rep)
     assert "Shadow P&L" in text and "after costs" in text
-    assert "Best: MNQ strat_22_continuation_observed" in text
-    assert "Worst: MES ema_pullback_trend" in text
+    assert "Best: strat_22_continuation_observed" in text
+    assert "Worst: ema_pullback_trend" in text
+    for instrument in sdp.REPORT_INSTRUMENTS:
+        assert instrument in text
+    assert "M2K" in text and "no shadow outcomes recorded" in text
     assert "no orders" in text
     empty = sdp.format_digest(sdp.build_report([], DAY))
-    assert "No shadow trades" in empty
+    assert "No shadow outcomes recorded" in empty
+    for instrument in sdp.REPORT_INSTRUMENTS:
+        assert instrument in empty
 
 
 def test_main_writes_files(tmp_path, capsys):
