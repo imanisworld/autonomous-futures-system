@@ -4,6 +4,16 @@
 
 _As of 2026-09-24 (runtime and current decisions: see the 2026-09-24 blocks in `docs/futures-current-status-2026-09-22.md`, then the reconciliation note below). This is the long futures handoff. Historical audit docs remain evidence records._
 
+## Promotion-gate quantity-proof refresh — 2026-09-29
+
+Repo audit narrowed an older promotion-gate concern instead of reopening completed work. #893 (`acadbf8`) already fixed the original hard-blocker success/exit-code semantics: blockers make the promotion report fail and the CLI return non-zero. Do **not** redo that repair.
+
+One residual source-side gap remained: the gate checked a claimed `contract_qty` against configured quantity caps but did not require evidence of the quantities actually represented by each recorded entry attempt. A packet could therefore satisfy the cap check without independently proving submitted/observed quantity.
+
+The accompanying PR adds a fail-closed evidence requirement: `execution.entry_attempt_contract_quantities` must provide one positive observed quantity per `entry_attempt`; its count must reconcile exactly; and every observed value must match `execution_context_claimed.contract_qty`. Cap compatibility remains a separate check.
+
+Scope is limited to the promotion evidence gate, regression tests, and current gate/status documentation. It does **not** change strategy formulas, risk rules, sizing behavior, broker/order code, execution routing, runtime env, deployment state, or strategy classification. No VPS action follows from this source change. Independent review and exact-head CI are still required before merge.
+
 ## Shared research plumbing note — 2026-09-26
 
 Repo-wide (not a futures runtime change): approved experiment contract #1042 (`73eb8d2…`) and fail-closed Experiment Runner #1047 (`df58d55…`) are on `main`. No live `APPROVED` experiment specs exist yet. Options-lane narrative for continuing that work lives in `docs/options-current-state-handoff.md` § Repository refresh — 2026-09-26. This note authorizes no futures deploy, restart, strategy change, or broker mutation.
