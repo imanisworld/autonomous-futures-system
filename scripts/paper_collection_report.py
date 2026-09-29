@@ -50,6 +50,7 @@ SESSION_BOUND = {"options scans"}
 
 FUTURES_ENV = "DISCORD_ROUTE_PAPER_COLLECTION_FUTURES"
 OPTIONS_ENV = "DISCORD_ROUTE_PAPER_COLLECTION_OPTIONS"
+FUTURES_REPORT_INSTRUMENTS = ("MNQ", "MES", "M2K", "MBT", "MCL", "MGC")
 
 
 def period_bounds(ref: date, period: str) -> tuple[date, date]:
@@ -457,10 +458,11 @@ def futures_discord_payload(
     outcome_text = "\n".join(outcome_lines) or "None recorded"
 
     collection = f"**{summary['rows']:,}** records saved\n" + _count_lines(summary.get("row_types") or {}, limit=4)
-    if summary.get("instruments"):
-        collection += "\nBy market: " + " · ".join(
-            f"{_display_name(k).upper()} **{v:,}**" for k, v in sorted(summary["instruments"].items())[:6]
-        )
+    instrument_counts = summary.get("instruments") or {}
+    collection += "\nBy market: " + " · ".join(
+        f"{instrument} **{int(instrument_counts.get(instrument, 0)):,}**"
+        for instrument in FUTURES_REPORT_INSTRUMENTS
+    )
     if summary["rows"] == 0:
         collection += "\n⚠ nothing was recorded for futures in this window"
 
