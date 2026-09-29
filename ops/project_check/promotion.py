@@ -264,26 +264,26 @@ def _check_quantity_evidence(
     """
     problems: list[str] = []
 
+    def _strict_positive_int(value: Any) -> int | None:
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, int):
+            return value if value > 0 else None
+        if isinstance(value, str):
+            raw = value.strip()
+            if raw.isdigit():
+                parsed = int(raw)
+                return parsed if parsed > 0 else None
+        return None
+
     attempts_raw = execution.get("entry_attempts")
-    if isinstance(attempts_raw, bool):
-        attempts = None
-    else:
-        try:
-            attempts = int(attempts_raw)
-        except (TypeError, ValueError):
-            attempts = None
-    if attempts is None or attempts <= 0:
+    attempts = _strict_positive_int(attempts_raw)
+    if attempts is None:
         problems.append("execution.entry_attempts must be a positive integer for quantity proof")
 
     claimed_raw = execution_context_claimed.get("contract_qty")
-    if isinstance(claimed_raw, bool):
-        claimed_qty = None
-    else:
-        try:
-            claimed_qty = int(claimed_raw)
-        except (TypeError, ValueError):
-            claimed_qty = None
-    if claimed_qty is None or claimed_qty <= 0:
+    claimed_qty = _strict_positive_int(claimed_raw)
+    if claimed_qty is None:
         problems.append("execution_context_claimed.contract_qty must be a positive integer")
 
     quantities_raw = execution.get("entry_attempt_contract_quantities")
@@ -295,14 +295,8 @@ def _check_quantity_evidence(
         )
     else:
         for index, raw in enumerate(quantities_raw):
-            if isinstance(raw, bool):
-                parsed = None
-            else:
-                try:
-                    parsed = int(raw)
-                except (TypeError, ValueError):
-                    parsed = None
-            if parsed is None or parsed <= 0:
+            parsed = _strict_positive_int(raw)
+            if parsed is None:
                 problems.append(
                     f"execution.entry_attempt_contract_quantities[{index}] must be a positive integer"
                 )
