@@ -443,3 +443,20 @@ def test_observed_quantity_count_must_match_entry_attempts(
         "does not match entry_attempts 5" in problem
         for problem in report["quantity_evidence"]["problems"]
     )
+
+
+def test_fractional_quantity_evidence_fails_closed(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ", "32")
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MES", "16")
+    monkeypatch.setenv("ENTRY_FILL_MODEL", "ioc_limit")
+    monkeypatch.setenv("MAX_CONTRACTS_HARD_CAP", "2")
+    payload = _complete_promotion_evidence()
+    payload["execution_context_claimed"]["contract_qty"] = 1.5
+    payload["execution"]["entry_attempt_contract_quantities"] = [1.5] * 5
+    evidence = _write_evidence(tmp_path, payload)
+    report = build_promotion_report(strategy="x", repo_root=tmp_path, evidence_path=evidence)
+    assert report["gate_pass"] is False
+    assert any(
+        "must be a positive integer" in problem
+        for problem in report["quantity_evidence"]["problems"]
+    )
