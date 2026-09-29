@@ -12,6 +12,16 @@ This is the concise dated operator snapshot for the futures system around 2026-0
 
 Core rule remains: **No proof, no run.**
 
+## afs-ro runtime hold — 2026-09-29
+
+A later read-only `afs-ro` wrapper audit is preserved in `docs/futures-afsro-runtime-audit-2026-09-29.md`. Treat it as **HANDOFF-REPORTED runtime evidence**, not as a fresh independent server check by this documentation session.
+
+That audit reports the futures service still on curated release `41ae1881655c235a26288244c81b8df2a7c8c968`, active with zero reported restarts, while Tradovate DEMO authentication has been rejected with HTTP 401 since 2026-09-25. Because broker positions and working orders cannot be read while authentication is down, current broker flatness is **UNKNOWN**. This is a **HOLD** under `No proof, no run`.
+
+The same audit reports #1068 is not on the box, #1053/#1054 appear absent from the deployed release, and effective `.env` pins / deploy-lock / separate reporter pin / access controls are not readable through `afs-ro`. It also leaves an unexplained `0 trades / -$59.75 realized` discrepancy and a potentially misleading broker-recovery notification for follow-up.
+
+**Safe order:** restore DEMO authentication through the operator-controlled credential path; perform read-only broker/account reconciliation; explain the accounting discrepancy; complete the wrapper-inaccessible runtime/access checks; only then decide whether to repin the reporter alone or promote an exact reviewed release. No deploy/restart/repin is authorized by this note.
+
 ## Repo closeout / next operator phase — 2026-09-29
 
 Repository `main` is now `715e03956f402fd553107a84125537768841d97c` after merged PR #1068. The audited repo-side futures defect list remains empty. #1068 adds six-market daily evidence visibility for MNQ, MES, M2K, MBT, MCL, and MGC; it does **not** prove or update the VPS pinned reporter.
