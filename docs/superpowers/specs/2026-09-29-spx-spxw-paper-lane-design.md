@@ -1,6 +1,6 @@
 # SPX → SPXW Paper Lane Design
 
-_Date: 2026-09-29. Status: AWAITING OPERATOR REVIEW. No deploy. Paper/advisory only._
+_Date: 2026-09-29. Status: APPROVED FOR IMPLEMENTATION (operator: finish it). No deploy. Paper/advisory only._
 
 ## Intent
 
