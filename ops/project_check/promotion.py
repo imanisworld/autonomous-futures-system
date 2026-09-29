@@ -49,13 +49,13 @@ reported UNKNOWN, never guessed:
   "execution": {
     "candidates_reaching_risk_engine": 60,
     "approved": 45,
-    "entry_attempts": 45,
+    "entry_attempts": 3,
     "entry_attempt_contract_quantities": [1, 1, 1],
-    "fills": 21,
-    "cancellations": 22,
-    "rejects_or_known_no_fills": 2,
-    "resolved_outcomes": 20,
-    "legitimately_open": 1
+    "fills": 2,
+    "cancellations": 1,
+    "rejects_or_known_no_fills": 0,
+    "resolved_outcomes": 2,
+    "legitimately_open": 0
   },
   "research_result": {"net_pnl": 1595.70, "profit_factor": 10.36, "win_rate": 0.529, "sample": 34},
   "runtime_parity": {"replay_live_logic_confirmed": true, "notes": "..."},
