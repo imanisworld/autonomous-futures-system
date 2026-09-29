@@ -21,7 +21,7 @@ Durable next actions in `docs/futures-operator-todo.md` are now reordered around
 
 ## Repository closeout handoff — 2026-09-29
 
-Current repository `main`: `715e03956f402fd553107a84125537768841d97c` after #1068.
+Current repository `main` at this closeout: `f48bcb8f42fab87f689016dc5257b507fcd017a5` after #1074; #1068 merged earlier at `715e03956f402fd553107a84125537768841d97c`.
 
 Repo-side safety work completed in this pass:
 - #1070: observed per-entry contract-quantity proof is mandatory for promotion and fails closed on missing/mismatched evidence.
