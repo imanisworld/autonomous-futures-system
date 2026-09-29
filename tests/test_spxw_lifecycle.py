@@ -274,7 +274,13 @@ def test_aggregate_risk_after_dedupe_and_resolve(tmp_path):
     )
     assert same_bucket.status == "SKIPPED"
     assert same_bucket.reason.startswith("duplicate_episode:")
-    # A later bar bucket is a new episode and may open.
+    # A later bar bucket is a new episode and may open (fresh liquid quotes).
+    lane.market_data = _Market(
+        bid=1.40,
+        ask=1.50,
+        underlying=5800.0,
+        quote_ts="2026-09-29T15:04:30+00:00",
+    )
     later_bar = asyncio.run(
         lane.scan_spx_setup(_setup(setup_entry_trigger=5795.0), now=NEXT_BAR)
     )
