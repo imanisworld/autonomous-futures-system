@@ -36,7 +36,8 @@ The existing `ops.project_check.promotion` gate must pass, including:
 - internally consistent attempt/fill/cancel/reject accounting;
 - candidate/direction/entry-stop-target/timeframe parity;
 - no lookahead/partial-bar dependency;
-- current runtime entry-fill model, effective tolerance and quantity-cap parity.
+- current runtime entry-fill model and effective tolerance parity;
+- configured quantity-cap compatibility **plus observed per-entry-attempt contract quantities** that reconcile to the recorded attempt count and the claimed quantity. A cap-compatible claim by itself is not quantity proof.
 
 Effective evidence classification must be either:
 
@@ -96,6 +97,8 @@ The generic gate deliberately does **not** guess a strategy lookback or a holida
 
 Required:
 
+- one observed contract quantity for every recorded entry attempt; the observed list length must equal `execution.entry_attempts`, every value must be positive, and every observed value must equal `execution_context_claimed.contract_qty`;
+- the claimed quantity must also remain within the current configured instrument/hard caps — these are separate checks;
 - IOC/no-fill behavior modeled;
 - pessimistic stop-first treatment when stop and target are both inside one unresolved bar;
 - gap-through handling;
@@ -202,6 +205,7 @@ Exit code:
   },
   "execution": {
     "entry_attempts": 0,
+    "entry_attempt_contract_quantities": [],
     "fills": 0,
     "cancellations": 0,
     "rejects_or_known_no_fills": 0,

@@ -21,6 +21,9 @@ evidence. It:
     specific lesson this routine exists to encode: entry model and effective
     tolerance must be checked against live runtime, not just asserted in the
     evidence packet
+  - requires per-entry-attempt observed contract quantities from the canonical
+    execution evidence and reconciles them against both the attempt count and
+    the claimed contract quantity; a cap-compatible claim alone is not proof
   - applies hard, deterministic safety caps (zero fills, accounting mismatch,
     lookahead/parity defects) that no classification may bypass
   - never invents a VALIDATED/BROKEN/etc. verdict from raw numbers alone --
@@ -46,12 +49,13 @@ reported UNKNOWN, never guessed:
   "execution": {
     "candidates_reaching_risk_engine": 60,
     "approved": 45,
-    "entry_attempts": 45,
-    "fills": 21,
-    "cancellations": 22,
-    "rejects_or_known_no_fills": 2,
-    "resolved_outcomes": 20,
-    "legitimately_open": 1
+    "entry_attempts": 3,
+    "entry_attempt_contract_quantities": [1, 1, 1],
+    "fills": 2,
+    "cancellations": 1,
+    "rejects_or_known_no_fills": 0,
+    "resolved_outcomes": 2,
+    "legitimately_open": 0
   },
   "research_result": {"net_pnl": 1595.70, "profit_factor": 10.36, "win_rate": 0.529, "sample": 34},
   "runtime_parity": {"replay_live_logic_confirmed": true, "notes": "..."},
@@ -237,11 +241,87 @@ def _execution_context_check(*, repo_root: Path, claimed: dict[str, Any]) -> dic
         "claimed": claimed,
         "live_verified": live_view,
         "quantity_check_semantics": (
-            "cap_compatibility_only: claimed contract_qty is checked against configured caps; "
-            "this does not independently prove the submitted order quantity"
+            "two_layer: claimed contract_qty is checked against configured caps and "
+            "promotion additionally requires per-entry-attempt observed quantities to "
+            "match that claim"
         ),
         "mismatches": mismatches,
         "parity_ok": not mismatches,
+    }
+
+
+def _check_quantity_evidence(
+    *,
+    execution: dict[str, Any],
+    execution_context_claimed: dict[str, Any],
+) -> dict[str, Any]:
+    """Verify observed quantity evidence for every recorded entry attempt.
+
+    The evidence-facts packet must carry one observed quantity per entry
+    attempt, copied from the canonical execution evidence. This does not parse
+    broker journals itself; it prevents a promotion PASS from relying only on a
+    cap-compatible claimed quantity.
+    """
+    problems: list[str] = []
+
+    def _strict_positive_int(value: Any) -> int | None:
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, int):
+            return value if value > 0 else None
+        if isinstance(value, str):
+            raw = value.strip()
+            if raw.isdigit():
+                parsed = int(raw)
+                return parsed if parsed > 0 else None
+        return None
+
+    attempts_raw = execution.get("entry_attempts")
+    attempts = _strict_positive_int(attempts_raw)
+    if attempts is None:
+        problems.append("execution.entry_attempts must be a positive integer for quantity proof")
+
+    claimed_raw = execution_context_claimed.get("contract_qty")
+    claimed_qty = _strict_positive_int(claimed_raw)
+    if claimed_qty is None:
+        problems.append("execution_context_claimed.contract_qty must be a positive integer")
+
+    quantities_raw = execution.get("entry_attempt_contract_quantities")
+    quantities: list[int] = []
+    if not isinstance(quantities_raw, list):
+        problems.append(
+            "execution.entry_attempt_contract_quantities must be a list with one observed "
+            "quantity per entry attempt"
+        )
+    else:
+        for index, raw in enumerate(quantities_raw):
+            parsed = _strict_positive_int(raw)
+            if parsed is None:
+                problems.append(
+                    f"execution.entry_attempt_contract_quantities[{index}] must be a positive integer"
+                )
+            else:
+                quantities.append(parsed)
+
+        if attempts is not None and len(quantities_raw) != attempts:
+            problems.append(
+                "execution.entry_attempt_contract_quantities count "
+                f"{len(quantities_raw)} does not match entry_attempts {attempts}"
+            )
+
+        if claimed_qty is not None and quantities and any(qty != claimed_qty for qty in quantities):
+            observed = sorted(set(quantities))
+            problems.append(
+                "observed entry-attempt contract quantities "
+                f"{observed} do not all match claimed contract_qty {claimed_qty}"
+            )
+
+    return {
+        "entry_attempts": attempts_raw,
+        "observed_contract_quantities": quantities_raw,
+        "claimed_contract_qty": claimed_raw,
+        "verified": not problems,
+        "problems": problems,
     }
 
 
@@ -251,6 +331,7 @@ def _safety_caps(
     accounting: dict[str, Any],
     execution: dict[str, Any],
     execution_context: dict[str, Any],
+    quantity_evidence: dict[str, Any],
     runtime_parity: dict[str, Any],
     execution_context_claimed: dict[str, Any],
     stated_classification: str | None,
@@ -324,6 +405,12 @@ def _safety_caps(
             "execution-context parity defect: " + "; ".join(execution_context.get("mismatches", []))
         )
 
+    if quantity_evidence.get("verified") is not True:
+        problems = quantity_evidence.get("problems") or ["quantity evidence is missing"]
+        blockers.append(
+            "entry-attempt contract quantity evidence is unverified -- " + "; ".join(problems)
+        )
+
     capped = bool(blockers)
     effective = stated_classification
     override_reason = None
@@ -377,11 +464,16 @@ def build_promotion_report(
 
     accounting = _check_accounting_identities(execution)
     execution_context = _execution_context_check(repo_root=root, claimed=execution_context_claimed)
+    quantity_evidence = _check_quantity_evidence(
+        execution=execution,
+        execution_context_claimed=execution_context_claimed,
+    )
     caps = _safety_caps(
         identity_parity=identity_parity,
         accounting=accounting,
         execution=execution,
         execution_context=execution_context,
+        quantity_evidence=quantity_evidence,
         runtime_parity=runtime_parity,
         execution_context_claimed=execution_context_claimed,
         stated_classification=stated_classification,
@@ -424,6 +516,7 @@ def build_promotion_report(
         "runtime_parity": runtime_parity,
         "paper_forward_evidence": paper_forward_evidence,
         "execution_context": execution_context,
+        "quantity_evidence": quantity_evidence,
         "classification": caps,
         "notes": evidence.get("notes"),
         "forbidden_actions_reminder": (

@@ -59,6 +59,7 @@ def test_report_ok_is_true_only_when_promotion_gate_passes(tmp_path: Path, monke
             },
             "execution": {
                 "entry_attempts": 1,
+                "entry_attempt_contract_quantities": [1],
                 "fills": 1,
                 "cancellations": 0,
                 "rejects_or_known_no_fills": 0,
