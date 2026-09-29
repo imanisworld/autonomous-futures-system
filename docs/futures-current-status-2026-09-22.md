@@ -24,7 +24,7 @@ The same audit reports #1068 is not on the box, #1053/#1054 appear absent from t
 
 ## Repo closeout / next operator phase — 2026-09-29
 
-Repository `main` is now `715e03956f402fd553107a84125537768841d97c` after merged PR #1068. The audited repo-side futures defect list remains empty. #1068 adds six-market daily evidence visibility for MNQ, MES, M2K, MBT, MCL, and MGC; it does **not** prove or update the VPS pinned reporter.
+Repository `main` at the repo closeout is `f48bcb8f42fab87f689016dc5257b507fcd017a5` after merged PR #1074; #1068 had already merged at `715e03956f402fd553107a84125537768841d97c`. The audited repo-side futures defect list remains empty. #1068 adds six-market daily evidence visibility for MNQ, MES, M2K, MBT, MCL, and MGC; it does **not** prove or update the VPS pinned reporter.
 
 The durable ordered next-actions list is `docs/futures-operator-todo.md`. The next phase is **VPS/access/runtime reconciliation**, starting read-only. Do not infer current deployed SHA, runtime pins, account state, reporter pin, or access restrictions from `main`. Do not remove existing operator access until a replacement MacBook/phone path and break-glass recovery are built and proven.
 
