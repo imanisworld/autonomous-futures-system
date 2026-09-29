@@ -158,11 +158,16 @@ def _execution_context_check(*, repo_root: Path, claimed: dict[str, Any]) -> dic
             return None
 
     def _as_positive_int(value: Any) -> int | None:
-        try:
-            parsed = int(value)
-        except (TypeError, ValueError):
+        if isinstance(value, bool):
             return None
-        return parsed if parsed > 0 else None
+        if isinstance(value, int):
+            return value if value > 0 else None
+        if isinstance(value, str):
+            raw = value.strip()
+            if raw.isdigit():
+                parsed = int(raw)
+                return parsed if parsed > 0 else None
+        return None
 
     instrument_raw = claimed.get("instrument")
     instrument = str(instrument_raw).strip().upper() if instrument_raw not in (None, "") else None
