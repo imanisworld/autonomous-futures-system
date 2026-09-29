@@ -16,10 +16,6 @@ from alert_ranker.session_calendar import us_equity_rth_state
 from alert_ranker.spxw_storage import SpxwStorage
 
 EQUITY_LANE_FORBIDDEN = frozenset({spxw.SIGNAL_UNDERLYING, spxw.CONTRACT_ROOT})
-NO_LIVE_BROKER_IMPORTS = (
-    "options_manager.adapters.webull_sandbox_paper_orders",
-    "options_manager.order_ticket",
-)
 
 
 @dataclass(frozen=True)

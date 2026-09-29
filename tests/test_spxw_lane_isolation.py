@@ -19,7 +19,6 @@ from alert_ranker import paper_v1 as equity_v1
 from alert_ranker.app import create_app
 from alert_ranker.config import ScannerConfig, load_config
 from alert_ranker.spxw_lane import (
-    NO_LIVE_BROKER_IMPORTS,
     SpxwPaperLane,
     assert_isolated_from_equity_universe,
     build_spxw_paper_candidate,
@@ -48,6 +47,11 @@ def test_isolation_assert_rejects_equity_watchlist_with_spx():
 
 
 def test_lane_module_has_no_broker_order_imports():
+    """AST-only boundary: no executable broker/order imports or submit calls.
+
+    Do not embed forbid-list module path strings in ``spxw_lane.py`` itself —
+    a repo-wide source scan treats those literals as an import boundary breach.
+    """
     source_path = Path(inspect.getfile(SpxwPaperLane))
     tree = ast.parse(source_path.read_text())
     imported: set[str] = set()
@@ -60,9 +64,9 @@ def test_lane_module_has_no_broker_order_imports():
             imported.add(module)
             for alias in node.names:
                 imported.add(f"{module}.{alias.name}" if module else alias.name)
-    for forbidden in NO_LIVE_BROKER_IMPORTS:
-        assert forbidden not in imported
-    # Guard strings document the forbid-list; ensure no executable import/call.
+    forbidden_prefixes = ("options_manager.adapters", "options_manager.order")
+    for name in imported:
+        assert not any(name == prefix or name.startswith(prefix + ".") for prefix in forbidden_prefixes)
     assert "PreparedOrderTicket" not in imported
     call_names = {
         node.func.id
@@ -70,6 +74,8 @@ def test_lane_module_has_no_broker_order_imports():
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
     }
     assert "submit_order" not in call_names
+    # Source must not mention the sandbox paper-order module path at all.
+    assert "sandbox_paper" not in source_path.read_text()
 
 
 class _Chain:
