@@ -14,11 +14,12 @@ _As of 2026-09-29. Operational checklist only. The authoritative options status 
 
 ## Local / real-provider validation
 
-- [ ] **#1071 — Epoch-3 audit**
-  - Run against the real options scanner SQLite in read-only mode.
-  - Preserve exact ACTIVE P&L, priced-closed count, financial winner/loss counts, opens, structural target/stop counts, and entry-consumed non-outcomes.
-  - Preserve COUNTERFACTUAL observations grouped by exact `counterfactual_filter_reason`.
-  - Do not call counterfactual observations expectancy.
+- [x] **#1071 — Epoch-3 audit COMPLETE**
+  - Verified read-only DB copy: 9,734 journal rows; latest `2026-09-29T19:46:18Z`; 337 Epoch-3 rows.
+  - ACTIVE: 7 rows; 5 priced closed; 1 winner / 4 losers; 2 open; P&L `-$247.00`; structural target/stop `1/4`; 0 entry-consumed non-outcomes.
+  - COUNTERFACTUAL: 330 observations, kept separate from ACTIVE and grouped by exact `counterfactual_filter_reason`.
+  - Output preserved at `logs/validation-20260929/options_epoch3_audit.json`.
+  - This is a cohort measurement, not proof of expectancy; do not tune V1 from five priced closes.
 
 - [ ] **#1067 — 66-symbol RTH capacity**
   - Run during RTH with real Public + Alpaca SIP/bar-context credentials.
