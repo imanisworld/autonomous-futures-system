@@ -242,6 +242,28 @@ def test_contract_qty_is_checked_against_relevant_effective_cap(tmp_path: Path, 
     assert any("contract_qty=2" in m and "cap 1" in m for m in report["execution_context"]["mismatches"])
 
 
+def test_fractional_claimed_contract_qty_is_not_truncated_by_cap_check(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MNQ", "32")
+    monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MES", "16")
+    monkeypatch.setenv("MAX_CONTRACTS_HARD_CAP", "2")
+    evidence = _write_evidence(
+        tmp_path,
+        {
+            "execution_context_claimed": {
+                "instrument": "MNQ",
+                "contract_qty": 1.5,
+            }
+        },
+    )
+    report = build_promotion_report(strategy="x", repo_root=tmp_path, evidence_path=evidence)
+    assert any(
+        "contract_qty=1.5" in mismatch and "not a positive integer" in mismatch
+        for mismatch in report["execution_context"]["mismatches"]
+    )
+
+
 def test_cli_returns_nonzero_when_promotion_gate_is_blocked(tmp_path: Path) -> None:
     evidence = _write_evidence(
         tmp_path,
