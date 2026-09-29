@@ -157,6 +157,7 @@ def _complete_evidence(tmp_path: Path) -> dict:
             "candidates_reaching_risk_engine": 45,
             "approved": 40,
             "entry_attempts": 40,
+            "entry_attempt_contract_quantities": [1] * 40,
             "fills": 40,
             "cancellations": 0,
             "rejects_or_known_no_fills": 0,
