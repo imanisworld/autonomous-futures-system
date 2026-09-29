@@ -4,6 +4,21 @@
 
 _As of 2026-09-24 (runtime and current decisions: see the 2026-09-24 blocks in `docs/futures-current-status-2026-09-22.md`, then the reconciliation note below). This is the long futures handoff. Historical audit docs remain evidence records._
 
+## afs-ro runtime reconciliation handoff — 2026-09-29
+
+A read-only `afs-ro` audit reported **HOLD** and is recorded in `docs/futures-afsro-runtime-audit-2026-09-29.md`. This documentation session did not independently re-run those box commands.
+
+Key reported facts:
+- runtime remains curated `41ae1881655c235a26288244c81b8df2a7c8c968`, active with 0 reported restarts;
+- Tradovate DEMO login has returned HTTP 401 / credentials rejected since 2026-09-25, so broker positions and working orders are unknown;
+- local journals reportedly show no open positions, but that does not substitute for broker read-back;
+- #1068 is not on the box; #1053/#1054 appear absent from the deployed release;
+- `.env` values, deploy lock, reporter pin/timers, sshd/sudo/account restrictions, private-network state, and break-glass access are not accessible through `afs-ro`;
+- an unexplained `0 trades / -$59.75 realized` daily summary remains to reconcile;
+- a broker "Resolved" alert followed by another 401 shortly afterward needs monitoring review after authentication is restored.
+
+Durable next actions in `docs/futures-operator-todo.md` are now reordered around this HOLD. Do not repin or deploy merely because source is ahead. First restore DEMO authentication through the operator-controlled credential path, prove broker account/positions/orders read-only, and complete the missing runtime/access evidence.
+
 ## Repository closeout handoff — 2026-09-29
 
 Current repository `main`: `715e03956f402fd553107a84125537768841d97c` after #1068.
