@@ -1,8 +1,46 @@
 # Options — Current State Handoff
 
-_As of 2026-09-26. The newest dated repository refresh below governs source state; the latest verified box-specific sections govern runtime state until a fresh VPS check is performed. This is the single current-state authority for the options lane._
+_As of 2026-09-29. The newest dated repository refresh below governs source state; the latest verified box-specific sections govern runtime state until a fresh local/provider or VPS check is performed. This is the single current-state authority for the options lane._
 
 Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`; the read-only coverage evidence lane (observer, reducer, outcome study, after-close collector) is described in `docs/options-coverage-observer.md`.
+
+## Repository refresh — 2026-09-29 (66-symbol expansion + SPXW paper lane + Epoch-3 audit)
+
+**No production change was performed by this refresh.** Production remains on the existing 20-symbol `OPTIONS_PAPER_V1` advisory/read-only posture. The 66-symbol universe is not deployed, the SPXW lane is disabled, and no strategy/risk/liquidity/DTE/alert rule was loosened.
+
+Three bounded PRs are now the active options workstream:
+
+| PR | Purpose | Exact head / status | Remaining gate |
+|---|---|---|---|
+| #1067 | Expand scanner coverage from 20 to 66 symbols; add isolated real-provider capacity preflight | `a4de6f986b4e19bca39e161248151f8e139eda0c`; exact-head CI green | Real 66/66 RTH capacity proof inside the existing 5-minute cadence with no critical provider/data failures |
+| #1069 | Separate SPX signal → SPXW paper lane with 0DTE vs 1+DTE cohorts | `5bcfb4dc1ba30ddfd71c746c68e4aefe7354fdef`; exact-head CI green | Real SPX snapshot + SPXW expiration/chain provider proof while lane remains OFF |
+| #1071 | Read-only Epoch-3 P&L / counterfactual-filter audit | `0dca986edbb975e75c7c086c8b53f3361fdc4c4f`; exact-head CI green; independent diff review APPROVE | Run against the real options scanner SQLite and preserve the output |
+
+### What is now proven in source
+
+- The canonical candidate universe contains 66 unique symbols in deterministic CORE → EXPANDED → CONDITIONAL order. Existing V1 contract-quality, risk, DTE, Strat, Signa/GEX authority, and alert thresholds were not changed by the expansion.
+- The 66-symbol capacity harness fails closed without real credentials and cannot claim PASS from mocks/stubs.
+- The SPXW lane is isolated from the equity/ETF scanner: SPX is the setup authority, SPXW is the contract family, `OPTIONS_PAPER_SPXW_V1` is separate from `OPTIONS_PAPER_V1`, and the lane defaults OFF.
+- SPXW 0DTE and 1+DTE are separate evidence cohorts; neither is assumed superior.
+- SPXW lifecycle code now includes episode-key duplicate suppression, OPEN-position resolution, exact-contract re-quote, ask-entry/bid-exit P&L, underlying/premium-stop resolution, cohort preservation, and clearing of lane-local aggregate open risk after resolution.
+- The Epoch-3 audit reads SQLite read-only, uses the epoch boundary from `docs/options_v1_evidence_epoch.json`, excludes pre-Epoch-3 rows, counts financial outcome from recorded `pnl_dollars` rather than structural WIN/LOSS labels, excludes entry-consumed non-outcomes, and keeps COUNTERFACTUAL rows out of ACTIVE P&L.
+- The previously quoted all-time `-$12` paper total is **not** an Epoch-3 verdict; it mixes cohorts. Exact Epoch-3 performance remains unverified until #1071 is run against the real SQLite.
+
+### Remaining work before any activation
+
+Use `docs/options-next-actions.md` as the durable **operational checklist only**. This file remains the current-state authority.
+
+1. Run #1071 against the real local options SQLite; preserve exact Epoch-3 ACTIVE P&L plus rejection-reason grouped counterfactual observations.
+2. During RTH, run #1067 with real Public + Alpaca SIP/bar-context credentials. PASS requires 66/66 within the existing five-minute cadence with no critical failures, rate-limit failures, timeouts, or missing/stale causal-bar failures.
+3. With the SPXW lane still OFF, run #1069's real provider preflight for SPX snapshot + SPXW expirations/chain; then rerun the lifecycle regression set.
+4. If and only if the evidence passes, obtain operator approval before merge/deploy/enable actions; then record the activation boundary in the evidence-epoch/current-state docs.
+5. Resolve old draft #1026 (read-only options audit wrappers) during later repo/VPS cleanup: explicitly keep/install later or close as obsolete. It does not block the three validations above.
+
+### Current confidence
+
+**High confidence:** source architecture, isolation, fail-closed behavior, CI, V1 rule preservation, SPXW episode/lifecycle mechanics, and Epoch-3 accounting logic.
+
+**Not yet proven:** current-version trading expectancy, exact Epoch-3 P&L, 66-symbol real-provider cadence capacity, and real SPX/SPXW provider behavior. Until those are measured, strategy edge remains unproven and production posture remains unchanged.
 
 ## Research / agent governance
 
