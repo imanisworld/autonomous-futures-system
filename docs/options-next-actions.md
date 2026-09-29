@@ -28,13 +28,14 @@ _As of 2026-09-29. Operational checklist only. The authoritative options status 
   - Preserve measured runtime and the exact tested SHA.
   - Do not change the production watchlist on a failed or incomplete preflight.
 
-- [ ] **#1069 — SPX/SPXW provider validation**
+- [ ] **#1069 — SPX/SPXW provider validation BLOCKED**
   - Keep `OPTIONS_SPXW_PAPER_LANE_ENABLED=false`.
   - Prove real SPX snapshot availability.
   - Prove SPXW expirations and option-chain retrieval.
   - Record whether 0DTE and 1+DTE are present.
   - Confirm no SPXW journal write, Discord side effect, broker route, or live execution occurs during provider preflight.
   - Rerun lifecycle tests after provider proof.
+  - **2026-09-29 real provider preflight failed:** SPX quote unavailable; Public returned HTTP 400 for `SPXW` expirations (`Instrument SPXW is not available on Public.`); no chain loaded. Lifecycle regression still passed 27/27. Next work is provider-symbol/data-path correction only; do not loosen strategy/risk rules.
 
 ## After the three validation gates
 
