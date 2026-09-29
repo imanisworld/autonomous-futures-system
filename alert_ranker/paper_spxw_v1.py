@@ -20,12 +20,15 @@ from alert_ranker.paper_v1 import (
     entry_geometry_state,
     entry_late_reason,
     remaining_reward_to_risk,
+    setup_episode_key,
 )
 
 POLICY_ID = "OPTIONS_PAPER_SPXW_V1"
 SIGNAL_UNDERLYING = "SPX"
 CONTRACT_ROOT = "SPXW"
 SETTLEMENT = "CASH_SETTLED_INDEX"
+# Distinct from equity ACTIVE so SPXW episodes never collide with V1 keys.
+EVIDENCE_LANE = "SPXW_PAPER"
 
 MAX_TRADE_RISK_DOLLARS = 300.0
 MAX_AGGREGATE_OPEN_RISK_DOLLARS = 1_000.0
@@ -374,9 +377,33 @@ def build_spxw_contract_fields(
             "cost_model": "entry_at_ask_exit_at_bid_no_commission",
             "underlying_invalidation": stop_underlying,
             "target_1": target,
+            # Aliases consumed by shared resolve_open_setup (V1 semantics).
+            "stop": stop_underlying,
+            "target": target,
+            "entry_quote": entry,
             "averaging_down": False,
         },
         "",
+    )
+
+
+def spxw_episode_key(
+    *,
+    setup_type: str | None,
+    direction: str | None,
+    trigger: object,
+    moment: datetime,
+    timeframe: str | None = None,
+) -> str:
+    """Stable SPXW evidence episode identity (underlying setup, not contract)."""
+    return setup_episode_key(
+        ticker=SIGNAL_UNDERLYING,
+        lane=EVIDENCE_LANE,
+        timeframe=timeframe or "30M",
+        setup_type=setup_type,
+        direction=direction,
+        trigger=trigger,
+        moment=moment,
     )
 
 
@@ -453,4 +480,7 @@ __all__ = [
     "entry_geometry_state",
     "remaining_reward_to_risk",
     "DEFAULT_MIN_REMAINING_RR",
+    "EVIDENCE_LANE",
+    "spxw_episode_key",
+    "setup_episode_key",
 ]

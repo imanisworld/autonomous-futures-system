@@ -285,6 +285,7 @@ def test_disabled_lane_creates_no_spxw_db_or_scheduler_job(tmp_path):
         job_ids = {job.id for job in scheduler.get_jobs()}
         assert "options-watchlist-scan" in job_ids
         assert "options-spx-spxw-scan" not in job_ids
+        assert "options-spx-spxw-resolve" not in job_ids
     assert not spxw_db.exists()
     assert not spxw_db.with_suffix(".sqlite-journal").exists()
 

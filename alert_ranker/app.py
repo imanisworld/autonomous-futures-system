@@ -153,6 +153,15 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
                     max_instances=1,
                     coalesce=True,
                 )
+                scheduler.add_job(
+                    app.state.spxw_lane.resolve_open_positions,
+                    "interval",
+                    minutes=cfg.spxw_interval_minutes,
+                    id="options-spx-spxw-resolve",
+                    replace_existing=True,
+                    max_instances=1,
+                    coalesce=True,
+                )
             if rh_client and rh_client.configured:
                 def _auto_check_job():
                     auto_check_positions(storage, cfg.discord_webhook_url, rh_client)

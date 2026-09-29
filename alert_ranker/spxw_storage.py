@@ -9,7 +9,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from alert_ranker.paper_spxw_v1 import COHORT_0DTE, COHORT_1_PLUS, POLICY_ID
+from alert_ranker.paper_spxw_v1 import (
+    COHORT_0DTE,
+    COHORT_1_PLUS,
+    CONTRACT_MULTIPLIER,
+    POLICY_ID,
+)
 
 
 CLOSED = frozenset({"WIN", "LOSS", "BREAKEVEN", "EXPIRED"})
@@ -86,6 +91,86 @@ class SpxwStorage:
                 except (TypeError, ValueError):
                     continue
         return round(total, 2)
+
+    def find_open_duplicate(self, episode_key: str) -> int | None:
+        """Return an OPEN row id already carrying this episode_key, if any."""
+        if not episode_key:
+            return None
+        needle = json.dumps({"episode_key": episode_key}, sort_keys=True)[1:-1]
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT id FROM options_spxw_shadow_journal
+                WHERE status = 'OPEN' AND selected_contract_json LIKE ?
+                ORDER BY id DESC LIMIT 1
+                """,
+                (f"%{needle}%",),
+            ).fetchone()
+        return int(row["id"]) if row else None
+
+    def find_episode_duplicate(self, episode_key: str) -> int | None:
+        """Return any journalled row for this episode (open or closed).
+
+        Matches equity V1: one episode is one row whether still OPEN or resolved,
+        so the 5-minute scheduler cannot reopen the same SPX trigger repeatedly.
+        """
+        if not episode_key:
+            return None
+        needle = json.dumps({"episode_key": episode_key}, sort_keys=True)[1:-1]
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT id FROM options_spxw_shadow_journal
+                WHERE selected_contract_json LIKE ?
+                ORDER BY id DESC LIMIT 1
+                """,
+                (f"%{needle}%",),
+            ).fetchone()
+        return int(row["id"]) if row else None
+
+    def open_rows_after(self, after_id: int, *, limit: int = 500) -> list[SpxwJournalRow]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM options_spxw_shadow_journal
+                WHERE status = 'OPEN' AND id > ?
+                ORDER BY id ASC LIMIT ?
+                """,
+                (after_id, max(1, int(limit))),
+            ).fetchall()
+        return [self._row(item) for item in rows]
+
+    def update_outcome(
+        self,
+        row_id: int,
+        *,
+        status: str,
+        outcome: dict[str, Any],
+    ) -> SpxwJournalRow | None:
+        existing = self.get(row_id)
+        if existing is None:
+            return None
+        merged = dict(existing.outcome)
+        merged.update(outcome)
+        merged = _derive_spxw_outcome_math(existing, merged)
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE options_spxw_shadow_journal
+                SET status = ?, outcome_json = ?
+                WHERE id = ?
+                """,
+                (status, json.dumps(merged, sort_keys=True, default=str), row_id),
+            )
+        return self.get(row_id)
+
+    def get(self, row_id: int) -> SpxwJournalRow | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM options_spxw_shadow_journal WHERE id = ?",
+                (int(row_id),),
+            ).fetchone()
+        return None if row is None else self._row(row)
 
     def record(
         self,
@@ -167,6 +252,48 @@ class SpxwStorage:
             outcome=json.loads(item["outcome_json"] or "{}"),
             setup_inputs=json.loads(item["setup_inputs_json"] or "{}"),
         )
+
+
+def _derive_spxw_outcome_math(
+    row: SpxwJournalRow,
+    outcome: dict[str, Any],
+) -> dict[str, Any]:
+    """ASK entry / BID exit P&L using the SPXW contract multiplier (×100)."""
+    entry = _num(
+        outcome.get("entry_mark")
+        or outcome.get("entry_premium")
+        or row.selected_contract.get("option_mark")
+        or row.selected_contract.get("entry_quote")
+        or row.selected_contract.get("option_ask")
+    )
+    exit_mark = _num(
+        outcome.get("exit_mark")
+        or outcome.get("exit_premium")
+        or outcome.get("option_bid_at_resolution")
+    )
+    if entry is None or exit_mark is None or entry <= 0:
+        return outcome
+    multiplier = _num(row.selected_contract.get("contract_multiplier")) or float(
+        CONTRACT_MULTIPLIER
+    )
+    contracts = _num(outcome.get("contracts") or row.selected_contract.get("contracts")) or 1.0
+    enriched = dict(outcome)
+    enriched.setdefault("entry_mark", entry)
+    enriched.setdefault("exit_mark", exit_mark)
+    enriched.setdefault("contracts", int(contracts))
+    enriched.setdefault("contract_multiplier", int(multiplier))
+    enriched.setdefault("averaging_down", False)
+    enriched["pnl_percent"] = round(((exit_mark - entry) / entry) * 100.0, 2)
+    enriched["pnl_dollars"] = round((exit_mark - entry) * multiplier * contracts, 2)
+    return enriched
+
+
+def _num(value: Any) -> float | None:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed
 
 
 def _pnl(row: SpxwJournalRow) -> float | None:

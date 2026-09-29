@@ -12,6 +12,7 @@ from typing import Any, Sequence
 from zoneinfo import ZoneInfo
 
 from alert_ranker import paper_spxw_v1 as spxw
+from alert_ranker.lifecycle import resolve_open_setup
 from alert_ranker.session_calendar import us_equity_rth_state
 from alert_ranker.spxw_storage import SpxwStorage
 
@@ -315,6 +316,37 @@ class SpxwPaperLane:
             self.last_skip_reason = "outside_market_hours"
             return SpxwLaneResult("SKIPPED", "outside_market_hours", None, None)
 
+        pattern = str(setup.get("pattern") or setup.get("setup_type") or "unknown")
+        setup_type = str(setup.get("setup_type") or pattern)
+        direction = str(setup.get("direction") or "UNKNOWN").upper()
+        episode = spxw.spxw_episode_key(
+            setup_type=setup_type,
+            direction=direction,
+            trigger=setup.get("setup_entry_trigger")
+            or setup.get("entry_trigger")
+            or setup.get("price"),
+            moment=now,
+            timeframe=str(setup.get("setup_timeframe") or setup.get("timeframe") or "30M"),
+        )
+        episode_dup = self.storage.find_episode_duplicate(episode)
+        if episode_dup is not None:
+            self.last_skip_reason = f"duplicate_episode:{episode_dup}"
+            return SpxwLaneResult(
+                "SKIPPED",
+                f"duplicate_episode:{episode_dup}",
+                None,
+                {"episode_key": episode, "duplicate_of": episode_dup},
+            )
+        open_dup = self.storage.find_open_duplicate(episode)
+        if open_dup is not None:
+            self.last_skip_reason = f"duplicate_open:{open_dup}"
+            return SpxwLaneResult(
+                "SKIPPED",
+                f"duplicate_open:{open_dup}",
+                None,
+                {"episode_key": episode, "duplicate_of": open_dup},
+            )
+
         result = await build_spxw_paper_candidate(
             market_data=self.market_data,
             setup=setup,
@@ -327,20 +359,21 @@ class SpxwPaperLane:
                 getattr(self.config, "paper_v1_min_remaining_rr", spxw.DEFAULT_MIN_REMAINING_RR)
             ),
         )
-        pattern = str(setup.get("pattern") or setup.get("setup_type") or "unknown")
-        setup_type = str(setup.get("setup_type") or pattern)
-        direction = str(setup.get("direction") or "UNKNOWN").upper()
         if result.status == "OPEN" and result.selected_contract:
+            contract = dict(result.selected_contract)
+            contract["episode_key"] = episode
+            contract["paper_evidence_lane"] = spxw.EVIDENCE_LANE
+            contract["contract_key"] = str(contract.get("contract") or "")
             journal_id = self.storage.record(
                 direction=direction,
                 pattern=pattern,
                 setup_type=setup_type,
                 status="OPEN",
                 dte_cohort=str(result.dte_cohort or ""),
-                dte=result.selected_contract.get("dte"),
+                dte=contract.get("dte"),
                 rejection_reason="",
                 setup_inputs=dict(setup),
-                selected_contract=result.selected_contract,
+                selected_contract=contract,
                 timestamp=now,
             )
             self.last_skip_reason = None
@@ -348,14 +381,16 @@ class SpxwPaperLane:
                 result.status,
                 result.reason,
                 result.dte_cohort,
-                result.selected_contract,
+                contract,
                 journal_id=journal_id,
             )
 
         cohort = result.dte_cohort or ""
         dte = None
-        if result.selected_contract:
-            dte = result.selected_contract.get("dte")
+        selected = dict(result.selected_contract or {})
+        selected["episode_key"] = episode
+        if selected.get("dte") is not None:
+            dte = selected.get("dte")
         journal_id = self.storage.record(
             direction=direction,
             pattern=pattern,
@@ -365,7 +400,7 @@ class SpxwPaperLane:
             dte=dte if isinstance(dte, int) else None,
             rejection_reason=result.reason,
             setup_inputs=dict(setup),
-            selected_contract=result.selected_contract or {},
+            selected_contract=selected,
             timestamp=now,
         )
         self.last_skip_reason = result.reason or result.status
@@ -373,9 +408,194 @@ class SpxwPaperLane:
             result.status,
             result.reason,
             result.dte_cohort,
-            result.selected_contract,
+            selected,
             journal_id=journal_id,
         )
+
+    async def resolve_open_positions(
+        self,
+        *,
+        now: datetime | None = None,
+        scheduled: bool = True,
+    ) -> dict[str, int]:
+        """Close OPEN SPXW paper rows using V1 resolution semantics.
+
+        Exact stored SPXW contract is re-quoted; entry was ask, exit is bid.
+        Missing/stale/mismatched quotes leave the row OPEN (fail closed). Never
+        averages down, never submits broker orders.
+        """
+        now = now or datetime.now(ZoneInfo(getattr(self.config, "timezone", "America/New_York")))
+        if not bool(getattr(self.config, "spxw_paper_lane_enabled", False)):
+            self.last_skip_reason = "spxw_lane_disabled"
+            return {"checked": 0, "resolved": 0}
+        if scheduled and not self.is_market_hours(now):
+            self.last_skip_reason = "outside_market_hours"
+            return {"checked": 0, "resolved": 0}
+
+        counts = {"checked": 0, "resolved": 0}
+        max_quote_age = float(
+            getattr(self.config, "public_stale_quote_seconds", 900.0) or 900.0
+        )
+        underlying_price: float | None = None
+        try:
+            snap = await self.market_data.fetch_market_snapshot(spxw.SIGNAL_UNDERLYING)
+            if not getattr(snap, "error", None):
+                underlying_price = _float(getattr(snap, "price", None))
+        except Exception:  # noqa: BLE001
+            underlying_price = None
+
+        chain_cache: dict[str, Any] = {}
+        last_id = 0
+        while True:
+            batch = self.storage.open_rows_after(last_id)
+            if not batch:
+                break
+            for row in batch:
+                last_id = row.id
+                counts["checked"] += 1
+                resolution = await self._resolve_one(
+                    row,
+                    underlying_price=underlying_price,
+                    now=now,
+                    chain_cache=chain_cache,
+                    max_quote_age_seconds=max_quote_age,
+                )
+                if resolution is None:
+                    continue
+                status, outcome = resolution
+                # Preserve cohort tagging on the closed row via selected_contract;
+                # status/outcome update never mutates dte_cohort.
+                self.storage.update_outcome(row.id, status=status, outcome=outcome)
+                counts["resolved"] += 1
+        return counts
+
+    async def _resolve_one(
+        self,
+        row: Any,
+        *,
+        underlying_price: float | None,
+        now: datetime,
+        chain_cache: dict[str, Any],
+        max_quote_age_seconds: float,
+    ) -> tuple[str, dict[str, Any]] | None:
+        contract = dict(row.selected_contract or {})
+        if str(contract.get("paper_policy_id") or "") != spxw.POLICY_ID:
+            return None
+        if contract.get("averaging_down"):
+            return None  # fail closed: SPXW never adds size
+
+        symbol = str(contract.get("contract") or contract.get("contract_key") or "")
+        expiry = str(contract.get("expiry") or contract.get("expiration") or "")[:10]
+        fetch_chain = getattr(self.market_data, "fetch_option_chain", None)
+        if not symbol or not expiry or not callable(fetch_chain):
+            return None
+
+        if expiry not in chain_cache:
+            try:
+                chain_cache[expiry] = await fetch_chain(spxw.CONTRACT_ROOT, expiry)
+            except Exception as exc:  # noqa: BLE001
+                chain_cache[expiry] = exc
+        chain = chain_cache[expiry]
+        if isinstance(chain, Exception) or getattr(chain, "error", None):
+            # No inventing marks. Expiry-only close still possible without a quote.
+            return resolve_open_setup(
+                direction=row.direction,
+                contract=contract,
+                underlying_price=None,
+                now=now,
+            )
+
+        quote = None
+        for candidate in (*getattr(chain, "calls", ()), *getattr(chain, "puts", ())):
+            if str(getattr(candidate, "symbol", "") or "") == symbol:
+                quote = candidate
+                break
+        if quote is None:
+            return resolve_open_setup(
+                direction=row.direction,
+                contract=contract,
+                underlying_price=None,
+                now=now,
+            )
+        if getattr(quote, "stale", False):
+            return None
+        if max_quote_age_seconds > 0:
+            ts_raw = getattr(quote, "quote_timestamp", None)
+            if ts_raw in (None, ""):
+                return None
+            try:
+                ts = datetime.fromisoformat(str(ts_raw).replace("Z", "+00:00"))
+            except ValueError:
+                return None
+            ref = now if now.tzinfo is not None else now.replace(tzinfo=ZoneInfo("America/New_York"))
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=ZoneInfo("America/New_York"))
+            if (ref.astimezone(ts.tzinfo) - ts).total_seconds() > max_quote_age_seconds:
+                return None
+
+        bid = _float(getattr(quote, "bid", None))
+        ask = _float(getattr(quote, "ask", None))
+        if bid is None or bid <= 0:
+            return None
+
+        premium_stop = _float(contract.get("premium_stop"))
+        entry = _float(contract.get("option_mark") or contract.get("entry_quote") or contract.get("option_ask"))
+        adverse_percent = None
+        if entry and bid is not None:
+            adverse_percent = round(max(0.0, ((entry - bid) / entry) * 100.0), 4)
+
+        if premium_stop is not None and bid <= premium_stop:
+            return (
+                "LOSS",
+                {
+                    "closed_reason": "premium_stop_hit",
+                    "resolved_at": now.isoformat(),
+                    "exit_mark": bid,
+                    "exit_premium": bid,
+                    "option_bid_at_resolution": bid,
+                    "option_ask_at_resolution": ask,
+                    "adverse_premium_percent": adverse_percent,
+                    "underlying_price_at_resolution": underlying_price,
+                    "dte_cohort": row.dte_cohort,
+                    "cost_model": contract.get("cost_model"),
+                    "averaging_down": False,
+                },
+            )
+
+        underlying_resolution = resolve_open_setup(
+            direction=row.direction,
+            contract=contract,
+            underlying_price=underlying_price,
+            now=now,
+        )
+        if underlying_resolution is None:
+            return None
+        status, outcome = underlying_resolution
+        enriched = dict(outcome)
+        enriched.update(
+            {
+                "exit_mark": bid,
+                "exit_premium": bid,
+                "option_bid_at_resolution": bid,
+                "option_ask_at_resolution": ask,
+                "adverse_premium_percent": adverse_percent,
+                "dte_cohort": row.dte_cohort,
+                "cost_model": contract.get("cost_model"),
+                "averaging_down": False,
+            }
+        )
+        # EXPIRY without a usable bid already returned above; if levels resolved,
+        # require the bid we already validated.
+        if status == "EXPIRED" and bid is None:
+            return None
+        # Sanity: stored expiry must still match the chain expiry used.
+        chain_expiry = str(getattr(chain, "expiration", "") or "")[:10]
+        if chain_expiry and chain_expiry != expiry:
+            return None
+        # Never invent a different contract family.
+        if str(contract.get("contract_root") or spxw.CONTRACT_ROOT) != spxw.CONTRACT_ROOT:
+            return None
+        return status, enriched
 
     def status(self) -> dict[str, Any]:
         return {
