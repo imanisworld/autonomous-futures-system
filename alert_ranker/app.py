@@ -178,10 +178,12 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
                 )
             scheduler.start()
             app_state["scheduler"] = scheduler
+            app.state.scheduler = scheduler
             try:
                 yield
             finally:
                 scheduler.shutdown(wait=False)
+                app.state.scheduler = None
 
     app = FastAPI(title="Advisory Options Scanner", lifespan=lifespan)
     if scanner is not None:

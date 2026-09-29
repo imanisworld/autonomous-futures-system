@@ -5,15 +5,19 @@ from __future__ import annotations
 import ast
 import asyncio
 import inspect
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 import pytest
+from fastapi.testclient import TestClient
 
 from alert_ranker import paper_spxw_v1 as spxw
-from alert_ranker.config import load_config
+from alert_ranker import paper_v1 as equity_v1
+from alert_ranker.app import create_app
+from alert_ranker.config import ScannerConfig, load_config
 from alert_ranker.spxw_lane import (
     NO_LIVE_BROKER_IMPORTS,
     SpxwPaperLane,
@@ -231,3 +235,99 @@ def test_non_spx_signal_rejected():
     )
     assert result.status == "REJECTED"
     assert result.reason == "signal_underlying_not_spx"
+
+
+def _scanner_config(tmp_path: Path, **overrides) -> ScannerConfig:
+    base = ScannerConfig(
+        market_data_provider="tastytrade",
+        tastytrade_username="user",
+        tastytrade_password="pass",
+        tastytrade_base_url="https://api.tastyworks.com",
+        public_api_key_configured=False,
+        public_base_url="https://api.public.com",
+        alpaca_api_key_configured=False,
+        alpaca_secret_key_configured=False,
+        alpaca_paper=True,
+        alpaca_data_base_url="https://data.alpaca.markets",
+        port=8010,
+        discord_webhook_url="",
+        watchlist=["AAPL", "SPY"],
+        interval_minutes=5,
+        sqlite_path=tmp_path / "options_scanner.sqlite",
+        spxw_paper_lane_enabled=False,
+        spxw_sqlite_path=tmp_path / "options_spxw_scanner.sqlite",
+    )
+    return replace(base, **overrides) if overrides else base
+
+
+def test_disabled_lane_creates_no_spxw_db_or_scheduler_job(tmp_path):
+    spxw_db = tmp_path / "options_spxw_scanner.sqlite"
+    cfg = _scanner_config(tmp_path, spxw_paper_lane_enabled=False, spxw_sqlite_path=spxw_db)
+    app = create_app(cfg)
+    with TestClient(app) as client:
+        status = client.get("/spxw/status").json()
+        assert status["lane"] == "SPX_SPXW_PAPER"
+        assert status["enabled"] is False
+        assert status["available"] is False
+        assert status["live_execution"] is False
+        assert status["broker_order_path"] is False
+        health = client.get("/health").json()
+        assert health["scheduler_running"] is True
+        assert getattr(client.app.state, "spxw_lane", None) is None
+        scheduler = getattr(client.app.state, "scheduler", None)
+        assert scheduler is not None
+        job_ids = {job.id for job in scheduler.get_jobs()}
+        assert "options-watchlist-scan" in job_ids
+        assert "options-spx-spxw-scan" not in job_ids
+    assert not spxw_db.exists()
+    assert not spxw_db.with_suffix(".sqlite-journal").exists()
+
+
+def test_disabled_run_scheduled_scan_skips_without_journal(tmp_path):
+    cfg = SimpleNamespace(
+        spxw_paper_lane_enabled=False,
+        timezone="America/New_York",
+        public_stale_quote_seconds=900.0,
+        paper_v1_min_remaining_rr=1.0,
+        spxw_interval_minutes=5,
+        spxw_sqlite_path=tmp_path / "spxw.sqlite",
+    )
+    storage = SpxwStorage(cfg.spxw_sqlite_path)
+    lane = SpxwPaperLane(
+        config=cfg,
+        market_data=_Market(),
+        storage=storage,
+        equity_watchlist=["SPY"],
+    )
+    result = asyncio.run(lane.run_scheduled_scan(now=NOW))
+    assert result.status == "SKIPPED"
+    assert result.reason == "spxw_lane_disabled"
+    assert storage.all_rows() == []
+
+
+def test_equity_paper_v1_policy_untouched_by_spxw_module():
+    assert equity_v1.POLICY_ID == "OPTIONS_PAPER_V1"
+    assert equity_v1.MIN_DTE == 14
+    assert equity_v1.MAX_TRADE_RISK_DOLLARS == 300.0
+    assert equity_v1.MAX_AGGREGATE_OPEN_RISK_DOLLARS == 1000.0
+    assert equity_v1.CONTRACT_MULTIPLIER == 100
+    assert spxw.POLICY_ID == "OPTIONS_PAPER_SPXW_V1"
+    assert spxw.POLICY_ID != equity_v1.POLICY_ID
+
+
+def test_provider_preflight_fails_closed_without_credentials(tmp_path, monkeypatch):
+    monkeypatch.delenv("PUBLIC_API_SECRET_KEY", raising=False)
+    monkeypatch.delenv("PUBLIC_API_KEY", raising=False)
+    monkeypatch.delenv("PUBLIC_ACCOUNT_ID", raising=False)
+    monkeypatch.delenv("OPTIONS_SPXW_PAPER_LANE_ENABLED", raising=False)
+    from scripts.options_spxw_provider_preflight import main
+
+    out = tmp_path / "spxw-provider.json"
+    code = main(["--json", "--out", str(out)])
+    assert code == 1
+    payload = out.read_text()
+    assert '"verdict": "FAIL"' in payload
+    assert "missing_env:PUBLIC" in payload or "market_data_unconfigured" in payload
+    assert '"stubs_accepted": false' in payload
+    assert '"spxw_journal_written": false' in payload
+    assert '"discord_side_effects": false' in payload
