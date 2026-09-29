@@ -11,7 +11,7 @@ Hard read-only guarantees, in layers:
   * every production file is opened read-only (O_RDONLY) — the only writes go
     to STATE_DIR under /tmp;
   * the only commands executed are read-only introspection (systemctl show /
-    is-active / list-units, journalctl, readlink, df, pgrep) plus the release's
+    is-active / list-units, timedatectl show, journalctl, readlink, df, pgrep) plus the release's
     own read-only report scripts, run with PYTHONDONTWRITEBYTECODE=1;
   * HTTP: GET only, to the local status API on 127.0.0.1:8000.  The single
     outbound POST is a Discord notification on an already-configured route;
@@ -275,7 +275,13 @@ RESOURCE_FD_WARN_FRACTION = 0.75
 RESOURCE_STATE_FS_WARN_FRACTION = 0.80
 RESOURCE_LOG_FS_WARN_FRACTION = 0.90
 
-READ_ONLY_COMMANDS = ("systemctl", "journalctl", "readlink", "df", "pgrep", "ps")
+# Host-clock health: the watcher never sets time. NTPSynchronized is a
+# provider-independent view of the kernel's NTP synchronization state exposed
+# by systemd-timedated. Wall-clock movement is also compared with CLOCK_MONOTONIC
+# so a discontinuous step is visible even if synchronization later looks healthy.
+CLOCK_STEP_BLOCK_SECONDS = 2.0
+
+READ_ONLY_COMMANDS = ("systemctl", "timedatectl", "journalctl", "readlink", "df", "pgrep", "ps")
 FORBIDDEN_TOKENS = (
     "systemctl restart", "systemctl stop", "systemctl start", "systemctl kill",
     "systemctl reload", "atomic_release", "afs-deploy", "ln -sfn", "/order/",
@@ -381,6 +387,10 @@ def run(cmd: list[str], timeout: int = 60, env: dict | None = None, cwd: str | N
             raise RuntimeError(f"command not in read-only allowlist: {cmd}")
     if exe == "systemctl" and cmd[1] not in ("show", "is-active", "list-units"):
         raise RuntimeError(f"systemctl verb not allowed: {cmd}")
+    if exe == "timedatectl" and cmd != [
+        "timedatectl", "show", "--property=NTPSynchronized", "--value",
+    ]:
+        raise RuntimeError(f"timedatectl command not allowed: {cmd}")
     try:
         p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=env, cwd=cwd)
         return p.returncode, (p.stdout or "") + (p.stderr or "")
@@ -1212,6 +1222,96 @@ def _top_memory_processes(limit: int = 5) -> list[dict]:
         if len(rows) >= limit:
             break
     return rows
+
+
+def _ntp_sync_state() -> dict:
+    """Read the kernel-backed NTP synchronization state through timedated."""
+    cmd = ["timedatectl", "show", "--property=NTPSynchronized", "--value"]
+    try:
+        rc, out = run(cmd, timeout=15)
+    except Exception as exc:  # noqa: BLE001 — unverifiable time must fail closed
+        return {
+            "source": "timedatectl.NTPSynchronized",
+            "synchronized": None,
+            "error": f"timedatectl query failed: {type(exc).__name__}: {exc}",
+        }
+    raw = out.strip().lower()
+    result: dict = {
+        "source": "timedatectl.NTPSynchronized",
+        "synchronized": None,
+    }
+    if rc != 0:
+        result["error"] = f"timedatectl exited {rc}: {out.strip()[:200]}"
+        return result
+    if raw in {"yes", "true", "1"}:
+        result["synchronized"] = True
+        return result
+    if raw in {"no", "false", "0"}:
+        result["synchronized"] = False
+        return result
+    result["error"] = f"unexpected NTPSynchronized value: {out.strip()[:200]!r}"
+    return result
+
+
+def check_clock(state: dict, f: Findings, tick: dict) -> None:
+    """Verify host NTP state and detect discontinuous wall-clock steps.
+
+    This check is observation-only. It never sets the system clock, restarts a
+    time service, or changes trading behavior.
+    """
+    wall_now = time.time()
+    monotonic_now = time.monotonic()
+    ntp = _ntp_sync_state()
+    clock: dict = {
+        "wall_utc": iso(datetime.fromtimestamp(wall_now, timezone.utc)),
+        "wall_epoch": round(wall_now, 3),
+        "monotonic_seconds": round(monotonic_now, 3),
+        "ntp": ntp,
+    }
+    tick["clock"] = clock
+
+    if ntp.get("synchronized") is False:
+        f.add(
+            "BLOCKED", "clock_ntp_unsynchronized",
+            "host clock is not synchronized to a reliable time source",
+            clock=clock,
+        )
+    elif ntp.get("synchronized") is not True:
+        f.add(
+            "BLOCKED", "clock_ntp_unverifiable",
+            f"cannot verify host clock synchronization: {ntp.get('error') or 'unknown status'}",
+            clock=clock,
+        )
+
+    previous = state.get("clock_guard") or {}
+    prev_wall = previous.get("wall_epoch")
+    prev_monotonic = previous.get("monotonic_seconds")
+    if isinstance(prev_wall, (int, float)) and isinstance(prev_monotonic, (int, float)):
+        if monotonic_now >= float(prev_monotonic):
+            wall_elapsed = wall_now - float(prev_wall)
+            monotonic_elapsed = monotonic_now - float(prev_monotonic)
+            step_seconds = wall_elapsed - monotonic_elapsed
+            clock["elapsed_wall_seconds"] = round(wall_elapsed, 3)
+            clock["elapsed_monotonic_seconds"] = round(monotonic_elapsed, 3)
+            clock["step_seconds"] = round(step_seconds, 3)
+            if abs(step_seconds) >= CLOCK_STEP_BLOCK_SECONDS:
+                direction = "forward" if step_seconds > 0 else "backward"
+                f.add(
+                    "BLOCKED", "clock_step_detected",
+                    f"host wall clock stepped {direction} by about {abs(step_seconds):.3f}s "
+                    f"relative to monotonic time",
+                    clock=clock,
+                )
+        else:
+            # /tmp normally disappears on reboot, but do not compare clocks if
+            # a stale state file ever survives a monotonic-clock reset.
+            clock["monotonic_reset"] = True
+
+    state["clock_guard"] = {
+        "wall_epoch": wall_now,
+        "monotonic_seconds": monotonic_now,
+        "observed_utc": clock["wall_utc"],
+    }
 
 
 def check_resources(state: dict, f: Findings, tick: dict) -> None:
@@ -2289,6 +2389,9 @@ _FINDING_TITLES = {
     "fd_pressure_options_scanner": "Options scanner is running out of file handles",
     "state_tmpfs_pressure": "Watcher's RAM-backed storage is filling up",
     "logs_disk_pressure": "Server log disk is filling up",
+    "clock_ntp_unsynchronized": "Server clock is not synchronized",
+    "clock_ntp_unverifiable": "Can't verify server clock synchronization",
+    "clock_step_detected": "Server clock jumped unexpectedly",
     "oom_kill_new": "Server ran out of memory and closed a program",
     "memory_critical": "Server memory is critically low",
     "memory_warning": "Server memory is getting low",
@@ -2352,6 +2455,9 @@ _FINDING_EXPLAIN = {
     "fd_pressure_": "A monitored process is close to its open-file limit; this can make normal reads and database opens fail.",
     "state_tmpfs_pressure": "The watcher's RAM-backed state filesystem is filling up.",
     "logs_disk_pressure": "The filesystem holding shared logs is filling up.",
+    "clock_ntp_unsynchronized": "The server says its clock is not synchronized to a reliable network time source.",
+    "clock_ntp_unverifiable": "The watcher could not prove whether the server clock is synchronized.",
+    "clock_step_detected": "Wall-clock time moved differently from the server's monotonic clock, indicating a time step.",
     "oom_kill_new": "The server ran out of memory and shut down a program to cope.",
     "memory_": "The server is running low on memory.",
     "swap_": "The server is running low on memory.",
@@ -2407,6 +2513,9 @@ def smallest_fix(key: str) -> str:
         "fd_pressure_": "Check for a file-handle leak before raising the process limit",
         "state_tmpfs_pressure": "Check which watcher diagnostic file is growing; durable evidence is archived separately",
         "logs_disk_pressure": "Free disk space without deleting trade or evidence records",
+        "clock_ntp_unsynchronized": "Check the host's NTP/time service before trusting timestamps; the watcher will not change the clock",
+        "clock_ntp_unverifiable": "Check the host's NTP/time service and timedated status before trusting timestamps",
+        "clock_step_detected": "Check why the host clock changed before trusting time-based evidence",
         "memory_": "Nothing yet — the watcher will warn again if it gets worse",
         "five_min_feed": "Check the 5-minute Micro Nasdaq alert in TradingView — every Micro Nasdaq practice position depends on it",
         "daily_22_collector_stalled": "Read the bot's log in the snapshot for the error",
@@ -3206,7 +3315,7 @@ def maybe_interim(state: dict, tick: dict) -> None:
 def tick_once(state: dict) -> dict:
     f = Findings()
     tick: dict = {"utc": iso(now_utc()), "tick": state["ticks"] + 1}
-    for name, fn in (("runtime", check_runtime), ("memory", check_memory), ("memory_fixed", check_memory_fixed), ("resources", check_resources), ("storage", check_storage), ("lanes", check_lanes), ("campaign", check_campaign), ("failed_reclaim", check_failed_reclaim)):
+    for name, fn in (("clock", check_clock), ("runtime", check_runtime), ("memory", check_memory), ("memory_fixed", check_memory_fixed), ("resources", check_resources), ("storage", check_storage), ("lanes", check_lanes), ("campaign", check_campaign), ("failed_reclaim", check_failed_reclaim)):
         try:
             fn(state, f, tick)
         except Exception as exc:  # noqa: BLE001
