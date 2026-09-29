@@ -196,6 +196,9 @@ def test_capacity_preflight_fails_closed_without_real_credentials(tmp_path):
     import subprocess
     import sys
 
+    from pathlib import Path
+
+    repo_root = Path(__file__).resolve().parents[1]
     out = tmp_path / "capacity.json"
     proc = subprocess.run(
         [
@@ -205,10 +208,13 @@ def test_capacity_preflight_fails_closed_without_real_credentials(tmp_path):
             "--out",
             str(out),
         ],
-        cwd="/workspace",
+        cwd=repo_root,
         capture_output=True,
         text=True,
-        env={"PATH": __import__("os").environ.get("PATH", ""), "PYTHONPATH": "/workspace"},
+        env={
+            "PATH": __import__("os").environ.get("PATH", ""),
+            "PYTHONPATH": str(repo_root),
+        },
         check=False,
     )
     assert proc.returncode != 0
