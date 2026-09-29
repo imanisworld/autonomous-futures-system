@@ -18,12 +18,12 @@ The earlier #893 repair remains valid: hard promotion blockers now make `project
 
 It did identify one narrower proof gap left by #893: `execution_context_claimed.contract_qty` was checked only for compatibility with configured quantity caps. The gate explicitly said that this did **not** independently prove the quantity actually represented by the canonical execution evidence, yet a complete-looking packet could still pass without any observed per-attempt quantity evidence.
 
-Draft PR **#1070** is the source-only repair. It makes promotion quantity proof two-layered:
+PR **#1070** merged to `main` as `37be78c5c965082185f7f06d1a85bc8db2eade3d` after independent APPROVE and exact-head CI (7,311 passed / 7 skipped). It makes promotion quantity proof two-layered:
 
 - configured instrument/hard-cap compatibility still has to pass;
 - `execution.entry_attempt_contract_quantities` must contain one positive observed quantity per recorded entry attempt, the list length must match `entry_attempts`, and every observed quantity must match the claimed `contract_qty`.
 
-This is a **promotion-evidence gate change only**. It does not alter strategy logic, risk limits, order sizing, broker routing, execution code, runtime configuration, or deployment state. Until #1070 is independently reviewed and merged, treat the quantity-proof repair as proposed source work, not deployed/runtime proof.
+This is a **promotion-evidence gate change only**. It does not alter strategy logic, risk limits, order sizing, broker routing, execution code, runtime configuration, or deployment state. The repair is now proven **repo-side only**; no VPS deployment/restart/repin was performed by #1070.
 
 ## MNQ inverse ORB — retired, not active (2026-09-24 read-only audit)
 
