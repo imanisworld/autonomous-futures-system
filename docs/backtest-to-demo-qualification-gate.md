@@ -191,6 +191,8 @@ Exit code:
 
 ## Evidence facts skeleton
 
+The JSON below is a **non-passing shape/template**, not an example that should clear the gate. Zero counts and empty lists are placeholders that must be replaced with actual, internally consistent evidence before qualification can pass.
+
 ```json
 {
   "strategy": "example",
