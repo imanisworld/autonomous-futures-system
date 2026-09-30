@@ -1,6 +1,6 @@
 # Options Signa Validation v2 — 2026-09-29
 
-Status: advisory / observation-only / no trade authority.
+Status: QA / advisory / observation-only / no trade authority.
 
 This upgrades the existing Signa evidence lane. It does **not** create a second
 Signa pipeline and does not grant Signa authority over setup status, contract
