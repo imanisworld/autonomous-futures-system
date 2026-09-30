@@ -18,6 +18,9 @@ class SignaActionCardObservation:
     timeframe: str | None = None
     direction: str | None = None
     confidence: float | None = None
+    strength: float | None = None
+    factor_count: int = 0
+    factor_conflicts: tuple[str, ...] = ()
     grade: str | None = None
     score: float | None = None
     entry_low: float | None = None
@@ -75,13 +78,21 @@ def parse_action_card(payload: dict[str, Any]) -> SignaActionCardObservation:
     components_raw = _dict(signal.get("component_scores"))
     components = {str(k): _float(v) for k, v in components_raw.items()}
     targets = tuple(v for v in (_float(x) for x in _list(signal.get("targets"))) if v is not None)
+    direction = _text(signal.get("direction"))
+    score = _float(signal.get("score"))
+    strength = _float(signal.get("strength"))
+    if strength is None and score is not None:
+        strength = min(100.0, abs(score - 50.0) * 2.0)
     return SignaActionCardObservation(
         symbol=_text(signal.get("symbol")),
         timeframe=_text(signal.get("timeframe")),
-        direction=_text(signal.get("direction")),
+        direction=direction,
         confidence=_float(signal.get("confidence")),
+        strength=strength,
+        factor_count=sum(value is not None for value in components.values()),
+        factor_conflicts=_factor_conflicts(direction, components),
         grade=_text(signal.get("grade")),
-        score=_float(signal.get("score")),
+        score=score,
         entry_low=_float(entry.get("low")),
         entry_high=_float(entry.get("high")),
         stop_loss=_float(signal.get("stop_loss")),
@@ -195,3 +206,24 @@ def _first_text(payload: dict[str, Any], *keys: str) -> str | None:
         if value is not None:
             return value
     return None
+
+
+
+def _factor_conflicts(
+    direction: str | None,
+    components: dict[str, float | None],
+) -> tuple[str, ...]:
+    normalized = (direction or "").upper()
+    bullish = normalized in {"LONG", "BUY", "BULL", "BULLISH", "CALL", "UP"}
+    bearish = normalized in {"SHORT", "SELL", "BEAR", "BEARISH", "PUT", "DOWN"}
+    if not bullish and not bearish:
+        return ()
+    conflicts: list[str] = []
+    for name, value in sorted(components.items()):
+        if value is None or value == 50:
+            continue
+        if bullish and value < 50:
+            conflicts.append(str(name))
+        elif bearish and value > 50:
+            conflicts.append(str(name))
+    return tuple(conflicts)
