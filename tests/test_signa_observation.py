@@ -43,6 +43,9 @@ def test_parse_documented_current_action_card_shape() -> None:
     assert obs.score == 91.0
     assert obs.grade == "A+"
     assert obs.confidence == 87.0
+    assert obs.strength == 82.0
+    assert obs.factor_count == 2
+    assert obs.factor_conflicts == ()
     assert obs.entry_low == 178.23
     assert obs.entry_high == 179.0
     assert obs.stop_loss == 174.8
@@ -97,6 +100,8 @@ def test_telemetry_fields_are_namespaced_and_non_authoritative() -> None:
     fields = obs.telemetry_fields()
     assert fields["signa_v2_direction"] == "LONG"
     assert fields["signa_v2_confidence"] == 80.0
+    assert fields["signa_v2_factor_count"] == 0
+    assert fields["signa_v2_factor_conflicts"] == []
     assert "signa_grade" not in fields
     assert "signa_score" not in fields
     assert "signa_daily_direction" not in fields
@@ -131,3 +136,37 @@ def test_observation_module_is_pure_and_has_no_execution_or_runtime_imports() ->
     assert ".put(" not in source
     assert ".delete(" not in source
     assert "open(" not in source
+
+
+
+def test_video_defined_strength_and_factor_conflicts_are_observational() -> None:
+    obs = parse_action_card(
+        {
+            "success": True,
+            "data": {
+                "signal": {
+                    "symbol": "MRK",
+                    "direction": "BULLISH",
+                    "score": 72,
+                    "confidence": 71,
+                    "component_scores": {
+                        "technicals": 65,
+                        "options_flow": 66,
+                        "sentiment": 60,
+                        "momentum": 50,
+                        "gamma": 48,
+                    },
+                }
+            },
+        }
+    )
+
+    assert obs.strength == 44.0
+    assert obs.factor_count == 5
+    assert obs.factor_conflicts == ("gamma",)
+    fields = obs.telemetry_fields()
+    assert fields["signa_v2_strength"] == 44.0
+    assert fields["signa_v2_factor_count"] == 5
+    assert fields["signa_v2_factor_conflicts"] == ["gamma"]
+    assert "decision" not in fields
+    assert "actionable" not in fields
