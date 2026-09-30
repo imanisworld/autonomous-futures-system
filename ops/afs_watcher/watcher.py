@@ -2930,7 +2930,10 @@ def handle_blocked(state: dict, findings: Findings, tick: dict) -> None:
     blocked = findings.blocked()
     current = {b["key"]: b for b in blocked}
     new_keys = [k for k in current if k not in state["blocked"]]
-    cleared = [k for k in state["blocked"] if k not in current]
+    # A downgrade to WARN is the same finding, not a recovery. Clear only when
+    # the key is gone from every level, including WARN.
+    present = {item["key"] for item in findings.items}
+    cleared = [k for k in state["blocked"] if k not in present]
     for k in cleared:
         log(f"BLOCKED cleared: {k}")
         was = state["blocked"].pop(k, None) or {}
