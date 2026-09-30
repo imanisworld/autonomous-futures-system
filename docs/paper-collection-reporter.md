@@ -199,3 +199,15 @@ No strategy, risk, broker, execution, source-policy or collection cadence change
 Rollback needs only an atomic reporter `current` flip back to
 `releases/b60931a6a9f8839ab9bbadb88eb6c5cb93cccd28`; retain the prior pin.
 No trading-service restart or systemd reload is required.
+
+**#1068 reporter overlay was not activated (2026-09-30).** `current` is still
+`releases/b60931a6a9f8-reporter-6512dc3578e9`. The exact #1068
+`scripts/paper_collection_report.py` bytes
+(`f364d275726150bf38f9fbe244244e9dc1d3dc536f222390b83f4360d9f12e1a`) were
+copied onto a scratch clone of that pin. The three pinned `ops/` files stayed
+byte-identical to the pin, and the scratch import failed before any symlink
+flip: system `/usr/bin/python3` has no `notifications` package, and the pinned
+`ops/evidence_registry.py` does not export `REGISTRY_HEADER`. Shipping the
+#1068 reporter here would require changing pinned dependencies or the unit,
+which this overlay does not allow. See
+`docs/futures-runtime-reconciliation-2026-09-30.md`.
