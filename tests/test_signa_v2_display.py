@@ -14,13 +14,16 @@ def test_render_signa_v2_full_observation() -> None:
             "signa_v2_grade": "A",
             "signa_v2_score": 91,
             "signa_v2_confidence": 88,
+            "signa_v2_strength": 82,
+            "signa_v2_factor_count": 5,
+            "signa_v2_factor_conflicts": ["gamma"],
             "signa_v2_direction": "LONG",
             "signa_v2_reward_to_risk": 2.3,
         }
     )
     assert text == (
         "V2 observational · AAPL · grade A · score 91 · confidence 88% · "
-        "LONG · R:R 2.30 · 1d"
+        "strength 82 · 5 factors · conflicts gamma · LONG · R:R 2.30 · 1d"
     )
 
 
