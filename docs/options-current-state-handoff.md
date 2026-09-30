@@ -13,8 +13,8 @@ Three bounded PRs are now the active options workstream:
 | PR | Purpose | Exact head / status | Remaining gate |
 |---|---|---|---|
 | #1067 | Expand scanner coverage from 20 to 66 symbols; add isolated real-provider capacity preflight | `a4de6f986b4e19bca39e161248151f8e139eda0c`; exact-head CI green | Real 66/66 RTH capacity proof inside the existing 5-minute cadence with no critical provider/data failures |
-| #1069 | Separate SPX signal → SPXW paper lane with 0DTE vs 1+DTE cohorts | `5bcfb4dc1ba30ddfd71c746c68e4aefe7354fdef`; exact-head CI green | Real SPX snapshot + SPXW expiration/chain provider proof while lane remains OFF |
-| #1071 | Read-only Epoch-3 P&L / counterfactual-filter audit | `0dca986edbb975e75c7c086c8b53f3361fdc4c4f`; exact-head CI green; independent diff review APPROVE | Run against the real options scanner SQLite and preserve the output |
+| #1069 | Separate SPX signal → SPXW paper lane with 0DTE vs 1+DTE cohorts | `d7a546c789c6ff6e23713357feb2228442211965`; exact-head CI green; provider mapping retest PASS; independent diff review no blocker | Confirm 0DTE appears during the next RTH session while lane remains OFF |
+| #1071 | Read-only Epoch-3 P&L / counterfactual-filter audit | `0dca986edbb975e75c7c086c8b53f3361fdc4c4f`; exact-head CI green; independent diff review APPROVE; real-data audit complete | No audit blocker; preserve result and do not tune from five priced closes |
 
 ### What is now proven in source
 
@@ -24,7 +24,7 @@ Three bounded PRs are now the active options workstream:
 - SPXW 0DTE and 1+DTE are separate evidence cohorts; neither is assumed superior.
 - SPXW lifecycle code now includes episode-key duplicate suppression, OPEN-position resolution, exact-contract re-quote, ask-entry/bid-exit P&L, underlying/premium-stop resolution, cohort preservation, and clearing of lane-local aggregate open risk after resolution.
 - The Epoch-3 audit reads SQLite read-only, uses the epoch boundary from `docs/options_v1_evidence_epoch.json`, excludes pre-Epoch-3 rows, counts financial outcome from recorded `pnl_dollars` rather than structural WIN/LOSS labels, excludes entry-consumed non-outcomes, and keeps COUNTERFACTUAL rows out of ACTIVE P&L.
-- The previously quoted all-time `-$12` paper total is **not** an Epoch-3 verdict; it mixes cohorts. Exact Epoch-3 performance remains unverified until #1071 is run against the real SQLite.
+- The previously quoted all-time `-$12` paper total is **not** an Epoch-3 verdict; it mixes cohorts. Exact Epoch-3 performance is now verified separately below.
 
 ### Epoch-3 audit result — 2026-09-29
 
@@ -42,27 +42,30 @@ Use `docs/options-next-actions.md` as the durable **operational checklist only**
 
 1. #1071 COMPLETE: Epoch-3 audit preserved as above; do not tune from the five-close sample.
 2. During RTH, run #1067 with real Public + Alpaca SIP/bar-context credentials. PASS requires 66/66 within the existing five-minute cadence with no critical failures, rate-limit failures, timeouts, or missing/stale causal-bar failures.
-3. With the SPXW lane still OFF, run #1069's real provider preflight for SPX snapshot + SPXW expirations/chain; then rerun the lifecycle regression set.
-4. If and only if the evidence passes, obtain operator approval before merge/deploy/enable actions; then record the activation boundary in the evidence-epoch/current-state docs.
+3. #1069 provider mapping/preflight is complete on `d7a546c`; during the same next RTH session, confirm SPXW 0DTE appears normally while the lane remains OFF.
+4. If and only if the remaining RTH evidence passes, obtain operator approval before merge/deploy/enable actions; then record any activation boundary in the evidence-epoch/current-state docs.
 5. Resolve old draft #1026 (read-only options audit wrappers) during later repo/VPS cleanup: explicitly keep/install later or close as obsolete. It does not block the three validations above.
 
 ### SPX/SPXW provider result — 2026-09-29
 
-#1069 real-provider validation **FAILED** on exact head `5bcfb4dc1ba30ddfd71c746c68e4aefe7354fdef`.
+Initial #1069 real-provider validation failed on `5bcfb4d` because Public does not expose `SPXW` as an instrument and an SPX equity quote is not the index.
 
-- SPX snapshot returned `quote_unavailable`.
-- Public returned HTTP 400 for SPXW expirations: `Instrument SPXW is not available on Public.`
-- No eligible expirations or option chain were obtained; `has_0dte=false`, `has_1_plus=false`.
-- The lane remained OFF and produced no journal/Discord/broker/deploy side effects.
-- Offline lifecycle suite passed 27/27.
+The narrow provider-mapping correction on exact head `d7a546c789c6ff6e23713357feb2228442211965` is now verified:
+- SPX snapshot requests use `SPX` / `INDEX`.
+- SPXW expirations and chains query the `SPX` index chain and retain only OCC-root `SPXW` contracts.
+- Equity requests remain `EQUITY`.
+- Real provider preflight **PASS**: SPX price present; 40 eligible expirations; tested chain 599 calls / 599 puts; 1+DTE present.
+- SPXW lifecycle regression remains 27/27 passed.
+- CI is green on the exact head and independent diff review found no blocking issue.
+- The lane remained OFF with no journal, Discord, broker, deploy, or live-order side effects.
 
-The blocker is therefore the real provider market-data/symbol path. Lifecycle mechanics remain source-proven, but the lane is **not merge-ready or deploy-ready** until provider access succeeds.
+0DTE could not be observed after the 2026-09-29 session had ended because that day's expiry was no longer listed. The only remaining SPXW validation is a next-session RTH observation that same-day expiry appears normally with no rule change.
 
 ### Current confidence
 
 **High confidence:** source architecture, isolation, fail-closed behavior, CI, V1 rule preservation, SPXW episode/lifecycle mechanics, and Epoch-3 accounting logic.
 
-**Not yet proven:** current-version trading expectancy, exact Epoch-3 P&L, 66-symbol real-provider cadence capacity, and real SPX/SPXW provider behavior. Until those are measured, strategy edge remains unproven and production posture remains unchanged.
+**Not yet proven:** current-version trading expectancy, 66-symbol real-provider cadence capacity, and next-session SPXW 0DTE availability. Epoch-3 P&L and the SPX/SPXW provider mapping are now measured. Strategy edge remains unproven and production posture remains unchanged.
 
 ## Research / agent governance
 
