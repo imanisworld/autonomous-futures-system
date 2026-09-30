@@ -16,7 +16,7 @@ import time
 
 import requests
 
-from execution.tradovate_broker import TradovateBroker, TradovateConfig
+from execution.tradovate_broker import TradovateBroker, TradovateConfig, _Token
 
 _FAR_FUTURE = "2099-01-01T00:00:00+00:00"
 
@@ -135,3 +135,47 @@ def test_temporary_renew_failure_does_not_open_new_session(monkeypatch):
     assert b._authenticate() is False
     assert login_calls["n"] == 1
     assert b._token.access_token == "tok1"
+
+
+def test_renewal_401_clears_stale_authorization_before_login(monkeypatch):
+    """Renewal 401 falls back to login, and that login must not send the old bearer.
+
+    Tradovate returns 401 for /auth/accesstokenrequest when a stale
+    Authorization header is still attached. The renewal request itself still
+    sends the old token; only the fallback login is header-free.
+    """
+    seen = {}
+
+    def fake_post(url, **kw):
+        if url.endswith("/auth/accesstokenrequest"):
+            seen["login_session_authorization"] = b._session.headers.get("Authorization")
+            explicit = kw.get("headers") or {}
+            seen["login_explicit_authorization"] = (
+                explicit.get("Authorization") if isinstance(explicit, dict) else explicit
+            )
+            return _Resp(200, {"accessToken": "fresh", "expirationTime": _FAR_FUTURE})
+        return _Resp(200, {})
+
+    def fake_get(url, **kw):
+        if url.endswith("/auth/renewAccessToken"):
+            headers = kw.get("headers") or {}
+            seen["renew_authorization"] = headers.get("Authorization")
+            return _Resp(401)
+        return _Resp(200, {})
+
+    b = _broker(monkeypatch)
+    monkeypatch.setattr(b._session, "post", fake_post)
+    monkeypatch.setattr(b._session, "get", fake_get)
+    b._auth_state.token = _Token(
+        access_token="known-invalid-token",
+        expires_at=time.time() + 10,
+    )
+    b._session.headers["Authorization"] = "Bearer known-invalid-token"
+
+    result = b.authenticate_result()
+
+    assert result.ok is True
+    assert seen["renew_authorization"] == "Bearer known-invalid-token"
+    assert seen["login_session_authorization"] is None
+    assert seen["login_explicit_authorization"] is None
+    assert b._session.headers.get("Authorization") == "Bearer fresh"
