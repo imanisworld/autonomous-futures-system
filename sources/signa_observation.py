@@ -24,6 +24,9 @@ class SignaActionCardObservation:
     score: float | None = None
     grade: str | None = None
     confidence: float | None = None
+    strength: float | None = None
+    factor_count: int = 0
+    factor_conflicts: tuple[str, ...] = field(default_factory=tuple)
     entry_low: float | None = None
     entry_high: float | None = None
     stop_loss: float | None = None
@@ -49,6 +52,9 @@ class SignaActionCardObservation:
             "signa_v2_score": self.score,
             "signa_v2_grade": self.grade,
             "signa_v2_confidence": self.confidence,
+            "signa_v2_strength": self.strength,
+            "signa_v2_factor_count": self.factor_count,
+            "signa_v2_factor_conflicts": list(self.factor_conflicts),
             "signa_v2_entry_low": self.entry_low,
             "signa_v2_entry_high": self.entry_high,
             "signa_v2_stop_loss": self.stop_loss,
@@ -110,15 +116,26 @@ def parse_action_card(
         for value in (_float_or_none(item) for item in _list(signal.get("targets")))
         if value is not None
     )
+    direction = _upper_or_none(signal.get("direction"))
+    score = _float_or_none(signal.get("score"))
+    strength = _float_or_none(signal.get("strength"))
+    if strength is None and score is not None:
+        # Signa defines strength as distance from neutral (50), scaled to 0-100.
+        strength = min(100.0, abs(score - 50.0) * 2.0)
+    factor_count = sum(value is not None for value in components.values())
+    factor_conflicts = _factor_conflicts(direction, components)
 
     return SignaActionCardObservation(
         ok=bool(payload.get("success", True)),
         symbol=_upper_or_none(signal.get("symbol")),
         timeframe=_str_or_none(signal.get("timeframe")),
-        direction=_upper_or_none(signal.get("direction")),
-        score=_float_or_none(signal.get("score")),
+        direction=direction,
+        score=score,
         grade=_upper_or_none(signal.get("grade")),
         confidence=_float_or_none(signal.get("confidence")),
+        strength=strength,
+        factor_count=factor_count,
+        factor_conflicts=factor_conflicts,
         entry_low=_float_or_none(entry_zone.get("low")),
         entry_high=_float_or_none(entry_zone.get("high")),
         stop_loss=_float_or_none(signal.get("stop_loss")),
@@ -159,3 +176,29 @@ def _float_or_none(value: Any) -> float | None:
         return float(value) if value is not None else None
     except (TypeError, ValueError):
         return None
+
+    
+
+def _factor_conflicts(
+    direction: str | None,
+    components: dict[str, float | None],
+) -> tuple[str, ...]:
+    """Return factor names that lean against the published direction.
+
+    A score of exactly 50 is neutral, not a conflict. This is observation-only
+    metadata; it does not reject or approve a trade.
+    """
+    normalized = (direction or "").upper()
+    bullish = normalized in {"LONG", "BUY", "BULL", "BULLISH", "CALL", "UP"}
+    bearish = normalized in {"SHORT", "SELL", "BEAR", "BEARISH", "PUT", "DOWN"}
+    if not bullish and not bearish:
+        return ()
+    conflicts: list[str] = []
+    for name, value in sorted(components.items()):
+        if value is None or value == 50:
+            continue
+        if bullish and value < 50:
+            conflicts.append(str(name))
+        elif bearish and value > 50:
+            conflicts.append(str(name))
+    return tuple(conflicts)
