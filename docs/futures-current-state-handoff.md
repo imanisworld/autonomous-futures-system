@@ -4,6 +4,14 @@
 
 _As of 2026-09-24 (runtime and current decisions: see the 2026-09-24 blocks in `docs/futures-current-status-2026-09-22.md`, then the reconciliation note below). This is the long futures handoff. Historical audit docs remain evidence records._
 
+## Runtime reconciliation — 2026-09-30
+
+Verified runtime and the closed auth/watcher lane are recorded in
+`docs/futures-runtime-reconciliation-2026-09-30.md`. Repository `main` is
+`07ceaf465cf93dd29e171d1e5292de6fdf7e06d7` (PR #1078). That note does not
+reopen strategy status. The inventory still wins if this handoff disagrees
+with it.
+
 ## Repository closeout handoff — 2026-09-29
 
 Current repository `main`: `715e03956f402fd553107a84125537768841d97c` after #1068.
