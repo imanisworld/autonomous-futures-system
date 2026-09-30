@@ -7,7 +7,7 @@ _As of 2026-09-29. Operational checklist only. The authoritative options status 
 - [x] #1067 code complete: 66-symbol candidate universe + fail-closed capacity preflight.
 - [x] #1067 exact-head CI green on `a4de6f986b4e19bca39e161248151f8e139eda0c`.
 - [x] #1069 code complete: isolated SPX → SPXW paper lane, 0DTE/1+DTE cohorts, dedupe, resolver, P&L, risk cleanup.
-- [x] #1069 exact-head CI green on `5bcfb4dc1ba30ddfd71c746c68e4aefe7354fdef`.
+- [x] #1069 exact-head CI green on `d7a546c789c6ff6e23713357feb2228442211965`.
 - [x] #1071 code complete: read-only Epoch-3 / filter-reason audit.
 - [x] #1071 exact-head CI green and independent diff review APPROVE on `0dca986edbb975e75c7c086c8b53f3361fdc4c4f`.
 - [x] Production remains 20 symbols; `OPTIONS_PAPER_V1`; advisory/read-only; SPXW OFF.
@@ -28,19 +28,20 @@ _As of 2026-09-29. Operational checklist only. The authoritative options status 
   - Preserve measured runtime and the exact tested SHA.
   - Do not change the production watchlist on a failed or incomplete preflight.
 
-- [ ] **#1069 — SPX/SPXW provider validation BLOCKED**
-  - Keep `OPTIONS_SPXW_PAPER_LANE_ENABLED=false`.
-  - Prove real SPX snapshot availability.
-  - Prove SPXW expirations and option-chain retrieval.
-  - Record whether 0DTE and 1+DTE are present.
-  - Confirm no SPXW journal write, Discord side effect, broker route, or live execution occurs during provider preflight.
-  - Rerun lifecycle tests after provider proof.
-  - **2026-09-29 real provider preflight failed:** SPX quote unavailable; Public returned HTTP 400 for `SPXW` expirations (`Instrument SPXW is not available on Public.`); no chain loaded. Lifecycle regression still passed 27/27. Next work is provider-symbol/data-path correction only; do not loosen strategy/risk rules.
+- [x] **#1069 — SPX/SPXW provider mapping + provider preflight COMPLETE**
+  - Exact head: `d7a546c789c6ff6e23713357feb2228442211965`; CI green; independent diff review found no blocking issue.
+  - Root cause fixed: SPX index data uses `SPX` / `INDEX`; SPXW expirations/chains are requested from the SPX index chain and filtered to OCC root `SPXW`; equity requests stay `EQUITY`.
+  - Real provider preflight PASS: SPX price present; 40 eligible expirations; tested chain 599 calls / 599 puts; 1+DTE present.
+  - Lifecycle regression: 27/27 passed.
+  - Lane stayed OFF; no journal, Discord, broker, deploy, or live-order side effects.
+  - 0DTE was not observable after the 2026-09-29 session ended. **Only remaining SPXW validation is to confirm 0DTE appears during the next RTH session.**
 
-## After the three validation gates
+## After the remaining RTH checks
 
+- [ ] Confirm #1067 66-symbol capacity PASS/FAIL during RTH.
+- [ ] Confirm SPXW 0DTE appears during RTH with no rule changes.
 - [ ] Review all evidence together; do not infer profitability from code/CI success.
-- [ ] Decide whether #1067, #1069, and #1071 are merge-ready.
+- [ ] Decide merge/deploy posture for #1067/#1069 and close out #1071.
 - [ ] Obtain explicit operator approval before any production deployment, watchlist expansion, or SPXW enablement.
 - [ ] If 20 → 66 is activated, record the new evidence-cohort boundary only after the first clean RTH cycle; do not pre-write `V1-EPOCH-4`.
 - [ ] If SPXW is enabled, keep its evidence separate from equity `OPTIONS_PAPER_V1`; preserve 0DTE and 1+DTE as separate cohorts.
