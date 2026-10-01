@@ -615,6 +615,9 @@ def _signa_v2_text(raw: dict, ticker: str = "") -> str:
         return "N/A"
     read = _signa_read(raw.get("signa_v2_grade"), raw.get("signa_v2_direction")) or "no read"
     parts = [f"For info only · Signa v2 (being tested): {read}"]
+    observation_rating = raw.get("signa_v2_observation_rating")
+    if observation_rating and observation_rating != "N/A":
+        parts.append(f"obs rating {observation_rating}")
     confidence = raw.get("signa_v2_confidence")
     if confidence is not None:
         try:
