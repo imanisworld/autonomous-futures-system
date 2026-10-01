@@ -28,14 +28,17 @@ This repository powers AFSVP futures/options research, paper/demo execution, evi
 
 This section is mandatory for Grok and every other agent. It does not expand any agent's authority.
 
-- On any session after an outage, quota reset, context loss, tool reconnect, or multi-day gap, the first pass is **RECONCILIATION ONLY**. Do not code, deploy, clean branches, launch research, or mutate runtime until current state is re-established.
-- Read `AGENTS.md`, `docs/agent-work-state.md`, and the authoritative lane record(s) before starting work. For futures strategy status that means `docs/strategy-rules/Strategy_Inventory.md`; for options current state it means `docs/options-current-state-handoff.md`.
-- Reconcile `main`, the active branch/PR, open related PRs, and any runtime facts required by the task. A stale handoff is not permission to repeat work.
-- Treat entries marked **DONE** or **DO NOT REDO** in `docs/agent-work-state.md` as closed unless new evidence proves the prior result invalid. Verify preserved work instead of recreating it.
-- Before opening a new branch, PR, study, audit, or implementation, search for an existing equivalent branch/PR/artifact and compare scope. If equivalent work exists, preserve or continue it; do not duplicate it.
+- **Checkpoint-first, diff-first.** After an outage, quota reset, context loss, tool reconnect, or multi-day gap, do not perform a repo-wide reconciliation by default.
+- Start by reading only `AGENTS.md`, `docs/agent-work-state.md`, the authoritative record for the requested lane, current `main` SHA, and the exact active branch/PR named by the checkpoint when applicable.
+- Compare those identifiers to the saved checkpoint. If they are unchanged and the requested task is already **DONE / DO NOT REDO**, resume from the saved **NEXT** item or stop. Do not re-audit unchanged completed work.
+- If something changed, inspect only the changed scope first. Expand the audit only as far as the detected drift requires.
+- A **full reconciliation** is required only when the checkpoint is missing, internally contradictory, materially stale, conflicts with an authoritative record, cannot identify the active work, or the requested action depends on safety-critical runtime facts that are no longer proven.
+- Treat entries marked **DONE** or **DO NOT REDO** in `docs/agent-work-state.md` as closed unless new evidence proves the prior result invalid.
+- Before opening a new branch, PR, study, audit, or implementation, search narrowly for an existing equivalent artifact in the relevant scope. Do not scan the whole repository merely to reconstruct context.
 - After each meaningful unit of work, checkpoint durable state: what was verified, what changed, branch/PR/SHA, tests/checks, blockers, and the exact next action.
 - When the platform exposes a usage/quota indicator, stop starting new work at roughly **70–75% used** (or **25–30% remaining**). Use the remaining budget only to finish the current atomic step, verify it, and write the checkpoint. Any rate-limit/usage warning triggers the same checkpoint behavior.
 - If usage/quota visibility is unavailable, checkpoint at every completed atomic task and before starting any new independent workstream. Never rely on end-of-session memory alone.
+- If more information is needed, fetch the **smallest additional source** that can answer the unresolved question. Escalate incrementally: checkpoint → exact task file/PR → changed diff → authoritative lane record → runtime proof if required. Do not jump directly to a full repo audit.
 - If `docs/agent-work-state.md` conflicts with an authoritative record or fresh runtime proof, the authoritative/fresh evidence wins. Update the work-state file to remove the contradiction before continuing.
 - If the agent cannot write the checkpoint itself, return a complete checkpoint payload for the operator/next agent to persist before more work begins.
 
