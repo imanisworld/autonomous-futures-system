@@ -200,14 +200,27 @@ Rollback needs only an atomic reporter `current` flip back to
 `releases/b60931a6a9f8839ab9bbadb88eb6c5cb93cccd28`; retain the prior pin.
 No trading-service restart or systemd reload is required.
 
-**#1068 reporter overlay was not activated (2026-09-30).** `current` is still
-`releases/b60931a6a9f8-reporter-6512dc3578e9`. The exact #1068
-`scripts/paper_collection_report.py` bytes
-(`f364d275726150bf38f9fbe244244e9dc1d3dc536f222390b83f4360d9f12e1a`) were
-copied onto a scratch clone of that pin. The three pinned `ops/` files stayed
-byte-identical to the pin, and the scratch import failed before any symlink
-flip: system `/usr/bin/python3` has no `notifications` package, and the pinned
-`ops/evidence_registry.py` does not export `REGISTRY_HEADER`. Shipping the
-#1068 reporter here would require changing pinned dependencies or the unit,
-which this overlay does not allow. See
-`docs/futures-runtime-reconciliation-2026-09-30.md`.
+**Six-market backport is the active pin (2026-09-30T03:41:24Z).** `current`
+points at `releases/b60931a6a9f8-reporter-1068-sixmarket-backport`. This is a
+derived minimal backport, not a pure Git tree. The base reporter source is
+`6512dc3578e9de59d8d6a8ceea8e78a39b9cb8e4`. The only production change is the
+fixed futures market line for MNQ, MES, M2K, MBT, MCL, and MGC, including
+zero counts. The #1068 reference is
+`715e03956f402fd553107a84125537768841d97c`. The full #1068 reporter was not
+copied, because it imports modules outside this four-file pin.
+
+- Reporter SHA256:
+  `e0382c38b1fd8b39da31066179ad4dc363469690faf50555eec812a6f0742771`.
+- `MANIFEST.sha256` file SHA256:
+  `4509508e001363017ee0c4dfa37037c4d89eddebe55a92b77426863b843b980b`.
+- `ops/__init__.py`, `ops/collector_census.py`, and `ops/evidence_registry.py`
+  are unchanged from `releases/b60931a6a9f8-reporter-6512dc3578e9`.
+
+A frozen 2026-09-30 log copy was run through the old and new pins with
+`--no-discord`. Both exited 0. Artifacts matched except generation
+timestamps. The futures card text changed only to `By market: MNQ **57** ·
+MES **47** · M2K **0** · MBT **0** · MCL **0** · MGC **0**`. One futures
+Discord post returned HTTP 200 and the stored message contained that line.
+Rollback is an atomic `current` flip back to
+`releases/b60931a6a9f8-reporter-6512dc3578e9`. Futures-bot PID `791194` and
+`NRestarts=0` did not change. No timer, unit, env, or broker change was made.

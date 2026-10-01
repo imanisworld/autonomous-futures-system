@@ -9,9 +9,11 @@ not approved. A market printed as zero evidence is not an execution market.
 
 ## Repository
 
-`main` is `07ceaf465cf93dd29e171d1e5292de6fdf7e06d7`, the merge of PR #1078.
-#1068 remains `715e03956f402fd553107a84125537768841d97c`. The three #1068
-reporting files on that merge are byte-identical to this `main`.
+The watcher fix is on `main` at `07ceaf465cf93dd29e171d1e5292de6fdf7e06d7`
+(PR #1078). The docs note before this closeout is
+`dfe97910102bc08041a8aa93e0f23b1e27c6c81e` (PR #1079). #1068 remains
+`715e03956f402fd553107a84125537768841d97c`. The three #1068 reporting files
+on that merge are byte-identical to that `main`.
 
 ## Auth
 
@@ -56,46 +58,63 @@ Before and after the shadow-report file replace:
 
 ## #1068 reporting surfaces
 
-### Paper collection — not flipped
+### Paper collection — derived six-market backport installed
 
-`/root/afs-shared/paper_collection/current` still points at
-`releases/b60931a6a9f8-reporter-6512dc3578e9`.
+The full #1068 reporter was not installed. It imports `notifications.plain_english`
+and `REGISTRY_HEADER`, which are outside the proven four-file pin. The active
+pin is a derived minimal backport of the six-market display onto the #899
+reporter. It is not a pure `715e039` tree.
 
-That pin is the documented #899 curated overlay:
+Re-read 2026-09-30 after the flip:
 
-- base `b60931a6a9f8839ab9bbadb88eb6c5cb93cccd28`
-- overlay `6512dc3578e9de59d8d6a8ceea8e78a39b9cb8e4`
-- overlay file `scripts/paper_collection_report.py`
-- reporter sha256
+- active pin `releases/b60931a6a9f8-reporter-1068-sixmarket-backport`
+- previous pin `releases/b60931a6a9f8-reporter-6512dc3578e9`
+- base reporter source `6512dc3578e9de59d8d6a8ceea8e78a39b9cb8e4`
+- #1068 reference `715e03956f402fd553107a84125537768841d97c`
+- changed path `scripts/paper_collection_report.py` only
+- installed reporter sha256
+  `e0382c38b1fd8b39da31066179ad4dc363469690faf50555eec812a6f0742771`
+- previous reporter sha256
   `d9c9c771926db95e6e1fae72d4cced2a12907d2ac82aaeb40310cdb287620ff0`
+- manifest sha256
+  `4509508e001363017ee0c4dfa37037c4d89eddebe55a92b77426863b843b980b`
+- rollback pin `releases/b60931a6a9f8-reporter-6512dc3578e9`
+- history line `2026-09-30T03:41:24Z`
 
-`MANIFEST.sha256` matched the four pinned files. EOD and EOW units still use
-`WorkingDirectory=/root/afs-shared/paper_collection/current`. Their timers
-and unit files were not changed.
+A frozen copy of the 2026-09-30 logs was read by the old and new reporters
+with `/usr/bin/python3` and `--no-discord`. Both exited 0. Structured
+artifacts matched except generation timestamps. Futures rows stayed 104,
+MES 47 and MNQ 57. Row types, outcomes, decisions, strategies, lanes,
+options, and collector status matched. The only report text change was the
+futures market line, to `By market: MNQ **57** · MES **47** · M2K **0** ·
+MBT **0** · MCL **0** · MGC **0**`.
 
-A scratch clone received only the exact #1068 reporter
-(`f364d275726150bf38f9fbe244244e9dc1d3dc536f222390b83f4360d9f12e1a`). The
-pinned `ops/__init__.py`, `ops/collector_census.py`, and
-`ops/evidence_registry.py` stayed identical to the current pin. Import
-failed: the unit's `/usr/bin/python3` has no `notifications` package, and
-the pinned registry does not export `REGISTRY_HEADER`. The symlink was not
-flipped. The prior pin remains the rollback target if a later overlay is
-activated. This is source-updated by #1068, with no runtime repin.
+One futures Discord post returned HTTP 200. The stored card contained that
+same line. EOD and EOW units still use
+`WorkingDirectory=/root/afs-shared/paper_collection/current`. Timer and unit
+hashes did not change. Futures-bot stayed PID `791194` / `NRestarts=0` on
+`75f10e4540aa1f25b51b77c1ec2a2da40381a188`. The watcher stayed PID `874999`.
+A later re-read the same night still showed those process identities.
 
-### Gate condition — not installed as its own copy
+### Gate condition — deferred until the next sanctioned futures release
 
-Cron runs `python -m ops.gate_condition_report` from the live futures
-release. There is no gate-condition systemd unit. A loose
-`/root/afs-shared/gate_condition_report.py` exists and is not what cron
-executes. Its sha256 is
-`b3a523aca69cb7e745943aaca0c20ac399a54b966432d3620c4c01ebe83f947a`. The live
-release file sha256 is
+Final disposition: **DEFERRED UNTIL NEXT SANCTIONED FUTURES RELEASE**.
+
+Cron runs `python -m ops.gate_condition_report` with `PYTHONPATH=.` from
+`/root/autonomous-futures-system`, which is the immutable live release
+`75f10e4540aa1f25b51b77c1ec2a2da40381a188`. There is no gate-condition
+systemd unit. The loose file `/root/afs-shared/gate_condition_report.py`
+is not the cron target. Its sha256 is
+`b3a523aca69cb7e745943aaca0c20ac399a54b966432d3620c4c01ebe83f947a`. The
+live module sha256 is
 `0b58b2260a17482d7ffef6267cf09af5521971c891a6a1bc9bfac35c7b1932dd`. The
 #1068 file sha256 is
 `3643571f853c34617d4fab5b2bd2e9a594dc9ef9e4e4bf35e949ead4981d2676`.
 
-Editing the live release would change the trading tree. Creating a new cron
-or unit was not done. Source updated by #1068; no runtime repin.
+No already-sanctioned reporting path can adopt that file without editing
+the trading release or changing the scheduler. A new cron, a rewritten cron
+command, or an in-place release edit was not created. This is not an urgent
+defect. No runtime mutation was made in this review.
 
 ### Shadow daily P&L — installed
 
@@ -121,14 +140,42 @@ showed MNQ, MES, M2K, MBT, MCL, and MGC, with the four empty markets labeled
 as no shadow outcomes. The crontab line was not changed. Futures-bot was not
 restarted.
 
+## Access re-read — 2026-09-30
+
+Read only. Nothing in SSH, sudo, firewall, or Tailscale was changed.
+
+Proven on this re-read:
+
+- public listeners on port 22
+- `PasswordAuthentication yes`
+- `PermitRootLogin prohibit-password` (root SSH password login prohibited)
+- Tailscale absent
+- password-locked non-root accounts include `grok-audit`, `grok-options-audit`, `grok-qa-audit`, and `claude-audit`
+- all four `grok-audit` authorized-key lines use `command=` and `restrict`
+- `claude-audit` shell is `/bin/bash`; no sudoers entry names that account
+- live release contains `scripts/deploy_lock.sh`; `deploy.lock` was absent while idle
+- rollback target file `/root/afs-shared/current.previous` points at `/root/afs-releases/41ae1881655c-20260924-124607`, and that directory exists
+
+Preserved from the access audit, not re-tested tonight:
+
+- MacBook current root-key login
+- `claude-audit` cannot read the protected AFS tree
+
+Requires the operator:
+
+- phone SSH login
+- Hetzner/provider console recovery
+
+Not authorized yet: disabling password authentication, root-key cleanup, converting `claude-audit` to a forced command, restricting public SSH, or removing current access. SSH is not safe to harden until the phone path and provider-console recovery are proven.
+
+Ready to test in a later operator window, not run tonight: candidate build/verify, and a rollback drill.
+
 ## Still open
 
-- map current access
-- MacBook replacement operator path
-- phone path
-- constrained agent access proof
-- provider-console break-glass proof
-- old-access lockdown after replacement proof
-- broader #1037 governance
+- phone SSH login
+- provider-console recovery
+- candidate build/verify and rollback drill, in an operator window
+- SSH hardening only after those proofs
+- #1037 governance remains a separate HOLD; secret-discovery stays closed
 - #994 research remains WAIT
-- paper-collection and gate-condition #1068 runtime surfaces, as described above
+- gate-condition #1068 runtime surface, deferred as described above

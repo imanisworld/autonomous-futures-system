@@ -6,9 +6,9 @@ _As of 2026-09-24 (runtime and current decisions: see the 2026-09-24 blocks in `
 
 ## Runtime reconciliation — 2026-09-30
 
-Verified runtime and the closed auth/watcher lane are recorded in
-`docs/futures-runtime-reconciliation-2026-09-30.md`. Repository `main` is
-`07ceaf465cf93dd29e171d1e5292de6fdf7e06d7` (PR #1078). That note does not
+Verified runtime, the paper-collection six-market pin, the deferred
+gate-condition surface, and the read-only access re-read are in
+`docs/futures-runtime-reconciliation-2026-09-30.md`. That note does not
 reopen strategy status. The inventory still wins if this handoff disagrees
 with it.
 
