@@ -2,9 +2,23 @@
 
 > **Purpose:** durable operator action tracker for futures infrastructure/safety work. This file is **not** strategy-status authority and must not override `docs/strategy-rules/Strategy_Inventory.md`, the research trial ledger, or verified VPS/runtime evidence.
 >
-> **Last repo reconciliation:** `main` `dfe97910102bc08041a8aa93e0f23b1e27c6c81e` before this closeout note. Runtime facts are in `docs/futures-runtime-reconciliation-2026-09-30.md`.
+> **Last repo reconciliation:** `main` `3737d532919859960bdefe8b11a611da785327ae` after PR #1080. Runtime facts are in `docs/futures-runtime-reconciliation-2026-09-30.md`.
 >
 > Core rule: **No proof, no run.**
+
+
+## Immediate state — no action required now
+
+Latest read-only health pass reported **PASS — KEEP COLLECTING / NO CHANGES**:
+
+- futures-bot remains on pinned release `75f10e4540aa1f25b51b77c1ec2a2da40381a188`, DEMO, live trading disabled;
+- release integrity passed; service remained one PID with zero restarts;
+- Tradovate demo account routing remained pinned and healthy;
+- journal and broker state agreed flat with zero execution attempts/fills for the current journal day;
+- forward evidence is still writing for `vwap_hold`; `orb_reclaim` is stale and `vwap_rejection` is quiet. Those stale/quiet arms are evidence-quality facts, not a reason to tune or restart the current collector;
+- GitHub `main` being ahead of the pinned release is reportable source/runtime drift, **not** an instruction to deploy.
+
+Do not deploy, restart, retune, harden SSH, or reopen research merely because paper results are losing. The next work remains operator-window work below.
 
 ## Completed — do not reopen by default
 
@@ -21,7 +35,7 @@
 
 These are ordered. Do not skip ahead.
 
-- [x] **Read-only runtime identity, 2026-09-30.** Futures-bot PID `791194`, `NRestarts=0`, release `75f10e4540aa1f25b51b77c1ec2a2da40381a188`, DEMO, live trading disabled. Reporter pins and the access map are in `docs/futures-runtime-reconciliation-2026-09-30.md`. Release integrity was not re-run tonight.
+- [x] **Read-only runtime identity, 2026-09-30.** Futures-bot PID `791194`, `NRestarts=0`, release `75f10e4540aa1f25b51b77c1ec2a2da40381a188`, DEMO, live trading disabled. Reporter pins and the access map are in `docs/futures-runtime-reconciliation-2026-09-30.md`. A later read-only health pass re-ran release integrity successfully and reconciled journal/broker state flat.
 - [x] **Current access map, read only.** Re-read 2026-09-30: public SSH port 22, `PasswordAuthentication yes`, `PermitRootLogin prohibit-password`, Tailscale absent, non-root login accounts password-locked, Grok audit keys use `command=` and `restrict`, `claude-audit` has an interactive shell and no sudoers entry. MacBook root-key login stays the proven current path from the access audit. Current access stays in place.
 - [ ] **Phone SSH login.** Requires the operator. Not proven.
 - [ ] **Hetzner/provider console recovery.** Requires the operator. Not proven.
