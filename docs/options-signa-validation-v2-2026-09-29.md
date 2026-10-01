@@ -62,6 +62,23 @@ The stored `observation_rating_basis` explains the mechanical reason for the let
 The rating cannot add to scanner score, change setup status, grant trade permission,
 change risk, rank contracts, or affect broker/order/execution behavior.
 
+### AFS trade grade
+
+The user-facing card also carries a separate **AFS Trade Grade**. This is not
+Signa's grade and it is not the post-trade journal `TradeGrader`. It is a
+display-only summary of the existing options scanner/validator state:
+
+- **A** — setup is mechanically triggered, scanner score is 9–10, the V1 contract/risk policy is valid, and `trade_proof_status=VALID`.
+- **B** — setup is triggered and viable, but either the scanner score is 7–8 or trade proof remains `INCOMPLETE`.
+- **C** — setup is triggered but the trade packet is incomplete or scanner score is below the normal alert threshold.
+- **F** — an explicit negative trade-proof status exists or the V1 contract/risk policy is invalid.
+- **N/A** — the setup has not mechanically triggered.
+
+This grade is presentation-only. It cannot change alert eligibility, scanner score,
+setup status, contract selection, risk permission, broker/order state, or execution.
+It may be reconstructed from the underlying stored scanner/validator fields; it is
+not a new source of truth.
+
 These remain namespaced observational telemetry in the scanner path.
 
 ## GEX context
