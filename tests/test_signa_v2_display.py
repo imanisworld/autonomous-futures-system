@@ -129,11 +129,12 @@ def test_trade_grade_is_display_only_and_uses_existing_validator_state() -> None
         )
         embed = build_discord_payload(result)["embeds"][0]
         fields = {field["name"]: field["value"] for field in embed["fields"]}
-        return fields["Trade grade"]
+        return fields["AFS trade grade"]
 
     assert grade_for(9).startswith("A ·")
     assert grade_for(8).startswith("B ·")
     assert grade_for(9, trade_proof_status="INCOMPLETE").startswith("B ·")
+    assert grade_for(6, trade_proof_status="INCOMPLETE").startswith("C ·")
     assert grade_for(6).startswith("C ·")
     assert grade_for(9, paper_policy_status="DATA_INVALID", paper_policy_reason="quote_stale").startswith("F ·")
 
@@ -154,5 +155,5 @@ def test_trade_grade_is_na_before_trigger() -> None:
     )
     embed = build_discord_payload(result)["embeds"][0]
     fields = {field["name"]: field["value"] for field in embed["fields"]}
-    assert fields["Trade grade"] == "N/A · setup not triggered"
+    assert fields["AFS trade grade"] == "N/A · setup not triggered"
     assert result.score == 9
