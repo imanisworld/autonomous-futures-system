@@ -51,7 +51,8 @@ These are ordered. Do not skip ahead.
 - [ ] **PR #1037 public-repo/governance audit:** keep separate from futures execution safety. Secret-discovery was clean; remaining questions concern public-history operational exposure/governance.
 - [ ] **PR #994 MNQ ORB Stage A research:** WAIT / research only. Stage B was not earned. Do not resume without an explicit research decision.
 - [ ] Continue normal paper/shadow/guarded-DEMO evidence collection under existing frozen contracts. Do not interpret more data as automatic promotion.
-- [ ] **PR #1085 shadow daily P&L report fixes** (reporting only: `--final` late-row pass, one-at-a-time view, always-shown open/never-filled counts). CI green on head `ded1f6a`; needs an independent review and then an operator merge decision. Running `--final` on the box is a separate scheduler change for a later operator decision; the bot needs no restart.
+- [x] **PR #1085 shadow daily P&L report fixes** (reporting only: `--final` late-row pass, one-at-a-time view, always-shown open/never-filled counts). Merged 2026-10-01 as `01b9654` by operator decision; all checks green on head `ded1f6a`; no independent agent review was posted.
+- [ ] **Install the #1085 report on the box (not done).** The live shadow daily P&L cron runs its own standalone runtime copy, not `main`, so nothing changed at runtime. Updating that copy and adding a next-morning `--final` schedule is a separate operator-approved change; the bot needs no restart. Compare the first `--final` run by hand against that day's first-pass JSON.
 
 ## Definition of done for this phase
 
