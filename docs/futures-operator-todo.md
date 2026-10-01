@@ -2,12 +2,12 @@
 
 > **Purpose:** durable operator action tracker for futures infrastructure/safety work. This file is **not** strategy-status authority and must not override `docs/strategy-rules/Strategy_Inventory.md`, the research trial ledger, or verified VPS/runtime evidence.
 >
-> **Last repo reconciliation:** `main` `7d09c62f49ac1e5bf907e84f21e6da78be97c299` after PR #1081. Runtime facts are in `docs/futures-runtime-reconciliation-2026-09-30.md`; those facts are a dated checkpoint and require fresh read-only proof before any runtime/broker/access mutation.
+> **Repo reconciliation base:** `main` `7d09c62f49ac1e5bf907e84f21e6da78be97c299` immediately before the post-#1081 checkpoint refresh. Fetch current `main` rather than treating this stored SHA as current. Runtime facts are in `docs/futures-runtime-reconciliation-2026-09-30.md`; those facts are a dated checkpoint and require fresh read-only proof before any runtime/broker/access mutation.
 >
 > Core rule: **No proof, no run.**
 
 
-## Immediate state — no action required now
+## Last verified runtime checkpoint — no automatic action
 
 Latest verified read-only health pass from 2026-09-30 ET reported **PASS — KEEP COLLECTING / NO CHANGES**. Treat it as a dated checkpoint, not proof of current runtime state:
 
@@ -36,7 +36,7 @@ Do not deploy, restart, retune, harden SSH, or reopen research merely because pa
 These are ordered. Do not skip ahead.
 
 - [x] **Read-only runtime identity, 2026-09-30.** Futures-bot PID `791194`, `NRestarts=0`, release `75f10e4540aa1f25b51b77c1ec2a2da40381a188`, DEMO, live trading disabled. Reporter pins and the access map are in `docs/futures-runtime-reconciliation-2026-09-30.md`. A later read-only health pass re-ran release integrity successfully and reconciled journal/broker state flat.
-- [x] **Current access map, read only.** Re-read 2026-09-30: public SSH port 22, `PasswordAuthentication yes`, `PermitRootLogin prohibit-password`, Tailscale absent, non-root login accounts password-locked, Grok audit keys use `command=` and `restrict`, `claude-audit` has an interactive shell and no sudoers entry. MacBook root-key login stays the proven current path from the access audit. Current access stays in place.
+- [x] **Access map checkpoint, read only.** Re-read 2026-09-30: public SSH port 22, `PasswordAuthentication yes`, `PermitRootLogin prohibit-password`, Tailscale absent, non-root login accounts password-locked, Grok audit keys use `command=` and `restrict`, `claude-audit` has an interactive shell and no sudoers entry. MacBook root-key login stays the proven current path from the access audit. Current access stays in place.
 - [ ] **Phone SSH login.** Requires the operator. Not proven.
 - [ ] **Hetzner/provider console recovery.** Requires the operator. Not proven.
 - [ ] **Ready to test, not done tonight:** candidate build/verify, and a rollback drill. The deploy-lock script is in the live release. The recorded rollback target directory `/root/afs-releases/41ae1881655c-20260924-124607` is present. Do not run those tests without an operator window.

@@ -4,7 +4,7 @@
 >
 > This file is **not** strategy-status authority, deployment authority, or experiment authority. Authoritative records named in `AGENTS.md` always win.
 >
-> **Updated through:** repository `main` `7d09c62f49ac1e5bf907e84f21e6da78be97c299` (PR #1081) plus the 2026-09-30 ET operator closeout.
+> **Checkpoint base:** repository `main` `7d09c62f49ac1e5bf907e84f21e6da78be97c299` immediately before the post-#1081 checkpoint refresh. Always fetch current `main`; this stored SHA is a comparison base, not a perpetual current-state claim.
 >
 > Core rule: **checkpoint first; diff first; do not redo proven work.**
 
@@ -65,7 +65,7 @@ If the agent cannot persist this file, it must return this payload verbatim-read
 - **Paper reporter:** installed and verified; active pin `releases/b60931a6a9f8-reporter-1068-sixmarket-backport`. Do not rebuild merely because Grok returns.
 - **Paper reporter smoke:** frozen-input comparison already passed; another Discord smoke is not required just to resume context.
 - **Futures runtime tonight:** read-only health result PASS. Keep collecting; no strategy/config/deploy response to losses.
-- **Docs closeout:** PR #1080 merged, followed by agent-resume/governance PR #1081. Current checkpoint `main` is `7d09c62f49ac1e5bf907e84f21e6da78be97c299`.
+- **Docs closeout:** PR #1080 and agent-resume/governance PR #1081 merged; PR #1083 then refreshed this checkpoint metadata. The stored repo SHA above is the pre-refresh comparison base. Fetch current `main` instead of inferring it from this file.
 - **Gate-condition #1068:** decision already made — deferred until the next sanctioned futures release. Do not force it into the immutable live release or rewrite cron solely to pick it up.
 - **#994:** WAIT. Stage B was not earned. Do not run the study unless a new explicit research decision changes that.
 - **Secret discovery for #1037:** closed. Do not repeat secret scanning merely to reconstruct context.
@@ -76,8 +76,8 @@ If the agent cannot persist this file, it must return this payload verbatim-read
 
 - **Runtime freshness boundary:** the runtime facts below are the last verified 2026-09-30 ET checkpoint, not perpetual current-state claims. Before any runtime/broker/access mutation, obtain the smallest fresh read-only proof required. Later external monitor/agent messages do not supersede this checkpoint unless independently verified.
 - Futures trading service: last verified pinned release `75f10e4540aa1f25b51b77c1ec2a2da40381a188`, Tradovate DEMO, live trading disabled.
-- Paper/shadow evidence collection continues under frozen contracts.
-- Reporter rollback pin: `releases/b60931a6a9f8-reporter-6512dc3578e9`.
+- At the last verified 2026-09-30 ET checkpoint, paper/shadow evidence collection was continuing under frozen contracts.
+- Last verified reporter rollback pin: `releases/b60931a6a9f8-reporter-6512dc3578e9`.
 - Preserve `candidate/tradovate-auth-only-41ae188` and `fix/watcher-resolve-only-when-cleared` unless fresh containment/deletion proof is produced.
 
 ### NEXT — operator window, in order
