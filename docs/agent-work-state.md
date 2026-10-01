@@ -89,10 +89,21 @@ If the agent cannot persist this file, it must return this payload verbatim-read
 6. Resolve remaining #1037 owner decisions: main protection/ruleset governance, historical operational exposure, retain-history vs fresh-root decision, public branch/ref cleanup, old VPS-address check, clean export.
 7. Continue ordinary paper/shadow/guarded-DEMO collection. Losses alone do not trigger strategy changes.
 
+### OPTIONS CHECKPOINT — resume, do not rebuild
+
+Options resume is governed by the same checkpoint-first / diff-first rule.
+
+- **Current-state authority:** `docs/options-current-state-handoff.md`. Do not create a competing options status file.
+- **PR #1073** (`docs/options-state-todo-20260929`) is already the dedicated options state/TODO refresh. It changes only `docs/options-current-state-handoff.md` and `docs/options-next-actions.md`. It is open/draft. Do **not** recreate that checklist in this PR or another branch; continue/review #1073 itself.
+- **PR #1077** (`claude/options-signa-validation-v2`) is already the active Signa-v2 observation/evidence change. It is open/draft and requires QA/review before merge. Do **not** start a second Signa-v2 implementation.
+- Options production posture recorded by #1073 remains advisory/read-only with the existing frozen evidence lanes; repository changes are not runtime proof.
+- #1073 records three separate real-data gates rather than permission to deploy: the #1071 real SQLite run, #1067 real 66-symbol five-minute capacity proof, and #1069 real SPX/SPXW provider proof with that lane OFF. A returning agent should verify which of those gates, if any, changed before doing work.
+- If #1073 merges, use its `docs/options-next-actions.md` as the options task checklist and update this checkpoint to the merged SHA. If it does not merge, inspect only its current diff/state rather than reconstructing the options backlog from older docs.
+
 ### OPEN / NEEDS DECISION — verify before touching
 
-- PR #1073 / branch `docs/options-state-todo-20260929`.
-- PR #1077 / branch `claude/options-signa-validation-v2`.
+- PR #1073 / branch `docs/options-state-todo-20260929`: continue/review existing work; do not duplicate it.
+- PR #1077 / branch `claude/options-signa-validation-v2`: QA/review existing work; do not duplicate it.
 - Closed-unmerged agent-safety doc branches associated with PR #1028 and #1036: verify whether their content is superseded before recreating anything.
 - Forward evidence: `orb_reclaim` was stale and `vwap_rejection` quiet in the latest read-only check. This does not block current collection, but future summaries must not imply continuous evidence for those arms.
 
