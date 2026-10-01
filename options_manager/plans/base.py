@@ -21,6 +21,14 @@ from typing import Literal, Optional
 
 Direction = Literal["CALL", "PUT"]
 LevelSide = Literal["RESISTANCE", "SUPPORT"]
+ObservationComponentName = Literal[
+    "strat_htf",
+    "market_alignment",
+    "signa",
+    "gex",
+    "level_quality",
+    "other_context",
+]
 
 
 class PlanStatus(str, Enum):
@@ -83,6 +91,41 @@ class SignaObservation:
             self.signal_timestamp,
             self.technicals_as_of,
         )
+
+
+@dataclass(frozen=True)
+class ObservationRatingSnapshot:
+    """Observation-only setup-interest telemetry.
+
+    This record is deliberately incapable of granting trade authority. It may
+    be logged, displayed, and evaluated later, but the plan manager must never
+    use it for actionability, conviction, risk, contract sizing, or execution.
+    No scoring algorithm lives in this schema module.
+    """
+
+    rating: float
+    components: tuple[tuple[ObservationComponentName, float], ...] = ()
+
+    @property
+    def observation_only(self) -> bool:
+        return True
+
+    @property
+    def trade_authority(self) -> bool:
+        return False
+
+    def validate(self) -> None:
+        if not (0.0 <= float(self.rating) <= 100.0):
+            raise ValueError("observation rating must be between 0 and 100")
+        seen: set[str] = set()
+        for name, value in self.components:
+            if name in seen:
+                raise ValueError(f"duplicate observation component: {name}")
+            seen.add(name)
+            if not (0.0 <= float(value) <= 100.0):
+                raise ValueError(
+                    f"observation component {name} must be between 0 and 100"
+                )
 
 
 @dataclass(frozen=True)
@@ -213,6 +256,7 @@ class PlanObservation:
     event_risk_clear: bool = False
     conviction_proofs: ConvictionProofs = field(default_factory=ConvictionProofs)
     signa: Optional[SignaObservation] = None
+    observation_rating: Optional[ObservationRatingSnapshot] = None
     contract_plan: Optional[ContractPlanSnapshot] = None
     risk_plan: Optional[RiskPlanSnapshot] = None
     mark_active: bool = False
@@ -254,6 +298,7 @@ class TradePlanSnapshot:
     signa_repeat_count: int = 0
     last_signa_fingerprint: Optional[tuple[object, ...]] = None
     latest_signa: Optional[SignaObservation] = None
+    observation_rating: Optional[ObservationRatingSnapshot] = None
     source_references: tuple[str, ...] = ()
     contract_plan: Optional[ContractPlanSnapshot] = None
     risk_plan: Optional[RiskPlanSnapshot] = None
