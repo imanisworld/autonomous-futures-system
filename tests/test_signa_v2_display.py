@@ -17,12 +17,13 @@ def test_render_signa_v2_full_observation() -> None:
             "signa_v2_strength": 82,
             "signa_v2_factor_count": 5,
             "signa_v2_factor_conflicts": ["gamma"],
+            "signa_v2_observation_rating": "B",
             "signa_v2_direction": "LONG",
             "signa_v2_reward_to_risk": 2.3,
         }
     )
     assert text == (
-        "V2 observational · AAPL · grade A · score 91 · confidence 88% · "
+        "V2 observational · AAPL · obs rating B · grade A · score 91 · confidence 88% · "
         "strength 82 · 5 factors · conflicts gamma · LONG · R:R 2.30 · 1d"
     )
 
@@ -56,6 +57,7 @@ def test_discord_uses_v2_observation_without_implying_authority() -> None:
             "signa_v2_grade": "A",
             "signa_v2_score": 91,
             "signa_v2_confidence": 88,
+            "signa_v2_observation_rating": "A",
             "signa_v2_direction": "LONG",
             "signa_v2_reward_to_risk": 2.3,
         },
@@ -66,6 +68,7 @@ def test_discord_uses_v2_observation_without_implying_authority() -> None:
     signa = fields["Signa (outside opinion)"]
     assert signa.startswith("For info only · Signa v2 (being tested)")
     assert "strong (grade A)" in signa
+    assert "obs rating A" in signa
     assert "88% confident" in signa
     assert "R:R" not in signa  # reward-to-risk ratio is jargon; dropped from the card
     assert result.components["signa"] == 0
@@ -92,6 +95,7 @@ def test_discord_keeps_legacy_signa_line_alongside_v2() -> None:
             "signa_v2_timeframe": "1d",
             "signa_v2_grade": "A",
             "signa_v2_score": 91,
+            "signa_v2_observation_rating": "A",
             "signa_v2_direction": "LONG",
         },
     )
@@ -100,4 +104,4 @@ def test_discord_keeps_legacy_signa_line_alongside_v2() -> None:
     fields = {field["name"]: field["value"] for field in embed["fields"]}
     legacy_line, v2_line = fields["Signa (outside opinion)"].split("\n")
     assert legacy_line == "For info only · leaning up, fairly strong (grade B)"
-    assert v2_line == "For info only · Signa v2 (being tested): leaning up, strong (grade A) · daily view"
+    assert v2_line == "For info only · Signa v2 (being tested): leaning up, strong (grade A) · obs rating A · daily view"
