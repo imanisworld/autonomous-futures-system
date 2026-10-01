@@ -27,6 +27,8 @@ class SignaActionCardObservation:
     strength: float | None = None
     factor_count: int = 0
     factor_conflicts: tuple[str, ...] = field(default_factory=tuple)
+    observation_rating: str = "N/A"
+    observation_rating_basis: str | None = None
     entry_low: float | None = None
     entry_high: float | None = None
     stop_loss: float | None = None
@@ -55,6 +57,8 @@ class SignaActionCardObservation:
             "signa_v2_strength": self.strength,
             "signa_v2_factor_count": self.factor_count,
             "signa_v2_factor_conflicts": list(self.factor_conflicts),
+            "signa_v2_observation_rating": self.observation_rating,
+            "signa_v2_observation_rating_basis": self.observation_rating_basis,
             "signa_v2_entry_low": self.entry_low,
             "signa_v2_entry_high": self.entry_high,
             "signa_v2_stop_loss": self.stop_loss,
@@ -124,18 +128,31 @@ def parse_action_card(
         strength = min(100.0, abs(score - 50.0) * 2.0)
     factor_count = sum(value is not None for value in components.values())
     factor_conflicts = _factor_conflicts(direction, components)
+    confidence = _float_or_none(signal.get("confidence"))
+    observation_ok = bool(payload.get("success", True))
+    observation_rating, observation_rating_basis = _observation_rating(
+        ok=observation_ok,
+        direction=direction,
+        score=score,
+        confidence=confidence,
+        strength=strength,
+        factor_count=factor_count,
+        factor_conflicts=factor_conflicts,
+    )
 
     return SignaActionCardObservation(
-        ok=bool(payload.get("success", True)),
+        ok=observation_ok,
         symbol=_upper_or_none(signal.get("symbol")),
         timeframe=_str_or_none(signal.get("timeframe")),
         direction=direction,
         score=score,
         grade=_upper_or_none(signal.get("grade")),
-        confidence=_float_or_none(signal.get("confidence")),
+        confidence=confidence,
         strength=strength,
         factor_count=factor_count,
         factor_conflicts=factor_conflicts,
+        observation_rating=observation_rating,
+        observation_rating_basis=observation_rating_basis,
         entry_low=_float_or_none(entry_zone.get("low")),
         entry_high=_float_or_none(entry_zone.get("high")),
         stop_loss=_float_or_none(signal.get("stop_loss")),
