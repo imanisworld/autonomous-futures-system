@@ -11,7 +11,12 @@ from ops.research_experiment_adapters.options_212c_target_geometry import (
     AdapterPreconditionError,
     EXPECTED_POPULATION,
     EXPECTED_SYMBOLS,
+    canonical_population_body,
+    episode_identity,
+    population_manifest_sha256,
     run_options_212c_target_geometry,
+    verify_population_binding,
+    _select_population,
 )
 
 
@@ -151,6 +156,69 @@ def test_adapter_requires_dataset_hash_before_run(tmp_path: Path):
         run_options_212c_target_geometry(
             _ctx(tmp_path, arm="baseline", dataset_hash="")
         )
+
+
+def _binding_spec(dataset: Path, digest: str, **overrides: object) -> dict:
+    data = {
+        "dataset_hash": digest,
+        "dataset_path": str(dataset),
+        "dataset_size_bytes": dataset.stat().st_size,
+        "population_count": EXPECTED_POPULATION,
+        "window": {"start": "2026-09-09", "end": "2026-09-15"},
+    }
+    data.update(overrides)
+    payload = json.loads(dataset.read_text(encoding="utf-8"))
+    rows = _select_population(payload)
+    body = canonical_population_body(
+        source_path=str(data["dataset_path"]),
+        source_size_bytes=int(data["dataset_size_bytes"]),
+        source_sha256=str(data["dataset_hash"]),
+        episode_ids=[episode_identity(row) for row in rows],
+    )
+    data["population_manifest_sha256"] = population_manifest_sha256(body)
+    return {"data": data}
+
+
+def test_binding_rejects_mismatched_source_size(tmp_path: Path):
+    dataset = tmp_path / "dataset.json"
+    digest = _write_dataset(dataset, _rows())
+    spec = _binding_spec(dataset, digest, dataset_size_bytes=dataset.stat().st_size - 1)
+
+    with pytest.raises(AdapterPreconditionError, match="dataset size mismatch"):
+        verify_population_binding(dataset, spec)
+
+
+def test_binding_rejects_mismatched_population_hash(tmp_path: Path):
+    dataset = tmp_path / "dataset.json"
+    digest = _write_dataset(dataset, _rows())
+    spec = _binding_spec(dataset, digest)
+    spec["data"]["population_manifest_sha256"] = "ab" * 32
+
+    with pytest.raises(AdapterPreconditionError, match="population manifest SHA-256 mismatch"):
+        verify_population_binding(dataset, spec)
+
+
+def test_binding_rejects_mismatched_population_count(tmp_path: Path):
+    dataset = tmp_path / "dataset.json"
+    digest = _write_dataset(dataset, _rows())
+    spec = _binding_spec(dataset, digest, population_count=EXPECTED_POPULATION - 1)
+
+    with pytest.raises(AdapterPreconditionError, match="population count mismatch"):
+        verify_population_binding(dataset, spec)
+
+
+def test_binding_accepts_matching_manifest_without_scoring(tmp_path: Path):
+    dataset = tmp_path / "dataset.json"
+    digest = _write_dataset(dataset, _rows())
+    spec = _binding_spec(dataset, digest)
+    first = verify_population_binding(dataset, spec)
+    second = verify_population_binding(dataset, spec)
+
+    assert first["population_count"] == EXPECTED_POPULATION
+    assert first["episode_ids"] == second["episode_ids"]
+    assert first["manifest_sha256"] == second["manifest_sha256"]
+    assert first["manifest_sha256"] == spec["data"]["population_manifest_sha256"]
+    assert "activated" not in first
 
 
 def test_adapter_fails_closed_on_changed_variable_drift(tmp_path: Path):

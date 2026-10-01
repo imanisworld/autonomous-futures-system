@@ -138,6 +138,34 @@
         "dataset_hash": {
           "type": ["string", "null"],
           "pattern": "^[0-9a-f]{64}$"
+        },
+        "dataset_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "dataset_size_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "population_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "population_manifest": {
+          "type": "string",
+          "minLength": 1
+        },
+        "population_manifest_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "selection_implementation": {
+          "type": "string",
+          "minLength": 1
+        },
+        "selection_version": {
+          "type": "string",
+          "minLength": 1
         }
       }
     },
