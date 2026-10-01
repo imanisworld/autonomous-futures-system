@@ -4,9 +4,9 @@
 >
 > This file is **not** strategy-status authority, deployment authority, or experiment authority. Authoritative records named in `AGENTS.md` always win.
 >
-> **Seeded from:** repository `main` `3737d532919859960bdefe8b11a611da785327ae` plus the 2026-09-30 ET operator closeout.
+> **Updated through:** repository `main` `7d09c62f49ac1e5bf907e84f21e6da78be97c299` (PR #1081) plus the 2026-09-30 ET operator closeout.
 >
-> Core rule: **reconcile first; do not redo proven work.**
+> Core rule: **checkpoint first; diff first; do not redo proven work.**
 
 ## Mandatory startup gate
 
@@ -65,7 +65,7 @@ If the agent cannot persist this file, it must return this payload verbatim-read
 - **Paper reporter:** installed and verified; active pin `releases/b60931a6a9f8-reporter-1068-sixmarket-backport`. Do not rebuild merely because Grok returns.
 - **Paper reporter smoke:** frozen-input comparison already passed; another Discord smoke is not required just to resume context.
 - **Futures runtime tonight:** read-only health result PASS. Keep collecting; no strategy/config/deploy response to losses.
-- **Docs closeout:** PR #1080 merged. Main at the seed checkpoint is `3737d532919859960bdefe8b11a611da785327ae`.
+- **Docs closeout:** PR #1080 merged, followed by agent-resume/governance PR #1081. Current checkpoint `main` is `7d09c62f49ac1e5bf907e84f21e6da78be97c299`.
 - **Gate-condition #1068:** decision already made — deferred until the next sanctioned futures release. Do not force it into the immutable live release or rewrite cron solely to pick it up.
 - **#994:** WAIT. Stage B was not earned. Do not run the study unless a new explicit research decision changes that.
 - **Secret discovery for #1037:** closed. Do not repeat secret scanning merely to reconstruct context.
@@ -74,7 +74,8 @@ If the agent cannot persist this file, it must return this payload verbatim-read
 
 ### CURRENT PRESERVE
 
-- Futures trading service: pinned release `75f10e4540aa1f25b51b77c1ec2a2da40381a188`, Tradovate DEMO, live trading disabled.
+- **Runtime freshness boundary:** the runtime facts below are the last verified 2026-09-30 ET checkpoint, not perpetual current-state claims. Before any runtime/broker/access mutation, obtain the smallest fresh read-only proof required. Later external monitor/agent messages do not supersede this checkpoint unless independently verified.
+- Futures trading service: last verified pinned release `75f10e4540aa1f25b51b77c1ec2a2da40381a188`, Tradovate DEMO, live trading disabled.
 - Paper/shadow evidence collection continues under frozen contracts.
 - Reporter rollback pin: `releases/b60931a6a9f8-reporter-6512dc3578e9`.
 - Preserve `candidate/tradovate-auth-only-41ae188` and `fix/watcher-resolve-only-when-cleared` unless fresh containment/deletion proof is produced.
@@ -94,8 +95,8 @@ If the agent cannot persist this file, it must return this payload verbatim-read
 Options resume is governed by the same checkpoint-first / diff-first rule.
 
 - **Current-state authority:** `docs/options-current-state-handoff.md`. Do not create a competing options status file.
-- **PR #1073** (`docs/options-state-todo-20260929`) is already the dedicated options state/TODO refresh. It changes only `docs/options-current-state-handoff.md` and `docs/options-next-actions.md`. It is open/draft. Do **not** recreate that checklist in this PR or another branch; continue/review #1073 itself.
-- **PR #1077** (`claude/options-signa-validation-v2`) is already the active Signa-v2 observation/evidence change. It is open/draft and requires QA/review before merge. Do **not** start a second Signa-v2 implementation.
+- **PR #1073** (`docs/options-state-todo-20260929`, exact head `0232c187e601b87c286af0ad70c5dd47acac3a58`) is already the dedicated options state/TODO refresh. It changes only `docs/options-current-state-handoff.md` and `docs/options-next-actions.md`. It is open/draft. Do **not** recreate that checklist in this PR or another branch; continue/review #1073 itself.
+- **PR #1077** (`claude/options-signa-validation-v2`, exact head `33e5d6dc33f8527de6bb72380793938cf288413b`) is already the active Signa-v2 observation/evidence change. It is open/draft and requires QA/review before merge. Do **not** start a second Signa-v2 implementation.
 - Options production posture recorded by #1073 remains advisory/read-only with the existing frozen evidence lanes; repository changes are not runtime proof.
 - #1073 records three separate real-data gates rather than permission to deploy: the #1071 real SQLite run, #1067 real 66-symbol five-minute capacity proof, and #1069 real SPX/SPXW provider proof with that lane OFF. A returning agent should verify which of those gates, if any, changed before doing work.
 - If #1073 merges, use its `docs/options-next-actions.md` as the options task checklist and update this checkpoint to the merged SHA. If it does not merge, inspect only its current diff/state rather than reconstructing the options backlog from older docs.
