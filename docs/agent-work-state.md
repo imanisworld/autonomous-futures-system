@@ -96,7 +96,7 @@ Options resume is governed by the same checkpoint-first / diff-first rule.
 
 - **Current-state authority:** `docs/options-current-state-handoff.md`. Do not create a competing options status file.
 - **PR #1073** (`docs/options-state-todo-20260929`, exact head `0232c187e601b87c286af0ad70c5dd47acac3a58`) is already the dedicated options state/TODO refresh. It changes only `docs/options-current-state-handoff.md` and `docs/options-next-actions.md`. It is open/draft. Do **not** recreate that checklist in this PR or another branch; continue/review #1073 itself.
-- **PR #1077** (`claude/options-signa-validation-v2`, exact head `33e5d6dc33f8527de6bb72380793938cf288413b`) is already the active Signa-v2 observation/evidence change. It is open/draft and requires QA/review before merge. Do **not** start a second Signa-v2 implementation.
+- **PR #1077** (`claude/options-signa-validation-v2`, exact head `fa417305d52246ba1f7530b243069048d261d651`) is the active Signa-v2 observation/evidence change. It is open and ready for review; exact-head tests, handoff-fields, CodeQL, Python analysis, and Actions analysis are green. It now includes separate display-only **Observation Rating (A/B/C/N/A)** and **AFS Trade Grade (A/B/C/F/N/A)** surfaces. Neither rating changes scanner score, alert eligibility, setup state, contract selection, risk permission, orders, or execution. Independent review remains required before merge. Do **not** start a second Signa-v2 implementation.
 - Options production posture recorded by #1073 remains advisory/read-only with the existing frozen evidence lanes; repository changes are not runtime proof.
 - #1073 records three separate real-data gates rather than permission to deploy: the #1071 real SQLite run, #1067 real 66-symbol five-minute capacity proof, and #1069 real SPX/SPXW provider proof with that lane OFF. A returning agent should verify which of those gates, if any, changed before doing work.
 - If #1073 merges, use its `docs/options-next-actions.md` as the options task checklist and update this checkpoint to the merged SHA. If it does not merge, inspect only its current diff/state rather than reconstructing the options backlog from older docs.
@@ -104,7 +104,7 @@ Options resume is governed by the same checkpoint-first / diff-first rule.
 ### OPEN / NEEDS DECISION — verify before touching
 
 - PR #1073 / branch `docs/options-state-todo-20260929`: continue/review existing work; do not duplicate it.
-- PR #1077 / branch `claude/options-signa-validation-v2`: QA/review existing work; do not duplicate it.
+- PR #1077 / branch `claude/options-signa-validation-v2`: exact-head QA is green; independent review is the remaining merge gate. Do not duplicate it.
 - Closed-unmerged agent-safety doc branches associated with PR #1028 and #1036: verify whether their content is superseded before recreating anything.
 - Forward evidence: `orb_reclaim` was stale and `vwap_rejection` quiet in the latest read-only check. This does not block current collection, but future summaries must not imply continuous evidence for those arms.
 
