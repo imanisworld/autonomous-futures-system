@@ -135,3 +135,34 @@ def test_temporary_renew_failure_does_not_open_new_session(monkeypatch):
     assert b._authenticate() is False
     assert login_calls["n"] == 1
     assert b._token.access_token == "tok1"
+
+
+def test_relogin_after_dead_session_never_sends_the_dead_bearer(monkeypatch):
+    """Regression (2026-09-25..29, 378 failed logins): once a session died, the
+    fallback accesstokenrequest went out through the shared requests.Session
+    still carrying `Authorization: Bearer <dead token>`. Tradovate 401s a valid
+    login that carries it. Checks the headers requests actually sends."""
+    sent = []
+
+    def fake_send(prepared, **kw):
+        sent.append((prepared.url, dict(prepared.headers)))
+        if prepared.url.endswith("/auth/renewAccessToken"):
+            return _Resp(401)  # the session is dead
+        if prepared.url.endswith("/auth/accesstokenrequest"):
+            if "Authorization" in prepared.headers:
+                return _Resp(401)  # what Tradovate does with the dead header
+            return _Resp(200, {"accessToken": "fresh", "expirationTime": _FAR_FUTURE})
+        return _Resp(200, {})
+
+    b = _broker(monkeypatch)
+    monkeypatch.setattr(b._session, "send", fake_send)
+    assert b._authenticate() is True                     # first login
+    assert b._session.headers["Authorization"] == "Bearer fresh"
+
+    b._auth_state.token.access_token = "dead"             # session killed server-side
+    b._apply_token(b._auth_state.token)
+    b._auth_state.token.expires_at = time.time() + 10     # stale → renew → 401 → login
+    assert b._authenticate() is True
+    logins = [h for url, h in sent if url.endswith("/auth/accesstokenrequest")]
+    assert len(logins) == 2 and all("Authorization" not in h for h in logins)
+    assert b._session.headers["Authorization"] == "Bearer fresh"   # other calls still authed

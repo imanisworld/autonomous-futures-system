@@ -652,7 +652,14 @@ class TradovateBroker(BrokerInterface):
             "deviceId": "risksentinel-server",
         }
         try:
-            resp = self._session.post(url, json=body, timeout=10)
+            # Never send the session's Bearer header on a login: after a session
+            # dies, _apply_token's header still holds the dead token, and
+            # Tradovate rejects an otherwise-valid accesstokenrequest that carries
+            # it (401) — which looped as "credentials_rejected" for days on
+            # 2026-09-25..29. None drops the header for this request only.
+            resp = self._session.post(
+                url, json=body, timeout=10, headers={"Authorization": None}
+            )
             resp.raise_for_status()
             data = resp.json()
             token = data.get("accessToken")
