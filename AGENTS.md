@@ -26,7 +26,7 @@ This repository powers AFSVP futures/options research, paper/demo execution, evi
 
 ## Resume / duplicate-work prevention
 
-This section is mandatory for Grok and every other agent. It does not expand any agent's authority.
+This section is mandatory for Grok and every other agent. It does not expand any agent's authority. Grok's compact bootstrap is `GROK.md`; if it conflicts with this file, `AGENTS.md` wins.
 
 - **Checkpoint-first, diff-first.** After an outage, quota reset, context loss, tool reconnect, or multi-day gap, do not perform a repo-wide reconciliation by default.
 - Start by reading only `AGENTS.md`, `docs/agent-work-state.md`, the authoritative record for the requested lane, current `main` SHA, and the exact active branch/PR named by the checkpoint when applicable.
