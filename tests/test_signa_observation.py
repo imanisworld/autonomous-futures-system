@@ -46,6 +46,8 @@ def test_parse_documented_current_action_card_shape() -> None:
     assert obs.strength == 82.0
     assert obs.factor_count == 2
     assert obs.factor_conflicts == ()
+    assert obs.observation_rating == "A"
+    assert obs.observation_rating_basis == "complete_core;factor_coverage;no_conflicts"
     assert obs.entry_low == 178.23
     assert obs.entry_high == 179.0
     assert obs.stop_loss == 174.8
@@ -62,6 +64,7 @@ def test_missing_signal_fails_closed_without_legacy_fallback() -> None:
     assert obs.error == "signal_missing"
     assert obs.direction is None
     assert obs.grade is None
+    assert obs.observation_rating == "N/A"
     assert obs.targets == ()
 
 
@@ -87,6 +90,8 @@ def test_malformed_optional_values_are_not_invented() -> None:
     assert obs.entry_high is None
     assert obs.targets == (500.5,)
     assert obs.component_scores == {"trend": None}
+    assert obs.observation_rating == "C"
+    assert "factor_coverage" in str(obs.observation_rating_basis)
 
 
 def test_telemetry_fields_are_namespaced_and_non_authoritative() -> None:
@@ -102,6 +107,8 @@ def test_telemetry_fields_are_namespaced_and_non_authoritative() -> None:
     assert fields["signa_v2_confidence"] == 80.0
     assert fields["signa_v2_factor_count"] == 0
     assert fields["signa_v2_factor_conflicts"] == []
+    assert fields["signa_v2_observation_rating"] == "C"
+    assert fields["signa_v2_observation_rating_basis"].startswith("partial:")
     assert "signa_grade" not in fields
     assert "signa_score" not in fields
     assert "signa_daily_direction" not in fields
@@ -164,9 +171,12 @@ def test_video_defined_strength_and_factor_conflicts_are_observational() -> None
     assert obs.strength == 44.0
     assert obs.factor_count == 5
     assert obs.factor_conflicts == ("gamma",)
+    assert obs.observation_rating == "B"
+    assert obs.observation_rating_basis == "complete_core;factor_conflicts=1"
     fields = obs.telemetry_fields()
     assert fields["signa_v2_strength"] == 44.0
     assert fields["signa_v2_factor_count"] == 5
     assert fields["signa_v2_factor_conflicts"] == ["gamma"]
+    assert fields["signa_v2_observation_rating"] == "B"
     assert "decision" not in fields
     assert "actionable" not in fields
