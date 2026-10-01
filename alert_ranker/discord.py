@@ -143,6 +143,7 @@ def build_discord_payload(result: ScoreResult) -> dict[str, Any]:
 
     fields: list[dict[str, Any]] = [
         {"name": "Status", "value": _status_text(result, side, state), "inline": False},
+        {"name": "Trade grade", "value": _trade_grade_text(result), "inline": True},
         {"name": "Setup", "value": _setup_card_text(result), "inline": True},
         {"name": "Market check", "value": _context_card_text(result, session), "inline": True},
         {"name": "Option", "value": _contract_card_text(result, side), "inline": True},
@@ -201,6 +202,41 @@ def _status_text(result: ScoreResult, side: str, state: str) -> str:
         return f"**{label}** · no entry permission\n{score}"
     label = "Setup triggered (top score)" if state == "golden" else "Setup triggered"
     return f"**{label}**\n{score}"
+
+
+
+def _trade_grade_text(result: ScoreResult) -> str:
+    """Display-only AFS trade grade from existing validator evidence.
+
+    This grade never changes scanner score, alert eligibility, setup status,
+    contract selection, risk permission, broker state, or execution.
+    """
+    raw = result.raw
+    if not _mechanically_triggered(result):
+        return "N/A · setup not triggered"
+
+    trade_proof = str(raw.get("trade_proof_status") or "").strip().upper()
+    paper_policy_id = str(raw.get("paper_policy_id") or "").strip()
+    paper_policy = str(raw.get("paper_policy_status") or "").strip().upper()
+
+    if trade_proof not in {"", "VALID", "INCOMPLETE"}:
+        return f"F · trade proof {trade_proof.lower()}"
+
+    if paper_policy_id == POLICY_ID and paper_policy != "VALID":
+        reason = str(raw.get("paper_policy_reason") or paper_policy or "invalid").strip()
+        return f"F · contract/risk invalid ({reason})"
+
+    if paper_policy_id != POLICY_ID or paper_policy != "VALID" or not trade_proof:
+        return f"C · incomplete trade packet · scanner {result.score}/10"
+
+    if trade_proof == "INCOMPLETE":
+        return f"B · scanner {result.score}/10 · trade proof incomplete"
+
+    if result.score >= 9:
+        return f"A · scanner {result.score}/10 · trade proof valid"
+    if result.score >= 7:
+        return f"B · scanner {result.score}/10 · trade proof valid"
+    return f"C · scanner {result.score}/10 · below normal alert bar"
 
 
 def _setup_card_text(result: ScoreResult) -> str:
