@@ -2,7 +2,7 @@
 
 > **Purpose:** durable operator action tracker for futures infrastructure/safety work. This file is **not** strategy-status authority and must not override `docs/strategy-rules/Strategy_Inventory.md`, the research trial ledger, or verified VPS/runtime evidence.
 >
-> **Last repo reconciliation:** `main` `07ceaf465cf93dd29e171d1e5292de6fdf7e06d7` after merged PR #1078. Runtime facts from the 2026-09-30 reconciliation are in `docs/futures-runtime-reconciliation-2026-09-30.md`.
+> **Last repo reconciliation:** `main` `dfe97910102bc08041a8aa93e0f23b1e27c6c81e` before this closeout note. Runtime facts are in `docs/futures-runtime-reconciliation-2026-09-30.md`.
 >
 > Core rule: **No proof, no run.**
 
@@ -13,6 +13,7 @@
 - [x] Promotion cap parser rejects fractional/invalid quantities instead of truncating them (#1072).
 - [x] Six-market daily evidence reporting is on `main` for MNQ, MES, M2K, MBT, MCL, and MGC (#1068).
 - [x] Shadow daily P&L runtime copy now uses the exact #1068 file. The 2026-09-29 scratch comparison kept the same totals and added the four zero-evidence markets. One Discord smoke showed all six markets. Futures-bot was not restarted.
+- [x] Paper-collection runtime uses derived pin `b60931a6a9f8-reporter-1068-sixmarket-backport`. It shows MNQ, MES, M2K, MBT, MCL, and MGC, including zeros, on the #899 reporter. The full #1068 reporter file was not installed. Frozen-input data matched, one Discord smoke showed the six markets, and futures-bot was not restarted.
 - [x] Reconciled repo-side futures defect list has no remaining open defect from the audited set.
 - [x] No live-trading authority was created by these repo changes.
 
@@ -20,13 +21,13 @@
 
 These are ordered. Do not skip ahead.
 
-- [ ] **Read-only VPS reconciliation.** Verify exact deployed futures SHA, release manifest/fingerprint/risk hash, service PID/cwd/restart count, release integrity, deploy-lock state, current non-secret runtime posture, account-pin status, broker positions/orders, reporter pins, and current human/agent access paths.
-- [ ] **Map current access before changing it.** Record operator login path, agent accounts/restrictions, sudo/forced-command boundaries, private-network/Tailscale state if any, deploy wrappers, and provider-console break-glass path.
-- [ ] **Build replacement operator access.** Target one simple MacBook path and a phone-usable path, key-only auth, provider console retained. Do not remove old access yet.
-- [ ] **Keep agents restricted.** Prefer allowlisted/read-only audit commands; no unrestricted root/sudo simply for convenience.
-- [ ] **Wrap existing sanctioned release tooling instead of creating a competing deploy system.** Any operator wrapper must preserve exact-SHA, deploy-lock, release-integrity, posture, account-pin, rollback, and no-proof-no-run gates.
-- [ ] **Prove replacement access before lockdown.** MacBook login, phone login, provider-console recovery, agent restriction, read-only status/audit, candidate build/verify, and rollback proof must all succeed.
-- [ ] **Finish the remaining #1068 reporting surfaces.** Shadow daily P&L is installed. The paper-collection pin was not flipped: the #1068 reporter cannot import on that pinned runtime without changing `ops/evidence_registry.py` or the unit. The scheduled gate-condition report still runs from the live futures release, so it was not edited. Do not invent a new cron or edit the live release to force either one.
+- [x] **Read-only runtime identity, 2026-09-30.** Futures-bot PID `791194`, `NRestarts=0`, release `75f10e4540aa1f25b51b77c1ec2a2da40381a188`, DEMO, live trading disabled. Reporter pins and the access map are in `docs/futures-runtime-reconciliation-2026-09-30.md`. Release integrity was not re-run tonight.
+- [x] **Current access map, read only.** Re-read 2026-09-30: public SSH port 22, `PasswordAuthentication yes`, `PermitRootLogin prohibit-password`, Tailscale absent, non-root login accounts password-locked, Grok audit keys use `command=` and `restrict`, `claude-audit` has an interactive shell and no sudoers entry. MacBook root-key login stays the proven current path from the access audit. Current access stays in place.
+- [ ] **Phone SSH login.** Requires the operator. Not proven.
+- [ ] **Hetzner/provider console recovery.** Requires the operator. Not proven.
+- [ ] **Ready to test, not done tonight:** candidate build/verify, and a rollback drill. The deploy-lock script is in the live release. The recorded rollback target directory `/root/afs-releases/41ae1881655c-20260924-124607` is present. Do not run those tests without an operator window.
+- [ ] **Not authorized yet:** `PasswordAuthentication no`, root-key cleanup, converting `claude-audit` to a forced command, public SSH restriction, or old-access removal. Do not harden SSH until phone login and provider-console recovery are proven.
+- [ ] **Gate-condition #1068 runtime is deferred until the next sanctioned futures release.** The cron module runs from the immutable live release. Adopting the #1068 file would edit that tree or change the scheduler. Paper-collection and shadow daily are already installed. This is not an urgent defect.
 - [ ] **Reconcile source vs runtime.** If a futures release update is actually required after the read-only audit, freeze an exact reviewed SHA and use a separate operator-approved controlled release window. No strategy/risk/broker-rule changes ride along implicitly.
 - [ ] **Lock down old access only after replacement proof.** Then remove or restrict obsolete broad access paths, keeping documented break-glass recovery.
 
@@ -49,4 +50,4 @@ This phase is complete only when:
 - docs/handoff are updated with exact verified runtime facts;
 - no accidental live execution path or unreviewed broker/risk change was introduced.
 
-Until then: **repo source is ahead of runtime proof.**
+Until then: the access phase is not complete. Do not treat a mapped current path as permission to remove it.
