@@ -2,14 +2,14 @@
 
 > **Purpose:** durable operator action tracker for futures infrastructure/safety work. This file is **not** strategy-status authority and must not override `docs/strategy-rules/Strategy_Inventory.md`, the research trial ledger, or verified VPS/runtime evidence.
 >
-> **Last repo reconciliation:** `main` `3737d532919859960bdefe8b11a611da785327ae` after PR #1080. Runtime facts are in `docs/futures-runtime-reconciliation-2026-09-30.md`.
+> **Last repo reconciliation:** `main` `7d09c62f49ac1e5bf907e84f21e6da78be97c299` after PR #1081. Runtime facts are in `docs/futures-runtime-reconciliation-2026-09-30.md`; those facts are a dated checkpoint and require fresh read-only proof before any runtime/broker/access mutation.
 >
 > Core rule: **No proof, no run.**
 
 
 ## Immediate state — no action required now
 
-Latest read-only health pass reported **PASS — KEEP COLLECTING / NO CHANGES**:
+Latest verified read-only health pass from 2026-09-30 ET reported **PASS — KEEP COLLECTING / NO CHANGES**. Treat it as a dated checkpoint, not proof of current runtime state:
 
 - futures-bot remains on pinned release `75f10e4540aa1f25b51b77c1ec2a2da40381a188`, DEMO, live trading disabled;
 - release integrity passed; service remained one PID with zero restarts;
