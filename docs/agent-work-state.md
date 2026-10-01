@@ -10,15 +10,21 @@
 
 ## Mandatory startup gate
 
-After any outage, quota reset, context loss, reconnect, or multi-day gap:
+After any outage, quota reset, context loss, reconnect, or multi-day gap, use the cheapest safe resume path:
 
 1. Read `AGENTS.md` and this file.
-2. Read the authoritative record for the lane being touched.
-3. Fetch current `main`.
-4. Inspect related open PRs/branches/issues before creating anything.
-5. If runtime matters, verify the box separately; do not infer runtime from GitHub.
-6. Compare the requested task to **DONE / DO NOT REDO / NEXT / BLOCKED** below.
-7. First returning session after a multi-day outage is **RECONCILIATION ONLY**. No coding, deployment, cleanup, new research, or runtime mutation until this ledger is reconciled with current evidence.
+2. Fetch only the current `main` SHA.
+3. Read the authoritative record for the requested lane.
+4. If this checkpoint names an active branch/PR for the task, inspect that exact branch/PR.
+5. Compare those identifiers to this checkpoint and classify the result:
+   - **UNCHANGED:** resume from **NEXT** immediately. Do not re-audit completed work.
+   - **SCOPED DRIFT:** inspect only the changed diff/files/PRs needed to understand that drift.
+   - **INSUFFICIENT STATE:** fetch the next-smallest source needed to resolve the unknown.
+   - **SAFETY-CRITICAL DRIFT:** verify the exact runtime facts required by the proposed action before mutation.
+6. Inspect broader related PRs/branches/issues only if the scoped check shows they are relevant.
+7. Perform a full repository/runtime reconciliation only if the checkpoint is missing, contradictory, materially stale, cannot identify the active work, conflicts with an authoritative record, or scoped evidence cannot resolve a safety-critical question.
+
+A returning session is therefore **RESUME FIRST, ESCALATE ONLY AS NEEDED** — not a mandatory full reconciliation.
 
 ## Quota / context guard
 
@@ -94,8 +100,12 @@ If the agent cannot persist this file, it must return this payload verbatim-read
 
 A returning agent must not ask, “What should I redo?” It must answer:
 
-1. What changed since this checkpoint?
-2. Which items remain genuinely unresolved?
-3. What is the smallest safe next action?
+1. Did the checkpoint identifiers actually change?
+2. If yes, what changed in the smallest relevant scope?
+3. Which items remain genuinely unresolved?
+4. What is the smallest safe next action?
+5. What additional information, if any, is specifically required before that action?
+
+If more information is needed, retrieve only that information first. Broaden the search only when the narrower evidence is insufficient.
 
 If nothing changed and no operator-window task is authorized: **do nothing and keep collecting.**
