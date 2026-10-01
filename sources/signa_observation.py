@@ -196,6 +196,44 @@ def _float_or_none(value: Any) -> float | None:
 
     
 
+def _observation_rating(
+    *,
+    ok: bool,
+    direction: str | None,
+    score: float | None,
+    confidence: float | None,
+    strength: float | None,
+    factor_count: int,
+    factor_conflicts: tuple[str, ...],
+) -> tuple[str, str]:
+    """Rate evidence quality only; never trade quality or permission.
+
+    A = core fields present + factor coverage + no observed factor conflicts.
+    B = core fields present + factor coverage + one or more observed conflicts.
+    C = payload parsed but core evidence or factor coverage is incomplete.
+    N/A = observation unavailable/failed.
+    """
+    if not ok:
+        return "N/A", "unavailable"
+
+    missing: list[str] = []
+    if direction is None:
+        missing.append("direction")
+    if score is None:
+        missing.append("score")
+    if confidence is None:
+        missing.append("confidence")
+    if strength is None:
+        missing.append("strength")
+    if factor_count <= 0:
+        missing.append("factor_coverage")
+    if missing:
+        return "C", "partial:" + ",".join(missing)
+    if factor_conflicts:
+        return "B", f"complete_core;factor_conflicts={len(factor_conflicts)}"
+    return "A", "complete_core;factor_coverage;no_conflicts"
+
+
 def _factor_conflicts(
     direction: str | None,
     components: dict[str, float | None],
