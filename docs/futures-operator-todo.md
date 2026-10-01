@@ -44,12 +44,14 @@ These are ordered. Do not skip ahead.
 - [ ] **Gate-condition #1068 runtime is deferred until the next sanctioned futures release.** The cron module runs from the immutable live release. Adopting the #1068 file would edit that tree or change the scheduler. Paper-collection and shadow daily are already installed. This is not an urgent defect.
 - [ ] **Reconcile source vs runtime.** If a futures release update is actually required after the read-only audit, freeze an exact reviewed SHA and use a separate operator-approved controlled release window. No strategy/risk/broker-rule changes ride along implicitly.
 - [ ] **Lock down old access only after replacement proof.** Then remove or restrict obsolete broad access paths, keeping documented break-glass recovery.
+- [ ] **Optional cleanup — unused duplicate release `2752fe2e04bedf3e8ae9d6ffea8c594eb333b925`.** Read-only check 2026-10-01: same parent (`41ae188`) and identical git tree as the live `75f10e4`. Its `execution/tradovate_broker.py` on the box hashes identically. It was built 13 minutes after `75f10e4` went live and never promoted (not in the release history). Never promote it: switching would only restart the bot onto the same code. The rollback target stays `41ae188`. Removing the directory and the `candidate/tradovate-auth-only-41ae188` branch is an operator cleanup action for a release-maintenance window; it is not urgent.
 
 ## Separate / not blocking the VPS phase
 
 - [ ] **PR #1037 public-repo/governance audit:** keep separate from futures execution safety. Secret-discovery was clean; remaining questions concern public-history operational exposure/governance.
 - [ ] **PR #994 MNQ ORB Stage A research:** WAIT / research only. Stage B was not earned. Do not resume without an explicit research decision.
 - [ ] Continue normal paper/shadow/guarded-DEMO evidence collection under existing frozen contracts. Do not interpret more data as automatic promotion.
+- [ ] **PR #1085 shadow daily P&L report fixes** (reporting only: `--final` late-row pass, one-at-a-time view, always-shown open/never-filled counts). CI green on head `ded1f6a`; needs an independent review and then an operator merge decision. Running `--final` on the box is a separate scheduler change for a later operator decision; the bot needs no restart.
 
 ## Definition of done for this phase
 
