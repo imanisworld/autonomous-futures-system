@@ -49,6 +49,7 @@ from options_manager.validation.proof_packet_intake import check_proof_packet_in
 from .base import (
     ContractPlanSnapshot,
     ConvictionProofs,
+    ObservationRatingSnapshot,
     PlanObservation,
     PlanPolicy,
     PlanUpdate,
@@ -242,6 +243,7 @@ def update_trade_thesis_from_authorities(
     policy: PlanPolicy = PlanPolicy(),
     conviction_proofs: ConvictionProofs = ConvictionProofs(),
     signa: Optional[SignaObservation] = None,
+    observation_rating: Optional[ObservationRatingSnapshot] = None,
 ) -> CanonicalPlanProofResult:
     """Promote one scanner result into a thesis only after all proof agrees.
 
@@ -500,6 +502,7 @@ def update_trade_thesis_from_authorities(
         event_risk_clear=context_result.event_risk_clear,
         conviction_proofs=conviction_proofs,
         signa=signa,
+        observation_rating=observation_rating,
         contract_plan=contract_plan,
         risk_plan=risk_plan,
         source_references=packet.source_references,
