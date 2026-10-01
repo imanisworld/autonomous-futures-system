@@ -12,6 +12,23 @@ gate-condition surface, and the read-only access re-read are in
 reopen strategy status. The inventory still wins if this handoff disagrees
 with it.
 
+
+## Overnight operational closeout — 2026-09-30 ET
+
+Latest operator-supplied read-only health check: **PASS — KEEP COLLECTING / NO CHANGES**.
+
+This is operational provenance only; it does not change Strategy Inventory classifications.
+
+- Deployed futures release remained `75f10e4540aa1f25b51b77c1ec2a2da40381a188`; release integrity passed.
+- GitHub `main` was ahead of the pinned release. That source/runtime drift is informational and does not authorize a deployment.
+- Runtime remained Tradovate DEMO with live trading disabled, one-contract hard cap intact, and broker authentication/routing healthy.
+- Journal and broker reconciled flat with zero execution attempts/fills for the current journal day.
+- Raw forward evidence remained active for `vwap_hold`; `orb_reclaim` was stale and `vwap_rejection` quiet. Do not silently count stale/quiet arms as continuous evidence.
+- Paper-reporter verification was complete; gate-condition #1068 remains deferred until the next sanctioned futures release.
+- SSH hardening remains blocked on proof of phone SSH access and provider-console recovery.
+
+Durable next actions live in `docs/futures-operator-todo.md`. Agent resume/checkpoint state lives in `docs/agent-work-state.md`. Nothing in this closeout authorizes strategy tuning, deployment, restart, broker mutation, or live trading.
+
 ## Repository closeout handoff — 2026-09-29
 
 Current repository `main`: `715e03956f402fd553107a84125537768841d97c` after #1068.
