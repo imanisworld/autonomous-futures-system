@@ -84,7 +84,7 @@ Lock these roles. Do not invent a parallel research automation layer.
 
 | Role | Owner | Allowed | Forbidden |
 |---|---|---|---|
-| Outside research / hypotheses | Grok (when used) | Market/context discovery, alternative explanations, hypothesis proposals for human review | Declaring strategy status; launching experiments; maintaining a competing inventory or queue |
+| Research + bounded read-only triage | Grok (when used) | External research; market/context discovery; narrow repo/runtime inspection; PR/diff review; log/status analysis; defect/gap identification; documentation/checkpoint proposals; proposing small implementation changes for independent review | Deploying/restarting services; mutating runtime/env/broker/risk/execution state; independently launching experiments; changing strategy status; promoting/merging safety-sensitive changes; maintaining a competing inventory or queue |
 | Repository-aware mechanical work | Cursor | Running *already registered* trials/replays; producing reproducible artifacts under the trial ledger / experiment-spec chain | Autonomously inventing or launching new strategy experiments; continuous variant search; promotion |
 | Independent breaker / QA | Claude and/or Codex | Implementation review, execution-safety review, live/replay parity, lookahead / optimistic-fill checks, spec-vs-code match | Being the primary experiment generator; silently updating strategy status |
 | Reconciliation and next-test decisions | ChatGPT + operator (human) | Resolve contradictory evidence; decide whether another experiment is justified; approve inventory classification changes; approve progression | Autopromotion to live; agent-only status edits without operator acknowledgment |
