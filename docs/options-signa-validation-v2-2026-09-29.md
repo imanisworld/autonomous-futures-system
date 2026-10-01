@@ -45,6 +45,22 @@ The parser now records:
 - `strength`
 - `factor_count`
 - `factor_conflicts`
+- `observation_rating`
+- `observation_rating_basis`
+
+### Observation rating
+
+This is an **AFS evidence-quality rating**, not a second Signa grade and not a trade score.
+It exists only to make the observation lane easier to scan and audit:
+
+- **A** — direction, score, confidence, and strength are present; at least one factor is present; no observed factor conflicts.
+- **B** — the same core evidence is present, but one or more factor scores conflict with the published direction.
+- **C** — the payload parsed, but core evidence or factor coverage is incomplete.
+- **N/A** — the observation is unavailable or failed.
+
+The stored `observation_rating_basis` explains the mechanical reason for the letter.
+The rating cannot add to scanner score, change setup status, grant trade permission,
+change risk, rank contracts, or affect broker/order/execution behavior.
 
 These remain namespaced observational telemetry in the scanner path.
 
