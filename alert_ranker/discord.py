@@ -143,7 +143,7 @@ def build_discord_payload(result: ScoreResult) -> dict[str, Any]:
 
     fields: list[dict[str, Any]] = [
         {"name": "Status", "value": _status_text(result, side, state), "inline": False},
-        {"name": "Trade grade", "value": _trade_grade_text(result), "inline": True},
+        {"name": "AFS trade grade", "value": _trade_grade_text(result), "inline": True},
         {"name": "Setup", "value": _setup_card_text(result), "inline": True},
         {"name": "Market check", "value": _context_card_text(result, session), "inline": True},
         {"name": "Option", "value": _contract_card_text(result, side), "inline": True},
@@ -229,14 +229,15 @@ def _trade_grade_text(result: ScoreResult) -> str:
     if paper_policy_id != POLICY_ID or paper_policy != "VALID" or not trade_proof:
         return f"C · incomplete trade packet · scanner {result.score}/10"
 
+    if result.score < 7:
+        return f"C · scanner {result.score}/10 · below normal alert bar"
+
     if trade_proof == "INCOMPLETE":
         return f"B · scanner {result.score}/10 · trade proof incomplete"
 
     if result.score >= 9:
         return f"A · scanner {result.score}/10 · trade proof valid"
-    if result.score >= 7:
-        return f"B · scanner {result.score}/10 · trade proof valid"
-    return f"C · scanner {result.score}/10 · below normal alert bar"
+    return f"B · scanner {result.score}/10 · trade proof valid"
 
 
 def _setup_card_text(result: ScoreResult) -> str:
