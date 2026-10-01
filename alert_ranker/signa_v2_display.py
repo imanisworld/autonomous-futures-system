@@ -25,11 +25,14 @@ def render_signa_v2(raw: dict[str, Any]) -> str:
     strength = raw.get("signa_v2_strength")
     factor_count = raw.get("signa_v2_factor_count")
     factor_conflicts = raw.get("signa_v2_factor_conflicts") or []
+    observation_rating = raw.get("signa_v2_observation_rating")
     direction = raw.get("signa_v2_direction")
     reward_to_risk = raw.get("signa_v2_reward_to_risk")
 
     if symbol:
         parts.append(str(symbol))
+    if observation_rating and observation_rating != "N/A":
+        parts.append(f"obs rating {observation_rating}")
     if grade:
         parts.append(f"grade {grade}")
     if score is not None:
