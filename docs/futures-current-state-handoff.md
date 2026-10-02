@@ -4,6 +4,18 @@
 
 _As of 2026-09-24 (runtime and current decisions: see the 2026-09-24 blocks in `docs/futures-current-status-2026-09-22.md`, then the reconciliation note below). This is the long futures handoff. Historical audit docs remain evidence records._
 
+## Minimal futures release candidate — 2026-10-02
+
+Repository `main` includes history-only PR #1123; no file content changed in that merge.
+
+- Exact candidate: `c44d32bc4961e56fae5c5f88a976eb6783341638`.
+- Base: deployed release `489b55b91b6303c195c8e84bfcbf05ef32d1ab04`.
+- Delta: #1095 + #1103 only, exactly 8 files.
+- Candidate QA: 7359 passed, 8 skipped, 2 deselected. The deselected tests are main-relative research-governance comparisons, not runtime or #1095/#1103 regressions.
+- 1-minute 4HR path remains observation-only and returns before DecisionEngine, RiskEngine, and broker execution.
+- Candidate is **PREPARED / NOT DEPLOYED**. No build, promote, restart, env, broker, or runtime mutation occurred.
+- Next gate: after 2026-10-03 12:00Z, confirm bytecode persistence and drift-gate health read-only, then rerun deployment-safety/runtime verification before any promote action.
+
 ## Repository research closeout — 2026-10-02
 
 Current repository `main` at this checkpoint: `5d19257e3a690851c0aa580135eba66536b09ec4` after PR #1118.
