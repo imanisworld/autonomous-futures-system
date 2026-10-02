@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 import os
 import tempfile
 import threading
@@ -41,6 +42,8 @@ try:
     import fcntl
 except ImportError:  # pragma: no cover
     fcntl = None
+
+logger = logging.getLogger(__name__)
 
 ET = ZoneInfo("America/New_York")
 MAX_SEEN = 500
@@ -539,11 +542,16 @@ def _process_five_min_bar_locked(
             and current_ts is not None
         ):
             # Available only at the completed 5m bar. This file is not an order.
-            publish_4hr_observation(
-                log_dir,
-                machine,
-                source_timestamp=current_ts + timedelta(minutes=5),
-            )
+            # A failed observation write must never skip this bar's paper
+            # candidates or the Daily 2-2 lane that runs after this collector.
+            try:
+                publish_4hr_observation(
+                    log_dir,
+                    machine,
+                    source_timestamp=current_ts + timedelta(minutes=5),
+                )
+            except Exception:  # noqa: BLE001 — observation is evidence-only
+                logger.warning("4HR observation publish failed closed", exc_info=True)
         if candidate is None:
             continue
         ledger = contract.ledger_for(contract.INSTRUMENT, strategy)
