@@ -23,31 +23,40 @@ _As of 2026-10-02. Operational checklist only. The authoritative options status 
   - Output preserved at `logs/validation-20260929/options_epoch3_audit.json`.
   - This is a cohort measurement, not proof of expectancy; do not tune V1 from five priced closes.
 
-- [ ] **#1067 — 66-symbol RTH capacity**
-  - Run during RTH with real Public + Alpaca SIP/bar-context credentials.
-  - PASS only if 66/66 completes inside the existing 5-minute cadence.
-  - Require zero critical data failures, 429/rate-limit failures, timeouts, and missing/stale causal-bar failures.
-  - Preserve measured runtime and the exact tested SHA.
-  - Do not change the production watchlist on a failed or incomplete preflight.
+- [x] **#1067 — 66-symbol RTH capacity = PROVEN / PASS**
+  - Exact head `fd2809061961578f3b280eff3ab664d710099d03`; exact-head CI green.
+  - Real-provider RTH result: 66/66 in 136.834056s of 300s.
+  - Critical data failures, 429/rate-limit failures, timeouts, and missing/stale causal-bar failures: 0.
+  - Production watchlist stayed 20. No deploy. `storage_writes=0`. `alerts_sent=0`.
+  - This PASS does not authorize merge, deploy, or a 66-symbol production expansion.
 
-- [x] **#1069 — SPX/SPXW provider mapping + provider preflight COMPLETE**
+- [x] **#1069 — SPXW 0DTE provider gate = PROVEN / PASS; lane still OFF**
   - Exact head: `d7a546c789c6ff6e23713357feb2228442211965`; CI green; independent diff review found no blocking issue.
   - Root cause fixed: SPX index data uses `SPX` / `INDEX`; SPXW expirations/chains are requested from the SPX index chain and filtered to OCC root `SPXW`; equity requests stay `EQUITY`.
   - Real provider preflight PASS: SPX price present; 40 eligible expirations; tested chain 599 calls / 599 puts; 1+DTE present.
   - Lifecycle regression: 27/27 passed.
   - Lane stayed OFF; no journal, Discord, broker, deploy, or live-order side effects.
-  - 0DTE was not observable after the 2026-09-29 session ended. **Only remaining SPXW validation is to confirm 0DTE appears during the next RTH session.**
+  - Refreshed RTH SPXW proof on exact head `a265fe680b9b7e78d321a4a35f931bc4199aa22e` = **PROVEN / PASS**: `has_0dte=true`, `has_1_plus=true`, 0DTE chain 2026-10-02 with 301 calls / 301 puts. Exact-head CI green.
+  - Lane remained OFF. No deploy, journal, or Discord side effects.
+  - This PASS does not authorize merge, deploy, or SPXW enablement.
 
-## After the remaining RTH checks
+## After the proven RTH checks
 
-- [ ] Confirm #1067 66-symbol capacity PASS/FAIL during RTH.
-- [ ] Confirm SPXW 0DTE appears during RTH with no rule changes.
+- [x] #1067 66-symbol capacity PASS on `fd2809061961578f3b280eff3ab664d710099d03`. Not deployed.
+- [x] SPXW 0DTE appeared during RTH on `a265fe680b9b7e78d321a4a35f931bc4199aa22e` with the lane OFF.
 - [ ] Review all evidence together; do not infer profitability from code/CI success.
 - [ ] Decide merge/deploy posture for #1067/#1069 and close out #1071.
 - [ ] Obtain explicit operator approval before any production deployment, watchlist expansion, or SPXW enablement.
 - [ ] If 20 → 66 is activated, record the new evidence-cohort boundary only after the first clean RTH cycle; do not pre-write `V1-EPOCH-4`.
 - [ ] If SPXW is enabled, keep its evidence separate from equity `OPTIONS_PAPER_V1`; preserve 0DTE and 1+DTE as separate cohorts.
 - [ ] Update `docs/options-current-state-handoff.md` with exact runtime/release proof after activation.
+
+## Frozen 59-episode experiment — approved only with a valid merged PR; not run
+
+- [ ] `E-2026-09-25-options-212c-target-geometry-01` becomes operator-approved on `main` only once PR #1111 is valid and merged. Until then `main` stays `DRAFT` with `approved_by: null` and `approved_at: null`.
+- [x] The experiment has **not** been run.
+- [ ] After merge, one later measurement may compare `nearest_v1` with `floor_ge1r` on the frozen 59-member population. Dataset hash `1963db73bccf0fd366eaaa077bb4e9582ed453ff220f1c5e789961096f3f113c`. Population manifest hash `2ee0db9132fe6b5933bb4cc04fb6d0e1e2d63f88c6ebc9e95a42b26f49d83e4a`.
+- [ ] That measurement is coverage/activation only. It does not authorize a P&L, expectancy, strategy-promotion, deployment, or execution conclusion.
 
 ## Cleanup / non-blocking
 
