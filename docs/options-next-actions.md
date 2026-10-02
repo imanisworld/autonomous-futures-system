@@ -58,12 +58,12 @@ _As of 2026-10-02. Operational checklist only. The authoritative options status 
 - [x] Evidence bytes preserved. `runner_report.json` SHA-256 `0d47bf46fd62748e9e6b67a248d2ef6ef76aad072e6ad1d2fd43192f7f3343e8`. That digest is the manifest `results_sha256`.
 - [x] The measurement is coverage/activation only. It does not establish profitable trades, expectancy, strategy promotion, deployment, or execution authority.
 
-## Forward floor-activation outcome draft — not approved, not run
+## Forward floor-activation outcome draft — merged as DRAFT, not run
 
 - [x] No untouched retrospective holdout. Sessions through 2026-10-02 are ineligible.
 - [x] DRAFT prereg `docs/prereg-options-212c-floor-outcome-2026-10-02.md` and spec `E-2026-10-02-options-212c-floor-outcome-01` (`status=DRAFT`). Ledger event `PLANNED`.
-- [ ] Independent re-review of the registration PR after the sealed episode snapshot, direction identity, and threshold-crossing-session corrections. Do not merge, approve collection, run the study, retune `floor_ge1r`, or open forward path outcomes.
-- [ ] Do not start this trial's 2026-10-05 collection until the registration commit is on `main`.
+- [x] Independent re-review approved PR #1115 for merge as DRAFT registration only. Merge `65847295521be1ff0d6b9ef89c8fb8699aff7735`, approved head `4631812866cbbaff2077d3dece92cb8b69eae250`.
+- [ ] Do not start this trial's 2026-10-05 collection. First implement and independently validate the prospective seal-capture path against the frozen contract.
 - [ ] Stage B stays **NOT EVALUATED** until a causal historical chain source exists. Do not backfill current quotes.
 
 ## Cleanup / non-blocking
