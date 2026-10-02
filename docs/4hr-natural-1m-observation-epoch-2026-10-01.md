@@ -1,6 +1,6 @@
 # 4HR natural-1m observation epoch
 
-Status: **CODE ONLY — EPOCH NOT STARTED**
+Status: **OBSERVER ON — CANONICAL EPOCH NOT STARTED**
 
 This note records why the first natural-1m deployment produced no 4HR evidence,
 and when a later sample is allowed to count. It does not change the evidence
@@ -37,12 +37,12 @@ expectancy sample, and not something to backfill. Do not convert historical
 
 The canonical forward sample starts only after all of the following are true:
 
-1. The pinned futures release contains the observation-only wiring:
-   `context/four_hr_observation.py` published by the wide-stop forward
-   collector, and read by `evaluate_armed_4hr_touch()`. **Met 2026-10-02
-   03:43Z:** release `489b55b91b6303c195c8e84bfcbf05ef32d1ab04` (#1092 with the
-   arm-window race fix, plus #1094's publish fail-safe). Conditions 3–5 are
-   still open; the observer flag is OFF, so the epoch has not started.
+1. The pinned futures release contains both the observation-only wiring **and the current contract-month guard**:
+   `context/four_hr_observation.py` published by the wide-stop forward collector,
+   `evaluate_armed_4hr_touch()` reading it, and #1103's `contract_check` /
+   mismatch-blocking behavior in `context/one_min_trigger.py`.
+   Release `489b55b91b6303c195c8e84bfcbf05ef32d1ab04` contains #1092/#1094 but
+   predates #1103, so this condition is **not yet met** for the canonical epoch.
 2. `strat_4hr_retrigger` is still absent from `enabled_concepts`.
 3. `ONE_MIN_TRIGGER_ENABLED=true` and
    `EXPECTED_PROOF_ONE_MIN_TRIGGER_ENABLED=true`. The 4HR observer only runs
@@ -60,6 +60,21 @@ before that verification does not count.
 
 The observer flag defaults off. Until it is explicitly enabled and pinned,
 the corrected code still emits no natural-1m 4HR evidence.
+
+
+### 2026-10-02 observer-on interval before #1103
+
+Grok's read-only runtime check reported the 1-minute and 4HR observer pins ON at
+`2026-10-02T15:17:19Z`, with DEMO flat, live trading off, no restart-created
+orders, and the strategy still absent from the executable strategy list.
+
+That timestamp is **not** the canonical evidence-epoch start because the running
+release is still `489b55b`, which cannot emit #1103's `contract_check` fields.
+Any natural-1m 4HR touch written before a release carrying #1103 is provisional
+and must not be counted or backfilled into the canonical sample.
+
+The canonical epoch timestamp is the first read-only verification after a
+release carrying #1103 is deployed and conditions 2–5 below are also proven.
 
 ## What the sample can and cannot see
 

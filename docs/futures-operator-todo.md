@@ -2,12 +2,28 @@
 
 > **Purpose:** durable operator action tracker for futures infrastructure/safety work. This file is **not** strategy-status authority and must not override `docs/strategy-rules/Strategy_Inventory.md`, the research trial ledger, or verified VPS/runtime evidence.
 >
-> **Repo reconciliation base:** `main` `90fc6f2` (PR #1098, 2026-10-02). Futures box release since 2026-10-02 03:43Z: `489b55b91b6303c195c8e84bfcbf05ef32d1ab04`. Fetch current `main` rather than treating this stored SHA as current. Runtime facts are in `docs/futures-runtime-reconciliation-2026-09-30.md`; those facts are a dated checkpoint and require fresh read-only proof before any runtime/broker/access mutation.
+> **Repo reconciliation base:** `main` `a2dbac1424f92df12ee6255b354ecfbd8035a09e` (PR #1107, 2026-10-02). Futures box release since 2026-10-02 03:43Z: `489b55b91b6303c195c8e84bfcbf05ef32d1ab04`. Fetch current `main` rather than treating this stored SHA as current. The freshest runtime facts are checkpointed in `docs/agent-work-state.md`; older reconciliation notes remain dated provenance and require fresh read-only proof before any runtime/broker/access mutation.
 >
 > Core rule: **No proof, no run.**
 
 
 ## Last verified runtime checkpoint — no automatic action
+
+**2026-10-02 15:17Z: observer enabled on release `489b55b`; canonical #1103 epoch still NOT started.**
+
+- Grok's read-only pass reported the generic 1-minute and 4HR observer pins ON and matching expected-proof pins; live trading OFF; Tradovate DEMO flat; no restart-created orders; journal advancing after restart.
+- `LOG_DIR=/root/afs-shared/logs` is now proven, clearing #1095's path prerequisite.
+- #1103 is merged on `main` but absent from deployed `489b55b`. Because #1103 adds the contract-month `contract_check`/mismatch-blocking behavior, any pre-#1103 4HR natural-1m touches are provisional/non-counting.
+- The canonical epoch begins only after a release carrying #1103 is deployed and the read-only pin/posture/no-order check is repeated.
+- #1107 is merged source-only; standalone watcher/push-relay server copies still require a separate operator-approved reinstall.
+
+**2026-10-02 14:45Z: release-drift remediation verified; live release unchanged at `489b55b91b6303c195c8e84bfcbf05ef32d1ab04`.**
+
+- Repo fix #1101 plus operator box drop-ins/cron setting stopped the known bytecode writers; ten release-tree `__pycache__` directories were removed.
+- Integrity with the shared environment loaded returned **OK, 1632 files** and remained clean after the 14:34Z feed-watchdog run.
+- futures-bot PID `1327346` remained stable; RSS about 324 MiB at 14:31Z matched the expected plateau.
+
+The next persistence confirmation remains read-only: after the 2026-10-03 12:00Z cron jobs, verify no release-tree `__pycache__` and confirm the next drift-gate result is OK.
 
 **2026-10-02 03:43Z: release `489b55b91b6303c195c8e84bfcbf05ef32d1ab04` promoted** (operator GO; `scripts/atomic_release.sh` build → verify → promote). Read-only proof 03:43–03:46Z:
 
@@ -59,9 +75,9 @@ These are ordered. Do not skip ahead.
     - `TRADOVATE_ENV` exactly `demo`.
     - `/root/afs-shared/.env` unchanged since the 2026-09-30 start.
   - [x] Integrity enforcement: promote's unit drop-in sets `RELEASE_INTEGRITY_ENFORCED=true` and `PYTHONDONTWRITEBYTECODE=1`. The live release had no `__pycache__` after startup.
-  - [ ] `LOG_DIR=/root/afs-shared/logs`: still unproven. It is only needed for #1095, which is **not** in `489b55b`. Prove it before the release that carries #1095.
-- [ ] **4HR natural-1m observation epoch.** #1092/#1094 are deployed in `489b55b`, but the observer flag is OFF, so no epoch and no natural-1m evidence yet. Follow `docs/4hr-natural-1m-observation-epoch-2026-10-01.md`: both flags, both `EXPECTED_PROOF_` pins, then an operator read-only verification whose time starts the epoch. Until then, 4HR MNQ has 0 prospective fills and no natural-1m evidence.
-- [ ] **Confirm the futures-bot memory plateau after the `489b55b` restart.** The watcher fired `memory_critical` at 03:43:45Z and `memory_warning` at 03:46Z. Both came from growth projected during startup. Read-only readings: RSS 147 MiB (03:43:45Z), 244 MiB (03:46Z), 252 MiB (03:49:29Z). The warning line is about 1,029 MiB and the critical line about 1,221 MiB; MemAvailable was 1,252 MiB. Release `5115b78` showed the same startup alarm and then levelled off near 360 MiB. Re-read after a full session. Expect about 350–400 MiB; treat steady growth past about 500 MiB as a possible leak.
+  - [x] `LOG_DIR=/root/afs-shared/logs`: proven from the running futures-bot on 2026-10-02. #1095 remains undeployed and still needs exact-SHA review + separate deploy GO.
+- [ ] **4HR natural-1m canonical observation epoch.** Observer pins were enabled at 15:17:19Z on release `489b55b`, but #1103 is absent from that release. Treat pre-#1103 touches as provisional/non-counting. After an exact reviewed release carrying #1103 is deployed, repeat the read-only pin/posture/no-order verification; that timestamp is the canonical epoch start.
+- [x] **Confirm the futures-bot memory plateau after the `489b55b` restart.** Read-only follow-up at 14:31Z showed PID `1327346` unchanged and RSS about 324 MiB, consistent with the expected post-startup plateau. The earlier `memory_critical`/`memory_warning` events were startup projections, not evidence of continuing unbounded growth.
 - [ ] **Options-scanner memory cap (needs an operator decision; not urgent).** The watcher tick at 2026-10-02 03:46Z showed `options-scanner` (pid `3901845`, release `47ae01ac`) with RSS 10.8 MiB, swap 470.5 MiB, and cgroup `memory.events` `max=1301`, `sock_throttled=8170`, `oom_kill=0`. Its unit has `MemoryMax=350M`. The working set is now about 480 MiB, so the kernel keeps it in swap instead of OOM-killing it, as it did before swap existed. The `swap_pressure_warning` events on 2026-10-01 ran 14:16–20:51Z, about RTH. That matches the timing but is not proof. Daily scan counts were steady from 2026-09-24 to 10-01 (3,087–3,369), so no skipped cycles are visible. Per-scan latency was not measured, because `options_scanner.sqlite` stores only a row timestamp and the read-only wrapper cannot query it. Options, each a separate operator GO: raise `MemoryMax` (about 600M) with a scanner-only restart, or reduce the scanner's footprint.
 - [ ] **Lock down old access only after replacement proof.** Then remove or restrict obsolete broad access paths, keeping documented break-glass recovery.
 - [ ] **Optional cleanup — unused duplicate release `2752fe2e04bedf3e8ae9d6ffea8c594eb333b925`.** Read-only check 2026-10-01: same parent (`41ae188`) and identical git tree as the live `75f10e4`. Its `execution/tradovate_broker.py` on the box hashes identically. It was built 13 minutes after `75f10e4` went live and never promoted (not in the release history). Never promote it: switching would only restart the bot onto the same code. Since 2026-10-02 the rollback target is `75f10e4`. Removing the directory and the `candidate/tradovate-auth-only-41ae188` branch is an operator cleanup action for a release-maintenance window; it is not urgent.
