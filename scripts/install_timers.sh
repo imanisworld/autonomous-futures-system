@@ -26,6 +26,8 @@ After=network.target
 Type=oneshot
 WorkingDirectory=$REPO
 EnvironmentFile=$REPO/.env
+# The immutable release rejects __pycache__. This applies to the Python child too.
+Environment=PYTHONDONTWRITEBYTECODE=1
 ExecStart=/bin/bash -c 'cd $REPO && git pull && $VENV $REPO/scripts/sync_news_calendar.py --apply && systemctl restart futures-bot'
 StandardOutput=journal
 StandardError=journal
@@ -53,6 +55,8 @@ After=network.target
 Type=oneshot
 WorkingDirectory=$REPO
 EnvironmentFile=/root/afs-shared/.env
+# The immutable release rejects __pycache__. Keep this Python process from writing any.
+Environment=PYTHONDONTWRITEBYTECODE=1
 ExecStart=$VENV $REPO/scripts/feed_watchdog.py
 StandardOutput=journal
 StandardError=journal

@@ -33,3 +33,47 @@ def test_feed_watchdog_installer_uses_shared_environment_file():
     feed_block = installer.split("# ─── 4. Feed watchdog", 1)[1]
     assert "EnvironmentFile=/root/afs-shared/.env" in feed_block
     assert "EnvironmentFile=$REPO/.env" not in feed_block
+
+
+def _service_bodies(installer: str) -> dict[str, str]:
+    bodies: dict[str, str] = {}
+    marker = "cat > /etc/systemd/system/"
+    cursor = 0
+    while True:
+        start = installer.find(marker, cursor)
+        if start < 0:
+            break
+        name_start = start + len(marker)
+        name_end = installer.find(" << EOF", name_start)
+        name = installer[name_start:name_end]
+        body_start = name_end + len(" << EOF\n")
+        body_end = installer.find("\nEOF", body_start)
+        bodies[name] = installer[body_start:body_end]
+        cursor = body_end + 4
+    return bodies
+
+
+def test_immutable_release_python_timers_cannot_write_bytecode():
+    """#1056 fails a release that contains __pycache__. Every Python process this
+    installer starts inside /root/autonomous-futures-system must be told not to
+    write bytecode. Timer cadence stays on the existing schedules.
+    """
+    installer = (ROOT / "scripts/install_timers.sh").read_text()
+    bodies = _service_bodies(installer)
+    python_services = {
+        name: body
+        for name, body in bodies.items()
+        if name.endswith(".service")
+        and "$VENV" in body
+        and "$REPO" in body
+    }
+    assert set(python_services) == {"calendar-sync.service", "feed-watchdog.service"}
+    for name, body in python_services.items():
+        assert "Environment=PYTHONDONTWRITEBYTECODE=1" in body, name
+        assert body.index("Environment=PYTHONDONTWRITEBYTECODE=1") < body.index("ExecStart=")
+
+    assert "OnCalendar=*-*-01 06:00:00 UTC" in bodies["calendar-sync.timer"]
+    assert "OnBootSec=3min" in bodies["feed-watchdog.timer"]
+    assert "OnUnitActiveSec=5min" in bodies["feed-watchdog.timer"]
+    assert "ExecStart=$VENV $REPO/scripts/feed_watchdog.py" in python_services["feed-watchdog.service"]
+    assert "sync_news_calendar.py --apply" in python_services["calendar-sync.service"]
