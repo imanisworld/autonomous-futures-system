@@ -91,6 +91,13 @@ These are ordered. Do not skip ahead.
 - [x] **Install the #1085 report on the box.** The operator installed it on 2026-10-01 at 02:45Z: the standalone `/root/afs-shared` copy was updated, and the 12:00Z `--final` cron was added; no bot restart. Both runs are confirmed by file timestamps in `/root/afs-shared/logs` (read-only, 2026-10-02). `shadow_daily_pnl_2026-09-30_final.json` was written 2026-10-01 12:00Z, and `shadow_daily_pnl_2026-10-01.json` was written 22:10Z.
 - [ ] **Compare the first `--final` run by hand** (`shadow_daily_pnl_2026-09-30_final.json`) against that day's first-pass JSON. Not done yet.
 
+## Account admission — research only, not a runtime change
+
+Rebased onto `d04cd9a`. This section does not revise the 4HR epoch or the runtime checkpoint above.
+
+- [x] **MNQ overlay, unscored.** `research/mnq_account_admission_overlay.py` keeps the frozen capacity rules and applies the $150 journal-day loss rule. Drawdown stays unevaluated unless a sourced starting balance and peak are passed, and those then move only from accepted resolutions. Draft: `docs/prereg-mnq-account-admission-overlay-DRAFT-2026-10-02.md`. Do not score it, and do not run prereg #929, until that draft is approved.
+- [x] **M2K / MGC / MCL / MBT.** Keep collecting. Do not expand the six-market path. MES waits.
+
 ## Definition of done for this phase
 
 This phase is complete only when:
