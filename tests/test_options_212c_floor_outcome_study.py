@@ -329,9 +329,8 @@ def test_touch_timeout_and_data_invalid_paths() -> None:
 
     bad_identity = json.loads(timeout_artifact.body)
     bad_identity["episodes"][0]["episode_id"] = "tampered"
-    invalid_identity = score_session_record(bad_identity)["rows"][0]
-    assert invalid_identity["outcome"] == DATA_INVALID
-    assert "snapshot_identity_invalid" in invalid_identity["flags"]
+    with pytest.raises(StudyContractError, match="snapshot_identity_invalid"):
+        score_session_record(bad_identity)
 
 
 def test_session_score_rejects_malformed_nonactivated_population_row() -> None:
