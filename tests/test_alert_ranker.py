@@ -22,6 +22,7 @@ from alert_ranker.market_data import (
     create_market_data_client,
 )
 from alert_ranker.scanner import OptionsScanner
+from alert_ranker.scanner_legacy import _LEGACY_SIGNA_REFRESH_LIMIT
 from alert_ranker.scorer import score_setup
 from alert_ranker.storage import ScanStorage
 from alert_ranker.tastytrade_client import TastytradeClient, parse_iv_rank
@@ -854,6 +855,116 @@ def test_legacy_signa_cache_miss_does_not_block_critical_fetch(tmp_path):
     assert payload["signa_error"] == "observational_cache_miss"
     assert payload["signa_cached"] is False
     assert signa.fetch_calls == 1
+    assert scanner._signa_refresh_threads == set()
+    assert scanner._signa_refresh_symbols == set()
+
+
+def _bounded_signa_scanner(tmp_path, signa):
+    cfg = scanner_config(tmp_path)
+    object.__setattr__(cfg, "signa_api_enabled", True)
+    storage = ScanStorage(cfg.sqlite_path)
+    tasty = TastytradeClient(cfg, client=httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(500))))
+    discord = DiscordAlerter(cfg, storage, client=httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(204))))
+    return OptionsScanner(cfg, tasty, storage, discord, signa_client=signa)
+
+
+class _BlockingCachedSigna:
+    def __init__(self):
+        self.fetch_calls = 0
+        self.lock = threading.Lock()
+        self.started = threading.Event()
+        self.at_limit = threading.Event()
+        self.overflow = threading.Event()
+        self.release = threading.Event()
+
+    def cached_signal(self, symbol: str, timeframe: str = "1d"):
+        return None
+
+    def fetch_signal(self, symbol: str):
+        with self.lock:
+            self.fetch_calls += 1
+            self.started.set()
+            if self.fetch_calls >= _LEGACY_SIGNA_REFRESH_LIMIT:
+                self.at_limit.set()
+            if self.fetch_calls > _LEGACY_SIGNA_REFRESH_LIMIT:
+                self.overflow.set()
+        self.release.wait(timeout=5)
+        return SignaSignal(symbol=symbol, ok=False, error="ReadTimeout")
+
+
+def _join_signa_refreshes(scanner) -> None:
+    for thread in list(scanner._signa_refresh_threads):
+        thread.join(timeout=2)
+
+
+def test_repeated_signa_misses_for_one_symbol_stay_one_in_flight(tmp_path):
+    signa = _BlockingCachedSigna()
+    scanner = _bounded_signa_scanner(tmp_path, signa)
+
+    async def _twice():
+        first = await scanner._fetch_signa_context("SPY", {})
+        second = await scanner._fetch_signa_context("SPY", {})
+        return first, second
+
+    try:
+        first, second = asyncio.run(asyncio.wait_for(_twice(), timeout=1.0))
+        assert signa.started.wait(timeout=2)
+    finally:
+        signa.release.set()
+        _join_signa_refreshes(scanner)
+
+    assert first["signa_error"] == "observational_cache_miss"
+    assert second["signa_error"] == "observational_cache_miss"
+    assert signa.fetch_calls == 1
+    assert signa.overflow.is_set() is False
+    assert scanner._signa_refresh_threads == set()
+    assert scanner._signa_refresh_symbols == set()
+
+
+def test_cold_66_symbol_signa_burst_is_bounded_and_does_not_block(tmp_path):
+    assert 1 <= _LEGACY_SIGNA_REFRESH_LIMIT <= 4
+    signa = _BlockingCachedSigna()
+    scanner = _bounded_signa_scanner(tmp_path, signa)
+    # Keep the tail out of the contract-month strip set so 66 names stay 66 symbols.
+    alphabet = "ABCDEFGIJKLNOPQRSTVWXY"
+    symbols = [
+        f"N{alphabet[i // len(alphabet)]}{alphabet[i % len(alphabet)]}"
+        for i in range(66)
+    ]
+
+    async def _burst():
+        return await asyncio.gather(*(scanner._fetch_signa_context(symbol, {}) for symbol in symbols))
+
+    try:
+        payloads = asyncio.run(asyncio.wait_for(_burst(), timeout=1.0))
+        assert signa.at_limit.wait(timeout=2)
+        assert signa.overflow.wait(timeout=0.2) is False
+    finally:
+        signa.release.set()
+        _join_signa_refreshes(scanner)
+
+    started = [item for item in payloads if item["signa_error"] == "observational_cache_miss"]
+    deferred = [item for item in payloads if item["signa_error"] == "observational_refresh_deferred"]
+    assert len(started) == _LEGACY_SIGNA_REFRESH_LIMIT
+    assert len(deferred) == 66 - _LEGACY_SIGNA_REFRESH_LIMIT
+    assert signa.fetch_calls == _LEGACY_SIGNA_REFRESH_LIMIT
+    assert len(scanner._signa_refresh_threads) == 0
+    assert len(scanner._signa_refresh_symbols) == 0
+    assert all(item["signa_cached"] is False for item in payloads)
+
+
+def test_deferred_signa_refresh_does_not_change_trade_score():
+    now = datetime(2026, 5, 29, 10, 0, tzinfo=ZoneInfo("America/New_York"))
+    context = setup_payload(ticker="SPY")
+    clean = score_setup(context, now=now)
+    deferred = score_setup(
+        {**context, "signa_error": "observational_refresh_deferred", "signa_grade": "A", "signa_score": 99},
+        now=now,
+    )
+
+    assert deferred.components["signa"] == 0
+    assert deferred.score == clean.score
+    assert deferred.direction == clean.direction
 
 
 def test_legacy_signa_cache_hit_skips_network_and_keeps_score_at_zero(tmp_path):

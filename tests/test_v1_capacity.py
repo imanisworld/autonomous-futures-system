@@ -142,6 +142,31 @@ def test_signa_timeout_is_recorded_and_does_not_fail_capacity_proof():
     assert aapl.timed_out is False
 
 
+def test_deferred_signa_refresh_is_telemetry_and_does_not_pass_a_bad_bar():
+    clock = FakeClock()
+    rows = {
+        "AAPL": _ok(signa_error="observational_refresh_deferred"),
+        "MSFT": {
+            "price": 200.0,
+            "market_data_error": None,
+            "bar_context_available": False,
+            "bar_context_reason": "incomplete_session",
+            "missing_bar_count": 2,
+            "signa_error": "observational_refresh_deferred",
+        },
+    }
+    scanner = FakeScanner(clock, rows)
+    report = _run(scanner, ["AAPL", "MSFT"], clock, budget=20.0)
+
+    assert report.verdict == "FAIL"
+    assert report.critical_failures == 1
+    assert report.missing_bar_symbols == ("MSFT",)
+    aapl = next(item for item in report.results if item.ticker == "AAPL")
+    assert aapl.critical_ok is True
+    assert aapl.signa_error == "observational_refresh_deferred"
+    assert "AAPL" in report.signa_error_symbols
+
+
 def test_market_and_bar_timeouts_still_fail_capacity_proof():
     clock = FakeClock()
     rows = {

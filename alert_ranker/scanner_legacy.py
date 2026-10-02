@@ -40,6 +40,11 @@ from .scorer import ScoreResult, is_ny_open, score_setup
 from .storage import ScanStorage
 from sources.signa_client import SignaClient
 
+# Observational legacy Signa stays off the quote/bar path. A cold 66-symbol
+# cycle may miss every cache; only this many network refreshes run at once.
+# Extra misses are dropped, not queued, so a failure storm cannot grow.
+_LEGACY_SIGNA_REFRESH_LIMIT = 2
+
 
 @dataclass(frozen=True)
 class ScanOutcome:
@@ -71,7 +76,9 @@ class OptionsScanner:
         self.bar_context = bar_context
         self.last_run_at: str | None = None
         self.last_skip_reason: str | None = None
+        self._signa_refresh_lock = threading.Lock()
         self._signa_refresh_threads: set[threading.Thread] = set()
+        self._signa_refresh_symbols: set[str] = set()
 
     def is_market_hours(self, now: datetime | None = None) -> bool:
         current = now or datetime.now(ZoneInfo(self.config.timezone))
@@ -803,10 +810,17 @@ class OptionsScanner:
             cached = peek(symbol)
             if cached is not None:
                 return self._signa_fields_from_signal(symbol, cached)
-            self._schedule_legacy_signa_refresh(client, symbol)
+            status = self._schedule_legacy_signa_refresh(client, symbol)
+            # A started or already-running refresh is a cache miss. A full pool
+            # drops the refresh and records that; it does not wait or queue.
+            signa_error = (
+                "observational_refresh_deferred"
+                if status == "deferred"
+                else "observational_cache_miss"
+            )
             return {
                 "signa_symbol": symbol,
-                "signa_error": "observational_cache_miss",
+                "signa_error": signa_error,
                 "signa_cached": False,
             }
         signal = await asyncio.to_thread(client.fetch_signal, symbol)
@@ -833,22 +847,49 @@ class OptionsScanner:
             **provenance,
         }
 
-    def _schedule_legacy_signa_refresh(self, client: Any, symbol: str) -> None:
-        """Refresh legacy Signa after this cycle. Daemon so the scan clock does not join it."""
+    def _schedule_legacy_signa_refresh(self, client: Any, symbol: str) -> str:
+        """Start at most one bounded background refresh. Never queues or blocks.
+
+        ``fetch_signal`` still owns the account 429/backoff guard. This method
+        only decides whether that call is allowed to run.
+        Returns ``started``, ``in_flight``, or ``deferred``.
+        """
+        key = (symbol or "").strip().upper()
+        if not key:
+            return "deferred"
 
         def _refresh() -> None:
             try:
-                client.fetch_signal(symbol)
+                client.fetch_signal(key)
             except Exception:
                 return
+            finally:
+                with self._signa_refresh_lock:
+                    self._signa_refresh_symbols.discard(key)
+                    self._signa_refresh_threads.discard(thread)
 
-        thread = threading.Thread(
-            target=_refresh,
-            name=f"signa-observational-{symbol}",
-            daemon=True,
-        )
-        self._signa_refresh_threads.add(thread)
-        thread.start()
+        with self._signa_refresh_lock:
+            finished = {item for item in self._signa_refresh_threads if not item.is_alive()}
+            self._signa_refresh_threads.difference_update(finished)
+            if key in self._signa_refresh_symbols:
+                return "in_flight"
+            if len(self._signa_refresh_symbols) >= _LEGACY_SIGNA_REFRESH_LIMIT:
+                return "deferred"
+            thread = threading.Thread(
+                target=_refresh,
+                name=f"signa-observational-{key}",
+                daemon=True,
+            )
+            self._signa_refresh_symbols.add(key)
+            self._signa_refresh_threads.add(thread)
+        try:
+            thread.start()
+        except Exception:
+            with self._signa_refresh_lock:
+                self._signa_refresh_symbols.discard(key)
+                self._signa_refresh_threads.discard(thread)
+            return "deferred"
+        return "started"
 
     def _signa_symbol_for(self, ticker: str) -> str:
         root = (ticker or "").split(":")[-1].upper().strip()
