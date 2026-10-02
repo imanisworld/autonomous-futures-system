@@ -6,10 +6,25 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import date, timedelta
 from pathlib import Path
 
+from alert_ranker.session_calendar import nyse_session_for
+from ops.options_212c_floor_outcome_monitor import (
+    ACTIVATION_CAP,
+    PATH_RECORD_INTEGRITY,
+    PATH_RECORD_ROOT,
+    PATH_RECORD_VERSION,
+    READOUT_FIELDS,
+    SESSION_CAP,
+    STUDY_ONLY_METRICS,
+    STUDY_SCORER_VERSION,
+    sealed_path_record_relpath,
+    study_readout,
+)
 from ops.research_experiment_runner import (
     classify_experiment_result,
+    compute_metrics,
     discover_specs,
     execute_experiment,
     run_validation,
@@ -67,6 +82,7 @@ def test_entry_gap_and_blind_readout_are_frozen() -> None:
     spec = _draft()
     prereg = (ROOT / spec["prereg_path"]).read_text(encoding="utf-8")
     execution = json.dumps(spec["execution"])
+    held = "\n".join(spec["held_constant"])
     assert "measured_entry_price = first_sight_price" in prereg
     assert "measured_entry_price = first_sight_price" in execution
     assert "entry_trigger" in spec["execution"]["entry_logic"]
@@ -76,17 +92,148 @@ def test_entry_gap_and_blind_readout_are_frozen() -> None:
         "opens beyond Target 1",
         "beyond Target 2",
         "gap_or_range_spans_stop_and_target",
-        "NYSE sessions elapsed",
-        "cumulative `floor_ge1r` activation count",
+        "sessions_elapsed",
+        "stop_condition_met",
+        "activation_cap",
+        "session_cap",
+        STUDY_SCORER_VERSION,
+        PATH_RECORD_VERSION,
+        PATH_RECORD_ROOT,
+        "DATA_INVALID",
         "INSUFFICIENT SAMPLE",
         "DESCRIPTIVE MEASUREMENT",
         "NOT EVALUATED",
+        "blocked until",
     ):
         assert phrase in prereg
-    assert "sessions elapsed" in spec["notes"]
-    assert "cumulative floor_ge1r activation count" in spec["notes"]
+    assert "cumulative `floor_ge1r` activation count" not in prereg
+    assert "out-v0.1 outcome semantics are held constant" not in prereg
+    assert STUDY_SCORER_VERSION in spec["data"]["dataset_id"]
+    assert "out-v0.1" not in spec["data"]["dataset_id"]
+    assert "not an input" in spec["data"]["source"]
+    assert "cov-v0.1 / ep-v0.1 / out-v0.1" not in held
+    assert STUDY_SCORER_VERSION in held
+    assert "stop_condition_met" in spec["notes"]
+    assert "cumulative floor_ge1r activation count" not in spec["notes"]
     assert "confirmatory edge test" in spec["notes"]
+    assert "Approval and scoring are blocked" in spec["notes"]
     assert spec["acceptance_criteria"] is None
+    assert set(STUDY_ONLY_METRICS).issubset(spec["required_metrics"])
+
+
+def _episode(session_date: str, *, symbol: str = "AAPL", gate: str = "WOULD_OTHERWISE_QUALIFY", bar: str = "14:00:00+00:00") -> dict:
+    return {
+        "family": "STRAT_212_CONTINUATION",
+        "symbol": symbol,
+        "session_date": session_date,
+        "first_bar_start": f"{session_date}T{bar}",
+        "gate_bucket_floor": gate,
+        "direction": "LONG",
+        "views": [{"outcome": "TARGET_FIRST", "close_r": 3.0}],
+        "realized_r": 3.0,
+    }
+
+
+def test_readout_hides_activation_path_and_outcome_fields() -> None:
+    sessions = ["2026-10-03", "2026-10-04", "2026-10-05", "2026-09-15"]
+    quiet = study_readout(sessions, [])
+    loud = study_readout(
+        sessions,
+        [
+            _episode("2026-10-05"),
+            _episode("2026-10-05"),
+            _episode("2026-10-05", symbol="MSFT", bar="15:00:00+00:00", gate="LATE_AT_FIRST_SIGHT"),
+            _episode("2026-09-15", symbol="NVDA"),
+        ],
+    )
+    assert quiet == loud
+    assert quiet == {
+        "sessions_elapsed": 1,
+        "stop_condition_met": False,
+        "stop_condition": None,
+    }
+    assert set(quiet) == set(READOUT_FIELDS)
+    rendered = json.dumps(quiet)
+    for hidden in ("AAPL", "TARGET_FIRST", "LONG", "realized_r", "activation"):
+        assert hidden not in rendered
+
+
+def _eligible_dates(count: int) -> list[str]:
+    found: list[str] = []
+    day = date(2026, 10, 5)
+    while len(found) < count:
+        if nyse_session_for(day) is not None:
+            found.append(day.isoformat())
+        day += timedelta(days=1)
+    return found
+
+
+def test_readout_names_the_stopping_condition_without_a_count() -> None:
+    one_session = ["2026-10-05"]
+    below = [
+        _episode("2026-10-05", bar=f"14:{index:02d}:00+00:00")
+        for index in range(ACTIVATION_CAP - 1)
+    ]
+    at_cap = below + [_episode("2026-10-05", bar="15:30:00+00:00")]
+    assert study_readout(one_session, below)["stop_condition_met"] is False
+    fired = study_readout(one_session, at_cap)
+    assert fired["sessions_elapsed"] == 1
+    assert fired["stop_condition_met"] is True
+    assert fired["stop_condition"] == "activation_cap"
+    assert str(ACTIVATION_CAP) not in json.dumps(fired)
+
+    almost = _eligible_dates(SESSION_CAP - 1)
+    capped_days = _eligible_dates(SESSION_CAP)
+    assert study_readout(almost, [])["stop_condition_met"] is False
+    capped = study_readout(capped_days, [])
+    assert capped["sessions_elapsed"] == SESSION_CAP
+    assert capped["stop_condition"] == "session_cap"
+    assert date(2026, 11, 26).isoformat() not in capped_days
+    assert all(date.fromisoformat(day).weekday() < 5 for day in capped_days)
+
+    both = study_readout(capped_days, at_cap)
+    assert both["stop_condition"] == "activation_cap_and_session_cap"
+
+
+def test_sealed_path_contract_is_frozen_and_has_no_reader() -> None:
+    assert sealed_path_record_relpath("2026-10-05") == (
+        f"{PATH_RECORD_ROOT}/2026-10-05.json"
+    )
+    assert "sha256" in PATH_RECORD_INTEGRITY.lower() or "SHA-256" in PATH_RECORD_INTEGRITY
+    assert "DATA_INVALID" in PATH_RECORD_INTEGRITY
+    source = (ROOT / "ops/options_212c_floor_outcome_monitor.py").read_text(encoding="utf-8")
+    assert "open(" not in source
+    assert "read_text" not in source
+    assert "coverage_outcomes" not in source
+
+
+def test_generic_runner_cannot_complete_when_study_metrics_are_absent() -> None:
+    spec = _draft()
+    metrics = compute_metrics(
+        [
+            {
+                "setup_detected": True,
+                "evaluated": True,
+                "activated": True,
+                "entered": True,
+                "completed": True,
+                "result": 1.0,
+                "mae": 0.2,
+                "mfe": 1.0,
+                "exit_reason": "target",
+            }
+        ],
+        spec["required_metrics"],
+    )
+    missing = set(metrics["_missing_required"])
+    assert set(STUDY_ONLY_METRICS).issubset(missing)
+    label, details = classify_experiment_result(
+        spec,
+        {"_missing_required": sorted(missing)},
+        {"_missing_required": sorted(missing)},
+    )
+    assert label == "INVALID EXPERIMENT"
+    assert details["reason"] == "required metrics missing"
 
 
 def test_null_criteria_cannot_classify_as_supported() -> None:

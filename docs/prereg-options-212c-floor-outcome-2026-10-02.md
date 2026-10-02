@@ -36,26 +36,32 @@ Eligible sessions are NYSE regular sessions on or after **2026-10-05**. Collecti
 
 ## Blind collection contract
 
-Until the stopping rule is met, the only study readout an operator or agent may view is:
+Until the one look, the only human-visible study readout is the return value of `study_readout` in `ops/options_212c_floor_outcome_monitor.py`:
 
-- NYSE sessions elapsed, as one count
-- cumulative `floor_ge1r` activation count, as one count
+- `sessions_elapsed`: the count of completed eligible NYSE sessions
+- `stop_condition_met`: `true` or `false`
+- `stop_condition`: `null` while the stop is false; `activation_cap` when the internal count reaches 25; `session_cap` when 60 eligible sessions have elapsed; `activation_cap_and_session_cap` when both are true on the same readout
 
-Those two numbers are the entire interim report. A favorable or unfavorable impression from them is not a reason to stop, continue, or change the rule.
+That object is the entire interim report. A favorable or unfavorable impression from sessions elapsed, or from the stop flag, is not a reason to change the rule.
 
-Before the one look, this trial must not expose:
+The function may count activations internally. It reads only `ep-v0.1` episode and gate fields: `family`, `symbol`, `session_date`, `first_bar_start`, and `gate_bucket_floor`. It does not open a path record, an `out-v0.1` outcome file, or any stored R or path field. Duplicate episode identities count once. A row that lacks those gate fields is not an activation.
 
-- ticker identities of activations
+Before the one look, the readout and every other human-facing surface for this trial must leave hidden:
+
+- the cumulative activation count, including the number 25, until the one look
+- the daily activation count
+- ticker identities
 - activation dates or timestamps
 - direction
 - target, stop, or timeout classification
 - MAE or MFE
 - R outcome
-- win or loss counts
-- per-session activation counts
+- win, loss, timeout, ambiguous, and data-invalid counts
 - any option-contract or P&L field
 
-The coverage collector may keep writing its ordinary files. Path and outcome fields in those files are not a study readout. Opening them for this trial before the stopping rule is met makes the trial `INVALID`. One scoring pass is allowed only after the stopping rule is met.
+When the internal count reaches 25, the readout may say that the activation stopping condition fired. At 60 eligible sessions it may say that the session cap fired. It still does not print the activation count.
+
+The ordinary coverage collector may keep writing its own files. Those files are not a study readout. Opening an ordinary outcome file, or opening a sealed path record, for this trial before the one look makes the trial `INVALID`. One scoring pass is allowed only after `stop_condition_met` is true.
 
 ## Frozen population
 
@@ -73,9 +79,11 @@ Expected structural rate, carried forward from the closed window only: 59 setups
 
 ## Setup and activation
 
-Versions stay `cov-v0.1` / `ep-v0.1` / `out-v0.1`.
+Collection identity stays `cov-v0.1` for the observer and `ep-v0.1` for the episode reducer. `floor_ge1r` activation stays the existing gate. The Stage A score for this trial is a separate frozen scorer, `options_212c_floor_outcome-v0.1`.
 
-`floor_ge1r` is the existing rule, unchanged:
+`OPTIONS_COVERAGE_OUTCOMES / out-v0.1` remains the ordinary coverage outcome study. Its walk classifies a 5-minute bar from the bar's extremes: a bar that reaches both Target 1 and invalidation is `AMBIGUOUS`, and an invalidation touch becomes `INVALIDATION_FIRST`. That walk does not price an adverse gap at the bar open, and a completed row does not keep the decisive bar's open except on an ambiguous bar. Those semantics are the ordinary collector's semantics. They are not this trial's fill rule. Ordinary `out-v0.1` files may continue to be written. They are not the authoritative scored outcome for `T-2026-10-02-prereg-options-212c-floor-outcome-2026-10-02-01`.
+
+`floor_ge1r` is the existing activation rule, unchanged:
 
 - target geometry = `find_targets(min_target_rr=1.0)`
 - activation = stored `gate_bucket_floor == WOULD_OTHERWISE_QUALIFY` at first sight
@@ -84,9 +92,29 @@ Versions stay `cov-v0.1` / `ep-v0.1` / `out-v0.1`.
 
 `nearest_v1` is not a second arm. No other target variant is added.
 
+## Prospective path record
+
+The Stage A scorer needs the decisive 5-minute bar open. It must be able to score from data captured during the forward window. A later historical refetch is forbidden.
+
+Frozen path identity: `options_212c_floor_outcome_path-v0.1`.
+
+Frozen location, one file per eligible session:
+
+`logs/research_sealed/T-2026-10-02-prereg-options-212c-floor-outcome-2026-10-02-01/path-records/options_212c_floor_outcome_path-v0.1/<session_date>.json`
+
+`sealed_path_record_relpath` in `ops/options_212c_floor_outcome_monitor.py` is that location. The directory is under gitignored `logs/`. It is not a study readout.
+
+Each session file is an immutable sufficient path record. It contains, for every structurally selected `STRAT_212_CONTINUATION` episode on the V1 universe that session, every 5-minute OHLC bar from `first_sight_at` through session close (`start`, `open`, `high`, `low`, `close`), plus `symbol`, `family`, `first_bar_start`, `first_sight_at`, `session_open`, `session_close`, the provider source and causal request window, and `captured_at`. It contains no precomputed outcome class, realized R, MAE, or MFE. The filename is the session date. It is not a ticker.
+
+This draft defines that artifact. It does not add a capturing job, and it does not collect a session.
+
+Integrity rule: once collection is approved, the capturing job writes the file once, after the session has settled and before any study readout, as canonical UTF-8 JSON with sorted keys and a trailing newline. It appends one `manifest.jsonl` line with `session_date`, byte length, and the SHA-256 of those exact bytes. The manifest line has no activation count and no outcome. The file is not rewritten. At the one look the scorer checks the hash, then scores. A missing file, a hash mismatch, or a missing bar in the `first_sight_at` through session-close grid is `DATA_INVALID` for the affected episode and is excluded from expectancy. Do not refetch historical bars to fill that gap, and do not repair the record after any outcome has been viewed. Doing either makes the trial `INVALID`.
+
+The study operator does not open these path records, or `manifest.jsonl`, before the one look. `study_readout` does not read them. Activation for the stopping rule comes from the episode gate, not from this artifact.
+
 ## Stage A — underlying path
 
-Score only activated episodes, and score them once, after the stopping rule.
+Score only activated episodes, and score them once, with `options_212c_floor_outcome-v0.1`, after `stop_condition_met` is true. The input to that scorer is the sealed path record above plus the episode gate fields. It is not an `out-v0.1` row.
 
 **Measured entry.** `measured_entry_price = first_sight_price`. Every Stage A R uses that price as the entry. The stored Strat trigger (`entry_trigger`) remains the structural trigger that defines the setup and the invalidation geometry. A later scorer must not substitute `entry_trigger` for `first_sight_price`, and must not substitute `first_sight_price` for `entry_trigger`. The mechanical trigger-cross view may be stored as setup context. It is not the fill and it is not the decision metric.
 
@@ -102,7 +130,7 @@ Preregistered fields:
 | Target 1 | Stored floor `target_1`. Exit classification uses Target 1 |
 | Target 2 | Stored when the floor geometry has one. Recorded when reached. Not an exit |
 | Maximum hold | Same regular session. `UNRESOLVED_AT_CLOSE` at the session close. No overnight carry |
-| Missing bars | A missing 5-minute bar or an incomplete forward session flags `missing_forward_bars` or `incomplete_forward_session`. The outcome is `DATA_INVALID` and is excluded from expectancy |
+| Missing bars | A missing sealed path file, a hash mismatch, or a missing 5-minute bar from `first_sight_at` through session close is `DATA_INVALID` and is excluded from expectancy. Do not repair it by a later refetch |
 | Price gaps | Deterministic rules below. No discretionary fill inside a gap |
 | Same-bar ambiguity | One 5-minute bar whose range reaches both Target 1 and invalidation is `AMBIGUOUS`. It is not a win and not a loss |
 | Fees and slippage | No dollar P&L is calculated. No extra slippage is applied on top of `first_sight_price`. R uses structural risk as the denominator and `measured_entry_price` as the entry |
@@ -112,7 +140,7 @@ Preregistered fields:
 
 ### Price-gap rules
 
-These rules are applied to each 5-minute bar in time order. The first matching rule ends the walk. "Beyond the stop" means the open is at or through invalidation in the adverse direction (`LONG` open `<=` invalidation; `SHORT` open `>=` invalidation). "Beyond Target 1" means the open is at or through Target 1 in the favorable direction. "Beyond Target 2" uses the same favorable test when Target 2 exists. "Reaches" means the bar's favorable or adverse extreme touches the level, including the open.
+These rules belong to `options_212c_floor_outcome-v0.1`. They are applied to each sealed 5-minute bar in time order. The first matching rule ends the walk. "Beyond the stop" means the open is at or through invalidation in the adverse direction (`LONG` open `<=` invalidation; `SHORT` open `>=` invalidation). "Beyond Target 1" means the open is at or through Target 1 in the favorable direction. "Beyond Target 2" uses the same favorable test when Target 2 exists. "Reaches" means the bar's favorable or adverse extreme touches the level, including the open.
 
 1. **Gap or range spans both stop and Target 1.** If the bar reaches both invalidation and Target 1, the outcome is `AMBIGUOUS` with flag `gap_or_range_spans_stop_and_target`. This includes a bar that opens beyond one level and reaches the other. No fill price is assigned. The row is excluded from R expectancy.
 2. **Bar opens beyond the stop.** If the open is beyond the stop and the bar does not reach Target 1, the outcome is `INVALIDATION_FIRST`. Realized R is the R of that open versus `measured_entry_price`. The stop price inside the gap is not a fill.
@@ -143,7 +171,7 @@ A later amendment would be a new trial. It would have to keep `selector-v1` unch
 
 ## Metrics
 
-Report these after the one look. Activation count is not the result.
+Report these after the one look. Activation count is not the result. The spec `required_metrics` lists every field below. Approval of this spec, and any scoring pass, stays blocked until `options_212c_floor_outcome-v0.1` emits each field and a validation check refuses to call the one look complete when any field is absent. The generic experiment runner's metric dictionary does not emit the study-only fields (`wins`, `losses`, `timeouts`, `ambiguous_count`, `data_invalid_count`, `timeout_rate`, `mean_r`, `mae_distribution`, `mfe_distribution`, `concentration_by_ticker`, `concentration_by_session_date`, `concentration_by_clock_bucket`, `outcome_concentration`). A generic run that lacks them is not a completed one look. That check is not implemented in this draft.
 
 - structurally selected episode count
 - activation count
@@ -203,6 +231,6 @@ One scoring pass after the stopping rule. No parameter search. No second target.
 
 ## Authority boundary
 
-This draft registers the contract. It does not approve collection or scoring. The spec status remains `DRAFT`. No adapter is registered for `options_212c_floor_underlying_outcome`, so the current runner cannot execute this spec.
+This draft registers the contract. It does not approve collection or scoring. The spec status remains `DRAFT`. No adapter is registered for `options_212c_floor_underlying_outcome`, so the current runner cannot execute this spec. Do not approve the spec, and do not score, until the `options_212c_floor_outcome-v0.1` metric check described above exists and fails closed on a missing preregistered field.
 
 Do not start this trial's forward collection until the registration commit is on `main`. The first intended session is 2026-10-05, and that session counts only if its coverage collection has not already run before the merge. If 2026-10-05 is collected before this registration reaches `main`, do not slide the window forward after the fact. Stop and register again.

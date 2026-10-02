@@ -268,10 +268,10 @@ All runtime facts below come from read-only `afs-ro` reads at 14:28–14:45Z, ex
 Options resume is governed by the same checkpoint-first / diff-first rule.
 
 - **Current-state authority:** `docs/options-current-state-handoff.md`. Checklist: `docs/options-next-actions.md`. Do not create a competing options status file.
-- **Verified main 2026-10-02:** `d304c22eac0b95a93377230f2a238b97fb6d9a57` (#1114). The closed options one-look remains #1113 `3f5e3f928d88fc3a8e43f11c159dd3dc3066f703`.
+- **Verified main 2026-10-02, fetched this session:** `ce7baa19a2692a4eeba60804f4f5214b9dfb73cd`. Registration-time main remains `d304c22eac0b95a93377230f2a238b97fb6d9a57` (#1114). The closed options one-look remains #1113 `3f5e3f928d88fc3a8e43f11c159dd3dc3066f703`.
 - **DONE / DO NOT REDO:** #1067 capacity PASS on `fd280906` (not deployed; watchlist stayed 20). #1069 SPXW 0DTE PASS on `a265fe68` (lane stayed OFF). #1111 approval and the frozen 59-episode one-look. Result: SUPPORTED BY THIS EXPERIMENT / coverage only / not edge. `floor_ge1r` 2 vs `nearest_v1` 0. Report SHA-256 `0d47bf46fd62748e9e6b67a248d2ef6ef76aad072e6ad1d2fd43192f7f3343e8`. Do not rerun, rescore, or extend it.
-- **DRAFT / NOT RUN:** `T-2026-10-02-prereg-options-212c-floor-outcome-2026-10-02-01`. Forward underlying outcome of unchanged `floor_ge1r` activations from 2026-10-05. Stage B option fills are NOT EVALUATED. No retrospective holdout was accepted. No path outcomes were scored.
-- **NEXT:** independent review of the draft-registration PR. Do not start 2026-10-05 collection for this trial until that registration is on `main`. Do not score, deploy #1067/#1069/#1077, expand the watchlist, or enable SPXW.
+- **DRAFT / NOT RUN:** `T-2026-10-02-prereg-options-212c-floor-outcome-2026-10-02-01` on PR #1115. First reviewed head `508d68b3af80851f99097aa8504e64ca4aa489dd` is not to be merged. The review corrections separate Stage A scoring as `options_212c_floor_outcome-v0.1`, seal prospective path records as `options_212c_floor_outcome_path-v0.1`, and limit the interim readout to `sessions_elapsed` plus `stop_condition_met`. Stage B option fills are NOT EVALUATED. No retrospective holdout was accepted. No path outcomes were scored. No trial data was collected.
+- **NEXT:** independent re-review of the corrected #1115 head. Do not merge it, and do not start 2026-10-05 collection for this trial, until that registration is on `main`. If 2026-10-05 is collected before the merge, do not slide the window. Do not score, deploy #1067/#1069/#1077, expand the watchlist, or enable SPXW.
 
 ### OPEN / NEEDS DECISION — verify before touching
 
