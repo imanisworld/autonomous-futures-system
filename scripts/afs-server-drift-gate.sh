@@ -78,7 +78,8 @@ PY
 }
 
 release_integrity_check() {
-  PYTHONPATH="$LIVE" "$PYTHON" -m ops.release_integrity --repo-root "$LIVE"
+  # -B: checking a release must never write __pycache__ into it.
+  PYTHONPATH="$LIVE" "$PYTHON" -B -m ops.release_integrity --repo-root "$LIVE"
 }
 
 options_scanner_release_check() {
@@ -120,7 +121,7 @@ options_scanner_release_check() {
     return 1
   }
 
-  if ! integrity="$(PYTHONPATH="$runtime_root" "$scanner_python" -m ops.release_integrity --repo-root "$runtime_root" 2>&1)"; then
+  if ! integrity="$(PYTHONPATH="$runtime_root" "$scanner_python" -B -m ops.release_integrity --repo-root "$runtime_root" 2>&1)"; then
     printf '%s\n' "$integrity"
     return 1
   fi
