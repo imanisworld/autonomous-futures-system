@@ -41,10 +41,14 @@ The canonical forward sample starts only after all of the following are true:
    `context/four_hr_observation.py` published by the wide-stop forward
    collector, and read by `evaluate_armed_4hr_touch()`.
 2. `strat_4hr_retrigger` is still absent from `enabled_concepts`.
-3. `ONE_MIN_4HR_OBSERVER_ENABLED=true`.
-4. `EXPECTED_PROOF_ONE_MIN_4HR_OBSERVER_ENABLED=true`.
-5. An operator read-only check records that the running process has that pin,
-   the observation file is the only arm source, and no broker order was
+3. `ONE_MIN_TRIGGER_ENABLED=true` and
+   `EXPECTED_PROOF_ONE_MIN_TRIGGER_ENABLED=true`. The 4HR observer only runs
+   when the generic 1-minute lane is also on; turning that lane off silently
+   stops 4HR evidence too.
+4. `ONE_MIN_4HR_OBSERVER_ENABLED=true` and
+   `EXPECTED_PROOF_ONE_MIN_4HR_OBSERVER_ENABLED=true`.
+5. An operator read-only check records that the running process has both
+   pins, the observation file is the only arm source, and no broker order was
    created by the check.
 
 The epoch timestamp is that verification time. This repository change does not
@@ -53,3 +57,27 @@ before that verification does not count.
 
 The observer flag defaults off. Until it is explicitly enabled and pinned,
 the corrected code still emits no natural-1m 4HR evidence.
+
+## What the sample can and cannot see
+
+Read the new sample with these boundaries. They are properties of the design,
+not missing data, and they must not be backfilled.
+
+- **Arm window.** The collector publishes the arm when the 5m bar that armed
+  it completes, recorded once as `armed_available_at`. When that arm resolves,
+  `terminal_available_at` records the first publish that showed it. A 1m bar
+  can use the arm only if it opened at or after `armed_available_at` and
+  before `terminal_available_at`. A 1m bar in the last minute of a 5m bar
+  still counts when its webhook is processed after the same-boundary 5m
+  webhook.
+- **09:30–09:34 ET is not observable.** The machine arms while evaluating the
+  09:30 5m bar, so the arm is first readable at 09:35. A touch from 09:30 to
+  09:34 produces no 1-minute evidence. If the 09:30 bar itself touches the
+  trigger, the arm is never published as ARMED and that day has no
+  natural-1m record. Report such days from the 5m collector, not as 1-minute
+  misses or no-touch days.
+- **Contract month is not checked.** The snapshot records the `MNQ` root only.
+  Around a roll (next window 2026-12-11 to 2026-12-14), the 5m and 1-minute
+  feeds could be on different months. Until the snapshot carries the contract
+  and the reader matches it, flag any natural-1m record from a roll window
+  for manual review before counting it.
