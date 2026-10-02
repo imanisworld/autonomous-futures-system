@@ -459,6 +459,7 @@ def _invalid(snapshot: Mapping[str, Any], reason: str) -> dict[str, Any]:
 def _validate_snapshot_identity(
     snapshot: Mapping[str, Any], session: Session
 ) -> tuple[str, str, str, str, str]:
+    """Validate canonical population identity without using outcome fields."""
     fields = ("symbol", "session_date", "direction", "first_bar_start", "family")
     values = tuple(snapshot.get(field) for field in fields)
     if any(not isinstance(value, str) or not value for value in values):
@@ -474,13 +475,6 @@ def _validate_snapshot_identity(
         raise StudyContractError("snapshot_identity_invalid")
     if snapshot.get("episode_id") != "|".join(values):
         raise StudyContractError("snapshot_identity_invalid")
-    sight = _dt(snapshot.get("first_sight_at"), "first_sight_at")
-    if not (
-        session.open.astimezone(timezone.utc)
-        <= sight
-        < session.close.astimezone(timezone.utc)
-    ):
-        raise StudyContractError("first_sight_outside_session")
     return values  # type: ignore[return-value]
 
 
@@ -526,6 +520,13 @@ def score_snapshot(
         )
         if snapshot.get("first_sight_after_close") is not False:
             raise StudyContractError("first_sight_after_close")
+        sight_utc = _dt(snapshot.get("first_sight_at"), "first_sight_at")
+        if not (
+            session.open.astimezone(timezone.utc)
+            <= sight_utc
+            < session.close.astimezone(timezone.utc)
+        ):
+            raise StudyContractError("first_sight_outside_session")
         entry = float(_num(snapshot.get("first_sight_price"), "first_sight_price"))
         trigger = float(_num(snapshot.get("entry_trigger"), "entry_trigger"))
         invalidation = float(_num(snapshot.get("invalidation"), "invalidation"))
@@ -654,11 +655,16 @@ def score_session_record(record: Mapping[str, Any]) -> dict[str, Any]:
     if not isinstance(episodes, list):
         raise StudyContractError("episodes_missing")
     rows = []
+    seen_ids: set[str] = set()
     for snap in episodes:
-        if (
-            not isinstance(snap, Mapping)
-            or snap.get("gate_bucket_floor") not in RECOGNIZED_GATES
-        ):
+        if not isinstance(snap, Mapping):
+            raise StudyContractError("snapshot_identity_invalid")
+        _validate_snapshot_identity(snap, session)
+        eid = str(snap["episode_id"])
+        if eid in seen_ids:
+            raise StudyContractError("duplicate_episode_id", eid)
+        seen_ids.add(eid)
+        if snap.get("gate_bucket_floor") not in RECOGNIZED_GATES:
             raise StudyContractError("gate_invalid")
         if snap.get("gate_bucket_floor") == ACTIVATION_GATE:
             rows.append(score_snapshot(snap, session))
