@@ -93,15 +93,17 @@ The canonical epoch begins only after an exact reviewed release carrying #1103 i
 5. After the 2026-10-03 12:00Z cron jobs, confirm no release-tree `__pycache__` and confirm the next drift-gate result is OK.
 6. The first #1103-compliant touch answers whether the 1-minute alert proves the contract: MATCH/MISMATCH/UNKNOWN.
 
-## Account-admission overlay — 2026-10-02, rebased onto `d04cd9a`
+## Account-admission overlay — CLOSED / INSUFFICIENT EVIDENCE
 
 Does not change the 4HR epoch above. #1108 stays the runtime record.
 
-- Sibling only: `research/mnq_account_admission_overlay.py`. Pinned #915/#929 files were not edited. Prereg #929 was not run. No historical stream was scored.
-- Daily loss uses the UTC calendar-date stand-in for live `date.today()`, and books a resolved fill to the entry's journal day (`open_position_date`). It does not use the CME 18:00 ET observation day. The box timezone is still unconfirmed.
-- Drawdown is `DRAWDOWN_GATE_NOT_EVALUATED` unless a provenance-backed starting balance and starting peak are supplied. Those then move only with accepted, resolved fills. After the frozen capacity checks, daily loss runs before that floor.
-- Draft, not approved: `docs/prereg-mnq-account-admission-overlay-DRAFT-2026-10-02.md`, registered as PLANNED trial `T-2026-10-02-prereg-mnq-account-admission-overlay-draft-2026-10-02-01`. No historical overlay scoring has been run. The same-timestamp census is still blank, so the overlay is not exact live parity. Options candidate admission stays insufficient evidence and was not implemented.
-- **2026-10-02 prereg completion attempt: `POPULATION_BLOCKED`.** The #929 forward window was not opened. The #915 historical stream has no committed fillable-event artifact, and a local rebuild did not reproduce its frozen control gate, so no artifact was kept. Futures-bot `date.today()` was read only at `2026-10-02T16:38:01Z`: process `TZ` unset, host zone `Etc/UTC`. No deploy, restart, or scored run.
+- **Current authority / DO NOT REDO:** trial `T-2026-10-02-prereg-mnq-account-admission-overlay-draft-2026-10-02-01` is closed as `INSUFFICIENT_EVIDENCE` on preserved research head `990b11135a1c49bc972981ac302930cd4f7565a3`. Result: `docs/research-evidence/T-2026-10-02-prereg-mnq-account-admission-overlay-draft-2026-10-02-01/result.json`; preserved look SHA-256 `0c6c084c830fa227951f2e8e4f47a85a2f22a72898014f243eced8ed8cc6f7e5`. Ledger is `COMPLETED` / `RESEARCH_ONLY` because the enum has no `INSUFFICIENT_EVIDENCE` token.
+- Neither pass is the historical account result. Do not select the sensitivity, average the passes, rerun, retune, or change strategy status. Further evidence for exact account ordering must be forward evidence with request order recorded.
+- `research/mnq_account_admission_overlay.py` is research-only. Pinned #915/#929 files were not edited; prereg #929 was not run.
+- Daily loss uses the UTC calendar-date stand-in for live `date.today()`, and books a resolved fill to the entry's journal day (`open_position_date`). It does not use the CME 18:00 ET observation day.
+- Drawdown stayed `DRAWDOWN_GATE_NOT_EVALUATED`; no provenance-backed starting balance/peak was supplied.
+- **Historical progression below is provenance only. Do not resume from these intermediate blockers.**
+- **2026-10-02 prereg completion attempt: `POPULATION_BLOCKED`.** The #929 forward window was not opened. The #915 historical stream had no committed fillable-event artifact, and a local rebuild did not reproduce its frozen control gate, so no artifact was kept. Futures-bot `date.today()` was read only at `2026-10-02T16:38:01Z`: process `TZ` unset, host zone `Etc/UTC`. No deploy, restart, or scored run.
 - **2026-10-02 #915 reproduction:** archived `5a9f14b` reproduces the family controls on the local corpora. The earlier failure was current `main` code in `resolve_bracket` and `PaperBroker`, not a different population. Artifact `research/artifacts/pr915-six-family-fillable-events-5a9f14b.jsonl` sha256 `d5f949fce98e80ab83fd1c2551b99e7644f4ddc0ad6381aaf978b3282be11942`, 2257 rows. Same-timestamp census 280, so the account draft is `SAME_TIMESTAMP_ORDER_BLOCKED`. The overlay was not run. #929 was not run.
 - **2026-10-02 reachable-collision census:** frozen capacity arbitration accepts 488 fills. 47 of the 280 raw equal-time pairs are reachable. The account draft stays `SAME_TIMESTAMP_ORDER_BLOCKED` for those 47. No overlay scoring. #929 was not run.
 - **2026-10-02 ordering audit:** 45 reachable rows are `EXIT_BEFORE_CANDIDATE_PROVEN` on the same 15m Asia bar. 2 Daily/Asia rows are `DISTINCT_REQUEST_ORDER_UNKNOWN`. The account draft stays blocked. No overlay scoring. #929 was not run.
