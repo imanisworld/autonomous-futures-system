@@ -174,3 +174,69 @@ def test_different_arm_does_not_inherit_window(tmp_path):
     other = {**ARMED, "status": "TRIGGERED", "trigger": 20050.0}
     assert publish_4hr_observation(tmp_path, other, source_timestamp=_et(9, 45))
     assert read_armed_observation(tmp_path, DAY, as_of=_et(9, 44)) is None
+
+
+def test_arm_keeps_the_contract_it_was_published_with(tmp_path):
+    assert publish_4hr_observation(
+        tmp_path, ARMED, source_timestamp=_et(9, 40), contract="MNQZ2026"
+    )
+    # A later publish of the same arm cannot change or erase its contract.
+    assert publish_4hr_observation(tmp_path, ARMED, source_timestamp=_et(9, 45))
+    assert publish_4hr_observation(
+        tmp_path, ARMED, source_timestamp=_et(9, 50), contract="MNQH2027"
+    )
+    assert read_armed_observation(tmp_path, DAY, as_of=_et(9, 51))["contract"] == "MNQZ2026"
+    triggered = {**ARMED, "status": "TRIGGERED"}
+    assert publish_4hr_observation(tmp_path, triggered, source_timestamp=_et(9, 55))
+    assert read_armed_observation(tmp_path, DAY, as_of=_et(9, 54))["contract"] == "MNQZ2026"
+
+
+def test_arm_without_proven_contract_records_none_then_first_known(tmp_path):
+    assert publish_4hr_observation(tmp_path, ARMED, source_timestamp=_et(9, 40))
+    assert read_armed_observation(tmp_path, DAY, as_of=_et(9, 41))["contract"] is None
+    assert publish_4hr_observation(
+        tmp_path, ARMED, source_timestamp=_et(9, 45), contract="MNQZ2026"
+    )
+    assert read_armed_observation(tmp_path, DAY, as_of=_et(9, 46))["contract"] == "MNQZ2026"
+
+
+def test_new_arm_does_not_inherit_old_contract(tmp_path):
+    assert publish_4hr_observation(
+        tmp_path, ARMED, source_timestamp=_et(9, 40), contract="MNQZ2026"
+    )
+    other = {**ARMED, "trigger": 20050.0}
+    assert publish_4hr_observation(tmp_path, other, source_timestamp=_et(9, 45))
+    assert read_armed_observation(tmp_path, DAY, as_of=_et(9, 46))["contract"] is None
+
+
+def test_collector_publishes_the_5m_alert_contract(monkeypatch, tmp_path):
+    cfg = copy.copy(load_config())
+    cfg.wide_stop_ledger_mode = "paper_sim"
+    cfg.wide_stop_ledger_epoch_start = "2026-09-08T00:00:00+00:00"
+
+    def fake(*, payload, cfg, bars_5m, strategy):
+        if strategy != "strat_4hr_retrigger":
+            return None, None, None, None
+        return None, None, None, dict(ARMED)
+
+    monkeypatch.setattr(
+        "context.wide_stop_forward_collector._evaluate_canonical_candidate",
+        fake,
+    )
+    process_five_min_bar(
+        payload=SimpleNamespace(
+            ticker="MNQ1!",
+            contract_hint="CME_MINI:MNQZ2026",
+            timestamp="2026-09-08T13:35:00+00:00",
+            timeframe="5m",
+            open=20000.0,
+            high=20010.0,
+            low=19990.0,
+            close=20005.0,
+            volume=1,
+        ),
+        cfg=cfg,
+        bars_5m=[],
+        log_dir=tmp_path,
+    )
+    assert read_armed_observation(tmp_path, DAY, as_of=_as_of())["contract"] == "MNQZ2026"
