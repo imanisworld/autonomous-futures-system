@@ -16,7 +16,7 @@ from typing import Any, Mapping, Sequence
 from zoneinfo import ZoneInfo
 
 from alert_ranker.causal_bars import MINUTE_5, Bar
-from alert_ranker.coverage_episodes import Episode, REDUCER_VERSION
+from alert_ranker.coverage_episodes import Episode, REDUCER_VERSION, reduce_events
 from alert_ranker.coverage_observer import OBSERVED_TIMEFRAME, OBSERVER_VERSION
 from alert_ranker.coverage_outcomes import gate_bucket
 from alert_ranker.session_calendar import EXCHANGE_TIMEZONE, Session, nyse_session_for
@@ -168,16 +168,22 @@ def _bar_dict(bar: Bar) -> dict[str, Any]:
 def _sealed_bars(
     ep: Episode, session: Session, bars: Sequence[Bar]
 ) -> list[dict[str, Any]]:
+    """Seal the causal bars actually available on the frozen grid.
+
+    A missing grid member is preserved as missing evidence: the seal is still
+    written and the one-look scorer classifies that episode DATA_INVALID.
+    Refetching later would violate the preregistration.
+    """
     expected = expected_starts(session, ep.first_sight_at)
+    expected_set = set(expected)
     by_start: dict[datetime, Bar] = {}
     for bar in bars:
+        if bar.start_utc not in expected_set:
+            continue
         if bar.start_utc in by_start:
             raise StudyContractError("duplicate_bar", bar.start_utc.isoformat())
         by_start[bar.start_utc] = bar
-    missing = [start for start in expected if start not in by_start]
-    if missing:
-        raise StudyContractError("missing_bar", missing[0].isoformat())
-    return [_bar_dict(by_start[start]) for start in expected]
+    return [_bar_dict(by_start[start]) for start in expected if start in by_start]
 
 
 def _same(a: Any, b: Any) -> bool:
@@ -265,15 +271,41 @@ def build_session_artifact(
             raise StudyContractError("duplicate_event_key", "|".join(key))
         event_index[key] = row
 
-    snapshots: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    selected = [
+    # Re-run the frozen ep-v0.1 reducer from the same first-event source and
+    # require the caller-provided episode population to match it exactly. This
+    # prevents an integration bug from silently omitting an episode before the
+    # session is sealed. The derived episodes, not caller-mutated copies, are
+    # the authoritative snapshots.
+    try:
+        derived = [
+            ep
+            for ep in reduce_events([dict(row) for row in event_index.values()])
+            if ep.session_date == session.date.isoformat()
+            and ep.family == FAMILY
+            and ep.symbol in V1_UNIVERSE
+        ]
+    except (KeyError, TypeError, ValueError) as exc:
+        raise StudyContractError("episode_reduction_failed", str(exc)) from exc
+    supplied = [
         ep
         for ep in episodes
         if ep.session_date == session.date.isoformat()
         and ep.family == FAMILY
         and ep.symbol in V1_UNIVERSE
     ]
+    derived_ids = {_episode_id(ep) for ep in derived}
+    supplied_ids = {_episode_id(ep) for ep in supplied}
+    if len(derived_ids) != len(derived) or len(supplied_ids) != len(supplied):
+        raise StudyContractError("duplicate_episode_id")
+    if supplied_ids != derived_ids:
+        raise StudyContractError(
+            "episode_population_mismatch",
+            f"supplied={len(supplied_ids)} derived={len(derived_ids)}",
+        )
+
+    snapshots: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    selected = derived
     for ep in sorted(selected, key=lambda x: (x.symbol, x.first_bar_start, x.direction)):
         if ep.reducer_version != REDUCER_VERSION:
             raise StudyContractError("reducer_version_mismatch")
@@ -377,8 +409,38 @@ def _invalid(snapshot: Mapping[str, Any], reason: str) -> dict[str, Any]:
         "realized_r": None,
         "mae_r": None,
         "mfe_r": None,
+        "target_2_reached": False,
+        "target_2_hit_at": None,
         "flags": [reason],
     }
+
+
+def _validate_snapshot_identity(
+    snapshot: Mapping[str, Any], session: Session
+) -> tuple[str, str, str, str, str]:
+    fields = ("symbol", "session_date", "direction", "first_bar_start", "family")
+    values = tuple(snapshot.get(field) for field in fields)
+    if any(not isinstance(value, str) or not value for value in values):
+        raise StudyContractError("snapshot_identity_invalid")
+    symbol, session_date, direction, first_bar_start, family = values
+    if (
+        symbol not in V1_UNIVERSE
+        or session_date != session.date.isoformat()
+        or direction not in {"LONG", "SHORT"}
+        or family != FAMILY
+        or snapshot.get("reducer_version") != REDUCER_VERSION
+    ):
+        raise StudyContractError("snapshot_identity_invalid")
+    if snapshot.get("episode_id") != "|".join(values):
+        raise StudyContractError("snapshot_identity_invalid")
+    sight = _dt(snapshot.get("first_sight_at"), "first_sight_at")
+    if not (
+        session.open.astimezone(timezone.utc)
+        <= sight
+        < session.close.astimezone(timezone.utc)
+    ):
+        raise StudyContractError("first_sight_outside_session")
+    return values  # type: ignore[return-value]
 
 
 def _validate_bar_rows(
@@ -418,12 +480,9 @@ def score_snapshot(
     if snapshot.get("gate_bucket_floor") != ACTIVATION_GATE:
         raise StudyContractError("not_activated")
     try:
-        direction = snapshot.get("direction")
-        if (
-            direction not in {"LONG", "SHORT"}
-            or snapshot.get("reducer_version") != REDUCER_VERSION
-        ):
-            raise StudyContractError("snapshot_identity_invalid")
+        _symbol, _session_date, direction, _first_bar_start, _family = (
+            _validate_snapshot_identity(snapshot, session)
+        )
         if snapshot.get("first_sight_after_close") is not False:
             raise StudyContractError("first_sight_after_close")
         entry = float(_num(snapshot.get("first_sight_price"), "first_sight_price"))
@@ -466,12 +525,21 @@ def score_snapshot(
     outcome: str | None = None
     result: float | None = None
     flags: list[str] = []
+    target2_reached = False
+    target2_hit_at: str | None = None
     for bar in bars:
         o, h, l = float(bar["open"]), float(bar["high"]), float(bar["low"])
         fav = h if direction == "LONG" else l
         adv = l if direction == "LONG" else h
         stop = adv <= invalidation if direction == "LONG" else adv >= invalidation
         hit = fav >= target1 if direction == "LONG" else fav <= target1
+        hit2 = (
+            target2 is not None
+            and (fav >= target2 if direction == "LONG" else fav <= target2)
+        )
+        if hit2 and not target2_reached:
+            target2_reached = True
+            target2_hit_at = str(bar["start"])
         if stop and hit:
             outcome, flags = AMBIGUOUS, [
                 "gap_or_range_spans_stop_and_target"
@@ -523,6 +591,8 @@ def score_snapshot(
         "realized_r": None if result is None else round(result, 6),
         "mae_r": round(mae, 6),
         "mfe_r": round(mfe, 6),
+        "target_2_reached": target2_reached,
+        "target_2_hit_at": target2_hit_at,
         "flags": flags,
     }
 
