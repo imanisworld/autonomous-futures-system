@@ -1,7 +1,7 @@
-# DRAFT — MNQ account-admission overlay — NOT APPROVED — DO NOT SCORE
+# MNQ account-admission overlay — ONE SCORED LOOK AUTHORIZED
 
-**Status: READY FOR INDEPENDENT PREREG REVIEW.** No scoring run is authorized
-until that review approves this prereg. This draft does not authorize a
+**Status: ONE_SCORED_LOOK_AUTHORIZED.** The one look defined in the reading
+rules is authorized. It has not been run. This document does not authorize a
 fetch, and it does not amend prereg #929.
 
 **Trial ID:** `T-2026-10-02-prereg-mnq-account-admission-overlay-draft-2026-10-02-01`
@@ -299,8 +299,11 @@ control:
 No third mode, no family slice, no seed, and no prereg #929 run.
 
 An override is exercised when that candidate's decision carries the frozen
-`equal_time_treatment`. The expected counts are 45 proven and 2 unresolved.
-Any other exercise count is `INSUFFICIENT_EVIDENCE`.
+`equal_time_treatment`. Report the two counts. The 45 pairs were identified
+under strict-before capacity, so exit-first can leave a later pair unexercised
+when that exiting position is no longer the open one. A count other than 45
+or 2 is an output. It is not, by itself, `INSUFFICIENT_EVIDENCE`. The map
+must still contain exactly those 45 + 2 pairs. That check is on the inputs.
 
 `SKIPPED_DAILY_LOSS` is the set of events the $150 gate blocked. Those events
 already passed the busy check and the three-fill cap. Do not attribute an
@@ -397,6 +400,6 @@ of this draft.
 
 ## Next
 
-Status is `READY FOR INDEPENDENT PREREG REVIEW`. Do not score. Do not run
-`apply_account_admission` on the historical stream until an independent
-reviewer approves this prereg. Do not open or run prereg #929.
+Status is `ONE_SCORED_LOOK_AUTHORIZED`. Run the two passes in the reading
+rules once, on this prereg, and stop. Do not open or run prereg #929. Do not
+add a third mode. Do not deploy.

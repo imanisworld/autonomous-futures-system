@@ -95,7 +95,7 @@ These are ordered. Do not skip ahead.
 
 Rebased onto `d04cd9a`. This section does not revise the 4HR epoch or the runtime checkpoint above.
 
-- [x] **MNQ overlay, unscored.** `research/mnq_account_admission_overlay.py` keeps the frozen capacity rules and applies the $150 journal-day loss rule before the drawdown floor. Drawdown is `DRAWDOWN_GATE_NOT_EVALUATED`. Draft: `docs/prereg-mnq-account-admission-overlay-DRAFT-2026-10-02.md`, PLANNED as `T-2026-10-02-prereg-mnq-account-admission-overlay-draft-2026-10-02-01`. The 45 proven equal-time pairs are exit-first. The two unresolved pairs are busy-first in the primary mode and exit-first only in the one sensitivity. Status is `READY FOR INDEPENDENT PREREG REVIEW`. Do not score it, and do not run prereg #929.
+- [x] **MNQ overlay, unscored.** `research/mnq_account_admission_overlay.py` keeps the frozen capacity rules and applies the $150 journal-day loss rule before the drawdown floor. Drawdown is `DRAWDOWN_GATE_NOT_EVALUATED`. Draft: `docs/prereg-mnq-account-admission-overlay-DRAFT-2026-10-02.md`, PLANNED as `T-2026-10-02-prereg-mnq-account-admission-overlay-draft-2026-10-02-01`. The 45 proven equal-time pairs are exit-first. The two unresolved pairs are busy-first in the primary mode and exit-first only in the one sensitivity. Status is `ONE_SCORED_LOOK_AUTHORIZED`. The look has not been run. Do not run prereg #929.
 - [x] **M2K / MGC / MCL / MBT.** Keep collecting. Do not expand the six-market path. MES waits.
 
 ## Definition of done for this phase
