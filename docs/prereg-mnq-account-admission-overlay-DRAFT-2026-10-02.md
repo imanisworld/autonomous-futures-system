@@ -32,7 +32,7 @@ holding/EOD behavior.
 | Drawdown seed | Provenance-backed starting balance and starting peak, or an explicit choice to leave drawdown `DRAWDOWN_GATE_NOT_EVALUATED` | **NOT CHOSEN** — census blocks a scored run |
 | Decision criteria | What would count as pass, fail, or insufficient | **NOT FROZEN** — census blocks a scored run |
 | Allowed outputs | Whether a look may read counts only, or also P&L | **NOT FROZEN** — census blocks a scored run |
-| Same-timestamp census | Count of accepted `exit_ts` values that exactly equal a later candidate's `eligible_fill_ts`, limited to candidates capacity could actually reach. Do not infer order from the tie | **47 reachable** of 280 raw fillable pairs — `SAME_TIMESTAMP_ORDER_BLOCKED` |
+| Same-timestamp census | Count of accepted `exit_ts` values that exactly equal a later candidate's `eligible_fill_ts`, limited to candidates capacity could actually reach. Do not infer order from the tie | **47 reachable**; 45 `EXIT_BEFORE_CANDIDATE_PROVEN`, 2 `DISTINCT_REQUEST_ORDER_UNKNOWN` — `SAME_TIMESTAMP_ORDER_BLOCKED` |
 
 Do not fill these blanks from prereg #929, from the replay's $5,000
 normalization, or from the $1,500 ladder seed.
@@ -126,10 +126,16 @@ candidate that would otherwise be the next reachable fill. That list is
 The definition is `docs/pr915-reachable-equal-time-census-2026-10-02.md`.
 Equal timestamps were not treated as an order.
 
-That reachable count is greater than 0. This draft is not ready. The exact
-live ordering for those 47 cases has to be frozen and tested before a scored
-run. The other raw pairs do not change which event capacity can reach. Do not
-call this overlay exact live parity.
+The ordering audit of those 47 cases is
+`research/artifacts/pr915-reachable-order-audit-5a9f14b.json`. Forty-five
+Asia-to-Asia rows are the same 15-minute bar, and `process_bar` clears the
+open cohort position before it considers that bar's candidates
+(`EXIT_BEFORE_CANDIDATE_PROVEN`). Two rows are a 5-minute Daily close and a
+15-minute Asia close. Those are separate payloads, and no arrival order is
+recorded (`DISTINCT_REQUEST_ORDER_UNKNOWN`).
+
+Those two rows keep this draft blocked. Do not treat the other 45 as
+permission to score, and do not call this overlay exact live parity.
 
 ## Drawdown
 
@@ -171,6 +177,6 @@ of this draft.
 
 ## Next
 
-Stop. Status is `SAME_TIMESTAMP_ORDER_BLOCKED`. Do not score. The next
-revision has to freeze and test the live same-request order for the 47
-reachable collisions before any scored look.
+Stop. Status is `SAME_TIMESTAMP_ORDER_BLOCKED`. Do not score. Forty-five
+reachable rows have a proven same-bar order. Two cross-timeframe rows do not.
+The next revision has to resolve those two payloads before any scored look.
