@@ -17,9 +17,10 @@ DAY = date(2026, 6, 2)
 ET = timezone(timedelta(hours=-4))
 
 
-def _payload(ts, *, tf="1m", o=19999.0, h=20001.0, l=19998.0, c=20000.5):
+def _payload(ts, *, tf="1m", o=19999.0, h=20001.0, l=19998.0, c=20000.5, contract_hint=None):
     return AlertPayload(
         ticker="MNQ1!",
+        contract_hint=contract_hint,
         timestamp=ts.isoformat(),
         open=o,
         high=h,
@@ -70,7 +71,9 @@ def _enable_observer(monkeypatch):
     monkeypatch.setenv("WIDE_STOP_LEDGER_MODE", "observe_only")
 
 
-def _arm_observation(log_dir, *, direction="LONG", trigger=20000.0, target=20200.0, source_timestamp=None):
+def _arm_observation(
+    log_dir, *, direction="LONG", trigger=20000.0, target=20200.0, source_timestamp=None, contract=None
+):
     publish_4hr_observation(
         log_dir,
         {
@@ -83,6 +86,7 @@ def _arm_observation(log_dir, *, direction="LONG", trigger=20000.0, target=20200
             "four_am_bar_ts": "2026-06-02T04:00:00-04:00",
         },
         source_timestamp=source_timestamp or datetime(2026, 6, 2, 9, 30, tzinfo=ET),
+        contract=contract,
     )
 
 
@@ -353,3 +357,78 @@ def test_touch_in_last_minute_survives_trigger_publish_race(monkeypatch, tmp_pat
         for_date=DAY,
     )
     assert after["one_min_trigger"] is None
+
+
+def _touch(log_dir, config, contract_hint):
+    return process_alert(
+        _payload(datetime(2026, 6, 2, 9, 31, tzinfo=ET), contract_hint=contract_hint),
+        config=config,
+        log_dir=log_dir,
+        for_date=DAY,
+    )
+
+
+def test_touch_records_matching_contract_month(monkeypatch, tmp_path, config):
+    _enable_observer(monkeypatch)
+    _without_executable_4hr(config)
+    log_dir = str(tmp_path)
+    _seed_completed_8am_hour(log_dir)
+    _arm_observation(log_dir, contract="MNQM2026")
+
+    event = _touch(log_dir, config, "CME_MINI:MNQM2026")["one_min_trigger"]
+    assert event["event"] == "TRIGGER_TOUCH"
+    assert event["contract_check"] == {
+        "status": "MATCH", "arm_contract": "MNQM2026", "bar_contract": "MNQM2026",
+        "needs_manual_review": False,
+    }
+
+
+def test_contract_month_mismatch_blocks_the_touch(monkeypatch, tmp_path, config):
+    _enable_observer(monkeypatch)
+    _without_executable_4hr(config)
+    log_dir = str(tmp_path)
+    _seed_completed_8am_hour(log_dir)
+    _arm_observation(log_dir, contract="MNQM2026")
+
+    result = _touch(log_dir, config, "CME_MINI:MNQU2026")
+    event = result["one_min_trigger"]
+    assert event["event"] == "TRIGGER_BLOCKED"
+    assert event["reason"] == "CONTRACT_MONTH_MISMATCH"
+    assert event["contract_check"]["arm_contract"] == "MNQM2026"
+    assert event["contract_check"]["bar_contract"] == "MNQU2026"
+    assert result["fill"] is None
+    assert result["execution_reachable"] is False
+    claims = list((tmp_path / ONE_MIN_LANE).rglob("*claim*"))
+    assert claims == []
+
+
+def test_unproven_contract_is_marked_unknown_not_assumed(monkeypatch, tmp_path, config):
+    _enable_observer(monkeypatch)
+    _without_executable_4hr(config)
+    log_dir = str(tmp_path)
+    _seed_completed_8am_hour(log_dir)
+    _arm_observation(log_dir, contract="MNQM2026")
+
+    event = _touch(log_dir, config, None)["one_min_trigger"]
+    assert event["event"] == "TRIGGER_TOUCH"
+    assert event["contract_check"] == {
+        "status": "UNKNOWN", "arm_contract": "MNQM2026", "bar_contract": None,
+        "needs_manual_review": True,
+    }
+
+
+def test_every_row_after_a_touch_carries_the_contract_check(monkeypatch, tmp_path, config):
+    _enable_observer(monkeypatch)
+    _without_executable_4hr(config)
+    log_dir = str(tmp_path)
+    # No completed 1h bar: the touch is TRIGGER_BLOCKED / COMPLETED_1H_STOP_MISSING.
+    _arm_observation(log_dir, contract="MNQM2026")
+    blocked = _touch(log_dir, config, None)["one_min_trigger"]
+    assert blocked["reason"] == "COMPLETED_1H_STOP_MISSING"
+    assert blocked["contract_check"]["needs_manual_review"] is True
+
+    _seed_completed_8am_hour(log_dir)
+    assert _touch(log_dir, config, "MNQM2026")["one_min_trigger"]["event"] == "TRIGGER_TOUCH"
+    duplicate = _touch(log_dir, config, "MNQM2026")["one_min_trigger"]
+    assert duplicate["event"] == "TRIGGER_DUPLICATE"
+    assert duplicate["contract_check"]["status"] == "MATCH"
