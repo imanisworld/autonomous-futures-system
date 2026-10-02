@@ -58,6 +58,14 @@ _As of 2026-10-02. Operational checklist only. The authoritative options status 
 - [x] Evidence bytes preserved. `runner_report.json` SHA-256 `0d47bf46fd62748e9e6b67a248d2ef6ef76aad072e6ad1d2fd43192f7f3343e8`. That digest is the manifest `results_sha256`.
 - [x] The measurement is coverage/activation only. It does not establish profitable trades, expectancy, strategy promotion, deployment, or execution authority.
 
+## Forward floor-activation outcome draft — not approved, not run
+
+- [x] No untouched retrospective holdout. Sessions through 2026-10-02 are ineligible.
+- [x] DRAFT prereg `docs/prereg-options-212c-floor-outcome-2026-10-02.md` and spec `E-2026-10-02-options-212c-floor-outcome-01` (`status=DRAFT`). Ledger event `PLANNED`.
+- [ ] Independent review of the registration PR. Do not approve collection, run the study, retune `floor_ge1r`, or open forward path outcomes.
+- [ ] Do not start this trial's 2026-10-05 collection until the registration commit is on `main`.
+- [ ] Stage B stays **NOT EVALUATED** until a causal historical chain source exists. Do not backfill current quotes.
+
 ## Cleanup / non-blocking
 
 - [ ] Decide whether/when to deploy #1077's display-only Signa-v2 surfaces. Separate operator GO; do not combine it with #1067 universe expansion or SPXW enablement.

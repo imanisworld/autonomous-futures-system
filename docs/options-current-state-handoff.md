@@ -4,6 +4,12 @@ _As of 2026-10-02. The newest dated repository refresh below governs source stat
 
 Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`; the read-only coverage evidence lane (observer, reducer, outcome study, after-close collector) is described in `docs/options-coverage-observer.md`.
 
+## Repository refresh — 2026-10-02 (forward outcome draft; not run)
+
+`main` at this registration is `d304c22eac0b95a93377230f2a238b97fb6d9a57` (#1114). The closed 59-episode result remains the #1113 preservation on `3f5e3f928d88fc3a8e43f11c159dd3dc3066f703`. The frozen 59-episode trial stays closed. No clean retrospective holdout for a `floor_ge1r` underlying-outcome test was found: 2026-09-09..2026-09-15 is the closed coverage window; 2026-09-16..2026-09-18 and the Sep 16-18 continuation postmortem are already outcome-exposed; the Epoch-3 journal audit viewed P&L through 2026-09-29T19:46:18Z. This checkout has no coverage outcome file after 2026-09-15. Later box sessions were not opened.
+
+A **DRAFT** forward design is registered and not approved to collect or score: `docs/prereg-options-212c-floor-outcome-2026-10-02.md`, spec `E-2026-10-02-options-212c-floor-outcome-01`, trial `T-2026-10-02-prereg-options-212c-floor-outcome-2026-10-02-01`, ledger event `PLANNED`. Measured entry is `first_sight_price`. Eligible sessions start 2026-10-05 only after this registration is on `main` and before that session is collected. Until the one look, the only study readout is sessions elapsed and the cumulative activation count. Stage B option fills are **NOT EVALUATED**. No outcomes were scored, no experiment was run, and this trial's forward collection has not started.
+
 ## Repository refresh — 2026-10-02 (59-episode one-look preserved)
 
 This refresh governs the frozen 59-episode experiment after its single run. The earlier same-day section that says the experiment is not run is the pre-run approval record.

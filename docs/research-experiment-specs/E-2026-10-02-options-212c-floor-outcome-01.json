@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "experiment_id": "E-2026-10-02-options-212c-floor-outcome-01",
+  "trial_id": "T-2026-10-02-prereg-options-212c-floor-outcome-2026-10-02-01",
+  "status": "DRAFT",
+  "approved_by": null,
+  "approved_at": null,
+  "supersedes": null,
+  "hypothesis": "On forward 30m STRAT_212_CONTINUATION episodes that pass the unchanged floor_ge1r activation rule, the frozen first-sight underlying path has a describable R distribution. This draft does not claim that distribution is an edge.",
+  "prereg_path": "docs/prereg-options-212c-floor-outcome-2026-10-02.md",
+  "baseline": {
+    "commit_sha": "d304c22eac0b95a93377230f2a238b97fb6d9a57",
+    "label": "main at draft registration; #1114 did not change the closed options experiment"
+  },
+  "candidate": {
+    "commit_sha": null,
+    "change": "Measure the existing floor_ge1r first-sight underlying path once, after the forward stopping rule, without a second target variant or an option fill model.",
+    "label": "floor_ge1r first-sight underlying outcome — measurement contract only"
+  },
+  "data": {
+    "source": "FORWARD col-v0.1 / cov-v0.1 / ep-v0.1 / out-v0.1 coverage collection; no retrospective file is an input",
+    "window": {
+      "start": "2026-10-05",
+      "end": "stop at 25 floor_ge1r activations or 60 NYSE sessions, whichever comes first"
+    },
+    "dataset_id": "coverage://options-30m-forward-20/from-2026-10-05/floor-outcome/out-v0.1"
+  },
+  "population": "Options 30m STRAT_212_CONTINUATION; exact 20-symbol V1 universe [AAPL, AMZN, BAC, COIN, GE, GOOGL, INTC, IWM, JPM, MRK, MSFT, NFLX, NVDA, PLTR, QQQ, SPY, TLT, TSLA, WMT, XOM]; forward NYSE sessions from 2026-10-05 inclusive until 25 floor_ge1r activations or 60 sessions, whichever comes first; sessions through 2026-10-02 inclusive are ineligible",
+  "setup_type": "options_212c_floor_underlying_outcome",
+  "timeframe": "30m",
+  "changed_variables": [
+    {
+      "name": "outcome_measurement",
+      "baseline_value": "not_measured",
+      "candidate_value": "floor_ge1r_first_sight_underlying_path"
+    }
+  ],
+  "held_constant": [
+    "floor_ge1r rule find_targets(min_target_rr=1.0)",
+    "activation gate_bucket_floor WOULD_OTHERWISE_QUALIFY at first sight",
+    "measured_entry_price = first_sight_price",
+    "stored entry_trigger is structural context and is never the measured fill",
+    "20-symbol V1 universe",
+    "cov-v0.1 / ep-v0.1 / out-v0.1 identity, with the preregistered gap rules controlling fills",
+    "first-sight clock and same-session hold",
+    "blind readout is sessions elapsed and cumulative activation count only",
+    "no nearest_v1 comparison and no additional target variant",
+    "no option contract, premium, or dollar P&L model",
+    "no watchlist, SPXW, risk, or execution change"
+  ],
+  "execution": {
+    "entry_logic": "measured_entry_price = first_sight_price. The stored Strat entry_trigger is structural setup context only and must not be substituted as the fill. Activation means gate_bucket_floor == WOULD_OTHERWISE_QUALIFY at first sight. Activation is not permission to choose a retrospectively better fill.",
+    "exit_logic": "Same regular session only. TARGET_FIRST uses floor target_1_r, never an open beyond the target. INVALIDATION_FIRST uses the open's R when the bar opens beyond the stop, otherwise the invalidation's R versus measured_entry_price. A bar that reaches both stop and Target 1 is AMBIGUOUS and is excluded. Timeout is UNRESOLVED_AT_CLOSE at close_r versus measured_entry_price. DATA_INVALID is excluded. No trailing exit and no Target 2 exit.",
+    "stop_logic": "Stored invalidation. If the 5-minute bar opens beyond the stop and does not reach Target 1, INVALIDATION_FIRST at the R of that open versus measured_entry_price; the stop price inside the gap is not a fill. If the bar reaches both the stop and Target 1, including a gap that spans both, AMBIGUOUS with flag gap_or_range_spans_stop_and_target. A non-gap touch of the stop uses the invalidation price. Missing 5-minute bars fail closed as DATA_INVALID.",
+    "target_logic": "Unchanged floor_ge1r target_1. If the bar opens beyond Target 1 and does not reach the stop, TARGET_FIRST at target_1_r; the open beyond Target 1 is not a fill. If that open is also beyond Target 2, record Target 2 as reached and still use target_1_r. Target 2 is not an exit. A gap through Target 2 that also reaches the stop is AMBIGUOUS.",
+    "sizing": "None. One underlying R per completed activation. No portfolio, overlap, or drawdown model.",
+    "friction": "No dollar P&L and no added slippage. R uses structural risk as the denominator and the first-sight price as the entry. Stage B option fills are NOT EVALUATED."
+  },
+  "required_metrics": [
+    "population_size",
+    "setups_evaluated",
+    "activation_count",
+    "completed_trades",
+    "win_rate",
+    "loss_rate",
+    "expectancy",
+    "median_result",
+    "average_winner",
+    "average_loser",
+    "payoff_ratio",
+    "mae",
+    "mfe",
+    "target_hit_rate",
+    "stop_hit_rate"
+  ],
+  "acceptance_criteria": null,
+  "rejection_criteria": null,
+  "evidence_path": "docs/research-evidence/T-2026-10-02-prereg-options-212c-floor-outcome-2026-10-02-01/",
+  "variant_manifest": null,
+  "notes": "DRAFT registration only. Not collection and not scoring. measured_entry_price = first_sight_price. Before the one look the only visible study fields are NYSE sessions elapsed and the cumulative floor_ge1r activation count. Acceptance and rejection criteria are null. Written results are INSUFFICIENT SAMPLE below 15 completed outcomes and DESCRIPTIVE MEASUREMENT at 15 or more. This is forward Stage A descriptive evidence, not a confirmatory edge test. Stage B is NOT EVALUATED. No drawdown. Do not start this trial's collection until this registration is on main. The closed 59-episode trial stays closed."
+}
