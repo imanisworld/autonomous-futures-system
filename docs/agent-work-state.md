@@ -4,7 +4,7 @@
 >
 > This file is **not** strategy-status authority, deployment authority, or experiment authority. Authoritative records named in `AGENTS.md` always win.
 >
-> **Checkpoint base:** repository `main` `b2fabc441c1343e74d0ac1a835a91ebeca6138e3` (PR #1097, 2026-10-02); futures box on `489b55b91b6303c195c8e84bfcbf05ef32d1ab04` since 2026-10-02 03:43Z. Always fetch current `main`; this stored SHA is a comparison base, not a perpetual current-state claim.
+> **Checkpoint base:** repository `main` `43ead15be7456b14d96e6d3211f5df48806ca637` (PR #1103, 2026-10-02 14:38Z); futures box on `489b55b91b6303c195c8e84bfcbf05ef32d1ab04` since 2026-10-02 03:43Z. Always fetch current `main`; this stored SHA is a comparison base, not a perpetual current-state claim.
 >
 > Core rule: **checkpoint first; diff first; do not redo proven work.**
 
@@ -58,7 +58,60 @@ Every substantial unit of work must leave:
 
 If the agent cannot persist this file, it must return this payload verbatim-ready for the next agent/operator to save.
 
-## Current checkpoint — 2026-10-02 ET
+## Current checkpoint — 2026-10-02 afternoon (after #1103)
+
+All runtime facts below come from read-only `afs-ro` reads at 14:28–14:45Z, except the box changes, which the operator ran.
+
+### DONE / DO NOT REDO
+
+- **Release drift alert and fix (2026-10-02).**
+  - **The alert:** at 11:05Z the drift gate reported "manifest integrity FAILED" on `489b55b`.
+  - **The cause:** Python jobs that run code from the live release wrote cpython-314 `__pycache__` files into it, in three batches:
+    - 03:47Z, most likely `feed-watchdog.timer`;
+    - 11:05Z, the drift gate's own `-m ops.release_integrity` run;
+    - 12:00Z, a cron job that was not identified.
+  - **The risk:** `webhook/app.py` refuses to start on an integrity failure, so any futures-bot restart would have failed.
+  - **Repo fix:** #1101 (`b74bacf`). The drift gate runs `ops.release_integrity` with `-B`, and the feed-watchdog, wide-stop EOD fallback and day-only-exit units set `PYTHONDONTWRITEBYTECODE=1`. #1100, a duplicate from another session, was closed.
+  - **Box fix (operator, ~14:28Z):**
+    1. A `no-bytecode.conf` drop-in on every unit referencing the live path except futures-bot: afs-coverage-collector, afs-wide-stop-demo-eod-fallback, calendar-sync, daily-digest, feed-watchdog, ibkr-watchdog, options-122-prospective, options-scanner, risksentinel. Then `daemon-reload`, with no restarts.
+    2. `PYTHONDONTWRITEBYTECODE=1` added at the top of root's crontab (backup `/root/crontab.bak.pre-nobytecode.*`); nothing in `/etc/cron.d` matched.
+    3. Ten `__pycache__` directories removed from the release, leaving `.venv` alone.
+    4. Integrity with the shared `.env` loaded: **OK, 1632 files**.
+  - **Still clean after the 14:34Z feed-watchdog run:** no `__pycache__` in the release.
+  - **Restart safety:** futures-bot can restart safely again.
+- **Box memory:** the post-deploy `memory_critical` was a startup projection. futures-bot PID `1327346` (unchanged) was at RSS 324 MiB at 14:31Z, a plateau consistent with release `5115b78` (about 360 MiB).
+- **Options scanner:** `apt-daily-upgrade` restarted it at about 06:49Z (new PID `1354682`, RSS about 232 MB), along with the watcher and push-relay. futures-bot was **not** restarted.
+- **Options-scanner swap:** before that restart the scanner held 470 MiB in swap under `MemoryMax=350M` (cgroup `max` events 1301, `sock_throttled` 8170). Daily scan counts stayed steady from 09-24 to 10-01 (3,087–3,369), so no skipped cycles are visible. It is recorded in `docs/futures-operator-todo.md` (#1099) and needs an operator decision.
+- **Merged since #1098:**
+  - #1099: TODO items for the memory plateau check, the scanner memory cap, and the #1085 install marked done.
+  - #1101: release jobs no longer write bytecode.
+  - #1102: shadow-report one-at-a-time labels.
+  - #1103 (`43ead15`): 4HR arm contract-month check.
+    - Behavior: `contract_check` is MATCH, MISMATCH (recorded as `TRIGGER_BLOCKED` / `CONTRACT_MONTH_MISMATCH`), or UNKNOWN (`needs_manual_review`).
+    - Review: `/futures-diff-review` APPROVE PAPER-DEPLOY at head `179b676`. Locally, 95 targeted and 323 wider tests passed, and the new tests fail on the base. CI green.
+  - None of these is deployed. #1101 is a repo change, and its units are already covered on the box by the drop-ins above.
+- **4HR observation publisher is live:** `logs/tf1m/4hr_observation/state_2026-10-02.json` is being written (14:40Z status `INVALIDATED`). The observer flag is still OFF, so no natural-1m evidence exists and the epoch has not started.
+- **#1095 bug seen live:** `logs/discord_observation_status.json` is written inside the release directory (last at 14:30Z). It is not flagged by the integrity check because `logs/` is excluded. #1095 fixes it and is not deployed.
+
+### NEXT — in order (afternoon)
+
+1. **Read-only confirmations:**
+   - after the 2026-10-03 12:00Z cron jobs: no `__pycache__` in the release;
+   - the next drift-gate run reports OK;
+   - futures-bot RSS stays flat.
+2. **Next futures release**, with an operator GO for each step:
+   1. prove `LOG_DIR=/root/afs-shared/logs` on the box (required for #1095);
+   2. `/futures-deployment-safety-audit`;
+   3. build, verify and promote an exact reviewed `main` SHA carrying #1095 and #1103;
+   4. install #1101's `afs-server-drift-gate.sh` on the box separately, since the box runs its own copy.
+3. **4HR natural-1m epoch:** follow `docs/4hr-natural-1m-observation-epoch-2026-10-01.md`, after #1103 is deployed and before the 2026-12-11 roll.
+4. **Open question:** do the 1-minute TradingView alerts send `contract_hint`?
+   - The Pine script sends it only when `cc_proven`.
+   - The box's `tf1m/bars_*.jsonl` rows do not store it.
+   - If the 1-minute alerts never send it, every #1103 check will be UNKNOWN and need manual review.
+5. **Options-scanner memory cap:** operator decision.
+
+## Earlier checkpoint — 2026-10-02 morning
 
 ### DONE / DO NOT REDO
 
@@ -83,7 +136,7 @@ If the agent cannot persist this file, it must return this payload verbatim-read
 - **Live release preserved on GitHub:** tag `archive/futures-stale-bearer-curated-75f10e4-2026-09-29` → `75f10e4`.
 - **60M 3-2-2 corpus rerun:** operator re-confirmed **HOLD** 2026-10-02. A rerun cannot change the $6k account-size blocker. Revisit near $6k equity, before quoting any 3-2-2 figure, or when forward 3-2-2 trades need a clean historical baseline.
 
-### NEXT — in order
+### NEXT — morning list (superseded by the afternoon list above; items 1, 3 and 4 are folded into it, and item 4 landed as #1103)
 
 1. **Post-deploy audit of `489b55b`:** run `/futures-deployment-safety-audit` after a full session on the new release. Confirm the watcher's startup `memory_critical` cleared, journals keep advancing, and there are no new errors.
 2. **4HR natural-1m epoch:** start only per `docs/4hr-natural-1m-observation-epoch-2026-10-01.md`. Set `ONE_MIN_TRIGGER_ENABLED` and `ONE_MIN_4HR_OBSERVER_ENABLED` with both `EXPECTED_PROOF_` pins; that is a pinned env change, so it needs an operator GO and a bot restart. Then an operator read-only verification; that time is the epoch start. The flag is OFF today, so no natural-1m 4HR evidence exists yet.
