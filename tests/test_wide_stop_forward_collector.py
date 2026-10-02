@@ -275,7 +275,7 @@ def test_process_five_min_bar_passes_payload_open_to_resolver(tmp_path, monkeypa
 
     monkeypatch.setattr(collector, "_resolve_one_position", _capture)
     monkeypatch.setattr(
-        collector, "_evaluate_canonical_candidate", lambda **kwargs: (None, None, None)
+        collector, "_evaluate_canonical_candidate", lambda **kwargs: (None, None, None, None)
     )
     payload = _payload()
     payload.open = 19_980.0
@@ -329,8 +329,8 @@ def test_max_three_filled_trades_per_day_blocks_fourth_candidate(tmp_path, monke
 
     def fake_eval(**kwargs):
         if kwargs["strategy"] == FOUR_HR:
-            return decision, object(), candidate
-        return None, None, None
+            return decision, object(), candidate, None
+        return None, None, None, None
 
     monkeypatch.setattr(collector, "_evaluate_canonical_candidate", fake_eval)
 

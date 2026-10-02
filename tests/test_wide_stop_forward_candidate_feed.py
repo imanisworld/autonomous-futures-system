@@ -102,7 +102,7 @@ def test_parked_322_reaches_canonical_collector_without_active_reenable(config, 
     monkeypatch.setattr(state_builder, "build_market_state", lambda _payload: copy.deepcopy(state))
     payload = SimpleNamespace(timestamp=bars[-1]["ts"])
 
-    decision, observed_state, candidate = _evaluate_canonical_candidate(
+    decision, observed_state, candidate, _machine = _evaluate_canonical_candidate(
         payload=payload,
         cfg=cfg,
         bars_5m=bars,

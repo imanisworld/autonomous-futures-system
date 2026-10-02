@@ -107,11 +107,11 @@ def test_fi5c_nan_stop_candidate_is_never_submitted(config, tmp_path, monkeypatc
     real = collector._evaluate_canonical_candidate
 
     def poisoned(**kwargs):
-        decision, state, candidate = real(**kwargs)
+        decision, state, candidate, machine = real(**kwargs)
         if candidate is not None:
             candidate = dict(candidate, stop=float("nan"))
             decision.setup.stop = float("nan")
-        return decision, state, candidate
+        return decision, state, candidate, machine
 
     monkeypatch.setattr(collector, "_evaluate_canonical_candidate", poisoned)
     broker = FakeDemoBroker()
