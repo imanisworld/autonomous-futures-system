@@ -25,6 +25,8 @@ same-evening run misses some. `--final` re-runs a past day, writes
 Stacking: the shadow lane is uncapped, so one setup can open a new trade while
 an earlier trade of the same market + strategy + direction is still live. The
 report also shows a one-at-a-time view that leaves those stacked trades out.
+"Left out" counts closed trades only, so kept + left out equals the market's
+trade count; overlapping trades still open are reported separately.
 Fill/exit times come from the stored bar files (the same bars the resolver
 used); without them it falls back to 15-minute bars and flags the count.
 """
@@ -194,7 +196,9 @@ def build_report(rows: list[dict], day: date, *, log_dir: str | Path | None = No
     total = _empty()
     first_by_inst: dict[str, dict] = defaultdict(_empty)
     first_total = _empty()
-    stacked_by_inst: dict[str, int] = defaultdict(int)
+    # Overlapping trades left out, bucketed like the totals: "closed" is what the
+    # one-at-a-time line leaves out, so kept + left out == the market's trades.
+    stacked_by_inst: dict[str, dict] = defaultdict(_empty)
     flags = mark_stacked(rows, log_dir)
     approx = 0
     for row in rows:
@@ -208,7 +212,7 @@ def build_report(rows: list[dict], day: date, *, log_dir: str | Path | None = No
         flag = flags.get(id(row))
         approx += bool(flag and flag["approx"])
         if flag and flag["stacked"]:
-            stacked_by_inst[inst] += 1
+            _add(stacked_by_inst[inst], inst, result, ticks)
             continue
         for bucket in (first_by_inst[inst], first_total):
             _add(bucket, inst, result, ticks)
@@ -227,11 +231,19 @@ def build_report(rows: list[dict], day: date, *, log_dir: str | Path | None = No
         "by_strategy": {k: {s: v[s] for s in sorted(v)} for k, v in sorted(by_strat.items())},
         # One-at-a-time view: stacked trades (filled while the same market +
         # strategy + direction was still in a trade) left out.
+        # "stacked" counts closed trades only; overlapping trades still open
+        # are "stacked_open" (they are already in the market's "still open").
         "first_signal": {
             "total": first_total,
-            "stacked": sum(stacked_by_inst.values()),
+            "stacked": sum(b["closed"] for b in stacked_by_inst.values()),
+            "stacked_open": sum(b["open"] for b in stacked_by_inst.values()),
             "by_instrument": {
-                k: {**first_by_inst[k], "stacked": stacked_by_inst[k]} for k in sorted(by_inst)
+                k: {
+                    **first_by_inst[k],
+                    "stacked": stacked_by_inst[k]["closed"],
+                    "stacked_open": stacked_by_inst[k]["open"],
+                }
+                for k in sorted(by_inst)
             },
             "timing_approx": approx,
         },
@@ -259,10 +271,15 @@ def _line(b: dict) -> str:
     )
 
 
-def _first_signal_line(first: dict, stacked: int) -> str:
+def _first_signal_line(label: str, first: dict, stacked: int, stacked_open: int = 0) -> str:
+    # The card keeps a "<label> one at a time:" line as its own field under its
+    # market only while the key is five words or fewer; longer keys are pooled
+    # into the card description, away from their market.
+    still_open = f", {stacked_open} more still open" if stacked_open else ""
     return (
-        f"One trade at a time per setup: {first['closed']} trades, {first['wins']} won,"
-        f" {first['losses']} lost, {_dollars(first)} ({stacked} overlapping trades left out)"
+        f"{label} one at a time: {first['closed']} trades, {first['wins']} won,"
+        f" {first['losses']} lost, {_dollars(first)}"
+        f" ({stacked} overlapping trades left out{still_open})"
     )
 
 
@@ -324,8 +341,11 @@ def format_digest(report: dict, *, top: int = 3) -> str:
         lines.append("No shadow outcomes recorded for this day; all six markets are shown below.")
     else:
         lines.append(f"All markets: {_line(report['total'])}")
-        if first_signal.get("stacked"):
-            lines.append(_first_signal_line(first_signal["total"], first_signal["stacked"]))
+        if first_signal.get("stacked") or first_signal.get("stacked_open"):
+            lines.append(_first_signal_line(
+                "Total", first_signal["total"], first_signal.get("stacked", 0),
+                first_signal.get("stacked_open", 0),
+            ))
     for inst in REPORT_INSTRUMENTS:
         bucket = report["by_instrument"].get(inst) or _empty()
         if not (bucket["closed"] or bucket["open"] or bucket["no_fill"]):
@@ -333,8 +353,10 @@ def format_digest(report: dict, *, top: int = 3) -> str:
             continue
         lines.append(f"**{pe.market(inst)}** — {_line(bucket)}")
         inst_first = (first_signal.get("by_instrument") or {}).get(inst) or {}
-        if inst_first.get("stacked"):
-            lines.append(_first_signal_line(inst_first, inst_first["stacked"]))
+        if inst_first.get("stacked") or inst_first.get("stacked_open"):
+            lines.append(_first_signal_line(
+                inst, inst_first, inst_first.get("stacked", 0), inst_first.get("stacked_open", 0),
+            ))
         best, worst = _strategy_extremes(report, inst)
         if best or worst:
             lines.append(
