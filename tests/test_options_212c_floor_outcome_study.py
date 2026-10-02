@@ -235,6 +235,17 @@ def test_capture_fails_closed_on_episode_drift_and_population_omission() -> None
         )
 
 
+    with pytest.raises(StudyContractError, match="event_version_mismatch"):
+        build_session_artifact(
+            session,
+            [ep],
+            [_event(ep, observer_version="cov-v9.9")],
+            {ep.symbol: _bars()},
+            source=_source(),
+            captured_at=datetime(2026, 10, 5, 20, 31, tzinfo=timezone.utc),
+        )
+
+
 def test_missing_bar_is_sealed_and_scores_data_invalid_without_refetch() -> None:
     ep = _episode()
     missing = _bars()
