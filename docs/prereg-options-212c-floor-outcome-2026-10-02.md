@@ -117,9 +117,11 @@ Frozen location, one file per eligible session:
 
 Each session file is one immutable seal of the non-bar episode snapshot and the 5-minute bars. The one-look reads only that file. It does not reopen the ordinary episode output, an `out-v0.1` row, or a later bar fetch.
 
-Session fields, frozen as `SESSION_SEAL_FIELDS`: `path_record_version`, `trial_id`, `session_date`, `session_open`, `session_close`, `source`, `captured_at`, `episodes`. `source` is the provider name and the causal request window. It contains no credentials.
+Session fields, frozen as `SESSION_SEAL_FIELDS`: `path_record_version`, `trial_id`, `session_date`, `session_open`, `session_close`, `source`, `captured_at`, `episodes`. `source` contains `provider`, `request_start`, `request_end`, `observer_run_id`, `observer_ran_at`, and `source_sha`; it contains no credentials. These are provenance fields only and are sealed before any study readout.
 
 Each structurally selected `STRAT_212_CONTINUATION` episode on the V1 universe is one object in `episodes`. Its fields are frozen as `EPISODE_SNAPSHOT_FIELDS`:
+
+`ep-v0.1` does **not** retain `floor_target_2`. The capture primitive therefore joins each reduced episode back to its exact first `cov-v0.1` observer event using `symbol|session_date|direction|first_bar_start|family`, cross-checks the shared entry/invalidation/risk/Target 1/first-sight fields, and copies `floor_target_2` from that first observer event. A missing first event, duplicate join key, or shared-field mismatch refuses the seal; it is not reconstructed later.
 
 - `episode_id`, formed as `symbol|session_date|direction|first_bar_start|family`
 - `symbol`, `session_date`, `direction`, `first_bar_start`, `family`
@@ -214,8 +216,8 @@ Report these after the one look. Activation count is not the result. The spec `r
 - payoff ratio (average winner divided by the absolute average loser), undefined when either side has zero rows
 - MAE and MFE distributions in R
 - target-hit rate, stop-hit rate, and timeout rate
-- concentration by ticker, session date, and clock bucket
-- outcome concentration (share of total R from the single largest contributor, and from the largest ticker)
+- concentration by ticker, session date, and clock bucket; `clock bucket` is the exchange-local (`America/New_York`) hour containing `first_sight_at`
+- outcome concentration: signed share of total completed R from the single largest episode contributor and from the ticker with the largest summed completed R; the share is `null` when total completed R is zero
 
 Maximum drawdown is not reported. No sequential portfolio, sizing, or overlap model is preregistered.
 
@@ -259,6 +261,6 @@ One scoring pass after the stopping rule. No parameter search. No second target.
 
 ## Authority boundary
 
-This draft registers the contract. It does not approve collection or scoring. The spec status remains `DRAFT`. No adapter is registered for `options_212c_floor_underlying_outcome`, so the current runner cannot execute this spec. Do not approve the spec, and do not score, until the `options_212c_floor_outcome-v0.1` metric check described above exists and fails closed on a missing preregistered field.
+This draft registers the contract. It does not approve collection or scoring. The spec status remains `DRAFT`. Synthetic-only capture/scoring primitives may exist in source for QA, but they have no provider call, file writer/reader, timer/service hook, or registered experiment adapter. No adapter is registered for `options_212c_floor_underlying_outcome`, so the current runner cannot execute this spec. Do not approve the spec, admit a forward session, or score real trial data until the seal-capture integration and `options_212c_floor_outcome-v0.1` metric check are independently reviewed and fail closed on a missing preregistered field.
 
 Do not start this trial's forward collection until the registration commit is on `main`. The first intended session is 2026-10-05, and that session counts only if its coverage collection has not already run before the merge. If 2026-10-05 is collected before this registration reaches `main`, do not slide the window forward after the fact. Stop and register again.

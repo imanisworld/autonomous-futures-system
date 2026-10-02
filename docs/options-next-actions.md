@@ -4,6 +4,17 @@ _As of 2026-10-02. Operational checklist only. The authoritative options status 
 
 ## Now — no production mutation
 
+
+### 2-1-2 floor-outcome forward study
+
+- [x] #1115 merged as `65847295521be1ff0d6b9ef89c8fb8699aff7735`: forward Stage-A contract registered **DRAFT / PLANNED / NOT RUN**.
+- [x] Frozen stopping monitor is hash-bound to sealed session snapshots, consecutive from 2026-10-05, with fail-closed identity/gate/session checks.
+- [ ] Independent-review the synthetic-only seal/scorer machinery branch. Required scope: exact first-event join for `floor_target_2`, exact 5-minute grid, gap/stop/target/timeout semantics, all preregistered metrics, and no real-data I/O.
+- [ ] After that review, obtain a separate operator GO before adding provider fetch/file writer/timer integration. **Do not collect a real session merely because the pure machinery exists.**
+- [ ] Before admitting 2026-10-05, verify the approved capture path was already on `main` and that no study data for that session was collected earlier. Otherwise stop and register a new forward window; do not slide this one.
+- [ ] One-look scoring remains blocked until the stop condition fires and the scorer/metric adapter is separately approved. Stage B option fills remain **NOT EVALUATED**.
+
+
 - [x] #1067 code complete: 66-symbol candidate universe + fail-closed capacity preflight.
 - [x] #1067 exact-head CI green on `a4de6f986b4e19bca39e161248151f8e139eda0c`.
 - [x] #1069 code complete: isolated SPX → SPXW paper lane, 0DTE/1+DTE cohorts, dedupe, resolver, P&L, risk cleanup.
