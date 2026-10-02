@@ -5,6 +5,7 @@ collector, strategy, or execution modules.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import subprocess
@@ -324,7 +325,6 @@ def test_canonical_research_evidence_is_registered_before_counting() -> None:
         assert len(path.parts) >= 4 and "/".join(path.parts[:2]) == "docs/research-evidence"
         trial_id = path.parts[2]
         assert trial_id in first, f"{rel}: trial_id directory not present in ledger"
-        assert _read_trial_id_from_artifact(ROOT / rel) == trial_id, f"{rel}: embedded trial_id mismatch"
 
         matching = [
             row
@@ -332,7 +332,26 @@ def test_canonical_research_evidence_is_registered_before_counting() -> None:
             if row["event"] in {"COMPLETED", "UNREGISTERED_ATTEMPT"}
             and row.get("result_artifact") == rel
         ]
+        if not matching:
+            terminals = [
+                row
+                for row in by_trial[trial_id]
+                if row["event"] == "COMPLETED" and isinstance(row.get("result_artifact"), str)
+            ]
+            assert len(terminals) == 1, f"{rel}: companion file needs exactly one COMPLETED result"
+            pinned = set(re.findall(r"[0-9a-f]{64}", terminals[0].get("notes") or ""))
+            digest = hashlib.sha256((ROOT / rel).read_bytes()).hexdigest()
+            assert digest in pinned, f"{rel}: preserved companion bytes are not pinned on the COMPLETED line"
+            text = (ROOT / rel).read_text(encoding="utf-8")
+            if rel.endswith(".json"):
+                payload = json.loads(text)
+                embedded = payload.get("trial_id") if isinstance(payload, dict) else None
+                if embedded is not None:
+                    assert embedded == trial_id, f"{rel}: companion trial_id mismatch"
+            continue
+
         assert len(matching) == 1, f"{rel}: expected exactly one terminal ledger event"
+        assert _read_trial_id_from_artifact(ROOT / rel) == trial_id, f"{rel}: embedded trial_id mismatch"
         terminal = matching[0]
 
         # Provenance is derived from history, not from SHAs stored in the row: after a

@@ -4,6 +4,16 @@ _As of 2026-10-02. The newest dated repository refresh below governs source stat
 
 Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`; the read-only coverage evidence lane (observer, reducer, outcome study, after-close collector) is described in `docs/options-coverage-observer.md`.
 
+## Repository refresh — 2026-10-02 (59-episode one-look preserved)
+
+This refresh governs the frozen 59-episode experiment after its single run. The earlier same-day section that says the experiment is not run is the pre-run approval record.
+
+- The one-look ran once on merged `main` `d238ea4aee2f2e9f7dae0b09e90cbb65f1e4070c`. These evidence bytes were copied unchanged onto current `main` `329fb2c0867e886542690e5d5b936fb5061d901c`. The run was not repeated.
+- **Result: SUPPORTED BY THIS EXPERIMENT / coverage only / not edge.** On the frozen 59-episode population, `floor_ge1r` produced 2 activations and `nearest_v1` produced 0. That is a coverage rescue. It does not establish that those two activations would have been profitable trades. Strategy edge remains unproven. There is no P&L, expectancy, promotion, deployment, or execution conclusion.
+- Ledger disposition: `RESEARCH_ONLY`.
+- Result artifact: `docs/research-evidence/T-2026-09-25-prereg-options-212c-target-geometry-2026-09-25-01/runner_report.json`, SHA-256 `0d47bf46fd62748e9e6b67a248d2ef6ef76aad072e6ad1d2fd43192f7f3343e8`. The trial manifest `results_sha256` is that digest. Companion evidence bytes were copied with their original hashes and were not regenerated.
+- No further run, tuning, watchlist expansion, SPXW enablement, or deployment follows from this result.
+
 ## Repository/runtime refresh — 2026-10-02 (proven gates; experiment not run)
 
 This refresh governs #1067 capacity, #1069 SPXW 0DTE, and the frozen 59-episode approval state. Earlier sections that still describe those two proofs as remaining, or the 59-episode spec as unapproved, are provenance of the earlier state.
@@ -15,7 +25,7 @@ This refresh governs #1067 capacity, #1069 SPXW 0DTE, and the frozen 59-episode 
 - #1077 merged as `8c4e2e472bd7926b46bcb83af1c7625117d3e769`. It adds display-only Signa-v2 Observation Rating / AFS Trade Grade surfaces; no scanner score, alert eligibility, setup state, contract selection, risk permission, order, or execution change. It is **not deployed** to the options scanner.
 - The options-scanner service was restarted by `apt-daily-upgrade` on 2026-10-02; that restart did not deploy #1077. Production remains the existing 20-symbol `OPTIONS_PAPER_V1` advisory/read-only posture with SPXW OFF.
 - Scanner memory-cap pressure remains an operator decision, not a strategy/evidence conclusion. Daily scan counts stayed steady through 2026-10-01; per-scan latency was not measured.
-- **59-episode experiment `E-2026-09-25-options-212c-target-geometry-01`:** operator approval (`approved_by` Operator, `approved_at` 2026-10-02T16:05:00Z) is recorded in this change and takes effect on `main` only when PR #1111 is valid and merged. Until that merge, `main` correctly stays `status: DRAFT` with null approval fields. The experiment is **NOT RUN**. The frozen contract stays one-look, 59 members, baseline `nearest_v1`, candidate `floor_ge1r`, dataset hash `1963db73bccf0fd366eaaa077bb4e9582ed453ff220f1c5e789961096f3f113c`, population manifest hash `2ee0db9132fe6b5933bb4cc04fb6d0e1e2d63f88c6ebc9e95a42b26f49d83e4a`. A later run may measure coverage and activation only. It has no P&L, expectancy, strategy-promotion, deployment, or execution authority.
+- **59-episode experiment `E-2026-09-25-options-212c-target-geometry-01`:** this paragraph is the pre-run approval record. #1111 merged as `d238ea4aee2f2e9f7dae0b09e90cbb65f1e4070c` with `approved_by` Operator and `approved_at` 2026-10-02T16:05:00Z. The one-look result is in the preservation refresh above: SUPPORTED BY THIS EXPERIMENT, coverage only, `RESEARCH_ONLY`, not edge. The frozen contract stayed one-look, 59 members, baseline `nearest_v1`, candidate `floor_ge1r`, dataset hash `1963db73bccf0fd366eaaa077bb4e9582ed453ff220f1c5e789961096f3f113c`, population manifest hash `2ee0db9132fe6b5933bb4cc04fb6d0e1e2d63f88c6ebc9e95a42b26f49d83e4a`.
 
 
 ## Repository refresh — 2026-09-29 (66-symbol expansion + SPXW paper lane + Epoch-3 audit)

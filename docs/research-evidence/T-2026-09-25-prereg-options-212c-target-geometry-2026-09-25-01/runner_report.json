@@ -1,0 +1,586 @@
+{
+  "artifacts": {
+    "criteria_classification": {
+      "acceptance_criteria": [
+        {
+          "evidence": "candidate.activation_count.count > baseline.activation_count.count => True",
+          "expression": "candidate.activation_count.count > baseline.activation_count.count",
+          "status": "ok",
+          "value": true
+        }
+      ],
+      "authority": "classification only; zero promotion/merge/deploy/strategy authority",
+      "integrity_checks": [
+        {
+          "evidence": "population_size baseline=59 candidate=59",
+          "name": "population_size_match",
+          "passed": true
+        },
+        {
+          "evidence": "no missing required metrics",
+          "name": "required_metrics_present",
+          "passed": true
+        }
+      ],
+      "reason": "all acceptance criteria passed; no performance rejection criteria fired",
+      "rejection_criteria": [
+        {
+          "class": "performance",
+          "evidence": "candidate.activation_count.count <= baseline.activation_count.count => False",
+          "expression": "candidate.activation_count.count <= baseline.activation_count.count",
+          "status": "ok",
+          "value": false
+        }
+      ]
+    },
+    "repository_sha": "d238ea4aee2f2e9f7dae0b09e90cbb65f1e4070c",
+    "runner_version": "1.0.0",
+    "spec_hash": "aeb3288787acd1fad650aabac55cf230417dae4c4bd98fca79c50fed55ab4a2e",
+    "spec_path": "docs/research-experiment-specs/E-2026-09-25-options-212c-target-geometry-01.json",
+    "validated_at": "2026-10-02T16:35:24Z"
+  },
+  "baseline_metrics": {
+    "_missing_required": [],
+    "activation_count": {
+      "count": 0,
+      "of": 59,
+      "rate": 0.0
+    },
+    "average_hold_time": {
+      "of": 0,
+      "seconds": null
+    },
+    "average_loser": {
+      "of": 0,
+      "value": null
+    },
+    "average_winner": {
+      "of": 0,
+      "value": null
+    },
+    "completed_trades": {
+      "count": 0,
+      "of": 0
+    },
+    "drawdown": {
+      "max_drawdown": 0.0,
+      "of": 0
+    },
+    "entry_count": {
+      "count": 0,
+      "of": 0,
+      "rate": null
+    },
+    "expectancy": {
+      "of": 0,
+      "value": null
+    },
+    "exposure": {
+      "completed_trades": 0,
+      "population": 59,
+      "rate": 0.0
+    },
+    "loss_rate": {
+      "count": 0,
+      "of": 0,
+      "rate": null
+    },
+    "mae": {
+      "mean": null,
+      "of": 0
+    },
+    "median_result": {
+      "of": 0,
+      "value": null
+    },
+    "mfe": {
+      "mean": null,
+      "of": 0
+    },
+    "payoff_ratio": {
+      "losers": 0,
+      "value": null,
+      "winners": 0
+    },
+    "population_size": {
+      "count": 59
+    },
+    "rejection_counts_by_reason": {
+      "counts": {
+        "MARKET_ALIGNMENT_REJECTED": 1,
+        "TARGET_GEOMETRY_REJECTED": 58
+      },
+      "of_evaluated": 59,
+      "total": 59
+    },
+    "setups_evaluated": {
+      "count": 59,
+      "of": 59
+    },
+    "stop_hit_rate": {
+      "count": 0,
+      "of": 0,
+      "rate": null
+    },
+    "target_hit_rate": {
+      "count": 0,
+      "of": 0,
+      "rate": null
+    },
+    "total_result": {
+      "of": 0,
+      "value": 0.0
+    },
+    "win_rate": {
+      "count": 0,
+      "of": 0,
+      "rate": null
+    }
+  },
+  "baseline_sha": "69ea8a9021441a04bd2b08616f38aa2a90f05536",
+  "candidate_metrics": {
+    "_missing_required": [],
+    "activation_count": {
+      "count": 2,
+      "of": 59,
+      "rate": 0.03389830508474576
+    },
+    "average_hold_time": {
+      "of": 0,
+      "seconds": null
+    },
+    "average_loser": {
+      "of": 0,
+      "value": null
+    },
+    "average_winner": {
+      "of": 0,
+      "value": null
+    },
+    "completed_trades": {
+      "count": 0,
+      "of": 0
+    },
+    "drawdown": {
+      "max_drawdown": 0.0,
+      "of": 0
+    },
+    "entry_count": {
+      "count": 0,
+      "of": 2,
+      "rate": 0.0
+    },
+    "expectancy": {
+      "of": 0,
+      "value": null
+    },
+    "exposure": {
+      "completed_trades": 0,
+      "population": 59,
+      "rate": 0.0
+    },
+    "loss_rate": {
+      "count": 0,
+      "of": 0,
+      "rate": null
+    },
+    "mae": {
+      "mean": null,
+      "of": 0
+    },
+    "median_result": {
+      "of": 0,
+      "value": null
+    },
+    "mfe": {
+      "mean": null,
+      "of": 0
+    },
+    "payoff_ratio": {
+      "losers": 0,
+      "value": null,
+      "winners": 0
+    },
+    "population_size": {
+      "count": 59
+    },
+    "rejection_counts_by_reason": {
+      "counts": {
+        "LATE_AT_FIRST_SIGHT": 2,
+        "MARKET_ALIGNMENT_REJECTED": 36,
+        "TARGET_GEOMETRY_REJECTED": 19
+      },
+      "of_evaluated": 59,
+      "total": 57
+    },
+    "setups_evaluated": {
+      "count": 59,
+      "of": 59
+    },
+    "stop_hit_rate": {
+      "count": 0,
+      "of": 0,
+      "rate": null
+    },
+    "target_hit_rate": {
+      "count": 0,
+      "of": 0,
+      "rate": null
+    },
+    "total_result": {
+      "of": 0,
+      "value": 0.0
+    },
+    "win_rate": {
+      "count": 0,
+      "of": 0,
+      "rate": null
+    }
+  },
+  "candidate_sha": "6bf42dc2eab0721e0054f794a3c35cf3b0a4d3c2",
+  "changed_variables": [
+    {
+      "baseline_value": "nearest_v1",
+      "candidate_value": "floor_ge1r",
+      "name": "target_geometry_rule"
+    }
+  ],
+  "concentration": {
+    "baseline": {
+      "regime": {
+        "UNKNOWN": 59
+      },
+      "setup_type": {
+        "options_212c_target_geometry": 59
+      },
+      "ticker": {
+        "AAPL": 3,
+        "AMZN": 1,
+        "BAC": 5,
+        "COIN": 3,
+        "GE": 1,
+        "GOOGL": 5,
+        "INTC": 2,
+        "IWM": 3,
+        "JPM": 4,
+        "MRK": 4,
+        "MSFT": 3,
+        "NFLX": 2,
+        "NVDA": 4,
+        "PLTR": 6,
+        "QQQ": 2,
+        "SPY": 2,
+        "TLT": 2,
+        "TSLA": 5,
+        "XOM": 2
+      },
+      "time": {
+        "14:30": 5,
+        "15:00": 5,
+        "15:30": 3,
+        "16:00": 9,
+        "16:30": 6,
+        "17:00": 4,
+        "17:30": 2,
+        "18:00": 7,
+        "18:30": 6,
+        "19:00": 8,
+        "19:30": 4
+      },
+      "timeframe": {
+        "30m": 59
+      }
+    },
+    "candidate": {
+      "regime": {
+        "UNKNOWN": 59
+      },
+      "setup_type": {
+        "options_212c_target_geometry": 59
+      },
+      "ticker": {
+        "AAPL": 3,
+        "AMZN": 1,
+        "BAC": 5,
+        "COIN": 3,
+        "GE": 1,
+        "GOOGL": 5,
+        "INTC": 2,
+        "IWM": 3,
+        "JPM": 4,
+        "MRK": 4,
+        "MSFT": 3,
+        "NFLX": 2,
+        "NVDA": 4,
+        "PLTR": 6,
+        "QQQ": 2,
+        "SPY": 2,
+        "TLT": 2,
+        "TSLA": 5,
+        "XOM": 2
+      },
+      "time": {
+        "14:30": 5,
+        "15:00": 5,
+        "15:30": 3,
+        "16:00": 9,
+        "16:30": 6,
+        "17:00": 4,
+        "17:30": 2,
+        "18:00": 7,
+        "18:30": 6,
+        "19:00": 8,
+        "19:30": 4
+      },
+      "timeframe": {
+        "30m": 59
+      }
+    }
+  },
+  "coverage_funnel": {
+    "baseline": {
+      "activated": {
+        "count": 0,
+        "of": 59
+      },
+      "completed": {
+        "count": 0,
+        "of": 0
+      },
+      "detected": {
+        "count": 59
+      },
+      "entered": {
+        "count": 0,
+        "of": 0
+      },
+      "evaluated": {
+        "count": 59,
+        "of": 59
+      },
+      "rejected_by_reason": {
+        "counts": {
+          "MARKET_ALIGNMENT_REJECTED": 1,
+          "TARGET_GEOMETRY_REJECTED": 58
+        },
+        "of": 59,
+        "total": 59
+      }
+    },
+    "candidate": {
+      "activated": {
+        "count": 2,
+        "of": 59
+      },
+      "completed": {
+        "count": 0,
+        "of": 0
+      },
+      "detected": {
+        "count": 59
+      },
+      "entered": {
+        "count": 0,
+        "of": 2
+      },
+      "evaluated": {
+        "count": 59,
+        "of": 59
+      },
+      "rejected_by_reason": {
+        "counts": {
+          "LATE_AT_FIRST_SIGHT": 2,
+          "MARKET_ALIGNMENT_REJECTED": 36,
+          "TARGET_GEOMETRY_REJECTED": 19
+        },
+        "of": 59,
+        "total": 57
+      }
+    }
+  },
+  "delta": {
+    "activation_count": {
+      "absolute": 0.03389830508474576,
+      "baseline": 0.0,
+      "baseline_denominator": 59,
+      "candidate": 0.03389830508474576,
+      "candidate_denominator": 59,
+      "percent": null
+    },
+    "completed_trades": {
+      "absolute": 0,
+      "baseline": 0,
+      "baseline_denominator": 0,
+      "candidate": 0,
+      "candidate_denominator": 0,
+      "percent": null
+    },
+    "drawdown": {
+      "absolute": 0.0,
+      "baseline": 0.0,
+      "baseline_denominator": 0,
+      "candidate": 0.0,
+      "candidate_denominator": 0,
+      "percent": null
+    },
+    "exposure": {
+      "absolute": 0.0,
+      "baseline": 0.0,
+      "baseline_denominator": null,
+      "candidate": 0.0,
+      "candidate_denominator": null,
+      "percent": null
+    },
+    "population_size": {
+      "absolute": 0,
+      "baseline": 59,
+      "baseline_denominator": null,
+      "candidate": 59,
+      "candidate_denominator": null,
+      "percent": 0.0
+    },
+    "setups_evaluated": {
+      "absolute": 0,
+      "baseline": 59,
+      "baseline_denominator": 59,
+      "candidate": 59,
+      "candidate_denominator": 59,
+      "percent": 0.0
+    },
+    "total_result": {
+      "absolute": 0.0,
+      "baseline": 0.0,
+      "baseline_denominator": 0,
+      "candidate": 0.0,
+      "candidate_denominator": 0,
+      "percent": null
+    }
+  },
+  "errors": [],
+  "evidence_classification": {
+    "INFERENCE": [
+      "Any claim that metric deltas imply a durable edge beyond this experiment"
+    ],
+    "UNKNOWN": [
+      "Whether the candidate should be promoted, merged, or deployed",
+      "Out-of-sample performance beyond the declared window"
+    ],
+    "VERIFIED": [
+      "baseline and candidate metrics computed from this run's population members",
+      "integrity checks listed under integrity_checks",
+      "result classification is mechanical against preregistered criteria only",
+      "runner has zero promotion/merge/deploy/strategy-change authority"
+    ]
+  },
+  "experiment_id": "E-2026-09-25-options-212c-target-geometry-01",
+  "held_constant": [
+    "exact 59 episode identities selected by family/symbol/date before outcomes",
+    "20-symbol V1 universe",
+    "2026-09-09..2026-09-15 retrospective sessions",
+    "trigger and invalidation",
+    "first-sight timestamp and price",
+    "SPY/QQQ/hourly/daily alignment inputs",
+    "gate ordering outside target-geometry-dependent fields",
+    "cov-v0.1 / ep-v0.1 / out-v0.1 semantics",
+    "no option contract/fill/sizing/P&L model"
+  ],
+  "integrity_checks": [
+    {
+      "evidence": "schema valid",
+      "name": "schema",
+      "result": "PASS"
+    },
+    {
+      "evidence": "filename stem matches experiment_id",
+      "name": "filename_stem",
+      "result": "PASS"
+    },
+    {
+      "evidence": "first event=PLANNED",
+      "name": "ledger_first_event",
+      "result": "PASS"
+    },
+    {
+      "evidence": "matches ledger frozen prereg_path",
+      "name": "prereg_path_match",
+      "result": "PASS"
+    },
+    {
+      "evidence": "matches ledger frozen population",
+      "name": "population_match",
+      "result": "PASS"
+    },
+    {
+      "evidence": "/Users/djb.a.e/MAINVSCODE/afs-options-1111/docs/prereg-options-212c-target-geometry-2026-09-25.md exists",
+      "name": "prereg_exists",
+      "result": "PASS"
+    },
+    {
+      "evidence": "expected docs/research-evidence/T-2026-09-25-prereg-options-212c-target-geometry-2026-09-25-01/, got 'docs/research-evidence/T-2026-09-25-prereg-options-212c-target-geometry-2026-09-25-01/'",
+      "name": "evidence_path",
+      "result": "PASS"
+    },
+    {
+      "evidence": "expected 'docs/research-trial-manifests/T-2026-09-25-prereg-options-212c-target-geometry-2026-09-25-01.json', got 'docs/research-trial-manifests/T-2026-09-25-prereg-options-212c-target-geometry-2026-09-25-01.json'",
+      "name": "variant_manifest",
+      "result": "PASS"
+    },
+    {
+      "evidence": "source/dataset_id/window present",
+      "name": "dataset_identity_fields",
+      "result": "PASS"
+    },
+    {
+      "evidence": "dataset_hash declared for non-path dataset_id; execution adapters must verify coverage",
+      "name": "dataset_hash",
+      "result": "PASS"
+    },
+    {
+      "evidence": "commit 69ea8a9021441a04bd2b08616f38aa2a90f05536 resolves",
+      "name": "baseline_sha_resolves",
+      "result": "PASS"
+    },
+    {
+      "evidence": "candidate declares commit_sha and/or change",
+      "name": "candidate_arm",
+      "result": "PASS"
+    },
+    {
+      "evidence": "commit 6bf42dc2eab0721e0054f794a3c35cf3b0a4d3c2 resolves",
+      "name": "candidate_sha_resolves",
+      "result": "PASS"
+    },
+    {
+      "evidence": "status='APPROVED'; execution requires APPROVED",
+      "name": "approved_status",
+      "result": "PASS"
+    },
+    {
+      "evidence": "adapter registered for setup_type='options_212c_target_geometry'",
+      "name": "execution_adapter",
+      "result": "PASS"
+    },
+    {
+      "evidence": "all required metrics present",
+      "name": "required_metrics",
+      "result": "PASS"
+    }
+  ],
+  "population": "Options 30m STRAT_212_CONTINUATION; exact 20-symbol V1 universe [AAPL, AMZN, BAC, COIN, GE, GOOGL, INTC, IWM, JPM, MRK, MSFT, NFLX, NVDA, PLTR, QQQ, SPY, TLT, TSLA, WMT, XOM]; retrospective sessions 2026-09-09..2026-09-15; full structurally selected 59-episode population",
+  "qa_handoff": [
+    "Confirm population identity was not outcome-selected.",
+    "Confirm only authorized changed_variables differ between arms.",
+    "Confirm dataset coverage and absence of leakage independently.",
+    "Falsify identical-population claim between arms.",
+    "Falsify that held_constant fields were actually held constant.",
+    "Attempt to reproduce metrics from raw arm outputs alone.",
+    "Attempt to falsify the mechanical criteria evaluation."
+  ],
+  "result": "SUPPORTED BY THIS EXPERIMENT",
+  "status": "VALID",
+  "trial_id": "T-2026-09-25-prereg-options-212c-target-geometry-2026-09-25-01",
+  "warnings": [
+    "Coverage-only target-geometry ablation: no option P&L, expectancy, or production-readiness claim is produced.",
+    "Coverage-only target-geometry ablation: no option P&L, expectancy, or production-readiness claim is produced."
+  ]
+}

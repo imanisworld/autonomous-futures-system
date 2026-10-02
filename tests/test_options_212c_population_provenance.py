@@ -4,6 +4,7 @@ These tests verify the frozen approval contract and do not score either arm.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -72,7 +73,15 @@ def test_verified_population_manifest_matches_its_canonical_hash() -> None:
     ]
 
     trial = json.loads((ROOT / TRIAL_MANIFEST_REL).read_text(encoding="utf-8"))
-    assert trial["results_sha256"] is None
+    report = (
+        ROOT
+        / "docs/research-evidence"
+        / "T-2026-09-25-prereg-options-212c-target-geometry-2026-09-25-01"
+        / "runner_report.json"
+    )
+    report_sha = hashlib.sha256(report.read_bytes()).hexdigest()
+    assert report_sha == "0d47bf46fd62748e9e6b67a248d2ef6ef76aad072e6ad1d2fd43192f7f3343e8"
+    assert trial["results_sha256"] == report_sha
 
 
 def test_approved_spec_validates_and_is_discoverable_for_execution() -> None:
