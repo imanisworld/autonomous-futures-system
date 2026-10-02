@@ -1,6 +1,6 @@
-"""Provenance binding for the draft 2-1-2 target-geometry experiment.
+"""Provenance binding for the approved 2-1-2 target-geometry experiment.
 
-These tests do not approve the spec and do not score either arm.
+These tests verify the frozen approval contract and do not score either arm.
 """
 from __future__ import annotations
 
@@ -44,9 +44,9 @@ def test_verified_population_manifest_matches_its_canonical_hash() -> None:
     recomputed = population_manifest_sha256(manifest["canonical"])
     again = population_manifest_sha256(json.loads(json.dumps(manifest["canonical"])))
 
-    assert spec["status"] == "DRAFT"
-    assert spec["approved_by"] is None
-    assert spec["approved_at"] is None
+    assert spec["status"] == "APPROVED"
+    assert spec["approved_by"] == "Operator"
+    assert spec["approved_at"] == "2026-10-02T16:05:00Z"
     assert manifest["manifest_sha256"] == recomputed == again
     assert manifest["canonical"]["population_count"] == 59
     assert len(manifest["canonical"]["episode_ids"]) == 59
@@ -70,15 +70,15 @@ def test_verified_population_manifest_matches_its_canonical_hash() -> None:
     assert trial["results_sha256"] is None
 
 
-def test_draft_spec_validates_and_stays_out_of_approved_discovery() -> None:
+def test_approved_spec_validates_and_is_discoverable_for_execution() -> None:
     report = run_validation(ROOT, ROOT / SPEC_REL, for_execution=False)
     assert report.status == "VALID"
 
-    blocked = run_validation(ROOT, ROOT / SPEC_REL, for_execution=True)
-    assert blocked.status == "BLOCKED"
+    executable = run_validation(ROOT, ROOT / SPEC_REL, for_execution=True)
+    assert executable.status == "VALID"
 
     approved = discover_specs(ROOT)
-    assert approved == []
+    assert any(path.name == "E-2026-09-25-options-212c-target-geometry-01.json" for path in approved)
     visible = discover_specs(ROOT, status=None)
     assert any(path.name == "E-2026-09-25-options-212c-target-geometry-01.json" for path in visible)
 
