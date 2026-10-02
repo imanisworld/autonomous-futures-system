@@ -2,9 +2,9 @@
   "schema_version": 1,
   "experiment_id": "E-2026-09-25-options-212c-target-geometry-01",
   "trial_id": "T-2026-09-25-prereg-options-212c-target-geometry-2026-09-25-01",
-  "status": "DRAFT",
-  "approved_by": null,
-  "approved_at": null,
+  "status": "APPROVED",
+  "approved_by": "Operator",
+  "approved_at": "2026-10-02T16:05:00Z",
   "supersedes": null,
   "hypothesis": "On the exact frozen 59-episode 30m STRAT_212_CONTINUATION population, the existing >=1R floor target geometry increases full-funnel WOULD_OTHERWISE_QUALIFY activations versus the current nearest-level V1 geometry, with all non-target inputs held constant.",
   "prereg_path": "docs/prereg-options-212c-target-geometry-2026-09-25.md",
@@ -76,5 +76,5 @@
   ],
   "evidence_path": "docs/research-evidence/T-2026-09-25-prereg-options-212c-target-geometry-2026-09-25-01/",
   "variant_manifest": "docs/research-trial-manifests/T-2026-09-25-prereg-options-212c-target-geometry-2026-09-25-01.json",
-  "notes": "DRAFT ONLY. Not approved and not run. The frozen outcomes file was verified read-only at /root/afs-shared/coverage/aggregate/outcomes_2026-09-09_2026-09-15.json (35024516 bytes, SHA-256 1963db73bccf0fd366eaaa077bb4e9582ed453ff220f1c5e789961096f3f113c). Selection implementation ops.research_experiment_adapters.options_212c_target_geometry._select_population version ep-v0.1-family-symbol-date-v1 reproduced 59 unique episodes. Population manifest SHA-256 is 2ee0db9132fe6b5933bb4cc04fb6d0e1e2d63f88c6ebc9e95a42b26f49d83e4a. approved_by and approved_at stay null. The variant manifest results_sha256 stays null. Operator approval is still required before any run. This test can classify coverage rescue only; it cannot prove edge, option expectancy, or production readiness."
+  "notes": "APPROVED by operator on 2026-10-02T16:05:00Z for one frozen measurement run only. The frozen outcomes file was verified read-only at /root/afs-shared/coverage/aggregate/outcomes_2026-09-09_2026-09-15.json (35024516 bytes, SHA-256 1963db73bccf0fd366eaaa077bb4e9582ed453ff220f1c5e789961096f3f113c). Selection implementation ops.research_experiment_adapters.options_212c_target_geometry._select_population version ep-v0.1-family-symbol-date-v1 reproduced 59 unique episodes. Population manifest SHA-256 is 2ee0db9132fe6b5933bb4cc04fb6d0e1e2d63f88c6ebc9e95a42b26f49d83e4a. The variant manifest results_sha256 remains null until the one approved run completes. Approval authorizes measurement only; this test can classify coverage rescue only and cannot prove edge, option expectancy, production readiness, promotion, deployment, or execution authority."
 }
