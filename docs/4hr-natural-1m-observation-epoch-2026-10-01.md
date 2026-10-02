@@ -81,13 +81,21 @@ not missing data, and they must not be backfilled.
   misses or no-touch days.
 - **Contract month is checked only when both alerts prove it.** The arm keeps
   the dated contract the 5m alert proved when it was first published
-  (`contract`, for example `MNQZ2026`). Each 1-minute record carries
-  `contract_check`:
+  (`contract`, for example `MNQZ2026`). Every record written after a 1-minute
+  touch carries `contract_check`:
   - `MATCH`: both alerts proved the same month.
   - `MISMATCH`: the months differ. The touch is recorded as `TRIGGER_BLOCKED`
     / `CONTRACT_MONTH_MISMATCH` and is never claimed as evidence.
-  - `UNKNOWN`: either alert did not prove its contract. The record still
-    counts, but an `UNKNOWN` record from a roll window (next: 2026-12-11 to
-    2026-12-14) needs manual review before it is counted.
+  - `UNKNOWN`: either alert did not prove its contract. The record is written
+    with `needs_manual_review: true` and must not be counted until reviewed.
+    The alerts are least likely to prove their contract around a roll (next:
+    2026-12-11 to 2026-12-14), so expect most roll-window records to be
+    `UNKNOWN`.
 
-  Snapshots written by a release without this field read as `UNKNOWN`.
+  The check runs only on bars that touch the trigger. A day where the 5m and
+  1-minute feeds are on different months but price never touches looks like a
+  normal no-touch day.
+
+  An arm published by a release without this field has no contract until the
+  current release republishes it; after that, it takes the 5m alert's
+  contract.

@@ -379,6 +379,7 @@ def test_touch_records_matching_contract_month(monkeypatch, tmp_path, config):
     assert event["event"] == "TRIGGER_TOUCH"
     assert event["contract_check"] == {
         "status": "MATCH", "arm_contract": "MNQM2026", "bar_contract": "MNQM2026",
+        "needs_manual_review": False,
     }
 
 
@@ -412,4 +413,22 @@ def test_unproven_contract_is_marked_unknown_not_assumed(monkeypatch, tmp_path, 
     assert event["event"] == "TRIGGER_TOUCH"
     assert event["contract_check"] == {
         "status": "UNKNOWN", "arm_contract": "MNQM2026", "bar_contract": None,
+        "needs_manual_review": True,
     }
+
+
+def test_every_row_after_a_touch_carries_the_contract_check(monkeypatch, tmp_path, config):
+    _enable_observer(monkeypatch)
+    _without_executable_4hr(config)
+    log_dir = str(tmp_path)
+    # No completed 1h bar: the touch is TRIGGER_BLOCKED / COMPLETED_1H_STOP_MISSING.
+    _arm_observation(log_dir, contract="MNQM2026")
+    blocked = _touch(log_dir, config, None)["one_min_trigger"]
+    assert blocked["reason"] == "COMPLETED_1H_STOP_MISSING"
+    assert blocked["contract_check"]["needs_manual_review"] is True
+
+    _seed_completed_8am_hour(log_dir)
+    assert _touch(log_dir, config, "MNQM2026")["one_min_trigger"]["event"] == "TRIGGER_TOUCH"
+    duplicate = _touch(log_dir, config, "MNQM2026")["one_min_trigger"]
+    assert duplicate["event"] == "TRIGGER_DUPLICATE"
+    assert duplicate["contract_check"]["status"] == "MATCH"

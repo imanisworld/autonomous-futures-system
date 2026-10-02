@@ -108,7 +108,11 @@ def _fully_completed_one_hour_stop(
 
 
 def _contract_check(state: dict, payload, day: date) -> dict:
-    """Compare the arm's 5m contract with this 1m bar's. Unproven is UNKNOWN, never assumed."""
+    """Compare the arm's 5m contract with this 1m bar's. Unproven is UNKNOWN, never assumed.
+
+    UNKNOWN rows carry ``needs_manual_review``: around a roll the alerts are least
+    likely to prove their contract, so such a row must not count unreviewed.
+    """
     arm_contract = normalize_contract(state.get("contract"), context_date=day)
     bar_contract = normalize_contract(
         getattr(payload, "contract_hint", None), context_date=day
@@ -117,7 +121,12 @@ def _contract_check(state: dict, payload, day: date) -> dict:
         status = "UNKNOWN"
     else:
         status = "MATCH" if arm_contract == bar_contract else "MISMATCH"
-    return {"status": status, "arm_contract": arm_contract, "bar_contract": bar_contract}
+    return {
+        "status": status,
+        "arm_contract": arm_contract,
+        "bar_contract": bar_contract,
+        "needs_manual_review": status == "UNKNOWN",
+    }
 
 
 def evaluate_armed_4hr_touch(payload, log_dir: str, for_date=None) -> Optional[dict]:
@@ -179,6 +188,7 @@ def evaluate_armed_4hr_touch(payload, log_dir: str, for_date=None) -> Optional[d
             "bar_ts": bar_open.isoformat(),
             "direction": direction,
             "trigger": trigger,
+            "contract_check": contract_check,
             "four_hour_treatment": treatment_context,
         }
         _append_evidence(log_dir, day, event)
@@ -207,6 +217,7 @@ def evaluate_armed_4hr_touch(payload, log_dir: str, for_date=None) -> Optional[d
             "fill_reference": fill_reference,
             "stop": stop,
             "target": target,
+            "contract_check": contract_check,
             "four_hour_treatment": treatment_context,
         }
         _append_evidence(log_dir, day, event)
@@ -218,6 +229,7 @@ def evaluate_armed_4hr_touch(payload, log_dir: str, for_date=None) -> Optional[d
             "strategy": STRATEGY,
             "bar_ts": bar_open.isoformat(),
             "arm_key": arm_key,
+            "contract_check": contract_check,
             "four_hour_treatment": treatment_context,
         }
 
