@@ -1,9 +1,9 @@
 # DRAFT — MNQ account-admission overlay — NOT APPROVED — DO NOT RUN
 
 **Status: SAME_TIMESTAMP_ORDER_BLOCKED. No scoring run is authorized.** The
-#915 fillable stream has been reproduced from the archive. The same-timestamp
-census is greater than zero, so this draft is not ready. It does not authorize
-a fetch, and it does not amend prereg #929.
+#915 fillable stream has been reproduced from the archive. Frozen capacity
+arbitration leaves 47 reachable equal-time cases, so this draft is not ready.
+It does not authorize a fetch, and it does not amend prereg #929.
 
 **Trial ID:** `T-2026-10-02-prereg-mnq-account-admission-overlay-draft-2026-10-02-01`
 
@@ -32,7 +32,7 @@ holding/EOD behavior.
 | Drawdown seed | Provenance-backed starting balance and starting peak, or an explicit choice to leave drawdown `DRAWDOWN_GATE_NOT_EVALUATED` | **NOT CHOSEN** — census blocks a scored run |
 | Decision criteria | What would count as pass, fail, or insufficient | **NOT FROZEN** — census blocks a scored run |
 | Allowed outputs | Whether a look may read counts only, or also P&L | **NOT FROZEN** — census blocks a scored run |
-| Same-timestamp census | Count of accepted `exit_ts` values that exactly equal a later candidate's `eligible_fill_ts`. Do not infer order from the tie | **280** — `SAME_TIMESTAMP_ORDER_BLOCKED` |
+| Same-timestamp census | Count of accepted `exit_ts` values that exactly equal a later candidate's `eligible_fill_ts`, limited to candidates capacity could actually reach. Do not infer order from the tie | **47 reachable** of 280 raw fillable pairs — `SAME_TIMESTAMP_ORDER_BLOCKED` |
 
 Do not fill these blanks from prereg #929, from the replay's $5,000
 normalization, or from the $1,500 ladder seed.
@@ -115,14 +115,21 @@ is strictly earlier than the next candidate's `eligible_fill_ts`. An equal
 timestamp is not treated as already realized. Equal timestamps are not an
 event order, and this draft does not infer one.
 
-The census on the reproduced artifact counted 280 fillable pairs whose
-`exit_ts` equals another event's `eligible_fill_ts`. The pairs are listed in
+The raw census on the reproduced artifact counted 280 fillable pairs whose
+`exit_ts` equals another event's `eligible_fill_ts`. Those pairs are listed in
 `research/artifacts/pr915-six-family-same-timestamp-collisions-5a9f14b.json`.
+
+Frozen capacity arbitration accepts 488 of the 2257 fillable events. Only 47
+of the raw pairs are an accepted open position whose exit timestamp equals a
+candidate that would otherwise be the next reachable fill. That list is
+`research/artifacts/pr915-reachable-equal-time-collisions-5a9f14b.json`.
+The definition is `docs/pr915-reachable-equal-time-census-2026-10-02.md`.
 Equal timestamps were not treated as an order.
 
-That count is greater than 0. This draft is not ready. The exact live
-ordering for those collisions has to be frozen and tested before a scored
-run. Do not call this overlay exact live parity.
+That reachable count is greater than 0. This draft is not ready. The exact
+live ordering for those 47 cases has to be frozen and tested before a scored
+run. The other raw pairs do not change which event capacity can reach. Do not
+call this overlay exact live parity.
 
 ## Drawdown
 
@@ -165,5 +172,5 @@ of this draft.
 ## Next
 
 Stop. Status is `SAME_TIMESTAMP_ORDER_BLOCKED`. Do not score. The next
-revision has to freeze and test the live same-request order for the 280
-collisions before any scored look.
+revision has to freeze and test the live same-request order for the 47
+reachable collisions before any scored look.
