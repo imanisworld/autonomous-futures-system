@@ -14,6 +14,11 @@ machine leaves ARMED, ``terminal_available_at`` records when that was known.
 A 1m bar may use the arm when armed_available_at <= bar open < terminal time.
 This keeps a 1m webhook that is processed after the same-boundary 5m webhook
 from losing the touch, without applying any later state backward.
+
+Contract month: ``contract`` is the dated contract the 5m alert proved when the
+arm was first published (for example ``MNQZ2026``), or None when the alert did
+not prove one. It is kept with the arm like ``armed_available_at``. The caller
+normalizes it; this module never derives a contract from a root or a date.
 """
 from __future__ import annotations
 
@@ -64,7 +69,9 @@ def _number(value: object) -> Optional[float]:
     return number
 
 
-def _snapshot(machine_state: dict, source_timestamp: datetime) -> Optional[dict]:
+def _snapshot(
+    machine_state: dict, source_timestamp: datetime, contract: Optional[str] = None
+) -> Optional[dict]:
     available = _aware(source_timestamp)
     if available is None or not isinstance(machine_state, dict):
         return None
@@ -81,6 +88,7 @@ def _snapshot(machine_state: dict, source_timestamp: datetime) -> Optional[dict]
         "trading_date": trading_date,
         "status": status,
         "source_timestamp": available.isoformat(),
+        "contract": contract if isinstance(contract, str) and contract else None,
         "executable": False,
         "trade_authorized": False,
         "order_authority": False,
@@ -143,7 +151,7 @@ def _previous_snapshot(path: Path, trading_date: str) -> Optional[dict]:
 
 
 def _carry_arm_window(snapshot: dict, previous: Optional[dict], machine_state: dict) -> None:
-    """Keep the first arm time; stamp the first time the arm stopped being ARMED."""
+    """Keep the first arm time and contract; stamp when the arm stopped being ARMED."""
     if previous is None:
         if snapshot["status"] == "ARMED":
             snapshot["armed_available_at"] = snapshot["source_timestamp"]
@@ -152,14 +160,17 @@ def _carry_arm_window(snapshot: dict, previous: Optional[dict], machine_state: d
         _arm_identity(previous) == _arm_identity(machine_state)
     )
     if snapshot["status"] == "ARMED":
-        snapshot["armed_available_at"] = (
-            previous["armed_available_at"] if same_arm else snapshot["source_timestamp"]
-        )
+        if same_arm:
+            snapshot["armed_available_at"] = previous["armed_available_at"]
+            snapshot["contract"] = previous.get("contract") or snapshot["contract"]
+        else:
+            snapshot["armed_available_at"] = snapshot["source_timestamp"]
         return
     if snapshot["status"] not in _TERMINAL or not same_arm:
         return
     snapshot.update({name: previous[name] for name in _ARM_FIELDS})
     snapshot["armed_available_at"] = previous["armed_available_at"]
+    snapshot["contract"] = previous.get("contract") or snapshot["contract"]
     snapshot["terminal_available_at"] = (
         previous.get("terminal_available_at") or snapshot["source_timestamp"]
     )
@@ -170,9 +181,13 @@ def publish_4hr_observation(
     machine_state: dict,
     *,
     source_timestamp: datetime,
+    contract: Optional[str] = None,
 ) -> bool:
-    """Publish one canonical machine snapshot. Malformed input writes nothing."""
-    snapshot = _snapshot(machine_state, source_timestamp)
+    """Publish one canonical machine snapshot. Malformed input writes nothing.
+
+    ``contract`` is the normalized dated contract the 5m alert proved, or None.
+    """
+    snapshot = _snapshot(machine_state, source_timestamp, contract)
     if snapshot is None:
         return False
     day = date.fromisoformat(snapshot["trading_date"])

@@ -79,8 +79,15 @@ not missing data, and they must not be backfilled.
   trigger, the arm is never published as ARMED and that day has no
   natural-1m record. Report such days from the 5m collector, not as 1-minute
   misses or no-touch days.
-- **Contract month is not checked.** The snapshot records the `MNQ` root only.
-  Around a roll (next window 2026-12-11 to 2026-12-14), the 5m and 1-minute
-  feeds could be on different months. Until the snapshot carries the contract
-  and the reader matches it, flag any natural-1m record from a roll window
-  for manual review before counting it.
+- **Contract month is checked only when both alerts prove it.** The arm keeps
+  the dated contract the 5m alert proved when it was first published
+  (`contract`, for example `MNQZ2026`). Each 1-minute record carries
+  `contract_check`:
+  - `MATCH`: both alerts proved the same month.
+  - `MISMATCH`: the months differ. The touch is recorded as `TRIGGER_BLOCKED`
+    / `CONTRACT_MONTH_MISMATCH` and is never claimed as evidence.
+  - `UNKNOWN`: either alert did not prove its contract. The record still
+    counts, but an `UNKNOWN` record from a roll window (next: 2026-12-11 to
+    2026-12-14) needs manual review before it is counted.
+
+  Snapshots written by a release without this field read as `UNKNOWN`.
