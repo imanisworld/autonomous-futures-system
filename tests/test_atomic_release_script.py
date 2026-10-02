@@ -278,8 +278,12 @@ def test_release_ops_modules_never_write_bytecode_into_a_release():
     assert export_at < build.index("python3 -m ops.release_integrity --repo-root . --manifest")
     assert export_at < build.index('tar czf "$archive"')
 
-    integrity_calls = re.findall(r"(\S+) PYTHONPATH='\$\w+(?:/\$sha)?' '[^']+/\.venv/bin/python' \\\n\s+-m ops\.release_integrity", text)
-    assert integrity_calls == ["PYTHONDONTWRITEBYTECODE=1"] * 4  # build, verify, promote, rollback
+    remote_calls = re.findall(
+        r"(\S+) \\\\\n\s+(\S+) PYTHONPATH='\$\w+(?:/\$sha)?' '[^']+/\.venv/bin/python' \\\n"
+        r"\s+-m ops\.release_integrity",
+        text,
+    )
+    assert [no_pyc for _, no_pyc in remote_calls] == ["PYTHONDONTWRITEBYTECODE=1"] * 4
     assert text.count("-m ops.release_integrity --repo-root '$") == 4
 
     for action in ("promote", "rollback"):
@@ -287,3 +291,28 @@ def test_release_ops_modules_never_write_bytecode_into_a_release():
         assert argc == 1
         assert "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH='" in rendered
         subprocess.run(["bash", "-n"], input=rendered, text=True, check=True)
+
+
+def test_every_release_integrity_check_is_given_the_fingerprint_pin():
+    """#1056: without EXPECTED_RELEASE_FINGERPRINT the check reports UNPINNED
+    and exits 1, which stops build/verify and fails promote/rollback after the
+    service has already restarted on the new release."""
+    text = SCRIPT.read_text()
+    build = text.split("build_release() {", 1)[1].split("verify_release() {", 1)[0]
+    local = build.split("python3 -m ops.release_manifest", 1)[1].split('tar czf "$archive"', 1)[0]
+    assert 'EXPECTED_RELEASE_FINGERPRINT="$(python3 -c' in local
+    assert '["fingerprint_sha256"]' in local
+
+    pins = re.findall(
+        r"EXPECTED_RELEASE_FINGERPRINT=(\S+) \\\\\n\s+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=",
+        text,
+    )
+    # build (box), verify, promote, rollback -- each with the fingerprint that
+    # step already holds; promote/rollback use the value written to .env.
+    assert pins == [r'\"\$built_fp\"', "'$fingerprint'", r'\"\$fp\"', r'\"\$prev_fp\"']
+
+    for action in ("promote", "rollback"):
+        _, rendered = _render_remote_command(action)
+        var = "fp" if action == "promote" else "prev_fp"
+        assert f'EXPECTED_RELEASE_FINGERPRINT="${var}" \\\n' in rendered
+        assert rendered.index(f"{var}=$(") < rendered.index(f'EXPECTED_RELEASE_FINGERPRINT="${var}"')

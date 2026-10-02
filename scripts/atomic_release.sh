@@ -68,7 +68,10 @@ build_release() {
     export PYTHONDONTWRITEBYTECODE=1
     RELEASE_BRANCH=main python3 -m ops.release_manifest \
       --repo-root . --output release_manifest.json
-    python3 -m ops.release_integrity --repo-root . --manifest release_manifest.json
+    # The check reports UNPINNED (exit 1) without a fingerprint pin (#1056).
+    # Pin to the manifest just built, the same value promote writes to .env.
+    EXPECTED_RELEASE_FINGERPRINT="$(python3 -c 'import json; print(json.load(open("release_manifest.json"))["fingerprint_sha256"])')" \
+      python3 -m ops.release_integrity --repo-root . --manifest release_manifest.json
     tar czf "$archive" --exclude=.git .
   )
 
@@ -84,6 +87,8 @@ build_release() {
     '$RELEASES/$sha/.venv/bin/pip' freeze > '$SHARED/release-${sha}-dependencies.txt'
     # Root ignores the a-w below; without this, the check writes the
     # __pycache__ it refuses into the release.
+    built_fp=\$(PYTHONDONTWRITEBYTECODE=1 '$RELEASES/$sha/.venv/bin/python' -c \"import json;print(json.load(open('$RELEASES/$sha/release_manifest.json'))['fingerprint_sha256'])\")
+    EXPECTED_RELEASE_FINGERPRINT=\"\$built_fp\" \\
     PYTHONDONTWRITEBYTECODE=1 PYTHONPATH='$RELEASES/$sha' '$RELEASES/$sha/.venv/bin/python' \
       -m ops.release_integrity --repo-root '$RELEASES/$sha'
     chmod -R a-w '$RELEASES/$sha'
@@ -136,6 +141,7 @@ verify_release() {
     done
     curl -fsS http://127.0.0.1:'$port'/health
     curl -fsS http://127.0.0.1:'$port'/status/tradovate-reliability >/dev/null
+    EXPECTED_RELEASE_FINGERPRINT='$fingerprint' \\
     PYTHONDONTWRITEBYTECODE=1 PYTHONPATH='$RELEASES/$sha' '$RELEASES/$sha/.venv/bin/python' \
       -m ops.release_integrity --repo-root '$RELEASES/$sha'
   "
@@ -253,6 +259,7 @@ promote_release() {
       exit 1
     }
     curl -fsS http://127.0.0.1:8000/health
+    EXPECTED_RELEASE_FINGERPRINT=\"\$fp\" \\
     PYTHONDONTWRITEBYTECODE=1 PYTHONPATH='$CURRENT' '$CURRENT/.venv/bin/python' \
       -m ops.release_integrity --repo-root '$CURRENT'
     # Durable release history. \$RELEASES is pruned to a rolling window of the
@@ -343,6 +350,7 @@ rollback_release() {
       exit 1
     }
     curl -fsS http://127.0.0.1:8000/health
+    EXPECTED_RELEASE_FINGERPRINT=\"\$prev_fp\" \\
     PYTHONDONTWRITEBYTECODE=1 PYTHONPATH='$CURRENT' '$CURRENT/.venv/bin/python' \
       -m ops.release_integrity --repo-root '$CURRENT'
     # Rollback changes the same release pins/link as promotion. Restore the
