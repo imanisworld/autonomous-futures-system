@@ -1,6 +1,6 @@
 # Options — Next Actions
 
-_As of 2026-09-29. Operational checklist only. The authoritative options status remains `docs/options-current-state-handoff.md`. This file must not be used to redefine strategy status, cohort boundaries, or deployment authority._
+_As of 2026-10-02. Operational checklist only. The authoritative options status remains `docs/options-current-state-handoff.md`. This file must not be used to redefine strategy status, cohort boundaries, or deployment authority._
 
 ## Now — no production mutation
 
@@ -11,6 +11,8 @@ _As of 2026-09-29. Operational checklist only. The authoritative options status 
 - [x] #1071 code complete: read-only Epoch-3 / filter-reason audit.
 - [x] #1071 exact-head CI green and independent diff review APPROVE on `0dca986edbb975e75c7c086c8b53f3361fdc4c4f`.
 - [x] Production remains 20 symbols; `OPTIONS_PAPER_V1`; advisory/read-only; SPXW OFF.
+- [x] #1077 merged as `8c4e2e472bd7926b46bcb83af1c7625117d3e769`; display-only Signa-v2 surfaces, no strategy/risk/order behavior change.
+- [x] #1077 is **not deployed** to the options scanner. A scanner deployment remains a separate operator GO and is not required for the #1067/#1069 evidence gates.
 
 ## Local / real-provider validation
 
@@ -48,6 +50,9 @@ _As of 2026-09-29. Operational checklist only. The authoritative options status 
 - [ ] Update `docs/options-current-state-handoff.md` with exact runtime/release proof after activation.
 
 ## Cleanup / non-blocking
+
+- [ ] Decide whether/when to deploy #1077's display-only Signa-v2 surfaces. Separate operator GO; do not combine it with #1067 universe expansion or SPXW enablement.
+- [ ] Resolve the options-scanner memory-cap decision recorded in `docs/agent-work-state.md` / `docs/futures-operator-todo.md`. This is operational capacity work, not permission to alter strategy rules.
 
 - [ ] Decide old draft #1026: **keep/install later** or **close as obsolete**. It does not block current validation.
 - [ ] After the active PRs are merged/closed, delete only branches proven safely contained or intentionally obsolete; preserve archive/research/release branches unless explicitly reviewed.
