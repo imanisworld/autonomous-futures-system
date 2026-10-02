@@ -24,6 +24,7 @@ from ops.options_212c_floor_outcome_monitor import (
     STUDY_ONLY_METRICS,
     STUDY_SCORER_VERSION,
     THRESHOLD_CROSSING_RULE,
+    bind_seal,
     sealed_path_record_relpath,
     study_readout,
 )
@@ -99,6 +100,7 @@ def test_entry_gap_and_blind_readout_are_frozen() -> None:
         "gap_or_range_spans_stop_and_target",
         "sessions_elapsed",
         "stop_condition_met",
+        "advance_refused",
         "activation_cap",
         "session_cap",
         STUDY_SCORER_VERSION,
@@ -138,35 +140,57 @@ def _episode(
     bar: str = "14:00:00+00:00",
     direction: str = "LONG",
 ) -> dict:
-    return {
-        "family": "STRAT_212_CONTINUATION",
+    identity = {
         "symbol": symbol,
         "session_date": session_date,
         "direction": direction,
         "first_bar_start": f"{session_date}T{bar}",
+        "family": "STRAT_212_CONTINUATION",
+    }
+    return {
+        **identity,
+        "episode_id": "|".join(identity[key] for key in EPISODE_IDENTITY_KEYS),
         "gate_bucket_floor": gate,
+        "bars": [{"start": f"{session_date}T{bar}", "open": 1, "high": 2, "low": 0.5, "close": 1.5}],
         "views": [{"outcome": "TARGET_FIRST", "close_r": 3.0}],
         "realized_r": 3.0,
     }
 
 
+def _session(session_date: str, episodes: list[dict]) -> dict:
+    record = {
+        "path_record_version": PATH_RECORD_VERSION,
+        "trial_id": "T-2026-10-02-prereg-options-212c-floor-outcome-2026-10-02-01",
+        "session_date": session_date,
+        "session_open": f"{session_date}T13:30:00+00:00",
+        "session_close": f"{session_date}T20:00:00+00:00",
+        "source": "sealed-test",
+        "captured_at": f"{session_date}T21:00:00+00:00",
+        "episodes": episodes,
+    }
+    return bind_seal(record)
+
+
 def test_readout_hides_activation_path_and_outcome_fields() -> None:
-    sessions = ["2026-10-03", "2026-10-04", "2026-10-05", "2026-09-15"]
-    quiet = study_readout(sessions, [])
+    quiet = study_readout([_session("2026-10-05", [])])
     loud = study_readout(
-        sessions,
         [
-            _episode("2026-10-05"),
-            _episode("2026-10-05"),
-            _episode("2026-10-05", symbol="MSFT", bar="15:00:00+00:00", gate="LATE_AT_FIRST_SIGHT"),
-            _episode("2026-09-15", symbol="NVDA"),
-        ],
+            _session(
+                "2026-10-05",
+                [
+                    _episode("2026-10-05"),
+                    _episode("2026-10-05"),
+                    _episode("2026-10-05", symbol="MSFT", bar="15:00:00+00:00", gate="LATE_AT_FIRST_SIGHT"),
+                ],
+            )
+        ]
     )
     assert quiet == loud
     assert quiet == {
         "sessions_elapsed": 1,
         "stop_condition_met": False,
         "stop_condition": None,
+        "advance_refused": False,
     }
     assert set(quiet) == set(READOUT_FIELDS)
     rendered = json.dumps(quiet)
@@ -185,51 +209,51 @@ def _eligible_dates(count: int) -> list[str]:
 
 
 def test_readout_names_the_stopping_condition_without_a_count() -> None:
-    one_session = ["2026-10-05"]
     below = [
         _episode("2026-10-05", bar=f"14:{index:02d}:00+00:00")
         for index in range(ACTIVATION_CAP - 1)
     ]
     at_cap = below + [_episode("2026-10-05", bar="15:30:00+00:00")]
-    assert study_readout(one_session, below)["stop_condition_met"] is False
-    fired = study_readout(one_session, at_cap)
+    assert study_readout([_session("2026-10-05", below)])["stop_condition_met"] is False
+    fired = study_readout([_session("2026-10-05", at_cap)])
     assert fired["sessions_elapsed"] == 1
     assert fired["stop_condition_met"] is True
     assert fired["stop_condition"] == "activation_cap"
+    assert fired["advance_refused"] is False
     assert str(ACTIVATION_CAP) not in json.dumps(fired)
 
-    almost = _eligible_dates(SESSION_CAP - 1)
+    almost = [_session(day, []) for day in _eligible_dates(SESSION_CAP - 1)]
     capped_days = _eligible_dates(SESSION_CAP)
-    assert study_readout(almost, [])["stop_condition_met"] is False
-    capped = study_readout(capped_days, [])
-    assert capped["sessions_elapsed"] == SESSION_CAP
-    assert capped["stop_condition"] == "session_cap"
+    capped = [_session(day, []) for day in capped_days]
+    assert study_readout(almost)["stop_condition_met"] is False
+    capped_readout = study_readout(capped)
+    assert capped_readout["sessions_elapsed"] == SESSION_CAP
+    assert capped_readout["stop_condition"] == "session_cap"
     assert date(2026, 11, 26).isoformat() not in capped_days
     assert all(date.fromisoformat(day).weekday() < 5 for day in capped_days)
 
-    both_days = _eligible_dates(SESSION_CAP)
     both_rows = [
-        _episode(both_days[-1], bar=f"14:{index:02d}:00+00:00")
+        _episode(capped_days[-1], bar=f"14:{index:02d}:00+00:00")
         for index in range(ACTIVATION_CAP)
     ]
-    both = study_readout(both_days, both_rows)
+    both = study_readout(capped[:-1] + [_session(capped_days[-1], both_rows)])
     assert both["sessions_elapsed"] == SESSION_CAP
     assert both["stop_condition"] == "activation_cap_and_session_cap"
 
 
 def test_direction_is_inside_the_identity_and_outside_the_readout() -> None:
-    session = ["2026-10-05"]
     longs = [
         _episode("2026-10-05", direction="LONG", bar=f"14:{index:02d}:00+00:00")
         for index in range(ACTIVATION_CAP - 1)
     ]
-    assert study_readout(session, longs)["stop_condition_met"] is False
-    missing_direction = dict(longs[0])
-    missing_direction["direction"] = None
-    assert study_readout(session, longs[: ACTIVATION_CAP - 2] + [missing_direction])["stop_condition_met"] is False
+    assert study_readout([_session("2026-10-05", longs)])["stop_condition_met"] is False
     fired = study_readout(
-        session,
-        longs + [_episode("2026-10-05", direction="SHORT", bar="14:00:00+00:00")],
+        [
+            _session(
+                "2026-10-05",
+                longs + [_episode("2026-10-05", direction="SHORT", bar="14:00:00+00:00")],
+            )
+        ]
     )
     assert fired["stop_condition"] == "activation_cap"
     rendered = json.dumps(fired)
@@ -244,6 +268,36 @@ def test_direction_is_inside_the_identity_and_outside_the_readout() -> None:
     )
 
 
+def test_missing_identity_or_hash_refuses_to_advance() -> None:
+    day1 = "2026-10-05"
+    prior = [_episode(day1, bar=f"14:{index:02d}:00+00:00") for index in range(ACTIVATION_CAP - 1)]
+    broken = _episode("2026-10-06", bar="15:00:00+00:00")
+    del broken["direction"]
+    refused = study_readout([_session(day1, prior), _session("2026-10-06", [broken])])
+    assert refused == {
+        "sessions_elapsed": 1,
+        "stop_condition_met": False,
+        "stop_condition": None,
+        "advance_refused": True,
+    }
+    missing_gate = _episode("2026-10-06", bar="15:05:00+00:00")
+    del missing_gate["gate_bucket_floor"]
+    assert study_readout([_session(day1, prior), _session("2026-10-06", [missing_gate])])["advance_refused"] is True
+    unbound = _session(day1, prior + [_episode(day1, bar="15:30:00+00:00")])
+    unbound["sha256"] = "0" * 64
+    assert study_readout([unbound])["advance_refused"] is True
+    assert study_readout([unbound])["sessions_elapsed"] == 0
+    assert study_readout([unbound])["stop_condition_met"] is False
+    stale = _session("2026-10-06", [_episode("2026-10-06")])
+    stale["record"]["episodes"][0]["bars"][0]["close"] = 9
+    assert study_readout([_session(day1, prior), stale]) == {
+        "sessions_elapsed": 0,
+        "stop_condition_met": False,
+        "stop_condition": None,
+        "advance_refused": True,
+    }
+
+
 def test_threshold_crossing_session_is_included_in_full() -> None:
     day1, day2, day3 = "2026-10-05", "2026-10-06", "2026-10-07"
     prior = [
@@ -252,11 +306,14 @@ def test_threshold_crossing_session_is_included_in_full() -> None:
     ]
     crossing = [_episode(day2, bar=f"15:{index:02d}:00+00:00") for index in range(3)]
     later = [_episode(day3, bar="14:00:00+00:00")]
-    readout = study_readout([day1, day2, day3], prior + crossing + later)
+    readout = study_readout(
+        [_session(day1, prior), _session(day2, crossing), _session(day3, later)]
+    )
     assert readout == {
         "sessions_elapsed": 2,
         "stop_condition_met": True,
         "stop_condition": "activation_cap",
+        "advance_refused": False,
     }
     rendered = json.dumps(readout)
     assert "27" not in rendered

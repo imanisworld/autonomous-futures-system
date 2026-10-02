@@ -1,12 +1,15 @@
 """Read-only stopping readout for the unapproved 212 floor-outcome draft.
 
 This module does not collect bars, score a path, or open an outcome file.
-``study_readout`` counts activations from episode and gate fields only, then
-returns the fields a person may see before the one look.
+``study_readout`` counts activations only from hash-verified sealed session
+records, the same bytes the one-look will score, then returns the fields a
+person may see before that look.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import date
 from typing import Any, Mapping, Sequence
 
@@ -127,7 +130,8 @@ STUDY_ONLY_METRICS = (
     "concentration_by_clock_bucket",
     "outcome_concentration",
 )
-READOUT_FIELDS = ("sessions_elapsed", "stop_condition_met", "stop_condition")
+READOUT_FIELDS = ("sessions_elapsed", "stop_condition_met", "stop_condition", "advance_refused")
+_IDENTITY_KEY = tuple[str, str, str, str, str]
 
 
 def sealed_path_record_relpath(session_date: str) -> str:
@@ -135,26 +139,65 @@ def sealed_path_record_relpath(session_date: str) -> str:
     return f"{PATH_RECORD_ROOT}/{session_date}.json"
 
 
-def study_readout(
-    completed_session_dates: Sequence[str],
-    episodes: Sequence[Mapping[str, Any]],
-) -> dict[str, Any]:
+def canonical_seal_bytes(record: Mapping[str, Any]) -> bytes:
+    """Return the exact bytes whose SHA-256 is the session manifest digest.
+
+    Compact UTF-8 JSON, keys sorted at every object, with one trailing newline.
+    The digest is stored in the manifest, not inside this body.
+    """
+    payload = json.dumps(record, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return (payload + "\n").encode("utf-8")
+
+
+def seal_sha256(record: Mapping[str, Any]) -> str:
+    """Return the manifest SHA-256 of one sealed session record."""
+    return hashlib.sha256(canonical_seal_bytes(record)).hexdigest()
+
+
+def bind_seal(record: Mapping[str, Any]) -> dict[str, Any]:
+    """Attach the manifest digest to a sealed session record. Does not write a file."""
+    return {"sha256": seal_sha256(record), "record": record}
+
+
+def study_readout(sealed_sessions: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     """Return sessions elapsed and whether the stopping rule has fired.
 
-    ``episodes`` are ``ep-v0.1`` gate rows. Direction is part of the internal
-    identity and is not returned. Path, R, and outcome fields on those rows
-    are ignored. This function does not open a file.
+    Each item is ``{"sha256", "record"}``. ``record`` is the sealed session
+    file body. The digest must equal :func:`seal_sha256` of that body. Loose
+    ``ep-v0.1`` rows are not an input. This function does not open a file and
+    does not return snapshot, bar, direction, or activation-count fields.
 
-    Sessions are taken in date order. Each included session counts in full.
-    The walk stops at the end of the session that reaches 25 activations, or
-    at 60 sessions. Activations after that session are not part of the window.
+    A missing or mismatched digest cannot be ordered, so the readout refuses
+    with ``sessions_elapsed`` 0. A verified seal whose episode is missing an
+    identity field or ``gate_bucket_floor`` refuses at that session: earlier
+    verified sessions stay elapsed, and later sessions are not entered.
     """
-    sessions = _eligible_sessions(completed_session_dates)
-    included, activation_count = _study_window(sessions, episodes)
+    placed, unplaceable = _place_seals(sealed_sessions)
+    if unplaceable:
+        return _refused(0)
+    included: list[str] = []
+    seen_dates: set[str] = set()
+    count = 0
+    for session_date, keys in placed:
+        if session_date in seen_dates or not _is_eligible_session(session_date):
+            return _refused(len(included))
+        if keys is None:
+            return _refused(len(included))
+        seen_dates.add(session_date)
+        included.append(session_date)
+        count += len(keys)
+        if count >= ACTIVATION_CAP or len(included) >= SESSION_CAP:
+            break
+    return _readout(len(included), count, refused=False)
+
+
+def _readout(elapsed: int, activation_count: int, *, refused: bool) -> dict[str, Any]:
     activation_cap = activation_count >= ACTIVATION_CAP
-    session_cap = len(included) >= SESSION_CAP
-    if activation_cap and session_cap:
-        condition: str | None = "activation_cap_and_session_cap"
+    session_cap = elapsed >= SESSION_CAP
+    if refused:
+        condition: str | None = None
+    elif activation_cap and session_cap:
+        condition = "activation_cap_and_session_cap"
     elif activation_cap:
         condition = "activation_cap"
     elif session_cap:
@@ -162,67 +205,91 @@ def study_readout(
     else:
         condition = None
     return {
-        "sessions_elapsed": len(included),
+        "sessions_elapsed": elapsed,
         "stop_condition_met": condition is not None,
         "stop_condition": condition,
+        "advance_refused": refused,
     }
 
 
-def _eligible_sessions(completed_session_dates: Sequence[str]) -> set[str]:
-    sessions: set[str] = set()
-    for value in completed_session_dates:
-        if not isinstance(value, str):
-            continue
-        try:
-            day = date.fromisoformat(value)
-        except ValueError:
-            continue
-        if day.isoformat() < ELIGIBLE_START:
-            continue
-        if nyse_session_for(day) is None:
-            continue
-        sessions.add(day.isoformat())
-    return sessions
+def _refused(elapsed: int) -> dict[str, Any]:
+    return _readout(elapsed, 0, refused=True)
 
 
-def _study_window(
-    sessions: set[str],
-    episodes: Sequence[Mapping[str, Any]],
-) -> tuple[list[str], int]:
-    ordered = sorted(sessions)
-    by_session: dict[str, set[tuple[str, str, str, str, str]]] = {session: set() for session in ordered}
+def _place_seals(
+    sealed_sessions: Sequence[Mapping[str, Any]],
+) -> tuple[list[tuple[str, set[_IDENTITY_KEY] | None]], bool]:
+    placed: list[tuple[str, set[_IDENTITY_KEY] | None]] = []
+    for item in sealed_sessions:
+        placed_seal = _place_seal(item)
+        if placed_seal is None:
+            return [], True
+        placed.append(placed_seal)
+    placed.sort(key=lambda item: item[0])
+    return placed, False
+
+
+def _place_seal(item: Mapping[str, Any]) -> tuple[str, set[_IDENTITY_KEY] | None] | None:
+    if not isinstance(item, Mapping):
+        return None
+    digest = item.get("sha256")
+    record = item.get("record")
+    if not isinstance(digest, str) or not digest or not isinstance(record, Mapping):
+        return None
+    try:
+        expected = seal_sha256(record)
+    except (TypeError, ValueError):
+        return None
+    if expected != digest:
+        return None
+    session_date = record.get("session_date")
+    if not isinstance(session_date, str) or not session_date:
+        return None
+    episodes = record.get("episodes")
+    if not isinstance(episodes, list):
+        return None
+    keys: set[_IDENTITY_KEY] = set()
     for episode in episodes:
-        key = _activation_key(episode, sessions)
+        key = _activation_key(episode, session_date)
+        if key is False:
+            return (session_date, None)
         if key is not None:
-            by_session[key[1]].add(key)
-    included: list[str] = []
-    count = 0
-    for session in ordered:
-        included.append(session)
-        count += len(by_session[session])
-        if count >= ACTIVATION_CAP or len(included) >= SESSION_CAP:
-            break
-    return included, count
+            keys.add(key)
+    return (session_date, keys)
 
 
-def _activation_key(
-    episode: Mapping[str, Any],
-    sessions: set[str],
-) -> tuple[str, str, str, str, str] | None:
-    if episode.get("gate_bucket_floor") != ACTIVATION_GATE:
+def _is_eligible_session(session_date: str) -> bool:
+    try:
+        day = date.fromisoformat(session_date)
+    except ValueError:
+        return False
+    if day.isoformat() < ELIGIBLE_START:
+        return False
+    return nyse_session_for(day) is not None
+
+
+def _activation_key(episode: Mapping[str, Any], session_date: str) -> _IDENTITY_KEY | None | bool:
+    """Return an activation identity, ``None`` for a non-activation, or ``False`` to refuse."""
+    if not isinstance(episode, Mapping):
+        return False
+    if "gate_bucket_floor" not in episode or not isinstance(episode.get("gate_bucket_floor"), str):
+        return False
+    if not episode["gate_bucket_floor"]:
+        return False
+    parts: list[str] = []
+    for key in EPISODE_IDENTITY_KEYS:
+        value = episode.get(key)
+        if not isinstance(value, str) or not value:
+            return False
+        parts.append(value)
+    symbol, episode_session, direction, _first_bar_start, family = parts
+    if symbol not in V1_UNIVERSE or direction not in {"LONG", "SHORT"} or family != FAMILY:
+        return False
+    if episode_session != session_date:
+        return False
+    episode_id = episode.get("episode_id")
+    if episode_id != "|".join(parts):
+        return False
+    if episode["gate_bucket_floor"] != ACTIVATION_GATE:
         return None
-    if episode.get("family") != FAMILY:
-        return None
-    symbol = episode.get("symbol")
-    session_date = episode.get("session_date")
-    direction = episode.get("direction")
-    first_bar_start = episode.get("first_bar_start")
-    if symbol not in V1_UNIVERSE:
-        return None
-    if direction not in {"LONG", "SHORT"}:
-        return None
-    if not isinstance(session_date, str) or session_date not in sessions:
-        return None
-    if not isinstance(first_bar_start, str) or not first_bar_start:
-        return None
-    return (symbol, session_date, direction, first_bar_start, FAMILY)
+    return (symbol, episode_session, direction, parts[3], family)

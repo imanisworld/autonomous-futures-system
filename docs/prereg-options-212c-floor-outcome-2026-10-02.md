@@ -40,15 +40,18 @@ Eligible sessions are NYSE regular sessions on or after **2026-10-05**. Collecti
 
 Until the one look, the only human-visible study readout is the return value of `study_readout` in `ops/options_212c_floor_outcome_monitor.py`:
 
-- `sessions_elapsed`: the count of completed eligible NYSE sessions
+- `sessions_elapsed`: the count of hash-verified eligible NYSE sessions inside the stopping window
 - `stop_condition_met`: `true` or `false`
 - `stop_condition`: `null` while the stop is false; `activation_cap` when the internal count reaches 25; `session_cap` when 60 eligible sessions have elapsed; `activation_cap_and_session_cap` when both are true on the same readout
+- `advance_refused`: `true` when the monitor will not move forward
 
-That object is the entire interim report. A favorable or unfavorable impression from sessions elapsed, or from the stop flag, is not a reason to change the rule.
+That object is the entire interim report. A favorable or unfavorable impression from sessions elapsed, from the stop flag, or from a refusal, is not a reason to change the rule.
 
-The function may count activations internally. It reads `ep-v0.1` episode and gate fields: `family`, `symbol`, `session_date`, `direction`, `first_bar_start`, and `gate_bucket_floor`. Direction is part of the canonical identity and is not part of the readout. It does not open a path record, an `out-v0.1` outcome file, or any stored R or path field. Duplicate canonical identities count once. A row that lacks direction or any other identity field is not an activation.
+The function counts activations only from episodes inside a sealed session record whose SHA-256 equals `seal_sha256` of that record. That is the same canonical body the one-look scores. A loose `ep-v0.1` row is not an input. Direction is part of the canonical identity and is not part of the readout. The function does not open a file, and it does not return the snapshot, the bars, or the activation count. Duplicate canonical identities inside one verified seal count once.
 
-Sessions are applied in date order. `sessions_elapsed` is the number of sessions inside the stopping window, through and including the threshold-crossing session or the 60th session. A later session passed to the function is outside the window and does not increase `sessions_elapsed`.
+`advance_refused` is fail-closed. A missing digest, a digest that does not match the sealed body, or a session that cannot be ordered refuses the readout with `sessions_elapsed` 0. A verified seal that contains an episode missing `episode_id`, any canonical identity field, or `gate_bucket_floor` refuses at that session: earlier verified sessions remain elapsed, that session is not elapsed, and no later session is entered. Those rows are not treated as zero activations.
+
+Sessions are applied in date order. `sessions_elapsed` is the number of verified sessions inside the stopping window, through and including the threshold-crossing session or the 60th session. A later verified session is outside the window and does not increase `sessions_elapsed`.
 
 Before the one look, the readout and every other human-facing surface for this trial must leave hidden:
 
@@ -131,7 +134,7 @@ This draft defines that artifact. It does not add a capturing job, and it does n
 
 Integrity rule: once collection is approved, the capturing job writes the file once, after the session has settled and before any study readout, as canonical UTF-8 JSON with sorted keys and a trailing newline. It appends one `manifest.jsonl` line with `session_date`, byte length, and the SHA-256 of those exact bytes. The manifest line has no activation count and no outcome. The file is not rewritten. At the one look the scorer checks the hash, then scores from the sealed snapshot and the sealed bars only. A missing file, a hash mismatch, a missing snapshot field, a null `first_sight_price`, `invalidation`, `structural_risk`, or `floor_target_1` on an activated episode, or a 5-minute grid that is not exactly the rule above, is `DATA_INVALID` for the affected episode and is excluded from expectancy. Do not refetch historical bars or episode fields to fill that gap, and do not repair the record after any outcome has been viewed. Doing either makes the trial `INVALID`.
 
-The study operator does not open these path records, or `manifest.jsonl`, before the one look. `study_readout` does not read them. Activation for the stopping rule comes from the episode gate, not from this artifact.
+The study operator does not open these path records, or `manifest.jsonl`, before the one look. `study_readout` is given the sealed record and the manifest SHA-256 in memory. It verifies the digest, then counts `gate_bucket_floor` from the episodes in that same body. It does not substitute a separate live `ep-v0.1` extract.
 
 ## Stage A — underlying path
 
