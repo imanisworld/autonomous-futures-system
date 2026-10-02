@@ -4,7 +4,7 @@
 >
 > This file is **not** strategy-status authority, deployment authority, or experiment authority. Authoritative records named in `AGENTS.md` always win.
 >
-> **Checkpoint base:** repository `main` `43ead15be7456b14d96e6d3211f5df48806ca637` (PR #1103, 2026-10-02 14:38Z); futures box on `489b55b91b6303c195c8e84bfcbf05ef32d1ab04` since 2026-10-02 03:43Z. Always fetch current `main`; this stored SHA is a comparison base, not a perpetual current-state claim.
+> **Checkpoint base:** repository `main` `14abe2a23fe55d46ef6e0cefee513a47be5e93a4` (PR #1104, 2026-10-02); shadow daily P&L report on the box = #1102 since 2026-10-02 14:53Z; futures box on `489b55b91b6303c195c8e84bfcbf05ef32d1ab04` since 2026-10-02 03:43Z. Always fetch current `main`; this stored SHA is a comparison base, not a perpetual current-state claim.
 >
 > Core rule: **checkpoint first; diff first; do not redo proven work.**
 
@@ -58,7 +58,48 @@ Every substantial unit of work must leave:
 
 If the agent cannot persist this file, it must return this payload verbatim-ready for the next agent/operator to save.
 
-## Current checkpoint — 2026-10-02 afternoon (after #1103)
+## Current checkpoint — 2026-10-02 ~15:00Z (#1102 installed, post-deploy audit)
+
+Runtime facts below come from read-only `afs-ro` reads at 14:40–15:00Z, plus the output of the one box change listed.
+
+### DONE / DO NOT REDO
+
+- **#1102 shadow report installed on the box, 2026-10-02 14:53Z** (operator GO, via the operator's new `afs-deploy shadow-report install 14abe2a…`):
+  - **The swap:** `/root/afs-shared/shadow_daily_pnl_report.py` went from the #1085 file (`ad0cbdb4…`) to #1102's (`971b251b…`). The deploy lock was taken and released.
+  - **Backup:** `shadow_daily_pnl_report.py.bak-20261002T145306Z`. The action is logged in `/root/afs-shared/deploy_actions.log`.
+  - **Smoke test (read-only rebuild of Oct 1, nothing written or posted):** 192 rows, **0 count mismatches**. MNQ 48 kept + 31 left out = 79; MES 43 + 26 = 69; total 91 + 57 = 148. The overlaps still open were MNQ 3 and MES 4, which confirms the cause of the old final-pass mismatch.
+  - **No change to cron or the bot:** the three cron lines are unchanged and futures-bot was not restarted. The first live card with the new layout is the 2026-10-02 22:10Z first pass.
+  - **Rollback:** `afs-deploy shadow-report rollback 20261002T145306Z`.
+- **`afs-deploy` exists (Claude's Mac-side deploy tool, `~/.config/afs-deploy/afs-deploy`):**
+  - It offers fixed operations only: `shadow-report install|rollback|backups`, and `release build|verify|promote|rollback`, which runs GitHub main's own `atomic_release.sh`.
+  - Every SHA must be on GitHub main. It honours the deploy lock and never forces it.
+  - A shadow-report install backs up first, runs a smoke test, and restores the old file automatically if the test fails.
+  - All 39 fake-box tests passed.
+  - Grok does not use it. It matters only because box actions it takes show up in `/root/afs-shared/deploy_actions.log`.
+- **`/futures-deployment-safety-audit` on `489b55b` (Claude, ~14:55Z) = APPROVE, DEMO BROKER ONLY:**
+  - **Release:** reviewed = deployed = `489b55b`, so there is no ride-along gap. futures-bot PID `1327346`, `NRestarts=0`, the only webhook process.
+  - **Broker and trading state:** Tradovate DEMO `HEALTHY`, account session active, no position. Live trading disabled. `paper_mode=false` is acceptable only with demo + live off.
+  - **Activity:** feed healthy for MNQ and MES; journal writing (14:45Z); alerts about 40×200 per tick.
+  - **Memory:** `memory_guard` `HEALTHY` (RSS 338 MB, 1058 MB available); the 03:43Z `memory_critical` has cleared. The swap-pressure warnings come and go and are the known options-scanner swap issue.
+  - **Release integrity:** no `__pycache__` in the release outside `.venv`; only the 14:29Z cleanup and `logs/` (the #1095 bug) changed.
+  - **Deploy lock:** free at 14:53Z.
+  - **Unverified with read-only tools:** `/status/*` endpoints, `EXIT_MODE`/`SCHEDULE_MODE`, live-preflight armed state, and `errors.log` (none under `/root/afs-shared/logs`).
+  - **Two unexplained items, both warnings:**
+    1. One TradingView alert was rejected `422 Unprocessable` at 13:49:05Z. Every other alert returned 200. The payload body isn't logged.
+    2. The watcher's `today.realized_pnl_dollars = -59.75` with `trade_count 0`, while broker `realized_pnl` is 0.0.
+- **Independent reviews of #1102 and #1103 (fresh-context reviewer, 2026-10-02): both APPROVE WITH NITS.** The nits were fixed before merge (`a7aac7f`, `179b676`). Still open, both low:
+  - the shadow report crashes if a row has `bars_to_exit < bars_to_fill` (old, not from #1102);
+  - #1103 silently drops a later conflicting contract hint for the same arm.
+
+### NEXT — in order (after 15:00Z)
+
+1. **Grok, read-only:** answer the three open runtime questions with exact evidence (file, line, timestamp):
+   1. Do the **1-minute** TradingView alerts send `contract_hint`? Check the 1m webhook payloads and Pine alert config. `tf1m/bars_*.jsonl` doesn't store it, so look at raw request logs or the alert template. If they never send it, every #1103 row will be UNKNOWN.
+   2. **`LOG_DIR`** of the running futures-bot. Boolean or path only, never other env values. It must equal `/root/afs-shared/logs` before the #1095 release.
+   3. **The 13:49:05Z `422`:** which alert, which field failed validation, and whether it repeats.
+2. Then the afternoon list below, unchanged: confirmations after 2026-10-03 12:00Z, then the next release (#1095 + #1103) with an operator GO per step, then the 4HR epoch.
+
+## Earlier checkpoint — 2026-10-02 afternoon (after #1103)
 
 All runtime facts below come from read-only `afs-ro` reads at 14:28–14:45Z, except the box changes, which the operator ran.
 
@@ -93,7 +134,7 @@ All runtime facts below come from read-only `afs-ro` reads at 14:28–14:45Z, ex
 - **4HR observation publisher is live:** `logs/tf1m/4hr_observation/state_2026-10-02.json` is being written (14:40Z status `INVALIDATED`). The observer flag is still OFF, so no natural-1m evidence exists and the epoch has not started.
 - **#1095 bug seen live:** `logs/discord_observation_status.json` is written inside the release directory (last at 14:30Z). It is not flagged by the integrity check because `logs/` is excluded. #1095 fixes it and is not deployed.
 
-### NEXT — in order (afternoon)
+### NEXT — in order (afternoon; still valid, after the 15:00Z list above)
 
 1. **Read-only confirmations:**
    - after the 2026-10-03 12:00Z cron jobs: no `__pycache__` in the release;
