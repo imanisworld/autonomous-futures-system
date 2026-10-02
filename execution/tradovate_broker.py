@@ -651,6 +651,10 @@ class TradovateBroker(BrokerInterface):
             "sec": self.config.secret,
             "deviceId": "risksentinel-server",
         }
+        # A stale session bearer makes Tradovate reject this login with 401.
+        # Renewal already proved the old token invalid; the new login is sent
+        # with no Authorization header, then _apply_token installs the fresh one.
+        self._session.headers.pop("Authorization", None)
         try:
             resp = self._session.post(url, json=body, timeout=10)
             resp.raise_for_status()

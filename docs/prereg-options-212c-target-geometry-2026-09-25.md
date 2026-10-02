@@ -78,22 +78,32 @@ No target is invented and no threshold is optimized.
 ## Dataset requirement
 
 The execution adapter consumes the frozen coverage outcome aggregate carrying
-the 59-member population. The authoritative manifest already pins the expected
-raw dataset SHA-256 as:
+the 59-member population. The authoritative manifest pins the expected raw
+dataset SHA-256 as:
 
 `1963db73bccf0fd366eaaa077bb4e9582ed453ff220f1c5e789961096f3f113c`
 
-The 34 MB member file itself is intentionally not tracked in the public repo and
-is currently absent from this checkout. Before this spec may move from `DRAFT`
-to `APPROVED`:
+Verified read-only on 2026-10-01T01:32:47Z, without running the experiment:
 
-1. restore the exact `outcomes_2026-09-09_2026-09-15.json` bytes (or a
-   provenance-preserving 59-row extract cut from those bytes before scoring);
-2. verify the restored file against the manifest-pinned SHA-256 above;
-3. make the adapter reproduce exactly 59 selected episodes;
-4. pass the embedded date/version/provenance checks.
+| Field | Value |
+|---|---|
+| Path | `/root/afs-shared/coverage/aggregate/outcomes_2026-09-09_2026-09-15.json` |
+| Size | 35,024,516 bytes |
+| SHA-256 | `1963db73bccf0fd366eaaa077bb4e9582ed453ff220f1c5e789961096f3f113c` |
+| Selector | `ops.research_experiment_adapters.options_212c_target_geometry._select_population` |
+| Selector version | `ep-v0.1-family-symbol-date-v1` |
+| Population count | 59 |
+| Population manifest | `docs/research-population-manifests/T-2026-09-25-prereg-options-212c-target-geometry-2026-09-25-01.json` |
+| Population manifest SHA-256 | `2ee0db9132fe6b5933bb4cc04fb6d0e1e2d63f88c6ebc9e95a42b26f49d83e4a` |
 
-If any of those conditions cannot be proven, the run is blocked.
+The 34 MB member file stays out of the public repo. A second extraction of the
+same bytes produced the same 59 episode identities and the same population
+manifest SHA-256. `status` remains `DRAFT`. `approved_by` and `approved_at`
+remain null. The variant manifest `results_sha256` remains null.
+
+Before this spec may move from `DRAFT` to `APPROVED`, an operator must approve
+it explicitly. A hash, size, population-count, or population-manifest mismatch
+fails closed and blocks a run.
 
 ## Required metrics
 

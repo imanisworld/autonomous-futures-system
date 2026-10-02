@@ -12,6 +12,27 @@ This is the concise dated operator snapshot for the futures system around 2026-0
 
 Core rule remains: **No proof, no run.**
 
+## Repo closeout / next operator phase — 2026-09-29
+
+Repository `main` is now `715e03956f402fd553107a84125537768841d97c` after merged PR #1068. The audited repo-side futures defect list remains empty. #1068 adds six-market daily evidence visibility for MNQ, MES, M2K, MBT, MCL, and MGC; it does **not** prove or update the VPS pinned reporter.
+
+The durable ordered next-actions list is `docs/futures-operator-todo.md`. The next phase is **VPS/access/runtime reconciliation**, starting read-only. Do not infer current deployed SHA, runtime pins, account state, reporter pin, or access restrictions from `main`. Do not remove existing operator access until a replacement MacBook/phone path and break-glass recovery are built and proven.
+
+No strategy, risk, broker, execution, environment, VPS, or live-trading posture changed as part of #1068 or this documentation closeout.
+
+## Promotion-gate quantity-proof audit — 2026-09-29
+
+The earlier #893 repair remains valid: hard promotion blockers now make `project_check promotion` fail closed and return a non-zero result. The 2026-09-29 repo audit did **not** reproduce the old hard-blocker/exit-code defect.
+
+It did identify one narrower proof gap left by #893: `execution_context_claimed.contract_qty` was checked only for compatibility with configured quantity caps. The gate explicitly said that this did **not** independently prove the quantity actually represented by the canonical execution evidence, yet a complete-looking packet could still pass without any observed per-attempt quantity evidence.
+
+PR **#1070** merged to `main` as `37be78c5c965082185f7f06d1a85bc8db2eade3d` after independent APPROVE and exact-head CI (7,311 passed / 7 skipped). It makes promotion quantity proof two-layered:
+
+- configured instrument/hard-cap compatibility still has to pass;
+- `execution.entry_attempt_contract_quantities` must contain one positive observed quantity per recorded entry attempt, the list length must match `entry_attempts`, and every observed quantity must match the claimed `contract_qty`.
+
+This is a **promotion-evidence gate change only**. It does not alter strategy logic, risk limits, order sizing, broker routing, execution code, runtime configuration, or deployment state. The repair is now proven **repo-side only**; no VPS deployment/restart/repin was performed by #1070.
+
 ## MNQ inverse ORB — retired, not active (2026-09-24 read-only audit)
 
 Operator decision 2026-09-24: the 2026-09-08 retirement stands. Do not reactivate.
@@ -303,7 +324,7 @@ The duplicate research work did not create a journal repair requirement.
 **CONFIRMED FIXED REPO-SIDE — do not carry forward as open repo defects**
 - Strategy Inventory taxonomy (#920 / `2e96e164624dc45996b45a2086b012c56ee5d43d`): evidence verdict and execution posture are now separate fields; `project_check daily` keeps the final evidence verdict as its safety classification while parsing posture separately, and the dashboard no longer infers execution authority from verdict text. Full CI passed before merge. **Deployed** since release `88e89e4` (2026-09-22 23:56 UTC); see "Runtime reconciliation" above.
 - normal PaperBroker vs ReplayEngine IOC entry-reference parity (#918 / `3e624693871cb725541e286b7feabf2633342228`): the normal webhook PaperBroker IOC path now supplies the causal decision-bar close, matching ReplayEngine; full CI passed before merge. **Deployed** since release `88e89e4`, but inert on the box (entry fill model is `market`).
-- promotion gate hard-blocker success semantics (#893 / `acadbf8`);
+- promotion gate hard-blocker/exit-code success semantics (#893 / `acadbf8`) — still fixed; the separate observed-quantity proof completeness gap found 2026-09-29 was closed by merged PR #1070 (`37be78c5c965082185f7f06d1a85bc8db2eade3d`), with follow-up integer-cap hardening merged in #1072;
 - zero/dead forward-campaign arm visibility (#582 / `964099c`);
 - `project_check daily` critical-failure success semantics (#788/#790).
 

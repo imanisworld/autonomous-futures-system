@@ -24,7 +24,7 @@ import json
 import os
 import sys
 import urllib.request
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -45,6 +45,7 @@ DEFAULT_SINCE = "2026-09-16T12:17:19+00:00"
 # Only strategies that are, or could be, executable through the live engine.
 # The *_observed lanes are the shadow mirrors of the same PDF-defined setups.
 CONDITIONS = ("TRENDING", "RANGE_BOUND", "DEAD", "CHOPPY")
+REPORT_INSTRUMENTS = ("MNQ", "MES", "M2K", "MBT", "MCL", "MGC")
 
 
 def _empty_bucket() -> dict:
@@ -81,6 +82,7 @@ def build_report(rows: list[dict], *, since: str = DEFAULT_SINCE, instruments: t
         for r in rows
         if r.get("record_type") == "CANDIDATE" and (r.get("signal_timestamp") or "") >= since
     }
+    candidate_counts = Counter(str(r.get("instrument") or "?") for r in cands.values())
     buckets: dict[str, dict[str, dict]] = defaultdict(lambda: defaultdict(_empty_bucket))
     resolved = 0
     for r in rows:
@@ -108,6 +110,7 @@ def build_report(rows: list[dict], *, since: str = DEFAULT_SINCE, instruments: t
         "since": since,
         "candidates": len(cands),
         "resolved": resolved,
+        "candidate_counts": {inst: candidate_counts.get(inst, 0) for inst in REPORT_INSTRUMENTS},
         "cost_model": {
             "instruments": list(COSTED_INSTRUMENTS),
             "commission_dollars": COMMISSION_DOLLARS,
@@ -118,9 +121,13 @@ def build_report(rows: list[dict], *, since: str = DEFAULT_SINCE, instruments: t
         "verdict": None,
         "authority": "evidence_only",
     }
-    for inst, conds in sorted(buckets.items()):
-        out["by_instrument"][inst] = {cond: dict(conds[cond]) for cond in sorted(conds)}
-    out["verdict"] = _verdict(out["by_instrument"].get("MNQ", {}))
+    for inst in REPORT_INSTRUMENTS:
+        conds = buckets.get(inst, {})
+        out["by_instrument"][inst] = {
+            cond: dict(conds.get(cond) or _empty_bucket())
+            for cond in CONDITIONS
+        }
+    out["verdict"] = _verdict(out["by_instrument"]["MNQ"])
     return out
 
 
@@ -166,27 +173,28 @@ def _bucket_words(b: dict) -> str:
 
 
 def format_digest(report: dict) -> str:
-    """Plain-English card text (docs/discord-operator-message-style.md)."""
+    """Plain-English six-market condition card; evidence only, never a rule change."""
     v = report["verdict"]
-    rb, tr = v["mnq_range_bound"], v["mnq_trending"]
     read = _READ_WORDS.get(v["state"], str(v["state"]).replace("_", " ").lower())
-    others = []
-    for inst, conds in report["by_instrument"].items():
+    lines = [
+        "📊 **Trending-only condition report · all 6 futures**",
+        "Question: how do observed setups perform when trending vs sideways?",
+    ]
+    candidate_counts = report.get("candidate_counts") or {}
+    for inst in REPORT_INSTRUMENTS:
+        conds = report["by_instrument"].get(inst) or {}
+        tr = conds.get("TRENDING") or _empty_bucket()
+        rb = conds.get("RANGE_BOUND") or _empty_bucket()
+        lines.append(f"**{pe.market(inst)}** — {int(candidate_counts.get(inst, 0))} setups observed")
+        lines.append(f"Trending: {_bucket_words(tr)}")
+        lines.append(f"Sideways: {_bucket_words(rb)}")
         if inst == "MNQ":
-            continue
-        n = sum(b["n"] for b in conds.values())
-        gross = sum(b["gross_usd"] for b in conds.values())
-        others.append(f"{inst}: {n} trade{'' if n == 1 else 's'}, {pe.money(round(gross))[:-3]}")
-    return (
-        f"📊 **Trending-only rule check · {pe.market('MNQ')}**\n"
-        f"Question: should it also trade when the market is moving sideways?\n"
-        f"When trending (allowed): {_bucket_words(tr)}\n"
-        f"When sideways (blocked): {_bucket_words(rb)}\n"
-        f"Answer so far: {read.format(n=v['min_resolved_for_read'])}\n"
-        f"Other markets (before costs): {' · '.join(others) if others else 'none yet'}\n"
-        f"Counting since: {pe.et_date(report['since'])}\n"
-        f"[practice tracking only · no rule change · decision after Sep 30]"
-    )
+            lines.append(f"Current MNQ rule read: {read.format(n=v['min_resolved_for_read'])}")
+        else:
+            lines.append("Observation only · no rule decision")
+    lines.append(f"Counting since: {pe.et_date(report['since'])}")
+    lines.append("[practice tracking only · no rule change · decision after Sep 30]")
+    return "\n".join(lines)
 
 
 def _post_discord(url: str, content: str) -> bool:

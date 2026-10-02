@@ -4,6 +4,55 @@
 
 _As of 2026-09-24 (runtime and current decisions: see the 2026-09-24 blocks in `docs/futures-current-status-2026-09-22.md`, then the reconciliation note below). This is the long futures handoff. Historical audit docs remain evidence records._
 
+## Runtime reconciliation — 2026-09-30
+
+Verified runtime, the paper-collection six-market pin, the deferred
+gate-condition surface, and the read-only access re-read are in
+`docs/futures-runtime-reconciliation-2026-09-30.md`. That note does not
+reopen strategy status. The inventory still wins if this handoff disagrees
+with it.
+
+
+## Overnight operational closeout — 2026-09-30 ET
+
+Latest operator-supplied read-only health check: **PASS — KEEP COLLECTING / NO CHANGES**.
+
+This is operational provenance only; it does not change Strategy Inventory classifications.
+
+- Deployed futures release remained `75f10e4540aa1f25b51b77c1ec2a2da40381a188`; release integrity passed.
+- GitHub `main` was ahead of the pinned release. That source/runtime drift is informational and does not authorize a deployment.
+- Runtime remained Tradovate DEMO with live trading disabled, one-contract hard cap intact, and broker authentication/routing healthy.
+- Journal and broker reconciled flat with zero execution attempts/fills for the current journal day.
+- Raw forward evidence remained active for `vwap_hold`; `orb_reclaim` was stale and `vwap_rejection` quiet. Do not silently count stale/quiet arms as continuous evidence.
+- Paper-reporter verification was complete; gate-condition #1068 remains deferred until the next sanctioned futures release.
+- SSH hardening remains blocked on proof of phone SSH access and provider-console recovery.
+
+Durable next actions live in `docs/futures-operator-todo.md`. Agent resume/checkpoint state lives in `docs/agent-work-state.md`. Nothing in this closeout authorizes strategy tuning, deployment, restart, broker mutation, or live trading.
+
+## Repository closeout handoff — 2026-09-29
+
+Current repository `main`: `715e03956f402fd553107a84125537768841d97c` after #1068.
+
+Repo-side safety work completed in this pass:
+- #1070: observed per-entry contract-quantity proof is mandatory for promotion and fails closed on missing/mismatched evidence.
+- #1072: the older cap-compatibility integer parser is strict and no longer truncates fractional quantities.
+- #1068: daily read-only evidence cards expose all six observation markets (MNQ, MES, M2K, MBT, MCL, MGC), including zero-evidence markets; this is source/reporting only until the VPS reporter is separately repinned and smoked.
+- The reconciled repo-side defect list has no remaining open item from the audited set.
+
+**Do not treat this as runtime proof.** No VPS deployment, service restart, env mutation, broker mutation, or reporter repin occurred in this repo closeout.
+
+Durable next actions are now tracked in `docs/futures-operator-todo.md`. Start with a **read-only VPS reconciliation and current-access map**, then build/prove replacement operator access before tightening or removing the old path. The TODO is an operations queue only; Strategy Inventory remains strategy-status authority.
+
+## Promotion-gate quantity-proof refresh — 2026-09-29
+
+Repo audit narrowed an older promotion-gate concern instead of reopening completed work. #893 (`acadbf8`) already fixed the original hard-blocker success/exit-code semantics: blockers make the promotion report fail and the CLI return non-zero. Do **not** redo that repair.
+
+One residual source-side gap remained: the gate checked a claimed `contract_qty` against configured quantity caps but did not require evidence of the quantities actually represented by each recorded entry attempt. A packet could therefore satisfy the cap check without independently proving submitted/observed quantity.
+
+PR **#1070** merged to `main` as `37be78c5c965082185f7f06d1a85bc8db2eade3d` after independent APPROVE and exact-head CI (7,311 passed / 7 skipped). It adds a fail-closed evidence requirement: `execution.entry_attempt_contract_quantities` must provide one positive observed quantity per `entry_attempt`; its count must reconcile exactly; and every observed value must match `execution_context_claimed.contract_qty`. Cap compatibility remains a separate check.
+
+Scope is limited to the promotion evidence gate, regression tests, and current gate/status documentation. It does **not** change strategy formulas, risk rules, sizing behavior, broker/order code, execution routing, runtime env, deployment state, or strategy classification. #1070 is **repo-side proven only**; no VPS deploy, restart, repin, or broker/env mutation followed from the merge.
+
 ## Shared research plumbing note — 2026-09-26
 
 Repo-wide (not a futures runtime change): approved experiment contract #1042 (`73eb8d2…`) and fail-closed Experiment Runner #1047 (`df58d55…`) are on `main`. No live `APPROVED` experiment specs exist yet. Options-lane narrative for continuing that work lives in `docs/options-current-state-handoff.md` § Repository refresh — 2026-09-26. This note authorizes no futures deploy, restart, strategy change, or broker mutation.

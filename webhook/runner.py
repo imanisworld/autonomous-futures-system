@@ -101,6 +101,7 @@ from context.five_min_feed import (
     recent_five_min,
     triggered_armed_setup,
 )
+from context.four_hr_observation import four_hr_observation_enabled
 from context.one_min_trigger import (
     evaluate_armed_4hr_touch,
     is_one_min,
@@ -562,11 +563,12 @@ def process_alert(
         }
 
     # ── Step 0a0: isolated 1-minute armed-trigger evidence lane ───────────────
-    # Default OFF. A 1m alert can observe only an already-persisted armed
-    # evidence state: the existing MNQ 4HR state and, when its separate flag is
-    # enabled, the isolated MNQ 3-2-2 observer state. It returns before
-    # DecisionEngine, RiskEngine, and all broker paths, so 1m cannot discover,
-    # authorize, or execute a trade.
+    # Default OFF. A 1m alert can observe only an already-published observation
+    # snapshot: the isolated MNQ 4HR observation file when its own flag is on,
+    # and the isolated MNQ 3-2-2 observer state when its flag is on. It returns
+    # before DecisionEngine, RiskEngine, and all broker paths, so 1m cannot
+    # discover, authorize, or execute a trade. Executable enabled_concepts are
+    # not consulted.
     if one_min_enabled() and is_one_min(payload.timeframe):
         one_min_event = None
         one_min_error = None
@@ -574,7 +576,7 @@ def process_alert(
         try:
             record_one_min(payload, log_dir, for_date=for_date)
             one_min_recorded = True
-            if "strat_4hr_retrigger" in cfg.enabled_concepts:
+            if four_hr_observation_enabled():
                 one_min_event = evaluate_armed_4hr_touch(
                     payload, log_dir, for_date=for_date
                 )

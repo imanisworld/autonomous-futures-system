@@ -143,6 +143,7 @@ def build_discord_payload(result: ScoreResult) -> dict[str, Any]:
 
     fields: list[dict[str, Any]] = [
         {"name": "Status", "value": _status_text(result, side, state), "inline": False},
+        {"name": "AFS trade grade", "value": _trade_grade_text(result), "inline": True},
         {"name": "Setup", "value": _setup_card_text(result), "inline": True},
         {"name": "Market check", "value": _context_card_text(result, session), "inline": True},
         {"name": "Option", "value": _contract_card_text(result, side), "inline": True},
@@ -153,10 +154,12 @@ def build_discord_payload(result: ScoreResult) -> dict[str, Any]:
         {"name": "Risk", "value": _risk_text(result), "inline": False},
         {"name": "Not checked", "value": _unchecked_text(result), "inline": False},
     ]
+    # Anchor by name, not index, so adding a card field cannot move this line.
+    after_why = next(i for i, field in enumerate(fields) if field["name"] == "Why") + 1
     if _mechanically_triggered(result):
-        fields.insert(8, {"name": "Can I trade this?", "value": "Setup TRIGGERED · you still need to check the contract and risk before doing anything · nothing is placed automatically", "inline": False})
+        fields.insert(after_why, {"name": "Can I trade this?", "value": "Setup TRIGGERED · you still need to check the contract and risk before doing anything · nothing is placed automatically", "inline": False})
     else:
-        fields.insert(8, {"name": "Can I trade this?", "value": "No — WAIT · watching only · no entry permission", "inline": False})
+        fields.insert(after_why, {"name": "Can I trade this?", "value": "No — WAIT · watching only · no entry permission", "inline": False})
 
     fields = [field for field in fields if field["value"] != "N/A"]
     for field in fields:
@@ -201,6 +204,42 @@ def _status_text(result: ScoreResult, side: str, state: str) -> str:
         return f"**{label}** · no entry permission\n{score}"
     label = "Setup triggered (top score)" if state == "golden" else "Setup triggered"
     return f"**{label}**\n{score}"
+
+
+
+def _trade_grade_text(result: ScoreResult) -> str:
+    """Display-only AFS trade grade from existing validator evidence.
+
+    This grade never changes scanner score, alert eligibility, setup status,
+    contract selection, risk permission, broker state, or execution.
+    """
+    raw = result.raw
+    if not _mechanically_triggered(result):
+        return "N/A · setup not triggered"
+
+    trade_proof = str(raw.get("trade_proof_status") or "").strip().upper()
+    paper_policy_id = str(raw.get("paper_policy_id") or "").strip()
+    paper_policy = str(raw.get("paper_policy_status") or "").strip().upper()
+
+    if trade_proof not in {"", "VALID", "INCOMPLETE"}:
+        return f"F · trade proof {trade_proof.lower()}"
+
+    if paper_policy_id == POLICY_ID and paper_policy != "VALID":
+        reason = str(raw.get("paper_policy_reason") or paper_policy or "invalid").strip()
+        return f"F · contract/risk invalid ({reason})"
+
+    if paper_policy_id != POLICY_ID or paper_policy != "VALID" or not trade_proof:
+        return f"C · incomplete trade packet · scanner {result.score}/10"
+
+    if result.score < 7:
+        return f"C · scanner {result.score}/10 · below normal alert bar"
+
+    if trade_proof == "INCOMPLETE":
+        return f"B · scanner {result.score}/10 · trade proof incomplete"
+
+    if result.score >= 9:
+        return f"A · scanner {result.score}/10 · trade proof valid"
+    return f"B · scanner {result.score}/10 · trade proof valid"
 
 
 def _setup_card_text(result: ScoreResult) -> str:
@@ -615,6 +654,9 @@ def _signa_v2_text(raw: dict, ticker: str = "") -> str:
         return "N/A"
     read = _signa_read(raw.get("signa_v2_grade"), raw.get("signa_v2_direction")) or "no read"
     parts = [f"For info only · Signa v2 (being tested): {read}"]
+    observation_rating = raw.get("signa_v2_observation_rating")
+    if observation_rating and observation_rating != "N/A":
+        parts.append(f"obs rating {observation_rating}")
     confidence = raw.get("signa_v2_confidence")
     if confidence is not None:
         try:

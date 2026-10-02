@@ -1,8 +1,9 @@
 """Isolated 1-minute trigger evidence lane for armed MNQ 4HR setups.
 
 This module cannot discover setups, run DecisionEngine, or route a broker order.
-It only records 1m bars and observes whether an already-persisted ARMED 4HR
-trigger was touched. Default OFF via ONE_MIN_TRIGGER_ENABLED.
+It only records 1m bars and observes whether the separate observation snapshot
+is already ARMED. It does not read executable strategy state. The 4HR observer
+flag defaults OFF.
 """
 from __future__ import annotations
 
@@ -19,6 +20,10 @@ from config.futures_contracts import contract_root, optional_tick_size
 from context.bar_history import _parse_dt
 from context.five_min_feed import recent_five_min
 from context.four_hr_continuation_attribution import completed_four_hour_sequence_context
+from context.four_hr_observation import (
+    four_hr_observation_enabled,
+    read_armed_observation,
+)
 from context.one_min_feed import (
     ONE_MIN_LANE,
     is_one_min,
@@ -26,7 +31,7 @@ from context.one_min_feed import (
     recent_one_min,
     record_one_min,
 )
-from journal.journal_logger import JournalLogger
+from execution.contract_identity import normalize as normalize_contract
 from strategy.four_hr_retrigger import aggregate_et_bars
 
 logger = logging.getLogger(__name__)
@@ -102,6 +107,28 @@ def _fully_completed_one_hour_stop(
     return float(stop), ref["ts"]
 
 
+def _contract_check(state: dict, payload, day: date) -> dict:
+    """Compare the arm's 5m contract with this 1m bar's. Unproven is UNKNOWN, never assumed.
+
+    UNKNOWN rows carry ``needs_manual_review``: around a roll the alerts are least
+    likely to prove their contract, so such a row must not count unreviewed.
+    """
+    arm_contract = normalize_contract(state.get("contract"), context_date=day)
+    bar_contract = normalize_contract(
+        getattr(payload, "contract_hint", None), context_date=day
+    )
+    if arm_contract is None or bar_contract is None:
+        status = "UNKNOWN"
+    else:
+        status = "MATCH" if arm_contract == bar_contract else "MISMATCH"
+    return {
+        "status": status,
+        "arm_contract": arm_contract,
+        "bar_contract": bar_contract,
+        "needs_manual_review": status == "UNKNOWN",
+    }
+
+
 def evaluate_armed_4hr_touch(payload, log_dir: str, for_date=None) -> Optional[dict]:
     """Observe a 1m touch only when an authoritative ARMED 4HR state already exists."""
     if _root(payload.ticker) != INSTRUMENT:
@@ -113,16 +140,12 @@ def evaluate_armed_4hr_touch(payload, log_dir: str, for_date=None) -> Optional[d
     day = for_date or bar_open.date()
     if not (time(9, 30) <= bar_open.timetz().replace(tzinfo=None) < time(11, 0)):
         return None
-
-    daily = JournalLogger(log_dir=log_dir).get_daily_state(day)
-    state = dict(daily.four_hr_retrigger_state.get(INSTRUMENT, {}) or {})
-    if state.get("status") != "ARMED":
+    if not four_hr_observation_enabled():
         return None
-    if state.get("trading_date") != day.isoformat():
+    state = read_armed_observation(log_dir, day, as_of=bar_open)
+    if state is None:
         return None
     direction = str(state.get("direction") or "").upper()
-    if direction not in {"LONG", "SHORT"}:
-        return None
     try:
         trigger = float(state["trigger"])
         target = float(state["target"])
@@ -134,6 +157,21 @@ def evaluate_armed_4hr_touch(payload, log_dir: str, for_date=None) -> Optional[d
     touched = bar_high >= trigger if direction == "LONG" else bar_low <= trigger
     if not touched:
         return None
+    contract_check = _contract_check(state, payload, day)
+    if contract_check["status"] == "MISMATCH":
+        # The arm's prices and this bar's prices come from different contracts.
+        event = {
+            "event": "TRIGGER_BLOCKED",
+            "reason": "CONTRACT_MONTH_MISMATCH",
+            "instrument": INSTRUMENT,
+            "strategy": STRATEGY,
+            "bar_ts": bar_open.isoformat(),
+            "direction": direction,
+            "trigger": trigger,
+            "contract_check": contract_check,
+        }
+        _append_evidence(log_dir, day, event)
+        return event
 
     treatment_context = _four_hour_treatment_context(
         log_dir=log_dir, bar_open=bar_open, for_date=day
@@ -150,6 +188,7 @@ def evaluate_armed_4hr_touch(payload, log_dir: str, for_date=None) -> Optional[d
             "bar_ts": bar_open.isoformat(),
             "direction": direction,
             "trigger": trigger,
+            "contract_check": contract_check,
             "four_hour_treatment": treatment_context,
         }
         _append_evidence(log_dir, day, event)
@@ -178,6 +217,7 @@ def evaluate_armed_4hr_touch(payload, log_dir: str, for_date=None) -> Optional[d
             "fill_reference": fill_reference,
             "stop": stop,
             "target": target,
+            "contract_check": contract_check,
             "four_hour_treatment": treatment_context,
         }
         _append_evidence(log_dir, day, event)
@@ -189,6 +229,7 @@ def evaluate_armed_4hr_touch(payload, log_dir: str, for_date=None) -> Optional[d
             "strategy": STRATEGY,
             "bar_ts": bar_open.isoformat(),
             "arm_key": arm_key,
+            "contract_check": contract_check,
             "four_hour_treatment": treatment_context,
         }
 
@@ -219,7 +260,16 @@ def evaluate_armed_4hr_touch(payload, log_dir: str, for_date=None) -> Optional[d
             else bar_open_px <= trigger
         ),
         "arm_key": arm_key,
-        "source_state": state,
+        "contract_check": contract_check,
+        "source_state": {
+            "schema": state.get("schema"),
+            "rule_version": state.get("rule_version"),
+            "source": state.get("source"),
+            "source_timestamp": state.get("source_timestamp"),
+            "armed_available_at": state.get("armed_available_at"),
+            "executable": False,
+            "trade_authorized": False,
+        },
         "four_hour_treatment": treatment_context,
     }
     _append_evidence(log_dir, day, event)

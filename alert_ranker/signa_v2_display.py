@@ -22,17 +22,29 @@ def render_signa_v2(raw: dict[str, Any]) -> str:
     grade = raw.get("signa_v2_grade")
     score = raw.get("signa_v2_score")
     confidence = raw.get("signa_v2_confidence")
+    strength = raw.get("signa_v2_strength")
+    factor_count = raw.get("signa_v2_factor_count")
+    factor_conflicts = raw.get("signa_v2_factor_conflicts") or []
+    observation_rating = raw.get("signa_v2_observation_rating")
     direction = raw.get("signa_v2_direction")
     reward_to_risk = raw.get("signa_v2_reward_to_risk")
 
     if symbol:
         parts.append(str(symbol))
+    if observation_rating and observation_rating != "N/A":
+        parts.append(f"obs rating {observation_rating}")
     if grade:
         parts.append(f"grade {grade}")
     if score is not None:
         parts.append(f"score {_number(score, 0)}")
     if confidence is not None:
         parts.append(f"confidence {_number(confidence, 0)}%")
+    if strength is not None:
+        parts.append(f"strength {_number(strength, 0)}")
+    if factor_count:
+        parts.append(f"{int(factor_count)} factors")
+    if factor_conflicts:
+        parts.append("conflicts " + ",".join(str(item) for item in factor_conflicts))
     if direction:
         parts.append(str(direction))
     if reward_to_risk is not None:

@@ -27,6 +27,22 @@ DATE_TO = "2026-09-15"
 EXPECTED_POPULATION = 59
 OUTCOME_VERSION = "out-v0.1"
 REDUCER_VERSION = "ep-v0.1"
+SELECTION_IMPLEMENTATION = (
+    "ops.research_experiment_adapters.options_212c_target_geometry._select_population"
+)
+SELECTION_VERSION = "ep-v0.1-family-symbol-date-v1"
+IDENTITY_KEYS = (
+    "symbol",
+    "session_date",
+    "direction",
+    "first_bar_start",
+    "family",
+)
+SELECTION_RULE = (
+    "family == STRAT_212_CONTINUATION and symbol in the 20-symbol V1 universe "
+    "and session_date within 2026-09-09..2026-09-15; no outcome, gate, or "
+    "target-geometry filter"
+)
 DATASET_ENV = "AFS_OPTIONS_212C_TARGET_GEOMETRY_DATASET"
 EXPECTED_SYMBOLS = frozenset(
     {
@@ -59,6 +75,49 @@ ARM_COMMIT = {"baseline": "baseline", "candidate": "candidate"}
 
 class AdapterPreconditionError(RuntimeError):
     """The registered experiment cannot be executed reproducibly."""
+
+
+def episode_identity(row: dict[str, Any]) -> str:
+    return "|".join(str(row.get(key) or "") for key in IDENTITY_KEYS)
+
+
+def canonical_population_body(
+    *,
+    source_path: str,
+    source_size_bytes: int,
+    source_sha256: str,
+    episode_ids: list[str],
+) -> dict[str, Any]:
+    """Canonical population document. ``generated_at`` is not part of this body."""
+    return {
+        "episode_ids": list(episode_ids),
+        "population_count": len(episode_ids),
+        "selection": {
+            "date_from": DATE_FROM,
+            "date_to": DATE_TO,
+            "family": FAMILY,
+            "identity_keys": list(IDENTITY_KEYS),
+            "implementation": SELECTION_IMPLEMENTATION,
+            "outcome_version": OUTCOME_VERSION,
+            "reducer_version": REDUCER_VERSION,
+            "rule": SELECTION_RULE,
+            "symbols": sorted(EXPECTED_SYMBOLS),
+            "version": SELECTION_VERSION,
+        },
+        "source_path": source_path,
+        "source_sha256": source_sha256,
+        "source_size_bytes": source_size_bytes,
+    }
+
+
+def population_manifest_sha256(body: dict[str, Any]) -> str:
+    encoded = json.dumps(
+        body,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def _sha256(path: Path) -> str:
@@ -122,9 +181,18 @@ def _validate_spec_contract(ctx: ExperimentContext) -> str:
     return arm
 
 
-def _load_payload(path: Path, expected_hash: str) -> dict[str, Any]:
+def _load_payload(
+    path: Path,
+    expected_hash: str,
+    expected_size: int | None = None,
+) -> dict[str, Any]:
     if not path.is_file():
         raise AdapterPreconditionError(f"dataset file missing: {path}")
+    actual_size = path.stat().st_size
+    if expected_size is not None and actual_size != expected_size:
+        raise AdapterPreconditionError(
+            f"dataset size mismatch: actual={actual_size} expected={expected_size}"
+        )
     actual = _sha256(path)
     if actual != expected_hash:
         raise AdapterPreconditionError(
@@ -170,16 +238,7 @@ def _select_population(payload: dict[str, Any]) -> list[dict[str, Any]]:
             f"expected {EXPECTED_POPULATION}"
         )
 
-    identities = [
-        (
-            row.get("symbol"),
-            row.get("session_date"),
-            row.get("direction"),
-            row.get("first_bar_start"),
-            row.get("family"),
-        )
-        for row in selected
-    ]
+    identities = [episode_identity(row) for row in selected]
     if len(set(identities)) != EXPECTED_POPULATION:
         raise AdapterPreconditionError("population contains duplicate episode identities")
 
@@ -293,13 +352,68 @@ def _member(
     }
 
 
+def verify_population_binding(path: Path, spec: dict[str, Any]) -> dict[str, Any]:
+    """Check source bytes and the selected episode set. Does not score either arm."""
+    data = spec.get("data") or {}
+    dataset_hash = str(data.get("dataset_hash") or "")
+    if not dataset_hash:
+        raise AdapterPreconditionError(
+            "dataset_hash is required by this adapter before an APPROVED run"
+        )
+    expected_size = data.get("dataset_size_bytes")
+    if expected_size is not None and not isinstance(expected_size, int):
+        raise AdapterPreconditionError("dataset_size_bytes must be an integer")
+    payload = _load_payload(path, dataset_hash, expected_size=expected_size)
+    rows = _select_population(payload)
+    episode_ids = [episode_identity(row) for row in rows]
+
+    declared_count = data.get("population_count")
+    if declared_count is not None and declared_count != len(rows):
+        raise AdapterPreconditionError(
+            f"population count mismatch: selected {len(rows)} expected {declared_count}"
+        )
+    if data.get("selection_implementation") not in (None, SELECTION_IMPLEMENTATION):
+        raise AdapterPreconditionError(
+            "selection implementation mismatch: "
+            f"actual={SELECTION_IMPLEMENTATION} "
+            f"expected={data.get('selection_implementation')}"
+        )
+    if data.get("selection_version") not in (None, SELECTION_VERSION):
+        raise AdapterPreconditionError(
+            "selection version mismatch: "
+            f"actual={SELECTION_VERSION} expected={data.get('selection_version')}"
+        )
+
+    source_path = str(data.get("dataset_path") or path)
+    body = canonical_population_body(
+        source_path=source_path,
+        source_size_bytes=path.stat().st_size,
+        source_sha256=dataset_hash,
+        episode_ids=episode_ids,
+    )
+    manifest_sha = population_manifest_sha256(body)
+    declared_manifest = data.get("population_manifest_sha256")
+    if declared_manifest is not None and declared_manifest != manifest_sha:
+        raise AdapterPreconditionError(
+            "population manifest SHA-256 mismatch: "
+            f"actual={manifest_sha} expected={declared_manifest}"
+        )
+    return {
+        "population_count": len(rows),
+        "episode_ids": episode_ids,
+        "manifest_sha256": manifest_sha,
+        "canonical": body,
+        "rows": rows,
+    }
+
+
 def run_options_212c_target_geometry(ctx: ExperimentContext) -> ArmRawResult:
     """Return one normalized arm over the exact frozen 59-episode population."""
     arm = _validate_spec_contract(ctx)
-    dataset_hash = str(ctx.spec["data"]["dataset_hash"])
     path = _dataset_path(ctx)
-    payload = _load_payload(path, dataset_hash)
-    rows = _select_population(payload)
+    bound = verify_population_binding(path, ctx.spec)
+    rows = bound["rows"]
+    dataset_hash = str(ctx.spec["data"]["dataset_hash"])
 
     members = [
         _member(row, arm=arm, setup_type=str(ctx.spec.get("setup_type") or SETUP_TYPE))

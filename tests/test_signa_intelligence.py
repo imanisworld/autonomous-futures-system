@@ -42,6 +42,8 @@ def test_parse_current_action_card_contract():
     assert obs.targets == (185.9, 190.0)
     assert obs.reward_to_risk == 2.2
     assert obs.component_scores == {"trend": 88.0, "momentum": None}
+    assert obs.observation_rating == "A"
+    assert obs.observation_rating_basis == "complete_core;factor_coverage;no_conflicts"
     assert obs.data_as_of == "2026-08-05T18:59:00Z"
 
 
@@ -52,6 +54,7 @@ def test_action_card_missing_fields_are_never_fabricated():
     assert obs.targets == ()
     assert obs.component_scores == {}
     assert obs.stop_loss is None
+    assert obs.observation_rating == "C"
 
 
 def test_parse_analysis_current_documented_shape():
@@ -129,3 +132,22 @@ def test_module_has_no_network_or_trading_authority():
     lowered = source.lower()
     for forbidden in ("live_trading_enabled", "place_order", "submit_order", "execute_trade", "tradovate", "alpaca"):
         assert forbidden not in lowered
+
+
+def test_neutral_direction_cannot_rate_a():
+    obs = parse_action_card(
+        {
+            "success": True,
+            "data": {
+                "signal": {
+                    "symbol": "SPY",
+                    "direction": "NEUTRAL",
+                    "score": 72,
+                    "confidence": 71,
+                    "component_scores": {"technicals": 65},
+                }
+            },
+        }
+    )
+    assert obs.observation_rating == "C"
+    assert obs.observation_rating_basis == "partial:direction_unrecognized"

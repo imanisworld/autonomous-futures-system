@@ -4,10 +4,11 @@ Read this first when picking up the futures system.
 
 ## Current source of truth
 
-1. `docs/futures-current-state-handoff.md` — current source/runtime split plus long provenance. Read the newest dated block first.
-2. `docs/futures-current-status-2026-09-22.md` — concise operator status. The filename is historical; newer dated sections inside the file supersede older sections.
-3. `docs/strategy-rules/Strategy_Inventory.md` — strategy evidence classifications and execution posture.
-4. Deployment state must still be verified on the box. Repository `main` is not proof of what the VPS is running.
+1. `docs/futures-operator-todo.md` — durable ordered operator action tracker. It tracks work to do, not strategy status.
+2. `docs/futures-current-state-handoff.md` — current source/runtime split plus long provenance. Read the newest dated block first.
+3. `docs/futures-current-status-2026-09-22.md` — concise operator status. The filename is historical; newer dated sections inside the file supersede older sections.
+4. `docs/strategy-rules/Strategy_Inventory.md` — strategy evidence classifications and execution posture.
+5. Deployment state must still be verified on the box. Repository `main` is not proof of what the VPS is running.
 
 ## Runtime reading rule
 
@@ -30,6 +31,7 @@ Exploratory or scratch work is not scored evidence merely because it produced a 
 
 ## Current operator priorities
 
+- Follow `docs/futures-operator-todo.md` in order for infrastructure/runtime work; do not rely on chat memory as the durable queue.
 - Prefer existing evidence lanes and current preregistered studies over creating duplicate variants.
 - Do not reopen retired or superseded work without a new preregistration and explicit reason.
 - Keep research/evidence conclusions separate from runtime/deployment claims.

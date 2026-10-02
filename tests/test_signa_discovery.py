@@ -31,7 +31,7 @@ def test_action_card_candidate_keeps_levels_and_observation_flags():
                 "stop_loss": 165,
                 "targets": [180, 190],
                 "reward_to_risk": 2.4,
-                "component_scores": {"trend": 90, "volume": 55},
+                "component_scores": {"trend": 90, "volume": 55, "gamma": 48},
             }
         },
     }
@@ -42,7 +42,10 @@ def test_action_card_candidate_keeps_levels_and_observation_flags():
     assert row["status"] == "SIGNA_CANDIDATE"
     assert row["trade_authority"] is False
     assert row["targets"] == (180.0, 190.0)
-    assert row["component_scores"] == {"trend": 90.0, "volume": 55.0}
+    assert row["component_scores"] == {"trend": 90.0, "volume": 55.0, "gamma": 48.0}
+    assert row["strength"] == 62.0
+    assert row["factor_count"] == 3
+    assert row["factor_conflicts"] == ("gamma",)
 
 
 def test_scan_candidates_are_deduped_and_flexible():
@@ -129,8 +132,13 @@ def test_manual_context_records_from_discord_style_text():
 
     ticker: QQQ
     source: gex
-    gamma_wall: 490
-    flip: 485
+    gex_regime: NEG_GAMMA
+    call_wall: 490
+    put_wall: 480
+    gamma_flip: 485
+    weinstein_stage: 2A
+    elliott_invalidation: 474
+    aggressor: sold_puts
     """
     rows = manual_context_records_from_text(text)
     assert len(rows) == 2
@@ -140,7 +148,13 @@ def test_manual_context_records_from_discord_style_text():
     assert rows[0]["direction"] == "LONG"
     assert rows[0]["callPremium"] == 1250000
     assert rows[1]["dataset"] == "gex"
-    assert rows[1]["flip"] == 485
+    assert rows[1]["gex_regime"] == "NEG_GAMMA"
+    assert rows[1]["call_wall"] == 490
+    assert rows[1]["put_wall"] == 480
+    assert rows[1]["gamma_flip"] == 485
+    assert rows[1]["weinstein_stage"] == "2A"
+    assert rows[1]["elliott_invalidation"] == 474
+    assert rows[1]["aggressor"] == "sold_puts"
 
 
 def test_client_uses_confirmed_options_flow_paths_and_gex_unresolved():

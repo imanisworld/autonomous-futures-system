@@ -52,6 +52,7 @@ from alert_ranker.causal_bars import (
     session_vwap,
 )
 from alert_ranker.config import ScannerConfig
+from alert_ranker.coverage_observer import _hourly_type
 from alert_ranker.discord import DiscordAlerter
 from alert_ranker.scanner import OptionsScanner
 from alert_ranker.setup_authority import evaluate_setup
@@ -346,6 +347,29 @@ def test_opening_hourly_candle_cannot_inherit_premarket_range():
     assert hourly[0].high < 999.0
     assert hourly[0].low > 1.0
     assert hourly[0].start == session.open
+
+
+def test_hourly_type_appears_only_after_two_completed_session_hours():
+    """Stored 2026-09-30 coverage rows: early hours are null, later hours are typed.
+
+    SPY 13:30Z and 14:00Z stored hourly_candle_type=None. MSFT 14:30Z was also
+    None. AAPL 15:00Z stored inside_bar, and SPY 15:30Z stored two_up with the
+    hourly check no longer in alignment_failures. The production rule emits a
+    session hour only from two contiguous 30-minute bars and classifies it
+    only once a prior completed session hour exists. A partial current hour
+    is dropped, so it is not a missing provider bar.
+    """
+    session = full_session(date(2026, 9, 30))
+    assert session.open.astimezone(UTC) == utc(2026, 9, 30, 13, 30)
+    bars = rising_series(session, 5)
+
+    assert _hourly_type(bars[:1], session) is None
+    assert len(build_session_timeframe(bars[:2], MINUTE_30, HOUR_1, session.open)) == 1
+    assert _hourly_type(bars[:2], session) is None
+    assert len(build_session_timeframe(bars[:3], MINUTE_30, HOUR_1, session.open)) == 1
+    assert _hourly_type(bars[:3], session) is None
+    assert len(build_session_timeframe(bars[:4], MINUTE_30, HOUR_1, session.open)) == 2
+    assert _hourly_type(bars[:4], session) == "two_up"
 
 
 def test_hourly_construction_refuses_to_bridge_a_gap():
