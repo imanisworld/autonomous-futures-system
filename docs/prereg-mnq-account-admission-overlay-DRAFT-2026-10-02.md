@@ -162,6 +162,18 @@ The first pair is a Daily 5-minute payload against an Asia 15-minute payload.
 The second pair is an Asia 15-minute payload against a Daily 5-minute payload.
 They are separate requests.
 
+Journal days follow the frozen UTC entry-day rule. These facts use only the
+timestamps already in the pair ids. They do not use P&L.
+
+- `2025-12-01T01:15:00+00:00`: the exiting entry is
+  `2025-11-30T23:00:00+00:00`, so its realized P&L books to journal day
+  `2025-11-30`. The candidate fill is journal day `2025-12-01`. Exit-first
+  frees capacity. That exit's P&L is not on the candidate's journal day.
+- `2026-02-05T12:45:00+00:00`: the exiting entry is
+  `2026-02-05T02:30:00+00:00` and the candidate fill is
+  `2026-02-05T12:45:00+00:00`. Both are journal day `2026-02-05`. Exit-first
+  can change the $150 gate for that candidate.
+
 ### Sensitivity — not the primary result
 
 One alternate sensitivity is authorized: `UNKNOWN_ORDER_EXIT_FIRST`.
@@ -252,23 +264,72 @@ Use `INSUFFICIENT_EVIDENCE` if:
 
 ## Material difference
 
-Primary versus the two-case sensitivity is materially different if any of
-these change:
+Compare only the primary pass with the one sensitivity pass. The difference
+is material if any of these is true:
 
-- the final classification of the account-admission audit;
-- whether the $150 daily-loss gate is judged consequential versus negligible;
-- the number of admitted fills differs by more than the two directly
-  uncertain candidate admissions;
-- any additional downstream admission difference propagates beyond the two
-  unresolved timestamps;
-- the sign of total realized account P&L changes;
-- the max loss streak or the daily-lockout interpretation changes materially;
-- any conclusion used to justify further futures progression changes.
+- the account-level label differs, using the labels in the reading rules;
+- primary `SKIPPED_DAILY_LOSS` count is 0 and the sensitivity count is not,
+  or the reverse;
+- the set of `FILLED` source ids differs by any id other than the two
+  unresolved candidate ids;
+- any source id other than those two candidates has a different disposition;
+- the sign of total realized account P&L differs, where the signs are
+  positive, negative, and zero;
+- the max consecutive losing fills count differs;
+- the set of journal days that contain at least one `SKIPPED_DAILY_LOSS`
+  differs.
 
-If only the two directly uncertain fills differ and the substantive
-conclusion is unchanged, report that uncertainty and the study can remain
-interpretable. Do not create a statistical significance threshold after
-viewing results. Do not use a profitability cutoff.
+If the only disposition changes are those two candidate ids, and none of the
+conditions above are true, report the uncertainty and keep the study
+interpretable. Do not add a statistical threshold after viewing results. Do
+not use a profitability cutoff.
+
+## Reading rules
+
+These rules are how the one look is read. They do not add a gate.
+
+The one look is exactly two calls to `apply_account_admission` on the pinned
+artifact, plus the already-frozen capacity replay used only as the 488-fill
+control:
+
+- primary: `load_frozen_equal_time_order("primary")`, no account seed;
+- sensitivity: `load_frozen_equal_time_order("unknown_order_exit_first")`,
+  no account seed.
+
+No third mode, no family slice, no seed, and no prereg #929 run.
+
+An override is exercised when that candidate's decision carries the frozen
+`equal_time_treatment`. The expected counts are 45 proven and 2 unresolved.
+Any other exercise count is `INSUFFICIENT_EVIDENCE`.
+
+`SKIPPED_DAILY_LOSS` is the set of events the $150 gate blocked. Those events
+already passed the busy check and the three-fill cap. Do not attribute an
+exit-first admission difference to that gate.
+
+The account-level label is:
+
+- `DAILY_LOSS_NEGLIGIBLE` when the primary `SKIPPED_DAILY_LOSS` count is 0;
+- `DAILY_LOSS_CONSEQUENTIAL` when that primary count is greater than 0.
+
+`INSUFFICIENT_EVIDENCE` replaces that label when a material difference is
+true. `INVALID_EXPERIMENT` replaces it when a validity check fails. Neither
+of those two outcomes is a strategy result.
+
+Economics use accepted terminal fills only, ordered by `eligible_fill_ts`:
+
+- realized account P&L is the sum of their `net_pnl`;
+- ending P&L is that sum, with no starting balance added;
+- the daily path sums `net_pnl` by the entry journal day;
+- a losing, winning, or flat day is a journal day with at least one such
+  fill whose sum is negative, positive, or zero;
+- max consecutive losses counts fills with `net_pnl < 0`; a zero or positive
+  fill resets the streak;
+- maximum dollar drawdown is the largest peak-to-trough drop of the
+  cumulative sum, starting at 0.
+
+The research-trial ledger `PLANNED` row keeps its registration-time
+population text. This prereg is the population authority. Do not append a
+`COMPLETED` row in order to authorize the look.
 
 ## Allowed outputs
 
