@@ -1,8 +1,18 @@
 # Options — Current State Handoff
 
-_As of 2026-09-29. The newest dated repository refresh below governs source state; the latest verified box-specific sections govern runtime state until a fresh local/provider or VPS check is performed. This is the single current-state authority for the options lane._
+_As of 2026-10-02. The newest dated repository refresh below governs source state; the latest verified box-specific sections govern runtime state until a fresh local/provider or VPS check is performed. This is the single current-state authority for the options lane._
 
 Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`; the read-only coverage evidence lane (observer, reducer, outcome study, after-close collector) is described in `docs/options-coverage-observer.md`.
+
+## Repository/runtime refresh — 2026-10-02
+
+- Repository `main` at this refresh: `14abe2a23fe55d46ef6e0cefee513a47be5e93a4` (#1104, documentation checkpoint).
+- #1077 merged as `8c4e2e472bd7926b46bcb83af1c7625117d3e769`. It adds display-only Signa-v2 Observation Rating / AFS Trade Grade surfaces. It does **not** change scanner score, alert eligibility, setup state, contract selection, risk permission, orders, or execution. It is **not deployed** to the options scanner and creates no execution authority.
+- #1067, #1069 and #1071 remain open at the exact heads recorded below. Their RTH/provider gates remain unchanged.
+- The options-scanner service was restarted by `apt-daily-upgrade` on 2026-10-02 around 06:49Z. That restart did not deploy #1077. Production posture remains the existing 20-symbol `OPTIONS_PAPER_V1` advisory/read-only lane with SPXW OFF.
+- Scanner memory-cap pressure remains an operator decision, not a strategy/evidence conclusion. Daily scan counts from 2026-09-24 through 2026-10-01 remained steady (3,087–3,369); per-scan latency was not measured, so the memory issue must not be interpreted as either proven harmless or proven to have skipped work.
+- Remaining activation gates are still the real-provider 66/66 RTH capacity proof for #1067 and an RTH observation that SPXW 0DTE appears normally while the SPXW lane remains OFF.
+
 
 ## Repository refresh — 2026-09-29 (66-symbol expansion + SPXW paper lane + Epoch-3 audit)
 
