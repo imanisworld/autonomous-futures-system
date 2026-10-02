@@ -1,0 +1,80 @@
+{
+  "acceptance_criteria": [
+    "candidate.activation_count.count > baseline.activation_count.count"
+  ],
+  "approved_at": "2026-10-02T16:05:00Z",
+  "approved_by": "Operator",
+  "baseline": {
+    "commit_sha": "69ea8a9021441a04bd2b08616f38aa2a90f05536",
+    "label": "nearest_v1 \u2014 current main before the experiment-specific adapter commit"
+  },
+  "candidate": {
+    "change": "Use the existing floor geometry path (find_targets(min_target_rr=1.0)) instead of nearest-level V1 geometry on the identical 59 episode population.",
+    "commit_sha": "6bf42dc2eab0721e0054f794a3c35cf3b0a4d3c2",
+    "label": "floor_ge1r \u2014 adapter-capable candidate commit; target rule differs only by declared arm"
+  },
+  "changed_variables": [
+    {
+      "baseline_value": "nearest_v1",
+      "candidate_value": "floor_ge1r",
+      "name": "target_geometry_rule"
+    }
+  ],
+  "data": {
+    "dataset_hash": "1963db73bccf0fd366eaaa077bb4e9582ed453ff220f1c5e789961096f3f113c",
+    "dataset_id": "coverage://options-30m-retrospective-20/2026-09-09_2026-09-15/out-v0.1",
+    "dataset_path": "/root/afs-shared/coverage/aggregate/outcomes_2026-09-09_2026-09-15.json",
+    "dataset_size_bytes": 35024516,
+    "population_count": 59,
+    "population_manifest": "docs/research-population-manifests/T-2026-09-25-prereg-options-212c-target-geometry-2026-09-25-01.json",
+    "population_manifest_sha256": "2ee0db9132fe6b5933bb4cc04fb6d0e1e2d63f88c6ebc9e95a42b26f49d83e4a",
+    "selection_implementation": "ops.research_experiment_adapters.options_212c_target_geometry._select_population",
+    "selection_version": "ep-v0.1-family-symbol-date-v1",
+    "source": "OPTIONS_COVERAGE_OUTCOMES out-v0.1 / ep-v0.1 frozen retrospective coverage evidence",
+    "window": {
+      "end": "2026-09-15",
+      "start": "2026-09-09"
+    }
+  },
+  "evidence_path": "docs/research-evidence/T-2026-09-25-prereg-options-212c-target-geometry-2026-09-25-01/",
+  "execution": {
+    "entry_logic": "Coverage classification only. Each structurally selected episode is evaluated at its stored first-sight state; activation means the arm-specific gate bucket is WOULD_OTHERWISE_QUALIFY. No option order is entered.",
+    "exit_logic": "No synthetic trade exit or option P&L is created in this experiment.",
+    "friction": "No option fill model. Existing stored first-sight timing/price is used only by the already-recorded late gate.",
+    "sizing": "None; coverage-only experiment.",
+    "stop_logic": "Stored trigger/invalidation and all non-target gate inputs remain unchanged between arms.",
+    "target_logic": "Baseline uses gate_bucket_nearest/current nearest-level V1 geometry. Candidate uses gate_bucket_floor/existing >=1R floor geometry. The floor rule's corresponding remaining-R/late check changes only because target geometry changes."
+  },
+  "experiment_id": "E-2026-09-25-options-212c-target-geometry-01",
+  "held_constant": [
+    "exact 59 episode identities selected by family/symbol/date before outcomes",
+    "20-symbol V1 universe",
+    "2026-09-09..2026-09-15 retrospective sessions",
+    "trigger and invalidation",
+    "first-sight timestamp and price",
+    "SPY/QQQ/hourly/daily alignment inputs",
+    "gate ordering outside target-geometry-dependent fields",
+    "cov-v0.1 / ep-v0.1 / out-v0.1 semantics",
+    "no option contract/fill/sizing/P&L model"
+  ],
+  "hypothesis": "On the exact frozen 59-episode 30m STRAT_212_CONTINUATION population, the existing >=1R floor target geometry increases full-funnel WOULD_OTHERWISE_QUALIFY activations versus the current nearest-level V1 geometry, with all non-target inputs held constant.",
+  "notes": "APPROVED by operator on 2026-10-02T16:05:00Z for one frozen measurement run only. The frozen outcomes file was verified read-only at /root/afs-shared/coverage/aggregate/outcomes_2026-09-09_2026-09-15.json (35024516 bytes, SHA-256 1963db73bccf0fd366eaaa077bb4e9582ed453ff220f1c5e789961096f3f113c). Selection implementation ops.research_experiment_adapters.options_212c_target_geometry._select_population version ep-v0.1-family-symbol-date-v1 reproduced 59 unique episodes. Population manifest SHA-256 is 2ee0db9132fe6b5933bb4cc04fb6d0e1e2d63f88c6ebc9e95a42b26f49d83e4a. The variant manifest results_sha256 remains null until the one approved run completes. Approval authorizes measurement only; this test can classify coverage rescue only and cannot prove edge, option expectancy, production readiness, promotion, deployment, or execution authority.",
+  "population": "Options 30m STRAT_212_CONTINUATION; exact 20-symbol V1 universe [AAPL, AMZN, BAC, COIN, GE, GOOGL, INTC, IWM, JPM, MRK, MSFT, NFLX, NVDA, PLTR, QQQ, SPY, TLT, TSLA, WMT, XOM]; retrospective sessions 2026-09-09..2026-09-15; full structurally selected 59-episode population",
+  "prereg_path": "docs/prereg-options-212c-target-geometry-2026-09-25.md",
+  "rejection_criteria": [
+    "candidate.activation_count.count <= baseline.activation_count.count"
+  ],
+  "required_metrics": [
+    "population_size",
+    "setups_evaluated",
+    "rejection_counts_by_reason",
+    "activation_count"
+  ],
+  "schema_version": 1,
+  "setup_type": "options_212c_target_geometry",
+  "status": "APPROVED",
+  "supersedes": null,
+  "timeframe": "30m",
+  "trial_id": "T-2026-09-25-prereg-options-212c-target-geometry-2026-09-25-01",
+  "variant_manifest": "docs/research-trial-manifests/T-2026-09-25-prereg-options-212c-target-geometry-2026-09-25-01.json"
+}

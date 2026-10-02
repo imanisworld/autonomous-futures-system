@@ -51,12 +51,12 @@ _As of 2026-10-02. Operational checklist only. The authoritative options status 
 - [ ] If SPXW is enabled, keep its evidence separate from equity `OPTIONS_PAPER_V1`; preserve 0DTE and 1+DTE as separate cohorts.
 - [ ] Update `docs/options-current-state-handoff.md` with exact runtime/release proof after activation.
 
-## Frozen 59-episode experiment — approved only with a valid merged PR; not run
+## Frozen 59-episode experiment — one look preserved; closed after this preservation merges
 
-- [ ] `E-2026-09-25-options-212c-target-geometry-01` becomes operator-approved on `main` only once PR #1111 is valid and merged. Until then `main` stays `DRAFT` with `approved_by: null` and `approved_at: null`.
-- [x] The experiment has **not** been run.
-- [ ] After merge, one later measurement may compare `nearest_v1` with `floor_ge1r` on the frozen 59-member population. Dataset hash `1963db73bccf0fd366eaaa077bb4e9582ed453ff220f1c5e789961096f3f113c`. Population manifest hash `2ee0db9132fe6b5933bb4cc04fb6d0e1e2d63f88c6ebc9e95a42b26f49d83e4a`.
-- [ ] That measurement is coverage/activation only. It does not authorize a P&L, expectancy, strategy-promotion, deployment, or execution conclusion.
+- [x] #1111 merged as `d238ea4aee2f2e9f7dae0b09e90cbb65f1e4070c`. The spec on `main` is `APPROVED` by Operator at `2026-10-02T16:05:00Z`.
+- [x] The single one-look ran once. Result: **SUPPORTED BY THIS EXPERIMENT / coverage only / not edge.** `floor_ge1r` 2 activations versus `nearest_v1` 0 on the frozen 59. Disposition `RESEARCH_ONLY`. Do not rerun.
+- [x] Evidence bytes preserved. `runner_report.json` SHA-256 `0d47bf46fd62748e9e6b67a248d2ef6ef76aad072e6ad1d2fd43192f7f3343e8`. That digest is the manifest `results_sha256`.
+- [x] The measurement is coverage/activation only. It does not establish profitable trades, expectancy, strategy promotion, deployment, or execution authority.
 
 ## Cleanup / non-blocking
 
