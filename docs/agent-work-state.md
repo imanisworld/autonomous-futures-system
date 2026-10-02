@@ -99,8 +99,8 @@ Does not change the 4HR epoch above. #1108 stays the runtime record.
 
 - Sibling only: `research/mnq_account_admission_overlay.py`. Pinned #915/#929 files were not edited. Prereg #929 was not run. No historical stream was scored.
 - Daily loss uses the UTC calendar-date stand-in for live `date.today()`, and books a resolved fill to the entry's journal day (`open_position_date`). It does not use the CME 18:00 ET observation day. The box timezone is still unconfirmed.
-- Drawdown is `DRAWDOWN_GATE_NOT_EVALUATED` unless a provenance-backed starting balance and starting peak are supplied. Those then move only with accepted, resolved fills.
-- Draft, not approved: `docs/prereg-mnq-account-admission-overlay-DRAFT-2026-10-02.md`. Options candidate admission stays insufficient evidence and was not implemented.
+- Drawdown is `DRAWDOWN_GATE_NOT_EVALUATED` unless a provenance-backed starting balance and starting peak are supplied. Those then move only with accepted, resolved fills. After the frozen capacity checks, daily loss runs before that floor.
+- Draft, not approved: `docs/prereg-mnq-account-admission-overlay-DRAFT-2026-10-02.md`, registered as PLANNED trial `T-2026-10-02-prereg-mnq-account-admission-overlay-draft-2026-10-02-01`. No historical overlay scoring has been run. The same-timestamp census is still blank, so the overlay is not exact live parity. Options candidate admission stays insufficient evidence and was not implemented.
 
 ## Current checkpoint — 2026-10-02 ~15:00Z (#1102 installed, post-deploy audit)
 

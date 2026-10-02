@@ -6,6 +6,7 @@ import pytest
 
 from research.mnq_account_admission_overlay import (
     DRAWDOWN_GATE_NOT_EVALUATED,
+    DRAWDOWN_NOT_APPLIED,
     DRAWDOWN_WITHIN_FLOOR,
     AccountSeed,
     apply_account_admission,
@@ -248,8 +249,12 @@ def test_drawdown_evolves_from_the_seed_and_ignored_trades_do_not_move_it():
     assert breached.drawdown_gate == "EVALUATED"
     assert [item.disposition for item in breached.decisions] == [
         "FILLED",
-        "SKIPPED_DRAWDOWN_FLOOR",
-        "SKIPPED_DRAWDOWN_FLOOR",
+        "SKIPPED_DAILY_LOSS",
+        "SKIPPED_DAILY_LOSS",
+    ]
+    assert [item.drawdown_gate for item in breached.decisions[1:]] == [
+        DRAWDOWN_NOT_APPLIED,
+        DRAWDOWN_NOT_APPLIED,
     ]
     assert [item.source_id for item in breached.fills] == ["a"]
 
@@ -261,6 +266,34 @@ def test_drawdown_evolves_from_the_seed_and_ignored_trades_do_not_move_it():
     inside = apply_account_admission(just_inside, account_seed=under_floor)
     assert [item.disposition for item in inside.decisions] == ["FILLED", "FILLED"]
     assert inside.decisions[1].drawdown_gate == DRAWDOWN_WITHIN_FLOOR
+
+
+def test_daily_loss_wins_when_drawdown_is_also_breached():
+    """Both gates fail. Daily loss is the disposition, matching RiskEngine order.
+
+    The skipped winner would repair the floor if it were booked. The next
+    journal day is clear of the $150 rule and still fails the floor, which
+    shows the skip did not move balance or peak and did not take a fill slot.
+    """
+
+    seed = AccountSeed(
+        starting_balance=1000.0,
+        starting_peak=1000.0,
+        source="unit-fixture:not-live-equity",
+    )
+    rows = [
+        event("a", "4HR_RETRIGGER", "2026-01-05T15:00:00+00:00", "2026-01-05T15:30:00+00:00", day="2026-01-05", pnl=-400),
+        event("repair", "60M_322_FIRST_LIVE", "2026-01-05T16:00:00+00:00", "2026-01-05T16:30:00+00:00", day="2026-01-05", pnl=500),
+        event("next-day", "12HR_MIYAGI", "2026-01-06T15:00:00+00:00", "2026-01-06T15:10:00+00:00", day="2026-01-06", pnl=10),
+    ]
+    overlay = apply_account_admission(rows, account_seed=seed)
+    assert [item.disposition for item in overlay.decisions] == [
+        "FILLED",
+        "SKIPPED_DAILY_LOSS",
+        "SKIPPED_DRAWDOWN_FLOOR",
+    ]
+    assert overlay.decisions[1].drawdown_gate == DRAWDOWN_NOT_APPLIED
+    assert [item.source_id for item in overlay.fills] == ["a"]
 
 
 def test_exact_thirty_percent_floor_uses_only_accepted_resolutions():

@@ -95,7 +95,7 @@ These are ordered. Do not skip ahead.
 
 Rebased onto `d04cd9a`. This section does not revise the 4HR epoch or the runtime checkpoint above.
 
-- [x] **MNQ overlay, unscored.** `research/mnq_account_admission_overlay.py` keeps the frozen capacity rules and applies the $150 journal-day loss rule. Drawdown stays unevaluated unless a sourced starting balance and peak are passed, and those then move only from accepted resolutions. Draft: `docs/prereg-mnq-account-admission-overlay-DRAFT-2026-10-02.md`. Do not score it, and do not run prereg #929, until that draft is approved.
+- [x] **MNQ overlay, unscored.** `research/mnq_account_admission_overlay.py` keeps the frozen capacity rules and applies the $150 journal-day loss rule before the drawdown floor. Drawdown stays unevaluated unless a sourced starting balance and peak are passed, and those then move only from accepted resolutions. Draft: `docs/prereg-mnq-account-admission-overlay-DRAFT-2026-10-02.md`, PLANNED as `T-2026-10-02-prereg-mnq-account-admission-overlay-draft-2026-10-02-01`. Do not score it, and do not run prereg #929, until that draft is approved. The same-timestamp census is still blank.
 - [x] **M2K / MGC / MCL / MBT.** Keep collecting. Do not expand the six-market path. MES waits.
 
 ## Definition of done for this phase

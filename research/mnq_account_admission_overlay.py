@@ -159,6 +159,11 @@ def apply_account_admission(
     Omit ``account_seed`` and the drawdown gate is
     ``DRAWDOWN_GATE_NOT_EVALUATED``. Pass a seed and balance/peak then move
     only with accepted, resolved fills.
+
+    After the frozen capacity checks, admission follows
+    ``RiskEngine.validate``: the journal-day loss rule runs before the
+    drawdown floor. A daily-loss skip does not apply the floor and does not
+    move the counterfactual path.
     """
 
     if account_seed is not None and not isinstance(account_seed, AccountSeed):
@@ -219,6 +224,19 @@ def apply_account_admission(
             )
             continue
 
+        # RiskEngine.validate checks daily loss before max drawdown. A
+        # candidate that already fails the journal-day loss rule does not
+        # receive a drawdown disposition.
+        if realized_by_day[journal_day(now)] <= -MAX_DAILY_LOSS_DOLLARS:
+            decisions.append(
+                _decision(
+                    event,
+                    SKIPPED_DAILY_LOSS,
+                    DRAWDOWN_NOT_APPLIED if path is not None else summary_gate,
+                )
+            )
+            continue
+
         drawdown_gate = summary_gate
         if path is not None:
             fraction = (path.peak - path.balance) / path.peak
@@ -228,10 +246,6 @@ def apply_account_admission(
                 )
                 continue
             drawdown_gate = DRAWDOWN_WITHIN_FLOOR
-
-        if realized_by_day[journal_day(now)] <= -MAX_DAILY_LOSS_DOLLARS:
-            decisions.append(_decision(event, SKIPPED_DAILY_LOSS, drawdown_gate))
-            continue
 
         fills.append(event)
         fills_by_day[event.observation_day] += 1
