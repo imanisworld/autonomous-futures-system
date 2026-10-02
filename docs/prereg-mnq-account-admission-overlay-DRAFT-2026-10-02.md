@@ -1,8 +1,8 @@
 # DRAFT — MNQ account-admission overlay — NOT APPROVED — DO NOT RUN
 
-**Status: DRAFT. No scoring run is authorized.** This revision replaces the
-earlier snapshot design. It does not name a population, it does not authorize
-a fetch, and it does not amend prereg #929.
+**Status: POPULATION_BLOCKED. No scoring run is authorized.** This revision
+records why a population cannot be bound yet. It does not authorize a fetch,
+and it does not amend prereg #929.
 
 **Trial ID:** `T-2026-10-02-prereg-mnq-account-admission-overlay-draft-2026-10-02-01`
 
@@ -25,16 +25,40 @@ holding/EOD behavior.
 
 | Item | Required before any run | This draft |
 |---|---|---|
-| Population | Exact family set and window | **BLANK** |
-| Input event stream | Path plus SHA-256 of the fillable-event artifact | **BLANK** |
-| Process timezone | Confirm what `date.today()` is on the futures-bot process. The code stand-in is UTC because this repo does not set `TZ` | **BLANK** |
-| Drawdown seed | Provenance-backed starting balance and starting peak, or an explicit choice to leave drawdown `DRAWDOWN_GATE_NOT_EVALUATED` | **BLANK** |
-| Decision criteria | What would count as pass, fail, or insufficient | **BLANK** |
-| Allowed outputs | Whether a look may read counts only, or also P&L | **BLANK** |
-| Same-timestamp census | Count of accepted `exit_ts` values that exactly equal a later candidate's `eligible_fill_ts`. Do not infer order from the tie | **BLANK** |
+| Population | Exact family set and window | **POPULATION_BLOCKED** |
+| Input event stream | Path plus SHA-256 of the fillable-event artifact | **NOT PRODUCED** |
+| Process timezone | Confirm what `date.today()` is on the futures-bot process | **PROVEN** `Etc/UTC` at 2026-10-02T16:38:01Z |
+| Drawdown seed | Provenance-backed starting balance and starting peak, or an explicit choice to leave drawdown `DRAWDOWN_GATE_NOT_EVALUATED` | **NOT CHOSEN** — no population |
+| Decision criteria | What would count as pass, fail, or insufficient | **NOT FROZEN** — no population |
+| Allowed outputs | Whether a look may read counts only, or also P&L | **NOT FROZEN** — no population |
+| Same-timestamp census | Count of accepted `exit_ts` values that exactly equal a later candidate's `eligible_fill_ts`. Do not infer order from the tie | **NOT RUN** — no artifact |
 
 Do not fill these blanks from prereg #929, from the replay's $5,000
 normalization, or from the $1,500 ladder seed.
+
+## Population block
+
+No population is selected.
+
+The forward window in prereg #929, first bar at or after
+`2026-09-23T22:00:00Z`, stays embargoed. It was not read and it was not
+rebuilt. The gap `2026-06-27` through `2026-07-23` stays out as well: prereg
+#929 already excludes it because other studies have examined those bars.
+
+The only already-defined historical stream is the frozen #915 six-family
+fillable set on the common window `2025-07-24` through `2026-06-26`
+(`4HR_RETRIGGER`, `60M_322_FIRST_LIVE`, `DAILY_22_COMPLETED_CLOSE`,
+`12HR_MIYAGI`, `ASIA_D_EMA`, `SUSTAINED_TREND_V1`). #915 already published
+aggregate portfolio results for that window. There is no committed
+fillable-event artifact for it. Rebuilding that stream from the frozen
+adapters on the local corpora does not reproduce the frozen family control
+gate, so the rebuild was discarded and was not written down. A drifted file
+is not this population.
+
+Until an exact artifact reproduces that frozen stream, or a different
+already-defined stream is named without opening the #929 embargo, this draft
+stays `POPULATION_BLOCKED`. The same-timestamp census, drawdown seed,
+decision criteria, and allowed outputs stay unresolved on purpose.
 
 ## Daily-loss day key
 
@@ -48,7 +72,8 @@ does not contain that outcome.
 
 This overlay therefore:
 
-- labels each candidate with the UTC calendar date of its fill timestamp;
+- labels each candidate with the UTC calendar date of its fill timestamp,
+  which is the proven `date.today()` calendar on the futures-bot process;
 - adds an accepted terminal result to the UTC calendar date of its **entry**,
   and only once the exit is strictly earlier than the candidate being judged;
 - skips with `SKIPPED_DAILY_LOSS` when that entry-day total is at or below
@@ -56,8 +81,21 @@ This overlay therefore:
 - does not use `observation_day` for this gate. The three-fill cap still uses
   `event.observation_day`, because that is the frozen capacity rule.
 
-UTC is the stand-in for `date.today()` until the process timezone blank is
-filled. Do not describe that stand-in as a completed live-parity proof.
+Process timezone, read only at `2026-10-02T16:38:01Z`:
+
+- futures-bot was already running (MainPID `1457117`, `NRestarts=0`). It was
+  not restarted.
+- The process environment has no `TZ`. The unit `Environment` has no `TZ`.
+  The unit's environment files do not assign `TZ`.
+- `timedatectl` reports `Etc/UTC`. `/etc/localtime` is
+  `/usr/share/zoneinfo/Etc/UTC`.
+- A host `python3` `date.today()` at that read returned `2026-10-02` with
+  `time.tzname` `('UTC', 'UTC')`.
+
+`date.today()` on that process is therefore the UTC calendar date. This is a
+point-in-time fact about the running process and the host zone. It is not a
+claim that a later `TZ` change is impossible, and it does not by itself make
+the overlay exact live parity. The same-timestamp census is still undone.
 
 ## Same-timestamp realization is not live parity
 
@@ -130,5 +168,7 @@ of this draft.
 
 ## Next
 
-Stop. An operator has to fill the blanks and approve a revision of this draft
-before anyone runs a scored comparison.
+Stop. Status is `POPULATION_BLOCKED`. Do not score. The next revision has to
+bind an exact fillable-event artifact that reproduces a frozen stream without
+opening the #929 embargo, then run the same-timestamp census on that artifact
+before any scored look.

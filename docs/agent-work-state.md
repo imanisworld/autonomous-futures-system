@@ -101,6 +101,7 @@ Does not change the 4HR epoch above. #1108 stays the runtime record.
 - Daily loss uses the UTC calendar-date stand-in for live `date.today()`, and books a resolved fill to the entry's journal day (`open_position_date`). It does not use the CME 18:00 ET observation day. The box timezone is still unconfirmed.
 - Drawdown is `DRAWDOWN_GATE_NOT_EVALUATED` unless a provenance-backed starting balance and starting peak are supplied. Those then move only with accepted, resolved fills. After the frozen capacity checks, daily loss runs before that floor.
 - Draft, not approved: `docs/prereg-mnq-account-admission-overlay-DRAFT-2026-10-02.md`, registered as PLANNED trial `T-2026-10-02-prereg-mnq-account-admission-overlay-draft-2026-10-02-01`. No historical overlay scoring has been run. The same-timestamp census is still blank, so the overlay is not exact live parity. Options candidate admission stays insufficient evidence and was not implemented.
+- **2026-10-02 prereg completion attempt: `POPULATION_BLOCKED`.** The #929 forward window was not opened. The #915 historical stream has no committed fillable-event artifact, and a local rebuild did not reproduce its frozen control gate, so no artifact was kept. Futures-bot `date.today()` was read only at `2026-10-02T16:38:01Z`: process `TZ` unset, host zone `Etc/UTC`. No deploy, restart, or scored run.
 
 ## Current checkpoint — 2026-10-02 ~15:00Z (#1102 installed, post-deploy audit)
 
