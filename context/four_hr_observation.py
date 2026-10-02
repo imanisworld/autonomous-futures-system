@@ -7,6 +7,13 @@ strategy, risk, or broker path reads this file.
 Default OFF via ONE_MIN_4HR_OBSERVER_ENABLED. A missing, stale, or malformed
 snapshot produces no evidence claim and never falls back to executable
 strategy state.
+
+Arm window: ``armed_available_at`` is written once, when the collector first
+publishes the arm, and is never refreshed by repeated ARMED publishes. When the
+machine leaves ARMED, ``terminal_available_at`` records when that was known.
+A 1m bar may use the arm when armed_available_at <= bar open < terminal time.
+This keeps a 1m webhook that is processed after the same-boundary 5m webhook
+from losing the touch, without applying any later state backward.
 """
 from __future__ import annotations
 
@@ -102,6 +109,62 @@ def _snapshot(machine_state: dict, source_timestamp: datetime) -> Optional[dict]
     return snapshot
 
 
+_ARM_FIELDS = ("direction", "trigger", "target", "setup_bar_ts", "four_am_bar_ts")
+_TERMINAL = {"TRIGGERED", "INVALIDATED", "EXPIRED"}
+
+
+def _arm_identity(state: dict) -> Optional[tuple]:
+    direction = str(state.get("direction") or "").upper()
+    trigger = _number(state.get("trigger"))
+    target = _number(state.get("target"))
+    setup_bar_ts = str(state.get("setup_bar_ts") or "")
+    four_am_bar_ts = str(state.get("four_am_bar_ts") or "")
+    if (
+        direction not in {"LONG", "SHORT"}
+        or trigger is None
+        or target is None
+        or not setup_bar_ts
+        or not four_am_bar_ts
+    ):
+        return None
+    return (direction, trigger, target, setup_bar_ts, four_am_bar_ts)
+
+
+def _previous_snapshot(path: Path, trading_date: str) -> Optional[dict]:
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError, UnicodeError):
+        return None
+    if not isinstance(raw, dict) or raw.get("schema") != SCHEMA:
+        return None
+    if raw.get("trading_date") != trading_date or not raw.get("armed_available_at"):
+        return None
+    return raw
+
+
+def _carry_arm_window(snapshot: dict, previous: Optional[dict], machine_state: dict) -> None:
+    """Keep the first arm time; stamp the first time the arm stopped being ARMED."""
+    if previous is None:
+        if snapshot["status"] == "ARMED":
+            snapshot["armed_available_at"] = snapshot["source_timestamp"]
+        return
+    same_arm = _arm_identity(previous) is not None and (
+        _arm_identity(previous) == _arm_identity(machine_state)
+    )
+    if snapshot["status"] == "ARMED":
+        snapshot["armed_available_at"] = (
+            previous["armed_available_at"] if same_arm else snapshot["source_timestamp"]
+        )
+        return
+    if snapshot["status"] not in _TERMINAL or not same_arm:
+        return
+    snapshot.update({name: previous[name] for name in _ARM_FIELDS})
+    snapshot["armed_available_at"] = previous["armed_available_at"]
+    snapshot["terminal_available_at"] = (
+        previous.get("terminal_available_at") or snapshot["source_timestamp"]
+    )
+
+
 def publish_4hr_observation(
     log_dir: str | Path,
     machine_state: dict,
@@ -114,6 +177,9 @@ def publish_4hr_observation(
         return False
     day = date.fromisoformat(snapshot["trading_date"])
     path = observation_state_path(log_dir, day)
+    _carry_arm_window(
+        snapshot, _previous_snapshot(path, snapshot["trading_date"]), machine_state
+    )
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
     tmp.write_text(
@@ -130,7 +196,7 @@ def read_armed_observation(
     *,
     as_of: datetime,
 ) -> Optional[dict]:
-    """Return one ARMED snapshot known at ``as_of``, or None. Never raises."""
+    """Return the arm if ``as_of`` is inside its published window, or None. Never raises."""
     as_of_et = _aware(as_of)
     if as_of_et is None:
         return None
@@ -147,7 +213,8 @@ def read_armed_observation(
         return None
     if raw.get("instrument") != "MNQ" or raw.get("trading_date") != day.isoformat():
         return None
-    if raw.get("status") != "ARMED":
+    status = raw.get("status")
+    if status != "ARMED" and status not in _TERMINAL:
         return None
     if (
         raw.get("executable") is not False
@@ -162,13 +229,24 @@ def read_armed_observation(
         return None
     if not raw.get("setup_bar_ts") or not raw.get("four_am_bar_ts"):
         return None
+    armed_et = _parse_aware(raw.get("armed_available_at"))
+    if armed_et is None or armed_et > as_of_et:
+        return None
+    if armed_et.date().isoformat() != day.isoformat():
+        return None
+    if status != "ARMED":
+        # The arm was resolved by the 5m bar ending at terminal_available_at.
+        # A 1m bar that opened before then was still inside the armed window.
+        terminal_et = _parse_aware(raw.get("terminal_available_at"))
+        if terminal_et is None or terminal_et <= armed_et or as_of_et >= terminal_et:
+            return None
+    return raw
+
+
+def _parse_aware(value: object) -> Optional[datetime]:
+    if not isinstance(value, str) or not value:
+        return None
     try:
-        available = datetime.fromisoformat(str(raw.get("source_timestamp")))
+        return _aware(datetime.fromisoformat(value))
     except ValueError:
         return None
-    available_et = _aware(available)
-    if available_et is None or available_et > as_of_et:
-        return None
-    if available_et.date().isoformat() != day.isoformat():
-        return None
-    return raw

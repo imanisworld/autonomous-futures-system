@@ -224,6 +224,7 @@ def evaluate_armed_4hr_touch(payload, log_dir: str, for_date=None) -> Optional[d
             "rule_version": state.get("rule_version"),
             "source": state.get("source"),
             "source_timestamp": state.get("source_timestamp"),
+            "armed_available_at": state.get("armed_available_at"),
             "executable": False,
             "trade_authorized": False,
         },

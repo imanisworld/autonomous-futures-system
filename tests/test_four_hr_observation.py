@@ -6,6 +6,7 @@ import copy
 from datetime import date, datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
+from zoneinfo import ZoneInfo
 
 from config.settings import load_config
 from context.four_hr_observation import (
@@ -125,3 +126,51 @@ def test_observation_module_and_executable_paths_stay_separate():
     assert "four_hr_observation" not in signal
     assert "four_hr_observation" not in risk
     assert "publish_4hr_observation" not in demo
+
+
+def _et(hour, minute):
+    return datetime(2026, 9, 8, hour, minute, tzinfo=ZoneInfo("America/New_York"))
+
+
+def test_repeated_armed_publish_keeps_first_arm_time(tmp_path):
+    # Arm known at 09:40 ET; the 09:40 5m bar republishes ARMED at 09:45 ET.
+    assert publish_4hr_observation(tmp_path, ARMED, source_timestamp=_et(9, 40))
+    assert publish_4hr_observation(tmp_path, ARMED, source_timestamp=_et(9, 45))
+    # The 09:44 1m webhook processed after the 09:45 publish still sees the arm.
+    observed = read_armed_observation(tmp_path, DAY, as_of=_et(9, 44))
+    assert observed is not None
+    assert observed["armed_available_at"].startswith("2026-09-08T09:40:00")
+    assert read_armed_observation(tmp_path, DAY, as_of=_et(9, 39)) is None
+
+
+def test_trigger_publish_does_not_hide_touch_inside_trigger_bar(tmp_path):
+    # Arm known at 09:40 ET; the 09:40 5m bar touches in its last minute and
+    # TRIGGERED is published at 09:45 ET before the 09:44 1m webhook is read.
+    assert publish_4hr_observation(tmp_path, ARMED, source_timestamp=_et(9, 40))
+    triggered = {**ARMED, "status": "TRIGGERED", "entry_time": "x", "stop": 1.0}
+    assert publish_4hr_observation(tmp_path, triggered, source_timestamp=_et(9, 45))
+    inside = read_armed_observation(tmp_path, DAY, as_of=_et(9, 44))
+    assert inside is not None
+    assert inside["terminal_available_at"].startswith("2026-09-08T09:45:00")
+    # After the arm resolved, no later 1m bar can use it.
+    assert read_armed_observation(tmp_path, DAY, as_of=_et(9, 45)) is None
+    assert read_armed_observation(tmp_path, DAY, as_of=_et(10, 30)) is None
+    # A repeated terminal publish keeps the first terminal time.
+    assert publish_4hr_observation(tmp_path, triggered, source_timestamp=_et(9, 50))
+    again = read_armed_observation(tmp_path, DAY, as_of=_et(9, 44))
+    assert again["terminal_available_at"].startswith("2026-09-08T09:45:00")
+
+
+def test_trigger_without_published_arm_is_never_readable(tmp_path):
+    # Armed and triggered on the same 09:30 bar: ARMED was never published.
+    triggered = {**ARMED, "status": "TRIGGERED"}
+    assert publish_4hr_observation(tmp_path, triggered, source_timestamp=_et(9, 35))
+    assert read_armed_observation(tmp_path, DAY, as_of=_et(9, 31)) is None
+    assert read_armed_observation(tmp_path, DAY, as_of=_et(9, 34)) is None
+
+
+def test_different_arm_does_not_inherit_window(tmp_path):
+    assert publish_4hr_observation(tmp_path, ARMED, source_timestamp=_et(9, 40))
+    other = {**ARMED, "status": "TRIGGERED", "trigger": 20050.0}
+    assert publish_4hr_observation(tmp_path, other, source_timestamp=_et(9, 45))
+    assert read_armed_observation(tmp_path, DAY, as_of=_et(9, 44)) is None

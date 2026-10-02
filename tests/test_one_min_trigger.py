@@ -313,3 +313,43 @@ def test_stale_observation_fails_closed(monkeypatch, tmp_path, config):
     assert result["one_min_trigger"] is None
     assert result["fill"] is None
     assert not (tmp_path / ONE_MIN_LANE / f"4hr_trigger_evidence_{DAY.isoformat()}.jsonl").exists()
+
+
+def test_touch_in_last_minute_survives_trigger_publish_race(monkeypatch, tmp_path, config):
+    """5m TRIGGERED publish processed before the same-boundary 1m webhook."""
+    _enable_observer(monkeypatch)
+    _without_executable_4hr(config)
+    log_dir = str(tmp_path)
+    _seed_completed_8am_hour(log_dir)
+    _arm_observation(log_dir, source_timestamp=datetime(2026, 6, 2, 9, 35, tzinfo=ET))
+    publish_4hr_observation(
+        log_dir,
+        {
+            "trading_date": DAY.isoformat(),
+            "status": "TRIGGERED",
+            "direction": "LONG",
+            "trigger": 20000.0,
+            "target": 20200.0,
+            "setup_bar_ts": "2026-06-02T09:10:00-04:00",
+            "four_am_bar_ts": "2026-06-02T04:00:00-04:00",
+        },
+        source_timestamp=datetime(2026, 6, 2, 9, 40, tzinfo=ET),
+    )
+
+    inside = process_alert(
+        _payload(datetime(2026, 6, 2, 9, 39, tzinfo=ET)),
+        config=config,
+        log_dir=log_dir,
+        for_date=DAY,
+    )
+    assert inside["one_min_trigger"]["event"] == "TRIGGER_TOUCH"
+    assert inside["fill"] is None
+    assert inside["execution_reachable"] is False
+
+    after = process_alert(
+        _payload(datetime(2026, 6, 2, 9, 40, tzinfo=ET)),
+        config=config,
+        log_dir=log_dir,
+        for_date=DAY,
+    )
+    assert after["one_min_trigger"] is None
