@@ -195,6 +195,39 @@ def _same(a: Any, b: Any) -> bool:
         return a == b
 
 
+def _crosscheck_reduced_episode(supplied: Episode, derived: Episode) -> None:
+    """Require the separately supplied ep-v0.1 row to match a fresh reduction."""
+    exact_fields = (
+        "reducer_version",
+        "symbol",
+        "session_date",
+        "family",
+        "direction",
+        "first_bar_start",
+        "first_sight_at",
+        "first_sight_after_close",
+        "v1_supported",
+        "floor_geometry_ok",
+        "alignment_ok",
+        "late_floor",
+    )
+    for field in exact_fields:
+        if getattr(supplied, field) != getattr(derived, field):
+            raise StudyContractError("episode_population_drift", field)
+    numeric_fields = (
+        "entry_trigger",
+        "invalidation",
+        "risk",
+        "floor_target_1",
+        "first_sight_price",
+    )
+    for field in numeric_fields:
+        if not _same(getattr(supplied, field), getattr(derived, field)):
+            raise StudyContractError("episode_population_drift", field)
+    if gate_bucket(supplied, "floor") != gate_bucket(derived, "floor"):
+        raise StudyContractError("episode_population_drift", "gate_bucket_floor")
+
+
 def _crosscheck(ep: Episode, event: Mapping[str, Any]) -> None:
     exact = {
         "observer_version": OBSERVER_VERSION,
@@ -302,6 +335,9 @@ def build_session_artifact(
             "episode_population_mismatch",
             f"supplied={len(supplied_ids)} derived={len(derived_ids)}",
         )
+    supplied_by_id = {_episode_id(ep): ep for ep in supplied}
+    for ep in derived:
+        _crosscheck_reduced_episode(supplied_by_id[_episode_id(ep)], ep)
 
     snapshots: list[dict[str, Any]] = []
     seen: set[str] = set()
