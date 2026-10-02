@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "archive_sha": "5a9f14baf714947b98a38a19b45f04a8d18fb365",
+  "archive_branch": "archive/pr915-mnq-combined-portfolio-audit-5a9f14b",
+  "window": {"start": "2025-07-24", "end": "2026-06-26"},
+  "artifact": "research/artifacts/pr915-six-family-fillable-events-5a9f14b.jsonl",
+  "sha256": "d5f949fce98e80ab83fd1c2551b99e7644f4ddc0ad6381aaf978b3282be11942",
+  "row_count": 2257,
+  "family_counts": {
+    "12HR_MIYAGI": 1,
+    "4HR_RETRIGGER": 37,
+    "60M_322_FIRST_LIVE": 11,
+    "ASIA_D_EMA": 2134,
+    "DAILY_22_COMPLETED_CLOSE": 38,
+    "SUSTAINED_TREND_V1": 36
+  },
+  "first_eligible_fill_ts": "2025-07-24T00:15:00+00:00",
+  "last_eligible_fill_ts": "2026-06-26T06:15:00+00:00",
+  "fields": [
+    "direction",
+    "eligible_fill_ts",
+    "entry",
+    "exit_ts",
+    "family",
+    "net_pnl",
+    "observation_day",
+    "result",
+    "session",
+    "signal_ts",
+    "source",
+    "source_id",
+    "stop",
+    "target"
+  ],
+  "sort": "eligible_fill_ts, archived TIE_PRIORITY index, source_id",
+  "same_timestamp_census_count": 280,
+  "same_timestamp_census_path": "research/artifacts/pr915-six-family-same-timestamp-collisions-5a9f14b.json",
+  "corpus_lineage": {
+    "note": "The #915 archive did not record corpus content hashes. These hashes are of the local MNQ_*.jsonl files read by the archived adapters during this reproduction.",
+    "4HR_RETRIGGER": {
+      "path": "data/replay_corpus_v1_5m_4hr_audit/MNQ",
+      "files": 621,
+      "sha256": "f27c8f2bf07d9db6e48feeddcfbdeca55f9831a59721daa296c9249dc29bf6d6"
+    },
+    "60M_322_FIRST_LIVE": {
+      "path_15m": "data/replay_polygon/MNQ",
+      "path_5m": "data/replay_corpus_v1_5m_4hr_audit/MNQ",
+      "files_15m": 622,
+      "sha256_15m": "2ead655471c3e374ebcbc982ab4da2c0bf0285b2d7116d3fe1396eeec2e03d22",
+      "files_5m": 621,
+      "sha256_5m": "f27c8f2bf07d9db6e48feeddcfbdeca55f9831a59721daa296c9249dc29bf6d6"
+    },
+    "DAILY_22_COMPLETED_CLOSE": {
+      "path": "data/replay_corpus_v1_5m_4hr_audit/MNQ",
+      "files": 621,
+      "sha256": "f27c8f2bf07d9db6e48feeddcfbdeca55f9831a59721daa296c9249dc29bf6d6"
+    },
+    "12HR_MIYAGI": {
+      "path": "data/replay_polygon_5m/MNQ",
+      "files": 621,
+      "sha256": "3a848e31ce2bb2c57a392e237fb64659b29da4f608ad8fb301c782029b727cdb"
+    },
+    "ASIA_D_EMA": {
+      "path": "data/replay_corpus_v1_market_condition_fixed/MNQ",
+      "files": 313,
+      "sha256": "c962e10c309e5a438ee423f04bdb5eae5a316e932f3d34c9270e10d51333c8c6"
+    },
+    "SUSTAINED_TREND_V1": {
+      "path_15m": "data/replay_corpus_v1_market_condition_fixed/MNQ",
+      "path_5m": "data/replay_corpus_v1_5m/MNQ",
+      "files_15m": 313,
+      "sha256_15m": "c962e10c309e5a438ee423f04bdb5eae5a316e932f3d34c9270e10d51333c8c6",
+      "files_5m": 621,
+      "sha256_5m": "878c53eb185c634592b38112d7ae0d57a848eb5ed32583050cd007582ddc0f0d"
+    }
+  }
+}

@@ -1,8 +1,9 @@
 # DRAFT — MNQ account-admission overlay — NOT APPROVED — DO NOT RUN
 
-**Status: POPULATION_BLOCKED. No scoring run is authorized.** This revision
-records why a population cannot be bound yet. It does not authorize a fetch,
-and it does not amend prereg #929.
+**Status: SAME_TIMESTAMP_ORDER_BLOCKED. No scoring run is authorized.** The
+#915 fillable stream has been reproduced from the archive. The same-timestamp
+census is greater than zero, so this draft is not ready. It does not authorize
+a fetch, and it does not amend prereg #929.
 
 **Trial ID:** `T-2026-10-02-prereg-mnq-account-admission-overlay-draft-2026-10-02-01`
 
@@ -25,40 +26,39 @@ holding/EOD behavior.
 
 | Item | Required before any run | This draft |
 |---|---|---|
-| Population | Exact family set and window | **POPULATION_BLOCKED** |
-| Input event stream | Path plus SHA-256 of the fillable-event artifact | **NOT PRODUCED** |
+| Population | Exact family set and window | **REPRODUCED** #915 six-family window `2025-07-24`..`2026-06-26` |
+| Input event stream | Path plus SHA-256 of the fillable-event artifact | **BOUND** `research/artifacts/pr915-six-family-fillable-events-5a9f14b.jsonl` `d5f949fce98e80ab83fd1c2551b99e7644f4ddc0ad6381aaf978b3282be11942` (2257 rows) |
 | Process timezone | Confirm what `date.today()` is on the futures-bot process | **PROVEN** `Etc/UTC` at 2026-10-02T16:38:01Z |
-| Drawdown seed | Provenance-backed starting balance and starting peak, or an explicit choice to leave drawdown `DRAWDOWN_GATE_NOT_EVALUATED` | **NOT CHOSEN** — no population |
-| Decision criteria | What would count as pass, fail, or insufficient | **NOT FROZEN** — no population |
-| Allowed outputs | Whether a look may read counts only, or also P&L | **NOT FROZEN** — no population |
-| Same-timestamp census | Count of accepted `exit_ts` values that exactly equal a later candidate's `eligible_fill_ts`. Do not infer order from the tie | **NOT RUN** — no artifact |
+| Drawdown seed | Provenance-backed starting balance and starting peak, or an explicit choice to leave drawdown `DRAWDOWN_GATE_NOT_EVALUATED` | **NOT CHOSEN** — census blocks a scored run |
+| Decision criteria | What would count as pass, fail, or insufficient | **NOT FROZEN** — census blocks a scored run |
+| Allowed outputs | Whether a look may read counts only, or also P&L | **NOT FROZEN** — census blocks a scored run |
+| Same-timestamp census | Count of accepted `exit_ts` values that exactly equal a later candidate's `eligible_fill_ts`. Do not infer order from the tie | **280** — `SAME_TIMESTAMP_ORDER_BLOCKED` |
 
 Do not fill these blanks from prereg #929, from the replay's $5,000
 normalization, or from the $1,500 ladder seed.
 
-## Population block
+## Population
 
-No population is selected.
+The population is the archived #915 six-family fillable stream, not the #929
+forward window.
 
-The forward window in prereg #929, first bar at or after
-`2026-09-23T22:00:00Z`, stays embargoed. It was not read and it was not
-rebuilt. The gap `2026-06-27` through `2026-07-23` stays out as well: prereg
-#929 already excludes it because other studies have examined those bars.
+- Families: `4HR_RETRIGGER`, `60M_322_FIRST_LIVE`, `DAILY_22_COMPLETED_CLOSE`,
+  `12HR_MIYAGI`, `ASIA_D_EMA`, `SUSTAINED_TREND_V1`. Asia stays in.
+- Window: `2025-07-24` through `2026-06-26`. Historical. #915 already
+  published aggregate results for this window.
+- Excluded: prereg #929 from `2026-09-23T22:00:00Z` onward, and
+  `2026-06-27` through `2026-07-23`.
+- Artifact: `research/artifacts/pr915-six-family-fillable-events-5a9f14b.jsonl`,
+  SHA-256 `d5f949fce98e80ab83fd1c2551b99e7644f4ddc0ad6381aaf978b3282be11942`,
+  2257 rows. Produced from archive `5a9f14b` plus the local corpora named in
+  `docs/pr915-fillable-event-reproduction-2026-10-02.md`.
 
-The only already-defined historical stream is the frozen #915 six-family
-fillable set on the common window `2025-07-24` through `2026-06-26`
-(`4HR_RETRIGGER`, `60M_322_FIRST_LIVE`, `DAILY_22_COMPLETED_CLOSE`,
-`12HR_MIYAGI`, `ASIA_D_EMA`, `SUSTAINED_TREND_V1`). #915 already published
-aggregate portfolio results for that window. There is no committed
-fillable-event artifact for it. Rebuilding that stream from the frozen
-adapters on the local corpora does not reproduce the frozen family control
-gate, so the rebuild was discarded and was not written down. A drifted file
-is not this population.
+The earlier current-`main` rebuild failed because `resolve_bracket` and
+`PaperBroker` have changed since that archive. The archived code reproduces
+the frozen family controls. Details are in that reproduction note.
 
-Until an exact artifact reproduces that frozen stream, or a different
-already-defined stream is named without opening the #929 embargo, this draft
-stays `POPULATION_BLOCKED`. The same-timestamp census, drawdown seed,
-decision criteria, and allowed outputs stay unresolved on purpose.
+Drawdown seed, decision criteria, and allowed outputs stay unfrozen. The
+census below blocks a scored run before those blanks matter.
 
 ## Daily-loss day key
 
@@ -115,18 +115,14 @@ is strictly earlier than the next candidate's `eligible_fill_ts`. An equal
 timestamp is not treated as already realized. Equal timestamps are not an
 event order, and this draft does not infer one.
 
-Before any scored run, census the selected population. Count cases where an
-accepted position's `exit_ts` is exactly equal to a later candidate's
-`eligible_fill_ts`.
+The census on the reproduced artifact counted 280 fillable pairs whose
+`exit_ts` equals another event's `eligible_fill_ts`. The pairs are listed in
+`research/artifacts/pr915-six-family-same-timestamp-collisions-5a9f14b.json`.
+Equal timestamps were not treated as an order.
 
-- If that count is 0, record the census against the named population. On
-  that population the current strict-before rule is sufficient for this
-  dimension.
-- If that count is greater than 0, this draft is not ready. The exact live
-  ordering for those collisions has to be frozen and tested before a scored
-  run.
-
-Until that census is recorded, do not call this overlay exact live parity.
+That count is greater than 0. This draft is not ready. The exact live
+ordering for those collisions has to be frozen and tested before a scored
+run. Do not call this overlay exact live parity.
 
 ## Drawdown
 
@@ -168,7 +164,6 @@ of this draft.
 
 ## Next
 
-Stop. Status is `POPULATION_BLOCKED`. Do not score. The next revision has to
-bind an exact fillable-event artifact that reproduces a frozen stream without
-opening the #929 embargo, then run the same-timestamp census on that artifact
-before any scored look.
+Stop. Status is `SAME_TIMESTAMP_ORDER_BLOCKED`. Do not score. The next
+revision has to freeze and test the live same-request order for the 280
+collisions before any scored look.
