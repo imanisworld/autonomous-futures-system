@@ -4,7 +4,7 @@
 >
 > This file is **not** strategy-status authority, deployment authority, or experiment authority. Authoritative records named in `AGENTS.md` always win.
 >
-> **Checkpoint base:** repository `main` `14abe2a23fe55d46ef6e0cefee513a47be5e93a4` (PR #1104, 2026-10-02); shadow daily P&L report on the box = #1102 since 2026-10-02 14:53Z; futures box on `489b55b91b6303c195c8e84bfcbf05ef32d1ab04` since 2026-10-02 03:43Z. Always fetch current `main`; this stored SHA is a comparison base, not a perpetual current-state claim.
+> **Checkpoint base:** repository `main` `5d19257e3a690851c0aa580135eba66536b09ec4` (PR #1118 merged, 2026-10-02); MNQ account-admission study is CLOSED / `INSUFFICIENT_EVIDENCE` / DO NOT REDO; shadow daily P&L report on the box = #1102 since 2026-10-02 14:53Z; futures box remains on last verified release `489b55b91b6303c195c8e84bfcbf05ef32d1ab04` since 2026-10-02 03:43Z. Always fetch current `main`; this stored SHA is a comparison base, not proof of current runtime state.
 >
 > Core rule: **checkpoint first; diff first; do not redo proven work.**
 

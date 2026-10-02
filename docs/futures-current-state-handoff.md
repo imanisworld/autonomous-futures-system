@@ -4,6 +4,20 @@
 
 _As of 2026-09-24 (runtime and current decisions: see the 2026-09-24 blocks in `docs/futures-current-status-2026-09-22.md`, then the reconciliation note below). This is the long futures handoff. Historical audit docs remain evidence records._
 
+## Repository research closeout — 2026-10-02
+
+Current repository `main` at this checkpoint: `5d19257e3a690851c0aa580135eba66536b09ec4` after PR #1118.
+
+- MNQ historical account-admission trial `T-2026-10-02-prereg-mnq-account-admission-overlay-draft-2026-10-02-01` is **CLOSED / INSUFFICIENT_EVIDENCE / DO NOT REDO**.
+- Preserved research head `990b11135a1c49bc972981ac302930cd4f7565a3` remains in merge ancestry.
+- Canonical result: `docs/research-evidence/T-2026-10-02-prereg-mnq-account-admission-overlay-draft-2026-10-02-01/result.json`.
+- Preserved `look.json` SHA-256: `0c6c084c830fa227951f2e8e4f47a85a2f22a72898014f243eced8ed8cc6f7e5`.
+- Ledger: `COMPLETED` / `RESEARCH_ONLY`; prereg classification remains `INSUFFICIENT_EVIDENCE`.
+- Neither historical pass is the account result. Do not select, average, rerun, reinterpret, or retune from them. `strategy_status_change_authorized = false`.
+- No deploy, restart, broker change, or runtime change came from this research closeout. Exact future account-order evidence must come from forward collection where request order is recorded.
+
+Durable next actions remain in `docs/futures-operator-todo.md`. Grok/agent resume state remains in `docs/agent-work-state.md`.
+
 ## Runtime reconciliation — 2026-09-30
 
 Verified runtime, the paper-collection six-market pin, the deferred
