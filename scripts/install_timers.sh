@@ -53,6 +53,7 @@ After=network.target
 Type=oneshot
 WorkingDirectory=$REPO
 EnvironmentFile=/root/afs-shared/.env
+Environment=PYTHONDONTWRITEBYTECODE=1
 ExecStart=$VENV $REPO/scripts/feed_watchdog.py
 StandardOutput=journal
 StandardError=journal
