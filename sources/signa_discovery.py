@@ -45,6 +45,9 @@ class SignaDiscoveryCandidate:
     grade: str | None = None
     score: float | None = None
     confidence: float | None = None
+    strength: float | None = None
+    factor_count: int = 0
+    factor_conflicts: tuple[str, ...] = ()
     entry_low: float | None = None
     entry_high: float | None = None
     stop_loss: float | None = None
@@ -118,6 +121,9 @@ def candidates_from_action_card(payload: dict[str, Any], *, endpoint: str = "sig
             grade=(card.grade.upper() if card.grade else None),
             score=card.score,
             confidence=card.confidence,
+            strength=card.strength,
+            factor_count=card.factor_count,
+            factor_conflicts=card.factor_conflicts,
             entry_low=card.entry_low,
             entry_high=card.entry_high,
             stop_loss=card.stop_loss,
@@ -212,7 +218,14 @@ def manual_context_record(payload: dict[str, Any], *, default_source: str = "man
     for key in (
         "callPremium", "putPremium", "totalPremium", "netPremium", "callVolume",
         "putVolume", "putCallRatio", "gamma_wall", "gammaWall", "flip",
-        "zero_gamma", "zeroGamma", "support", "resistance", "notes",
+        "gamma_flip", "zero_gamma", "zeroGamma", "gex_regime", "net_gex",
+        "gex_score", "call_wall", "put_wall", "zero_dte_gamma",
+        "support", "resistance", "notes", "strength", "factor_count",
+        "factor_conflicts", "weinstein_stage", "weinstein_confidence",
+        "wyckoff_state", "elliott_wave", "elliott_invalidation",
+        "relative_strength", "momentum", "volume_confirmation",
+        "flow_volume", "open_interest", "aggressor", "sweep", "block",
+        "bid_ask_spread_pct", "entry_zone_low", "entry_zone_high",
     ):
         if key in payload:
             tag[key] = payload[key]
@@ -269,8 +282,14 @@ def context_record_from_response(
         "callPremium", "putPremium", "totalPremium", "netPremium", "callVolume",
         "putVolume", "putCallRatio", "unusualActivity", "sentiment", "symbol",
         "count", "call_pct", "put_pct", "call_premium", "put_premium", "row_count",
-        "signal", "confidence", "trade_count", "buy_count", "sell_count",
-        "recent_30d", "house_count", "senate_count",
+        "signal", "confidence", "strength", "factor_count", "factor_conflicts",
+        "trade_count", "buy_count", "sell_count", "recent_30d", "house_count",
+        "senate_count", "gex_regime", "net_gex", "gex_score", "call_wall",
+        "put_wall", "gamma_flip", "flip", "zero_dte_gamma", "weinstein_stage",
+        "weinstein_confidence", "wyckoff_state", "elliott_wave",
+        "elliott_invalidation", "relative_strength", "momentum",
+        "volume_confirmation", "flow_volume", "open_interest", "aggressor",
+        "sweep", "block", "bid_ask_spread_pct",
     ):
         if key in payload:
             row[key] = payload[key]
