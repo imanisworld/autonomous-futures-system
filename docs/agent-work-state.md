@@ -93,6 +93,16 @@ The canonical epoch begins only after an exact reviewed release carrying #1103 i
 5. After the 2026-10-03 12:00Z cron jobs, confirm no release-tree `__pycache__` and confirm the next drift-gate result is OK.
 6. The first #1103-compliant touch answers whether the 1-minute alert proves the contract: MATCH/MISMATCH/UNKNOWN.
 
+## Next futures release candidate — PREPARED / HOLD FOR RUNTIME GATE
+
+- **Candidate:** `c44d32bc4961e56fae5c5f88a976eb6783341638`, based on deployed `489b55b91b6303c195c8e84bfcbf05ef32d1ab04`.
+- **Scope:** exactly #1095 + #1103 only: 8 changed files total. No unrelated current-`main` changes ride along.
+- **Lineage:** PR #1123 merged history-only with zero file changes, so the candidate is reachable from `main`.
+- **QA:** seven source/test blobs are byte-identical to the reviewed #1095/#1103 commits; candidate audit rerun passed **7359 passed, 8 skipped, 2 deselected**. The two deselected tests are the current-`origin/main` research-spec/ledger governance comparisons, which cannot pass on an intentionally old minimal release tree without importing unrelated current research files.
+- **Safety review:** the 1-minute 4HR observer returns before DecisionEngine/RiskEngine/broker paths, with `fill=None` and `execution_reachable=false`. #1095 changes only observer-status state location and prefers proven `LOG_DIR`.
+- **NOT DEPLOYED:** no build, promote, restart, broker, env, or runtime mutation occurred.
+- **BLOCKER / NEXT:** after 2026-10-03 12:00Z, read-only verify release-tree `__pycache__` remains absent and drift-gate is OK; then perform fresh deployment-safety/runtime verification before any build/verify/promote. Candidate promotion remains HOLD until those gates pass.
+
 ## Account-admission overlay — CLOSED / INSUFFICIENT EVIDENCE
 
 Does not change the 4HR epoch above. #1108 stays the runtime record.
