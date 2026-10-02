@@ -158,8 +158,8 @@ def _patch_candidate(monkeypatch, strategy=FOUR_HR):
 
     def fake_eval(*, strategy: str, **kwargs):
         if strategy != target:
-            return None, None, None
-        return decision, object(), _candidate(strategy)
+            return None, None, None, None
+        return decision, object(), _candidate(strategy), None
 
     monkeypatch.setattr(collector, "_evaluate_canonical_candidate", fake_eval)
     monkeypatch.setattr(collector, "_trade_setup", lambda state, out: _setup(target))

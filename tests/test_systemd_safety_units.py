@@ -33,3 +33,19 @@ def test_feed_watchdog_installer_uses_shared_environment_file():
     feed_block = installer.split("# ─── 4. Feed watchdog", 1)[1]
     assert "EnvironmentFile=/root/afs-shared/.env" in feed_block
     assert "EnvironmentFile=$REPO/.env" not in feed_block
+
+
+def test_units_running_from_the_live_release_never_write_bytecode():
+    # The live release is integrity-checked and refuses any __pycache__ file,
+    # so every oneshot that imports release code must disable bytecode writes.
+    for name in (
+        "afs-wide-stop-demo-eod-fallback.service",
+        "afs-day-only-exit.service",
+        "afs-external-heartbeat.service",
+    ):
+        unit = (ROOT / "deploy/systemd" / name).read_text()
+        assert "Environment=PYTHONDONTWRITEBYTECODE=1" in unit, name
+
+    installer = (ROOT / "scripts/install_timers.sh").read_text()
+    feed_block = installer.split("# ─── 4. Feed watchdog", 1)[1].split("feed-watchdog.timer", 1)[0]
+    assert "Environment=PYTHONDONTWRITEBYTECODE=1" in feed_block

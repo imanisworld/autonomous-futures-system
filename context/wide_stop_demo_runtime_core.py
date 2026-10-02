@@ -672,7 +672,7 @@ def process_demo_five_min_bar(
             return events
 
         for strategy in collector._NATIVE:
-            decision, market_state, candidate = collector._evaluate_canonical_candidate(
+            decision, market_state, candidate, _machine = collector._evaluate_canonical_candidate(
                 payload=payload, cfg=cfg, bars_5m=bars_5m, strategy=strategy,
             )
             if candidate is None:

@@ -119,6 +119,8 @@ def test_format_reports_show_zero_activity_and_health():
         end=date(2026, 9, 16),
     )
     assert "nothing was recorded for futures in this window" in f
+    for instrument in report.FUTURES_REPORT_INSTRUMENTS:
+        assert f"{instrument} **0**" in f
     assert "1 up to date" in f
 
     o = report.format_options_report(
@@ -227,6 +229,9 @@ def test_futures_card_prioritizes_attention_without_claiming_executed_results():
     assert "not real trades" in fields["Practice results"]
     assert "**554** records saved" in fields["Activity recorded"]
     assert "MNQ **285**" in fields["Activity recorded"]
+    assert "MES **269**" in fields["Activity recorded"]
+    for instrument in ("M2K", "MBT", "MCL", "MGC"):
+        assert f"{instrument} **0**" in fields["Activity recorded"]
     assert "2-2 continuation" in fields["Most active setups"]
     assert "Pullback in a trend" in fields["Most active setups"]
     assert "+ 14 more across 1 other type" in fields["Most active setups"]

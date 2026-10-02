@@ -18,6 +18,11 @@ class SignaActionCardObservation:
     timeframe: str | None = None
     direction: str | None = None
     confidence: float | None = None
+    strength: float | None = None
+    factor_count: int = 0
+    factor_conflicts: tuple[str, ...] = ()
+    observation_rating: str = "N/A"
+    observation_rating_basis: str | None = None
     grade: str | None = None
     score: float | None = None
     entry_low: float | None = None
@@ -75,13 +80,35 @@ def parse_action_card(payload: dict[str, Any]) -> SignaActionCardObservation:
     components_raw = _dict(signal.get("component_scores"))
     components = {str(k): _float(v) for k, v in components_raw.items()}
     targets = tuple(v for v in (_float(x) for x in _list(signal.get("targets"))) if v is not None)
+    direction = _text(signal.get("direction"))
+    score = _float(signal.get("score"))
+    confidence = _float(signal.get("confidence"))
+    strength = _float(signal.get("strength"))
+    if strength is None and score is not None:
+        strength = min(100.0, abs(score - 50.0) * 2.0)
+    factor_count = sum(value is not None for value in components.values())
+    factor_conflicts = _factor_conflicts(direction, components)
+    observation_rating, observation_rating_basis = _observation_rating(
+        ok=bool(payload.get("success", True)),
+        direction=direction,
+        score=score,
+        confidence=confidence,
+        strength=strength,
+        factor_count=factor_count,
+        factor_conflicts=factor_conflicts,
+    )
     return SignaActionCardObservation(
         symbol=_text(signal.get("symbol")),
         timeframe=_text(signal.get("timeframe")),
-        direction=_text(signal.get("direction")),
-        confidence=_float(signal.get("confidence")),
+        direction=direction,
+        confidence=confidence,
+        strength=strength,
+        factor_count=factor_count,
+        factor_conflicts=factor_conflicts,
+        observation_rating=observation_rating,
+        observation_rating_basis=observation_rating_basis,
         grade=_text(signal.get("grade")),
-        score=_float(signal.get("score")),
+        score=score,
         entry_low=_float(entry.get("low")),
         entry_high=_float(entry.get("high")),
         stop_loss=_float(signal.get("stop_loss")),
@@ -195,3 +222,62 @@ def _first_text(payload: dict[str, Any], *keys: str) -> str | None:
         if value is not None:
             return value
     return None
+
+
+_BULLISH = frozenset({"LONG", "BUY", "BULL", "BULLISH", "CALL", "UP"})
+_BEARISH = frozenset({"SHORT", "SELL", "BEAR", "BEARISH", "PUT", "DOWN"})
+
+
+def _observation_rating(
+    *,
+    ok: bool,
+    direction: str | None,
+    score: float | None,
+    confidence: float | None,
+    strength: float | None,
+    factor_count: int,
+    factor_conflicts: tuple[str, ...],
+) -> tuple[str, str]:
+    """Rate evidence quality only; never trade quality or permission."""
+    if not ok:
+        return "N/A", "unavailable"
+    missing: list[str] = []
+    if direction is None:
+        missing.append("direction")
+    elif direction.upper() not in _BULLISH | _BEARISH:
+        # NEUTRAL/unknown: factor agreement cannot be evaluated, so never A.
+        missing.append("direction_unrecognized")
+    if score is None:
+        missing.append("score")
+    if confidence is None:
+        missing.append("confidence")
+    if strength is None:
+        missing.append("strength")
+    if factor_count <= 0:
+        missing.append("factor_coverage")
+    if missing:
+        return "C", "partial:" + ",".join(missing)
+    if factor_conflicts:
+        return "B", f"complete_core;factor_conflicts={len(factor_conflicts)}"
+    return "A", "complete_core;factor_coverage;no_conflicts"
+
+
+
+def _factor_conflicts(
+    direction: str | None,
+    components: dict[str, float | None],
+) -> tuple[str, ...]:
+    normalized = (direction or "").upper()
+    bullish = normalized in _BULLISH
+    bearish = normalized in _BEARISH
+    if not bullish and not bearish:
+        return ()
+    conflicts: list[str] = []
+    for name, value in sorted(components.items()):
+        if value is None or value == 50:
+            continue
+        if bullish and value < 50:
+            conflicts.append(str(name))
+        elif bearish and value > 50:
+            conflicts.append(str(name))
+    return tuple(conflicts)
