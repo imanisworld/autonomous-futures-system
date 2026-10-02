@@ -2,7 +2,7 @@
 
 > **Purpose:** durable operator action tracker for futures infrastructure/safety work. This file is **not** strategy-status authority and must not override `docs/strategy-rules/Strategy_Inventory.md`, the research trial ledger, or verified VPS/runtime evidence.
 >
-> **Repo reconciliation base:** `main` `90fc6f2` (PR #1098, 2026-10-02). Futures box release since 2026-10-02 03:43Z: `489b55b91b6303c195c8e84bfcbf05ef32d1ab04`. Fetch current `main` rather than treating this stored SHA as current. Runtime facts are in `docs/futures-runtime-reconciliation-2026-09-30.md`; those facts are a dated checkpoint and require fresh read-only proof before any runtime/broker/access mutation.
+> **Repo reconciliation base:** `main` `b74bacf88a5daa605e1d39ea0c21d0584eb8832f` (PR #1101, 2026-10-02). Futures box release since 2026-10-02 03:43Z: `489b55b91b6303c195c8e84bfcbf05ef32d1ab04`. Fetch current `main` rather than treating this stored SHA as current. The 2026-09-30 reconciliation is history. Current resume facts are in `docs/agent-work-state.md`.
 >
 > Core rule: **No proof, no run.**
 
@@ -11,16 +11,16 @@
 
 **2026-10-02 03:43Z: release `489b55b91b6303c195c8e84bfcbf05ef32d1ab04` promoted** (operator GO; `scripts/atomic_release.sh` build → verify → promote). Read-only proof 03:43–03:46Z:
 
-- futures-bot PID `1327346`, cwd `/root/afs-releases/489b55b…`, `NRestarts=0`.
-- Release integrity OK, 1632 files; no `__pycache__` in the live release.
-- Tradovate DEMO `HEALTHY`, live trading disabled, flat; journal writing again from 03:45:15Z.
+- futures-bot PID `1327346`, cwd `/root/afs-releases/489b55b…`, `NRestarts=0`. Still that process at 15:03Z.
+- Release integrity OK, 1632 files, at startup. Auxiliary jobs later wrote `__pycache__`. Those files were removed. At 15:03Z the release-tree bytecode count was 0, and the post-cleanup integrity check the same hour was OK.
+- Tradovate DEMO, live trading disabled. Auth was `HEALTHY` and the account was flat on the earlier post-deploy read. Working orders were not re-read after the 03:43Z restart.
 - Rollback target `75f10e4`.
 
-This is a deploy-time snapshot. Run `/futures-deployment-safety-audit` after a full session before treating it as steady state. Details are in `docs/agent-work-state.md`.
+#1101 is on `main` and is not the live tree. The installed feed-watchdog and the other live-release jobs already have no-bytecode protection. Do not deploy a release just to pick up #1101. Details are in `docs/agent-work-state.md`.
 
 Previous: latest verified read-only health pass from 2026-09-30 ET reported **PASS — KEEP COLLECTING / NO CHANGES**. Treat it as a dated checkpoint, not proof of current runtime state:
 
-- futures-bot remains on pinned release `75f10e4540aa1f25b51b77c1ec2a2da40381a188`, DEMO, live trading disabled;
+- as of that 2026-09-30 pass, futures-bot was on `75f10e4540aa1f25b51b77c1ec2a2da40381a188`, DEMO, live trading disabled. That commit is now the rollback target;
 - release integrity passed; service remained one PID with zero restarts;
 - Tradovate demo account routing remained pinned and healthy;
 - journal and broker state agreed flat with zero execution attempts/fills for the current journal day;
@@ -58,13 +58,24 @@ These are ordered. Do not skip ahead.
     - `MAX_CONTRACTS_HARD_CAP` = `1`, with `EXPECTED_PROOF_MAX_CONTRACTS_HARD_CAP` matching.
     - `TRADOVATE_ENV` exactly `demo`.
     - `/root/afs-shared/.env` unchanged since the 2026-09-30 start.
-  - [x] Integrity enforcement: promote's unit drop-in sets `RELEASE_INTEGRITY_ENFORCED=true` and `PYTHONDONTWRITEBYTECODE=1`. The live release had no `__pycache__` after startup.
-  - [ ] `LOG_DIR=/root/afs-shared/logs`: still unproven. It is only needed for #1095, which is **not** in `489b55b`. Prove it before the release that carries #1095.
-- [ ] **4HR natural-1m observation epoch.** #1092/#1094 are deployed in `489b55b`, but the observer flag is OFF, so no epoch and no natural-1m evidence yet. Follow `docs/4hr-natural-1m-observation-epoch-2026-10-01.md`: both flags, both `EXPECTED_PROOF_` pins, then an operator read-only verification whose time starts the epoch. Until then, 4HR MNQ has 0 prospective fills and no natural-1m evidence.
-- [ ] **Confirm the futures-bot memory plateau after the `489b55b` restart.** The watcher fired `memory_critical` at 03:43:45Z and `memory_warning` at 03:46Z. Both came from growth projected during startup. Read-only readings: RSS 147 MiB (03:43:45Z), 244 MiB (03:46Z), 252 MiB (03:49:29Z). The warning line is about 1,029 MiB and the critical line about 1,221 MiB; MemAvailable was 1,252 MiB. Release `5115b78` showed the same startup alarm and then levelled off near 360 MiB. Re-read after a full session. Expect about 350–400 MiB; treat steady growth past about 500 MiB as a possible leak.
+  - [x] Integrity enforcement: promote's unit drop-in sets `RELEASE_INTEGRITY_ENFORCED=true` and `PYTHONDONTWRITEBYTECODE=1` for futures-bot. Startup was clean. Later auxiliary jobs wrote bytecode; the installed jobs are now protected and the release-tree count was 0 at 15:03Z.
+  - [x] `LOG_DIR=/root/afs-shared/logs` on PID `1327346`. #1095 is still **not** in `489b55b`. This proof does not authorize that deploy.
+- [ ] **4HR natural-1m observation epoch.** Not started. On PID `1327346` at 15:06Z the 1-minute trigger and its proof pin are already on. `ONE_MIN_4HR_OBSERVER_ENABLED` and its proof pin are absent. `state_2026-10-02.json` under `tf1m/4hr_observation` is an invalidated wide-stop publish, not evidence and not the epoch. Follow `docs/4hr-natural-1m-observation-epoch-2026-10-01.md`. Enabling the observer is an operator GO and a bot restart.
+- [ ] **Confirm the futures-bot memory plateau after the `489b55b` restart.** The watcher fired `memory_critical` at 03:43:45Z and cleared it at 03:46:20Z. Read-only startup readings: RSS 147 MiB (03:43:45Z), 244 MiB (03:46Z), 252 MiB (03:49:29Z). The warning line is about 1,029 MiB and the critical line about 1,221 MiB; MemAvailable was 1,252 MiB. Release `5115b78` showed the same startup alarm and then levelled off near 360 MiB. The full-session plateau was not re-read. Expect about 350–400 MiB; treat steady growth past about 500 MiB as a possible leak.
 - [ ] **Options-scanner memory cap (needs an operator decision; not urgent).** The watcher tick at 2026-10-02 03:46Z showed `options-scanner` (pid `3901845`, release `47ae01ac`) with RSS 10.8 MiB, swap 470.5 MiB, and cgroup `memory.events` `max=1301`, `sock_throttled=8170`, `oom_kill=0`. Its unit has `MemoryMax=350M`. The working set is now about 480 MiB, so the kernel keeps it in swap instead of OOM-killing it, as it did before swap existed. The `swap_pressure_warning` events on 2026-10-01 ran 14:16–20:51Z, about RTH. That matches the timing but is not proof. Daily scan counts were steady from 2026-09-24 to 10-01 (3,087–3,369), so no skipped cycles are visible. Per-scan latency was not measured, because `options_scanner.sqlite` stores only a row timestamp and the read-only wrapper cannot query it. Options, each a separate operator GO: raise `MemoryMax` (about 600M) with a scanner-only restart, or reduce the scanner's footprint.
 - [ ] **Lock down old access only after replacement proof.** Then remove or restrict obsolete broad access paths, keeping documented break-glass recovery.
 - [ ] **Optional cleanup — unused duplicate release `2752fe2e04bedf3e8ae9d6ffea8c594eb333b925`.** Read-only check 2026-10-01: same parent (`41ae188`) and identical git tree as the live `75f10e4`. Its `execution/tradovate_broker.py` on the box hashes identically. It was built 13 minutes after `75f10e4` went live and never promoted (not in the release history). Never promote it: switching would only restart the bot onto the same code. Since 2026-10-02 the rollback target is `75f10e4`. Removing the directory and the `candidate/tradovate-auth-only-41ae188` branch is an operator cleanup action for a release-maintenance window; it is not urgent.
+
+## Account replay — Cursor only, do not rebuild
+
+Audited 2026-10-02 against `risk_rules.yaml` and `risk/risk_engine.py`. Details are in `docs/agent-work-state.md`. Grok does not get a follow-up task.
+
+- [x] **MNQ shared-account audit.** `replay_portfolio` already does chronological order, 1 contract, 1 open position, and 3 fills/day. Do not build another simulator.
+- [x] **Missing current-account gates, identified only.** Daily-loss lockout (`max_daily_loss: 150` per contract; at one contract, stop new entries once realized daily P&L is at or below `-$150`) and the 30% survival floor, which needs a real balance and peak. News blackout, session caps, session cutoffs, the consecutive-loss lock, the circuit breaker, the early-session loss floor, and profit-protect are off. Do not add them. The replay’s $5,000 figure and the $1,500 ladder seed are not live equity.
+- [x] **Do not run prereg #929 as this proof.** The prereg freezes those mechanics, and the P&L look is not open.
+- [ ] **Smallest extension, not started.** A sibling filter on the existing fill stream for the daily-loss skip. The drawdown skip waits for a real balance and peak series. Do not edit the pinned #915/#929 files. Do not score it without a new prereg.
+- [ ] **MES waits** until that MNQ account-gate question is actually answered.
+- [x] **M2K / MGC / MCL / MBT.** Keep collecting. Do not expand the six-market path.
 
 ## Separate / not blocking the VPS phase
 

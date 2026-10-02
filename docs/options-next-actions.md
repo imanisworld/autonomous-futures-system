@@ -36,6 +36,14 @@ _As of 2026-09-29. Operational checklist only. The authoritative options status 
   - Lane stayed OFF; no journal, Discord, broker, deploy, or live-order side effects.
   - 0DTE was not observable after the 2026-09-29 session ended. **Only remaining SPXW validation is to confirm 0DTE appears during the next RTH session.**
 
+## Account admission — evidence gap, do not implement yet
+
+`alert_ranker/account_equity.py` already replays recorded ACTIVE V1 trades: chronological entries and exits, ASK entry, BID marks, contract quantity, scenario cash, overlap, mark-to-market equity, drawdown, planned open risk, and overnight exposure. It drops counterfactual rows and rows with `risk_budget_consumed is False`. Do not rebuild it.
+
+A 2026-10-02 schema audit found the journal cannot causally reconstruct account admission for every candidate. `alert_ranker/lifecycle.py` opens a paper row only when the full decision context is already present. Ordinary scans and provider failures never become rows. `aggregate_open_planned_risk` reads the current OPEN table, not a historical snapshot. Cash in the equity replay is a caller-supplied scenario balance (`$1,500` / `$2,500` / `$5,000`), not recorded cash. COUNTERFACTUAL rows stay non-trades.
+
+- [x] **Gap matrix recorded.** Required facts that are missing as causal inputs: available cash, aggregate open planned risk at the candidate timestamp, open orders, and a complete rejected-candidate quote stream. Missing evidence stays `INSUFFICIENT_EVIDENCE`. Do not start a candidate-admission simulator, and do not publish a scored expectancy.
+
 ## After the remaining RTH checks
 
 - [ ] Confirm #1067 66-symbol capacity PASS/FAIL during RTH.

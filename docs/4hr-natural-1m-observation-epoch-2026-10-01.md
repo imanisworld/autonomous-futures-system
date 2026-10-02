@@ -41,11 +41,13 @@ The canonical forward sample starts only after all of the following are true:
    `context/four_hr_observation.py` published by the wide-stop forward
    collector, and read by `evaluate_armed_4hr_touch()`. **Met 2026-10-02
    03:43Z:** release `489b55b91b6303c195c8e84bfcbf05ef32d1ab04` (#1092 with the
-   arm-window race fix, plus #1094's publish fail-safe). Conditions 3–5 are
-   still open; the observer flag is OFF, so the epoch has not started.
+   arm-window race fix, plus #1094's publish fail-safe). Condition 3 is met
+   on the running process. Conditions 4 and 5 are still open, so the epoch
+   has not started.
 2. `strat_4hr_retrigger` is still absent from `enabled_concepts`.
 3. `ONE_MIN_TRIGGER_ENABLED=true` and
-   `EXPECTED_PROOF_ONE_MIN_TRIGGER_ENABLED=true`. The 4HR observer only runs
+   `EXPECTED_PROOF_ONE_MIN_TRIGGER_ENABLED=true`. **Met 2026-10-02 15:06Z**
+   on PID `1327346`. The 4HR observer only runs
    when the generic 1-minute lane is also on; turning that lane off silently
    stops 4HR evidence too.
 4. `ONE_MIN_4HR_OBSERVER_ENABLED=true` and
@@ -59,7 +61,17 @@ deploy, does not set the flag, and does not start the epoch. Evidence written
 before that verification does not count.
 
 The observer flag defaults off. Until it is explicitly enabled and pinned,
-the corrected code still emits no natural-1m 4HR evidence.
+the corrected code still emits no natural-1m 4HR evidence. There is no
+`4hr_trigger_evidence` file.
+
+Verified on PID `1327346` at 2026-10-02 15:06Z: `ONE_MIN_TRIGGER_ENABLED=true`
+and `EXPECTED_PROOF_ONE_MIN_TRIGGER_ENABLED=true`.
+`ONE_MIN_4HR_OBSERVER_ENABLED` and its proof pin are absent.
+
+`/root/afs-shared/logs/tf1m/4hr_observation/state_2026-10-02.json` is being
+rewritten anyway. At 15:00Z it was `status=INVALIDATED`, `executable=false`,
+`trade_authorized=false`, `source=wide_stop_forward_v1`. That file is not
+the epoch, and rows written before the condition-5 verification do not count.
 
 ## What the sample can and cannot see
 
