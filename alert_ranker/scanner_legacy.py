@@ -869,7 +869,12 @@ class OptionsScanner:
                     self._signa_refresh_threads.discard(thread)
 
         with self._signa_refresh_lock:
-            finished = {item for item in self._signa_refresh_threads if not item.is_alive()}
+            # ident is None until start(); a not-yet-started thread is not finished.
+            finished = {
+                item
+                for item in self._signa_refresh_threads
+                if item.ident is not None and not item.is_alive()
+            }
             self._signa_refresh_threads.difference_update(finished)
             if key in self._signa_refresh_symbols:
                 return "in_flight"
