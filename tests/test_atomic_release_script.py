@@ -260,3 +260,30 @@ def test_watcher_sync_does_not_touch_persistent_secret_or_backup_files():
         assert ".triage_key" not in block
         assert "watcher.py.bak" not in block
         assert "rm -rf" not in block
+
+
+def test_release_ops_modules_never_write_bytecode_into_a_release():
+    """ops.release_integrity refuses any __pycache__ in a release (#1056).
+
+    Every run of the release's own ops modules must disable bytecode writes, or
+    the check creates the files it then refuses: locally in the build worktree
+    (and its tarball), and on the box as root, where chmod a-w does not stop
+    the write -- including against the LIVE release after promote/rollback have
+    already restarted the service.
+    """
+    text = SCRIPT.read_text()
+    build = text.split("build_release() {", 1)[1].split("verify_release() {", 1)[0]
+    export_at = build.index("export PYTHONDONTWRITEBYTECODE=1")
+    assert export_at < build.index("python3 -m ops.release_manifest")
+    assert export_at < build.index("python3 -m ops.release_integrity --repo-root . --manifest")
+    assert export_at < build.index('tar czf "$archive"')
+
+    integrity_calls = re.findall(r"(\S+) PYTHONPATH='\$\w+(?:/\$sha)?' '[^']+/\.venv/bin/python' \\\n\s+-m ops\.release_integrity", text)
+    assert integrity_calls == ["PYTHONDONTWRITEBYTECODE=1"] * 4  # build, verify, promote, rollback
+    assert text.count("-m ops.release_integrity --repo-root '$") == 4
+
+    for action in ("promote", "rollback"):
+        argc, rendered = _render_remote_command(action)
+        assert argc == 1
+        assert "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH='" in rendered
+        subprocess.run(["bash", "-n"], input=rendered, text=True, check=True)
