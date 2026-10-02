@@ -4,6 +4,16 @@ _As of 2026-10-02. The newest dated repository refresh below governs source stat
 
 Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`; the read-only coverage evidence lane (observer, reducer, outcome study, after-close collector) is described in `docs/options-coverage-observer.md`.
 
+
+## Repository refresh — 2026-10-02 (#1115 merged; forward machinery QA only)
+
+PR #1115 merged as `65847295521be1ff0d6b9ef89c8fb8699aff7735`. It registers `T-2026-10-02-prereg-options-212c-floor-outcome-2026-10-02-01` as **DRAFT / PLANNED / NOT RUN**. The registration is not collection authority. The frozen window still starts 2026-10-05 only if that first session is admitted under the reviewed seal-capture contract; otherwise the window must be registered again rather than slid forward.
+
+Draft PR #1121, reconciled onto `main` `08b99938d44369cd5eb1828c985e5179ae7fbd78`, is implementing **synthetic-only** machinery for independent QA: a pure in-memory seal builder plus the frozen Stage-A scoring/metric primitives. The builder joins each `ep-v0.1` episode to its exact first `cov-v0.1` event because `ep-v0.1` does not preserve `floor_target_2`; shared fields must cross-check before Target 2 is copied. It renders the canonical seal bytes and manifest digest but has no provider call, file writer/reader, timer/service hook, or experiment adapter. The scorer implements the preregistered first-sight gap/stop/Target 1/timeout rules and every required descriptive metric against synthetic/in-memory records only.
+
+**No trial data has been collected or scored.** The spec remains `DRAFT`; Stage B remains **NOT EVALUATED**; #1067/#1069/#1077 remain undeployed options changes; the production watchlist is not expanded and SPXW remains OFF. The next gate is exact-head CI plus independent review of the machinery branch. Only after that review and a separate operator GO may a real seal-capture integration be wired to provider/collector I/O.
+
+
 ## Repository refresh — 2026-10-02 (forward outcome draft; not run)
 
 `main` at this registration is `d304c22eac0b95a93377230f2a238b97fb6d9a57` (#1114). The closed 59-episode result remains the #1113 preservation on `3f5e3f928d88fc3a8e43f11c159dd3dc3066f703`. The frozen 59-episode trial stays closed. No clean retrospective holdout for a `floor_ge1r` underlying-outcome test was found: 2026-09-09..2026-09-15 is the closed coverage window; 2026-09-16..2026-09-18 and the Sep 16-18 continuation postmortem are already outcome-exposed; the Epoch-3 journal audit viewed P&L through 2026-09-29T19:46:18Z. This checkout has no coverage outcome file after 2026-09-15. Later box sessions were not opened.

@@ -117,9 +117,11 @@ Frozen location, one file per eligible session:
 
 Each session file is one immutable seal of the non-bar episode snapshot and the 5-minute bars. The one-look reads only that file. It does not reopen the ordinary episode output, an `out-v0.1` row, or a later bar fetch.
 
-Session fields, frozen as `SESSION_SEAL_FIELDS`: `path_record_version`, `trial_id`, `session_date`, `session_open`, `session_close`, `source`, `captured_at`, `episodes`. `source` is the provider name and the causal request window. It contains no credentials.
+Session fields, frozen as `SESSION_SEAL_FIELDS`: `path_record_version`, `trial_id`, `session_date`, `session_open`, `session_close`, `source`, `captured_at`, `episodes`. `source` contains `provider`, `request_start`, `request_end`, `observer_run_id`, `observer_ran_at`, and `source_sha`; it contains no credentials. These are provenance fields only and are sealed before any study readout.
 
 Each structurally selected `STRAT_212_CONTINUATION` episode on the V1 universe is one object in `episodes`. Its fields are frozen as `EPISODE_SNAPSHOT_FIELDS`:
+
+`ep-v0.1` does **not** retain `floor_target_2`. The capture primitive therefore joins each reduced episode back to its exact first `cov-v0.1` observer event using `symbol|session_date|direction|first_bar_start|family`, cross-checks the shared entry/invalidation/risk/Target 1/first-sight fields, and copies `floor_target_2` from that first observer event. A missing first event, duplicate join key, or shared-field mismatch refuses the seal; it is not reconstructed later. The capture primitive also re-runs the frozen `ep-v0.1` reduction from those exact observer events and requires the supplied episode-ID set and frozen gate/scoring fields to match; an omitted or drifted episode refuses the seal.
 
 - `episode_id`, formed as `symbol|session_date|direction|first_bar_start|family`
 - `symbol`, `session_date`, `direction`, `first_bar_start`, `family`
@@ -132,11 +134,11 @@ Each structurally selected `STRAT_212_CONTINUATION` episode on the V1 universe i
 - `floor_target_1`, `floor_target_2` (`floor_target_2` is null when the floor geometry has no second target)
 - `bars`
 
-`bars` holds `start`, `open`, `high`, `low`, `close` for exactly this grid: the first full 5-minute bar whose `start` is greater than or equal to `first_sight_at`, through the last bar whose end (`start` plus 5 minutes) is less than or equal to `session_close`, in time order. A bar that starts before `first_sight_at` is excluded. A bar whose end is after `session_close` is excluded. The file contains no precomputed outcome class, realized R, MAE, or MFE. The filename is the session date. It is not a ticker.
+`bars` is the prospective evidence for this expected grid: the first full 5-minute bar whose `start` is greater than or equal to `first_sight_at`, through the last bar whose end (`start` plus 5 minutes) is less than or equal to `session_close`, in time order. A bar that starts before `first_sight_at` is excluded. A bar whose end is after `session_close` is excluded. The capture path seals the bars actually available on that grid and never refetches a missing member later; at the one look the scorer compares the sealed starts with the full expected grid, and any missing or extra member makes that episode `DATA_INVALID`. This preserves missing-data evidence instead of preventing the session from being sealed. The file contains no precomputed outcome class, realized R, MAE, or MFE. The filename is the session date. It is not a ticker.
 
 This draft defines that artifact. It does not add a capturing job, and it does not collect a session.
 
-Integrity rule: once collection is approved, the capturing job writes the file once, after the session has settled and before any study readout, as canonical UTF-8 JSON with sorted keys and a trailing newline. It appends one `manifest.jsonl` line with `session_date`, byte length, and the SHA-256 of those exact bytes. The manifest line has no activation count and no outcome. The file is not rewritten. At the one look the scorer checks the hash, then scores from the sealed snapshot and the sealed bars only. A missing file, a hash mismatch, a missing snapshot field, a null `first_sight_price`, `invalidation`, `structural_risk`, or `floor_target_1` on an activated episode, or a 5-minute grid that is not exactly the rule above, is `DATA_INVALID` for the affected episode and is excluded from expectancy. Do not refetch historical bars or episode fields to fill that gap, and do not repair the record after any outcome has been viewed. Doing either makes the trial `INVALID`.
+Integrity rule: once collection is approved, the capturing job writes the file once, after the session has settled and before any study readout, as canonical UTF-8 JSON with sorted keys and a trailing newline. It appends one `manifest.jsonl` line with `session_date`, byte length, and the SHA-256 of those exact bytes. The manifest line has no activation count and no outcome. The file is not rewritten. At the one look the scorer checks the hash, then scores from the sealed snapshot and the sealed bars only. A missing session file or hash mismatch refuses advancement because there is no trustworthy session seal. Inside a verified seal, a missing scoring snapshot field, a null `first_sight_price`, `invalidation`, `structural_risk`, or `floor_target_1` on an activated episode, or a missing/extra 5-minute grid member is `DATA_INVALID` for the affected episode and is excluded from expectancy. Missing bars are sealed as missing evidence; they are not repaired. Do not refetch historical bars or episode fields to fill a gap, and do not repair the record after any outcome has been viewed. Doing either makes the trial `INVALID`.
 
 The study operator does not open these path records, or `manifest.jsonl`, before the one look. `study_readout` is given the sealed record and the manifest SHA-256 in memory. It verifies the digest, then counts `gate_bucket_floor` from the episodes in that same body. It does not substitute a separate live `ep-v0.1` extract.
 
@@ -156,7 +158,7 @@ Preregistered fields:
 | Structural trigger | Stored `entry_trigger`. Setup context only. Never the measured fill |
 | Invalidation | Stored episode invalidation. No trailed stop |
 | Target 1 | Stored floor `target_1`. Exit classification uses Target 1 |
-| Target 2 | Stored when the floor geometry has one. Recorded when reached. Not an exit |
+| Target 2 | Stored when the floor geometry has one. Scored as `target_2_reached` plus first sealed 5-minute `target_2_hit_at` when its favorable extreme reaches the level, including a gap through it. Recorded only; never an exit |
 | Maximum hold | Same regular session. `UNRESOLVED_AT_CLOSE` at the session close. No overnight carry |
 | Missing bars | A missing sealed file, a hash mismatch, a missing snapshot field, or a 5-minute grid other than the first full bar with `start >= first_sight_at` through the last bar whose end is `<= session_close` is `DATA_INVALID` and is excluded from expectancy. Do not repair it by a later refetch |
 | Price gaps | Deterministic rules below. No discretionary fill inside a gap |
@@ -214,8 +216,8 @@ Report these after the one look. Activation count is not the result. The spec `r
 - payoff ratio (average winner divided by the absolute average loser), undefined when either side has zero rows
 - MAE and MFE distributions in R
 - target-hit rate, stop-hit rate, and timeout rate
-- concentration by ticker, session date, and clock bucket
-- outcome concentration (share of total R from the single largest contributor, and from the largest ticker)
+- concentration by ticker, session date, and clock bucket; `clock bucket` is the exchange-local (`America/New_York`) hour containing `first_sight_at`
+- outcome concentration: signed share of total completed R from the single largest episode contributor and from the ticker with the largest summed completed R; the share is `null` when total completed R is zero
 
 Maximum drawdown is not reported. No sequential portfolio, sizing, or overlap model is preregistered.
 
@@ -259,6 +261,6 @@ One scoring pass after the stopping rule. No parameter search. No second target.
 
 ## Authority boundary
 
-This draft registers the contract. It does not approve collection or scoring. The spec status remains `DRAFT`. No adapter is registered for `options_212c_floor_underlying_outcome`, so the current runner cannot execute this spec. Do not approve the spec, and do not score, until the `options_212c_floor_outcome-v0.1` metric check described above exists and fails closed on a missing preregistered field.
+This draft registers the contract. It does not approve collection or scoring. The spec status remains `DRAFT`. Synthetic-only capture/scoring primitives may exist in source for QA, but they have no provider call, file writer/reader, timer/service hook, or registered experiment adapter. No adapter is registered for `options_212c_floor_underlying_outcome`, so the current runner cannot execute this spec. Do not approve the spec, admit a forward session, or score real trial data until the seal-capture integration and `options_212c_floor_outcome-v0.1` metric check are independently reviewed and fail closed on a missing preregistered field.
 
 Do not start this trial's forward collection until the registration commit is on `main`. The first intended session is 2026-10-05, and that session counts only if its coverage collection has not already run before the merge. If 2026-10-05 is collected before this registration reaches `main`, do not slide the window forward after the fact. Stop and register again.
