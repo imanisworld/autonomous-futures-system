@@ -2,10 +2,33 @@
 
 > **Purpose:** durable operator action tracker for futures infrastructure/safety work. This file is **not** strategy-status authority and must not override `docs/strategy-rules/Strategy_Inventory.md`, the research trial ledger, or verified VPS/runtime evidence.
 >
-> **Repo reconciliation base:** `main` `5d19257e3a690851c0aa580135eba66536b09ec4` (PR #1118 merged, 2026-10-02). The MNQ account-admission study is CLOSED / `INSUFFICIENT_EVIDENCE` / DO NOT REDO. Futures box release since the last verified runtime checkpoint remains `489b55b91b6303c195c8e84bfcbf05ef32d1ab04`. Fetch current `main` rather than treating this stored SHA as perpetual current state. The freshest runtime facts are checkpointed in `docs/agent-work-state.md`; older reconciliation notes remain dated provenance and require fresh read-only proof before any runtime/broker/access mutation.
+> **Repo reconciliation base:** `main` `13a4b268330fce3ac7d389e92c0d69c04aeb6ea2` (2026-10-02 pause checkpoint; PR #1123 already merged the minimal candidate lineage into `main`). The MNQ account-admission study is CLOSED / `INSUFFICIENT_EVIDENCE` / DO NOT REDO. Futures box release since the last verified runtime checkpoint remains `489b55b91b6303c195c8e84bfcbf05ef32d1ab04`. Fetch current `main` rather than treating this stored SHA as perpetual current state. The freshest runtime facts are checkpointed in `docs/agent-work-state.md`; older reconciliation notes remain dated provenance and require fresh read-only proof before any runtime/broker/access mutation.
 >
 > Core rule: **No proof, no run.**
 
+
+## PAUSED — RESUME HERE
+
+**2026-10-02 stop point: repo-side release preflight is complete; next action is read-only VPS proof only.**
+
+- Minimal futures candidate: `c44d32bc4961e56fae5c5f88a976eb6783341638`.
+- Candidate is the exact deployed-`489b55b` + #1095 + #1103 tree: eight changed files only. No strategy, broker, risk, scheduler, env, or executable-strategy enablement change is in the candidate.
+- Exact candidate tests/CI passed. `strat_4hr_retrigger` remains non-executable; the 1-minute observer returns before DecisionEngine/RiskEngine/broker with `fill=None` and `execution_reachable=false`.
+- **Do not use the candidate's bundled `scripts/atomic_release.sh`.** It predates #1096 and fails integrity as `UNPINNED`. If a later release action is authorized, use the already-merged #1096 `atomic_release.sh` to target exact SHA `c44d32bc...`.
+- Candidate lineage is reachable from `main` via merged PR #1123 without changing the candidate tree.
+- No VPS facts were refreshed during the repo preflight. No build, verify, promote, restart, env change, broker change, or TradingView alert change was made.
+
+### NEXT — read-only VPS preflight, in order
+
+1. After the 2026-10-03 12:00Z cron window, confirm the live release tree still has no `__pycache__` and the next drift-gate result is OK.
+2. Re-prove the deployed SHA is still `489b55b91b6303c195c8e84bfcbf05ef32d1ab04`.
+3. Re-prove `LIVE_TRADING_ENABLED=false`, `TRADOVATE_ENV=demo`, account flat, and no unexpected orders.
+4. Re-prove `LOG_DIR=/root/afs-shared/logs`, observer proof pins match, and capture `SCHEDULE_MODE` + `EXIT_MODE` because promotion gating depends on posture.
+5. Confirm rollback target `75f10e4540aa1f25b51b77c1ec2a2da40381a188` still exists/is usable and live release integrity is clean.
+6. Determine read-only whether 1-minute TradingView alerts actually carry `contract_hint`. If not provable from retained data/config, report UNKNOWN; do not alter alerts.
+7. **STOP and reconcile.** Only after these facts are clean should the operator decide whether to authorize #1096 `atomic_release.sh build → verify → promote` for exact candidate `c44d32bc...`.
+
+Until that review: **HOLD. No deploy, restart, build/promote, env mutation, broker mutation, strategy enablement, or research rerun.**
 
 ## Last verified runtime checkpoint — no automatic action
 
