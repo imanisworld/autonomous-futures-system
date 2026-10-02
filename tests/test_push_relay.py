@@ -19,7 +19,11 @@ def today(**over):
         "trade_count": 0,
         "wins": 0,
         "losses": 0,
-        "realized_pnl_dollars": 0.0,
+        "today_pnl_dollars": 0.0,
+        # /status/today's legacy field is CUMULATIVE account P&L; nonzero here so a
+        # test fails if anything reports it as the day's P&L.
+        "realized_pnl_dollars": -59.75,
+        "cumulative_realized_pnl_dollars": -59.75,
         "consecutive_losses": 0,
         "max_consecutive_losses": 9999,
     }
@@ -40,7 +44,7 @@ def test_position_open_then_close_with_outcome():
     assert "MNQ LONG @ 30100.25" in ev[0].body
     assert ev[0].url == "/futures"
 
-    c = signature(today(trade_count=1, wins=1, realized_pnl_dollars=42.5))
+    c = signature(today(trade_count=1, wins=1, today_pnl_dollars=42.5))
     ev = diff_events(b, c)
     assert len(ev) == 1
     assert ev[0].title == "Position closed · WIN"
@@ -50,7 +54,7 @@ def test_position_open_then_close_with_outcome():
 
 def test_resolved_without_seeing_open_position():
     a = signature(today())
-    b = signature(today(trade_count=1, losses=1, realized_pnl_dollars=-113.0))
+    b = signature(today(trade_count=1, losses=1, today_pnl_dollars=-113.0))
     ev = diff_events(a, b)
     assert [e.title for e in ev] == ["Trade resolved"]
     assert "+0W / +1L" in ev[0].body
@@ -109,7 +113,7 @@ def test_event_is_frozen_and_defaults_url():
 
 
 def test_daily_summary_lines():
-    e = daily_summary(today(trade_count=3, wins=2, losses=1, realized_pnl_dollars=94.0))
+    e = daily_summary(today(trade_count=3, wins=2, losses=1, today_pnl_dollars=94.0))
     assert e.title == "Close · 2026-09-21"
     assert e.body == "3 trades · 2W-1L · P&L +$94.00"
     assert e.tag == "daily" and e.url == "/journal"
@@ -119,6 +123,18 @@ def test_daily_summary_lines():
 
     held = daily_summary(today(trade_count=1, has_open_position=True, open_position={"instrument": "MNQ", "direction": "LONG"}))
     assert held.body.endswith("open MNQ LONG")
+
+
+def test_day_pnl_ignores_cumulative_legacy_field():
+    # 2026-10-02: 0 trades today, cumulative account P&L -59.75 -> the day is $0.00.
+    e = daily_summary(today())
+    assert e.body == "0 trades · P&L $0.00"
+    assert signature(today())["realized"] == 0.0
+
+    b = signature(today(trade_count=1, losses=1, today_pnl_dollars=-20.0, realized_pnl_dollars=-79.75))
+    ev = diff_events(signature(today()), b)
+    assert "day -$20.00" in ev[0].body
+    assert "79.75" not in ev[0].body
 
 
 def test_daily_due_once_per_weekday_after_time():

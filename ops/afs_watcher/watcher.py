@@ -1073,7 +1073,9 @@ def check_runtime(state: dict, f: Findings, tick: dict) -> None:
             f.add("WARN", "broker_account_not_ok", f"broker-account ok=false: {ba.get('message')}")
     td, err = http_get_json("/status/today")
     if td:
-        rt["today"] = {k: td.get(k) for k in ("date", "trade_count", "wins", "losses", "has_open_position", "open_position", "realized_pnl_dollars", "live_trading_enabled", "paper_mode")}
+        # /status/today keeps a legacy `realized_pnl_dollars` that is CUMULATIVE account
+        # P&L, not today's; record the two explicit fields so "today" never shows it.
+        rt["today"] = {k: td.get(k) for k in ("date", "trade_count", "wins", "losses", "has_open_position", "open_position", "today_pnl_dollars", "cumulative_realized_pnl_dollars", "live_trading_enabled", "paper_mode")}
         if td.get("live_trading_enabled"):
             f.add("BLOCKED", "live_trading_enabled", "status/today reports live_trading_enabled=true")
 
@@ -3013,7 +3015,7 @@ def maybe_daily(state: dict, tick: dict, findings: Findings) -> None:
     disc: list[str] = []
     rep: dict = {"et_date": key, "utc": iso(now_utc()), "release": RELEASE_SHA, "epoch": iso(EPOCH)}
     today, err = http_get_json("/status/today")
-    rep["status_today"] = {k: (today or {}).get(k) for k in ("date", "trade_count", "wins", "losses", "no_trades", "has_open_position", "open_position", "realized_pnl_dollars", "live_trading_enabled", "paper_mode", "top_no_trade_reasons")} if today else {"error": err}
+    rep["status_today"] = {k: (today or {}).get(k) for k in ("date", "trade_count", "wins", "losses", "no_trades", "has_open_position", "open_position", "today_pnl_dollars", "cumulative_realized_pnl_dollars", "live_trading_enabled", "paper_mode", "top_no_trade_reasons")} if today else {"error": err}
     if today is None:
         disc.append(f"/status/today unreachable: {err}")
     elif today.get("has_open_position"):
