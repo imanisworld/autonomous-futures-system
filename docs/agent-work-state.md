@@ -58,6 +58,41 @@ Every substantial unit of work must leave:
 
 If the agent cannot persist this file, it must return this payload verbatim-ready for the next agent/operator to save.
 
+## Current checkpoint — 2026-10-02 15:17Z (observer ON; canonical epoch HOLD pending #1103 deploy)
+
+Runtime observations below are from Grok's read-only `afs-ro` pass reported by the operator after the 15:00Z checkpoint. Repository facts were independently reconciled against GitHub.
+
+### DONE / DO NOT REDO
+
+- **Read-only server tool updated.** `afs-ro` now exposes the needed settings/pre-live surfaces. Backup `afs-ro.bak-20261002` is the older Sep 28 tool; the active `afs-ro` is the new tool used for the checks below.
+- **Observer/runtime posture at 15:17:19Z:** release `489b55b91b6303c195c8e84bfcbf05ef32d1ab04`; generic 1-minute + 4HR observer pins ON and matching their `EXPECTED_PROOF_` pins; pre-live had no mismatched/unpinned setting; live trading OFF; Tradovate DEMO flat; restart created no orders; journal advanced at 15:15:12Z; `strat_4hr_retrigger` remained outside the executable strategy list.
+- **`LOG_DIR` proven:** `/root/afs-shared/logs`. This clears #1095's runtime-path prerequisite only; it does not authorize deployment.
+- **13:49Z 422:** one TradingView request failed format validation before processing. Payload body was not retained, so the exact bad field remains UNKNOWN. It was the only rejection in the inspected 24-hour window. All six instruments retained their 13:48 one-minute bar, so no 1-minute data gap resulted.
+- **Contract hint only partially answered:** 15-minute alerts reported `MNQZ2026` / `MESZ2026` matching routed contracts. Stored 1-minute bar rows do not retain `contract_hint`; the first #1103-compliant touch must resolve MATCH/MISMATCH/UNKNOWN.
+- **Watcher P&L display bug fixed in source:** #1107 merged as `a2dbac1`; watcher/push-relay now use `today_pnl_dollars` for day P&L. The standalone server copies are still unchanged until a separate operator-approved install.
+- **Watcher BLOCKED is separate from trade safety:** same-release restart baseline state plus the known options-scanner memory/swap condition. Do not reset watcher state or change scanner memory limits without an operator GO.
+
+### CRITICAL RECONCILIATION — 15:17Z is not the canonical #1103 epoch start
+
+Grok called 15:17:19Z the official 4HR epoch start. Repository proof contradicts that as a canonical #1103-compliant evidence boundary:
+
+- deployed release `489b55b` predates #1103;
+- #1103 (`43ead15`) adds `contract_check`, mismatch blocking, and `needs_manual_review` to `context/one_min_trigger.py`;
+- the current epoch doc says every post-touch record carries `contract_check`, which `489b55b` cannot emit.
+
+Therefore 15:17:19Z is an **observer-on timestamp only**. Any natural-1m 4HR touch before a release carrying #1103 is provisional/non-counting for the canonical epoch and must not be backfilled into it.
+
+The canonical epoch begins only after an exact reviewed release carrying #1103 is deployed and a read-only verification confirms the required pins, observer-only posture, and no broker-order side effect.
+
+### NEXT — in order
+
+1. Do not redo Grok's completed runtime questions.
+2. #1107 is merged source-only. Any watcher/push-relay server reinstall is a separate operator GO.
+3. Next futures release: #1095 + #1103 only after exact-SHA review and `/futures-deployment-safety-audit`; build/verify/promote requires separate operator authorization.
+4. After that release, repeat the read-only pin/posture/no-order verification. That timestamp becomes the canonical 4HR natural-1m epoch start.
+5. After the 2026-10-03 12:00Z cron jobs, confirm no release-tree `__pycache__` and confirm the next drift-gate result is OK.
+6. The first #1103-compliant touch answers whether the 1-minute alert proves the contract: MATCH/MISMATCH/UNKNOWN.
+
 ## Current checkpoint — 2026-10-02 ~15:00Z (#1102 installed, post-deploy audit)
 
 Runtime facts below come from read-only `afs-ro` reads at 14:40–15:00Z, plus the output of the one box change listed.
