@@ -1,8 +1,11 @@
-# MNQ account-admission overlay — ONE SCORED LOOK AUTHORIZED
+# MNQ account-admission overlay — CLOSED / INSUFFICIENT EVIDENCE
 
-**Status: ONE_SCORED_LOOK_AUTHORIZED.** The one look defined in the reading
-rules is authorized. It has not been run. This document does not authorize a
-fetch, and it does not amend prereg #929.
+**Status: CLOSED / INSUFFICIENT_EVIDENCE.** The one look defined in the
+reading rules was run once and is preserved at
+`docs/research-evidence/T-2026-10-02-prereg-mnq-account-admission-overlay-draft-2026-10-02-01/result.json`.
+Do not rerun it. Neither pass is the historical account result. Do not
+select the sensitivity. Do not average the two passes. This document does
+not authorize a fetch, and it does not amend prereg #929.
 
 **Trial ID:** `T-2026-10-02-prereg-mnq-account-admission-overlay-draft-2026-10-02-01`
 
@@ -400,6 +403,12 @@ of this draft.
 
 ## Next
 
-Status is `ONE_SCORED_LOOK_AUTHORIZED`. Run the two passes in the reading
-rules once, on this prereg, and stop. Do not open or run prereg #929. Do not
-add a third mode. Do not deploy.
+The historical study is closed as `INSUFFICIENT_EVIDENCE`. The preserved
+result is
+`docs/research-evidence/T-2026-10-02-prereg-mnq-account-admission-overlay-draft-2026-10-02-01/result.json`.
+Daily-loss admission matters, but exact historical account realism cannot be
+established from this dataset because two unrecoverable cross-timeframe
+arrival orders produce materially different downstream account paths. No
+further historical rerun, third mode, retune, or strategy-status change is
+authorized. The next useful evidence has to come forward, where request
+order is recorded. Do not open or run prereg #929. Do not deploy.
