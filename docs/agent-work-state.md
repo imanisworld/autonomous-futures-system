@@ -4,7 +4,7 @@
 >
 > This file is **not** strategy-status authority, deployment authority, or experiment authority. Authoritative records named in `AGENTS.md` always win.
 >
-> **Checkpoint base:** repository `main` `3c3dcd5b0567943e5af9d452d3adf7c06d41b7e5` (PR #1073 merged 2026-10-02). Always fetch current `main`; this stored SHA is a comparison base, not a perpetual current-state claim.
+> **Checkpoint base:** repository `main` `6ad0bac2bcbbce6dbb88f181ad4aa469e3711421` (PR #1096 merged 2026-10-02). Always fetch current `main`; this stored SHA is a comparison base, not a perpetual current-state claim.
 >
 > Core rule: **checkpoint first; diff first; do not redo proven work.**
 
@@ -58,7 +58,30 @@ Every substantial unit of work must leave:
 
 If the agent cannot persist this file, it must return this payload verbatim-ready for the next agent/operator to save.
 
-## Current checkpoint — 2026-09-30 ET
+## Current checkpoint — 2026-10-02 ET
+
+### DONE / DO NOT REDO
+
+- **Runtime read, 2026-10-02 02:06–02:09Z (read-only `afs-ro`):** futures-bot PID `791194`, `NRestarts=0`, active since 2026-09-30 00:35:54Z on `75f10e4540aa1f25b51b77c1ec2a2da40381a188`; Tradovate DEMO `HEALTHY`; live trading disabled; preflight 2026-10-02 00:37:01Z passed, not armed, 0 positions, 0 working orders. Not re-read since; re-verify before any mutation.
+- **4HR MNQ forward evidence:** 0 prospective fills since the 2026-09-09 wide-stop epoch. The `wide_stop_4k` lane saw 2 candidates, both blocked before an order (2026-09-15 `REGIME_RESTRICTED`; 2026-09-30 `ENTRY_DETACHED_FROM_PRICE`). The natural-1m 4HR lane never wrote evidence; cause and the new-epoch rules are in `docs/4hr-natural-1m-observation-epoch-2026-10-01.md`. Do not re-audit; do not backfill.
+- **Merged 2026-10-02 (none deployed):** #1077 Signa v2 (`8c4e2e4`), #1092 4HR natural-1m observation (`8b7d968`), #1094 observation publish fail-safe (`489b55b`), #1095 observation status path follows `LOG_DIR` (`1c43291`), #1096 release-script bytecode/fingerprint fixes (`6ad0bac`), plus docs #1073 and #1093.
+- **Reviews done:** `/options-diff-review` of #1077 at `9387964` = APPROVE (260 tests). `/futures-diff-review` of #1092 = APPROVE PAPER-DEPLOY; its should-fix landed as #1094.
+- **Release review `75f10e4` → `6ad0bac` done (2026-10-02):** code tightens safety; #1096 is release-script tooling only (bytecode off and fingerprint pin on every integrity check); `strategy/`, `journal/`, and `risk_rules.yaml` unchanged; all 7 live-only commits are patch-present on main (stale-bearer fix and FI-18 account pin intact). Verdict **HOLD for deploy** until the box preconditions under NEXT are proven. Re-review only commits after `6ad0bac`.
+- **Live release preserved on GitHub:** tag `archive/futures-stale-bearer-curated-75f10e4-2026-09-29` → `75f10e4`.
+- **60M 3-2-2 corpus rerun:** operator re-confirmed **HOLD** 2026-10-02. A rerun cannot change the $6k account-size blocker. Revisit near $6k equity, before quoting any 3-2-2 figure, or when forward 3-2-2 trades need a clean historical baseline.
+
+### NEXT — futures release, in order
+
+1. **Read-only box env proof** (names and value shape only; never print secrets):
+   - `MAX_CONTRACTS_HARD_CAP` is an ASCII integer 1–6 and `EXPECTED_PROOF_MAX_CONTRACTS_HARD_CAP` equals it. Main's `load_config()` refuses to start without it, and `PaperBroker` / `TradovateBroker` refuse orders; live `risk_rules.yaml` has no fallback key.
+   - `TRADOVATE_ENV` is exactly `demo` (no case folding, no whitespace).
+   - `RELEASE_INTEGRITY_ENFORCED` state. If enforced: the unit `ExecStart` runs Python with `-B` (or `PYTHONDONTWRITEBYTECODE=1`) so the running service never writes `__pycache__` into the release; #1096 covers build/verify/promote and the fingerprint pin they pass.
+   - `LOG_DIR=/root/afs-shared/logs`, so the observation status file lands beside the journal (#1095).
+2. If all pass: build/verify an exact reviewed SHA through `scripts/atomic_release.sh`, then a separate operator deploy GO. Gate-condition #1068 rides along with that release.
+3. Start the 4HR natural-1m epoch only per `docs/4hr-natural-1m-observation-epoch-2026-10-01.md` (both flags + both pins, then an operator read-only verification; that time is the epoch start).
+4. #1077 on the options scanner is a separate deploy GO.
+
+## Previous checkpoint — 2026-09-30 ET
 
 ### DONE / DO NOT REDO
 
@@ -96,13 +119,13 @@ Options resume is governed by the same checkpoint-first / diff-first rule.
 
 - **Current-state authority:** `docs/options-current-state-handoff.md`. Do not create a competing options status file.
 - **PR #1073 MERGED** as `3c3dcd5b0567943e5af9d452d3adf7c06d41b7e5` (squash of reviewed head `0232c187e601b87c286af0ad70c5dd47acac3a58`). `docs/options-current-state-handoff.md` is now dated 2026-09-29. **Options task checklist: `docs/options-next-actions.md`.** Do not recreate that checklist elsewhere.
-- **PR #1077** (`claude/options-signa-validation-v2`, exact head `93879644c9b248c8cb2d29b172b086fa9af5c88a`) is the active Signa-v2 observation/evidence change. It is open and ready for review. The 2026-10-02 head adds one commit on top of `fa41730`: NEUTRAL/unrecognized Signa direction now rates C (`partial:direction_unrecognized`) in both Signa modules, and the "Can I trade this?" card field is placed by name after "Why". The earlier green CI applied to `fa41730`; exact-head CI on `9387964` must be re-confirmed before merge. It now includes separate display-only **Observation Rating (A/B/C/N/A)** and **AFS Trade Grade (A/B/C/F/N/A)** surfaces. Neither rating changes scanner score, alert eligibility, setup state, contract selection, risk permission, orders, or execution. Independent review remains required before merge. Do **not** start a second Signa-v2 implementation.
+- **PR #1077 MERGED** as `8c4e2e4` (squash of reviewed head `93879644c9b248c8cb2d29b172b086fa9af5c88a`; exact-head CI green; `/options-diff-review` APPROVE). It adds display-only **Observation Rating (A/B/C/N/A)** and **AFS Trade Grade (A/B/C/F/N/A)** surfaces; neither changes scanner score, alert eligibility, setup state, contract selection, risk permission, orders, or execution. **Not deployed** to the options scanner. Do **not** start a second Signa-v2 implementation.
 - Options production posture recorded by the merged #1073 remains advisory/read-only with the existing frozen evidence lanes; repository changes are not runtime proof.
 - Real-data gates as recorded by the merged #1073 (none is permission to deploy): #1071 Epoch-3 real-data audit COMPLETE (`0dca986`; do not tune from the five-close sample); #1069 SPX→SPXW provider mapping/preflight COMPLETE on `d7a546c`, with an RTH check that SPXW 0DTE appears while the lane stays OFF still pending; #1067 real 66/66 RTH capacity proof inside the five-minute cadence still pending (`a4de6f9`). Verify which gates changed before doing work.
 
 ### OPEN / NEEDS DECISION — verify before touching
 
-- PR #1077 / branch `claude/options-signa-validation-v2`: head moved to `9387964` on 2026-10-02; re-confirm exact-head CI, then independent review is the remaining merge gate. Do not duplicate it.
+- #1077 options-scanner deploy: needs a separate operator GO; the scanner box release is unchanged.
 - Closed-unmerged agent-safety doc branches associated with PR #1028 and #1036: verify whether their content is superseded before recreating anything.
 - Forward evidence: `orb_reclaim` was stale and `vwap_rejection` quiet in the latest read-only check. This does not block current collection, but future summaries must not imply continuous evidence for those arms.
 
