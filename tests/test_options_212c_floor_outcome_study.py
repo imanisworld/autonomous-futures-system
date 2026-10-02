@@ -334,6 +334,16 @@ def test_touch_timeout_and_data_invalid_paths() -> None:
     assert "snapshot_identity_invalid" in invalid_identity["flags"]
 
 
+def test_session_score_rejects_malformed_nonactivated_population_row() -> None:
+    record = json.loads(_artifact().body)
+    snap = dict(record["episodes"][0])
+    snap["gate_bucket_floor"] = "MARKET_ALIGNMENT_REJECTED"
+    snap["episode_id"] = "tampered"
+    record["episodes"] = [snap]
+    with pytest.raises(StudyContractError, match="snapshot_identity_invalid"):
+        score_session_record(record)
+
+
 def test_aggregate_emits_all_preregistered_metrics() -> None:
     rows = [
         {
