@@ -9,10 +9,12 @@ _As of 2026-10-02. Operational checklist only. The authoritative options status 
 
 - [x] #1115 merged as `65847295521be1ff0d6b9ef89c8fb8699aff7735`: forward Stage-A contract registered **DRAFT / PLANNED / NOT RUN**.
 - [x] Frozen stopping monitor is hash-bound to sealed session snapshots, consecutive from 2026-10-05, with fail-closed identity/gate/session checks.
-- [ ] Independent-review the synthetic-only seal/scorer machinery branch. Required scope: exact first-event join for `floor_target_2`, exact 5-minute grid, gap/stop/target/timeout semantics, all preregistered metrics, and no real-data I/O.
-- [ ] After that review, obtain a separate operator GO before adding provider fetch/file writer/timer integration. **Do not collect a real session merely because the pure machinery exists.**
-- [ ] Before admitting 2026-10-05, verify the approved capture path was already on `main` and that no study data for that session was collected earlier. Otherwise stop and register a new forward window; do not slide this one.
-- [ ] One-look scoring remains blocked until the stop condition fires and the scorer/metric adapter is separately approved. Stage B option fills remain **NOT EVALUATED**.
+- [x] #1121 merged as `13a4b268330fce3ac7d389e92c0d69c04aeb6ea2`: synthetic-only seal/scorer machinery reviewed and preserved. No provider/file/timer/runner integration; no real collection or scoring.
+- [ ] Build the **real prospective seal-capture integration with collection disabled**. Wire the approved `cov-v0.1` / `ep-v0.1` session evidence and causal 5-minute bars into the merged seal builder; write immutable session JSON + SHA-256 manifest; make the blind monitor read the sealed artifacts; fail closed on session/hash/version/identity/gate/grid/continuity problems.
+- [ ] Independently review that integration on an exact head. Required QA: synthetic/dry-run fixtures only; no real session admission; exact-head CI green; verify the no-outcome-read boundary.
+- [ ] Obtain a **separate operator GO** before admitting the first real forward session. The integration existing on `main` is not collection authority.
+- [ ] Before admitting 2026-10-05, verify the approved capture integration was already on `main` and that no study data for that session was collected earlier. Otherwise stop and register a new forward window; do not slide this one.
+- [ ] One-look scoring remains blocked until the frozen stop condition fires and the scorer/metric path is separately approved. Stage B option fills remain **NOT EVALUATED**.
 
 
 - [x] #1067 code complete: 66-symbol candidate universe + fail-closed capacity preflight.
@@ -69,12 +71,14 @@ _As of 2026-10-02. Operational checklist only. The authoritative options status 
 - [x] Evidence bytes preserved. `runner_report.json` SHA-256 `0d47bf46fd62748e9e6b67a248d2ef6ef76aad072e6ad1d2fd43192f7f3343e8`. That digest is the manifest `results_sha256`.
 - [x] The measurement is coverage/activation only. It does not establish profitable trades, expectancy, strategy promotion, deployment, or execution authority.
 
-## Forward floor-activation outcome draft — not approved, not run
+## Forward floor-activation outcome draft — registered, not run
 
 - [x] No untouched retrospective holdout. Sessions through 2026-10-02 are ineligible.
 - [x] DRAFT prereg `docs/prereg-options-212c-floor-outcome-2026-10-02.md` and spec `E-2026-10-02-options-212c-floor-outcome-01` (`status=DRAFT`). Ledger event `PLANNED`.
-- [ ] Independent re-review of the registration PR after the sealed episode snapshot, direction identity, and threshold-crossing-session corrections. Do not merge, approve collection, run the study, retune `floor_ge1r`, or open forward path outcomes.
-- [ ] Do not start this trial's 2026-10-05 collection until the registration commit is on `main`.
+- [x] #1115 registration merged. Frozen seal/monitor/stopping contract is on `main`.
+- [x] #1121 synthetic capture/scorer machinery merged as `13a4b268330fce3ac7d389e92c0d69c04aeb6ea2`; exact reviewed head `b9c2558e6488a9a103387f75bb6f4b52a0fa8c8c`. Still **no real-data I/O and no collection**.
+- [ ] Build and independently review the real seal-capture integration before any session is admitted.
+- [ ] Do not start this trial's 2026-10-05 collection without a separate operator GO after that integration is on `main`.
 - [ ] Stage B stays **NOT EVALUATED** until a causal historical chain source exists. Do not backfill current quotes.
 
 ## Cleanup / non-blocking
