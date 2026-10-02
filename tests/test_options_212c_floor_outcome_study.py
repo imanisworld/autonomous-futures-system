@@ -390,6 +390,24 @@ def test_aggregate_emits_all_preregistered_metrics() -> None:
     assert metrics["expectancy"]["value"] == 0.25
 
 
+def test_machinery_has_no_real_data_io_or_runner_hook() -> None:
+    source = (ROOT / "ops/options_212c_floor_outcome_study.py").read_text(
+        encoding="utf-8"
+    )
+    for forbidden in (
+        "AlpacaBarProvider",
+        "httpx",
+        "requests",
+        "subprocess",
+        "Path(",
+        ".open(",
+        "write_text(",
+        "write_bytes(",
+        "EXECUTION_ADAPTERS",
+    ):
+        assert forbidden not in source
+
+
 def test_spec_stays_draft_and_metric_contract_matches() -> None:
     spec = json.loads(SPEC.read_text(encoding="utf-8"))
     assert spec["status"] == "DRAFT"
