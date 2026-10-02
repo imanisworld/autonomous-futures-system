@@ -39,7 +39,10 @@ The canonical forward sample starts only after all of the following are true:
 
 1. The pinned futures release contains the observation-only wiring:
    `context/four_hr_observation.py` published by the wide-stop forward
-   collector, and read by `evaluate_armed_4hr_touch()`.
+   collector, and read by `evaluate_armed_4hr_touch()`. **Met 2026-10-02
+   03:43Z:** release `489b55b91b6303c195c8e84bfcbf05ef32d1ab04` (#1092 with the
+   arm-window race fix, plus #1094's publish fail-safe). Conditions 3–5 are
+   still open; the observer flag is OFF, so the epoch has not started.
 2. `strat_4hr_retrigger` is still absent from `enabled_concepts`.
 3. `ONE_MIN_TRIGGER_ENABLED=true` and
    `EXPECTED_PROOF_ONE_MIN_TRIGGER_ENABLED=true`. The 4HR observer only runs
