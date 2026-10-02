@@ -44,6 +44,9 @@ The two unresolved rows:
 All 47 rows are in
 `research/artifacts/pr915-reachable-order-audit-5a9f14b.json`.
 
-One unresolved reachable case is enough. The account draft stays
-`SAME_TIMESTAMP_ORDER_BLOCKED`. This audit does not freeze an ordering rule
-and does not authorize a scored run.
+This audit does not invent an arrival order for the two cross-timeframe
+rows. The account prereg now freezes the uncertainty treatment for those
+exact pairs. Primary mode is `UNKNOWN_ORDER_BUSY_FIRST`. The only sensitivity
+is `UNKNOWN_ORDER_EXIT_FIRST`. Status of that prereg is
+`READY FOR INDEPENDENT PREREG REVIEW`. This audit still does not authorize a
+scored run.
