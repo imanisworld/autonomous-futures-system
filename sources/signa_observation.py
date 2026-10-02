@@ -196,6 +196,10 @@ def _float_or_none(value: Any) -> float | None:
 
     
 
+_BULLISH = frozenset({"LONG", "BUY", "BULL", "BULLISH", "CALL", "UP"})
+_BEARISH = frozenset({"SHORT", "SELL", "BEAR", "BEARISH", "PUT", "DOWN"})
+
+
 def _observation_rating(
     *,
     ok: bool,
@@ -210,7 +214,8 @@ def _observation_rating(
 
     A = core fields present + factor coverage + no observed factor conflicts.
     B = core fields present + factor coverage + one or more observed conflicts.
-    C = payload parsed but core evidence or factor coverage is incomplete.
+    C = payload parsed but core evidence or factor coverage is incomplete,
+        or the direction is NEUTRAL/unrecognized (agreement not evaluable).
     N/A = observation unavailable/failed.
     """
     if not ok:
@@ -219,6 +224,9 @@ def _observation_rating(
     missing: list[str] = []
     if direction is None:
         missing.append("direction")
+    elif direction.upper() not in _BULLISH | _BEARISH:
+        # NEUTRAL/unknown: factor agreement cannot be evaluated, so never A.
+        missing.append("direction_unrecognized")
     if score is None:
         missing.append("score")
     if confidence is None:
@@ -244,8 +252,8 @@ def _factor_conflicts(
     metadata; it does not reject or approve a trade.
     """
     normalized = (direction or "").upper()
-    bullish = normalized in {"LONG", "BUY", "BULL", "BULLISH", "CALL", "UP"}
-    bearish = normalized in {"SHORT", "SELL", "BEAR", "BEARISH", "PUT", "DOWN"}
+    bullish = normalized in _BULLISH
+    bearish = normalized in _BEARISH
     if not bullish and not bearish:
         return ()
     conflicts: list[str] = []

@@ -157,3 +157,17 @@ def test_trade_grade_is_na_before_trigger() -> None:
     fields = {field["name"]: field["value"] for field in embed["fields"]}
     assert fields["AFS trade grade"] == "N/A · setup not triggered"
     assert result.score == 9
+
+
+def test_can_i_trade_this_stays_directly_after_why() -> None:
+    for setup_status in ("TRIGGERED", "WATCHING"):
+        result = ScoreResult(
+            ticker="AAPL",
+            direction="LONG",
+            score=9,
+            pattern="2-1-2",
+            components={"vwap": 2, "trend": 2, "volume": 2, "session": 1, "signa": 0},
+            raw={"ticker": "AAPL", "direction": "LONG", "setup_status": setup_status, "price": 105.0},
+        )
+        names = [field["name"] for field in build_discord_payload(result)["embeds"][0]["fields"]]
+        assert names.index("Can I trade this?") == names.index("Why") + 1

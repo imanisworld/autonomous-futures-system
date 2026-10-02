@@ -154,10 +154,12 @@ def build_discord_payload(result: ScoreResult) -> dict[str, Any]:
         {"name": "Risk", "value": _risk_text(result), "inline": False},
         {"name": "Not checked", "value": _unchecked_text(result), "inline": False},
     ]
+    # Anchor by name, not index, so adding a card field cannot move this line.
+    after_why = next(i for i, field in enumerate(fields) if field["name"] == "Why") + 1
     if _mechanically_triggered(result):
-        fields.insert(8, {"name": "Can I trade this?", "value": "Setup TRIGGERED · you still need to check the contract and risk before doing anything · nothing is placed automatically", "inline": False})
+        fields.insert(after_why, {"name": "Can I trade this?", "value": "Setup TRIGGERED · you still need to check the contract and risk before doing anything · nothing is placed automatically", "inline": False})
     else:
-        fields.insert(8, {"name": "Can I trade this?", "value": "No — WAIT · watching only · no entry permission", "inline": False})
+        fields.insert(after_why, {"name": "Can I trade this?", "value": "No — WAIT · watching only · no entry permission", "inline": False})
 
     fields = [field for field in fields if field["value"] != "N/A"]
     for field in fields:

@@ -224,6 +224,10 @@ def _first_text(payload: dict[str, Any], *keys: str) -> str | None:
     return None
 
 
+_BULLISH = frozenset({"LONG", "BUY", "BULL", "BULLISH", "CALL", "UP"})
+_BEARISH = frozenset({"SHORT", "SELL", "BEAR", "BEARISH", "PUT", "DOWN"})
+
+
 def _observation_rating(
     *,
     ok: bool,
@@ -240,6 +244,9 @@ def _observation_rating(
     missing: list[str] = []
     if direction is None:
         missing.append("direction")
+    elif direction.upper() not in _BULLISH | _BEARISH:
+        # NEUTRAL/unknown: factor agreement cannot be evaluated, so never A.
+        missing.append("direction_unrecognized")
     if score is None:
         missing.append("score")
     if confidence is None:
@@ -261,8 +268,8 @@ def _factor_conflicts(
     components: dict[str, float | None],
 ) -> tuple[str, ...]:
     normalized = (direction or "").upper()
-    bullish = normalized in {"LONG", "BUY", "BULL", "BULLISH", "CALL", "UP"}
-    bearish = normalized in {"SHORT", "SELL", "BEAR", "BEARISH", "PUT", "DOWN"}
+    bullish = normalized in _BULLISH
+    bearish = normalized in _BEARISH
     if not bullish and not bearish:
         return ()
     conflicts: list[str] = []

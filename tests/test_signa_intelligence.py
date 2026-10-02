@@ -132,3 +132,22 @@ def test_module_has_no_network_or_trading_authority():
     lowered = source.lower()
     for forbidden in ("live_trading_enabled", "place_order", "submit_order", "execute_trade", "tradovate", "alpaca"):
         assert forbidden not in lowered
+
+
+def test_neutral_direction_cannot_rate_a():
+    obs = parse_action_card(
+        {
+            "success": True,
+            "data": {
+                "signal": {
+                    "symbol": "SPY",
+                    "direction": "NEUTRAL",
+                    "score": 72,
+                    "confidence": 71,
+                    "component_scores": {"technicals": 65},
+                }
+            },
+        }
+    )
+    assert obs.observation_rating == "C"
+    assert obs.observation_rating_basis == "partial:direction_unrecognized"

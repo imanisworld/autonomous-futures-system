@@ -180,3 +180,24 @@ def test_video_defined_strength_and_factor_conflicts_are_observational() -> None
     assert fields["signa_v2_observation_rating"] == "B"
     assert "decision" not in fields
     assert "actionable" not in fields
+
+
+def test_neutral_or_unknown_direction_cannot_rate_a() -> None:
+    for direction in ("NEUTRAL", "SIDEWAYS"):
+        obs = parse_action_card(
+            {
+                "success": True,
+                "data": {
+                    "signal": {
+                        "symbol": "SPY",
+                        "direction": direction,
+                        "score": 72,
+                        "confidence": 71,
+                        "component_scores": {"technicals": 65, "gamma": 30},
+                    }
+                },
+            }
+        )
+        assert obs.factor_conflicts == ()
+        assert obs.observation_rating == "C"
+        assert obs.observation_rating_basis == "partial:direction_unrecognized"
