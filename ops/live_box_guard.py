@@ -65,6 +65,10 @@ PROOF_CRITICAL_RUNTIME_OVERRIDES = (
     # Proof-critical because it changes accepted evidence behavior and maintains
     # a new isolated armed-state record from the 5m feed.
     "ONE_MIN_322_OBSERVER_ENABLED",
+    # Observation-only MNQ 4HR natural-1m reader. Default OFF. Proof-critical
+    # because it decides whether armed observation snapshots become evidence.
+    # It does not add strat_4hr_retrigger to the executable book.
+    "ONE_MIN_4HR_OBSERVER_ENABLED",
     "SCHEDULE_MODE",
     "DEMO_EXECUTION_HOLD_SESSIONS",
     "PRIMARY_DECISION_TF",

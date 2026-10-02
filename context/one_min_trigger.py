@@ -1,8 +1,9 @@
 """Isolated 1-minute trigger evidence lane for armed MNQ 4HR setups.
 
 This module cannot discover setups, run DecisionEngine, or route a broker order.
-It only records 1m bars and observes whether an already-persisted ARMED 4HR
-trigger was touched. Default OFF via ONE_MIN_TRIGGER_ENABLED.
+It only records 1m bars and observes whether the separate observation snapshot
+is already ARMED. It does not read executable strategy state. The 4HR observer
+flag defaults OFF.
 """
 from __future__ import annotations
 
@@ -19,6 +20,10 @@ from config.futures_contracts import contract_root, optional_tick_size
 from context.bar_history import _parse_dt
 from context.five_min_feed import recent_five_min
 from context.four_hr_continuation_attribution import completed_four_hour_sequence_context
+from context.four_hr_observation import (
+    four_hr_observation_enabled,
+    read_armed_observation,
+)
 from context.one_min_feed import (
     ONE_MIN_LANE,
     is_one_min,
@@ -26,7 +31,6 @@ from context.one_min_feed import (
     recent_one_min,
     record_one_min,
 )
-from journal.journal_logger import JournalLogger
 from strategy.four_hr_retrigger import aggregate_et_bars
 
 logger = logging.getLogger(__name__)
@@ -113,16 +117,12 @@ def evaluate_armed_4hr_touch(payload, log_dir: str, for_date=None) -> Optional[d
     day = for_date or bar_open.date()
     if not (time(9, 30) <= bar_open.timetz().replace(tzinfo=None) < time(11, 0)):
         return None
-
-    daily = JournalLogger(log_dir=log_dir).get_daily_state(day)
-    state = dict(daily.four_hr_retrigger_state.get(INSTRUMENT, {}) or {})
-    if state.get("status") != "ARMED":
+    if not four_hr_observation_enabled():
         return None
-    if state.get("trading_date") != day.isoformat():
+    state = read_armed_observation(log_dir, day, as_of=bar_open)
+    if state is None:
         return None
     direction = str(state.get("direction") or "").upper()
-    if direction not in {"LONG", "SHORT"}:
-        return None
     try:
         trigger = float(state["trigger"])
         target = float(state["target"])
@@ -219,7 +219,14 @@ def evaluate_armed_4hr_touch(payload, log_dir: str, for_date=None) -> Optional[d
             else bar_open_px <= trigger
         ),
         "arm_key": arm_key,
-        "source_state": state,
+        "source_state": {
+            "schema": state.get("schema"),
+            "rule_version": state.get("rule_version"),
+            "source": state.get("source"),
+            "source_timestamp": state.get("source_timestamp"),
+            "executable": False,
+            "trade_authorized": False,
+        },
         "four_hour_treatment": treatment_context,
     }
     _append_evidence(log_dir, day, event)

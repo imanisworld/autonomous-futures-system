@@ -14,13 +14,14 @@ import os
 import tempfile
 import threading
 from contextlib import contextmanager
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
 from context import wide_stop_ledger_paper as contract
 from context.bar_history import _parse_dt
+from context.four_hr_observation import publish_4hr_observation
 from context.wide_stop_ledger_runtime import (
     _epoch,
     _journal,
@@ -250,16 +251,16 @@ def _evaluate_canonical_candidate(
 
     current_ts = _parse_dt(str(payload.timestamp))
     if current_ts is None or not _in_detection_window(strategy, current_ts):
-        return None, None, None
+        return None, None, None, None
     state = build_market_state(payload)
     if _root(state.instrument) != contract.INSTRUMENT:
-        return None, None, None
+        return None, None, None, None
     state.canonical_4hr_only = True
     state.bar_history_5m = list(bars_5m)
 
     ledger = contract.ledger_for(contract.INSTRUMENT, strategy)
     if ledger is None:
-        return None, None, None
+        return None, None, None, None
     isolated = _isolated_config(cfg, ledger, strategy)
     daily = DailyState()
     prior = _prior_machine_state(
@@ -279,7 +280,11 @@ def _evaluate_canonical_candidate(
         if strategy == FOUR_HR
         else state.strat_322_first_live_candidate
     )
-    return decision, state, candidate
+    machine = None
+    if strategy == FOUR_HR:
+        raw_machine = daily.four_hr_retrigger_state.get(contract.INSTRUMENT) or {}
+        machine = dict(raw_machine) if isinstance(raw_machine, dict) else None
+    return decision, state, candidate, machine
 
 
 def _lane_daily_state(cfg, ledger: contract.Ledger, log_dir, for_date):
@@ -521,12 +526,24 @@ def _process_five_min_bar_locked(
             events.append(resolved)
 
     for strategy in _NATIVE:
-        decision, market_state, candidate = _evaluate_canonical_candidate(
+        decision, market_state, candidate, machine = _evaluate_canonical_candidate(
             payload=payload,
             cfg=cfg,
             bars_5m=bars_5m,
             strategy=strategy,
         )
+        if (
+            strategy == FOUR_HR
+            and isinstance(machine, dict)
+            and machine
+            and current_ts is not None
+        ):
+            # Available only at the completed 5m bar. This file is not an order.
+            publish_4hr_observation(
+                log_dir,
+                machine,
+                source_timestamp=current_ts + timedelta(minutes=5),
+            )
         if candidate is None:
             continue
         ledger = contract.ledger_for(contract.INSTRUMENT, strategy)
