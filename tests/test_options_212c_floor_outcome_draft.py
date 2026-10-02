@@ -9,6 +9,8 @@ import json
 from datetime import date, timedelta
 from pathlib import Path
 
+from alert_ranker.coverage_episodes import REDUCER_VERSION as EPISODE_REDUCER_VERSION
+from alert_ranker.coverage_outcomes import BUCKET_ORDER
 from alert_ranker.session_calendar import nyse_session_for
 from ops.options_212c_floor_outcome_monitor import (
     ACTIVATION_CAP,
@@ -19,11 +21,14 @@ from ops.options_212c_floor_outcome_monitor import (
     PATH_RECORD_ROOT,
     PATH_RECORD_VERSION,
     READOUT_FIELDS,
+    RECOGNIZED_GATES,
+    REDUCER_VERSION,
     SESSION_CAP,
     SESSION_SEAL_FIELDS,
     STUDY_ONLY_METRICS,
     STUDY_SCORER_VERSION,
     THRESHOLD_CROSSING_RULE,
+    TRIAL_ID,
     bind_seal,
     sealed_path_record_relpath,
     study_readout,
@@ -101,6 +106,7 @@ def test_entry_gap_and_blind_readout_are_frozen() -> None:
         "sessions_elapsed",
         "stop_condition_met",
         "advance_refused",
+        "consecutive eligible NYSE sessions",
         "activation_cap",
         "session_cap",
         STUDY_SCORER_VERSION,
@@ -150,6 +156,7 @@ def _episode(
     return {
         **identity,
         "episode_id": "|".join(identity[key] for key in EPISODE_IDENTITY_KEYS),
+        "reducer_version": REDUCER_VERSION,
         "gate_bucket_floor": gate,
         "bars": [{"start": f"{session_date}T{bar}", "open": 1, "high": 2, "low": 0.5, "close": 1.5}],
         "views": [{"outcome": "TARGET_FIRST", "close_r": 3.0}],
@@ -181,6 +188,7 @@ def test_readout_hides_activation_path_and_outcome_fields() -> None:
                     _episode("2026-10-05"),
                     _episode("2026-10-05"),
                     _episode("2026-10-05", symbol="MSFT", bar="15:00:00+00:00", gate="LATE_AT_FIRST_SIGHT"),
+                    _episode("2026-10-05", symbol="NVDA", bar="15:05:00+00:00", gate="MARKET_ALIGNMENT_REJECTED"),
                 ],
             )
         ]
@@ -296,6 +304,54 @@ def test_missing_identity_or_hash_refuses_to_advance() -> None:
         "stop_condition": None,
         "advance_refused": True,
     }
+
+
+def test_a_missing_eligible_session_refuses_to_advance() -> None:
+    day1, day2, day3 = "2026-10-05", "2026-10-06", "2026-10-07"
+    prior = [_episode(day1, bar=f"14:{index:02d}:00+00:00") for index in range(ACTIVATION_CAP - 1)]
+    skipped = study_readout(
+        [_session(day1, prior), _session(day3, [_episode(day3, bar="15:00:00+00:00")])]
+    )
+    assert skipped == {
+        "sessions_elapsed": 1,
+        "stop_condition_met": False,
+        "stop_condition": None,
+        "advance_refused": True,
+    }
+    assert study_readout([_session(day3, [])])["sessions_elapsed"] == 0
+    friday, monday, tuesday = "2026-10-09", "2026-10-12", "2026-10-13"
+    prefix = [_session(day, []) for day in _eligible_dates(5)]
+    assert [item["record"]["session_date"] for item in prefix][-1] == friday
+    continuous = study_readout(prefix + [_session(monday, [])])
+    assert continuous["sessions_elapsed"] == 6
+    assert continuous["advance_refused"] is False
+    gapped_monday = study_readout(prefix + [_session(tuesday, [])])
+    assert gapped_monday["advance_refused"] is True
+    assert gapped_monday["sessions_elapsed"] == 5
+    assert RECOGNIZED_GATES == frozenset(BUCKET_ORDER)
+    assert REDUCER_VERSION == EPISODE_REDUCER_VERSION
+
+
+def test_unknown_gate_or_seal_identity_refuses_to_advance() -> None:
+    day1, day2 = "2026-10-05", "2026-10-06"
+    unknown = _episode(day2, gate="NOT_A_GATE")
+    refused = study_readout([_session(day1, []), _session(day2, [unknown])])
+    assert refused == {
+        "sessions_elapsed": 1,
+        "stop_condition_met": False,
+        "stop_condition": None,
+        "advance_refused": True,
+    }
+    wrong_reducer = _episode(day1)
+    wrong_reducer["reducer_version"] = "ep-v0.2"
+    assert study_readout([_session(day1, [wrong_reducer])])["sessions_elapsed"] == 0
+    wrong_version = _session(day1, [])
+    wrong_version["record"]["path_record_version"] = "other"
+    assert study_readout([bind_seal(wrong_version["record"])])["advance_refused"] is True
+    wrong_trial = _session(day2, [])
+    wrong_trial["record"]["trial_id"] = "other-trial"
+    assert study_readout([_session(day1, []), bind_seal(wrong_trial["record"])]) == refused
+    assert TRIAL_ID in (ROOT / "docs/prereg-options-212c-floor-outcome-2026-10-02.md").read_text(encoding="utf-8")
 
 
 def test_threshold_crossing_session_is_included_in_full() -> None:

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import date
+from datetime import date, timedelta
 from typing import Any, Mapping, Sequence
 
 from alert_ranker.session_calendar import nyse_session_for
@@ -22,7 +22,17 @@ ELIGIBLE_START = "2026-10-05"
 ACTIVATION_CAP = 25
 SESSION_CAP = 60
 FAMILY = "STRAT_212_CONTINUATION"
+REDUCER_VERSION = "ep-v0.1"
 ACTIVATION_GATE = "WOULD_OTHERWISE_QUALIFY"
+RECOGNIZED_GATES = frozenset(
+    {
+        "UNSUPPORTED_FAMILY",
+        "TARGET_GEOMETRY_REJECTED",
+        "MARKET_ALIGNMENT_REJECTED",
+        "LATE_AT_FIRST_SIGHT",
+        "WOULD_OTHERWISE_QUALIFY",
+    }
+)
 V1_UNIVERSE = frozenset(
     {
         "AAPL",
@@ -168,26 +178,30 @@ def study_readout(sealed_sessions: Sequence[Mapping[str, Any]]) -> dict[str, Any
     does not return snapshot, bar, direction, or activation-count fields.
 
     A missing or mismatched digest cannot be ordered, so the readout refuses
-    with ``sessions_elapsed`` 0. A verified seal whose episode is missing an
-    identity field or ``gate_bucket_floor`` refuses at that session: earlier
-    verified sessions stay elapsed, and later sessions are not entered.
+    with ``sessions_elapsed`` 0. Seals must be consecutive eligible NYSE
+    sessions from ``ELIGIBLE_START``. A later seal with an earlier eligible
+    session missing refuses at that gap: the consecutive prefix stays elapsed
+    and the later seal is not entered. A verified seal whose episode is missing
+    an identity field, ``reducer_version``, or a recognized ``gate_bucket_floor``
+    refuses at that session the same way.
     """
     placed, unplaceable = _place_seals(sealed_sessions)
     if unplaceable:
         return _refused(0)
     included: list[str] = []
-    seen_dates: set[str] = set()
     count = 0
+    expected = ELIGIBLE_START
     for session_date, keys in placed:
-        if session_date in seen_dates or not _is_eligible_session(session_date):
+        if session_date != expected or keys is None:
             return _refused(len(included))
-        if keys is None:
-            return _refused(len(included))
-        seen_dates.add(session_date)
         included.append(session_date)
         count += len(keys)
         if count >= ACTIVATION_CAP or len(included) >= SESSION_CAP:
             break
+        next_session = _next_eligible_session(session_date)
+        if next_session is None:
+            return _refused(len(included))
+        expected = next_session
     return _readout(len(included), count, refused=False)
 
 
@@ -245,6 +259,8 @@ def _place_seal(item: Mapping[str, Any]) -> tuple[str, set[_IDENTITY_KEY] | None
     session_date = record.get("session_date")
     if not isinstance(session_date, str) or not session_date:
         return None
+    if record.get("path_record_version") != PATH_RECORD_VERSION or record.get("trial_id") != TRIAL_ID:
+        return (session_date, None)
     episodes = record.get("episodes")
     if not isinstance(episodes, list):
         return None
@@ -258,23 +274,27 @@ def _place_seal(item: Mapping[str, Any]) -> tuple[str, set[_IDENTITY_KEY] | None
     return (session_date, keys)
 
 
-def _is_eligible_session(session_date: str) -> bool:
+def _next_eligible_session(session_date: str) -> str | None:
+    """Return the next NYSE session after ``session_date``, skipping closed days."""
     try:
         day = date.fromisoformat(session_date)
     except ValueError:
-        return False
-    if day.isoformat() < ELIGIBLE_START:
-        return False
-    return nyse_session_for(day) is not None
+        return None
+    for _ in range(366):
+        day += timedelta(days=1)
+        if nyse_session_for(day) is not None:
+            return day.isoformat()
+    return None
 
 
 def _activation_key(episode: Mapping[str, Any], session_date: str) -> _IDENTITY_KEY | None | bool:
     """Return an activation identity, ``None`` for a non-activation, or ``False`` to refuse."""
     if not isinstance(episode, Mapping):
         return False
-    if "gate_bucket_floor" not in episode or not isinstance(episode.get("gate_bucket_floor"), str):
+    if episode.get("reducer_version") != REDUCER_VERSION:
         return False
-    if not episode["gate_bucket_floor"]:
+    gate = episode.get("gate_bucket_floor")
+    if gate not in RECOGNIZED_GATES:
         return False
     parts: list[str] = []
     for key in EPISODE_IDENTITY_KEYS:
@@ -290,6 +310,6 @@ def _activation_key(episode: Mapping[str, Any], session_date: str) -> _IDENTITY_
     episode_id = episode.get("episode_id")
     if episode_id != "|".join(parts):
         return False
-    if episode["gate_bucket_floor"] != ACTIVATION_GATE:
+    if gate != ACTIVATION_GATE:
         return None
     return (symbol, episode_session, direction, parts[3], family)

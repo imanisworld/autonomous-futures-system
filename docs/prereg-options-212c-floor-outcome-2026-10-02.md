@@ -49,9 +49,13 @@ That object is the entire interim report. A favorable or unfavorable impression 
 
 The function counts activations only from episodes inside a sealed session record whose SHA-256 equals `seal_sha256` of that record. That is the same canonical body the one-look scores. A loose `ep-v0.1` row is not an input. Direction is part of the canonical identity and is not part of the readout. The function does not open a file, and it does not return the snapshot, the bars, or the activation count. Duplicate canonical identities inside one verified seal count once.
 
-`advance_refused` is fail-closed. A missing digest, a digest that does not match the sealed body, or a session that cannot be ordered refuses the readout with `sessions_elapsed` 0. A verified seal that contains an episode missing `episode_id`, any canonical identity field, or `gate_bucket_floor` refuses at that session: earlier verified sessions remain elapsed, that session is not elapsed, and no later session is entered. Those rows are not treated as zero activations.
+`advance_refused` is fail-closed. A missing digest, a digest that does not match the sealed body, or a session that cannot be ordered refuses the readout with `sessions_elapsed` 0. A verified seal that contains an episode missing `episode_id`, any canonical identity field, `reducer_version`, or `gate_bucket_floor` refuses at that session: earlier verified sessions remain elapsed, that session is not elapsed, and no later session is entered. Those rows are not treated as zero activations.
 
-Sessions are applied in date order. `sessions_elapsed` is the number of verified sessions inside the stopping window, through and including the threshold-crossing session or the 60th session. A later verified session is outside the window and does not increase `sessions_elapsed`.
+Seals must be consecutive eligible NYSE sessions from 2026-10-05 forward. A weekend or an NYSE holiday is not a gap. If a later seal exists while an earlier eligible session is missing, the monitor returns `advance_refused` and stops there: the consecutive prefix stays elapsed, and the later seal is not entered. A skipped session is not treated as zero sessions.
+
+Before an episode is counted, `path_record_version` must be `options_212c_floor_outcome_path-v0.1`, `trial_id` must be this trial, and `reducer_version` must be `ep-v0.1`. `gate_bucket_floor` must be one of `UNSUPPORTED_FAMILY`, `TARGET_GEOMETRY_REJECTED`, `MARKET_ALIGNMENT_REJECTED`, `LATE_AT_FIRST_SIGHT`, or `WOULD_OTHERWISE_QUALIFY`. Any other value, including an unknown nonempty value, refuses at that session. Only `WOULD_OTHERWISE_QUALIFY` is an activation.
+
+Sessions are applied in that consecutive order. `sessions_elapsed` is the number of verified sessions inside the stopping window, through and including the threshold-crossing session or the 60th session. A later verified session is outside the window and does not increase `sessions_elapsed`.
 
 Before the one look, the readout and every other human-facing surface for this trial must leave hidden:
 
