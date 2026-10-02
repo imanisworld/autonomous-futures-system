@@ -4,7 +4,7 @@
 >
 > This file is **not** strategy-status authority, deployment authority, or experiment authority. Authoritative records named in `AGENTS.md` always win.
 >
-> **Checkpoint base:** repository `main` `7d09c62f49ac1e5bf907e84f21e6da78be97c299` immediately before the post-#1081 checkpoint refresh. Always fetch current `main`; this stored SHA is a comparison base, not a perpetual current-state claim.
+> **Checkpoint base:** repository `main` `3c3dcd5b0567943e5af9d452d3adf7c06d41b7e5` (PR #1073 merged 2026-10-02). Always fetch current `main`; this stored SHA is a comparison base, not a perpetual current-state claim.
 >
 > Core rule: **checkpoint first; diff first; do not redo proven work.**
 
@@ -95,16 +95,14 @@ If the agent cannot persist this file, it must return this payload verbatim-read
 Options resume is governed by the same checkpoint-first / diff-first rule.
 
 - **Current-state authority:** `docs/options-current-state-handoff.md`. Do not create a competing options status file.
-- **PR #1073** (`docs/options-state-todo-20260929`, exact head `0232c187e601b87c286af0ad70c5dd47acac3a58`) is already the dedicated options state/TODO refresh. It changes only `docs/options-current-state-handoff.md` and `docs/options-next-actions.md`. It is open/draft. Do **not** recreate that checklist in this PR or another branch; continue/review #1073 itself.
-- **PR #1077** (`claude/options-signa-validation-v2`, exact head `fa417305d52246ba1f7530b243069048d261d651`) is the active Signa-v2 observation/evidence change. It is open and ready for review; exact-head tests, handoff-fields, CodeQL, Python analysis, and Actions analysis are green. It now includes separate display-only **Observation Rating (A/B/C/N/A)** and **AFS Trade Grade (A/B/C/F/N/A)** surfaces. Neither rating changes scanner score, alert eligibility, setup state, contract selection, risk permission, orders, or execution. Independent review remains required before merge. Do **not** start a second Signa-v2 implementation.
-- Options production posture recorded by #1073 remains advisory/read-only with the existing frozen evidence lanes; repository changes are not runtime proof.
-- #1073 records three separate real-data gates rather than permission to deploy: the #1071 real SQLite run, #1067 real 66-symbol five-minute capacity proof, and #1069 real SPX/SPXW provider proof with that lane OFF. A returning agent should verify which of those gates, if any, changed before doing work.
-- If #1073 merges, use its `docs/options-next-actions.md` as the options task checklist and update this checkpoint to the merged SHA. If it does not merge, inspect only its current diff/state rather than reconstructing the options backlog from older docs.
+- **PR #1073 MERGED** as `3c3dcd5b0567943e5af9d452d3adf7c06d41b7e5` (squash of reviewed head `0232c187e601b87c286af0ad70c5dd47acac3a58`). `docs/options-current-state-handoff.md` is now dated 2026-09-29. **Options task checklist: `docs/options-next-actions.md`.** Do not recreate that checklist elsewhere.
+- **PR #1077** (`claude/options-signa-validation-v2`, exact head `93879644c9b248c8cb2d29b172b086fa9af5c88a`) is the active Signa-v2 observation/evidence change. It is open and ready for review. The 2026-10-02 head adds one commit on top of `fa41730`: NEUTRAL/unrecognized Signa direction now rates C (`partial:direction_unrecognized`) in both Signa modules, and the "Can I trade this?" card field is placed by name after "Why". The earlier green CI applied to `fa41730`; exact-head CI on `9387964` must be re-confirmed before merge. It now includes separate display-only **Observation Rating (A/B/C/N/A)** and **AFS Trade Grade (A/B/C/F/N/A)** surfaces. Neither rating changes scanner score, alert eligibility, setup state, contract selection, risk permission, orders, or execution. Independent review remains required before merge. Do **not** start a second Signa-v2 implementation.
+- Options production posture recorded by the merged #1073 remains advisory/read-only with the existing frozen evidence lanes; repository changes are not runtime proof.
+- Real-data gates as recorded by the merged #1073 (none is permission to deploy): #1071 Epoch-3 real-data audit COMPLETE (`0dca986`; do not tune from the five-close sample); #1069 SPX→SPXW provider mapping/preflight COMPLETE on `d7a546c`, with an RTH check that SPXW 0DTE appears while the lane stays OFF still pending; #1067 real 66/66 RTH capacity proof inside the five-minute cadence still pending (`a4de6f9`). Verify which gates changed before doing work.
 
 ### OPEN / NEEDS DECISION — verify before touching
 
-- PR #1073 / branch `docs/options-state-todo-20260929`: continue/review existing work; do not duplicate it.
-- PR #1077 / branch `claude/options-signa-validation-v2`: exact-head QA is green; independent review is the remaining merge gate. Do not duplicate it.
+- PR #1077 / branch `claude/options-signa-validation-v2`: head moved to `9387964` on 2026-10-02; re-confirm exact-head CI, then independent review is the remaining merge gate. Do not duplicate it.
 - Closed-unmerged agent-safety doc branches associated with PR #1028 and #1036: verify whether their content is superseded before recreating anything.
 - Forward evidence: `orb_reclaim` was stale and `vwap_rejection` quiet in the latest read-only check. This does not block current collection, but future summaries must not imply continuous evidence for those arms.
 
