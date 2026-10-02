@@ -1,8 +1,18 @@
 # Options — Current State Handoff
 
-_As of 2026-09-29. The newest dated repository refresh below governs source state; the latest verified box-specific sections govern runtime state until a fresh local/provider or VPS check is performed. This is the single current-state authority for the options lane._
+_As of 2026-10-02. The newest dated repository refresh below governs source state; the latest verified box-specific sections govern runtime state until a fresh local/provider or VPS check is performed. This is the single current-state authority for the options lane._
 
 Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`; the read-only coverage evidence lane (observer, reducer, outcome study, after-close collector) is described in `docs/options-coverage-observer.md`.
+
+## Repository/runtime refresh — 2026-10-02
+
+- Repository `main` at this refresh: `a2dbac1424f92df12ee6255b354ecfbd8035a09e` (#1107).
+- #1077 merged as `8c4e2e472bd7926b46bcb83af1c7625117d3e769`. It adds display-only Signa-v2 Observation Rating / AFS Trade Grade surfaces; no scanner score, alert eligibility, setup state, contract selection, risk permission, order, or execution change. It is **not deployed** to the options scanner.
+- #1067, #1069 and #1071 remain open at the exact heads recorded below. Their RTH/provider gates remain unchanged.
+- The options-scanner service was restarted by `apt-daily-upgrade` on 2026-10-02; that restart did not deploy #1077. Production remains the existing 20-symbol `OPTIONS_PAPER_V1` advisory/read-only posture with SPXW OFF.
+- Scanner memory-cap pressure remains an operator decision, not a strategy/evidence conclusion. Daily scan counts stayed steady through 2026-10-01; per-scan latency was not measured.
+- Remaining activation gates are still the real-provider 66/66 RTH capacity proof for #1067 and an RTH observation that SPXW 0DTE appears normally while the lane remains OFF.
+
 
 ## Repository refresh — 2026-09-29 (66-symbol expansion + SPXW paper lane + Epoch-3 audit)
 
