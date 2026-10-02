@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -70,6 +71,7 @@ class OptionsScanner:
         self.bar_context = bar_context
         self.last_run_at: str | None = None
         self.last_skip_reason: str | None = None
+        self._signa_refresh_threads: set[threading.Thread] = set()
 
     def is_market_hours(self, now: datetime | None = None) -> bool:
         current = now or datetime.now(ZoneInfo(self.config.timezone))
@@ -613,8 +615,15 @@ class OptionsScanner:
         self, ticker: str, context: dict[str, Any], now: datetime
     ) -> dict[str, Any]:
         snapshot = await self.market_data.fetch_market_snapshot(ticker)
-        signa_context = await self._fetch_signa_context(ticker, context)
         bar_fields = await self._fetch_bar_context(ticker, now)
+        try:
+            signa_context = await self._fetch_signa_context(ticker, context)
+        except Exception as exc:  # noqa: BLE001 - observational Signa must not fail the scan
+            signa_context = {
+                "signa_symbol": self._signa_symbol_for(ticker),
+                "signa_error": f"observational:{type(exc).__name__}",
+                "signa_cached": False,
+            }
         caller_vwap = context.get("vwap")
         caller_ema20 = context.get("ema20")
         if caller_ema20 is None:
@@ -787,7 +796,23 @@ class OptionsScanner:
                 cache_ttl_seconds=self.config.signa_cache_ttl_seconds,
                 respect_account_backoff=True,
             )
+        peek = getattr(client, "cached_signal", None)
+        if callable(peek):
+            # Cache-capable clients stay off the serial quote/bar path. A miss
+            # is telemetry only; the network refresh cannot stall this cycle.
+            cached = peek(symbol)
+            if cached is not None:
+                return self._signa_fields_from_signal(symbol, cached)
+            self._schedule_legacy_signa_refresh(client, symbol)
+            return {
+                "signa_symbol": symbol,
+                "signa_error": "observational_cache_miss",
+                "signa_cached": False,
+            }
         signal = await asyncio.to_thread(client.fetch_signal, symbol)
+        return self._signa_fields_from_signal(symbol, signal)
+
+    def _signa_fields_from_signal(self, symbol: str, signal: Any) -> dict[str, Any]:
         provenance = signal.provenance_fields()
         if not signal.ok:
             return {
@@ -807,6 +832,23 @@ class OptionsScanner:
             "signa_raw_payload": signal.raw,
             **provenance,
         }
+
+    def _schedule_legacy_signa_refresh(self, client: Any, symbol: str) -> None:
+        """Refresh legacy Signa after this cycle. Daemon so the scan clock does not join it."""
+
+        def _refresh() -> None:
+            try:
+                client.fetch_signal(symbol)
+            except Exception:
+                return
+
+        thread = threading.Thread(
+            target=_refresh,
+            name=f"signa-observational-{symbol}",
+            daemon=True,
+        )
+        self._signa_refresh_threads.add(thread)
+        thread.start()
 
     def _signa_symbol_for(self, ticker: str) -> str:
         root = (ticker or "").split(":")[-1].upper().strip()

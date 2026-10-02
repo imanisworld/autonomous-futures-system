@@ -9,10 +9,11 @@ live scanner, so provider latency and causal-bar availability can be measured
 without touching V1 state.
 
 A PASS here is necessary, not sufficient, for activation.  It proves that the
-current read-only snapshot/context/observational-enrichment path can traverse
-all candidate symbols inside one configured scanner interval with no critical
-data failures.  It does not prove option-chain capacity because contract
-fetches are deliberately forbidden in this lane.
+read-only snapshot and causal-bar path can traverse all candidate symbols
+inside one configured scanner interval with no critical data failures.
+Observational Signa is recorded and must not decide the verdict.  It does not
+prove option-chain capacity because contract fetches are deliberately forbidden
+in this lane.
 """
 from __future__ import annotations
 
@@ -126,14 +127,17 @@ def classify_symbol_result(ticker: str, elapsed_seconds: float, raw: dict[str, A
     signa_v2_error = _text(data.get("signa_v2_error")) or None
     exception_text = f"{type(exception).__name__}:{exception}" if exception is not None else None
 
-    error_values = (market_error, bar_reason, signa_error, signa_v2_error, exception_text)
-    rate_limited = _contains_any(error_values, RATE_LIMIT_MARKERS)
-    timed_out = _contains_any(error_values, TIMEOUT_MARKERS)
+    # Quote, causal-bar, and builder exceptions are the capacity gates.
+    # Legacy and v2 Signa stay in observational telemetry and cannot trip
+    # rate-limit or timeout verdicts.
+    critical_error_values = (market_error, bar_reason, exception_text)
+    rate_limited = _contains_any(critical_error_values, RATE_LIMIT_MARKERS)
+    timed_out = _contains_any(critical_error_values, TIMEOUT_MARKERS)
     missing_bars = missing_bar_count > 0 or _contains_any((bar_reason,), MISSING_BAR_MARKERS)
 
     # Signa is observational in V1 and does not make price-action evidence
-    # invalid.  Snapshot and causal-bar failures are critical; Signa failures
-    # remain visible and still consume measured cycle time.
+    # invalid.  Snapshot and causal-bar failures are critical.  Signa failures
+    # remain visible on the result and must not grant or remove that verdict.
     price_present = data.get("price") not in (None, "")
     critical_ok = (
         exception is None

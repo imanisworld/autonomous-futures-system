@@ -120,7 +120,7 @@ def test_rate_limit_and_timeout_are_visible_and_block_when_critical():
     assert timeout.critical_ok is False
 
 
-def test_signa_timeout_is_observational_for_setup_but_still_blocks_capacity_proof():
+def test_signa_timeout_is_recorded_and_does_not_fail_capacity_proof():
     clock = FakeClock()
     rows = {
         "AAPL": _ok(signa_error="ReadTimeout"),
@@ -129,12 +129,108 @@ def test_signa_timeout_is_observational_for_setup_but_still_blocks_capacity_proo
     scanner = FakeScanner(clock, rows)
     report = _run(scanner, list(rows), clock, budget=20.0)
 
-    assert report.verdict == "FAIL"
+    assert report.verdict == "PASS"
+    assert report.reasons == ()
     assert report.critical_failures == 0
     assert report.observational_failures == 2
     assert report.signa_error_symbols == ("AAPL", "MSFT")
-    assert report.timed_out_symbols == ("AAPL", "MSFT")
-    assert "timeouts:2" in report.reasons
+    assert report.timed_out_symbols == ()
+    assert report.rate_limited_symbols == ()
+    aapl = next(item for item in report.results if item.ticker == "AAPL")
+    assert aapl.signa_error == "ReadTimeout"
+    assert aapl.critical_ok is True
+    assert aapl.timed_out is False
+
+
+def test_market_and_bar_timeouts_still_fail_capacity_proof():
+    clock = FakeClock()
+    rows = {
+        "AAPL": {
+            "price": None,
+            "market_data_error": "timeout",
+            "bar_context_available": False,
+            "bar_context_reason": "provider_unavailable:ReadTimeout",
+            "missing_bar_count": 0,
+        },
+        "MSFT": _ok(),
+    }
+    scanner = FakeScanner(clock, rows)
+    report = _run(scanner, ["AAPL", "MSFT"], clock, budget=20.0)
+
+    assert report.verdict == "FAIL"
+    assert "timeouts:1" in report.reasons
+    assert "critical_data_failures:1" in report.reasons
+    assert report.timed_out_symbols == ("AAPL",)
+    assert report.critical_failures == 1
+
+
+def test_rate_limits_still_fail_but_observational_signa_429_does_not():
+    clock = FakeClock()
+    rows = {
+        "AAPL": {
+            "price": None,
+            "market_data_error": "rate_limited",
+            "bar_context_available": False,
+            "bar_context_reason": "provider_error:HTTP 429",
+            "missing_bar_count": 0,
+        },
+        "MSFT": _ok(signa_error="http_429"),
+    }
+    scanner = FakeScanner(clock, rows)
+    report = _run(scanner, ["AAPL", "MSFT"], clock, budget=20.0)
+
+    assert report.verdict == "FAIL"
+    assert "rate_limited:1" in report.reasons
+    assert report.rate_limited_symbols == ("AAPL",)
+    msft = next(item for item in report.results if item.ticker == "MSFT")
+    assert msft.rate_limited is False
+    assert msft.critical_ok is True
+    assert msft.signa_error == "http_429"
+    assert "MSFT" in report.signa_error_symbols
+
+
+def test_stale_causal_bars_still_fail_capacity_proof():
+    clock = FakeClock()
+    rows = {
+        "AAPL": _ok(),
+        "MSFT": {
+            "price": 200.0,
+            "market_data_error": None,
+            "bar_context_available": False,
+            "bar_context_reason": "stale_market_data",
+            "missing_bar_count": 0,
+        },
+    }
+    scanner = FakeScanner(clock, rows)
+    report = _run(scanner, ["AAPL", "MSFT"], clock, budget=20.0)
+
+    assert report.verdict == "FAIL"
+    assert "critical_data_failures:1" in report.reasons
+    assert report.bar_context_error_symbols == ("MSFT",)
+    msft = next(item for item in report.results if item.ticker == "MSFT")
+    assert msft.critical_ok is False
+
+
+def test_observational_signa_failure_cannot_clear_a_critical_bar_failure():
+    clock = FakeClock()
+    rows = {
+        "AAPL": {
+            "price": 100.0,
+            "market_data_error": None,
+            "bar_context_available": False,
+            "bar_context_reason": "stale_market_data",
+            "missing_bar_count": 1,
+            "signa_error": None,
+            "signa_grade": "A",
+            "signa_score": 99,
+        },
+    }
+    scanner = FakeScanner(clock, rows)
+    report = _run(scanner, ["AAPL"], clock, budget=20.0)
+
+    assert report.verdict == "FAIL"
+    assert report.critical_failures == 1
+    assert report.signa_error_symbols == ()
 
 
 def test_missing_or_incomplete_bar_context_blocks_capacity_proof():
