@@ -12,13 +12,18 @@ from pathlib import Path
 from alert_ranker.session_calendar import nyse_session_for
 from ops.options_212c_floor_outcome_monitor import (
     ACTIVATION_CAP,
+    EPISODE_IDENTITY_KEYS,
+    EPISODE_SNAPSHOT_FIELDS,
+    FIVE_MINUTE_GRID,
     PATH_RECORD_INTEGRITY,
     PATH_RECORD_ROOT,
     PATH_RECORD_VERSION,
     READOUT_FIELDS,
     SESSION_CAP,
+    SESSION_SEAL_FIELDS,
     STUDY_ONLY_METRICS,
     STUDY_SCORER_VERSION,
+    THRESHOLD_CROSSING_RULE,
     sealed_path_record_relpath,
     study_readout,
 )
@@ -100,6 +105,10 @@ def test_entry_gap_and_blind_readout_are_frozen() -> None:
         PATH_RECORD_VERSION,
         PATH_RECORD_ROOT,
         "DATA_INVALID",
+        "threshold-crossing session",
+        "start` is greater than or equal to `first_sight_at`",
+        "structural_risk",
+        "floor_target_1",
         "INSUFFICIENT SAMPLE",
         "DESCRIPTIVE MEASUREMENT",
         "NOT EVALUATED",
@@ -121,14 +130,21 @@ def test_entry_gap_and_blind_readout_are_frozen() -> None:
     assert set(STUDY_ONLY_METRICS).issubset(spec["required_metrics"])
 
 
-def _episode(session_date: str, *, symbol: str = "AAPL", gate: str = "WOULD_OTHERWISE_QUALIFY", bar: str = "14:00:00+00:00") -> dict:
+def _episode(
+    session_date: str,
+    *,
+    symbol: str = "AAPL",
+    gate: str = "WOULD_OTHERWISE_QUALIFY",
+    bar: str = "14:00:00+00:00",
+    direction: str = "LONG",
+) -> dict:
     return {
         "family": "STRAT_212_CONTINUATION",
         "symbol": symbol,
         "session_date": session_date,
+        "direction": direction,
         "first_bar_start": f"{session_date}T{bar}",
         "gate_bucket_floor": gate,
-        "direction": "LONG",
         "views": [{"outcome": "TARGET_FIRST", "close_r": 3.0}],
         "realized_r": 3.0,
     }
@@ -191,8 +207,73 @@ def test_readout_names_the_stopping_condition_without_a_count() -> None:
     assert date(2026, 11, 26).isoformat() not in capped_days
     assert all(date.fromisoformat(day).weekday() < 5 for day in capped_days)
 
-    both = study_readout(capped_days, at_cap)
+    both_days = _eligible_dates(SESSION_CAP)
+    both_rows = [
+        _episode(both_days[-1], bar=f"14:{index:02d}:00+00:00")
+        for index in range(ACTIVATION_CAP)
+    ]
+    both = study_readout(both_days, both_rows)
+    assert both["sessions_elapsed"] == SESSION_CAP
     assert both["stop_condition"] == "activation_cap_and_session_cap"
+
+
+def test_direction_is_inside_the_identity_and_outside_the_readout() -> None:
+    session = ["2026-10-05"]
+    longs = [
+        _episode("2026-10-05", direction="LONG", bar=f"14:{index:02d}:00+00:00")
+        for index in range(ACTIVATION_CAP - 1)
+    ]
+    assert study_readout(session, longs)["stop_condition_met"] is False
+    missing_direction = dict(longs[0])
+    missing_direction["direction"] = None
+    assert study_readout(session, longs[: ACTIVATION_CAP - 2] + [missing_direction])["stop_condition_met"] is False
+    fired = study_readout(
+        session,
+        longs + [_episode("2026-10-05", direction="SHORT", bar="14:00:00+00:00")],
+    )
+    assert fired["stop_condition"] == "activation_cap"
+    rendered = json.dumps(fired)
+    assert "LONG" not in rendered
+    assert "SHORT" not in rendered
+    assert EPISODE_IDENTITY_KEYS == (
+        "symbol",
+        "session_date",
+        "direction",
+        "first_bar_start",
+        "family",
+    )
+
+
+def test_threshold_crossing_session_is_included_in_full() -> None:
+    day1, day2, day3 = "2026-10-05", "2026-10-06", "2026-10-07"
+    prior = [
+        _episode(day1, bar=f"14:{index:02d}:00+00:00")
+        for index in range(ACTIVATION_CAP - 1)
+    ]
+    crossing = [_episode(day2, bar=f"15:{index:02d}:00+00:00") for index in range(3)]
+    later = [_episode(day3, bar="14:00:00+00:00")]
+    readout = study_readout([day1, day2, day3], prior + crossing + later)
+    assert readout == {
+        "sessions_elapsed": 2,
+        "stop_condition_met": True,
+        "stop_condition": "activation_cap",
+    }
+    rendered = json.dumps(readout)
+    assert "27" not in rendered
+    assert str(ACTIVATION_CAP) not in rendered
+    assert "full threshold-crossing session" in THRESHOLD_CROSSING_RULE
+
+
+def test_sealed_snapshot_and_bar_grid_are_frozen() -> None:
+    spec = _draft()
+    prereg = (ROOT / spec["prereg_path"]).read_text(encoding="utf-8")
+    for field in SESSION_SEAL_FIELDS + EPISODE_SNAPSHOT_FIELDS:
+        assert field in prereg
+    assert "start >= first_sight_at" in FIVE_MINUTE_GRID or "greater than or equal to first_sight_at" in FIVE_MINUTE_GRID
+    assert "session_close" in FIVE_MINUTE_GRID
+    assert "sealed episode snapshot" in spec["notes"]
+    assert "not an exact final-N" in spec["notes"]
+    assert "open(" not in (ROOT / "ops/options_212c_floor_outcome_monitor.py").read_text(encoding="utf-8")
 
 
 def test_sealed_path_contract_is_frozen_and_has_no_reader() -> None:

@@ -29,10 +29,12 @@ No defensible untouched retrospective holdout was found in this checkout.
 
 Local inventory checked without reading path fields: `logs/coverage_outcomes/` contains only `outcomes_2026-09-09_2026-09-15.{json,csv,md}`. No later `outcomes_*.json` or `episodes_*.json` is in `logs/` or `data/`.
 
-Eligible sessions are NYSE regular sessions on or after **2026-10-05**. Collection stops at the earlier of:
+Eligible sessions are NYSE regular sessions on or after **2026-10-05**. Collection stops after the earlier of these completed sessions:
 
-- 25 `floor_ge1r` activations, counted from `gate_bucket_floor == WOULD_OTHERWISE_QUALIFY` only; or
-- 60 completed eligible NYSE sessions.
+- the session in which the `floor_ge1r` activation count, counted from `gate_bucket_floor == WOULD_OTHERWISE_QUALIFY` only, first reaches 25; or
+- the 60th completed eligible NYSE session.
+
+25 is a stop trigger, not an exact final-N requirement. The threshold-crossing session is included in full. If 24 activations already exist and the next session contains 3, the study includes all 27, and no session after that one is added. The same rule applies at the 60-session cap: that 60th session is included in full, and no later session is added. Activations are not dropped to force the count back to 25.
 
 ## Blind collection contract
 
@@ -44,7 +46,9 @@ Until the one look, the only human-visible study readout is the return value of 
 
 That object is the entire interim report. A favorable or unfavorable impression from sessions elapsed, or from the stop flag, is not a reason to change the rule.
 
-The function may count activations internally. It reads only `ep-v0.1` episode and gate fields: `family`, `symbol`, `session_date`, `first_bar_start`, and `gate_bucket_floor`. It does not open a path record, an `out-v0.1` outcome file, or any stored R or path field. Duplicate episode identities count once. A row that lacks those gate fields is not an activation.
+The function may count activations internally. It reads `ep-v0.1` episode and gate fields: `family`, `symbol`, `session_date`, `direction`, `first_bar_start`, and `gate_bucket_floor`. Direction is part of the canonical identity and is not part of the readout. It does not open a path record, an `out-v0.1` outcome file, or any stored R or path field. Duplicate canonical identities count once. A row that lacks direction or any other identity field is not an activation.
+
+Sessions are applied in date order. `sessions_elapsed` is the number of sessions inside the stopping window, through and including the threshold-crossing session or the 60th session. A later session passed to the function is outside the window and does not increase `sessions_elapsed`.
 
 Before the one look, the readout and every other human-facing surface for this trial must leave hidden:
 
@@ -70,7 +74,7 @@ Include every episode satisfying all of:
 - `family == STRAT_212_CONTINUATION`
 - session date is an eligible NYSE session on or after 2026-10-05, inside the stopping window above
 - symbol is in the exact 20-symbol V1 universe: `AAPL, AMZN, BAC, COIN, GE, GOOGL, INTC, IWM, JPM, MRK, MSFT, NFLX, NVDA, PLTR, QQQ, SPY, TLT, TSLA, WMT, XOM`
-- episode identity is the existing `ep-v0.1` first-opportunity reduction
+- episode identity is the existing `ep-v0.1` first-opportunity reduction, with canonical keys `symbol`, `session_date`, `direction`, `first_bar_start`, `family`, joined in that order as `episode_id`
 - membership is selected from family, symbol, and session date
 
 The 66-symbol candidate universe is not the population. Membership is not filtered on a path outcome, a target hit, or a P&L sign.
@@ -104,17 +108,34 @@ Frozen location, one file per eligible session:
 
 `sealed_path_record_relpath` in `ops/options_212c_floor_outcome_monitor.py` is that location. The directory is under gitignored `logs/`. It is not a study readout.
 
-Each session file is an immutable sufficient path record. It contains, for every structurally selected `STRAT_212_CONTINUATION` episode on the V1 universe that session, every 5-minute OHLC bar from `first_sight_at` through session close (`start`, `open`, `high`, `low`, `close`), plus `symbol`, `family`, `first_bar_start`, `first_sight_at`, `session_open`, `session_close`, the provider source and causal request window, and `captured_at`. It contains no precomputed outcome class, realized R, MAE, or MFE. The filename is the session date. It is not a ticker.
+Each session file is one immutable seal of the non-bar episode snapshot and the 5-minute bars. The one-look reads only that file. It does not reopen the ordinary episode output, an `out-v0.1` row, or a later bar fetch.
+
+Session fields, frozen as `SESSION_SEAL_FIELDS`: `path_record_version`, `trial_id`, `session_date`, `session_open`, `session_close`, `source`, `captured_at`, `episodes`. `source` is the provider name and the causal request window. It contains no credentials.
+
+Each structurally selected `STRAT_212_CONTINUATION` episode on the V1 universe is one object in `episodes`. Its fields are frozen as `EPISODE_SNAPSHOT_FIELDS`:
+
+- `episode_id`, formed as `symbol|session_date|direction|first_bar_start|family`
+- `symbol`, `session_date`, `direction`, `first_bar_start`, `family`
+- `reducer_version` (`ep-v0.1`)
+- `gate_bucket_floor`
+- `entry_trigger`
+- `invalidation`
+- `structural_risk`, copied at seal time from the episode `risk` field
+- `first_sight_at`, `first_sight_price`, `first_sight_after_close`
+- `floor_target_1`, `floor_target_2` (`floor_target_2` is null when the floor geometry has no second target)
+- `bars`
+
+`bars` holds `start`, `open`, `high`, `low`, `close` for exactly this grid: the first full 5-minute bar whose `start` is greater than or equal to `first_sight_at`, through the last bar whose end (`start` plus 5 minutes) is less than or equal to `session_close`, in time order. A bar that starts before `first_sight_at` is excluded. A bar whose end is after `session_close` is excluded. The file contains no precomputed outcome class, realized R, MAE, or MFE. The filename is the session date. It is not a ticker.
 
 This draft defines that artifact. It does not add a capturing job, and it does not collect a session.
 
-Integrity rule: once collection is approved, the capturing job writes the file once, after the session has settled and before any study readout, as canonical UTF-8 JSON with sorted keys and a trailing newline. It appends one `manifest.jsonl` line with `session_date`, byte length, and the SHA-256 of those exact bytes. The manifest line has no activation count and no outcome. The file is not rewritten. At the one look the scorer checks the hash, then scores. A missing file, a hash mismatch, or a missing bar in the `first_sight_at` through session-close grid is `DATA_INVALID` for the affected episode and is excluded from expectancy. Do not refetch historical bars to fill that gap, and do not repair the record after any outcome has been viewed. Doing either makes the trial `INVALID`.
+Integrity rule: once collection is approved, the capturing job writes the file once, after the session has settled and before any study readout, as canonical UTF-8 JSON with sorted keys and a trailing newline. It appends one `manifest.jsonl` line with `session_date`, byte length, and the SHA-256 of those exact bytes. The manifest line has no activation count and no outcome. The file is not rewritten. At the one look the scorer checks the hash, then scores from the sealed snapshot and the sealed bars only. A missing file, a hash mismatch, a missing snapshot field, a null `first_sight_price`, `invalidation`, `structural_risk`, or `floor_target_1` on an activated episode, or a 5-minute grid that is not exactly the rule above, is `DATA_INVALID` for the affected episode and is excluded from expectancy. Do not refetch historical bars or episode fields to fill that gap, and do not repair the record after any outcome has been viewed. Doing either makes the trial `INVALID`.
 
 The study operator does not open these path records, or `manifest.jsonl`, before the one look. `study_readout` does not read them. Activation for the stopping rule comes from the episode gate, not from this artifact.
 
 ## Stage A — underlying path
 
-Score only activated episodes, and score them once, with `options_212c_floor_outcome-v0.1`, after `stop_condition_met` is true. The input to that scorer is the sealed path record above plus the episode gate fields. It is not an `out-v0.1` row.
+Score only activated episodes, and score them once, with `options_212c_floor_outcome-v0.1`, after `stop_condition_met` is true. The only inputs are the sealed episode snapshot and the sealed 5-minute bars in the path record above. The scorer does not reopen a live episode file and it does not read an `out-v0.1` row.
 
 **Measured entry.** `measured_entry_price = first_sight_price`. Every Stage A R uses that price as the entry. The stored Strat trigger (`entry_trigger`) remains the structural trigger that defines the setup and the invalidation geometry. A later scorer must not substitute `entry_trigger` for `first_sight_price`, and must not substitute `first_sight_price` for `entry_trigger`. The mechanical trigger-cross view may be stored as setup context. It is not the fill and it is not the decision metric.
 
@@ -130,7 +151,7 @@ Preregistered fields:
 | Target 1 | Stored floor `target_1`. Exit classification uses Target 1 |
 | Target 2 | Stored when the floor geometry has one. Recorded when reached. Not an exit |
 | Maximum hold | Same regular session. `UNRESOLVED_AT_CLOSE` at the session close. No overnight carry |
-| Missing bars | A missing sealed path file, a hash mismatch, or a missing 5-minute bar from `first_sight_at` through session close is `DATA_INVALID` and is excluded from expectancy. Do not repair it by a later refetch |
+| Missing bars | A missing sealed file, a hash mismatch, a missing snapshot field, or a 5-minute grid other than the first full bar with `start >= first_sight_at` through the last bar whose end is `<= session_close` is `DATA_INVALID` and is excluded from expectancy. Do not repair it by a later refetch |
 | Price gaps | Deterministic rules below. No discretionary fill inside a gap |
 | Same-bar ambiguity | One 5-minute bar whose range reaches both Target 1 and invalidation is `AMBIGUOUS`. It is not a win and not a loss |
 | Fees and slippage | No dollar P&L is calculated. No extra slippage is applied on top of `first_sight_price`. R uses structural risk as the denominator and `measured_entry_price` as the entry |

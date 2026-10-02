@@ -62,7 +62,7 @@ _As of 2026-10-02. Operational checklist only. The authoritative options status 
 
 - [x] No untouched retrospective holdout. Sessions through 2026-10-02 are ineligible.
 - [x] DRAFT prereg `docs/prereg-options-212c-floor-outcome-2026-10-02.md` and spec `E-2026-10-02-options-212c-floor-outcome-01` (`status=DRAFT`). Ledger event `PLANNED`.
-- [ ] Independent re-review of the registration PR after the scorer, sealed-path, and blindness corrections. Do not merge, approve collection, run the study, retune `floor_ge1r`, or open forward path outcomes.
+- [ ] Independent re-review of the registration PR after the sealed episode snapshot, direction identity, and threshold-crossing-session corrections. Do not merge, approve collection, run the study, retune `floor_ge1r`, or open forward path outcomes.
 - [ ] Do not start this trial's 2026-10-05 collection until the registration commit is on `main`.
 - [ ] Stage B stays **NOT EVALUATED** until a causal historical chain source exists. Do not backfill current quotes.
 
