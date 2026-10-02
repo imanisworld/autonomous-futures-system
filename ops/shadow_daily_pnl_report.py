@@ -275,7 +275,7 @@ def _first_signal_line(label: str, first: dict, stacked: int, stacked_open: int 
     # The card keeps a "<label> one at a time:" line as its own field under its
     # market only while the key is five words or fewer; longer keys are pooled
     # into the card description, away from their market.
-    still_open = f", {stacked_open} more still open" if stacked_open else ""
+    still_open = f", {stacked_open} overlapping trades still open" if stacked_open else ""
     return (
         f"{label} one at a time: {first['closed']} trades, {first['wins']} won,"
         f" {first['losses']} lost, {_dollars(first)}"
@@ -341,7 +341,8 @@ def format_digest(report: dict, *, top: int = 3) -> str:
         lines.append("No shadow outcomes recorded for this day; all six markets are shown below.")
     else:
         lines.append(f"All markets: {_line(report['total'])}")
-        if first_signal.get("stacked") or first_signal.get("stacked_open"):
+        # Only when closed trades were left out; otherwise the view equals the total.
+        if first_signal.get("stacked"):
             lines.append(_first_signal_line(
                 "Total", first_signal["total"], first_signal.get("stacked", 0),
                 first_signal.get("stacked_open", 0),
@@ -353,7 +354,7 @@ def format_digest(report: dict, *, top: int = 3) -> str:
             continue
         lines.append(f"**{pe.market(inst)}** — {_line(bucket)}")
         inst_first = (first_signal.get("by_instrument") or {}).get(inst) or {}
-        if inst_first.get("stacked") or inst_first.get("stacked_open"):
+        if inst_first.get("stacked"):
             lines.append(_first_signal_line(
                 inst, inst_first, inst_first.get("stacked", 0), inst_first.get("stacked_open", 0),
             ))

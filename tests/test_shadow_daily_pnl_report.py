@@ -213,7 +213,19 @@ def test_open_overlapping_trades_are_not_counted_as_left_out(tmp_path):
     assert mnq["closed"] + mnq["stacked"] == total["closed"] == 2
     text = sdp.format_digest(rep)
     assert "MNQ one at a time: 1 trades" in text
-    assert "(1 overlapping trades left out, 1 more still open)" in text
+    assert "(1 overlapping trades left out, 1 overlapping trades still open)" in text
+
+
+def test_only_open_overlaps_print_no_one_at_a_time_line(tmp_path):
+    # Nothing closed was left out, so the view would just repeat the total.
+    _bars(tmp_path, "MNQ", 1, 24)
+    rows = [
+        _filled("a", "MNQ", "LOSS", -8, "2026-09-23T01:00:00+00:00", 1, 4),
+        _filled("c", "MNQ", "OPEN", None, "2026-09-23T01:30:00+00:00", 1, None),
+    ]
+    rep = sdp.build_report(rows, DAY, log_dir=tmp_path)
+    assert (rep["first_signal"]["stacked"], rep["first_signal"]["stacked_open"]) == (0, 1)
+    assert "one at a time" not in sdp.format_digest(rep)
 
 
 def test_one_at_a_time_lines_stay_under_their_market_on_the_card(tmp_path):
