@@ -2,7 +2,7 @@
 
 > **Purpose:** durable operator action tracker for futures infrastructure/safety work. This file is **not** strategy-status authority and must not override `docs/strategy-rules/Strategy_Inventory.md`, the research trial ledger, or verified VPS/runtime evidence.
 >
-> **Repo reconciliation base:** `main` `a2dbac1424f92df12ee6255b354ecfbd8035a09e` (PR #1107, 2026-10-02). Futures box release since 2026-10-02 03:43Z: `489b55b91b6303c195c8e84bfcbf05ef32d1ab04`. Fetch current `main` rather than treating this stored SHA as current. The freshest runtime facts are checkpointed in `docs/agent-work-state.md`; older reconciliation notes remain dated provenance and require fresh read-only proof before any runtime/broker/access mutation.
+> **Repo reconciliation base:** `main` `5d19257e3a690851c0aa580135eba66536b09ec4` (PR #1118 merged, 2026-10-02). The MNQ account-admission study is CLOSED / `INSUFFICIENT_EVIDENCE` / DO NOT REDO. Futures box release since the last verified runtime checkpoint remains `489b55b91b6303c195c8e84bfcbf05ef32d1ab04`. Fetch current `main` rather than treating this stored SHA as perpetual current state. The freshest runtime facts are checkpointed in `docs/agent-work-state.md`; older reconciliation notes remain dated provenance and require fresh read-only proof before any runtime/broker/access mutation.
 >
 > Core rule: **No proof, no run.**
 
