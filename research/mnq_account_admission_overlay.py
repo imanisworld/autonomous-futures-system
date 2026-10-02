@@ -40,6 +40,12 @@ from research.mnq_combined_portfolio_audit import (
     PortfolioEvent,
     parse_ts,
 )
+from research.mnq_equal_time_admission_order import (
+    EXIT_FIRST_TREATMENTS,
+    UNKNOWN_ORDER_BUSY_FIRST,
+    EqualTimeOrder,
+    EqualTimeOrderError,
+)
 
 # Current production value at one contract. Copied so a later yaml edit cannot
 # silently rescore this overlay. RiskEngine._check_daily_loss_limit rejects a
@@ -101,6 +107,7 @@ class AdmissionDecision:
     journal_day: str
     blocker_source_id: Optional[str] = None
     blocker_family: Optional[str] = None
+    equal_time_treatment: Optional[str] = None
 
 
 @dataclass
@@ -121,6 +128,7 @@ def _event_sort_key(event: PortfolioEvent):
 
 @dataclass
 class _PendingRealization:
+    source_id: str
     exit_at: datetime
     journal_day: str
     net_pnl: float
@@ -149,10 +157,45 @@ def _realize_strictly_before(
         item.applied = True
 
 
+def _realize_named_exit(
+    pending: list[_PendingRealization],
+    source_id: str,
+    now: datetime,
+    realized_by_day: dict[str, float],
+    path: Optional[_AccountPath],
+) -> None:
+    """Book one named exit at ``now``, including an equal timestamp."""
+
+    matched = False
+    for item in pending:
+        if item.source_id != source_id:
+            continue
+        if item.applied:
+            raise EqualTimeOrderError(
+                f"equal-time override {source_id} was already realized"
+            )
+        if item.exit_at != now:
+            raise EqualTimeOrderError(
+                f"equal-time override {source_id} exit {item.exit_at.isoformat()} "
+                f"is not {now.isoformat()}"
+            )
+        realized_by_day[item.journal_day] += item.net_pnl
+        if path is not None:
+            path.balance += item.net_pnl
+            path.peak = max(path.peak, path.balance)
+        item.applied = True
+        matched = True
+    if not matched:
+        raise EqualTimeOrderError(
+            f"equal-time override {source_id} has no pending realization"
+        )
+
+
 def apply_account_admission(
     events: Iterable[PortfolioEvent],
     *,
     account_seed: Optional[AccountSeed] = None,
+    equal_time_order: Optional[EqualTimeOrder] = None,
 ) -> AdmissionReplay:
     """Admit fillable events under the frozen capacity rules plus daily loss.
 
@@ -164,12 +207,20 @@ def apply_account_admission(
     ``RiskEngine.validate``: the journal-day loss rule runs before the
     drawdown floor. A daily-loss skip does not apply the floor and does not
     move the counterfactual path.
+
+    Omit ``equal_time_order`` and an equal timestamp stays occupied. Pass a
+    frozen ``EqualTimeOrder`` to apply only the pairs in that map. Other
+    equal timestamps stay strict-before.
     """
 
     if account_seed is not None and not isinstance(account_seed, AccountSeed):
         raise TypeError("account_seed must be an AccountSeed or omitted")
+    if equal_time_order is not None and not isinstance(equal_time_order, EqualTimeOrder):
+        raise TypeError("equal_time_order must be an EqualTimeOrder or omitted")
 
     rows = list(events)
+    if equal_time_order is not None:
+        equal_time_order.require_sources(event.source_id for event in rows)
     rows.sort(key=_event_sort_key)
     summary_gate = (
         DRAWDOWN_GATE_NOT_EVALUATED if account_seed is None else "EVALUATED"
@@ -202,6 +253,31 @@ def apply_account_admission(
             if parse_ts(active.exit_ts) < now:
                 active = None
 
+        applied_treatment: Optional[str] = None
+        if equal_time_order is not None and active is not None:
+            treatment = equal_time_order.treatment_for(active.source_id, event.source_id)
+            if treatment is not None:
+                if active.exit_ts is None or parse_ts(active.exit_ts) != now:
+                    raise EqualTimeOrderError(
+                        f"{active.source_id} -> {event.source_id} is not an equal-time exit"
+                    )
+                if treatment in EXIT_FIRST_TREATMENTS:
+                    _realize_named_exit(
+                        pending,
+                        active.source_id,
+                        now,
+                        realized_by_day,
+                        path,
+                    )
+                    active = None
+                    applied_treatment = treatment
+                elif treatment == UNKNOWN_ORDER_BUSY_FIRST:
+                    applied_treatment = treatment
+                else:
+                    raise EqualTimeOrderError(
+                        f"unknown equal-time treatment {treatment!r}"
+                    )
+
         if active is not None:
             decisions.append(
                 _decision(
@@ -210,6 +286,11 @@ def apply_account_admission(
                     DRAWDOWN_NOT_APPLIED if path is not None else summary_gate,
                     blocker_source_id=active.source_id,
                     blocker_family=active.family,
+                    equal_time_treatment=(
+                        applied_treatment
+                        if applied_treatment == UNKNOWN_ORDER_BUSY_FIRST
+                        else None
+                    ),
                 )
             )
             continue
@@ -220,6 +301,7 @@ def apply_account_admission(
                     event,
                     "SKIPPED_MAX_TRADES_PORTFOLIO",
                     DRAWDOWN_NOT_APPLIED if path is not None else summary_gate,
+                    equal_time_treatment=applied_treatment,
                 )
             )
             continue
@@ -233,6 +315,7 @@ def apply_account_admission(
                     event,
                     SKIPPED_DAILY_LOSS,
                     DRAWDOWN_NOT_APPLIED if path is not None else summary_gate,
+                    equal_time_treatment=applied_treatment,
                 )
             )
             continue
@@ -242,18 +325,31 @@ def apply_account_admission(
             fraction = (path.peak - path.balance) / path.peak
             if fraction >= MAX_DRAWDOWN_FRACTION:
                 decisions.append(
-                    _decision(event, SKIPPED_DRAWDOWN_FLOOR, DRAWDOWN_AT_OR_BEYOND_FLOOR)
+                    _decision(
+                        event,
+                        SKIPPED_DRAWDOWN_FLOOR,
+                        DRAWDOWN_AT_OR_BEYOND_FLOOR,
+                        equal_time_treatment=applied_treatment,
+                    )
                 )
                 continue
             drawdown_gate = DRAWDOWN_WITHIN_FLOOR
 
         fills.append(event)
         fills_by_day[event.observation_day] += 1
-        decisions.append(_decision(event, "FILLED", drawdown_gate))
+        decisions.append(
+            _decision(
+                event,
+                "FILLED",
+                drawdown_gate,
+                equal_time_treatment=applied_treatment,
+            )
+        )
         active = event
         if event.exit_ts is not None and event.result in _TERMINAL_RESULTS:
             pending.append(
                 _PendingRealization(
+                    source_id=event.source_id,
                     exit_at=parse_ts(event.exit_ts),
                     journal_day=journal_day(event.eligible_fill_ts),
                     net_pnl=float(event.net_pnl),
@@ -275,6 +371,7 @@ def _decision(
     *,
     blocker_source_id: Optional[str] = None,
     blocker_family: Optional[str] = None,
+    equal_time_treatment: Optional[str] = None,
 ) -> AdmissionDecision:
     return AdmissionDecision(
         source_id=event.source_id,
@@ -286,4 +383,5 @@ def _decision(
         journal_day=journal_day(event.eligible_fill_ts),
         blocker_source_id=blocker_source_id,
         blocker_family=blocker_family,
+        equal_time_treatment=equal_time_treatment,
     )

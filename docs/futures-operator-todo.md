@@ -93,9 +93,9 @@ These are ordered. Do not skip ahead.
 
 ## Account admission — research only, not a runtime change
 
-Rebased onto `d04cd9a`. This section does not revise the 4HR epoch or the runtime checkpoint above.
+Closed on preserved research head `990b11135a1c49bc972981ac302930cd4f7565a3`. This section does not revise the 4HR epoch or the runtime checkpoint above.
 
-- [x] **MNQ overlay, unscored.** `research/mnq_account_admission_overlay.py` keeps the frozen capacity rules and applies the $150 journal-day loss rule before the drawdown floor. Drawdown stays unevaluated unless a sourced starting balance and peak are passed, and those then move only from accepted resolutions. Draft: `docs/prereg-mnq-account-admission-overlay-DRAFT-2026-10-02.md`, PLANNED as `T-2026-10-02-prereg-mnq-account-admission-overlay-draft-2026-10-02-01`. Do not score it, and do not run prereg #929. The archived #915 stream is reproduced at `research/artifacts/pr915-six-family-fillable-events-5a9f14b.jsonl`. Of the 47 reachable equal-time cases, 45 are proven exit-before-candidate on the same 15m bar and 2 cross-timeframe payloads have no arrival order. The draft stays `SAME_TIMESTAMP_ORDER_BLOCKED`. Do not score it.
+- [x] **MNQ overlay, CLOSED / DO NOT REDO.** `research/mnq_account_admission_overlay.py` keeps the frozen capacity rules and applies the $150 journal-day loss rule before the drawdown floor. Drawdown is `DRAWDOWN_GATE_NOT_EVALUATED`. Trial `T-2026-10-02-prereg-mnq-account-admission-overlay-draft-2026-10-02-01` is closed as `INSUFFICIENT_EVIDENCE`; ledger disposition is `RESEARCH_ONLY`. Preserved result: `docs/research-evidence/T-2026-10-02-prereg-mnq-account-admission-overlay-draft-2026-10-02-01/result.json`; preserved look SHA-256 `0c6c084c830fa227951f2e8e4f47a85a2f22a72898014f243eced8ed8cc6f7e5`. Neither pass is the historical account result. Do not rerun, select, average, retune, run prereg #929, or change strategy status. Exact account-order evidence must come from forward collection with request order recorded.
 - [x] **M2K / MGC / MCL / MBT.** Keep collecting. Do not expand the six-market path. MES waits.
 
 ## Definition of done for this phase
