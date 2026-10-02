@@ -4,14 +4,18 @@ _As of 2026-10-02. The newest dated repository refresh below governs source stat
 
 Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`; the read-only coverage evidence lane (observer, reducer, outcome study, after-close collector) is described in `docs/options-coverage-observer.md`.
 
-## Repository/runtime refresh — 2026-10-02
+## Repository/runtime refresh — 2026-10-02 (proven gates; experiment not run)
 
-- Repository `main` at this refresh: `a2dbac1424f92df12ee6255b354ecfbd8035a09e` (#1107).
+This refresh governs #1067 capacity, #1069 SPXW 0DTE, and the frozen 59-episode approval state. Earlier sections that still describe those two proofs as remaining, or the 59-episode spec as unapproved, are provenance of the earlier state.
+
+- Repository `main` when the proofs below were accepted: `a2dbac1424f92df12ee6255b354ecfbd8035a09e`. This refresh is recorded against `d04cd9ac477265267ddffbcd4d9c6ae6830d7cc0`.
+- **#1067 capacity gate = PROVEN / PASS.** Exact head `fd2809061961578f3b280eff3ab664d710099d03`. Exact-head CI green. Real-provider RTH result: 66/66 in 136.834056s of the 300s cadence, with 0 critical failures, timeouts, rate limits, and missing bars. Production watchlist stayed 20. Storage writes and alerts sent were 0. The proof does not authorize merge, deploy, or a 66-symbol production expansion.
+- **#1069 SPXW 0DTE provider gate = PROVEN / PASS.** Exact head `a265fe680b9b7e78d321a4a35f931bc4199aa22e`. Exact-head CI green. Refreshed RTH result: `has_0dte=true`, `has_1_plus=true`, 0DTE chain 2026-10-02 with 301 calls / 301 puts. The lane remained OFF. There was no deploy, journal write, or Discord send. The proof does not authorize merge, deploy, or SPXW enablement.
+- #1071 remains the completed Epoch-3 audit. Do not tune from the five priced closes.
 - #1077 merged as `8c4e2e472bd7926b46bcb83af1c7625117d3e769`. It adds display-only Signa-v2 Observation Rating / AFS Trade Grade surfaces; no scanner score, alert eligibility, setup state, contract selection, risk permission, order, or execution change. It is **not deployed** to the options scanner.
-- #1067, #1069 and #1071 remain open at the exact heads recorded below. Their RTH/provider gates remain unchanged.
 - The options-scanner service was restarted by `apt-daily-upgrade` on 2026-10-02; that restart did not deploy #1077. Production remains the existing 20-symbol `OPTIONS_PAPER_V1` advisory/read-only posture with SPXW OFF.
 - Scanner memory-cap pressure remains an operator decision, not a strategy/evidence conclusion. Daily scan counts stayed steady through 2026-10-01; per-scan latency was not measured.
-- Remaining activation gates are still the real-provider 66/66 RTH capacity proof for #1067 and an RTH observation that SPXW 0DTE appears normally while the lane remains OFF.
+- **59-episode experiment `E-2026-09-25-options-212c-target-geometry-01`:** operator approval (`approved_by` Operator, `approved_at` 2026-10-02T16:05:00Z) is recorded in this change and takes effect on `main` only when PR #1111 is valid and merged. Until that merge, `main` correctly stays `status: DRAFT` with null approval fields. The experiment is **NOT RUN**. The frozen contract stays one-look, 59 members, baseline `nearest_v1`, candidate `floor_ge1r`, dataset hash `1963db73bccf0fd366eaaa077bb4e9582ed453ff220f1c5e789961096f3f113c`, population manifest hash `2ee0db9132fe6b5933bb4cc04fb6d0e1e2d63f88c6ebc9e95a42b26f49d83e4a`. A later run may measure coverage and activation only. It has no P&L, expectancy, strategy-promotion, deployment, or execution authority.
 
 
 ## Repository refresh — 2026-09-29 (66-symbol expansion + SPXW paper lane + Epoch-3 audit)
@@ -48,7 +52,7 @@ Three bounded PRs are now the active options workstream:
 
 ### Remaining work before any activation
 
-Use `docs/options-next-actions.md` as the durable **operational checklist only**. This file remains the current-state authority.
+The #1067 capacity and #1069 0DTE items in this 2026-09-29 list are superseded by the proven-gates refresh above. Use `docs/options-next-actions.md` as the durable **operational checklist only**. This file remains the current-state authority.
 
 1. #1071 COMPLETE: Epoch-3 audit preserved as above; do not tune from the five-close sample.
 2. During RTH, run #1067 with real Public + Alpaca SIP/bar-context credentials. PASS requires 66/66 within the existing five-minute cadence with no critical failures, rate-limit failures, timeouts, or missing/stale causal-bar failures.
@@ -69,13 +73,13 @@ The narrow provider-mapping correction on exact head `d7a546c789c6ff6e23713357fe
 - CI is green on the exact head and independent diff review found no blocking issue.
 - The lane remained OFF with no journal, Discord, broker, deploy, or live-order side effects.
 
-0DTE could not be observed after the 2026-09-29 session had ended because that day's expiry was no longer listed. The only remaining SPXW validation is a next-session RTH observation that same-day expiry appears normally with no rule change.
+0DTE could not be observed after the 2026-09-29 session had ended because that day's expiry was no longer listed. That remaining observation was closed by the 2026-10-02 refreshed RTH proof on `a265fe680b9b7e78d321a4a35f931bc4199aa22e`: `has_0dte=true`, lane still OFF.
 
 ### Current confidence
 
 **High confidence:** source architecture, isolation, fail-closed behavior, CI, V1 rule preservation, SPXW episode/lifecycle mechanics, and Epoch-3 accounting logic.
 
-**Not yet proven:** current-version trading expectancy, 66-symbol real-provider cadence capacity, and next-session SPXW 0DTE availability. Epoch-3 P&L and the SPX/SPXW provider mapping are now measured. Strategy edge remains unproven and production posture remains unchanged.
+**Not yet proven as of 2026-09-29:** current-version trading expectancy. The 66-symbol cadence-capacity and next-session SPXW 0DTE sentences in this paragraph were closed by the 2026-10-02 proven-gates refresh. Epoch-3 P&L and the SPX/SPXW provider mapping are measured. Strategy edge remains unproven and production posture remains unchanged.
 
 ## Research / agent governance
 

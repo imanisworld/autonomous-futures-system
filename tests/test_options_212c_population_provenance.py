@@ -10,11 +10,16 @@ from pathlib import Path
 
 import pytest
 
+from ops.research_experiment_adapters import register_builtin_adapters
 from ops.research_experiment_adapters.options_212c_target_geometry import (
     population_manifest_sha256,
     verify_population_binding,
 )
-from ops.research_experiment_runner import discover_specs, run_validation
+from ops.research_experiment_runner import (
+    clear_execution_adapters,
+    discover_specs,
+    run_validation,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC_REL = "docs/research-experiment-specs/E-2026-09-25-options-212c-target-geometry-01.json"
@@ -74,11 +79,34 @@ def test_approved_spec_validates_and_is_discoverable_for_execution() -> None:
     report = run_validation(ROOT, ROOT / SPEC_REL, for_execution=False)
     assert report.status == "VALID"
 
-    executable = run_validation(ROOT, ROOT / SPEC_REL, for_execution=True)
+    clear_execution_adapters()
+    blocked = run_validation(ROOT, ROOT / SPEC_REL, for_execution=True)
+    assert blocked.status == "BLOCKED"
+    assert any(
+        check.name == "execution_adapter" and not check.passed
+        for check in blocked.integrity_checks
+    )
+
+    register_builtin_adapters()
+    try:
+        executable = run_validation(ROOT, ROOT / SPEC_REL, for_execution=True)
+    finally:
+        clear_execution_adapters()
     assert executable.status == "VALID"
+    assert all(check.passed for check in executable.integrity_checks)
+    assert any(
+        check.name == "approved_status" and check.passed
+        for check in executable.integrity_checks
+    )
+    assert any(
+        check.name == "execution_adapter" and check.passed
+        for check in executable.integrity_checks
+    )
 
     approved = discover_specs(ROOT)
-    assert any(path.name == "E-2026-09-25-options-212c-target-geometry-01.json" for path in approved)
+    assert [path.name for path in approved] == [
+        "E-2026-09-25-options-212c-target-geometry-01.json"
+    ]
     visible = discover_specs(ROOT, status=None)
     assert any(path.name == "E-2026-09-25-options-212c-target-geometry-01.json" for path in visible)
 
