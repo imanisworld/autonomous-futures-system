@@ -2,7 +2,7 @@
 
 > **Purpose:** durable operator action tracker for futures infrastructure/safety work. This file is **not** strategy-status authority and must not override `docs/strategy-rules/Strategy_Inventory.md`, the research trial ledger, or verified VPS/runtime evidence.
 >
-> **Repo reconciliation base:** `main` `7d09c62f49ac1e5bf907e84f21e6da78be97c299` immediately before the post-#1081 checkpoint refresh. Fetch current `main` rather than treating this stored SHA as current. Runtime facts are in `docs/futures-runtime-reconciliation-2026-09-30.md`; those facts are a dated checkpoint and require fresh read-only proof before any runtime/broker/access mutation.
+> **Repo reconciliation base:** `main` `6ad0bac2bcbbce6dbb88f181ad4aa469e3711421` (PR #1096, 2026-10-02). Fetch current `main` rather than treating this stored SHA as current. Runtime facts are in `docs/futures-runtime-reconciliation-2026-09-30.md`; those facts are a dated checkpoint and require fresh read-only proof before any runtime/broker/access mutation.
 >
 > Core rule: **No proof, no run.**
 
@@ -43,6 +43,14 @@ These are ordered. Do not skip ahead.
 - [ ] **Not authorized yet:** `PasswordAuthentication no`, root-key cleanup, converting `claude-audit` to a forced command, public SSH restriction, or old-access removal. Do not harden SSH until phone login and provider-console recovery are proven.
 - [ ] **Gate-condition #1068 runtime is deferred until the next sanctioned futures release.** The cron module runs from the immutable live release. Adopting the #1068 file would edit that tree or change the scheduler. Paper-collection and shadow daily are already installed. This is not an urgent defect.
 - [ ] **Reconcile source vs runtime.** If a futures release update is actually required after the read-only audit, freeze an exact reviewed SHA and use a separate operator-approved controlled release window. No strategy/risk/broker-rule changes ride along implicitly.
+  - **Release review done 2026-10-02:** live `75f10e4` → main `6ad0bac` reviewed. Verdict **HOLD for deploy**: the code only tightens safety, but main refuses to start or to fill unless the box environment meets the checks below. Details: `docs/agent-work-state.md` (2026-10-02 checkpoint).
+  - [ ] Read-only box proof, names and value shape only, no secrets printed:
+    - `MAX_CONTRACTS_HARD_CAP` is an ASCII integer 1–6 and `EXPECTED_PROOF_MAX_CONTRACTS_HARD_CAP` equals it (`load_config()` refuses to start without it; both brokers refuse orders).
+    - `TRADOVATE_ENV` is exactly `demo`.
+    - `RELEASE_INTEGRITY_ENFORCED` state; if enforced, the futures-bot unit runs Python with `-B` or `PYTHONDONTWRITEBYTECODE=1` (#1096 already covers build/verify/promote).
+    - `LOG_DIR=/root/afs-shared/logs` (#1095 keeps the observation status file beside the journal).
+  - [ ] Build/verify an exact reviewed SHA with `scripts/atomic_release.sh`, then a separate operator deploy GO. Gate-condition #1068 rides along with that release.
+- [ ] **4HR natural-1m observation epoch (after the release above).** Merged as #1092/#1094; not deployed. Follow `docs/4hr-natural-1m-observation-epoch-2026-10-01.md`: both flags, both `EXPECTED_PROOF_` pins, then an operator read-only verification whose time starts the epoch. Until then, 4HR MNQ has 0 prospective fills and no natural-1m evidence.
 - [ ] **Lock down old access only after replacement proof.** Then remove or restrict obsolete broad access paths, keeping documented break-glass recovery.
 - [ ] **Optional cleanup — unused duplicate release `2752fe2e04bedf3e8ae9d6ffea8c594eb333b925`.** Read-only check 2026-10-01: same parent (`41ae188`) and identical git tree as the live `75f10e4`. Its `execution/tradovate_broker.py` on the box hashes identically. It was built 13 minutes after `75f10e4` went live and never promoted (not in the release history). Never promote it: switching would only restart the bot onto the same code. The rollback target stays `41ae188`. Removing the directory and the `candidate/tradovate-auth-only-41ae188` branch is an operator cleanup action for a release-maintenance window; it is not urgent.
 
