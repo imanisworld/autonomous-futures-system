@@ -92,14 +92,38 @@ def _event(ep: Episode, **overrides) -> dict:
         "direction": ep.direction,
         "family": ep.family,
         "bar_start": ep.first_bar_start,
+        "bar_close": ep.first_bar_close,
+        "v1_supported": ep.v1_supported,
+        "requested_family": ep.requested_family,
         "entry_trigger": ep.entry_trigger,
         "invalidation": ep.invalidation,
         "risk": ep.risk,
+        "nearest_target_1": ep.nearest_target_1,
+        "nearest_target_2": None,
+        "nearest_rr_1": ep.nearest_rr_1,
+        "nearest_reason": ep.nearest_reason,
+        "nearest_geometry_ok": ep.nearest_geometry_ok,
         "floor_target_1": ep.floor_target_1,
         "floor_target_2": 103.0,
+        "floor_rr_1": ep.floor_rr_1,
+        "floor_reason": ep.floor_reason,
+        "floor_geometry_ok": ep.floor_geometry_ok,
+        "floor_rescued": ep.floor_rescued,
+        "spy_trend": ep.spy_trend,
+        "qqq_trend": ep.qqq_trend,
+        "hourly_candle_type": ep.hourly_candle_type,
+        "daily_candle_type": ep.daily_candle_type,
+        "alignment_ok": ep.alignment_ok,
+        "alignment_failures": ep.alignment_failures,
         "first_sight_at": ep.first_sight_at,
         "first_sight_after_close": ep.first_sight_after_close,
         "first_sight_price": ep.first_sight_price,
+        "nearest_remaining_rr": ep.nearest_remaining_rr,
+        "floor_remaining_rr": ep.floor_remaining_rr,
+        "late_nearest": ep.late_nearest,
+        "late_floor": ep.late_floor,
+        "would_qualify_v1_rule": ep.would_qualify_v1_rule,
+        "would_qualify_floor_rule": ep.would_qualify_floor_rule,
     }
     row.update(overrides)
     return row
@@ -186,11 +210,11 @@ def test_capture_seals_target2_grid_and_manifest_without_outcome_fields() -> Non
     assert b'"realized_r"' not in artifact.body
 
 
-def test_capture_fails_closed_on_first_event_drift_and_missing_bar() -> None:
+def test_capture_fails_closed_on_episode_drift_and_population_omission() -> None:
     session = nyse_session_for(datetime.fromisoformat(DAY).date())
     assert session is not None
     ep = _episode()
-    with pytest.raises(StudyContractError, match="episode_event_mismatch"):
+    with pytest.raises(StudyContractError, match="episode_population_drift"):
         build_session_artifact(
             session,
             [ep],
@@ -200,17 +224,27 @@ def test_capture_fails_closed_on_first_event_drift_and_missing_bar() -> None:
             captured_at=datetime(2026, 10, 5, 20, 31, tzinfo=timezone.utc),
         )
 
-    missing = _bars()
-    del missing[3]
-    with pytest.raises(StudyContractError, match="missing_bar"):
+    with pytest.raises(StudyContractError, match="episode_population_mismatch"):
         build_session_artifact(
             session,
-            [ep],
+            [],
             [_event(ep)],
-            {ep.symbol: missing},
+            {ep.symbol: _bars()},
             source=_source(),
             captured_at=datetime(2026, 10, 5, 20, 31, tzinfo=timezone.utc),
         )
+
+
+def test_missing_bar_is_sealed_and_scores_data_invalid_without_refetch() -> None:
+    ep = _episode()
+    missing = _bars()
+    del missing[3]
+    artifact = _artifact(ep=ep, bars=missing)
+    assert len(artifact.record["episodes"][0]["bars"]) == len(_bars()) - 1
+    scored = score_session_record(artifact.record)["rows"][0]
+    assert scored["outcome"] == DATA_INVALID
+    assert scored["realized_r"] is None
+    assert "bar_grid_length" in scored["flags"]
 
 
 @pytest.mark.parametrize(
@@ -248,6 +282,9 @@ def test_gap_and_same_bar_rules_are_frozen(
     assert flag in scored["flags"]
     assert scored["mae_r"] == 0.0
     assert scored["mfe_r"] == 0.0
+    if flag == "gap_through_target_1":
+        assert scored["target_2_reached"] is True
+        assert scored["target_2_hit_at"] == f"{DAY}T14:20:00+00:00"
 
 
 def test_touch_timeout_and_data_invalid_paths() -> None:
@@ -278,6 +315,12 @@ def test_touch_timeout_and_data_invalid_paths() -> None:
     invalid = score_session_record(bad)["rows"][0]
     assert invalid["outcome"] == DATA_INVALID
     assert invalid["realized_r"] is None
+
+    bad_identity = json.loads(timeout_artifact.body)
+    bad_identity["episodes"][0]["episode_id"] = "tampered"
+    invalid_identity = score_session_record(bad_identity)["rows"][0]
+    assert invalid_identity["outcome"] == DATA_INVALID
+    assert "snapshot_identity_invalid" in invalid_identity["flags"]
 
 
 def test_aggregate_emits_all_preregistered_metrics() -> None:
