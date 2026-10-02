@@ -31,9 +31,20 @@ class StatusUpdate:
 
 
 def _state_path() -> Path:
+    """Where the per-ticker Discord message ids live.
+
+    Precedence: DISCORD_OBSERVATION_STATUS_STATE, then LOG_DIR (the same
+    directory the journal uses, see config.settings.load_config), then
+    AFS_SHARED_DIR/logs, then ``logs``. LOG_DIR comes before AFS_SHARED_DIR so
+    this file lands beside the journal instead of in the process working
+    directory, which on the box is the immutable release tree.
+    """
     explicit = str(os.getenv("DISCORD_OBSERVATION_STATUS_STATE", "")).strip()
     if explicit:
         return Path(explicit)
+    log_dir = str(os.getenv("LOG_DIR", "")).strip()
+    if log_dir:
+        return Path(log_dir) / "discord_observation_status.json"
     shared = str(os.getenv("AFS_SHARED_DIR", "")).strip()
     base = (Path(shared) / "logs") if shared else Path("logs")
     return base / "discord_observation_status.json"
