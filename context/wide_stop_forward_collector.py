@@ -30,6 +30,7 @@ from context.wide_stop_ledger_runtime import (
     _lane_journal,
     observe_candidate,
 )
+from execution.contract_identity import normalize as normalize_contract
 from execution.day_only_exit import EOD_BAR_MISSING, is_after_eod_close, resolve_paper_eod
 from execution.paper_broker import NextBarOHLC
 from risk.risk_engine import DailyState, RiskEngine, TradeSetup
@@ -549,6 +550,9 @@ def _process_five_min_bar_locked(
                     log_dir,
                     machine,
                     source_timestamp=current_ts + timedelta(minutes=5),
+                    contract=normalize_contract(
+                        getattr(payload, "contract_hint", None), context_date=day
+                    ),
                 )
             except Exception:  # noqa: BLE001 — observation is evidence-only
                 logger.warning("4HR observation publish failed closed", exc_info=True)
