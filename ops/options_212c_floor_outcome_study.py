@@ -299,6 +299,11 @@ def build_session_artifact(
             or row.get("symbol") not in V1_UNIVERSE
         ):
             continue
+        if (
+            row.get("observer_version") != OBSERVER_VERSION
+            or row.get("timeframe") != OBSERVED_TIMEFRAME
+        ):
+            raise StudyContractError("event_version_mismatch")
         key = _event_key(row)
         if key in event_index:
             raise StudyContractError("duplicate_event_key", "|".join(key))
