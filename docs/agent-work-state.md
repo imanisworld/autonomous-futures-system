@@ -58,29 +58,37 @@ Every substantial unit of work must leave:
 
 If the agent cannot persist this file, it must return this payload verbatim-ready for the next agent/operator to save.
 
-## Current checkpoint — 2026-10-04 ~21:00Z (3-2-2 parked; drift-gate fix in #1129; 4HR epoch next)
+## Current checkpoint — 2026-10-04 ~21:30Z (c44d32b deployed; canonical 4HR epoch started)
 
-Repo `main` `53077be` (#1127 merged `c61e6a8`, #1128 merged `53077be`). Box release still `489b55b` per the relayed 19:50Z preflight; candidate `c44d32b` NOT built/deployed. Branch for this checkpoint: `fix/drift-gate-pass-fingerprint-pin` (PR #1129).
+Exact release `c44d32bc4961e56fae5c5f88a976eb6783341638` was built, verified, and promoted successfully. Rollback remains the prior `489b55b` release.
 
 ### DONE / DO NOT REDO
 
-- **3-2-2 = WAIT / PARKED.** Corrected headline merged (#1127) and reconciled into the Strategy Inventory (#1128). Do not rerun, tune, or reopen.
-- **Drift-gate root cause proven (Claude, 2026-10-04):** `ops.release_integrity.verify_release` reads `EXPECTED_RELEASE_FINGERPRINT` only from the process environment; #1056 (`a850660`, in deployed `489b55b`) makes a matching-but-unpinned tree `UNPINNED` / exit 1; the installed gate (`/root/bin/afs-drift-gate.sh` = `scripts/afs-server-drift-gate.sh`) ran the check from cron without the pin and only read it afterwards. Reproduced on a `/tmp` mini release: old script `UNPINNED exit=1`, fixed script `OK exit=0`, 0 `__pycache__`.
-- **#1129 fixes fingerprint propagation only** (`release_integrity_check` passes the pin from `$ENV_FILE`; missing pin still `UNPINNED`; `-B` kept; +1 regression test; 33 gate/integrity tests pass). Repo fix only — the box keeps alarming until the operator installs the merged script to `/root/bin` (back up first, run once manually, expect `OK release-integrity: 489b55b91b63 …`, no new `__pycache__`, no service restart).
-- **`c44d32b` identity/scope already re-verified by SHA/blob (2026-10-04):** reachable from `main`; `489b55b..c44d32b` = #1095 + six #1103 backports + two CI commits; exactly the 8 reviewed files; 7 source/test blobs byte-identical to merged #1095 (`1c43291`) / #1103 (`43ead15`); the docs file differs only by a status paragraph absent in the candidate. **Do not rebuild, re-test, or re-audit it.** Its 7359-test QA, #1095/#1103 review, and 4HR historical/stop-R:R audits are complete.
+- 3-2-2 remains WAIT / PARKED. Do not rerun or tune.
+- #1129 drift-gate fix is merged and installed; manual gate verification passed and no service restart was required.
+- Exact `c44d32b` deployment completed successfully: build PASS, verify PASS, promote PASS.
+- Post-deploy verification passed: deployed SHA/cwd match `c44d32b`; release integrity PASS; no release-tree bytecode drift; required paper/demo and one-contract pins match; observer flags are on.
+- 4HR observer remains non-executable and outside the executable strategy list.
+- Fresh post-deploy broker proof: 0 open positions and 0 working orders.
+- futures-bot is active with no restart loop.
+- Heartbeat refreshed after restart and now passes.
+- Live remains disarmed; no arming action was taken.
 
-### UNKNOWN (carried)
+### CANONICAL 4HR NATURAL-1M EPOCH
 
-- **Live runtime posture / broker state remains UNKNOWN this session:** `claude-audit` has no key access from the workstation (`Permission denied (publickey,password)`), root was not substituted. Last proof of deployed SHA, pins, flat demo position, and no working orders is the relayed 2026-10-04 ~19:50Z Cursor preflight / 2026-10-02 15:17Z broker proof.
-- MNQ 1m alert `contract_hint`; #929 forward fill count (Mac-only Polygon fetch, last 0 as of 09-23).
+**START = 2026-10-04T21:30:05Z UTC.**
 
-### NEXT — in order
+This is the timestamp of the last required post-deploy proof on exact release `c44d32b`. It precedes the Sunday CME reopen.
 
-1. Merge #1129 once CI is green; operator installs the gate fix on the box (separate root action, no restart).
-2. **Sanctioned read-only runtime preflight via Cursor's `afs-ro` lane (not Claude):** deployed SHA = `489b55b`, integrity OK with the pin, 0 release-tree `__pycache__`, `LIVE_TRADING_ENABLED=false`, `TRADOVATE_ENV=demo`, `MAX_CONTRACTS_HARD_CAP=1`, 1m/4HR observer pins matching `EXPECTED_PROOF_`, deploy lock absent, demo position null and no working orders.
-3. If PASS: operator GO → deploy exact `c44d32bc4961e56fae5c5f88a976eb6783341638` via `scripts/atomic_release.sh` (no rebuild, no current-`main` ride-along).
-4. Immediately re-verify pins/posture/no-order read-only; that timestamp is the **canonical 4HR natural-1m epoch start**. Then collect forward evidence only.
-No Polygon. No new strategy research. No 3-2-2 work. No parameter tuning while the epoch runs.
+From this timestamp forward: prospective evidence only; no backfill; no parameter tuning; no strategy changes; no Polygon work; no 3-2-2 work.
+
+### OPEN QUESTIONS / NEXT
+
+1. Collect forward 4HR natural-1m evidence only.
+2. On the first #1103-compliant touch, record `contract_hint` as MATCH / MISMATCH / UNKNOWN and whether manual review is required.
+3. Preserve observer-only posture and live-disarmed state.
+4. Keep historical evidence separate from this forward epoch.
+5. Verify the next drift-gate cron result read-only when convenient; it is not a prerequisite to collecting the epoch.
 
 ## Earlier checkpoint — 2026-10-04 ~20:00Z (3-2-2 corrected rerun DONE; system HOLD unchanged)
 
