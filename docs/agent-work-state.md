@@ -58,35 +58,37 @@ Every substantial unit of work must leave:
 
 If the agent cannot persist this file, it must return this payload verbatim-ready for the next agent/operator to save.
 
-## Current checkpoint — 2026-10-04 ~21:21Z (predeploy proof complete; exact c44d32b eligible for operator GO)
+## Current checkpoint — 2026-10-04 ~21:30Z (c44d32b deployed; canonical 4HR epoch started)
 
-Repo `main` is `94136a5` (#1129 merged); this checkpoint branch is docs-only. Box release remains `489b55b91b6303c195c8e84bfcbf05ef32d1ab04`. Candidate `c44d32bc4961e56fae5c5f88a976eb6783341638` remains NOT built/deployed. Runtime evidence below is from Cursor's 2026-10-04 21:08–21:21Z operator-root pass; root was used read-only except for the explicitly authorized drift-gate install and the explicitly authorized in-process live-preflight POST.
+Exact release `c44d32bc4961e56fae5c5f88a976eb6783341638` was built, verified, and promoted successfully. Rollback remains the prior `489b55b` release.
 
 ### DONE / DO NOT REDO
 
-- **3-2-2 = WAIT / PARKED.** #1127 corrected evidence and #1128 Strategy Inventory reconciliation are merged. Do not rerun, tune, or reopen.
-- **Drift-gate fix #1129 = MERGED + INSTALLED.** Installed to `/root/bin/afs-drift-gate.sh` at 2026-10-04 21:10:57Z after timestamped backup `afs-drift-gate.sh.bak-20261004T211057Z`. Installed bytes match merged source. No service restart. Manual gate run exit 0: `OK release-integrity: 489b55b91b63 matches manifest and durable pins`; release-tree `__pycache__` stayed 0.
-- **Fresh runtime posture verified 21:13–21:15Z:** deployed symlink/process cwd = `489b55b`; release integrity PASS with durable fingerprint; release-tree `__pycache__` = 0; `LIVE_TRADING_ENABLED=false`; `TRADOVATE_ENV=demo`; `MAX_CONTRACTS_HARD_CAP=1` with matching expected proof; 1m trigger + 4HR observer pins match `EXPECTED_PROOF_`; deploy lock absent; futures-bot active/running, PID `1457117`, `NRestarts=0`; broker account HEALTHY with fresh `position=null`.
-- **Fresh in-process live-preflight completed 2026-10-04 21:20:50Z.** Bot-owned shared Tradovate session reported `orders_readable` PASS with 0 rows, `no_working_orders` PASS with 0 working orders, `positions_readable` PASS with 0 rows, and `no_open_positions` PASS with 0 open positions. Broker position was re-read at 21:20:51Z and remained null. No second Tradovate session was opened.
-- Live-preflight checks: PASS `tradovate_reliability_healthy`, PASS `account_readable`, PASS `positions_readable`, PASS `orders_readable`, PASS `no_open_positions`, PASS `no_working_orders`, PASS `live_box_drift_guard`; **only `heartbeat_fresh` failed**, with last successful heartbeat `2026-10-02T20:55:57Z`. Result remained `armed=false`, `disarmed_reason=preflight_failed:heartbeat_fresh`.
-- **Candidate `c44d32b` identity/scope remains already approved.** It exists, is reachable from current main, descends from `489b55b`, and remains the exact reviewed 8-file #1095 + #1103 candidate. Do not rebuild, re-test, re-audit, or add current-main ride-alongs.
+- 3-2-2 remains WAIT / PARKED. Do not rerun or tune.
+- #1129 drift-gate fix is merged and installed; manual gate verification passed and no service restart was required.
+- Exact `c44d32b` deployment completed successfully: build PASS, verify PASS, promote PASS.
+- Post-deploy verification passed: deployed SHA/cwd match `c44d32b`; release integrity PASS; no release-tree bytecode drift; required paper/demo and one-contract pins match; observer flags are on.
+- 4HR observer remains non-executable and outside the executable strategy list.
+- Fresh post-deploy broker proof: 0 open positions and 0 working orders.
+- futures-bot is active with no restart loop.
+- Heartbeat refreshed after restart and now passes.
+- Live remains disarmed; no arming action was taken.
 
-### DISCLOSURES
+### CANONICAL 4HR NATURAL-1M EPOCH
 
-- **No `afs-ro` lane exists on this box.** The prior checkpoint wording was inaccurate. Available runtime proof was obtained through root read-only GETs/reads plus the authorized in-process preflight POST.
-- The preflight POST rewrote `live_preflight_state.json` and may have posted the expected Discord FAILED alert because `heartbeat_fresh` is stale. No env, service, order, position, strategy, or deployment state changed.
-- **Heartbeat freshness is stale and remains unresolved.** It is the only failed preflight check and keeps live execution disarmed. Do not reinterpret the deployment as live-execution authorization. The purpose of the next release remains observation-only 4HR natural-1m evidence collection.
-- MNQ 1m `contract_hint` remains UNKNOWN until a #1103-compliant touch; #929 forward count remains outside this lane.
+**START = 2026-10-04T21:30:05Z UTC.**
 
-### NEXT — in order
+This is the timestamp of the last required post-deploy proof on exact release `c44d32b`. It precedes the Sunday CME reopen.
 
-1. **Operator decision:** exact `c44d32bc4961e56fae5c5f88a976eb6783341638` is eligible for a bounded deploy GO. No other SHA is authorized by this checkpoint.
-2. On explicit GO, run `scripts/atomic_release.sh` for **exact c44d32b only** using the already-reviewed candidate. No current-main ride-along, no strategy/risk/env changes, no unrelated installs.
-3. Immediately after promotion, re-verify: deployed SHA = c44d32b, release integrity PASS, `LIVE_TRADING_ENABLED=false`, `TRADOVATE_ENV=demo`, `MAX_CONTRACTS_HARD_CAP=1`, 1m/4HR observer pins matched, observer path remains non-executable, broker position null, working orders 0, service healthy, release-tree `__pycache__` = 0.
-4. If and only if that post-deploy verification passes, record its timestamp as the **canonical 4HR natural-1m epoch start**.
-5. Then collect prospective 4HR evidence only. No parameter tuning while the epoch runs.
+From this timestamp forward: prospective evidence only; no backfill; no parameter tuning; no strategy changes; no Polygon work; no 3-2-2 work.
 
-No Polygon. No new strategy research. No 3-2-2 work. No second historical rerun.
+### OPEN QUESTIONS / NEXT
+
+1. Collect forward 4HR natural-1m evidence only.
+2. On the first #1103-compliant touch, record `contract_hint` as MATCH / MISMATCH / UNKNOWN and whether manual review is required.
+3. Preserve observer-only posture and live-disarmed state.
+4. Keep historical evidence separate from this forward epoch.
+5. Verify the next drift-gate cron result read-only when convenient; it is not a prerequisite to collecting the epoch.
 
 ## Earlier checkpoint — 2026-10-04 ~20:00Z (3-2-2 corrected rerun DONE; system HOLD unchanged)
 
