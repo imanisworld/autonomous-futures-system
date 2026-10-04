@@ -9,6 +9,48 @@ the same PR + review process as new work.
 
 ---
 
+## 2026-10-04 cleanup (post-PR #1130)
+
+Main at audit: `94136a5e8f5baa3414d327329e5f3aa329c578fa` (#1130 merged as
+`9779a5d` during the pass). Scope was deliberately narrow: only branches whose
+PR GitHub records as CLOSED-unmerged and whose closure comment or a later
+merged PR names the superseder. Each tag below was pushed and remote-verified
+(`ls-remote` peel == archived SHA) before its branch was deleted, and each
+deletion was a lease on that exact SHA. Tag messages carry the same Purpose
+and Disposition text. Commit history additionally remains in
+`refs/pull/N/head`.
+
+Also deleted without a tag: `docs/4hr-predeploy-checkpoint-20261004` (#1130
+MERGED, merge commit `9779a5d` reachable from `main`, tip `f75a9b9` == PR head;
+GitHub auto-deleted it on merge).
+
+| Original branch | Archived SHA | Archive tag | Purpose | Disposition |
+|---|---|---|---|---|
+| `chatgpt/futures-afsro-audit-handoff-20260929` | `8841d67c33a87a629399e9bbadb7af0c5fa772b0` | `archive/chatgpt-futures-afsro-audit-handoff-20260929-2026-10-04` | docs: record afs-ro runtime hold and reprioritize futures todo (#1075) | CLOSED unmerged 2026-09-30; superseded by later futures handoff/todo updates on `main` |
+| `cursor/env-setup-ae40` | `1ed1c510e608987fee736773307ba0962e95321c` | `archive/cursor-env-setup-ae40-2026-10-04` | Cloud Agent environment config, Python 3.13 venv + dev deps (#1029) | CLOSED unmerged 2026-09-25; not adopted |
+| `cursor/resolve-bracket-exact-eod-38fe` | `f005242776d5bdf95a874bef985a69f09f180249` | `archive/cursor-resolve-bracket-exact-eod-38fe-2026-10-04` | Fail closed on a missing 15:55 ET bar and reissue the 3-2-2 record (#1025) | CLOSED unmerged 2026-09-28; superseded by merged #1057 (exact-EOD resolver fix) and #1060 (evidence erratum) |
+| `docs/current-state-refresh-20261002` | `2c1a5aea43cd00f2e22e5c3cff842b765c9f720d` | `archive/docs-current-state-refresh-20261002-2026-10-04` | docs: refresh futures/options current state for 2026-10-02 (#1106) | CLOSED unmerged 2026-10-02; superseded by later current-state/handoff updates on `main` |
+| `docs/mnq-account-admission-gap-20261002` | `1e062ca99a4aafc035bdbef3bcee948a2a7fa61c` | `archive/docs-mnq-account-admission-gap-20261002-2026-10-04` | docs: record MNQ account-admission gap (#1109) | CLOSED unmerged 2026-10-02; superseded by the rebased overlay in #1110; stale 4HR doc edits intentionally not kept |
+
+Kept, not deleted (54 remote branches remain):
+- Open PRs (10): #994, #1026, #1037, #1067, #1069, #1071, #1089, #1091, #1119, #1125.
+- `release/*` (33), `release-scope/inline-dashboard-inventory`,
+  `candidate/tradovate-auth-only-41ae188`, `audit/base-489b55b-20261002`:
+  release/rollback provenance; several tips are live or on-box release dirs
+  (`47ae01a` options scanner, `c44d32b` futures, `2752fe2`, `5b7be0f7`,
+  `db9bc7e`, `dd3aa9d`, `75b2687`, `aea0df0`, `36e73f1`). Deleting any of these
+  needs an `archive/release-*` tag first and a separate operator ruling.
+- `release/options-signa-budget-892` (#895 CLOSED): release ref, same rule.
+- `research/cpi-shock-fade-shadow-20260924` (#1021 CLOSED): PARKED per PM
+  ruling AFS-0032 with forward dates still ahead; kept so the PR can reopen.
+- `archive/forward-one-min-review-cbd25ae`,
+  `archive/futures-setup-equivalence-plan-a9690f6`,
+  `archive/pr915-mnq-combined-portfolio-audit-5a9f14b`: already archive refs.
+- `claude/452-runtime-memory-gate`, `claude/hotfix-c7798d4-plus-849` (KEEP) and
+  `hold/fixed-daily-loss-cap` (NEEDS REVIEW): unchanged from the 2026-09-24 rulings.
+
+---
+
 ## 2026-07-25 cleanup (post-PR #310)
 
 Disposition audit method: unique commits vs `main`, unique files vs `main`,
