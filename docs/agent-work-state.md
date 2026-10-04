@@ -4,7 +4,7 @@
 >
 > This file is **not** strategy-status authority, deployment authority, or experiment authority. Authoritative records named in `AGENTS.md` always win.
 >
-> **Checkpoint base:** repository `main` `5d19257e3a690851c0aa580135eba66536b09ec4` (PR #1118 merged, 2026-10-02); MNQ account-admission study is CLOSED / `INSUFFICIENT_EVIDENCE` / DO NOT REDO; shadow daily P&L report on the box = #1102 since 2026-10-02 14:53Z; futures box remains on last verified release `489b55b91b6303c195c8e84bfcbf05ef32d1ab04` since 2026-10-02 03:43Z. Always fetch current `main`; this stored SHA is a comparison base, not proof of current runtime state.
+> **Checkpoint base:** repository `main` `d970b40` (PR #1131 merged, 2026-10-04); MNQ account-admission study is CLOSED / `INSUFFICIENT_EVIDENCE` / DO NOT REDO; shadow daily P&L report on the box = #1102 since 2026-10-02 14:53Z; futures box is on release `c44d32bc4961e56fae5c5f88a976eb6783341638` since 2026-10-04 21:29:09Z (rollback `489b55b`); **canonical 4HR natural-1m epoch start = 2026-10-04T21:30:05Z**. Always fetch current `main`; this stored SHA is a comparison base, not proof of current runtime state.
 >
 > Core rule: **checkpoint first; diff first; do not redo proven work.**
 
@@ -74,6 +74,14 @@ Exact release `c44d32bc4961e56fae5c5f88a976eb6783341638` was built, verified, an
 - Heartbeat refreshed after restart and now passes.
 - Live remains disarmed; no arming action was taken.
 
+Exact identifiers (Cursor, 2026-10-04 21:08–21:30Z; runtime path = root read-only over `ssh hetzner`, one authorized install, the sanctioned release script):
+
+- **Drift gate installed:** `/root/bin/afs-drift-gate.sh` = `scripts/afs-server-drift-gate.sh` at `94136a5` (blob `1347906…`, sha256 `3cf086a3…c86f9a`, mode 0755) at 21:10:57Z; backup `/root/bin/afs-drift-gate.sh.bak-20261004T211057Z` (sha256 `49b41262…e25bdc` = #680 version + the two hand-added `-B` flags; nothing box-local lost). Manual run 21:11:10Z on `489b55b`: exit 0, `OK release-integrity: 489b55b91b63`, 0 `__pycache__`. Cron line unchanged (`5 11 * * *`). Not yet observed from cron against `c44d32b`.
+- **Deploy:** `scripts/atomic_release.sh` from checkout `94136a5` (release tooling unchanged since `6ad0bac`), `AFS_BOX=hetzner`. build 21:27:12–21:27:59Z (integrity OK 1633 files, local + box); verify 21:28:27–21:28:36Z (candidate unit on `127.0.0.1:57963`, `BROKER=paper`, live false); promote 21:28:57–21:29:13Z via Path 1 (box on reset-baseline posture `always_on_shadow`/`off`/`static`; behavior-neutral gate not required and would have refused on 4 context/notification files — not bypassed, simply not applicable). Manifest fingerprint `a2860378…2e4f1` pinned in `.env`; `release_history.txt` 101 entries; `current.previous` = `489b55b`. futures-bot PID `1851835`, `NRestarts=0`, ActiveEnter 21:29:02Z; afs-watcher resynced and active 21:29:09Z.
+- **Broker proofs** were the bot's own in-process preflight (`POST /admin/live-preflight/run`, secret taken from the process env into a header, never printed): 21:20:50Z on `489b55b` (only `heartbeat_fresh` failed) and 21:30:05Z on `c44d32b` (all 8 checks PASS, `armed: False`). No second Tradovate session was opened (two-session limit; see `execution/tradovate_broker.py`).
+- **Access correction:** no `afs-ro` user or binary exists on the box; `afs-ro@` rejects the workstation key; `claude-audit` has no key here. Only `grok-audit` (sudo-restricted `/usr/local/sbin/afs-grok-audit`) and `claude-audit` accounts exist. Prior "Cursor's `afs-ro` lane" wording is inaccurate.
+- **Repo hygiene (same day, after the deploy):** 14 merged local branches and 4 clean merged worktrees removed; 5 CLOSED-unmerged superseded remote branches tagged `archive/*-2026-10-04` and deleted with SHA lease (recorded in `docs/BRANCH_ARCHIVE_INDEX.md`, PR #1131). 54 remote branches remain; `release/*`, `hold/*`, `archive/*`, KEEP refs, open PRs, `../afs-options-1111` (dirty), and `stash@{0}` untouched. Further remote cleanup is a separate audited pass.
+
 ### CANONICAL 4HR NATURAL-1M EPOCH
 
 **START = 2026-10-04T21:30:05Z UTC.**
@@ -88,7 +96,8 @@ From this timestamp forward: prospective evidence only; no backfill; no paramete
 2. On the first #1103-compliant touch, record `contract_hint` as MATCH / MISMATCH / UNKNOWN and whether manual review is required.
 3. Preserve observer-only posture and live-disarmed state.
 4. Keep historical evidence separate from this forward epoch.
-5. Verify the next drift-gate cron result read-only when convenient; it is not a prerequisite to collecting the epoch.
+5. Verify the next drift-gate cron result read-only when convenient (2026-10-05 after 11:05Z, expect `OK release-integrity: c44d32bc4961`); it is not a prerequisite to collecting the epoch.
+6. After the first full session on `c44d32b`: `/futures-deployment-safety-audit`; confirm #1095 writes observation status under `/root/afs-shared/logs/`, not inside the release tree.
 
 ## Earlier checkpoint — 2026-10-04 ~20:00Z (3-2-2 corrected rerun DONE; system HOLD unchanged)
 
