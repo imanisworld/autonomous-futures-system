@@ -58,7 +58,28 @@ Every substantial unit of work must leave:
 
 If the agent cannot persist this file, it must return this payload verbatim-ready for the next agent/operator to save.
 
-## Current checkpoint — 2026-10-02 15:17Z (observer ON; canonical epoch HOLD pending #1103 deploy)
+## Current checkpoint — 2026-10-04 ~20:00Z (3-2-2 corrected rerun DONE; system HOLD unchanged)
+
+Repo `main` `f38acde` (#1124, #1126). Box release still `489b55b`; candidate `c44d32b` NOT built/deployed; rollback `75f10e4` present. futures-bot PID 1457117 since 2026-10-02 15:10:47Z, NRestarts=0. These runtime facts are from Cursor's read-only 2026-10-04 ~19:50Z preflight relayed by the operator; nothing was mutated. Branch for this work: `research/322-corrected-rerun-20261004` (from `f38acde`).
+
+### DONE / DO NOT REDO
+
+- **3-2-2 #1057-corrected rerun — DONE 2026-10-04 (Claude), trial `T-2026-10-04-prereg-322-corrected-eod-rerun-2026-10-04-01`.** Operator lifted only the research-rerun HOLD. Frozen harness `scripts/322_trigger_timing_ab_2026_09_18.py` unedited; same 34 candidates; corpora byte-identical to the 09-18 run; resolver at #1057. Exactly one row changed: 2025-01-20 SHORT (MLK early close) `TARGET_HIT` at 19:50 ET → `EOD_BAR_MISSING`. Pre-armed 3-tick: **+$2,471.64**, 32 resolved / 32-0, H1 +$1,128.32 / H2 +$1,343.32, PF ∞, max DD $0 (archived +$2,709.66 / 33-0; delta −$238.02, all in H1). Classification **PROMISING BUT UNPROVEN**. Artifact `docs/research-evidence/T-2026-10-04-prereg-322-corrected-eod-rerun-2026-10-04-01/result.json`; narrative `docs/322-corrected-eod-rerun-erratum-2026-10-04.md`. Ledger PLANNED + COMPLETED lines appended. Disclosure: scoring ran before the PLANNED commit (zero free parameters); reconciliation may downgrade. Do not rerun. Inventory wording update is **proposed in the erratum, not applied**.
+- **Env note for any future offline PaperBroker research:** `MAX_CONTRACTS_HARD_CAP=1` must be in the process env since #1053 or every bracket is `NO_FILL`. Harness `check_repro` pins are now known-stale (pre-#1057); left unedited deliberately.
+- Cursor 2026-10-04 preflight (relayed): delta-only MNQ/MES evidence audit done; pins verified by name; 4HR natural-1m canonical epoch NOT started; 3-2-2 1m observer 0 arms / 0 touches (10 rows 09-21→10-02); `wide_stop_4k` filled_count=0; drift-gate ALARM 10-02/03/04 is a tooling false alarm (`/root/bin/afs-drift-gate.sh:81` omits `EXPECTED_RELEASE_FINGERPRINT`); release tree intact.
+
+### UNKNOWN (carried)
+
+- MNQ 1m alert `contract_hint`; #929 forward fill count (Mac-only Polygon fetch, last 0 as of 09-23); broker flat / no unexpected orders not re-proven since 2026-10-02 15:17Z.
+
+### NEXT — in order
+
+1. Reconciliation role (ChatGPT + operator): accept/reject the proposed Strategy Inventory wording in `docs/322-corrected-eod-rerun-erratum-2026-10-04.md`; decide whether the ledger line stays `COMPLETED` or is downgraded for execution-order.
+2. Operator: acknowledge the drift-gate false alarm; queue the gate pin fix as a separate GO.
+3. Only then: decide whether `c44d32b` deploy + canonical 4HR 1m epoch deserves attention.
+No new strategy work. No broad research cycle. No second 3-2-2 rerun.
+
+## Earlier checkpoint — 2026-10-02 15:17Z (observer ON; canonical epoch HOLD pending #1103 deploy)
 
 Runtime observations below are from Grok's read-only `afs-ro` pass reported by the operator after the 15:00Z checkpoint. Repository facts were independently reconciled against GitHub.
 
