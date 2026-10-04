@@ -79,7 +79,13 @@ PY
 
 release_integrity_check() {
   # -B: checking a release must never write __pycache__ into it.
-  PYTHONPATH="$LIVE" "$PYTHON" -B -m ops.release_integrity --repo-root "$LIVE"
+  # Since #1056 ops.release_integrity reads EXPECTED_RELEASE_FINGERPRINT from
+  # the process environment and reports a matching-but-unpinned tree as
+  # UNPINNED (exit 1). Cron does not carry the .env, so hand the durable pin
+  # from $ENV_FILE to the check explicitly. A missing pin stays UNPINNED.
+  local expected_fp
+  expected_fp="$(env_value EXPECTED_RELEASE_FINGERPRINT 2>/dev/null || true)"
+  EXPECTED_RELEASE_FINGERPRINT="$expected_fp" PYTHONPATH="$LIVE" "$PYTHON" -B -m ops.release_integrity --repo-root "$LIVE"
 }
 
 options_scanner_release_check() {
