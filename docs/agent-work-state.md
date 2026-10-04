@@ -58,30 +58,32 @@ Every substantial unit of work must leave:
 
 If the agent cannot persist this file, it must return this payload verbatim-ready for the next agent/operator to save.
 
-## Current checkpoint — 2026-10-04 ~21:15Z (drift gate installed; runtime preflight passed with order-freshness disclosure; 4HR deploy gate next)
+## Current checkpoint — 2026-10-04 ~21:21Z (predeploy proof complete; exact c44d32b eligible for operator GO)
 
-Repo `main` `94136a5` (#1129 merged). Box release remains `489b55b91b6303c195c8e84bfcbf05ef32d1ab04`; candidate `c44d32bc4961e56fae5c5f88a976eb6783341638` exists and remains NOT built/deployed. Runtime evidence below is from Cursor's 2026-10-04 21:08–21:15Z operator-root pass; root was used read-only except for the explicitly authorized drift-gate install because the previously referenced `afs-ro` lane does not exist on this box.
+Repo `main` is `94136a5` (#1129 merged); this checkpoint branch is docs-only. Box release remains `489b55b91b6303c195c8e84bfcbf05ef32d1ab04`. Candidate `c44d32bc4961e56fae5c5f88a976eb6783341638` remains NOT built/deployed. Runtime evidence below is from Cursor's 2026-10-04 21:08–21:21Z operator-root pass; root was used read-only except for the explicitly authorized drift-gate install and the explicitly authorized in-process live-preflight POST.
 
 ### DONE / DO NOT REDO
 
 - **3-2-2 = WAIT / PARKED.** #1127 corrected evidence and #1128 Strategy Inventory reconciliation are merged. Do not rerun, tune, or reopen.
-- **Drift-gate fix #1129 = MERGED + INSTALLED.** Merged source at `94136a5`; installed to `/root/bin/afs-drift-gate.sh` at 2026-10-04 21:10:57Z after a timestamped backup `afs-drift-gate.sh.bak-20261004T211057Z`. Installed SHA-256 matches merged source. No service restart. Manual run exit 0: `OK release-integrity: 489b55b91b63 matches manifest and durable pins`; options-scanner integrity also OK; release-tree `__pycache__` count stayed 0. Do not redo the root-cause diagnosis or install.
-- **Fresh runtime posture verified 21:13–21:15Z:** deployed symlink/process cwd = `489b55b`; release integrity PASS with durable fingerprint; release-tree `__pycache__` = 0; `LIVE_TRADING_ENABLED=false`; `TRADOVATE_ENV=demo`; `MAX_CONTRACTS_HARD_CAP=1` with matching expected proof; 1m trigger + 4HR observer pins match `EXPECTED_PROOF_`; deploy lock absent; futures-bot active/running, PID `1457117`, `NRestarts=0`; fresh broker account read at 21:14Z shows `position=null`, open/realized P&L 0, reliability HEALTHY.
+- **Drift-gate fix #1129 = MERGED + INSTALLED.** Installed to `/root/bin/afs-drift-gate.sh` at 2026-10-04 21:10:57Z after timestamped backup `afs-drift-gate.sh.bak-20261004T211057Z`. Installed bytes match merged source. No service restart. Manual gate run exit 0: `OK release-integrity: 489b55b91b63 matches manifest and durable pins`; release-tree `__pycache__` stayed 0.
+- **Fresh runtime posture verified 21:13–21:15Z:** deployed symlink/process cwd = `489b55b`; release integrity PASS with durable fingerprint; release-tree `__pycache__` = 0; `LIVE_TRADING_ENABLED=false`; `TRADOVATE_ENV=demo`; `MAX_CONTRACTS_HARD_CAP=1` with matching expected proof; 1m trigger + 4HR observer pins match `EXPECTED_PROOF_`; deploy lock absent; futures-bot active/running, PID `1457117`, `NRestarts=0`; broker account HEALTHY with fresh `position=null`.
+- **Fresh in-process live-preflight completed 2026-10-04 21:20:50Z.** Bot-owned shared Tradovate session reported `orders_readable` PASS with 0 rows, `no_working_orders` PASS with 0 working orders, `positions_readable` PASS with 0 rows, and `no_open_positions` PASS with 0 open positions. Broker position was re-read at 21:20:51Z and remained null. No second Tradovate session was opened.
+- Live-preflight checks: PASS `tradovate_reliability_healthy`, PASS `account_readable`, PASS `positions_readable`, PASS `orders_readable`, PASS `no_open_positions`, PASS `no_working_orders`, PASS `live_box_drift_guard`; **only `heartbeat_fresh` failed**, with last successful heartbeat `2026-10-02T20:55:57Z`. Result remained `armed=false`, `disarmed_reason=preflight_failed:heartbeat_fresh`.
 - **Candidate `c44d32b` identity/scope remains already approved.** It exists, is reachable from current main, descends from `489b55b`, and remains the exact reviewed 8-file #1095 + #1103 candidate. Do not rebuild, re-test, re-audit, or add current-main ride-alongs.
 
-### DISCLOSURES / REMAINING SAFETY GATE
+### DISCLOSURES
 
-- **No `afs-ro` lane exists on this box.** The prior checkpoint wording was inaccurate. The 21:13–21:15Z preflight used root for strictly read-only GETs/reads after the authorized gate-script install. Do not recreate an `afs-ro` diagnosis; use an actually available sanctioned read path.
-- **Working-orders proof is not minutes-fresh.** Last bot-owned live-preflight order read was 2026-10-04 00:37:01Z and reported 0 working orders / no open positions. No bot order/bracket journal activity occurred afterwards, and the fresh 21:14Z broker position is null, but this does not prove that no external/manual DEMO order was placed after 00:37Z.
-- **Heartbeat freshness is stale:** live-preflight's last successful heartbeat is 2026-10-02T20:55Z. A fresh in-process preflight would write state and post a Discord FAILED alert because of `heartbeat_fresh`; an out-of-process Tradovate read risks a second session and is not authorized.
+- **No `afs-ro` lane exists on this box.** The prior checkpoint wording was inaccurate. Available runtime proof was obtained through root read-only GETs/reads plus the authorized in-process preflight POST.
+- The preflight POST rewrote `live_preflight_state.json` and may have posted the expected Discord FAILED alert because `heartbeat_fresh` is stale. No env, service, order, position, strategy, or deployment state changed.
+- **Heartbeat freshness is stale and remains unresolved.** It is the only failed preflight check and keeps live execution disarmed. Do not reinterpret the deployment as live-execution authorization. The purpose of the next release remains observation-only 4HR natural-1m evidence collection.
 - MNQ 1m `contract_hint` remains UNKNOWN until a #1103-compliant touch; #929 forward count remains outside this lane.
 
 ### NEXT — in order
 
-1. **Before deploy, obtain a minutes-fresh no-working-orders proof from the bot's own in-process preflight path.** This may require the operator secret and may post the known heartbeat-stale Discord safety alert; that alert is acceptable as a side effect if the operator authorizes the check. Do not open a second Tradovate session solely to inspect orders.
-2. Reconcile the preflight result: if `working_orders=0`, `position=null`, all deployment pins remain matched, and the only failing item is the already-understood `heartbeat_fresh` condition, return the evidence for an explicit deploy GO decision. Do not silently waive any additional failure.
-3. Only after explicit GO: build/verify/promote **exact** `c44d32bc4961e56fae5c5f88a976eb6783341638` via `scripts/atomic_release.sh`; no rebuild of candidate contents and no current-main ride-along.
-4. Immediately after promotion, re-verify deployed SHA, release integrity, paper/demo pins, observer-only posture, broker position, and working orders. That verified timestamp becomes the **canonical 4HR natural-1m epoch start**.
+1. **Operator decision:** exact `c44d32bc4961e56fae5c5f88a976eb6783341638` is eligible for a bounded deploy GO. No other SHA is authorized by this checkpoint.
+2. On explicit GO, run `scripts/atomic_release.sh` for **exact c44d32b only** using the already-reviewed candidate. No current-main ride-along, no strategy/risk/env changes, no unrelated installs.
+3. Immediately after promotion, re-verify: deployed SHA = c44d32b, release integrity PASS, `LIVE_TRADING_ENABLED=false`, `TRADOVATE_ENV=demo`, `MAX_CONTRACTS_HARD_CAP=1`, 1m/4HR observer pins matched, observer path remains non-executable, broker position null, working orders 0, service healthy, release-tree `__pycache__` = 0.
+4. If and only if that post-deploy verification passes, record its timestamp as the **canonical 4HR natural-1m epoch start**.
 5. Then collect prospective 4HR evidence only. No parameter tuning while the epoch runs.
 
 No Polygon. No new strategy research. No 3-2-2 work. No second historical rerun.
