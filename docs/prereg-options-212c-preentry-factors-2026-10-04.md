@@ -60,6 +60,16 @@ At most five. Every factor is computed from fields already frozen in the parent'
 
 Secondary pre-entry descriptors, reported as distributions only and **not** tabulated against outcome: floor `target_1_r` at measured entry (continuous; no bucket is defined here), presence of `floor_target_2` (expected constant, geometry requires it), `first_sight_after_close` (expected constant `false`).
 
+### Known mechanical confounds — declared before any outcome
+
+- **F2 is geometrically tied to win rate.** With `b` the blind-window extension in R, the scored trade's stop distance is `1 + b` R and its target distance is `floor_rr_1 − b` R. A larger `b` means a closer target and a farther stop, so `TARGET_FIRST` frequency rises with `b` by construction while the win is smaller and the loss larger in R. The F2 table therefore **must** co-report, per level, mean `target_1_r`, mean stop distance in R, and mean completed R; the displayed comparison statistic for F2 is completed R, not win rate. A win-rate gradient across F2 levels is expected mechanically and is not evidence of discrimination. `floor_remaining_rr` and `target_1_r` are reparametrizations of the same quantity and are never a second factor.
+- **F3 is tied to the UNRESOLVED class.** The horizon is the same session, so a later `first_sight_at` leaves fewer bars and more `UNRESOLVED_AT_CLOSE` by construction. `minutes_to_close_at_first_sight = session_close − first_sight_at` is recorded as a nuisance covariate and its median is reported per outcome class. Every table shows `WIN/(WIN+LOSS)` and the UNRESOLVED share side by side, never a single three-column rate. No clock-correlated factor (F3, F5) may appear in a discrimination sentence.
+- **F1 is a regime proxy.** Because SPY and QQQ trend must match direction for every activation, the LONG/SHORT mix is set by the index regime during collection. Direction mix and per-direction counts are reported; **no cross-direction comparative sentence is permitted** in the written result.
+
+### Excluded by name
+
+The following are never inputs, factors, or covariates: `n_events`, `last_bar_start`, `run_id` (computed from bars after the first opportunity), any quantity derived from `bars`, any `out-v0.1` field, `spy_trend`, `qqq_trend`, `hourly_candle_type`, `daily_candle_type`, `alignment_failures`, `late_floor`, `floor_remaining_rr`, `target_1_r` as a factor.
+
 ## Tier 2 — gate-contrast, hypothesis-generating only
 
 The sealed record contains every structurally selected episode with its `gate_bucket_floor` and its 5-minute bars, not only activations. Tier 2 scores, with the parent's unchanged scorer, the episodes whose only failing gate was market alignment, and places them beside activations:
@@ -100,11 +110,13 @@ Multiplicity disclosure: exactly four primary outcome contrasts (F2–F5) plus o
 
 ## Sample rules — frozen
 
-1. No table exists before the parent's `stop_condition_met` is true and the parent one-look is complete. This companion has no interim readout of its own.
-2. If the parent result is `INVALID` or `INSUFFICIENT SAMPLE` (completed outcomes below 15), this trial's written result is the same word and no factor table is published.
-3. A cell publishes a rate only when it has at least 5 completed WIN+LOSS outcomes; otherwise the cell shows counts only.
-4. A factor-level contrast is written up as "observed difference" only when every compared level has at least 10 completed WIN+LOSS outcomes and the Wilson intervals do not overlap. Below that it is "not distinguishable at this sample".
-5. No level, cell, or contrast becomes a filter, scanner change, sizing rule, or watchlist change. The only permitted follow-up is a new preregistered prospective trial that names one hypothesis before any new outcome is seen.
+1. No table exists before the parent's `stop_condition_met` is true and the parent one-look is complete. This companion has no interim readout of its own, including factor marginals (for example a LONG count so far).
+2. The companion publishes a factor table only when the parent's written result is `DESCRIPTIVE MEASUREMENT` (completed outcomes 15 or more). Parent `INVALID` or `INSUFFICIENT SAMPLE` is inherited verbatim and nothing else is published.
+3. A factor level displays any rate (`WIN/(WIN+LOSS)`, UNRESOLVED share, mean completed R) only when that level has at least 10 completed outcomes **and** at least 5 decided (WIN+LOSS) outcomes; otherwise the level shows counts only. Displayed rates carry Wilson 95% intervals.
+4. A comparative sentence between levels ("X did better than Y") requires every compared level to have at least 20 decided outcomes and an expected count of at least 5 in every cell under independence. **Under the parent's 25-activation cap this is unreachable; this companion is therefore counts-only and hypothesis-generating by design, and says so in its result.**
+5. Tables F2–F5 are published in full or not at all. No level is merged, no table is dropped, no table is ranked as primary after the look.
+6. `effective_clusters` = the number of distinct (`session_date`, America/New_York hour of `first_sight_at`) pairs with at least one completed outcome, and `max_episodes_per_cluster`, are required fields: simultaneous activations across symbols on one 30m bar share one index move and are not independent. No inferential test is run.
+7. No level, cell, or contrast becomes a filter, scanner change, sizing rule, or watchlist change. The only permitted follow-up is a new preregistered prospective trial that names one hypothesis before any new outcome is seen.
 
 ## Written results
 
@@ -123,9 +135,15 @@ There is no `SUPPORTED` outcome. Winner discrimination remains **not proven** un
 ## Provenance and hash binding
 
 - Factor definitions: this file, byte-frozen at the registration commit on `main`. The ledger `PLANNED` line cites this path; CI requires that commit to precede any evidence commit.
+- Code constants the definitions depend on are pinned to `main` `d970b4072a772e3ba50d81bac5b152c41e3ffbe6`: `BLIND_WINDOW_MATERIAL_R = 0.25` in `alert_ranker/coverage_outcomes.py`, the `gate_bucket` ordering in the same file, and `first_sight` / alignment evaluation in `alert_ranker/coverage_observer.py`. A later change to any of them is an amendment that requires a new ledger line before the look; silently reading the new value makes this trial `INVALID`.
+- Collector identity: the parent seal's `source.source_sha` is recorded per session in the companion artifact; a drift across sessions is reported, not repaired.
 - Spec: `docs/research-experiment-specs/E-2026-10-04-options-212c-preentry-factors-01.json`; `python scripts/afs_experiment_runner.py validate --spec …` prints its `spec_hash`; that hash is recorded in the evidence artifact.
 - Inputs: exclusively the parent's sealed session records, identified per session by the `manifest.jsonl` SHA-256 already defined by the parent. The companion evidence artifact lists `session_date`, parent seal SHA-256, and the parent one-look artifact SHA-256 it consumed. A record whose digest does not match is not an input.
 - Prior exposure, disclosed: a 2026-09-18 descriptive family validation stratified 2-1-2 continuation 1R rates by SPY/QQQ/daily/hourly alignment on a retrospective 150-symbol corpus that contains the closed 59 episodes; the closed one-look exposed two activations and their identities. No forward-window outcome has been seen. Tier 1 factors F2–F5 were chosen because they are not those already-exposed gate factors.
+
+## Independent review before registration
+
+A fresh-context red-team was given the operator's protocol text only (no outcome file, no closed-trial evidence) on 2026-10-04 and returned `PROTOCOL NEEDS REVISION`. Its blocker — every recommended factor is constant inside the activated population and none is in the seal — matches the finding above. Its major findings (F2 geometric confound, F1 regime proxy, F3/UNRESOLVED time confound, post-entry `ep-v0.1` fields, cell sizes under the 25 cap, inheritance of the parent verdict, code-constant pinning) are incorporated in the sections marked above. Its suggested factors `floor_target_2` presence and `floor_rescued` were not adopted: the first is constant because the floor geometry rejects a missing second target, and the second needs a companion capture record that does not exist and cannot exist before 2026-10-05.
 
 ## Authority boundary
 
