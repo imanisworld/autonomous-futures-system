@@ -58,7 +58,31 @@ Every substantial unit of work must leave:
 
 If the agent cannot persist this file, it must return this payload verbatim-ready for the next agent/operator to save.
 
-## Current checkpoint — 2026-10-04 ~20:00Z (3-2-2 corrected rerun DONE; system HOLD unchanged)
+## Current checkpoint — 2026-10-04 ~21:00Z (3-2-2 parked; drift-gate fix in #1129; 4HR epoch next)
+
+Repo `main` `53077be` (#1127 merged `c61e6a8`, #1128 merged `53077be`). Box release still `489b55b` per the relayed 19:50Z preflight; candidate `c44d32b` NOT built/deployed. Branch for this checkpoint: `fix/drift-gate-pass-fingerprint-pin` (PR #1129).
+
+### DONE / DO NOT REDO
+
+- **3-2-2 = WAIT / PARKED.** Corrected headline merged (#1127) and reconciled into the Strategy Inventory (#1128). Do not rerun, tune, or reopen.
+- **Drift-gate root cause proven (Claude, 2026-10-04):** `ops.release_integrity.verify_release` reads `EXPECTED_RELEASE_FINGERPRINT` only from the process environment; #1056 (`a850660`, in deployed `489b55b`) makes a matching-but-unpinned tree `UNPINNED` / exit 1; the installed gate (`/root/bin/afs-drift-gate.sh` = `scripts/afs-server-drift-gate.sh`) ran the check from cron without the pin and only read it afterwards. Reproduced on a `/tmp` mini release: old script `UNPINNED exit=1`, fixed script `OK exit=0`, 0 `__pycache__`.
+- **#1129 fixes fingerprint propagation only** (`release_integrity_check` passes the pin from `$ENV_FILE`; missing pin still `UNPINNED`; `-B` kept; +1 regression test; 33 gate/integrity tests pass). Repo fix only — the box keeps alarming until the operator installs the merged script to `/root/bin` (back up first, run once manually, expect `OK release-integrity: 489b55b91b63 …`, no new `__pycache__`, no service restart).
+- **`c44d32b` identity/scope already re-verified by SHA/blob (2026-10-04):** reachable from `main`; `489b55b..c44d32b` = #1095 + six #1103 backports + two CI commits; exactly the 8 reviewed files; 7 source/test blobs byte-identical to merged #1095 (`1c43291`) / #1103 (`43ead15`); the docs file differs only by a status paragraph absent in the candidate. **Do not rebuild, re-test, or re-audit it.** Its 7359-test QA, #1095/#1103 review, and 4HR historical/stop-R:R audits are complete.
+
+### UNKNOWN (carried)
+
+- **Live runtime posture / broker state remains UNKNOWN this session:** `claude-audit` has no key access from the workstation (`Permission denied (publickey,password)`), root was not substituted. Last proof of deployed SHA, pins, flat demo position, and no working orders is the relayed 2026-10-04 ~19:50Z Cursor preflight / 2026-10-02 15:17Z broker proof.
+- MNQ 1m alert `contract_hint`; #929 forward fill count (Mac-only Polygon fetch, last 0 as of 09-23).
+
+### NEXT — in order
+
+1. Merge #1129 once CI is green; operator installs the gate fix on the box (separate root action, no restart).
+2. **Sanctioned read-only runtime preflight via Cursor's `afs-ro` lane (not Claude):** deployed SHA = `489b55b`, integrity OK with the pin, 0 release-tree `__pycache__`, `LIVE_TRADING_ENABLED=false`, `TRADOVATE_ENV=demo`, `MAX_CONTRACTS_HARD_CAP=1`, 1m/4HR observer pins matching `EXPECTED_PROOF_`, deploy lock absent, demo position null and no working orders.
+3. If PASS: operator GO → deploy exact `c44d32bc4961e56fae5c5f88a976eb6783341638` via `scripts/atomic_release.sh` (no rebuild, no current-`main` ride-along).
+4. Immediately re-verify pins/posture/no-order read-only; that timestamp is the **canonical 4HR natural-1m epoch start**. Then collect forward evidence only.
+No Polygon. No new strategy research. No 3-2-2 work. No parameter tuning while the epoch runs.
+
+## Earlier checkpoint — 2026-10-04 ~20:00Z (3-2-2 corrected rerun DONE; system HOLD unchanged)
 
 Repo `main` `f38acde` (#1124, #1126). Box release still `489b55b`; candidate `c44d32b` NOT built/deployed; rollback `75f10e4` present. futures-bot PID 1457117 since 2026-10-02 15:10:47Z, NRestarts=0. These runtime facts are from Cursor's read-only 2026-10-04 ~19:50Z preflight relayed by the operator; nothing was mutated. Branch for this work: `research/322-corrected-rerun-20261004` (from `f38acde`).
 
