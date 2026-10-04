@@ -1,11 +1,36 @@
 # 4HR natural-1m observation epoch
 
-Status: **OBSERVER ON — CANONICAL EPOCH NOT STARTED**
+Status: **CANONICAL EPOCH STARTED — 2026-10-04T21:30:05Z on release `c44d32bc4961e56fae5c5f88a976eb6783341638`**
 
 This note records why the first natural-1m deployment produced no 4HR evidence,
-and when a later sample is allowed to count. It does not change the evidence
-verdict. `docs/strategy-rules/Strategy_Inventory.md` remains the strategy-status
-authority. 4HR MNQ stays **PROMISING BUT UNPROVEN**.
+when a later sample is allowed to count, and the verified start of that sample.
+It does not change the evidence verdict. `docs/strategy-rules/Strategy_Inventory.md`
+remains the strategy-status authority. 4HR MNQ stays **PROMISING BUT UNPROVEN**
+until the forward sample says otherwise.
+
+## Canonical epoch start — 2026-10-04T21:30:05Z
+
+Exact release `c44d32bc4961e56fae5c5f88a976eb6783341638` (= `489b55b` + #1095
++ #1103, eight files) was built, verified, and promoted with
+`scripts/atomic_release.sh` on 2026-10-04 (promote 21:28:57–21:29:13Z, operator
+GO). Conditions 1–5 below were then proven read-only on the running process:
+
+1. release carries #1092/#1094 observation wiring **and** #1103 `contract_check`;
+   symlink and futures-bot cwd both `/root/afs-releases/c44d32bc…1638`;
+   `release integrity: OK — 1633 files checked`; 0 release-tree `__pycache__`;
+2. `strat_4hr_retrigger` absent from `enabled_concepts` (only `orb_breakout` active);
+3. `ONE_MIN_TRIGGER_ENABLED=true` = `EXPECTED_PROOF_ONE_MIN_TRIGGER_ENABLED`;
+4. `ONE_MIN_4HR_OBSERVER_ENABLED=true` = `EXPECTED_PROOF_ONE_MIN_4HR_OBSERVER_ENABLED`;
+5. `LIVE_TRADING_ENABLED=false`, `TRADOVATE_ENV=demo`, `MAX_CONTRACTS_HARD_CAP=1`
+   (pinned); broker position `null`; the bot's own in-process preflight at
+   21:30:05Z read `0 position row(s)` / `0 order row(s)` / `0 working order(s)`;
+   live stayed disarmed (`preflight_passed_not_armed`).
+
+The epoch start is the timestamp of that last proof, **2026-10-04T21:30:05Z**,
+before the Sunday 22:00Z CME reopen, so no natural-1m touch can predate it.
+Evidence from this timestamp forward is the canonical sample. Nothing earlier
+counts or is backfilled. No parameter, strategy, or alert change is allowed
+while the sample runs. Rollback target: `489b55b` (`current.previous`).
 
 ## Disabled period — do not count
 
@@ -33,7 +58,7 @@ That zero is the defect result. It is not a no-event sample, not a negative
 expectancy sample, and not something to backfill. Do not convert historical
 `strat_4hr_retrigger_observed` proxy rows into this lane.
 
-## New epoch — not started by this change
+## New epoch — conditions (met 2026-10-04, see above)
 
 The canonical forward sample starts only after all of the following are true:
 
@@ -41,8 +66,8 @@ The canonical forward sample starts only after all of the following are true:
    `context/four_hr_observation.py` published by the wide-stop forward collector,
    `evaluate_armed_4hr_touch()` reading it, and #1103's `contract_check` /
    mismatch-blocking behavior in `context/one_min_trigger.py`.
-   Release `489b55b91b6303c195c8e84bfcbf05ef32d1ab04` contains #1092/#1094 but
-   predates #1103, so this condition is **not yet met** for the canonical epoch.
+   Release `489b55b91b6303c195c8e84bfcbf05ef32d1ab04` contained #1092/#1094 but
+   predated #1103; release `c44d32b` (deployed 2026-10-04) carries both.
 2. `strat_4hr_retrigger` is still absent from `enabled_concepts`.
 3. `ONE_MIN_TRIGGER_ENABLED=true` and
    `EXPECTED_PROOF_ONE_MIN_TRIGGER_ENABLED=true`. The 4HR observer only runs
@@ -74,7 +99,10 @@ Any natural-1m 4HR touch written before a release carrying #1103 is provisional
 and must not be counted or backfilled into the canonical sample.
 
 The canonical epoch timestamp is the first read-only verification after a
-release carrying #1103 is deployed and conditions 2–5 below are also proven.
+release carrying #1103 is deployed and conditions 2–5 are also proven. That
+verification happened on 2026-10-04 (see "Canonical epoch start" above); any
+4HR natural-1m record from 2026-10-02 15:17Z to 2026-10-04 21:30:05Z on
+`489b55b` stays provisional and is not part of the sample.
 
 ## What the sample can and cannot see
 

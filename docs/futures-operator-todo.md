@@ -2,33 +2,29 @@
 
 > **Purpose:** durable operator action tracker for futures infrastructure/safety work. This file is **not** strategy-status authority and must not override `docs/strategy-rules/Strategy_Inventory.md`, the research trial ledger, or verified VPS/runtime evidence.
 >
-> **Repo reconciliation base:** `main` `13a4b268330fce3ac7d389e92c0d69c04aeb6ea2` (2026-10-02 pause checkpoint; PR #1123 already merged the minimal candidate lineage into `main`). The MNQ account-admission study is CLOSED / `INSUFFICIENT_EVIDENCE` / DO NOT REDO. Futures box release since the last verified runtime checkpoint remains `489b55b91b6303c195c8e84bfcbf05ef32d1ab04`. Fetch current `main` rather than treating this stored SHA as perpetual current state. The freshest runtime facts are checkpointed in `docs/agent-work-state.md`; older reconciliation notes remain dated provenance and require fresh read-only proof before any runtime/broker/access mutation.
+> **Repo reconciliation base:** `main` `d970b40` (2026-10-04, after PR #1131). The MNQ account-admission study is CLOSED / `INSUFFICIENT_EVIDENCE` / DO NOT REDO. Futures box release since the last verified runtime checkpoint is `c44d32bc4961e56fae5c5f88a976eb6783341638` (promoted 2026-10-04 21:29:09Z; rollback target `489b55b91b6303c195c8e84bfcbf05ef32d1ab04`). Fetch current `main` rather than treating this stored SHA as perpetual current state. The freshest runtime facts are checkpointed in `docs/agent-work-state.md`; older reconciliation notes remain dated provenance and require fresh read-only proof before any runtime/broker/access mutation.
 >
 > Core rule: **No proof, no run.**
 
 
-## PAUSED — RESUME HERE
+## CURRENT — 4HR natural-1m canonical epoch running; collect only
 
-**2026-10-02 stop point: repo-side release preflight is complete; next action is read-only VPS proof only.**
+**2026-10-04 21:30:05Z: canonical epoch started on exact release `c44d32b`.** Details and the full proof table are in `docs/agent-work-state.md` (2026-10-04 ~21:30Z checkpoint) and `docs/4hr-natural-1m-observation-epoch-2026-10-01.md`.
 
-- Minimal futures candidate: `c44d32bc4961e56fae5c5f88a976eb6783341638`.
-- Candidate is the exact deployed-`489b55b` + #1095 + #1103 tree: eight changed files only. No strategy, broker, risk, scheduler, env, or executable-strategy enablement change is in the candidate.
-- Exact candidate tests/CI passed. `strat_4hr_retrigger` remains non-executable; the 1-minute observer returns before DecisionEngine/RiskEngine/broker with `fill=None` and `execution_reachable=false`.
-- **Do not use the candidate's bundled `scripts/atomic_release.sh`.** It predates #1096 and fails integrity as `UNPINNED`. If a later release action is authorized, use the already-merged #1096 `atomic_release.sh` to target exact SHA `c44d32bc...`.
-- Candidate lineage is reachable from `main` via merged PR #1123 without changing the candidate tree.
-- No VPS facts were refreshed during the repo preflight. No build, verify, promote, restart, env change, broker change, or TradingView alert change was made.
+- Deployed via `scripts/atomic_release.sh` build → verify → promote (operator GO), tooling at `main` `94136a5` (unchanged since the `489b55b` deploy). Box posture was the reset baseline (`always_on_shadow` / `HTF off` / `static`), so the promote gate took its sanctioned Path 1.
+- Post-deploy: symlink + cwd `c44d32b`; integrity OK 1633 files; 0 release-tree `__pycache__`; `LIVE_TRADING_ENABLED=false`; `TRADOVATE_ENV=demo`; `MAX_CONTRACTS_HARD_CAP=1`; both observer pins `true` and matching `EXPECTED_PROOF_`; `strat_4hr_retrigger` not in `enabled_concepts`; broker position null; in-process preflight 0 positions / 0 working orders; futures-bot PID `1851835`, `NRestarts=0`; deploy lock released; live disarmed (`preflight_passed_not_armed`).
+- Heartbeat: the `heartbeat_fresh` failure seen 2026-10-02 20:55Z → 2026-10-04 cleared on the promote restart (fresh at 21:29:03Z). If it goes stale again without a restart, that is a new observation, not the known one.
+- Drift gate: #1129 fix installed to `/root/bin/afs-drift-gate.sh` at 21:10:57Z (sha256 `3cf086a3…c86f9a`; backup `/root/bin/afs-drift-gate.sh.bak-20261004T211057Z`); one manual run on `489b55b` exited 0 with `OK release-integrity`. It has not yet run from cron against `c44d32b`.
+- Access note: there is **no `afs-ro` user or tool on the box** (only `grok-audit` with a sudo-restricted `afs-grok-audit`, and `claude-audit`). The 2026-10-04 read-only preflights were root read-only over `ssh hetzner`. Earlier "Cursor's `afs-ro` lane" wording in checkpoints is inaccurate.
 
-### NEXT — read-only VPS preflight, in order
+### NEXT — read-only, in order
 
-1. After the 2026-10-03 12:00Z cron window, confirm the live release tree still has no `__pycache__` and the next drift-gate result is OK.
-2. Re-prove the deployed SHA is still `489b55b91b6303c195c8e84bfcbf05ef32d1ab04`.
-3. Re-prove `LIVE_TRADING_ENABLED=false`, `TRADOVATE_ENV=demo`, account flat, and no unexpected orders.
-4. Re-prove `LOG_DIR=/root/afs-shared/logs`, observer proof pins match, and capture `SCHEDULE_MODE` + `EXIT_MODE` because promotion gating depends on posture.
-5. Confirm rollback target `75f10e4540aa1f25b51b77c1ec2a2da40381a188` still exists/is usable and live release integrity is clean.
-6. Determine read-only whether 1-minute TradingView alerts actually carry `contract_hint`. If not provable from retained data/config, report UNKNOWN; do not alter alerts.
-7. **STOP and reconcile.** Only after these facts are clean should the operator decide whether to authorize #1096 `atomic_release.sh build → verify → promote` for exact candidate `c44d32bc...`.
+1. **2026-10-05 after 11:05Z:** confirm `/root/afs-drift-gate.log` shows `OK release-integrity: c44d32bc4961 …` from the cron run and the live tree still has 0 `__pycache__`. If it alarms, read the reason before touching anything.
+2. **After the first full session on `c44d32b`:** run `/futures-deployment-safety-audit`; confirm journals advance, `LOG_DIR` observation status lands in `/root/afs-shared/logs/` (not inside the release tree, #1095), RSS plateau, no new errors.
+3. **On the first 4HR natural-1m touch:** record `contract_check` MATCH / MISMATCH / UNKNOWN and whether `needs_manual_review` fired. This is the open `contract_hint` question; do not alter TradingView alerts to force an answer.
+4. Keep collecting. No parameter tuning, strategy change, Polygon work, or 3-2-2 work while the sample runs. A natural-1m 4HR loss is evidence, not a trigger.
 
-Until that review: **HOLD. No deploy, restart, build/promote, env mutation, broker mutation, strategy enablement, or research rerun.**
+**HOLD on everything else: no deploy, restart, env mutation, broker mutation, strategy enablement, or research rerun without a new operator GO.**
 
 ## Last verified runtime checkpoint — no automatic action
 
@@ -88,7 +84,7 @@ These are ordered. Do not skip ahead.
 - [ ] **Phone SSH login.** Requires the operator. Not proven.
 - [ ] **Hetzner/provider console recovery.** Requires the operator. Not proven.
 - [x] **Candidate build/verify:** exercised for real on 2026-10-02 as part of the `489b55b` deploy. It first failed on #1056's `__pycache__`/UNPINNED rules; fixed by #1096 (`6ad0bac`).
-- [ ] **Rollback drill:** not done. The rollback target is now `75f10e4` (`/root/afs-releases/75f10e4540aa1f25b51b77c1ec2a2da40381a188`). Do not drill without an operator window.
+- [ ] **Rollback drill:** not done. The rollback target is now `489b55b` (`/root/afs-releases/489b55b91b6303c195c8e84bfcbf05ef32d1ab04`, recorded in `current.previous` by the 2026-10-04 promote); `75f10e4` is still on the box as the prior one. Do not drill without an operator window, and not during the 4HR epoch unless the deployed release itself is the problem.
 - [ ] **`afs-deploy.sh` (outside the repo):** not checked for the two #1056 problems that #1096 fixed in `atomic_release.sh`. Use `atomic_release.sh` until it is checked.
 - [ ] **Not authorized yet:** `PasswordAuthentication no`, root-key cleanup, converting `claude-audit` to a forced command, public SSH restriction, or old-access removal. Do not harden SSH until phone login and provider-console recovery are proven.
 - [x] **Gate-condition #1068 runtime:** shipped in release `489b55b` (2026-10-02). It is not yet observed running from the new release; check at the next audit.
@@ -99,8 +95,9 @@ These are ordered. Do not skip ahead.
     - `/root/afs-shared/.env` unchanged since the 2026-09-30 start.
   - [x] Integrity enforcement: promote's unit drop-in sets `RELEASE_INTEGRITY_ENFORCED=true` and `PYTHONDONTWRITEBYTECODE=1`. The live release had no `__pycache__` after startup.
   - [x] `LOG_DIR=/root/afs-shared/logs`: proven from the running futures-bot on 2026-10-02. #1095 remains undeployed and still needs exact-SHA review + separate deploy GO.
-- [ ] **Next futures release candidate prepared — HOLD for runtime gate.** Candidate `c44d32bc4961e56fae5c5f88a976eb6783341638` is the minimal deployed-`489b55b` + #1095 + #1103 tree, exactly 8 changed files. Candidate audit: 7359 passed, 8 skipped, 2 documented current-main governance checks deselected. PR #1123 made the SHA reachable from `main` with zero file changes. Do not deploy yet: after 2026-10-03 12:00Z confirm no release-tree `__pycache__`, confirm drift-gate OK, and run fresh deployment-safety/runtime verification.
-- [ ] **4HR natural-1m canonical observation epoch.** Observer pins were enabled at 15:17:19Z on release `489b55b`, but #1103 is absent from that release. Treat pre-#1103 touches as provisional/non-counting. After candidate `c44d32bc...` (or another separately reviewed release carrying #1103) is deployed, repeat the read-only pin/posture/no-order verification; that timestamp is the canonical epoch start.
+- [x] **Minimal futures release `c44d32bc4961e56fae5c5f88a976eb6783341638` deployed 2026-10-04 21:29:09Z** (operator GO; `scripts/atomic_release.sh` build → verify → promote; exact `489b55b` + #1095 + #1103, 8 files; candidate audit 7359 passed / 8 skipped / 2 governance checks deselected). Post-deploy proof in the CURRENT block above. Rollback target `489b55b`.
+- [x] **4HR natural-1m canonical observation epoch started 2026-10-04T21:30:05Z** on `c44d32b` after the read-only pin/posture/no-order verification. Pre-#1103 touches (2026-10-02 15:17Z → 2026-10-04 21:30:05Z on `489b55b`) stay provisional/non-counting. Forward collection only from here.
+- [x] **Drift-gate #1129 fix installed on the box 2026-10-04 21:10:57Z** (backup `afs-drift-gate.sh.bak-20261004T211057Z`; manual run exit 0, no restart). First cron run against `c44d32b` is 2026-10-05 11:05Z — see NEXT.
 - [x] **Confirm the futures-bot memory plateau after the `489b55b` restart.** Read-only follow-up at 14:31Z showed PID `1327346` unchanged and RSS about 324 MiB, consistent with the expected post-startup plateau. The earlier `memory_critical`/`memory_warning` events were startup projections, not evidence of continuing unbounded growth.
 - [ ] **Options-scanner memory cap (needs an operator decision; not urgent).** The watcher tick at 2026-10-02 03:46Z showed `options-scanner` (pid `3901845`, release `47ae01ac`) with RSS 10.8 MiB, swap 470.5 MiB, and cgroup `memory.events` `max=1301`, `sock_throttled=8170`, `oom_kill=0`. Its unit has `MemoryMax=350M`. The working set is now about 480 MiB, so the kernel keeps it in swap instead of OOM-killing it, as it did before swap existed. The `swap_pressure_warning` events on 2026-10-01 ran 14:16–20:51Z, about RTH. That matches the timing but is not proof. Daily scan counts were steady from 2026-09-24 to 10-01 (3,087–3,369), so no skipped cycles are visible. Per-scan latency was not measured, because `options_scanner.sqlite` stores only a row timestamp and the read-only wrapper cannot query it. Options, each a separate operator GO: raise `MemoryMax` (about 600M) with a scanner-only restart, or reduce the scanner's footprint.
 - [ ] **Lock down old access only after replacement proof.** Then remove or restrict obsolete broad access paths, keeping documented break-glass recovery.

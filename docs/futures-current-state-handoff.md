@@ -4,17 +4,14 @@
 
 _As of 2026-09-24 (runtime and current decisions: see the 2026-09-24 blocks in `docs/futures-current-status-2026-09-22.md`, then the reconciliation note below). This is the long futures handoff. Historical audit docs remain evidence records._
 
-## Minimal futures release candidate — 2026-10-02
+## Release `c44d32b` deployed; 4HR natural-1m canonical epoch started — 2026-10-04
 
-Repository `main` includes history-only PR #1123; no file content changed in that merge.
-
-- Exact candidate: `c44d32bc4961e56fae5c5f88a976eb6783341638`.
-- Base: deployed release `489b55b91b6303c195c8e84bfcbf05ef32d1ab04`.
-- Delta: #1095 + #1103 only, exactly 8 files.
-- Candidate QA: 7359 passed, 8 skipped, 2 deselected. The deselected tests are main-relative research-governance comparisons, not runtime or #1095/#1103 regressions.
-- 1-minute 4HR path remains observation-only and returns before DecisionEngine, RiskEngine, and broker execution.
-- Candidate is **PREPARED / NOT DEPLOYED**. No build, promote, restart, env, broker, or runtime mutation occurred.
-- Next gate: after 2026-10-03 12:00Z, confirm bytecode persistence and drift-gate health read-only, then rerun deployment-safety/runtime verification before any promote action.
+- Deployed futures release: `c44d32bc4961e56fae5c5f88a976eb6783341638`, promoted 2026-10-04 21:29:09Z via `scripts/atomic_release.sh` build → verify → promote under explicit operator GO. Rollback target `489b55b91b6303c195c8e84bfcbf05ef32d1ab04` (`current.previous`).
+- Delta vs `489b55b`: #1095 + #1103 only, exactly 8 files (history-only PR #1123 made the SHA reachable from `main`). Candidate QA: 7359 passed, 8 skipped, 2 deselected main-relative governance comparisons.
+- Post-deploy read-only proof (21:29:39–21:30:05Z): symlink and futures-bot cwd on `c44d32b`; integrity OK 1633 files with the fingerprint pin; 0 release-tree `__pycache__`; `LIVE_TRADING_ENABLED=false`, `TRADOVATE_ENV=demo`, `MAX_CONTRACTS_HARD_CAP=1`; `ONE_MIN_TRIGGER_ENABLED` and `ONE_MIN_4HR_OBSERVER_ENABLED` both `true` with matching `EXPECTED_PROOF_` pins; `strat_4hr_retrigger` absent from `enabled_concepts`; broker position null; in-process preflight 0 positions / 0 working orders; live disarmed.
+- **Canonical 4HR natural-1m epoch start: 2026-10-04T21:30:05Z.** Prospective evidence only from here; nothing earlier counts. Details: `docs/4hr-natural-1m-observation-epoch-2026-10-01.md`; checkpoint: `docs/agent-work-state.md`.
+- Same day: #1129 drift-gate fingerprint-pin fix installed to `/root/bin/afs-drift-gate.sh` (backup kept; manual run OK; first cron run against `c44d32b` is 2026-10-05 11:05Z).
+- Strategy status is unchanged: 4HR MNQ remains whatever `docs/strategy-rules/Strategy_Inventory.md` says (PROMISING BUT UNPROVEN). Deployment of an observer is not a status change.
 
 ## Repository research closeout — 2026-10-02
 
