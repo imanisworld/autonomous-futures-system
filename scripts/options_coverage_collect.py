@@ -83,7 +83,6 @@ from ops.options_212c_floor_outcome_capture import (  # noqa: E402
     capture_progress,
     inspect_seal,
 )
-from ops.options_212c_floor_outcome_monitor import ELIGIBLE_START  # noqa: E402
 from scripts.options_coverage_observer import DEFAULT_SQLITE, DEFAULT_UNIVERSE, load_universe  # noqa: E402
 from scripts.options_coverage_outcomes import write_markdown  # noqa: E402
 
@@ -128,7 +127,6 @@ class Collector:
         sleep: Callable[[float], None] = time.sleep,
         now: datetime | None = None,
         capture_root: Path | None = None,
-        eligible_start: str | None = ELIGIBLE_START,
     ) -> None:
         self.data_dir = data_dir
         self.sqlite_path = sqlite_path
@@ -144,7 +142,6 @@ class Collector:
         self.sleep = sleep
         self.now = now or datetime.now(timezone.utc)
         self.capture_root = Path(capture_root) if capture_root is not None else ROOT
-        self.eligible_start = eligible_start
         self.daily_dir = data_dir / "daily"
         self.aggregate_dir = data_dir / "aggregate"
         self.runs_dir = data_dir / "runs"
@@ -212,10 +209,7 @@ class Collector:
 
     def _capture_progress(self) -> Any:
         try:
-            return capture_progress(
-                self.capture_root,
-                eligible_start=self.eligible_start,
-            )
+            return capture_progress(self.capture_root)
         except CaptureIntegrationError as exc:
             raise CollectorError(
                 "capture_integrity_refused", f"{exc.reason}: {exc.detail}"
@@ -226,7 +220,6 @@ class Collector:
             return capture_decision(
                 self.capture_root,
                 session.date.isoformat(),
-                eligible_start=self.eligible_start,
             )
         except CaptureIntegrationError as exc:
             raise CollectorError(
@@ -613,7 +606,6 @@ def build_collector(args: argparse.Namespace, **overrides: Any) -> Collector:
             or env.get("OPTIONS_212C_CAPTURE_ROOT")
             or ROOT
         ),
-        eligible_start=ELIGIBLE_START,
     )
     kwargs.update(overrides)
     if "source" not in kwargs:
