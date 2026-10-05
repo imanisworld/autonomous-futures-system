@@ -110,6 +110,16 @@ def test_max_trades_reached_setup_still_observed_but_not_executed(config, tmp_pa
     assert result["execution_block"]["trade_count"] == config.max_trades_per_day
     assert result["execution_block"]["limit"] == config.max_trades_per_day
 
+    # Cap-only eligibility is evaluated without constructing a broker or
+    # changing the actual execution state. It may pass or fail another gate,
+    # but daily_trade_limit itself is deliberately removed from this observer.
+    post_cap = result["post_cap_eligibility"]
+    assert post_cap["observation_only"] is True
+    assert post_cap["execution_reachable"] is False
+    assert post_cap["daily_trade_limit_bypassed"] is True
+    assert post_cap["original_trade_count"] == config.max_trades_per_day
+    assert post_cap["risk_without_daily_cap"]["failed_rule"] != "daily_trade_limit"
+
     # Observation layer: the setup the engine found is recorded, not erased.
     assert result["observed_decision"] == "TRADE"
     assert result["candidate"] is not None
@@ -126,6 +136,7 @@ def test_max_trades_reached_setup_still_observed_but_not_executed(config, tmp_pa
     assert row["observed_decision"] == "TRADE"
     assert row["setup"] is not None and row["setup"]["strategy"]
     assert row["execution_block"]["code"] == "BLOCKED_MAX_TRADES"
+    assert row["post_cap_eligibility"] == post_cap
     assert row["reason"]
     # Never a counted or intent row.
     assert all(r.get("decision") not in {"TRADE_INTENT"} for r in new_rows)
