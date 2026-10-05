@@ -291,12 +291,13 @@ def load_verified_seals(root: Path) -> list[dict[str, Any]]:
     return bound
 
 
-def capture_progress(
-    root: Path,
-    *,
-    eligible_start: str | None = ELIGIBLE_START,
-) -> CaptureProgress:
-    start = _validate_eligible_start(eligible_start)
+def capture_progress(root: Path) -> CaptureProgress:
+    """Return blind progress using only the source-registered eligible start.
+
+    There is intentionally no runtime/CLI start override. Tests may monkeypatch
+    this module constant; production changes require a reviewed source amendment.
+    """
+    start = _validate_eligible_start(ELIGIBLE_START)
     if start is None:
         return CaptureProgress(
             enabled=False,
@@ -340,22 +341,17 @@ def capture_progress(
     )
 
 
-def capture_decision(
-    root: Path,
-    session_date: str,
-    *,
-    eligible_start: str | None = ELIGIBLE_START,
-) -> CaptureDecision:
+def capture_decision(root: Path, session_date: str) -> CaptureDecision:
     day = _validate_session_date(session_date)
-    start = _validate_eligible_start(eligible_start)
+    start = _validate_eligible_start(ELIGIBLE_START)
     if start is None:
-        progress = capture_progress(root, eligible_start=None)
+        progress = capture_progress(root)
         return CaptureDecision(False, "eligible_start_unset", progress)
     if day < start:
-        progress = capture_progress(root, eligible_start=start)
+        progress = capture_progress(root)
         return CaptureDecision(False, "before_eligible_start", progress)
 
-    progress = capture_progress(root, eligible_start=start)
+    progress = capture_progress(root)
     existing = inspect_seal(root, day)
     if existing.ok:
         return CaptureDecision(False, "already_sealed", progress, existing)
@@ -372,18 +368,21 @@ def capture_decision(
 def write_artifact_once(
     root: Path,
     artifact: SealedSessionArtifact,
-    *,
-    eligible_start: str | None = ELIGIBLE_START,
 ) -> SealCheck:
     """Write one immutable session file and one manifest line, exactly once."""
 
     session_date = _validate_session_date(
         str(artifact.record.get("session_date") or "")
     )
-    decision = capture_decision(
-        root, session_date, eligible_start=eligible_start
-    )
+    decision = capture_decision(root, session_date)
     if decision.reason == "already_sealed" and decision.existing is not None:
+        if (
+            artifact.sha256 != decision.existing.sha256
+            or len(artifact.body) != decision.existing.byte_length
+        ):
+            raise CaptureIntegrationError(
+                "seal_already_exists_mismatch", session_date
+            )
         return decision.existing
     if not decision.required:
         raise CaptureIntegrationError(
