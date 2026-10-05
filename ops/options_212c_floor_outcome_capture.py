@@ -14,7 +14,7 @@ import json
 import os
 import re
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -35,6 +35,7 @@ from ops.options_212c_floor_outcome_monitor import (
 )
 from ops.options_212c_floor_outcome_study import SealedSessionArtifact
 
+_SHA40 = re.compile(r"^[0-9a-f]{40}$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _MANIFEST_FIELDS = frozenset({"session_date", "byte_length", "sha256"})
 _SOURCE_FIELDS = frozenset(
@@ -181,9 +182,51 @@ def _validate_artifact_schema(record: Mapping[str, Any]) -> None:
     session_date = _validate_session_date(
         str(record.get("session_date") or "")
     )
+    authority = nyse_session_for(date.fromisoformat(session_date))
+    assert authority is not None
+    expected_open = authority.open.astimezone(timezone.utc).isoformat()
+    expected_close = authority.close.astimezone(timezone.utc).isoformat()
+    if (
+        record.get("session_open") != expected_open
+        or record.get("session_close") != expected_close
+    ):
+        raise CaptureIntegrationError("artifact_session_window_invalid")
+
     source = record.get("source")
     if not isinstance(source, Mapping) or set(source) != _SOURCE_FIELDS:
         raise CaptureIntegrationError("artifact_source_fields_invalid")
+    if (
+        not isinstance(source.get("provider"), str)
+        or not source.get("provider")
+        or not isinstance(source.get("observer_run_id"), int)
+        or isinstance(source.get("observer_run_id"), bool)
+        or int(source["observer_run_id"]) <= 0
+        or not isinstance(source.get("source_sha"), str)
+        or not _SHA40.fullmatch(str(source.get("source_sha")))
+    ):
+        raise CaptureIntegrationError("artifact_source_identity_invalid")
+    try:
+        request_start = datetime.fromisoformat(str(source.get("request_start")))
+        request_end = datetime.fromisoformat(str(source.get("request_end")))
+        observer_ran_at = datetime.fromisoformat(str(source.get("observer_ran_at")))
+        captured_at = datetime.fromisoformat(str(record.get("captured_at")))
+    except ValueError as exc:
+        raise CaptureIntegrationError("artifact_timestamp_invalid") from exc
+    times = (request_start, request_end, observer_ran_at, captured_at)
+    if any(value.tzinfo is None or value.utcoffset() is None for value in times):
+        raise CaptureIntegrationError("artifact_timestamp_invalid")
+    if (
+        request_start.astimezone(timezone.utc)
+        != authority.open.astimezone(timezone.utc)
+        or request_end.astimezone(timezone.utc)
+        != authority.close.astimezone(timezone.utc)
+        or captured_at.astimezone(timezone.utc)
+        < authority.close.astimezone(timezone.utc)
+        or observer_ran_at.astimezone(timezone.utc)
+        > captured_at.astimezone(timezone.utc)
+    ):
+        raise CaptureIntegrationError("artifact_source_window_invalid")
+
     episodes = record.get("episodes")
     if not isinstance(episodes, list):
         raise CaptureIntegrationError("artifact_episodes_invalid")
@@ -307,6 +350,7 @@ def _verify_with_entry(
         raise CaptureIntegrationError("seal_record_invalid", day)
     if record.get("session_date") != day:
         raise CaptureIntegrationError("seal_session_mismatch", day)
+    _validate_artifact_schema(record)
     if canonical_seal_bytes(record) != body:
         raise CaptureIntegrationError("seal_not_canonical", day)
     return (
