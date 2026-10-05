@@ -118,7 +118,22 @@ def _capture_request(args: argparse.Namespace, sqlite_path: Path, events: Sequen
     if not _SHA40.fullmatch(str(args.capture_source_sha)):
         raise CaptureIntegrationError("capture_source_sha_invalid", str(args.capture_source_sha))
 
-    decision = capture_decision(Path(args.capture_root), args.date_from)
+    capture_root = Path(args.capture_root)
+    if args.out is None:
+        raise CaptureIntegrationError("capture_out_dir_missing")
+    out_dir = Path(args.out)
+    if out_dir.resolve() != (capture_root / "daily").resolve():
+        raise CaptureIntegrationError(
+            "capture_out_dir_mismatch",
+            f"{out_dir} != {capture_root / 'daily'}",
+        )
+    stem_name = f"outcomes_{args.date_from}_{args.date_to}"
+    if out_dir.exists() and any(out_dir.glob(f"{stem_name}*")):
+        raise CaptureIntegrationError(
+            "capture_prior_outcome_artifact", args.date_from
+        )
+
+    decision = capture_decision(capture_root, args.date_from)
     if decision.reason == "already_sealed":
         return {
             "session_date": args.date_from,
@@ -145,7 +160,7 @@ def _capture_request(args: argparse.Namespace, sqlite_path: Path, events: Sequen
         )
     return {
         "session_date": args.date_from,
-        "root": Path(args.capture_root),
+        "root": capture_root,
         "source_sha": str(args.capture_source_sha),
         "observer_run_id": run_id,
         "observer_ran_at": ran_at,
@@ -172,16 +187,10 @@ def _seal_from_fetch(
         for ep in session_episodes
         if ep.family == FAMILY and ep.symbol in V1_UNIVERSE
     }
-    provider_errors = {
-        symbol: errors[symbol]
-        for symbol in sorted(selected_symbols)
-        if symbol in errors
-    }
-    if provider_errors:
-        raise CaptureIntegrationError(
-            "capture_provider_errors",
-            json.dumps(provider_errors, sort_keys=True)[:500],
-        )
+    # Freeze the first fetch exactly as observed. A provider error for a
+    # selected symbol is represented by whatever bars were actually returned
+    # (often none); the frozen grid is then DATA_INVALID at the one look.
+    # Refetching later to "repair" that path would violate the capture contract.
     selected_bars = {
         symbol: bars.get(symbol, [])
         for symbol in sorted(selected_symbols)
