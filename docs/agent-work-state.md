@@ -4,7 +4,7 @@
 >
 > This file is **not** strategy-status authority, deployment authority, or experiment authority. Authoritative records named in `AGENTS.md` always win.
 >
-> **Checkpoint base:** repository `main` `d970b40` (PR #1131 merged, 2026-10-04); MNQ account-admission study is CLOSED / `INSUFFICIENT_EVIDENCE` / DO NOT REDO; shadow daily P&L report on the box = #1102 since 2026-10-02 14:53Z; futures box is on release `c44d32bc4961e56fae5c5f88a976eb6783341638` since 2026-10-04 21:29:09Z (rollback `489b55b`); **canonical 4HR natural-1m epoch start = 2026-10-04T21:30:05Z**. Always fetch current `main`; this stored SHA is a comparison base, not proof of current runtime state.
+> **Checkpoint base:** repository `main` `4433c0e` (PR #1137 merged, 2026-10-05); MNQ account-admission study is CLOSED / `INSUFFICIENT_EVIDENCE` / DO NOT REDO; shadow daily P&L report on the box = #1102 since 2026-10-02 14:53Z; futures box is on release `c44d32bc4961e56fae5c5f88a976eb6783341638` since 2026-10-04 21:29:09Z (rollback `489b55b`); **canonical 4HR natural-1m epoch start = 2026-10-04T21:30:05Z**; **#1137 post-cap eligibility is repo-side only — HOLD DEPLOYMENT**. Always fetch current `main`; this stored SHA is a comparison base, not proof of current runtime state.
 >
 > Core rule: **checkpoint first; diff first; do not redo proven work.**
 
@@ -58,7 +58,33 @@ Every substantial unit of work must leave:
 
 If the agent cannot persist this file, it must return this payload verbatim-ready for the next agent/operator to save.
 
-## Current checkpoint — 2026-10-04 ~21:30Z (c44d32b deployed; canonical 4HR epoch started)
+## Current checkpoint — 2026-10-05 ~15:40Z (#1137 merged; HOLD DEPLOYMENT; 4HR epoch unchanged)
+
+Repo `main` `4433c0e5d959165b9a0dfcc037e173aa1b4e8b19` after PR #1137. Futures box remains on exact release `c44d32bc4961e56fae5c5f88a976eb6783341638`. Canonical 4HR natural-1m epoch remains **2026-10-04T21:30:05Z**. No deploy, restart, env mutation, or broker mutation in this session.
+
+### DONE / DO NOT REDO
+
+- **#1137 post-cap eligibility observer — MERGED REPO-SIDE ONLY / DO NOT DEPLOY.** Independent review on exact head `deb2346` = **APPROVE REPO-SIDE ONLY** after the reduced-news `trade_count` bypass was fixed (`_PostCapObservationRiskEngine` overrides only `_check_daily_trade_limit`; real copied `trade_count` preserved). Merge commit `4433c0e`. Exact-head CI green. Cap remains 3. No WIN/LOSS/fill/P&L scoring. No broker/order reachability from the observer path.
+- **Deployment-readiness audit (read-only, 2026-10-05) — HOLD DEPLOYMENT.** `c44d32b..4433c0e` = 132 commits / 82 files; deploying current `main` is not a #1137-only release. Any promote/restart would break the `c44d32b` epoch release pin. Deployed release already journals raw `BLOCKED_MAX_TRADES` + `observe_past_capacity` candidates; eligibility classification can wait. A cherry-picked `c44d32b` + #1137-only candidate is isolatable later only under a separate operator GO after the epoch may end or be re-baselined — not now.
+- 3-2-2 remains WAIT / PARKED. Do not rerun or tune.
+- Prior 2026-10-04 ~21:30Z deploy/epoch proofs below remain the last box-side runtime authority; this session did not re-probe the VPS (no SSH to `hetzner`).
+
+### CANONICAL 4HR NATURAL-1M EPOCH (unchanged)
+
+**START = 2026-10-04T21:30:05Z UTC on exact release `c44d32b`.**
+
+Prospective evidence only; no backfill; no parameter tuning; no strategy changes; no Polygon work; no 3-2-2 work; no deploy of #1137 onto this epoch.
+
+### OPEN QUESTIONS / NEXT
+
+1. Collect forward 4HR natural-1m evidence only on `c44d32b`.
+2. On the first #1103-compliant touch, record `contract_hint` as MATCH / MISMATCH / UNKNOWN and whether manual review is required.
+3. Preserve observer-only posture and live-disarmed state.
+4. Confirm drift-gate cron against `c44d32b` when convenient (expect `OK release-integrity: c44d32bc4961`).
+5. After the first full session on `c44d32b`: `/futures-deployment-safety-audit`; confirm #1095 writes observation status under `/root/afs-shared/logs/`.
+6. Do **not** promote `main` or a #1137 candidate while the canonical epoch is active.
+
+## Earlier checkpoint — 2026-10-04 ~21:30Z (c44d32b deployed; canonical 4HR epoch started)
 
 Exact release `c44d32bc4961e56fae5c5f88a976eb6783341638` was built, verified, and promoted successfully. Rollback remains the prior `489b55b` release.
 

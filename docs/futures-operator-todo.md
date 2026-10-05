@@ -2,14 +2,16 @@
 
 > **Purpose:** durable operator action tracker for futures infrastructure/safety work. This file is **not** strategy-status authority and must not override `docs/strategy-rules/Strategy_Inventory.md`, the research trial ledger, or verified VPS/runtime evidence.
 >
-> **Repo reconciliation base:** `main` `d970b40` (2026-10-04, after PR #1131). The MNQ account-admission study is CLOSED / `INSUFFICIENT_EVIDENCE` / DO NOT REDO. Futures box release since the last verified runtime checkpoint is `c44d32bc4961e56fae5c5f88a976eb6783341638` (promoted 2026-10-04 21:29:09Z; rollback target `489b55b91b6303c195c8e84bfcbf05ef32d1ab04`). Fetch current `main` rather than treating this stored SHA as perpetual current state. The freshest runtime facts are checkpointed in `docs/agent-work-state.md`; older reconciliation notes remain dated provenance and require fresh read-only proof before any runtime/broker/access mutation.
+> **Repo reconciliation base:** `main` `4433c0e` (2026-10-05, after PR #1137). The MNQ account-admission study is CLOSED / `INSUFFICIENT_EVIDENCE` / DO NOT REDO. Futures box release since the last verified runtime checkpoint is `c44d32bc4961e56fae5c5f88a976eb6783341638` (promoted 2026-10-04 21:29:09Z; rollback target `489b55b91b6303c195c8e84bfcbf05ef32d1ab04`). **#1137 is merged repo-side only — HOLD DEPLOYMENT** (do not promote onto the active 4HR epoch). Fetch current `main` rather than treating this stored SHA as perpetual current state. The freshest runtime facts are checkpointed in `docs/agent-work-state.md`; older reconciliation notes remain dated provenance and require fresh read-only proof before any runtime/broker/access mutation.
 >
 > Core rule: **No proof, no run.**
 
 
-## CURRENT — 4HR natural-1m canonical epoch running; collect only
+## CURRENT — 4HR natural-1m canonical epoch running; collect only; #1137 HOLD DEPLOYMENT
 
 **2026-10-04 21:30:05Z: canonical epoch started on exact release `c44d32b`.** Details and the full proof table are in `docs/agent-work-state.md` (2026-10-04 ~21:30Z checkpoint) and `docs/4hr-natural-1m-observation-epoch-2026-10-01.md`.
+
+**2026-10-05: PR #1137 merged to `main` as `4433c0e` (post-cap eligibility observer + read-only report). Independent review = APPROVE REPO-SIDE ONLY. Deployment-readiness audit = HOLD DEPLOYMENT.** Do not promote `main` or a #1137 candidate while the `c44d32b` epoch is active. Deployed release already journals raw `BLOCKED_MAX_TRADES` candidates; eligibility classification can wait. Details: `docs/post-cap-eligibility-shadow-2026-10-05.md` and `docs/agent-work-state.md` (2026-10-05 checkpoint).
 
 - Deployed via `scripts/atomic_release.sh` build → verify → promote (operator GO), tooling at `main` `94136a5` (unchanged since the `489b55b` deploy). Box posture was the reset baseline (`always_on_shadow` / `HTF off` / `static`), so the promote gate took its sanctioned Path 1.
 - Post-deploy: symlink + cwd `c44d32b`; integrity OK 1633 files; 0 release-tree `__pycache__`; `LIVE_TRADING_ENABLED=false`; `TRADOVATE_ENV=demo`; `MAX_CONTRACTS_HARD_CAP=1`; both observer pins `true` and matching `EXPECTED_PROOF_`; `strat_4hr_retrigger` not in `enabled_concepts`; broker position null; in-process preflight 0 positions / 0 working orders; futures-bot PID `1851835`, `NRestarts=0`; deploy lock released; live disarmed (`preflight_passed_not_armed`).
@@ -19,10 +21,11 @@
 
 ### NEXT — read-only, in order
 
-1. **2026-10-05 after 11:05Z:** confirm `/root/afs-drift-gate.log` shows `OK release-integrity: c44d32bc4961 …` from the cron run and the live tree still has 0 `__pycache__`. If it alarms, read the reason before touching anything.
+1. **Confirm `/root/afs-drift-gate.log`** shows `OK release-integrity: c44d32bc4961 …` from the 2026-10-05 11:05Z cron run (or the next daily run) and the live tree still has 0 `__pycache__`. If it alarms, read the reason before touching anything.
 2. **After the first full session on `c44d32b`:** run `/futures-deployment-safety-audit`; confirm journals advance, `LOG_DIR` observation status lands in `/root/afs-shared/logs/` (not inside the release tree, #1095), RSS plateau, no new errors.
 3. **On the first 4HR natural-1m touch:** record `contract_check` MATCH / MISMATCH / UNKNOWN and whether `needs_manual_review` fired. This is the open `contract_hint` question; do not alter TradingView alerts to force an answer.
 4. Keep collecting. No parameter tuning, strategy change, Polygon work, or 3-2-2 work while the sample runs. A natural-1m 4HR loss is evidence, not a trigger.
+5. **#1137 stays HOLD DEPLOYMENT.** Do not promote `main` (132 ride-along commits vs `c44d32b`) and do not build/promote a cherry-picked #1137 candidate unless an operator explicitly ends or re-baselines the 4HR epoch.
 
 **HOLD on everything else: no deploy, restart, env mutation, broker mutation, strategy enablement, or research rerun without a new operator GO.**
 
@@ -66,7 +69,8 @@ Do not deploy, restart, retune, harden SSH, or reopen research merely because pa
 
 ## Completed — do not reopen by default
 
-- [x] Promotion hard-blocker / CLI exit semantics remain fail-closed (#893).
+- [x] **PR #1137 post-cap eligibility observer merged 2026-10-05 as `4433c0e`.** Repo-side only. Independent review APPROVE REPO-SIDE ONLY; deployment-readiness = **HOLD DEPLOYMENT**. Do not promote onto the active 4HR epoch. Raw post-cap candidates continue on `c44d32b`; eligibility classification waits.
+- [x] **Promotion hard-blocker / CLI exit semantics remain fail-closed (#893).**
 - [x] Promotion quantity proof requires per-entry-attempt observed quantities and exact count/claim reconciliation (#1070).
 - [x] Promotion cap parser rejects fractional/invalid quantities instead of truncating them (#1072).
 - [x] Six-market daily evidence reporting is on `main` for MNQ, MES, M2K, MBT, MCL, and MGC (#1068).
