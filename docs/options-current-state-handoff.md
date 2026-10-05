@@ -1,9 +1,13 @@
 # Options — Current State Handoff
 
-_As of 2026-10-02. The newest dated repository refresh below governs source state; the latest verified box-specific sections govern runtime state until a fresh local/provider or VPS check is performed. This is the single current-state authority for the options lane._
+_As of 2026-10-04. The newest dated repository refresh below governs source state; the latest verified box-specific sections govern runtime state until a fresh local/provider or VPS check is performed. This is the single current-state authority for the options lane._
 
 Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`; the read-only coverage evidence lane (observer, reducer, outcome study, after-close collector) is described in `docs/options-coverage-observer.md`.
 
+
+## Repository refresh — 2026-10-04 (companion pre-entry factor DRAFT registered)
+
+Trial `T-2026-10-04-prereg-options-212c-preentry-factors-2026-10-04-01` / spec `E-2026-10-04-options-212c-preentry-factors-01` is registered **DRAFT / PLANNED / NOT RUN** as a definitions-only companion to the forward study `E-2026-10-02-options-212c-floor-outcome-01`. It freezes, before the parent's first eligible session (2026-10-05), which pre-entry factors will be tabulated against the parent's single scored look: direction (stratifier only), `blind_window` at the existing `BLIND_WINDOW_MATERIAL_R = 0.25`, `clock_bucket`, `instrument_class`, `opening_bar`, all derived from fields already in the parent seal. The operator-recommended gate factors (SPY/QQQ/hourly/daily alignment, `late_floor`) are constant by construction among activations and are recorded as verification counts. A fresh-context blind red-team (protocol only, no outcomes) returned `PROTOCOL NEEDS REVISION`, and a second fresh-context diff review returned `REQUEST CHANGES` (the draft's gate-contrast control asked the parent scorer to score non-activated episodes, which it refuses); both sets of findings are incorporated and the gate-contrast control is recorded as UNAVAILABLE. Neither review report is archived in the repository. The companion is **counts-only and hypothesis-generating by design**; it cannot answer "what causes wins" confirmatorily and has no `SUPPORTED` outcome. It changes nothing in the parent contract, adds no adapter, collection, scoring, or approval, and does not authorize the parent to collect. Coverage improvement remains proven; profitable missed trades and winner discrimination remain not proven. The closed 59-episode trial stays closed.
 
 ## Repository refresh — 2026-10-02 (#1115 merged; forward machinery QA only)
 
