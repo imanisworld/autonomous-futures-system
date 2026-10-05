@@ -26,6 +26,18 @@ from strategy.confluence_scorer import score_setup
 from strategy.stop_sizing import apply_stop_multiplier
 
 
+class _PostCapObservationRiskEngine(RiskEngine):
+    """RiskEngine variant for one inert counterfactual question only.
+
+    The executable daily-count gate is the single overridden check. Every
+    other inherited check receives the caller's real copied DailyState,
+    including its original trade_count.
+    """
+
+    def _check_daily_trade_limit(self, setup: TradeSetup, daily_state: DailyState):
+        return None
+
+
 def evaluate_post_cap_eligibility(
     *,
     state: Any,
@@ -40,8 +52,9 @@ def evaluate_post_cap_eligibility(
     """Return an inert cap-only eligibility record.
 
     daily_state.trade_count must already be at or above the configured total
-    daily capacity. The copy passed to RiskEngine has only trade_count reset
-    to zero; every other reconstructed risk field is preserved.
+    daily capacity. The copy passed to the observation-only RiskEngine keeps
+    the real trade_count; only the executable _check_daily_trade_limit method
+    is overridden. Every other reconstructed risk field and gate is preserved.
 
     account_balance and account_peak_balance are explicitly the journal
     ledger values supplied by the caller. This keeps the observer broker-free.
@@ -69,7 +82,7 @@ def evaluate_post_cap_eligibility(
         )
 
     confluence = score_setup(state, observed_setup)
-    risk_engine = RiskEngine(config=cfg)
+    risk_engine = _PostCapObservationRiskEngine(config=cfg)
     recommended_contracts = risk_engine.recommended_contracts(
         state.instrument, account_balance
     )
@@ -83,9 +96,8 @@ def evaluate_post_cap_eligibility(
 
     shadow_state = copy.deepcopy(daily_state)
     original_trade_count = int(shadow_state.trade_count)
-    # Remove exactly the daily-count capacity gate. Search proves RiskEngine
-    # reads DailyState.trade_count only in _check_daily_trade_limit.
-    shadow_state.trade_count = 0
+    # Keep the true count for every non-cap rule (for example reduced-news-day
+    # trade limits). The subclass above skips only _check_daily_trade_limit.
     shadow_state.account_balance = float(account_balance)
     shadow_state.account_peak_balance = float(account_peak_balance)
 
