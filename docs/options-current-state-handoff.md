@@ -5,6 +5,14 @@ _As of 2026-10-05. The newest dated repository refresh below governs source stat
 Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`; the read-only coverage evidence lane (observer, reducer, outcome study, after-close collector) is described in `docs/options-coverage-observer.md`.
 
 
+## Repository refresh — 2026-10-05 (#1089 merged telemetry schema; #1140 daily-cap audit open)
+
+Repo `main` tip after #1089 squash merge: `31c9281f41e61791dc050d74f33acf02f87085e4`. **No options runtime/deploy/restart** from this refresh. Active `OPTIONS_PAPER_V1` policy and the current evidence cohort are unchanged.
+
+- **#1089 — observational setup rating schema MERGED / repo-side only.** Adds `ObservationRatingSnapshot` to the Phase-1 options plan lane with pinned `observation_only=true` / `trade_authority=false`. Independent review APPROVE: rating cannot alter actionability, status, conviction, validation, entry/invalidation/targets, contract/risk/sizing, alerts, broker prep, or execution. No scoring algorithm/weights. Missing GEX/Signa is not a hard rejection via this schema. Exact reviewed head `8642fa6971332a136c0e7d649f2bedd585e0610d`; exact-head CI green before merge.
+- **#1140 — options daily-cap shadow audit OPEN / docs-only.** Exact head `6c5f2081b5191395a1c4731dfea68e715709b15f`. Verdict **DOES NOT DO THIS** for active V1: there is no 3-openings/day ACTIVE cap. Existing `$300` per-trade and `$1,000` aggregate ACTIVE planned-risk controls plus ACTIVE/COUNTERFACTUAL separation remain authoritative. `options_trading.max_daily_trades: 3` belongs to the separate disabled companion path (`options_trading.enabled: false`) and must not be treated as active-V1 behavior. Do not implement a 3-trade options cap from this audit; that would create a new risk-policy/cohort boundary requiring operator approval + preregistration. Do not backfill/relabel prior options evidence.
+- Production posture remains 20-symbol advisory/read-only `OPTIONS_PAPER_V1` with SPXW OFF unless a later verified runtime section says otherwise.
+
 ## Repository refresh — 2026-10-05 (forward `-02` re-registration + floor-eligible companion + blind-window prep; not run)
 
 Preparation only. **Not approval, not collection, not scoring, not a coverage-collector deploy.**

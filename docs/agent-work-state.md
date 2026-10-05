@@ -4,7 +4,7 @@
 >
 > This file is **not** strategy-status authority, deployment authority, or experiment authority. Authoritative records named in `AGENTS.md` always win.
 >
-> **Checkpoint base:** repository `main` `4433c0e` (PR #1137 merged, 2026-10-05); MNQ account-admission study is CLOSED / `INSUFFICIENT_EVIDENCE` / DO NOT REDO; shadow daily P&L report on the box = #1102 since 2026-10-02 14:53Z; futures box is on release `c44d32bc4961e56fae5c5f88a976eb6783341638` since 2026-10-04 21:29:09Z (rollback `489b55b`); **canonical 4HR natural-1m epoch start = 2026-10-04T21:30:05Z**; **#1137 post-cap eligibility is repo-side only — HOLD DEPLOYMENT**. Always fetch current `main`; this stored SHA is a comparison base, not proof of current runtime state.
+> **Checkpoint base:** repository `main` `31c9281` (PR #1089 merged, 2026-10-05; includes #1137 as `4433c0e`); MNQ account-admission study is CLOSED / `INSUFFICIENT_EVIDENCE` / DO NOT REDO; shadow daily P&L report on the box = #1102 since 2026-10-02 14:53Z; futures box is on release `c44d32bc4961e56fae5c5f88a976eb6783341638` since 2026-10-04 21:29:09Z (rollback `489b55b`); **canonical 4HR natural-1m epoch start = 2026-10-04T21:30:05Z**; **#1137 post-cap eligibility is repo-side only — HOLD DEPLOYMENT**; **#1089 observation rating is repo-side telemetry only — no options deploy**. Always fetch current `main`; this stored SHA is a comparison base, not proof of current runtime state.
 >
 > Core rule: **checkpoint first; diff first; do not redo proven work.**
 
@@ -58,14 +58,16 @@ Every substantial unit of work must leave:
 
 If the agent cannot persist this file, it must return this payload verbatim-ready for the next agent/operator to save.
 
-## Current checkpoint — 2026-10-05 ~15:40Z (#1137 merged; HOLD DEPLOYMENT; 4HR epoch unchanged)
+## Current checkpoint — 2026-10-05 ~16:15Z (#1089 merged; #1140 open; #1137 HOLD DEPLOYMENT)
 
-Repo `main` `4433c0e5d959165b9a0dfcc037e173aa1b4e8b19` after PR #1137. Futures box remains on exact release `c44d32bc4961e56fae5c5f88a976eb6783341638`. Canonical 4HR natural-1m epoch remains **2026-10-04T21:30:05Z**. No deploy, restart, env mutation, or broker mutation in this session.
+Repo `main` `31c9281f41e61791dc050d74f33acf02f87085e4` after PR #1089 (includes #1137 as `4433c0e`). Futures box remains on exact release `c44d32bc4961e56fae5c5f88a976eb6783341638`. Canonical 4HR natural-1m epoch remains **2026-10-04T21:30:05Z**. No deploy, restart, env mutation, or broker mutation in this session.
 
 ### DONE / DO NOT REDO
 
-- **#1137 post-cap eligibility observer — MERGED REPO-SIDE ONLY / DO NOT DEPLOY.** Independent review on exact head `deb2346` = **APPROVE REPO-SIDE ONLY** after the reduced-news `trade_count` bypass was fixed (`_PostCapObservationRiskEngine` overrides only `_check_daily_trade_limit`; real copied `trade_count` preserved). Merge commit `4433c0e`. Exact-head CI green. Cap remains 3. No WIN/LOSS/fill/P&L scoring. No broker/order reachability from the observer path.
-- **Deployment-readiness audit (read-only, 2026-10-05) — HOLD DEPLOYMENT.** `c44d32b..4433c0e` = 132 commits / 82 files; deploying current `main` is not a #1137-only release. Any promote/restart would break the `c44d32b` epoch release pin. Deployed release already journals raw `BLOCKED_MAX_TRADES` + `observe_past_capacity` candidates; eligibility classification can wait. A cherry-picked `c44d32b` + #1137-only candidate is isolatable later only under a separate operator GO after the epoch may end or be re-baselined — not now.
+- **#1089 observational setup rating schema — MERGED REPO-SIDE ONLY / DO NOT DEPLOY.** Squash merge `31c9281` from exact head `8642fa6971332a136c0e7d649f2bedd585e0610d` after independent review APPROVE and exact-head CI green. `ObservationRatingSnapshot` is telemetry only (`observation_only=true`, `trade_authority=false`); rating cannot alter actionability/status/conviction/risk/contract/alerts/execution. No scoring weights. Does not change active `OPTIONS_PAPER_V1` or the current options evidence cohort.
+- **#1140 options daily-cap shadow audit — OPEN / REVIEW-READY / DO NOT IMPLEMENT A CAP.** Docs-only. Exact head `6c5f2081b5191395a1c4731dfea68e715709b15f`. Verdict **DOES NOT DO THIS** for active V1 (no 3-openings/day cap). Companion `max_daily_trades: 3` stays disabled/`options_trading.enabled: false`. Active V1 remains $300/$1,000 ACTIVE risk + ACTIVE/COUNTERFACTUAL separation. Operator must choose KEEP CURRENT V1 vs NEW CAPPED COHORT; no backfill/relabel.
+- **#1137 post-cap eligibility observer — MERGED REPO-SIDE ONLY / DO NOT DEPLOY.** Independent review APPROVE REPO-SIDE ONLY; merge `4433c0e`. Cap remains futures 3/day. HOLD DEPLOYMENT while 4HR epoch is on `c44d32b`.
+- **Deployment-readiness audit (read-only, 2026-10-05) — HOLD DEPLOYMENT.** Deploying current `main` is not a #1137-only release and would break the `c44d32b` epoch pin.
 - 3-2-2 remains WAIT / PARKED. Do not rerun or tune.
 - Prior 2026-10-04 ~21:30Z deploy/epoch proofs below remain the last box-side runtime authority; this session did not re-probe the VPS (no SSH to `hetzner`).
 
@@ -73,7 +75,7 @@ Repo `main` `4433c0e5d959165b9a0dfcc037e173aa1b4e8b19` after PR #1137. Futures b
 
 **START = 2026-10-04T21:30:05Z UTC on exact release `c44d32b`.**
 
-Prospective evidence only; no backfill; no parameter tuning; no strategy changes; no Polygon work; no 3-2-2 work; no deploy of #1137 onto this epoch.
+Prospective evidence only; no backfill; no parameter tuning; no strategy changes; no Polygon work; no 3-2-2 work; no deploy of #1137 or current `main` onto this epoch.
 
 ### OPEN QUESTIONS / NEXT
 
@@ -83,6 +85,12 @@ Prospective evidence only; no backfill; no parameter tuning; no strategy changes
 4. Confirm drift-gate cron against `c44d32b` when convenient (expect `OK release-integrity: c44d32bc4961`).
 5. After the first full session on `c44d32b`: `/futures-deployment-safety-audit`; confirm #1095 writes observation status under `/root/afs-shared/logs/`.
 6. Do **not** promote `main` or a #1137 candidate while the canonical epoch is active.
+7. Operator decision on #1140: KEEP CURRENT V1 or authorize a separately preregistered NEW CAPPED COHORT. Do not implement a 3-trade options cap from the audit alone.
+8. No options service deploy/restart from #1089 or #1140.
+
+## Earlier checkpoint — 2026-10-05 ~15:40Z (#1137 merged; HOLD DEPLOYMENT; 4HR epoch unchanged)
+
+Repo `main` was `4433c0e5d959165b9a0dfcc037e173aa1b4e8b19` after PR #1137. Superseded for repository tip by `31c9281` (#1089); futures runtime HOLD DEPLOYMENT facts above remain current.
 
 ## Earlier checkpoint — 2026-10-04 ~21:30Z (c44d32b deployed; canonical 4HR epoch started)
 

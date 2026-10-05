@@ -1,9 +1,14 @@
 # Options — Next Actions
 
-_As of 2026-10-02. Operational checklist only. The authoritative options status remains `docs/options-current-state-handoff.md`. This file must not be used to redefine strategy status, cohort boundaries, or deployment authority._
+_As of 2026-10-05. Operational checklist only. The authoritative options status remains `docs/options-current-state-handoff.md`. This file must not be used to redefine strategy status, cohort boundaries, or deployment authority._
 
 ## Now — no production mutation
 
+### Observation rating + daily-cap audit closeout
+
+- [x] #1089 merged as `31c9281f41e61791dc050d74f33acf02f87085e4` from exact head `8642fa6971332a136c0e7d649f2bedd585e0610d`. Observation-only rating schema; no trade authority; no scoring weights; **not deployed**.
+- [ ] #1140 docs-only daily-cap audit is open/review-ready at `6c5f2081b5191395a1c4731dfea68e715709b15f`. Operator chooses KEEP CURRENT V1 or authorizes a separately preregistered NEW CAPPED COHORT. Do **not** implement a 3-trade options cap from the audit alone. Do not backfill/relabel prior evidence.
+- [ ] Do not deploy/restart options services from #1089 or #1140.
 
 ### 2-1-2 floor-outcome forward study
 

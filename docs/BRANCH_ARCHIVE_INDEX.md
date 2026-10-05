@@ -9,22 +9,23 @@ the same PR + review process as new work.
 
 ---
 
-## 2026-10-05 cleanup (post-PR #1137)
+## 2026-10-05 cleanup (post-PR #1089 + #1137)
 
-Main at audit: `4433c0e5d959165b9a0dfcc037e173aa1b4e8b19` (#1137 merged). Scope
-was deliberately narrow: only the merged #1137 head branch that GitHub left
-on the remote, plus the local review tracking branch.
+Main at audit: `31c9281f41e61791dc050d74f33acf02f87085e4` (#1089 merged; includes
+#1137 as `4433c0e`). Scope deliberately narrow: merged PR head branches and
+local review/worktree leftovers only.
 
-Deleted without an archive tag (MERGED; tip reachable from `main`; history
-also in `refs/pull/1137/head`):
+Deleted without an archive tag (MERGED; history also in `refs/pull/N/head`):
 
 | Original branch | Tip SHA | Disposition |
 |---|---|---|
-| `ops/post-cap-eligibility-shadow-20261005` | `deb23464882c5f58c01fa95d246650efdc8556d6` | MERGED via #1137 as `4433c0e`; tip ancestor of `main`; remote already gone by cleanup (GitHub delete-on-merge / pruned); local review tracker removed |
-| `cursor/review-1137-ffce` (local only) | tracked `ops/post-cap…` at `deb2346` | SAFE DELETE LOCAL after merge |
+| `options/observation-rating-schema` | `8642fa6971332a136c0e7d649f2bedd585e0610d` | MERGED via #1089 squash as `31c9281`; remote already gone (GitHub delete-on-merge / pruned); local branch + `/tmp/wt-1089*` worktrees removed |
+| `ops/post-cap-eligibility-shadow-20261005` | `deb23464882c5f58c01fa95d246650efdc8556d6` / later `4fec8c3…` | MERGED via #1137 as `4433c0e`; remote already gone; local review trackers removed |
+| `cursor/review-1137-ffce` / `review-1137-deb2346` (local only) | review trackers | SAFE DELETE LOCAL after merge |
+| `/tmp/wt-1140` worktree only | `6c5f208…` | worktree removed; **remote `audit/options-daily-cap-shadow-20261005` KEEP** — open PR #1140 |
 
-Kept, not deleted: open PR heads, `release/*`, `hold/*`, `archive/*`,
-`candidate/*`, `audit/*`, and all other remotes from the 2026-10-04 KEEP set.
+Kept, not deleted: open PR heads (including #1140), `release/*`, `hold/*`,
+`archive/*`, `candidate/*`, and all other remotes from the 2026-10-04 KEEP set.
 Further remote cleanup remains a separate audited pass.
 
 ---
