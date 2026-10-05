@@ -367,6 +367,7 @@ def test_aggregate_emits_all_preregistered_metrics() -> None:
             "episode_id": "a",
             "ticker": "AAPL",
             "session_date": DAY,
+            "gate_bucket_floor": "WOULD_OTHERWISE_QUALIFY",
             "clock_bucket": "10:00 ET",
             "outcome": TARGET,
             "realized_r": 1.5,
@@ -378,6 +379,7 @@ def test_aggregate_emits_all_preregistered_metrics() -> None:
             "episode_id": "b",
             "ticker": "MSFT",
             "session_date": DAY,
+            "gate_bucket_floor": "WOULD_OTHERWISE_QUALIFY",
             "clock_bucket": "11:00 ET",
             "outcome": STOP,
             "realized_r": -1.0,
@@ -389,6 +391,7 @@ def test_aggregate_emits_all_preregistered_metrics() -> None:
             "episode_id": "c",
             "ticker": "AAPL",
             "session_date": DAY,
+            "gate_bucket_floor": "WOULD_OTHERWISE_QUALIFY",
             "clock_bucket": "12:00 ET",
             "outcome": TIMEOUT,
             "realized_r": 0.25,
@@ -620,18 +623,28 @@ def test_companion_scores_alignment_rejected_but_not_late_and_aggregates_by_stra
 
     primary = score_session_record(artifact.record)
     assert primary["population"] == POPULATION_ACTIVATED
+    assert primary["population_size"] == 4
     assert [r["ticker"] for r in primary["rows"]] == ["AAPL"]
+    primary_metrics = aggregate_metrics([primary])
+    assert primary_metrics["activation_count"]["count"] == 1
+    assert primary_metrics["activation_count"]["of"] == 4
 
     companion = score_session_record(artifact.record, population=POPULATION_FLOOR_ELIGIBLE)
-    assert companion["population_size"] == 4
+    assert companion["population_size"] == 2
     assert sorted(r["ticker"] for r in companion["rows"]) == ["AAPL", "MSFT"]  # NVDA is late; AMZN has no floor geometry
     by_ticker = {r["ticker"]: r for r in companion["rows"]}
     assert by_ticker["AAPL"]["factors"]["spy_alignment"] == ALIGNED
     assert by_ticker["MSFT"]["factors"]["spy_alignment"] == NOT_ALIGNED
     assert by_ticker["MSFT"]["outcome"] == TARGET
+    assert by_ticker["AAPL"]["gate_bucket_floor"] == "WOULD_OTHERWISE_QUALIFY"
+    assert by_ticker["MSFT"]["gate_bucket_floor"] == "MARKET_ALIGNMENT_REJECTED"
 
     table = aggregate_factor_metrics([companion])
     assert table["population"] == POPULATION_FLOOR_ELIGIBLE
+    assert table["overall"]["population_size"]["count"] == 2
+    assert table["overall"]["setups_evaluated"]["count"] == 2
+    assert table["overall"]["activation_count"] == {"count": 1, "rate": 0.5, "of": 2}
+    assert table["overall"]["wins"]["count"] == 2
     assert set(table["by_factor"]) == set(PRIMARY_FACTORS)
     assert table["by_factor"]["spy_alignment"][ALIGNED]["count"] == 1
     assert table["by_factor"]["spy_alignment"][NOT_ALIGNED]["count"] == 1
@@ -639,8 +652,13 @@ def test_companion_scores_alignment_rejected_but_not_late_and_aggregates_by_stra
     # cells below the preregistered minimum report counts only
     assert table["by_factor"]["spy_alignment"][ALIGNED]["suppressed"] is True
     assert table["by_factor"]["spy_alignment"][ALIGNED]["metrics"] is None
+    assert table["by_factor"]["spy_alignment"][ALIGNED]["activation_count"] == 1
+    assert table["by_factor"]["spy_alignment"][NOT_ALIGNED]["activation_count"] == 0
     assert table["by_gate_bucket_floor"]["MARKET_ALIGNMENT_REJECTED"]["count"] == 1
+    assert table["by_gate_bucket_floor"]["MARKET_ALIGNMENT_REJECTED"]["activation_count"] == 0
+    assert table["by_gate_bucket_floor"]["WOULD_OTHERWISE_QUALIFY"]["activation_count"] == 1
     assert table["by_direction"]["LONG"]["count"] == 2 and table["by_direction"]["SHORT"]["count"] == 0
+    assert table["by_direction"]["LONG"]["activation_count"] == 1
     assert set(REQUIRED_METRICS).issubset(table["overall"])
     with pytest.raises(StudyContractError, match="population_invalid"):
         aggregate_factor_metrics([primary])
@@ -654,8 +672,86 @@ def test_companion_cell_releases_metrics_at_the_minimum() -> None:
     table = aggregate_factor_metrics([{"population": POPULATION_FLOOR_ELIGIBLE, "population_size": 5, "rows": rows}])
     cell = table["by_factor"]["remaining_r_bucket"]["ge2"]
     assert cell["completed"] == 5 and cell["suppressed"] is False
+    assert cell["activation_count"] == 5
     assert cell["metrics"]["wins"]["count"] == 2
-    assert table["by_factor"]["remaining_r_bucket"]["ge1_lt1p5"] == {"count": 0, "completed": 0, "metrics": None, "suppressed": True}
+    assert cell["metrics"]["activation_count"]["count"] == 5
+    assert table["by_factor"]["remaining_r_bucket"]["ge1_lt1p5"] == {
+        "count": 0,
+        "completed": 0,
+        "activation_count": 0,
+        "metrics": None,
+        "suppressed": True,
+    }
+
+
+def test_companion_alignment_rejected_cells_have_zero_activations() -> None:
+    rejected = [
+        {
+            "episode_id": str(i),
+            "ticker": "MSFT",
+            "session_date": DAY,
+            "direction": "LONG",
+            "gate_bucket_floor": "MARKET_ALIGNMENT_REJECTED",
+            "clock_bucket": "10:00 ET",
+            "outcome": TARGET if i % 2 else STOP,
+            "realized_r": 1.5 if i % 2 else -1.0,
+            "mae_r": -0.2,
+            "mfe_r": 0.8,
+            "factors": {f: NOT_ALIGNED for f in PRIMARY_FACTORS[:-1]} | {"remaining_r_bucket": "ge2"},
+            "flags": [],
+        }
+        for i in range(5)
+    ]
+    qualify = [
+        {
+            "episode_id": f"q{i}",
+            "ticker": "AAPL",
+            "session_date": DAY,
+            "direction": "SHORT",
+            "gate_bucket_floor": "WOULD_OTHERWISE_QUALIFY",
+            "clock_bucket": "10:00 ET",
+            "outcome": TARGET,
+            "realized_r": 1.0,
+            "mae_r": -0.1,
+            "mfe_r": 0.5,
+            "factors": {f: ALIGNED for f in PRIMARY_FACTORS[:-1]} | {"remaining_r_bucket": "ge2"},
+            "flags": [],
+        }
+        for i in range(5)
+    ]
+    table = aggregate_factor_metrics(
+        [{"population": POPULATION_FLOOR_ELIGIBLE, "population_size": 10, "rows": rejected + qualify}]
+    )
+    overall = table["overall"]
+    assert overall["population_size"]["count"] == 10
+    assert overall["setups_evaluated"]["count"] == 10
+    assert overall["activation_count"] == {"count": 5, "rate": 0.5, "of": 10}
+    assert overall["wins"]["count"] == 7
+    assert overall["losses"]["count"] == 3
+
+    rejected_cell = table["by_gate_bucket_floor"]["MARKET_ALIGNMENT_REJECTED"]
+    assert rejected_cell["count"] == 5
+    assert rejected_cell["activation_count"] == 0
+    assert rejected_cell["suppressed"] is False
+    assert rejected_cell["metrics"]["activation_count"] == {"count": 0, "rate": 0.0, "of": 5}
+    assert rejected_cell["metrics"]["wins"]["count"] == 2
+    assert rejected_cell["metrics"]["losses"]["count"] == 3
+
+    qualify_cell = table["by_gate_bucket_floor"]["WOULD_OTHERWISE_QUALIFY"]
+    assert qualify_cell["activation_count"] == 5
+    assert qualify_cell["metrics"]["activation_count"]["count"] == 5
+
+    not_aligned = table["by_factor"]["spy_alignment"][NOT_ALIGNED]
+    assert not_aligned["count"] == 5
+    assert not_aligned["activation_count"] == 0
+    assert not_aligned["metrics"]["activation_count"]["count"] == 0
+
+    long_cell = table["by_direction"]["LONG"]
+    assert long_cell["count"] == 5
+    assert long_cell["activation_count"] == 0
+    short_cell = table["by_direction"]["SHORT"]
+    assert short_cell["count"] == 5
+    assert short_cell["activation_count"] == 5
 
 
 def test_scoring_refuses_a_snapshot_missing_a_v02_factor_field() -> None:

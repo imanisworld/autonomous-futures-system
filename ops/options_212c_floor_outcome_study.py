@@ -872,10 +872,16 @@ def score_session_record(
                 raise StudyContractError("snapshot_field_missing", field)
         if in_population(snap, population):
             rows.append(score_snapshot(snap, session, population=population))
+    # Primary Stage A: population is every sealed structural 2-1-2 episode;
+    # activations are the scored WOULD_OTHERWISE_QUALIFY rows. Companion:
+    # population is the scored floor-eligible subset only.
+    population_size = (
+        len(rows) if population == POPULATION_FLOOR_ELIGIBLE else len(episodes)
+    )
     return {
         "session_date": record.get("session_date"),
         "population": population,
-        "population_size": len(episodes),
+        "population_size": population_size,
         "rows": rows,
     }
 
@@ -923,6 +929,11 @@ def _group(
     return out
 
 
+def _is_activation(row: Mapping[str, Any]) -> bool:
+    """An activation is a WOULD_OTHERWISE_QUALIFY row, never another gate."""
+    return row.get("gate_bucket_floor") == ACTIVATION_GATE
+
+
 def aggregate_metrics(
     session_scores: Sequence[Mapping[str, Any]]
 ) -> dict[str, Any]:
@@ -935,6 +946,7 @@ def aggregate_metrics(
         for r in (x.get("rows") or [])
         if isinstance(r, Mapping)
     ]
+    activations = [r for r in rows if _is_activation(r)]
     completed = [r for r in rows if r.get("outcome") in COMPLETED]
     wins = [r for r in completed if r.get("outcome") == TARGET]
     losses = [r for r in completed if r.get("outcome") == STOP]
@@ -1033,8 +1045,8 @@ def aggregate_metrics(
             "of": population,
         },
         "activation_count": {
-            "count": len(rows),
-            "rate": _div(len(rows), population),
+            "count": len(activations),
+            "rate": _div(len(activations), population),
             "of": population,
         },
         "completed_trades": {
@@ -1144,7 +1156,12 @@ def aggregate_metrics(
 def _cell(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     """One stratum. Full metric table only at MIN_CELL_COMPLETED completed rows."""
     completed = sum(1 for r in rows if r.get("outcome") in COMPLETED)
-    cell: dict[str, Any] = {"count": len(rows), "completed": completed}
+    activations = sum(1 for r in rows if _is_activation(r))
+    cell: dict[str, Any] = {
+        "count": len(rows),
+        "completed": completed,
+        "activation_count": activations,
+    }
     if completed >= MIN_CELL_COMPLETED:
         cell["metrics"] = aggregate_metrics(
             [{"population_size": len(rows), "rows": list(rows)}]

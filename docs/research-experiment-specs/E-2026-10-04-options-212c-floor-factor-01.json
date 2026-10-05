@@ -38,7 +38,7 @@
   "held_constant": [
     "same path-v0.2 seals as the primary trial; no second seal",
     "walk options_212c_floor_outcome-v0.1 unchanged; measured_entry_price = first_sight_price",
-    "population gate_bucket_floor in {MARKET_ALIGNMENT_REJECTED, WOULD_OTHERWISE_QUALIFY} with late_floor false and first_sight_after_close false",
+    "population_size and setups_evaluated count floor-eligible episodes only; activation_count is WOULD_OTHERWISE_QUALIFY; MARKET_ALIGNMENT_REJECTED cells have activation_count 0",
     "raw sealed fields spy_trend, qqq_trend, hourly_candle_type, daily_candle_type, alignment_failures, floor_remaining_rr, late_floor",
     "derived labels ALIGNED / NOT_ALIGNED / MISSING and remaining-R buckets computed at score time only",
     "hourly MISSING is explicit and is not treated as aligned",

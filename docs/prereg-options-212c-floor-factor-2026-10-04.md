@@ -73,6 +73,8 @@ After the one look, publish:
 - the same table per primary-factor label
 - the same split by direction inside each factor label
 
+Denominator rule, frozen: `population_size` and `setups_evaluated` count floor-eligible episodes only. `activation_count` counts `gate_bucket_floor == WOULD_OTHERWISE_QUALIFY` inside that population. Activation rate is activations / floor-eligible population. W/L/timeout/R describe every scored floor-eligible row, including `MARKET_ALIGNMENT_REJECTED`. The same rule applies inside each factor, direction, and gate stratum; a `MARKET_ALIGNMENT_REJECTED` cell has `activation_count` 0.
+
 A cell with fewer than 5 completed outcomes reports counts only (`suppressed: true`, `metrics: null`). No numeric threshold is an acceptance criterion.
 
 The generic experiment runner does not emit `by_factor`, `by_factor_and_direction`, `by_gate_bucket_floor`, or `by_direction`. A generic run that lacks them is not a completed one look. The one-look adapter must independently verify the manifest SHA-256 of each sealed file and enforce **INSUFFICIENT SAMPLE** (overall completed outcomes below 15) / **DESCRIPTIVE MEASUREMENT** (15 or more).
