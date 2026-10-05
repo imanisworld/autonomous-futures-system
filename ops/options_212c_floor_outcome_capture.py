@@ -379,6 +379,18 @@ def write_artifact_once(
     session_date = _validate_session_date(
         str(artifact.record.get("session_date") or "")
     )
+    expected_manifest = {
+        "session_date": session_date,
+        "byte_length": len(artifact.body),
+        "sha256": artifact.sha256,
+    }
+    if artifact.manifest != expected_manifest:
+        raise CaptureIntegrationError("artifact_manifest_mismatch", session_date)
+    if hashlib.sha256(artifact.body).hexdigest() != artifact.sha256:
+        raise CaptureIntegrationError("artifact_sha256_mismatch", session_date)
+    if canonical_seal_bytes(artifact.record) != artifact.body:
+        raise CaptureIntegrationError("artifact_not_canonical", session_date)
+
     decision = capture_decision(root, session_date)
     if decision.reason == "already_sealed" and decision.existing is not None:
         if (
@@ -393,18 +405,6 @@ def write_artifact_once(
         raise CaptureIntegrationError(
             "capture_not_allowed", f"{session_date}:{decision.reason}"
         )
-
-    expected_manifest = {
-        "session_date": session_date,
-        "byte_length": len(artifact.body),
-        "sha256": artifact.sha256,
-    }
-    if artifact.manifest != expected_manifest:
-        raise CaptureIntegrationError("artifact_manifest_mismatch", session_date)
-    if hashlib.sha256(artifact.body).hexdigest() != artifact.sha256:
-        raise CaptureIntegrationError("artifact_sha256_mismatch", session_date)
-    if canonical_seal_bytes(artifact.record) != artifact.body:
-        raise CaptureIntegrationError("artifact_not_canonical", session_date)
 
     directory = seal_directory(root)
     directory.mkdir(parents=True, exist_ok=True)
