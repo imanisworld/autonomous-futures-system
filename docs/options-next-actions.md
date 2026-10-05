@@ -7,12 +7,15 @@ _As of 2026-10-02. Operational checklist only. The authoritative options status 
 
 ### 2-1-2 floor-outcome forward study
 
-- [x] #1115 merged as `65847295521be1ff0d6b9ef89c8fb8699aff7735`: forward Stage-A contract registered **DRAFT / PLANNED / NOT RUN**.
-- [x] Frozen stopping monitor is hash-bound to sealed session snapshots, consecutive from 2026-10-05, with fail-closed identity/gate/session checks.
-- [ ] Independent-review the synthetic-only seal/scorer machinery branch. Required scope: exact first-event join for `floor_target_2`, exact 5-minute grid, gap/stop/target/timeout semantics, all preregistered metrics, and no real-data I/O.
-- [ ] After that review, obtain a separate operator GO before adding provider fetch/file writer/timer integration. **Do not collect a real session merely because the pure machinery exists.**
-- [ ] Before admitting 2026-10-05, verify the approved capture path was already on `main` and that no study data for that session was collected earlier. Otherwise stop and register a new forward window; do not slide this one.
-- [ ] One-look scoring remains blocked until the stop condition fires and the scorer/metric adapter is separately approved. Stage B option fills remain **NOT EVALUATED**.
+- [x] #1115 merged as `65847295521be1ff0d6b9ef89c8fb8699aff7735`: original `-01` registration **DRAFT / PLANNED / NOT RUN**.
+- [x] Frozen stopping monitor is hash-bound to sealed session snapshots, consecutive from the registered eligible start, with fail-closed identity/gate/session checks.
+- [x] Independent review of the synthetic-only seal/scorer machinery (2026-10-04): contract matched; two seal fail-closed gaps found (`request_end < close` accepted; off-grid bars silently dropped).
+- [x] Operator rulings 2026-10-05: broader floor-eligible companion; re-register `-02` to supersede `-01`; path-v0.2; refuse short `request_end` and off-grid bars; collector-side blind-window quarantine. **Not approval to collect or score.**
+- [x] #1133 activation-only companion `E-2026-10-04-options-212c-preentry-factors-01` is **SUPERSEDED / NOT_RUN** (gate factors constant on activations).
+- [ ] Merge the isolated preparation branch after CI/handoff are green. Do not deploy the collector change in the same step as merge unless the operator explicitly GOs a coverage-release deploy.
+- [ ] Do **not** admit 2026-10-05. Eligible start stays UNSET until the approved capture path is on `main` **and deployed**. Never backfill.
+- [ ] After merge + independent review, obtain a separate operator GO before adding provider fetch / real seal writer / timer integration.
+- [ ] One-look scoring remains blocked until the stop condition fires and the scorer/metric adapter is separately approved. The adapter must verify manifest hashes and enforce `INSUFFICIENT SAMPLE` / `DESCRIPTIVE MEASUREMENT`. Stage B option fills remain **NOT EVALUATED**.
 
 
 - [x] #1067 code complete: 66-symbol candidate universe + fail-closed capacity preflight.
@@ -71,10 +74,12 @@ _As of 2026-10-02. Operational checklist only. The authoritative options status 
 
 ## Forward floor-activation outcome draft — not approved, not run
 
-- [x] No untouched retrospective holdout. Sessions through 2026-10-02 are ineligible.
-- [x] DRAFT prereg `docs/prereg-options-212c-floor-outcome-2026-10-02.md` and spec `E-2026-10-02-options-212c-floor-outcome-01` (`status=DRAFT`). Ledger event `PLANNED`.
-- [ ] Independent re-review of the registration PR after the sealed episode snapshot, direction identity, and threshold-crossing-session corrections. Do not merge, approve collection, run the study, retune `floor_ge1r`, or open forward path outcomes.
-- [ ] Do not start this trial's 2026-10-05 collection until the registration commit is on `main`.
+- [x] No untouched retrospective holdout. Sessions through 2026-10-05 are ineligible and are never backfilled.
+- [x] `-01` (`E-2026-10-02-options-212c-floor-outcome-01` / `T-2026-10-02-prereg-options-212c-floor-outcome-2026-10-02-01`) is **SUPERSEDED / NOT_RUN**. It was never approved, collected, or scored.
+- [x] `#1133` `E-2026-10-04-options-212c-preentry-factors-01` is **SUPERSEDED / NOT_RUN** (activation-only).
+- [x] Successor DRAFT prereg `docs/prereg-options-212c-floor-outcome-2026-10-04.md` and spec `E-2026-10-04-options-212c-floor-outcome-02` (`status=DRAFT`). Ledger event `PLANNED`. Eligible start UNSET.
+- [x] Companion DRAFT `E-2026-10-04-options-212c-floor-factor-01` over the floor-eligible population (`MARKET_ALIGNMENT_REJECTED` + `WOULD_OTHERWISE_QUALIFY`). Descriptive / hypothesis-generating only.
+- [ ] Do not approve `-02` or the companion, do not write a real seal, and do not collect/score until the capture path is on `main` and deployed.
 - [ ] Stage B stays **NOT EVALUATED** until a causal historical chain source exists. Do not backfill current quotes.
 
 ## Cleanup / non-blocking

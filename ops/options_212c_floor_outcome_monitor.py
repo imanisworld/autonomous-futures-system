@@ -16,9 +16,18 @@ from typing import Any, Mapping, Sequence
 from alert_ranker.session_calendar import nyse_session_for
 
 STUDY_SCORER_VERSION = "options_212c_floor_outcome-v0.1"
-PATH_RECORD_VERSION = "options_212c_floor_outcome_path-v0.1"
-TRIAL_ID = "T-2026-10-02-prereg-options-212c-floor-outcome-2026-10-02-01"
-ELIGIBLE_START = "2026-10-05"
+FACTOR_SCORER_VERSION = "options_212c_floor_factor-v0.1"
+PATH_RECORD_VERSION = "options_212c_floor_outcome_path-v0.2"
+TRIAL_ID = "T-2026-10-04-prereg-options-212c-floor-outcome-2026-10-04-01"
+COMPANION_TRIAL_ID = "T-2026-10-04-prereg-options-212c-floor-factor-2026-10-04-01"
+SUPERSEDED_TRIAL_ID = "T-2026-10-02-prereg-options-212c-floor-outcome-2026-10-02-01"
+# The forward window has no start date yet. It becomes the first NYSE session
+# strictly after the approved real capture path is merged to main AND deployed,
+# and is fixed by a pre-collection amendment before the first seal is written.
+# While it is None every readout refuses to advance. 2026-10-05 is ineligible
+# and is never backfilled.
+ELIGIBLE_START: str | None = None
+INELIGIBLE_THROUGH = "2026-10-05"
 ACTIVATION_CAP = 25
 SESSION_CAP = 60
 FAMILY = "STRAT_212_CONTINUATION"
@@ -59,8 +68,8 @@ V1_UNIVERSE = frozenset(
 )
 PATH_RECORD_ROOT = (
     "logs/research_sealed/"
-    "T-2026-10-02-prereg-options-212c-floor-outcome-2026-10-02-01/"
-    "path-records/options_212c_floor_outcome_path-v0.1"
+    "T-2026-10-04-prereg-options-212c-floor-outcome-2026-10-04-01/"
+    "path-records/options_212c_floor_outcome_path-v0.2"
 )
 EPISODE_IDENTITY_KEYS = (
     "symbol",
@@ -97,14 +106,29 @@ EPISODE_SNAPSHOT_FIELDS = (
     "floor_target_1",
     "floor_target_2",
     "bars",
+    # path-v0.2: contemporaneous pre-entry factors, copied verbatim from the
+    # cross-checked first cov-v0.1 event. Raw values only; the ALIGNED /
+    # NOT_ALIGNED / MISSING labels and the remaining-R bucket are derived at
+    # score time and are never stored in the seal.
+    "spy_trend",
+    "qqq_trend",
+    "hourly_candle_type",
+    "daily_candle_type",
+    "alignment_failures",
+    "floor_remaining_rr",
+    "late_floor",
 )
+PRE_ENTRY_FACTOR_FIELDS = EPISODE_SNAPSHOT_FIELDS[-7:]
+# Companion (descriptive, hypothesis-generating) population: floor-eligible
+# but for market alignment. Direction is a stratifier only.
+COMPANION_GATES = frozenset({"MARKET_ALIGNMENT_REJECTED", "WOULD_OTHERWISE_QUALIFY"})
 FIVE_MINUTE_GRID = (
     "The sealed bars for an episode are exactly the full 5-minute bars whose start "
     "is greater than or equal to first_sight_at, through the last bar whose end "
     "(start plus 5 minutes) is less than or equal to session_close, in time order. "
     "A bar that starts before first_sight_at is excluded. "
     "A bar whose end is after session_close is excluded. "
-    "A gap inside that grid, or a bar outside it, is DATA_INVALID."
+    "A gap inside that grid is DATA_INVALID. Any supplied bar off that grid refuses the seal."
 )
 THRESHOLD_CROSSING_RULE = (
     "25 activations is a stop trigger evaluated after a completed eligible session, "
@@ -115,9 +139,10 @@ PATH_RECORD_INTEGRITY = (
     "One immutable JSON file per eligible NYSE session. "
     "SHA-256 of the exact file bytes is appended to manifest.jsonl in the same directory. "
     "The file freezes the episode snapshot and the 5-minute bars. "
-    "A missing file, a hash mismatch, a missing snapshot field, or a missing or "
-    "extra 5-minute bar on the frozen grid is DATA_INVALID for the affected episode. "
-    "The one-look reads only that sealed file. "
+    "A missing file or a hash mismatch refuses advancement. "
+    "A missing snapshot field or a missing 5-minute bar on the frozen grid is "
+    "DATA_INVALID for the affected episode. An extra or off-grid bar refuses the seal. "
+    "The one-look adapter independently verifies the manifest SHA-256, then reads only that sealed file. "
     "Do not refetch historical bars or episode fields, and do not repair the file "
     "after any outcome is viewed."
 )
@@ -169,7 +194,11 @@ def bind_seal(record: Mapping[str, Any]) -> dict[str, Any]:
     return {"sha256": seal_sha256(record), "record": record}
 
 
-def study_readout(sealed_sessions: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+def study_readout(
+    sealed_sessions: Sequence[Mapping[str, Any]],
+    *,
+    eligible_start: str | None = ELIGIBLE_START,
+) -> dict[str, Any]:
     """Return sessions elapsed and whether the stopping rule has fired.
 
     Each item is ``{"sha256", "record"}``. ``record`` is the sealed session
@@ -177,20 +206,28 @@ def study_readout(sealed_sessions: Sequence[Mapping[str, Any]]) -> dict[str, Any
     ``ep-v0.1`` rows are not an input. This function does not open a file and
     does not return snapshot, bar, direction, or activation-count fields.
 
+    ``eligible_start`` is the registered first eligible NYSE session. While the
+    registration leaves it ``None`` (no approved+deployed capture path yet) the
+    readout refuses with ``sessions_elapsed`` 0: there is no window to count.
+    A start on or before ``INELIGIBLE_THROUGH`` or on a non-session day refuses
+    the same way.
+
     A missing or mismatched digest cannot be ordered, so the readout refuses
     with ``sessions_elapsed`` 0. Seals must be consecutive eligible NYSE
-    sessions from ``ELIGIBLE_START``. A later seal with an earlier eligible
+    sessions from ``eligible_start``. A later seal with an earlier eligible
     session missing refuses at that gap: the consecutive prefix stays elapsed
     and the later seal is not entered. A verified seal whose episode is missing
     an identity field, ``reducer_version``, or a recognized ``gate_bucket_floor``
     refuses at that session the same way.
     """
+    if not _valid_eligible_start(eligible_start):
+        return _refused(0)
     placed, unplaceable = _place_seals(sealed_sessions)
     if unplaceable:
         return _refused(0)
     included: list[str] = []
     count = 0
-    expected = ELIGIBLE_START
+    expected = eligible_start
     for session_date, keys in placed:
         if session_date != expected or keys is None:
             return _refused(len(included))
@@ -228,6 +265,19 @@ def _readout(elapsed: int, activation_count: int, *, refused: bool) -> dict[str,
 
 def _refused(elapsed: int) -> dict[str, Any]:
     return _readout(elapsed, 0, refused=True)
+
+
+def _valid_eligible_start(value: str | None) -> bool:
+    """A registered start must be a real NYSE session strictly after the ineligible span."""
+    if not isinstance(value, str) or not value:
+        return False
+    try:
+        day = date.fromisoformat(value)
+    except ValueError:
+        return False
+    if value <= INELIGIBLE_THROUGH:
+        return False
+    return nyse_session_for(day) is not None
 
 
 def _place_seals(

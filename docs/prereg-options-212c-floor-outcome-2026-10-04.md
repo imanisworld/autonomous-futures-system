@@ -1,14 +1,18 @@
-# Preregistration — Options 30m 2-1-2 continuation floor-activation underlying outcome (2026-10-02)
+# Preregistration — Options 30m 2-1-2 continuation floor-activation underlying outcome (2026-10-04)
 
-<!-- trial_id: T-2026-10-02-prereg-options-212c-floor-outcome-2026-10-02-01 -->
+<!-- trial_id: T-2026-10-04-prereg-options-212c-floor-outcome-2026-10-04-01 -->
 
-**Status: SUPERSEDED — NOT APPROVED — NOT RUN.** Replaced by `E-2026-10-04-options-212c-floor-outcome-02` / `T-2026-10-04-prereg-options-212c-floor-outcome-2026-10-04-01`. 2026-10-05 was never admitted and is never backfilled. Do not collect or score this trial.
+**Status: DRAFT — NOT APPROVED — NOT RUN.**
 
-**Trial ID:** `T-2026-10-02-prereg-options-212c-floor-outcome-2026-10-02-01`
+**Trial ID:** `T-2026-10-04-prereg-options-212c-floor-outcome-2026-10-04-01`
 
-**Experiment ID:** `E-2026-10-02-options-212c-floor-outcome-01`
+**Experiment ID:** `E-2026-10-04-options-212c-floor-outcome-02`
+
+**Supersedes:** `E-2026-10-02-options-212c-floor-outcome-01` / `T-2026-10-02-prereg-options-212c-floor-outcome-2026-10-02-01` (never approved, never collected, never scored).
 
 This draft asks whether already-defined `floor_ge1r` activations have economically useful underlying outcomes. It does not answer that question. It freezes the population and the measurement contract for a later one-look. It does not retune `floor_ge1r`, compare another target rule, select an option contract, change `OPTIONS_PAPER_V1`, expand the watchlist, enable SPXW, or authorize a paper or live order.
+
+`-01` cannot be admitted: 2026-10-05 is ineligible and is never backfilled. The eligible start is **UNSET** until a pre-collection amendment fixes it to the first NYSE session strictly after the approved real capture path is merged to `main` **and deployed**. The monitor refuses every readout while that start is unset.
 
 ## Question
 
@@ -29,7 +33,7 @@ No defensible untouched retrospective holdout was found in this checkout.
 
 Local inventory checked without reading path fields: `logs/coverage_outcomes/` contains only `outcomes_2026-09-09_2026-09-15.{json,csv,md}`. No later `outcomes_*.json` or `episodes_*.json` is in `logs/` or `data/`.
 
-Eligible sessions are NYSE regular sessions on or after **2026-10-05**. Collection stops after the earlier of these completed sessions:
+Eligible sessions are NYSE regular sessions on or after the **registered eligible start**. That start is not chosen in this draft. It will be the first NYSE session strictly after the approved real capture path is merged to `main` and deployed, and it will be written by a pre-collection amendment before the first seal. Sessions through **2026-10-05** inclusive are ineligible and are never backfilled. Collection stops after the earlier of these completed sessions:
 
 - the session in which the `floor_ge1r` activation count, counted from `gate_bucket_floor == WOULD_OTHERWISE_QUALIFY` only, first reaches 25; or
 - the 60th completed eligible NYSE session.
@@ -49,9 +53,9 @@ That object is the entire interim report. A favorable or unfavorable impression 
 
 The function counts activations only from episodes inside a sealed session record whose SHA-256 equals `seal_sha256` of that record. That is the same canonical body the one-look scores. A loose `ep-v0.1` row is not an input. Direction is part of the canonical identity and is not part of the readout. The function does not open a file, and it does not return the snapshot, the bars, or the activation count. Duplicate canonical identities inside one verified seal count once.
 
-`advance_refused` is fail-closed. A missing digest, a digest that does not match the sealed body, or a session that cannot be ordered refuses the readout with `sessions_elapsed` 0. A verified seal that contains an episode missing `episode_id`, any canonical identity field, `reducer_version`, or `gate_bucket_floor` refuses at that session: earlier verified sessions remain elapsed, that session is not elapsed, and no later session is entered. Those rows are not treated as zero activations.
+`advance_refused` is fail-closed. While the eligible start is unset, every readout refuses with `sessions_elapsed` 0. A start on or before 2026-10-05, or on a non-session day, refuses the same way. A missing digest, a digest that does not match the sealed body, or a session that cannot be ordered refuses the readout with `sessions_elapsed` 0. A verified seal that contains an episode missing `episode_id`, any canonical identity field, `reducer_version`, or `gate_bucket_floor` refuses at that session: earlier verified sessions remain elapsed, that session is not elapsed, and no later session is entered. Those rows are not treated as zero activations.
 
-Seals must be consecutive eligible NYSE sessions from 2026-10-05 forward. A weekend or an NYSE holiday is not a gap. If a later seal exists while an earlier eligible session is missing, the monitor returns `advance_refused` and stops there: the consecutive prefix stays elapsed, and the later seal is not entered. A skipped session is not treated as zero sessions.
+Seals must be consecutive eligible NYSE sessions from the registered eligible start forward. A weekend or an NYSE holiday is not a gap. If a later seal exists while an earlier eligible session is missing, the monitor returns `advance_refused` and stops there: the consecutive prefix stays elapsed, and the later seal is not entered. A skipped session is not treated as zero sessions.
 
 Before an episode is counted, `path_record_version` must be `options_212c_floor_outcome_path-v0.1`, `trial_id` must be this trial, and `reducer_version` must be `ep-v0.1`. `gate_bucket_floor` must be one of `UNSUPPORTED_FAMILY`, `TARGET_GEOMETRY_REJECTED`, `MARKET_ALIGNMENT_REJECTED`, `LATE_AT_FIRST_SIGHT`, or `WOULD_OTHERWISE_QUALIFY`. Any other value, including an unknown nonempty value, refuses at that session. Only `WOULD_OTHERWISE_QUALIFY` is an activation.
 
@@ -79,7 +83,7 @@ The ordinary coverage collector may keep writing its own files. Those files are 
 Include every episode satisfying all of:
 
 - `family == STRAT_212_CONTINUATION`
-- session date is an eligible NYSE session on or after 2026-10-05, inside the stopping window above
+- session date is an eligible NYSE session on or after the registered eligible start, inside the stopping window above
 - symbol is in the exact 20-symbol V1 universe: `AAPL, AMZN, BAC, COIN, GE, GOOGL, INTC, IWM, JPM, MRK, MSFT, NFLX, NVDA, PLTR, QQQ, SPY, TLT, TSLA, WMT, XOM`
 - episode identity is the existing `ep-v0.1` first-opportunity reduction, with canonical keys `symbol`, `session_date`, `direction`, `first_bar_start`, `family`, joined in that order as `episode_id`
 - membership is selected from family, symbol, and session date
@@ -107,11 +111,11 @@ Collection identity stays `cov-v0.1` for the observer and `ep-v0.1` for the epis
 
 The Stage A scorer needs the decisive 5-minute bar open. It must be able to score from data captured during the forward window. A later historical refetch is forbidden.
 
-Frozen path identity: `options_212c_floor_outcome_path-v0.1`.
+Frozen path identity: `options_212c_floor_outcome_path-v0.2`.
 
 Frozen location, one file per eligible session:
 
-`logs/research_sealed/T-2026-10-02-prereg-options-212c-floor-outcome-2026-10-02-01/path-records/options_212c_floor_outcome_path-v0.1/<session_date>.json`
+`logs/research_sealed/T-2026-10-04-prereg-options-212c-floor-outcome-2026-10-04-01/path-records/options_212c_floor_outcome_path-v0.2/<session_date>.json`
 
 `sealed_path_record_relpath` in `ops/options_212c_floor_outcome_monitor.py` is that location. The directory is under gitignored `logs/`. It is not a study readout.
 
@@ -121,7 +125,7 @@ Session fields, frozen as `SESSION_SEAL_FIELDS`: `path_record_version`, `trial_i
 
 Each structurally selected `STRAT_212_CONTINUATION` episode on the V1 universe is one object in `episodes`. Its fields are frozen as `EPISODE_SNAPSHOT_FIELDS`:
 
-`ep-v0.1` does **not** retain `floor_target_2`. The capture primitive therefore joins each reduced episode back to its exact first `cov-v0.1` observer event using `symbol|session_date|direction|first_bar_start|family`, cross-checks the shared entry/invalidation/risk/Target 1/first-sight fields, and copies `floor_target_2` from that first observer event. A missing first event, duplicate join key, or shared-field mismatch refuses the seal; it is not reconstructed later. The capture primitive also re-runs the frozen `ep-v0.1` reduction from those exact observer events and requires the supplied episode-ID set and frozen gate/scoring fields to match; an omitted or drifted episode refuses the seal.
+`ep-v0.1` does **not** retain `floor_target_2`. The capture primitive therefore joins each reduced episode back to its exact first `cov-v0.1` observer event using `symbol|session_date|direction|first_bar_start|family`, cross-checks the shared entry/invalidation/risk/Target 1/first-sight fields **and** the raw pre-entry factor fields, and copies `floor_target_2` from that first observer event. A missing first event, duplicate join key, or shared-field mismatch refuses the seal; it is not reconstructed later. The capture primitive also re-runs the frozen `ep-v0.1` reduction from those exact observer events and requires the supplied episode-ID set and frozen gate/scoring/factor fields to match; an omitted or drifted episode refuses the seal.
 
 - `episode_id`, formed as `symbol|session_date|direction|first_bar_start|family`
 - `symbol`, `session_date`, `direction`, `first_bar_start`, `family`
@@ -133,12 +137,15 @@ Each structurally selected `STRAT_212_CONTINUATION` episode on the V1 universe i
 - `first_sight_at`, `first_sight_price`, `first_sight_after_close`
 - `floor_target_1`, `floor_target_2` (`floor_target_2` is null when the floor geometry has no second target)
 - `bars`
+- raw contemporaneous pre-entry fields, copied verbatim from the first event: `spy_trend`, `qqq_trend`, `hourly_candle_type`, `daily_candle_type`, `alignment_failures`, `floor_remaining_rr`, `late_floor`
 
-`bars` is the prospective evidence for this expected grid: the first full 5-minute bar whose `start` is greater than or equal to `first_sight_at`, through the last bar whose end (`start` plus 5 minutes) is less than or equal to `session_close`, in time order. A bar that starts before `first_sight_at` is excluded. A bar whose end is after `session_close` is excluded. The capture path seals the bars actually available on that grid and never refetches a missing member later; at the one look the scorer compares the sealed starts with the full expected grid, and any missing or extra member makes that episode `DATA_INVALID`. This preserves missing-data evidence instead of preventing the session from being sealed. The file contains no precomputed outcome class, realized R, MAE, or MFE. The filename is the session date. It is not a ticker.
+Derived factor labels (`ALIGNED` / `NOT_ALIGNED` / `MISSING`, remaining-R bucket) are computed at score time and are never stored in the seal.
+
+`bars` is the prospective evidence for this expected grid: the first full 5-minute bar whose `start` is greater than or equal to `first_sight_at`, through the last bar whose end (`start` plus 5 minutes) is less than or equal to `session_close`, in time order. A bar that starts before `first_sight_at` is excluded. A bar whose end is after `session_close` is excluded. Any supplied bar off the regular-session 5-minute grid, before the open, or ending after the close **refuses the seal**; it is never silently discarded. The capture path seals the bars actually available on that grid and never refetches a missing member later; at the one look the scorer compares the sealed starts with the full expected grid, and any missing member makes that episode `DATA_INVALID`. A `source.request_end` before `session_close` refuses the seal. This preserves missing-data evidence instead of preventing the session from being sealed, and treats unexpected extra data as a capture failure. The file contains no precomputed outcome class, realized R, MAE, or MFE. The filename is the session date. It is not a ticker.
 
 This draft defines that artifact. It does not add a capturing job, and it does not collect a session.
 
-Integrity rule: once collection is approved, the capturing job writes the file once, after the session has settled and before any study readout, as canonical UTF-8 JSON with sorted keys and a trailing newline. It appends one `manifest.jsonl` line with `session_date`, byte length, and the SHA-256 of those exact bytes. The manifest line has no activation count and no outcome. The file is not rewritten. At the one look the scorer checks the hash, then scores from the sealed snapshot and the sealed bars only. A missing session file or hash mismatch refuses advancement because there is no trustworthy session seal. Inside a verified seal, a missing scoring snapshot field, a null `first_sight_price`, `invalidation`, `structural_risk`, or `floor_target_1` on an activated episode, or a missing/extra 5-minute grid member is `DATA_INVALID` for the affected episode and is excluded from expectancy. Missing bars are sealed as missing evidence; they are not repaired. Do not refetch historical bars or episode fields to fill a gap, and do not repair the record after any outcome has been viewed. Doing either makes the trial `INVALID`.
+Integrity rule: once collection is approved, the capturing job writes the file once, after the session has settled and before any study readout, as canonical UTF-8 JSON with sorted keys and a trailing newline. It appends one `manifest.jsonl` line with `session_date`, byte length, and the SHA-256 of those exact bytes. The manifest line has no activation count and no outcome. The file is not rewritten. At the one look the **adapter** independently verifies the manifest SHA-256 of the sealed bytes before handing the parsed record to the scorer, then scores from the sealed snapshot and the sealed bars only. A missing session file or hash mismatch refuses advancement because there is no trustworthy session seal. Inside a verified seal, a missing scoring snapshot field, a null `first_sight_price`, `invalidation`, `structural_risk`, or `floor_target_1` on an activated episode, or a missing 5-minute grid member is `DATA_INVALID` for the affected episode and is excluded from expectancy. Missing bars are sealed as missing evidence; they are not repaired. Do not refetch historical bars or episode fields to fill a gap, and do not repair the record after any outcome has been viewed. Doing either makes the trial `INVALID`.
 
 The study operator does not open these path records, or `manifest.jsonl`, before the one look. `study_readout` is given the sealed record and the manifest SHA-256 in memory. It verifies the digest, then counts `gate_bucket_floor` from the episodes in that same body. It does not substitute a separate live `ep-v0.1` extract.
 
@@ -237,7 +244,7 @@ What that can support:
 
 What that cannot support: a claim that `n=15`, `n=25`, `n=30`, or `n=50` proves edge. Those numbers are collection and insufficiency bounds only.
 
-If completed outcomes are below 15 when the stopping rule fires, the written result is **INSUFFICIENT SAMPLE**. No expectancy sentence is allowed. If completed outcomes are 15 or more, publish the metric table and the uncertainty. That publication is a measurement record.
+If completed outcomes are below 15 when the stopping rule fires, the written result is **INSUFFICIENT SAMPLE**. No expectancy sentence is allowed. If completed outcomes are 15 or more, publish the metric table and the uncertainty. That publication is a measurement record. The one-look adapter must enforce this verdict rule; the in-memory scorer does not.
 
 ## Decision rule
 
@@ -263,4 +270,6 @@ One scoring pass after the stopping rule. No parameter search. No second target.
 
 This draft registers the contract. It does not approve collection or scoring. The spec status remains `DRAFT`. Synthetic-only capture/scoring primitives may exist in source for QA, but they have no provider call, file writer/reader, timer/service hook, or registered experiment adapter. No adapter is registered for `options_212c_floor_underlying_outcome`, so the current runner cannot execute this spec. Do not approve the spec, admit a forward session, or score real trial data until the seal-capture integration and `options_212c_floor_outcome-v0.1` metric check are independently reviewed and fail closed on a missing preregistered field.
 
-Do not start this trial's forward collection until the registration commit is on `main`. The first intended session is 2026-10-05, and that session counts only if its coverage collection has not already run before the merge. If 2026-10-05 is collected before this registration reaches `main`, do not slide the window forward after the fact. Stop and register again.
+The companion descriptive factor study `T-2026-10-04-prereg-options-212c-floor-factor-2026-10-04-01` reads the same `options_212c_floor_outcome_path-v0.2` seals. It is hypothesis-generating only. Ordinary coverage products for this population are quarantined by the collector during the blind window (presentation only; raw `cov-v0.1` events and the `ep-v0.1` reduction are unchanged).
+
+Do not start this trial's forward collection until the registration commit is on `main` **and** the approved real capture path is deployed. The eligible start is not 2026-10-05. If any session is collected before that capture path is on `main` and deployed, do not slide the window forward after the fact and do not backfill. Stop and amend the start, or register again.

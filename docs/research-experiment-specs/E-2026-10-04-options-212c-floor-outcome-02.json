@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "experiment_id": "E-2026-10-04-options-212c-floor-outcome-02",
+  "trial_id": "T-2026-10-04-prereg-options-212c-floor-outcome-2026-10-04-01",
+  "status": "DRAFT",
+  "approved_by": null,
+  "approved_at": null,
+  "supersedes": "E-2026-10-02-options-212c-floor-outcome-01",
+  "hypothesis": "On forward 30m STRAT_212_CONTINUATION episodes that pass the unchanged floor_ge1r activation rule, the frozen first-sight underlying path has a describable R distribution. This draft does not claim that distribution is an edge.",
+  "prereg_path": "docs/prereg-options-212c-floor-outcome-2026-10-04.md",
+  "baseline": {
+    "commit_sha": "d970b4072a772e3ba50d81bac5b152c41e3ffbe6",
+    "label": "main at re-registration; -01 was never approved, never collected, never scored"
+  },
+  "candidate": {
+    "commit_sha": null,
+    "change": "Measure floor_ge1r first-sight underlying paths once with options_212c_floor_outcome-v0.1, after the forward stopping rule, from sealed options_212c_floor_outcome_path-v0.2 records, without a second target variant or an option fill model. Re-registered from -01 because 2026-10-05 cannot be admitted and the path record gained contemporaneous pre-entry factor fields.",
+    "label": "floor_ge1r first-sight underlying outcome — options_212c_floor_outcome-v0.1 on path-v0.2"
+  },
+  "data": {
+    "source": "Sealed options_212c_floor_outcome_path-v0.2 session files only: the episode snapshot (including the raw pre-entry factor fields) plus the 5-minute bars. Scored only by options_212c_floor_outcome-v0.1. Ordinary ep-v0.1 and out-v0.1 files are not an input. No retrospective file is an input. Nothing from -01 is an input because -01 never collected.",
+    "window": {
+      "start": "UNSET: the first NYSE session strictly after the approved real capture path is merged to main AND deployed to the pinned coverage release; fixed by a pre-collection amendment of this spec before the first seal is written; 2026-10-05 and every earlier session are ineligible and are never backfilled",
+      "end": "stop after the session in which floor_ge1r activations first reach 25, including that full session, or after 60 NYSE sessions from the eligible start, whichever comes first"
+    },
+    "dataset_id": "coverage://options-30m-forward-20/from-registered-start/floor-outcome/options_212c_floor_outcome_path-v0.2/options_212c_floor_outcome-v0.1"
+  },
+  "population": "Options 30m STRAT_212_CONTINUATION; exact 20-symbol V1 universe [AAPL, AMZN, BAC, COIN, GE, GOOGL, INTC, IWM, JPM, MRK, MSFT, NFLX, NVDA, PLTR, QQQ, SPY, TLT, TSLA, WMT, XOM]; forward NYSE sessions from the registered eligible start inclusive through the session that first reaches 25 floor_ge1r activations, including every activation in that session, or through 60 sessions, whichever comes first; the eligible start is the first NYSE session strictly after the approved real capture path is merged to main and deployed, fixed by a pre-collection amendment before the first seal; sessions through 2026-10-05 inclusive are ineligible and are never backfilled",
+  "setup_type": "options_212c_floor_underlying_outcome",
+  "timeframe": "30m",
+  "changed_variables": [
+    {
+      "name": "outcome_measurement",
+      "baseline_value": "not_measured",
+      "candidate_value": "floor_ge1r_first_sight_underlying_path"
+    }
+  ],
+  "held_constant": [
+    "floor_ge1r rule find_targets(min_target_rr=1.0)",
+    "activation gate_bucket_floor WOULD_OTHERWISE_QUALIFY at first sight",
+    "measured_entry_price = first_sight_price",
+    "stored entry_trigger is structural context and is never the measured fill",
+    "20-symbol V1 universe",
+    "cov-v0.1 observer and ep-v0.1 episode identity",
+    "Stage A scorer options_212c_floor_outcome-v0.1, separate from out-v0.1; the walk is unchanged from -01",
+    "sealed path record options_212c_floor_outcome_path-v0.2 containing the episode snapshot, the raw pre-entry factor fields spy_trend, qqq_trend, hourly_candle_type, daily_candle_type, alignment_failures, floor_remaining_rr, late_floor, and the 5-minute bars; the one-look uses only that seal",
+    "derived factor labels (ALIGNED / NOT_ALIGNED / MISSING, remaining-R bucket) are computed at score time and are never stored in the seal",
+    "5-minute grid is the first full bar with start >= first_sight_at through the last bar whose end is <= session_close",
+    "canonical episode identity symbol|session_date|direction|first_bar_start|family",
+    "25 activations stops after the full threshold-crossing session and is not an exact final-N",
+    "first-sight clock and same-session hold",
+    "interim readout is sessions_elapsed, stop_condition_met, and advance_refused; seals must be consecutive eligible NYSE sessions from the registered start, an unknown gate refuses, and an unset start refuses",
+    "no nearest_v1 comparison and no additional target variant",
+    "no option contract, premium, or dollar P&L model",
+    "no watchlist, SPXW, risk, or execution change",
+    "floor_target_2 is copied from the exact first cov-v0.1 event because ep-v0.1 does not retain it; shared first-event fields, including the pre-entry factor fields, must cross-check or the seal is refused",
+    "sealed source provenance fields are provider, request_start, request_end, observer_run_id, observer_ran_at, and source_sha; a request_end before session_close refuses the seal",
+    "any supplied bar off the regular-session 5-minute grid, before the open, or ending after the close refuses the seal; it is never silently discarded",
+    "clock-bucket concentration uses the America/New_York hour containing first_sight_at",
+    "outcome-concentration shares are signed shares of total completed R and are null when total completed R is zero",
+    "capture re-runs ep-v0.1 from the exact cov-v0.1 events and refuses when the supplied episode population or frozen gate/scoring/factor fields drift",
+    "missing 5-minute grid members are sealed as missing evidence and become DATA_INVALID at scoring; they are never refetched",
+    "Target 2 is recorded as target_2_reached and target_2_hit_at when reached but never changes the exit",
+    "ordinary coverage products for the trial population are quarantined by the collector during the blind window (presentation only; raw events and the reduction are unchanged)"
+  ],
+  "execution": {
+    "entry_logic": "measured_entry_price = first_sight_price. The stored Strat entry_trigger is structural setup context only and must not be substituted as the fill. Activation means gate_bucket_floor == WOULD_OTHERWISE_QUALIFY at first sight. Activation is not permission to choose a retrospectively better fill.",
+    "exit_logic": "Scorer options_212c_floor_outcome-v0.1, not out-v0.1. Same regular session only. TARGET_FIRST uses floor target_1_r, never an open beyond the target. INVALIDATION_FIRST uses the open's R when the bar opens beyond the stop, otherwise the invalidation's R versus measured_entry_price. A bar that reaches both stop and Target 1 is AMBIGUOUS and is excluded. Timeout is UNRESOLVED_AT_CLOSE at close_r versus measured_entry_price. DATA_INVALID is excluded. No trailing exit and no Target 2 exit.",
+    "stop_logic": "Stored invalidation, scored by options_212c_floor_outcome-v0.1 from the sealed episode snapshot and sealed bars only. If the 5-minute bar opens beyond the stop and does not reach Target 1, INVALIDATION_FIRST at the R of that open versus measured_entry_price; the stop price inside the gap is not a fill. If the bar reaches both the stop and Target 1, including a gap that spans both, AMBIGUOUS with flag gap_or_range_spans_stop_and_target. A non-gap touch of the stop uses the invalidation price. A missing snapshot field, hash mismatch, or bar outside the frozen 5-minute grid is DATA_INVALID and is not repaired by a later refetch.",
+    "target_logic": "Unchanged floor_ge1r target_1. If the bar opens beyond Target 1 and does not reach the stop, TARGET_FIRST at target_1_r; the open beyond Target 1 is not a fill. If that open is also beyond Target 2, record Target 2 as reached and still use target_1_r. Target 2 is not an exit. A gap through Target 2 that also reaches the stop is AMBIGUOUS.",
+    "sizing": "None. One underlying R per completed activation. No portfolio, overlap, or drawdown model.",
+    "friction": "No dollar P&L and no added slippage. R uses structural risk as the denominator and the first-sight price as the entry. Stage B option fills are NOT EVALUATED."
+  },
+  "required_metrics": [
+    "population_size",
+    "setups_evaluated",
+    "activation_count",
+    "completed_trades",
+    "wins",
+    "losses",
+    "timeouts",
+    "ambiguous_count",
+    "data_invalid_count",
+    "win_rate",
+    "loss_rate",
+    "expectancy",
+    "mean_r",
+    "median_result",
+    "average_winner",
+    "average_loser",
+    "payoff_ratio",
+    "mae",
+    "mfe",
+    "mae_distribution",
+    "mfe_distribution",
+    "target_hit_rate",
+    "stop_hit_rate",
+    "timeout_rate",
+    "concentration_by_ticker",
+    "concentration_by_session_date",
+    "concentration_by_clock_bucket",
+    "outcome_concentration"
+  ],
+  "acceptance_criteria": null,
+  "rejection_criteria": null,
+  "evidence_path": "docs/research-evidence/T-2026-10-04-prereg-options-212c-floor-outcome-2026-10-04-01/",
+  "variant_manifest": null,
+  "notes": "DRAFT re-registration only. Supersedes E-2026-10-02-options-212c-floor-outcome-01, which was never approved, never collected, and never scored; its 2026-10-05 start cannot be admitted because no approved capture path existed on main and deployed before that session, and the window is not slid. The eligible start is UNSET until a pre-collection amendment fixes it to the first NYSE session strictly after the approved real capture path is merged to main AND deployed; the monitor refuses every readout while the start is unset. Not collection and not scoring. Stage A scorer is options_212c_floor_outcome-v0.1 (walk unchanged). The one-look input is the sealed episode snapshot plus the sealed 5-minute bars in options_212c_floor_outcome_path-v0.2 under logs/research_sealed/T-2026-10-04-prereg-options-212c-floor-outcome-2026-10-04-01/path-records/options_212c_floor_outcome_path-v0.2/. The 5-minute grid starts at the first full bar with start >= first_sight_at and ends at the last bar whose end is <= session_close. Canonical identity includes direction. 25 activations includes the full threshold-crossing session and is not an exact final-N. Missing snapshot or bar-grid data is DATA_INVALID and must not be repaired by a later refetch. A request_end before the close, or any off-grid bar, refuses the seal. Ordinary out-v0.1 files are not the authoritative outcome and are quarantined for this population during the blind window. measured_entry_price = first_sight_price. Before the one look the only visible study fields are sessions_elapsed, stop_condition_met, and advance_refused, plus the stopping-condition name once it fires. Direction and the activation count stay hidden. Acceptance and rejection criteria are null. Written results are INSUFFICIENT SAMPLE below 15 completed outcomes and DESCRIPTIVE MEASUREMENT at 15 or more; the one-look adapter must verify the manifest SHA-256 independently and enforce that verdict rule. This is forward Stage A descriptive evidence, not a confirmatory edge test. Stage B is NOT EVALUATED. No drawdown. Approval and scoring are blocked until the adapter emits every required_metrics field and refuses a completed one-look when any field is absent. The companion descriptive factor study T-2026-10-04-prereg-options-212c-floor-factor-2026-10-04-01 reads the same seals and is registered separately. The closed 59-episode trial stays closed."
+}

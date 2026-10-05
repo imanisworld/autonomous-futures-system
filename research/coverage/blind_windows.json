@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "windows": [
+    {
+      "window_id": "options-212c-forward-blind",
+      "trial_ids": [
+        "T-2026-10-04-prereg-options-212c-floor-outcome-2026-10-04-01",
+        "T-2026-10-04-prereg-options-212c-floor-factor-2026-10-04-01"
+      ],
+      "family": "STRAT_212_CONTINUATION",
+      "symbols": [
+        "AAPL", "AMZN", "BAC", "COIN", "GE", "GOOGL", "INTC", "IWM", "JPM", "MRK",
+        "MSFT", "NFLX", "NVDA", "PLTR", "QQQ", "SPY", "TLT", "TSLA", "WMT", "XOM"
+      ],
+      "quarantine_from": "2026-10-05",
+      "released_at": null,
+      "note": "Presentation-only quarantine of the ordinary coverage outcome/episode products for the registered forward 2-1-2 continuation floor-outcome study and its descriptive companion. quarantine_from is the earliest session the collector may redact once this policy is deployed; it is NOT the trial's eligible start, which is fixed by a later pre-collection amendment. Sessions already collected before deployment are not rewritten. released_at is set by the operator only after the legitimate one look; until then every active session is quarantined. Raw cov-v0.1 events and the ep-v0.1 reduction are never altered."
+    }
+  ]
+}
