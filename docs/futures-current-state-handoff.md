@@ -4,6 +4,15 @@
 
 _As of 2026-09-24 (runtime and current decisions: see the 2026-09-24 blocks in `docs/futures-current-status-2026-09-22.md`, then the reconciliation note below). This is the long futures handoff. Historical audit docs remain evidence records._
 
+## #1137 merged repo-side; HOLD DEPLOYMENT — 2026-10-05
+
+- Repository `main`: `4433c0e5d959165b9a0dfcc037e173aa1b4e8b19` after PR #1137 (post-cap eligibility observer + read-only report).
+- Independent review on exact head `deb2346`: **APPROVE REPO-SIDE ONLY** (reduced-news `trade_count` bypass fixed; only `_check_daily_trade_limit` skipped on the observation path).
+- Deployment-readiness audit: **HOLD DEPLOYMENT.** Box stays on `c44d32b`. Canonical 4HR natural-1m epoch unchanged (`2026-10-04T21:30:05Z`). Deploying current `main` would ride along 132 commits / 82 files and require a restart that breaks the epoch release pin.
+- Deployed `c44d32b` already journals raw `BLOCKED_MAX_TRADES` + `observe_past_capacity` candidates. Eligibility classification (`post_cap_eligibility`) is not on the box and is not required for the active epoch.
+- No deploy, restart, env mutation, broker mutation, strategy-status change, outcome scoring, or cap change authorized by #1137.
+- Durable actions: `docs/futures-operator-todo.md`. Agent checkpoint: `docs/agent-work-state.md`. Spec: `docs/post-cap-eligibility-shadow-2026-10-05.md`.
+
 ## Release `c44d32b` deployed; 4HR natural-1m canonical epoch started — 2026-10-04
 
 - Deployed futures release: `c44d32bc4961e56fae5c5f88a976eb6783341638`, promoted 2026-10-04 21:29:09Z via `scripts/atomic_release.sh` build → verify → promote under explicit operator GO. Rollback target `489b55b91b6303c195c8e84bfcbf05ef32d1ab04` (`current.previous`).

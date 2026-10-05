@@ -32,6 +32,10 @@ Evidence from this timestamp forward is the canonical sample. Nothing earlier
 counts or is backfilled. No parameter, strategy, or alert change is allowed
 while the sample runs. Rollback target: `489b55b` (`current.previous`).
 
+**2026-10-05:** PR #1137 (post-cap eligibility) merged to `main` as `4433c0e`
+but is **HOLD DEPLOYMENT**. It does not change this epoch, the deployed SHA,
+or the 4HR observer posture. Leave the box on `c44d32b`.
+
 ## Disabled period — do not count
 
 From the 2026-09-18 1-minute lane deployment through the runtime verification

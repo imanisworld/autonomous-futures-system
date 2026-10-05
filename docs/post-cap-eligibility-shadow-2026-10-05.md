@@ -1,6 +1,10 @@
 # Post-cap eligibility shadow — 2026-10-05
 
-**Status:** REPO-SIDE ONLY / OBSERVATION ONLY / NO DEPLOYMENT AUTHORITY
+**Status:** MERGED TO `main` (`4433c0e`) / OBSERVATION ONLY / **HOLD DEPLOYMENT**
+
+Independent review: **APPROVE REPO-SIDE ONLY** (exact head `deb2346`).
+Deployment-readiness audit (2026-10-05): **HOLD DEPLOYMENT** — leave the box on
+`c44d32b`; do not promote this observer onto the active 4HR natural-1m epoch.
 
 ## Verdict
 
@@ -150,8 +154,15 @@ The branch adds tests proving:
 
 ## Deployment boundary
 
-Do not deploy this branch merely because CI passes.
+Do not deploy this observer merely because it is merged or CI passed.
 
-The current 4HR natural-1m epoch remains the active prospective evidence lane.
-Any runtime promotion of this observer requires a separate deployment-safety
-decision and must preserve the 4HR epoch boundary and observer-only posture.
+**2026-10-05 decision: HOLD DEPLOYMENT.** Futures box stays on exact release
+`c44d32bc4961e56fae5c5f88a976eb6783341638`. Canonical 4HR natural-1m epoch
+start remains `2026-10-04T21:30:05Z`. Promoting current `main` would ride along
+unrelated post-`c44d32b` commits and requires a restart that breaks the epoch
+release pin. Deployed `c44d32b` already journals raw `BLOCKED_MAX_TRADES`
+candidates via `observe_past_capacity`; eligibility classification can wait.
+
+A cherry-picked `c44d32b` + #1137-only candidate may be built later only under
+an explicit operator GO after the epoch may end or be re-baselined. Any runtime
+promotion must preserve observer-only posture and live-disarmed state.

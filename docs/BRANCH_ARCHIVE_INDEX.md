@@ -9,6 +9,26 @@ the same PR + review process as new work.
 
 ---
 
+## 2026-10-05 cleanup (post-PR #1137)
+
+Main at audit: `4433c0e5d959165b9a0dfcc037e173aa1b4e8b19` (#1137 merged). Scope
+was deliberately narrow: only the merged #1137 head branch that GitHub left
+on the remote, plus the local review tracking branch.
+
+Deleted without an archive tag (MERGED; tip reachable from `main`; history
+also in `refs/pull/1137/head`):
+
+| Original branch | Tip SHA | Disposition |
+|---|---|---|
+| `ops/post-cap-eligibility-shadow-20261005` | `deb23464882c5f58c01fa95d246650efdc8556d6` | MERGED via #1137 as `4433c0e`; tip ancestor of `main` |
+| `cursor/review-1137-ffce` (local only) | tracked `ops/post-cap…` at `deb2346` | SAFE DELETE LOCAL after merge |
+
+Kept, not deleted: open PR heads, `release/*`, `hold/*`, `archive/*`,
+`candidate/*`, `audit/*`, and all other remotes from the 2026-10-04 KEEP set.
+Further remote cleanup remains a separate audited pass.
+
+---
+
 ## 2026-10-04 cleanup (post-PR #1130)
 
 Main at audit: `94136a5e8f5baa3414d327329e5f3aa329c578fa` (#1130 merged as
