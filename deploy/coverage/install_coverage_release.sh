@@ -67,7 +67,8 @@ build() {
     '$RELEASES/$sha/.venv/bin/pip' install -q --requirement '$RELEASES/$sha/requirements.txt'
     '$RELEASES/$sha/.venv/bin/pip' freeze > '$COVERAGE/release-${sha}-dependencies.txt'
     cd '$RELEASES/$sha' && '$RELEASES/$sha/.venv/bin/python' scripts/options_coverage_collect.py --plan --require-pinned \
-      --sqlite '$COVERAGE/options_coverage_observer.sqlite' --data-dir '$COVERAGE' --no-calendar-check >/dev/null
+      --sqlite '$COVERAGE/options_coverage_observer.sqlite' --data-dir '$COVERAGE' \
+      --capture-root '$COVERAGE' --no-calendar-check >/dev/null
     chmod -R a-w '$RELEASES/$sha'
     rm -f '$archive'
   "
