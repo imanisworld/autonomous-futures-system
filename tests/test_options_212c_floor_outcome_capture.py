@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 from datetime import date, datetime, timedelta, timezone
+from types import SimpleNamespace
 from pathlib import Path
 
 import pytest
@@ -337,7 +338,7 @@ def test_outcome_fetch_hook_seals_before_any_trial_scoring(
         assert forbidden not in keys
 
 
-def test_capture_provider_error_on_selected_symbol_refuses(
+def test_capture_provider_error_freezes_missing_grid_instead_of_refetching(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     event = _event()
@@ -352,14 +353,54 @@ def test_capture_provider_error_on_selected_symbol_refuses(
         "observer_ran_at": (session.close + timedelta(minutes=30)).astimezone(UTC).isoformat(),
         "already_sealed": False,
     }
-    with pytest.raises(CaptureIntegrationError, match="capture_provider_errors"):
-        outcome_script._seal_from_fetch(
-            request,
-            session,
-            [episode],
-            [event],
-            {},
-            {"AAPL": "provider_error:synthetic"},
-            captured_at=session.close + timedelta(minutes=31),
-        )
-    assert not seal_path(tmp_path, DAY).exists()
+    result = outcome_script._seal_from_fetch(
+        request,
+        session,
+        [episode],
+        [event],
+        {},
+        {"AAPL": "provider_error:synthetic"},
+        captured_at=session.close + timedelta(minutes=31),
+    )
+    assert result["state"] == "valid"
+    record = json.loads(seal_path(tmp_path, DAY).read_bytes())
+    assert record["episodes"][0]["bars"] == []
+
+
+def test_capture_request_refuses_existing_ordinary_outcome_artifact(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(capture_module, "ELIGIBLE_START", DAY)
+    daily = tmp_path / "daily"
+    daily.mkdir()
+    (daily / f"outcomes_{DAY}_{DAY}.json").write_text("{}")
+    args = SimpleNamespace(
+        capture_root=str(tmp_path),
+        capture_source_sha="b" * 40,
+        capture_observer_run_id=7,
+        capture_observer_ran_at="2026-10-06T20:30:00+00:00",
+        date_from=DAY,
+        date_to=DAY,
+        out=str(daily),
+    )
+    with pytest.raises(
+        CaptureIntegrationError, match="capture_prior_outcome_artifact"
+    ):
+        outcome_script._capture_request(args, tmp_path / "unused.sqlite", [])
+
+
+def test_capture_request_refuses_noncanonical_output_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(capture_module, "ELIGIBLE_START", DAY)
+    args = SimpleNamespace(
+        capture_root=str(tmp_path),
+        capture_source_sha="b" * 40,
+        capture_observer_run_id=7,
+        capture_observer_ran_at="2026-10-06T20:30:00+00:00",
+        date_from=DAY,
+        date_to=DAY,
+        out=str(tmp_path / "elsewhere"),
+    )
+    with pytest.raises(CaptureIntegrationError, match="capture_out_dir_mismatch"):
+        outcome_script._capture_request(args, tmp_path / "unused.sqlite", [])
