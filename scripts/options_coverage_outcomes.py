@@ -63,7 +63,7 @@ from ops.options_212c_floor_outcome_capture import (  # noqa: E402
     capture_decision,
     write_artifact_once,
 )
-from ops.options_212c_floor_outcome_monitor import ELIGIBLE_START, FAMILY, V1_UNIVERSE  # noqa: E402
+from ops.options_212c_floor_outcome_monitor import FAMILY, V1_UNIVERSE  # noqa: E402
 from ops.options_212c_floor_outcome_study import StudyContractError, build_session_artifact  # noqa: E402
 from scripts.options_coverage_observer import fetch_all  # noqa: E402
 
@@ -118,11 +118,7 @@ def _capture_request(args: argparse.Namespace, sqlite_path: Path, events: Sequen
     if not _SHA40.fullmatch(str(args.capture_source_sha)):
         raise CaptureIntegrationError("capture_source_sha_invalid", str(args.capture_source_sha))
 
-    decision = capture_decision(
-        Path(args.capture_root),
-        args.date_from,
-        eligible_start=ELIGIBLE_START,
-    )
+    decision = capture_decision(Path(args.capture_root), args.date_from)
     if decision.reason == "already_sealed":
         return {
             "session_date": args.date_from,
@@ -206,11 +202,7 @@ def _seal_from_fetch(
         source=source,
         captured_at=captured_at or datetime.now(timezone.utc),
     )
-    check = write_artifact_once(
-        request["root"],
-        artifact,
-        eligible_start=ELIGIBLE_START,
-    )
+    check = write_artifact_once(request["root"], artifact)
     return check.to_public_dict()
 
 
