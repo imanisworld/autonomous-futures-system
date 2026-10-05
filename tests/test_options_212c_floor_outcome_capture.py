@@ -234,6 +234,32 @@ def test_write_once_manifest_once_and_advance_blind_monitor(
         write_artifact_once(tmp_path, mismatched)
 
 
+def test_writer_refuses_outcome_field_schema_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(capture_module, "ELIGIBLE_START", DAY)
+    artifact = _empty_artifact()
+    record = dict(artifact.record)
+    record["outcome"] = "TARGET_FIRST"
+    body = canonical_seal_bytes(record)
+    digest = seal_sha256(record)
+    drifted = SealedSessionArtifact(
+        record=record,
+        body=body,
+        sha256=digest,
+        manifest={
+            "session_date": DAY,
+            "byte_length": len(body),
+            "sha256": digest,
+        },
+    )
+    with pytest.raises(
+        CaptureIntegrationError, match="artifact_session_fields_invalid"
+    ):
+        write_artifact_once(tmp_path, drifted)
+    assert not seal_path(tmp_path, DAY).exists()
+
+
 def test_partial_or_tampered_seal_refuses_without_repair(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
