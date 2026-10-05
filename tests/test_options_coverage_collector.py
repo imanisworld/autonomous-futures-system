@@ -783,6 +783,7 @@ def test_install_script_touches_only_the_coverage_release():
     script = (ROOT / "deploy" / "coverage" / "install_coverage_release.sh").read_text()
     assert "set -euo pipefail" in script
     assert "release_manifest.json" in script and "--require-pinned" in script and "chmod -R a-w" in script
+    assert "--capture-root '$COVERAGE'" in script
     assert "ln -sfn '$RELEASES/$REF' '$CURRENT'" in script
     body = "\n".join(line for line in script.splitlines() if not line.lstrip().startswith("#"))
     for forbidden in ("autonomous-futures-system", "afs-releases", "futures-bot", "afs-watcher", "scanner", "git pull", "git push"):
