@@ -164,6 +164,8 @@ def _seal_from_fetch(
     coverage_events: Sequence[dict[str, Any]],
     bars: dict[str, list[Any]],
     errors: dict[str, str],
+    *,
+    captured_at: datetime | None = None,
 ) -> dict[str, Any]:
     if request.get("already_sealed"):
         existing = request.get("existing")
@@ -202,7 +204,7 @@ def _seal_from_fetch(
         coverage_events,
         selected_bars,
         source=source,
-        captured_at=datetime.now(timezone.utc),
+        captured_at=captured_at or datetime.now(timezone.utc),
     )
     check = write_artifact_once(
         request["root"],
