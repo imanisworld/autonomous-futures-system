@@ -87,6 +87,38 @@ Only a row satisfying all of these may later enter the post-cap outcome study:
 Rows failing another gate remain rejected candidates. They are not numbered as
 hypothetical trade #4/#5/etc.
 
+## Read-only reporting
+
+`scripts/post_cap_eligibility_report.py` reads the journal records only. It
+does not recreate strategy or risk logic.
+
+For each day it reports:
+
+- all raw selected candidates seen after the cap;
+- candidates rejected by another gate;
+- candidates still unverified or errored;
+- only the candidates that passed every local gate except the cap.
+
+Only those last rows receive hypothetical numbering:
+
+- first eligible row after the 3-trade cap -> shadow trade #4;
+- next eligible row -> #5;
+- later eligible rows -> #6, #7, and so on.
+
+The report intentionally has `outcome_scoring_enabled = false`. Numbering an
+eligible setup is not the same as claiming its fill or P&L.
+
+Example:
+
+```bash
+python scripts/post_cap_eligibility_report.py \
+  --log-dir /root/afs-shared/logs \
+  --date 2026-10-05
+```
+
+Older `BLOCKED_MAX_TRADES` rows that predate the new eligibility record remain
+`UNVERIFIED`; the report does not retroactively guess.
+
 ## Outcome resolution remains HOLD
 
 This change intentionally does **not** assign WIN/LOSS/P&L yet.
