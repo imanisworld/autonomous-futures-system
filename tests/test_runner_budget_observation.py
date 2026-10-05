@@ -159,6 +159,27 @@ def test_max_trades_reached_setup_still_observed_but_not_executed(config, tmp_pa
     assert len({(o.get("candidate_id"), o.get("stage")) for o in stages}) == len(stages)
 
 
+def test_post_cap_eligibility_never_constructs_a_broker(config, tmp_path, monkeypatch):
+    log_dir = str(tmp_path / "logs")
+    journal = JournalLogger(log_dir=log_dir)
+    for _ in range(config.max_trades_per_day):
+        _seed_approved_trade(journal, "WIN", 40.0)
+
+    def _forbidden(*args, **kwargs):
+        raise AssertionError("post-cap observation must not construct any broker")
+
+    monkeypatch.setattr("webhook.runner._make_broker", _forbidden)
+    monkeypatch.setattr("webhook.runner._paper_broker", _forbidden)
+
+    result = process_alert(
+        _trade_payload(30), config=config, log_dir=log_dir, for_date=TODAY
+    )
+
+    assert result["decision"] == "BLOCKED_MAX_TRADES"
+    assert result["post_cap_eligibility"]["execution_reachable"] is False
+    assert result.get("fill") is None
+
+
 def test_max_trades_reached_no_setup_is_distinguishable(config, tmp_path):
     """A budget-exhausted bar with NO setup must not look like a blocked setup."""
     log_dir = str(tmp_path / "logs")
