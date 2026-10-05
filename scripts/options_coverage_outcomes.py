@@ -47,11 +47,21 @@ from alert_ranker.coverage_outcomes import (  # noqa: E402
     measure_episode,
     summarize_outcomes,
 )
+from alert_ranker.coverage_quarantine import (  # noqa: E402
+    DEFAULT_POLICY_RELPATH,
+    BlindWindow,
+    QuarantinePolicyError,
+    load_blind_windows,
+    partition_rows,
+    quarantine_record,
+    write_quarantine,
+)
 from alert_ranker.session_calendar import nyse_session_for  # noqa: E402
 from scripts.options_coverage_observer import fetch_all  # noqa: E402
 
 DEFAULT_SQLITE = ROOT / "logs" / "options_coverage_observer.sqlite"
 DEFAULT_OUT = ROOT / "logs" / "coverage_outcomes"
+DEFAULT_BLIND_WINDOWS = ROOT / DEFAULT_POLICY_RELPATH
 
 
 def load_events(path: Path, date_from: str, date_to: str) -> list[dict[str, Any]]:
@@ -176,6 +186,22 @@ def _group_table(summary: dict[str, Any], key: str, population: str, label: str)
     return lines
 
 
+def quarantine_lines(summary: dict[str, Any]) -> list[str]:
+    """Human-readable proof that a blind window was applied. No row content."""
+    blocks = summary.get("quarantine") or []
+    if not blocks:
+        return []
+    lines = ["## Blind-window quarantine (presentation only)", ""]
+    for block in blocks:
+        lines.append(
+            f"- window `{block['window_id']}` ({', '.join(block['trial_ids'])}): {block['quarantined_rows']} structural "
+            f"{block['family']} rows on {block['symbols_count']} symbols withheld from this product; sealed at "
+            f"`{block['path']}` ({block['byte_length']} bytes, sha256 `{block['sha256']}`). Raw observer events are unchanged."
+        )
+    lines.append("")
+    return lines
+
+
 def write_markdown(path: Path, summary: dict[str, Any], date_from: str, date_to: str, errors: dict[str, str]) -> None:
     total = summary["total"]
     lines = [
@@ -186,6 +212,7 @@ def write_markdown(path: Path, summary: dict[str, Any], date_from: str, date_to:
         f"Episodes {total['episodes']} · clean {total['clean_episodes']} · flagged {total['quality_flagged_episodes']} · quality flags {json.dumps(summary['quality_flag_counts'], sort_keys=True)}",
         f"Provider errors during 5m fetch: {len(errors)}" + (f" — {json.dumps(errors, sort_keys=True)[:400]}" if errors else ""),
         "",
+        *quarantine_lines(summary),
         "## By family — CLEAN episodes",
         *_family_table(summary, "clean"),
         "",
@@ -218,6 +245,12 @@ def write_markdown(path: Path, summary: dict[str, Any], date_from: str, date_to:
 
 
 async def run(args: argparse.Namespace) -> int:
+    policy_path = Path(args.blind_windows or os.environ.get("OPTIONS_COVERAGE_BLIND_WINDOWS") or DEFAULT_BLIND_WINDOWS)
+    try:
+        windows = load_policy(policy_path)
+    except QuarantinePolicyError as exc:
+        print(f"blind-window policy refused: {exc}", file=sys.stderr)
+        return 2
     sqlite_path = Path(args.sqlite or os.environ.get("OPTIONS_COVERAGE_SQLITE_PATH") or DEFAULT_SQLITE)
     events = load_events(sqlite_path, args.date_from, args.date_to)
     episodes = reduce_events(events)
@@ -236,21 +269,75 @@ async def run(args: argparse.Namespace) -> int:
         feed=CONSOLIDATED_FEED,
     )
     outcomes, errors = await measure_all(episodes, provider, args.pause_seconds)
-    summary = summarize_outcomes(outcomes)
-    summary["date_from"], summary["date_to"] = args.date_from, args.date_to
-    summary["raw_events"], summary["episodes"] = len(events), len(episodes)
+    out = Path(args.out or DEFAULT_OUT)
+    summary, public = write_products(
+        out, args.date_from, args.date_to, outcomes, errors, windows,
+        raw_events=len(events), episodes=len(episodes),
+    )
+    stem = out / f"outcomes_{args.date_from}_{args.date_to}"
+    held = sum(block["quarantined_rows"] for block in summary.get("quarantine") or [])
+    print(
+        f"{OUTCOME_ID} {OUTCOME_VERSION}: {len(events)} events → {len(episodes)} episodes → {len(outcomes)} outcomes "
+        f"({len(public)} public, {held} quarantined); clean {summary['total']['clean_episodes']}; errors {len(errors)}"
+    )
+    print(f"wrote {stem}.json / .csv / .md")
+    return 0
+
+
+def write_products(
+    out: Path,
+    date_from: str,
+    date_to: str,
+    outcomes: Sequence[EpisodeOutcome],
+    errors: dict[str, str],
+    windows: Sequence[BlindWindow],
+    *,
+    raw_events: int,
+    episodes: int,
+) -> tuple[dict[str, Any], list[EpisodeOutcome]]:
+    """Write the public ``outcomes_<from>_<to>.{json,csv,md}`` and any quarantine files.
+
+    Rows inside an active blind window are withheld from every public product
+    and written canonically under ``<out>/quarantine/<window_id>/``; the public
+    summary carries only the binding block. Pure presentation isolation: the
+    measured outcomes themselves are unchanged. Returns ``(summary, public)``.
+    """
+    rows = [o.to_row() for o in outcomes]
+    public_rows, held = partition_rows(rows, windows)
+    held_ids = {id(r) for rows_ in held.values() for r in rows_}
+    public = [o for o, row in zip(outcomes, rows) if id(row) not in held_ids]
+
+    summary = summarize_outcomes(public)
+    summary["date_from"], summary["date_to"] = date_from, date_to
+    summary["raw_events"], summary["episodes"] = raw_events, episodes
     summary["generated_at"] = datetime.now(timezone.utc).isoformat()
     summary["provider_errors"] = errors
 
-    out = Path(args.out or DEFAULT_OUT)
     out.mkdir(parents=True, exist_ok=True)
-    stem = out / f"outcomes_{args.date_from}_{args.date_to}"
-    stem.with_suffix(".json").write_text(json.dumps({"summary": summary, "episodes": [o.to_row() for o in outcomes]}, indent=1, sort_keys=True))
-    write_csv(stem.with_suffix(".csv"), outcomes)
-    write_markdown(stem.with_suffix(".md"), summary, args.date_from, args.date_to, errors)
-    print(f"{OUTCOME_ID} {OUTCOME_VERSION}: {len(events)} events → {len(episodes)} episodes → {len(outcomes)} outcomes; clean {summary['total']['clean_episodes']}; errors {len(errors)}")
-    print(f"wrote {stem}.json / .csv / .md")
-    return 0
+    blocks: list[dict[str, Any]] = []
+    by_id = {w.window_id: w for w in windows}
+    # Every window active for the range gets a file, even an empty one, so the
+    # product proves the quarantine ran for that session.
+    active = [w for w in windows if any(w.active_on(d) for d in (date_from, date_to))]
+    for window in sorted(active, key=lambda w: w.window_id):
+        record = quarantine_record(
+            window, "outcomes", date_from, date_to, held.get(window.window_id, []),
+            source={"outcome_id": OUTCOME_ID, "outcome_version": OUTCOME_VERSION, "raw_events": raw_events, "episodes": episodes},
+        )
+        blocks.append(write_quarantine(out, record, window=by_id[window.window_id]))
+    if blocks:
+        summary["quarantine"] = blocks
+
+    stem = out / f"outcomes_{date_from}_{date_to}"
+    stem.with_suffix(".json").write_text(json.dumps({"summary": summary, "episodes": public_rows}, indent=1, sort_keys=True))
+    write_csv(stem.with_suffix(".csv"), public)
+    write_markdown(stem.with_suffix(".md"), summary, date_from, date_to, errors)
+    return summary, public
+
+
+def load_policy(path: Path) -> Sequence[BlindWindow]:
+    """Fail closed: a missing or malformed blind-window policy stops the run."""
+    return load_blind_windows(path)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -260,6 +347,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--sqlite")
     parser.add_argument("--out")
     parser.add_argument("--pause-seconds", type=float, default=3.0, help="pause between sessions to respect the provider rate limit")
+    parser.add_argument("--blind-windows", help=f"Blind-window quarantine policy JSON (default: {DEFAULT_POLICY_RELPATH} or OPTIONS_COVERAGE_BLIND_WINDOWS)")
     args = parser.parse_args(argv)
     return asyncio.run(run(args))
 

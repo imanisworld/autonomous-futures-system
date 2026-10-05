@@ -275,7 +275,7 @@ def test_process_five_min_bar_passes_payload_open_to_resolver(tmp_path, monkeypa
 
     monkeypatch.setattr(collector, "_resolve_one_position", _capture)
     monkeypatch.setattr(
-        collector, "_evaluate_canonical_candidate", lambda **kwargs: (None, None, None)
+        collector, "_evaluate_canonical_candidate", lambda **kwargs: (None, None, None, None)
     )
     payload = _payload()
     payload.open = 19_980.0
@@ -329,8 +329,8 @@ def test_max_three_filled_trades_per_day_blocks_fourth_candidate(tmp_path, monke
 
     def fake_eval(**kwargs):
         if kwargs["strategy"] == FOUR_HR:
-            return decision, object(), candidate
-        return None, None, None
+            return decision, object(), candidate, None
+        return None, None, None, None
 
     monkeypatch.setattr(collector, "_evaluate_canonical_candidate", fake_eval)
 
@@ -347,3 +347,52 @@ def test_max_three_filled_trades_per_day_blocks_fourth_candidate(tmp_path, monke
     assert blocked[0]["lane_failed_rule"] == "max_trades_per_day"
     assert _load_state(tmp_path, ledger)["filled_count"] == MAX_FILLED_PER_DAY
     assert _load_state(tmp_path, ledger)["position"] is None
+
+
+def test_failed_4hr_observation_publish_does_not_skip_bar_candidates(tmp_path, monkeypatch, caplog):
+    cfg = _cfg()
+    ledger = contract.LEDGERS["wide_stop_4k"]
+    state = _empty_state()
+    state["filled_date"] = DAY.isoformat()
+    state["filled_count"] = MAX_FILLED_PER_DAY
+    _save_state(tmp_path, ledger, state)
+
+    candidate = {
+        "direction": "LONG",
+        "entry": 20_000.0,
+        "stop": 19_950.0,
+        "target": 20_070.0,
+        "entry_time": datetime(2026, 9, 8, 14, 5, tzinfo=timezone.utc),
+    }
+    decision = SimpleNamespace(decision="TRADE", setup=object(), failed_gates=[], reason="ok")
+    machine = {"status": "ARMED", "trading_date": DAY.isoformat()}
+
+    import context.wide_stop_forward_collector as collector
+
+    def fake_eval(**kwargs):
+        if kwargs["strategy"] == FOUR_HR:
+            return decision, object(), candidate, machine
+        return None, None, None, None
+
+    calls = []
+
+    def broken_publish(*args, **kwargs):
+        calls.append(kwargs)
+        raise OSError("disk full")
+
+    monkeypatch.setattr(collector, "_evaluate_canonical_candidate", fake_eval)
+    monkeypatch.setattr(collector, "publish_4hr_observation", broken_publish)
+
+    with caplog.at_level("WARNING", logger=collector.__name__):
+        events = process_five_min_bar(
+            payload=_payload(),
+            cfg=cfg,
+            bars_5m=[],
+            log_dir=tmp_path,
+            for_date=DAY,
+        )
+
+    assert len(calls) == 1
+    blocked = [event for event in events if event.get("lane_result") == "BLOCKED_MAX_TRADES"]
+    assert len(blocked) == 1
+    assert "4HR observation publish failed closed" in caplog.text

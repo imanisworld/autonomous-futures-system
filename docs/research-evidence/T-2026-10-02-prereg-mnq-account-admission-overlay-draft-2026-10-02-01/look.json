@@ -1,0 +1,2754 @@
+{
+  "classification": "INSUFFICIENT_EVIDENCE",
+  "account_level_label": "INSUFFICIENT_EVIDENCE",
+  "material_reasons": [
+    "admitted fills differ beyond the two candidates",
+    "disposition differs beyond the two candidates",
+    "max consecutive losses differs",
+    "daily-loss journal days differ"
+  ],
+  "input_events": 2257,
+  "frozen_capacity_accepted_fills": 488,
+  "artifact_sha256": "d5f949fce98e80ab83fd1c2551b99e7644f4ddc0ad6381aaf978b3282be11942",
+  "primary": {
+    "accepted_fills": 484,
+    "terminal_fills": 481,
+    "skipped_busy": 1514,
+    "skipped_max_trades": 157,
+    "skipped_daily_loss": 102,
+    "proven_exercised": 39,
+    "unknown_exercised": 2,
+    "daily_loss_ids": [
+      "asia:2025-07-24T23:30:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2025-09-04T23:15:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2025-09-04T23:30:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-02-02T00:45:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-02-02T02:15:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2026-02-02T05:00:00+00:00:ema_pullback_trend:SHORT",
+      "asia:2026-02-02T05:15:00+00:00:ema_pullback_trend:SHORT",
+      "asia:2026-02-02T23:15:00+00:00:ema_pullback_trend:LONG",
+      "asia:2026-02-02T23:30:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-02-06T02:15:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-02-06T05:00:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2026-02-06T06:15:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-02-06T06:30:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-02-06T07:45:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-03-02T02:30:00+00:00:ema_pullback_trend:SHORT",
+      "asia:2026-03-02T03:00:00+00:00:ema_pullback_trend:SHORT",
+      "asia:2026-03-02T03:15:00+00:00:ema_pullback_trend:SHORT",
+      "asia:2026-03-02T03:30:00+00:00:ema_pullback_trend:SHORT",
+      "asia:2026-03-02T03:45:00+00:00:ema_pullback_trend:SHORT",
+      "asia:2026-03-02T04:00:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2026-03-02T04:15:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2026-03-02T04:45:00+00:00:ema_pullback_trend:SHORT",
+      "asia:2026-03-02T05:00:00+00:00:ema_pullback_trend:SHORT",
+      "asia:2026-03-02T05:30:00+00:00:strat_22_continuation_observed:SHORT",
+      "4hr:2026-03-02",
+      "asia:2026-03-02T23:45:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2026-03-05T23:30:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-03-05T23:45:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-03-09T05:45:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-03-09T06:30:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-03-09T22:15:00+00:00:ema_pullback_trend:LONG",
+      "asia:2026-03-09T22:30:00+00:00:ema_pullback_trend:LONG",
+      "asia:2026-03-09T22:45:00+00:00:ema_pullback_trend:LONG",
+      "asia:2026-03-09T23:15:00+00:00:ema_pullback_trend:LONG",
+      "asia:2026-03-09T23:30:00+00:00:ema_pullback_trend:LONG",
+      "asia:2026-03-10T05:45:00+00:00:ema_pullback_trend:LONG",
+      "asia:2026-03-10T06:00:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-03-10T06:15:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-03-10T06:30:00+00:00:ema_pullback_trend:LONG",
+      "asia:2026-03-10T07:00:00+00:00:ema_pullback_trend:LONG",
+      "4hr:2026-03-10",
+      "asia:2026-03-10T22:15:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2026-03-10T23:30:00+00:00:ema_pullback_trend:SHORT",
+      "asia:2026-03-12T04:30:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-03-12T06:45:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-03-12T23:30:00+00:00:ema_pullback_trend:SHORT",
+      "asia:2026-03-12T23:45:00+00:00:ema_pullback_trend:SHORT",
+      "asia:2026-03-25T04:45:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-03-25T05:00:00+00:00:ema_pullback_trend:LONG",
+      "asia:2026-03-25T05:45:00+00:00:ema_pullback_trend:LONG",
+      "asia:2026-03-25T06:45:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2026-03-25T22:15:00+00:00:ema_pullback_trend:SHORT",
+      "asia:2026-03-25T23:00:00+00:00:ema_pullback_trend:SHORT",
+      "asia:2026-03-25T23:30:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2026-03-31T22:15:00+00:00:ema_pullback_trend:LONG",
+      "asia:2026-03-31T23:45:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-04-09T23:45:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-04-13T06:15:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-04-30T05:00:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2026-04-30T23:30:00+00:00:ema_pullback_trend:LONG",
+      "asia:2026-04-30T23:45:00+00:00:strat_22_continuation_observed:LONG",
+      "4hr:2026-05-11",
+      "asia:2026-05-11T22:30:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-05-11T23:00:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-05-11T23:30:00+00:00:ema_pullback_trend:LONG",
+      "asia:2026-05-14T23:00:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-05-14T23:30:00+00:00:ema_pullback_trend:LONG",
+      "asia:2026-05-26T23:30:00+00:00:ema_pullback_trend:LONG",
+      "asia:2026-06-03T22:30:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2026-06-03T23:45:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2026-06-04T03:00:00+00:00:ema_pullback_trend:SHORT",
+      "asia:2026-06-04T04:30:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-06-04T23:45:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2026-06-08T05:00:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2026-06-08T05:15:00+00:00:ema_pullback_trend:SHORT",
+      "asia:2026-06-08T06:00:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2026-06-09T03:00:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-06-09T03:30:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-06-09T04:00:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-06-09T04:15:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-06-09T04:30:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-06-09T04:45:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-06-09T06:00:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-06-09T23:00:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2026-06-09T23:45:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2026-06-16T23:15:00+00:00:ema_pullback_trend:SHORT",
+      "asia:2026-06-16T23:45:00+00:00:ema_pullback_trend:SHORT",
+      "asia:2026-06-18T05:30:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-06-18T22:15:00+00:00:ema_pullback_trend:LONG",
+      "asia:2026-06-18T23:00:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2026-06-18T23:30:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-06-22T23:00:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2026-06-22T23:15:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2026-06-22T23:30:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2026-06-23T03:30:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2026-06-23T22:45:00+00:00:ema_pullback_trend:SHORT",
+      "asia:2026-06-23T23:30:00+00:00:ema_pullback_trend:SHORT",
+      "asia:2026-06-23T23:45:00+00:00:ema_pullback_trend:SHORT",
+      "asia:2026-06-24T04:15:00+00:00:ema_pullback_trend:SHORT",
+      "asia:2026-06-24T05:30:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-06-24T05:45:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-06-24T23:30:00+00:00:strat_22_continuation_observed:LONG"
+    ],
+    "daily_loss_days": [
+      "2025-07-24",
+      "2025-09-04",
+      "2026-02-02",
+      "2026-02-06",
+      "2026-03-02",
+      "2026-03-05",
+      "2026-03-09",
+      "2026-03-10",
+      "2026-03-12",
+      "2026-03-25",
+      "2026-03-31",
+      "2026-04-09",
+      "2026-04-13",
+      "2026-04-30",
+      "2026-05-11",
+      "2026-05-14",
+      "2026-05-26",
+      "2026-06-03",
+      "2026-06-04",
+      "2026-06-08",
+      "2026-06-09",
+      "2026-06-16",
+      "2026-06-18",
+      "2026-06-22",
+      "2026-06-23",
+      "2026-06-24"
+    ],
+    "realized_pnl": "7776.31",
+    "sign": "positive",
+    "losing_days": 121,
+    "winning_days": 108,
+    "flat_days": 0,
+    "max_consecutive_losses": 14,
+    "max_dollar_drawdown": "3544.51",
+    "daily_path": [
+      {
+        "journal_day": "2025-07-24",
+        "realized_pnl": "-174.97"
+      },
+      {
+        "journal_day": "2025-07-25",
+        "realized_pnl": "52.15"
+      },
+      {
+        "journal_day": "2025-07-27",
+        "realized_pnl": "94.52"
+      },
+      {
+        "journal_day": "2025-07-29",
+        "realized_pnl": "74.84"
+      },
+      {
+        "journal_day": "2025-07-30",
+        "realized_pnl": "-71.00"
+      },
+      {
+        "journal_day": "2025-07-31",
+        "realized_pnl": "239.87"
+      },
+      {
+        "journal_day": "2025-08-03",
+        "realized_pnl": "-133.00"
+      },
+      {
+        "journal_day": "2025-08-04",
+        "realized_pnl": "301.96"
+      },
+      {
+        "journal_day": "2025-08-05",
+        "realized_pnl": "-98.76"
+      },
+      {
+        "journal_day": "2025-08-06",
+        "realized_pnl": "525.22"
+      },
+      {
+        "journal_day": "2025-08-08",
+        "realized_pnl": "-703.51"
+      },
+      {
+        "journal_day": "2025-08-21",
+        "realized_pnl": "-98.00"
+      },
+      {
+        "journal_day": "2025-08-22",
+        "realized_pnl": "-104.00"
+      },
+      {
+        "journal_day": "2025-08-24",
+        "realized_pnl": "-26.54"
+      },
+      {
+        "journal_day": "2025-08-25",
+        "realized_pnl": "62.00"
+      },
+      {
+        "journal_day": "2025-08-26",
+        "realized_pnl": "-34.67"
+      },
+      {
+        "journal_day": "2025-08-27",
+        "realized_pnl": "7.49"
+      },
+      {
+        "journal_day": "2025-08-28",
+        "realized_pnl": "54.50"
+      },
+      {
+        "journal_day": "2025-08-29",
+        "realized_pnl": "-27.50"
+      },
+      {
+        "journal_day": "2025-08-31",
+        "realized_pnl": "-28.50"
+      },
+      {
+        "journal_day": "2025-09-01",
+        "realized_pnl": "35.50"
+      },
+      {
+        "journal_day": "2025-09-02",
+        "realized_pnl": "162.95"
+      },
+      {
+        "journal_day": "2025-09-03",
+        "realized_pnl": "124.40"
+      },
+      {
+        "journal_day": "2025-09-04",
+        "realized_pnl": "-153.48"
+      },
+      {
+        "journal_day": "2025-09-05",
+        "realized_pnl": "422.21"
+      },
+      {
+        "journal_day": "2025-09-07",
+        "realized_pnl": "79.00"
+      },
+      {
+        "journal_day": "2025-09-08",
+        "realized_pnl": "6.55"
+      },
+      {
+        "journal_day": "2025-09-09",
+        "realized_pnl": "104.91"
+      },
+      {
+        "journal_day": "2025-09-10",
+        "realized_pnl": "202.02"
+      },
+      {
+        "journal_day": "2025-09-11",
+        "realized_pnl": "41.52"
+      },
+      {
+        "journal_day": "2025-09-12",
+        "realized_pnl": "-11.50"
+      },
+      {
+        "journal_day": "2025-09-14",
+        "realized_pnl": "-30.00"
+      },
+      {
+        "journal_day": "2025-09-15",
+        "realized_pnl": "823.90"
+      },
+      {
+        "journal_day": "2025-09-18",
+        "realized_pnl": "-12.50"
+      },
+      {
+        "journal_day": "2025-09-19",
+        "realized_pnl": "-103.50"
+      },
+      {
+        "journal_day": "2025-09-21",
+        "realized_pnl": "-42.05"
+      },
+      {
+        "journal_day": "2025-09-22",
+        "realized_pnl": "-69.67"
+      },
+      {
+        "journal_day": "2025-09-23",
+        "realized_pnl": "8.40"
+      },
+      {
+        "journal_day": "2025-09-24",
+        "realized_pnl": "-36.04"
+      },
+      {
+        "journal_day": "2025-09-25",
+        "realized_pnl": "5.50"
+      },
+      {
+        "journal_day": "2025-09-26",
+        "realized_pnl": "-46.99"
+      },
+      {
+        "journal_day": "2025-09-28",
+        "realized_pnl": "156.07"
+      },
+      {
+        "journal_day": "2025-09-29",
+        "realized_pnl": "-66.11"
+      },
+      {
+        "journal_day": "2025-09-30",
+        "realized_pnl": "-133.26"
+      },
+      {
+        "journal_day": "2025-10-01",
+        "realized_pnl": "277.66"
+      },
+      {
+        "journal_day": "2025-10-02",
+        "realized_pnl": "43.50"
+      },
+      {
+        "journal_day": "2025-10-03",
+        "realized_pnl": "71.00"
+      },
+      {
+        "journal_day": "2025-10-05",
+        "realized_pnl": "170.00"
+      },
+      {
+        "journal_day": "2025-10-06",
+        "realized_pnl": "-59.50"
+      },
+      {
+        "journal_day": "2025-10-07",
+        "realized_pnl": "-148.50"
+      },
+      {
+        "journal_day": "2025-10-08",
+        "realized_pnl": "66.50"
+      },
+      {
+        "journal_day": "2025-10-09",
+        "realized_pnl": "3.00"
+      },
+      {
+        "journal_day": "2025-10-10",
+        "realized_pnl": "1.50"
+      },
+      {
+        "journal_day": "2025-10-12",
+        "realized_pnl": "247.50"
+      },
+      {
+        "journal_day": "2025-10-13",
+        "realized_pnl": "-45.50"
+      },
+      {
+        "journal_day": "2025-10-14",
+        "realized_pnl": "494.50"
+      },
+      {
+        "journal_day": "2025-10-15",
+        "realized_pnl": "116.20"
+      },
+      {
+        "journal_day": "2025-10-16",
+        "realized_pnl": "-117.12"
+      },
+      {
+        "journal_day": "2025-10-17",
+        "realized_pnl": "155.37"
+      },
+      {
+        "journal_day": "2025-10-20",
+        "realized_pnl": "254.91"
+      },
+      {
+        "journal_day": "2025-10-21",
+        "realized_pnl": "-31.66"
+      },
+      {
+        "journal_day": "2025-10-22",
+        "realized_pnl": "-101.50"
+      },
+      {
+        "journal_day": "2025-10-23",
+        "realized_pnl": "97.50"
+      },
+      {
+        "journal_day": "2025-10-24",
+        "realized_pnl": "136.88"
+      },
+      {
+        "journal_day": "2025-10-27",
+        "realized_pnl": "194.87"
+      },
+      {
+        "journal_day": "2025-10-28",
+        "realized_pnl": "118.15"
+      },
+      {
+        "journal_day": "2025-10-29",
+        "realized_pnl": "-43.80"
+      },
+      {
+        "journal_day": "2025-10-30",
+        "realized_pnl": "166.14"
+      },
+      {
+        "journal_day": "2025-10-31",
+        "realized_pnl": "-66.50"
+      },
+      {
+        "journal_day": "2025-11-02",
+        "realized_pnl": "268.00"
+      },
+      {
+        "journal_day": "2025-11-03",
+        "realized_pnl": "112.50"
+      },
+      {
+        "journal_day": "2025-11-04",
+        "realized_pnl": "557.41"
+      },
+      {
+        "journal_day": "2025-11-05",
+        "realized_pnl": "-4.98"
+      },
+      {
+        "journal_day": "2025-11-06",
+        "realized_pnl": "2407.04"
+      },
+      {
+        "journal_day": "2025-11-20",
+        "realized_pnl": "-324.45"
+      },
+      {
+        "journal_day": "2025-11-24",
+        "realized_pnl": "96.75"
+      },
+      {
+        "journal_day": "2025-11-25",
+        "realized_pnl": "-39.00"
+      },
+      {
+        "journal_day": "2025-11-26",
+        "realized_pnl": "172.62"
+      },
+      {
+        "journal_day": "2025-11-27",
+        "realized_pnl": "-84.50"
+      },
+      {
+        "journal_day": "2025-11-28",
+        "realized_pnl": "124.00"
+      },
+      {
+        "journal_day": "2025-11-30",
+        "realized_pnl": "-380.98"
+      },
+      {
+        "journal_day": "2025-12-01",
+        "realized_pnl": "36.50"
+      },
+      {
+        "journal_day": "2025-12-02",
+        "realized_pnl": "-124.12"
+      },
+      {
+        "journal_day": "2025-12-03",
+        "realized_pnl": "-77.70"
+      },
+      {
+        "journal_day": "2025-12-04",
+        "realized_pnl": "-60.97"
+      },
+      {
+        "journal_day": "2025-12-05",
+        "realized_pnl": "47.06"
+      },
+      {
+        "journal_day": "2025-12-08",
+        "realized_pnl": "58.99"
+      },
+      {
+        "journal_day": "2025-12-09",
+        "realized_pnl": "-9.35"
+      },
+      {
+        "journal_day": "2025-12-10",
+        "realized_pnl": "77.00"
+      },
+      {
+        "journal_day": "2025-12-11",
+        "realized_pnl": "231.00"
+      },
+      {
+        "journal_day": "2025-12-15",
+        "realized_pnl": "252.97"
+      },
+      {
+        "journal_day": "2025-12-16",
+        "realized_pnl": "-6.78"
+      },
+      {
+        "journal_day": "2025-12-17",
+        "realized_pnl": "-56.97"
+      },
+      {
+        "journal_day": "2025-12-18",
+        "realized_pnl": "-97.04"
+      },
+      {
+        "journal_day": "2025-12-19",
+        "realized_pnl": "210.50"
+      },
+      {
+        "journal_day": "2025-12-22",
+        "realized_pnl": "95.00"
+      },
+      {
+        "journal_day": "2025-12-23",
+        "realized_pnl": "-69.97"
+      },
+      {
+        "journal_day": "2025-12-24",
+        "realized_pnl": "3.00"
+      },
+      {
+        "journal_day": "2025-12-25",
+        "realized_pnl": "-90.22"
+      },
+      {
+        "journal_day": "2025-12-28",
+        "realized_pnl": "-23.66"
+      },
+      {
+        "journal_day": "2025-12-29",
+        "realized_pnl": "-48.63"
+      },
+      {
+        "journal_day": "2025-12-30",
+        "realized_pnl": "108.92"
+      },
+      {
+        "journal_day": "2025-12-31",
+        "realized_pnl": "89.52"
+      },
+      {
+        "journal_day": "2026-01-02",
+        "realized_pnl": "226.00"
+      },
+      {
+        "journal_day": "2026-01-04",
+        "realized_pnl": "193.00"
+      },
+      {
+        "journal_day": "2026-01-05",
+        "realized_pnl": "-41.50"
+      },
+      {
+        "journal_day": "2026-01-06",
+        "realized_pnl": "-27.20"
+      },
+      {
+        "journal_day": "2026-01-07",
+        "realized_pnl": "76.00"
+      },
+      {
+        "journal_day": "2026-01-08",
+        "realized_pnl": "116.13"
+      },
+      {
+        "journal_day": "2026-01-09",
+        "realized_pnl": "118.77"
+      },
+      {
+        "journal_day": "2026-01-12",
+        "realized_pnl": "595.60"
+      },
+      {
+        "journal_day": "2026-01-13",
+        "realized_pnl": "-60.00"
+      },
+      {
+        "journal_day": "2026-01-14",
+        "realized_pnl": "26.71"
+      },
+      {
+        "journal_day": "2026-01-15",
+        "realized_pnl": "-139.50"
+      },
+      {
+        "journal_day": "2026-01-16",
+        "realized_pnl": "290.02"
+      },
+      {
+        "journal_day": "2026-01-20",
+        "realized_pnl": "-96.50"
+      },
+      {
+        "journal_day": "2026-01-21",
+        "realized_pnl": "-95.00"
+      },
+      {
+        "journal_day": "2026-01-22",
+        "realized_pnl": "-135.50"
+      },
+      {
+        "journal_day": "2026-01-23",
+        "realized_pnl": "35.00"
+      },
+      {
+        "journal_day": "2026-01-26",
+        "realized_pnl": "210.34"
+      },
+      {
+        "journal_day": "2026-01-27",
+        "realized_pnl": "197.50"
+      },
+      {
+        "journal_day": "2026-01-28",
+        "realized_pnl": "367.02"
+      },
+      {
+        "journal_day": "2026-01-29",
+        "realized_pnl": "123.48"
+      },
+      {
+        "journal_day": "2026-01-30",
+        "realized_pnl": "53.50"
+      },
+      {
+        "journal_day": "2026-02-01",
+        "realized_pnl": "-210.50"
+      },
+      {
+        "journal_day": "2026-02-02",
+        "realized_pnl": "-186.21"
+      },
+      {
+        "journal_day": "2026-02-03",
+        "realized_pnl": "-143.37"
+      },
+      {
+        "journal_day": "2026-02-04",
+        "realized_pnl": "-213.46"
+      },
+      {
+        "journal_day": "2026-02-05",
+        "realized_pnl": "836.00"
+      },
+      {
+        "journal_day": "2026-02-06",
+        "realized_pnl": "-279.90"
+      },
+      {
+        "journal_day": "2026-02-08",
+        "realized_pnl": "-175.50"
+      },
+      {
+        "journal_day": "2026-02-09",
+        "realized_pnl": "-56.00"
+      },
+      {
+        "journal_day": "2026-02-10",
+        "realized_pnl": "-119.00"
+      },
+      {
+        "journal_day": "2026-02-11",
+        "realized_pnl": "-82.50"
+      },
+      {
+        "journal_day": "2026-02-12",
+        "realized_pnl": "794.80"
+      },
+      {
+        "journal_day": "2026-02-13",
+        "realized_pnl": "109.52"
+      },
+      {
+        "journal_day": "2026-02-16",
+        "realized_pnl": "-144.48"
+      },
+      {
+        "journal_day": "2026-02-17",
+        "realized_pnl": "-686.98"
+      },
+      {
+        "journal_day": "2026-02-19",
+        "realized_pnl": "156.00"
+      },
+      {
+        "journal_day": "2026-02-20",
+        "realized_pnl": "146.50"
+      },
+      {
+        "journal_day": "2026-02-23",
+        "realized_pnl": "-138.50"
+      },
+      {
+        "journal_day": "2026-02-24",
+        "realized_pnl": "-15.56"
+      },
+      {
+        "journal_day": "2026-02-25",
+        "realized_pnl": "45.02"
+      },
+      {
+        "journal_day": "2026-02-26",
+        "realized_pnl": "39.50"
+      },
+      {
+        "journal_day": "2026-02-27",
+        "realized_pnl": "-96.97"
+      },
+      {
+        "journal_day": "2026-03-02",
+        "realized_pnl": "-219.61"
+      },
+      {
+        "journal_day": "2026-03-03",
+        "realized_pnl": "158.75"
+      },
+      {
+        "journal_day": "2026-03-04",
+        "realized_pnl": "336.20"
+      },
+      {
+        "journal_day": "2026-03-05",
+        "realized_pnl": "-210.50"
+      },
+      {
+        "journal_day": "2026-03-06",
+        "realized_pnl": "430.52"
+      },
+      {
+        "journal_day": "2026-03-09",
+        "realized_pnl": "-251.46"
+      },
+      {
+        "journal_day": "2026-03-10",
+        "realized_pnl": "-194.54"
+      },
+      {
+        "journal_day": "2026-03-11",
+        "realized_pnl": "118.30"
+      },
+      {
+        "journal_day": "2026-03-12",
+        "realized_pnl": "-435.00"
+      },
+      {
+        "journal_day": "2026-03-13",
+        "realized_pnl": "40.52"
+      },
+      {
+        "journal_day": "2026-03-15",
+        "realized_pnl": "-900.48"
+      },
+      {
+        "journal_day": "2026-03-16",
+        "realized_pnl": "-69.00"
+      },
+      {
+        "journal_day": "2026-03-17",
+        "realized_pnl": "-150.64"
+      },
+      {
+        "journal_day": "2026-03-18",
+        "realized_pnl": "80.02"
+      },
+      {
+        "journal_day": "2026-03-19",
+        "realized_pnl": "-2.17"
+      },
+      {
+        "journal_day": "2026-03-20",
+        "realized_pnl": "-129.97"
+      },
+      {
+        "journal_day": "2026-03-22",
+        "realized_pnl": "-237.79"
+      },
+      {
+        "journal_day": "2026-03-23",
+        "realized_pnl": "-53.07"
+      },
+      {
+        "journal_day": "2026-03-24",
+        "realized_pnl": "-139.50"
+      },
+      {
+        "journal_day": "2026-03-25",
+        "realized_pnl": "-237.80"
+      },
+      {
+        "journal_day": "2026-03-26",
+        "realized_pnl": "-133.79"
+      },
+      {
+        "journal_day": "2026-03-27",
+        "realized_pnl": "-184.50"
+      },
+      {
+        "journal_day": "2026-03-29",
+        "realized_pnl": "-61.00"
+      },
+      {
+        "journal_day": "2026-03-30",
+        "realized_pnl": "281.20"
+      },
+      {
+        "journal_day": "2026-03-31",
+        "realized_pnl": "-173.59"
+      },
+      {
+        "journal_day": "2026-04-01",
+        "realized_pnl": "266.67"
+      },
+      {
+        "journal_day": "2026-04-02",
+        "realized_pnl": "72.26"
+      },
+      {
+        "journal_day": "2026-04-03",
+        "realized_pnl": "-40.50"
+      },
+      {
+        "journal_day": "2026-04-05",
+        "realized_pnl": "-84.06"
+      },
+      {
+        "journal_day": "2026-04-06",
+        "realized_pnl": "134.95"
+      },
+      {
+        "journal_day": "2026-04-07",
+        "realized_pnl": "-103.49"
+      },
+      {
+        "journal_day": "2026-04-08",
+        "realized_pnl": "298.89"
+      },
+      {
+        "journal_day": "2026-04-09",
+        "realized_pnl": "-167.74"
+      },
+      {
+        "journal_day": "2026-04-10",
+        "realized_pnl": "-670.72"
+      },
+      {
+        "journal_day": "2026-04-13",
+        "realized_pnl": "-196.08"
+      },
+      {
+        "journal_day": "2026-04-14",
+        "realized_pnl": "335.70"
+      },
+      {
+        "journal_day": "2026-04-15",
+        "realized_pnl": "39.50"
+      },
+      {
+        "journal_day": "2026-04-16",
+        "realized_pnl": "-107.11"
+      },
+      {
+        "journal_day": "2026-04-17",
+        "realized_pnl": "-94.30"
+      },
+      {
+        "journal_day": "2026-04-20",
+        "realized_pnl": "-129.11"
+      },
+      {
+        "journal_day": "2026-04-22",
+        "realized_pnl": "1362.02"
+      },
+      {
+        "journal_day": "2026-04-30",
+        "realized_pnl": "-198.15"
+      },
+      {
+        "journal_day": "2026-05-01",
+        "realized_pnl": "29.65"
+      },
+      {
+        "journal_day": "2026-05-03",
+        "realized_pnl": "-114.25"
+      },
+      {
+        "journal_day": "2026-05-04",
+        "realized_pnl": "-124.89"
+      },
+      {
+        "journal_day": "2026-05-05",
+        "realized_pnl": "1548.52"
+      },
+      {
+        "journal_day": "2026-05-06",
+        "realized_pnl": "-32.50"
+      },
+      {
+        "journal_day": "2026-05-07",
+        "realized_pnl": "-230.81"
+      },
+      {
+        "journal_day": "2026-05-08",
+        "realized_pnl": "133.50"
+      },
+      {
+        "journal_day": "2026-05-10",
+        "realized_pnl": "-100.56"
+      },
+      {
+        "journal_day": "2026-05-11",
+        "realized_pnl": "-188.50"
+      },
+      {
+        "journal_day": "2026-05-12",
+        "realized_pnl": "280.19"
+      },
+      {
+        "journal_day": "2026-05-13",
+        "realized_pnl": "208.00"
+      },
+      {
+        "journal_day": "2026-05-14",
+        "realized_pnl": "-199.00"
+      },
+      {
+        "journal_day": "2026-05-15",
+        "realized_pnl": "281.68"
+      },
+      {
+        "journal_day": "2026-05-17",
+        "realized_pnl": "-1177.70"
+      },
+      {
+        "journal_day": "2026-05-25",
+        "realized_pnl": "228.50"
+      },
+      {
+        "journal_day": "2026-05-26",
+        "realized_pnl": "-212.11"
+      },
+      {
+        "journal_day": "2026-05-27",
+        "realized_pnl": "213.00"
+      },
+      {
+        "journal_day": "2026-05-28",
+        "realized_pnl": "-85.63"
+      },
+      {
+        "journal_day": "2026-05-29",
+        "realized_pnl": "-110.50"
+      },
+      {
+        "journal_day": "2026-05-31",
+        "realized_pnl": "162.87"
+      },
+      {
+        "journal_day": "2026-06-01",
+        "realized_pnl": "-292.50"
+      },
+      {
+        "journal_day": "2026-06-02",
+        "realized_pnl": "-118.48"
+      },
+      {
+        "journal_day": "2026-06-03",
+        "realized_pnl": "-166.53"
+      },
+      {
+        "journal_day": "2026-06-04",
+        "realized_pnl": "-150.50"
+      },
+      {
+        "journal_day": "2026-06-05",
+        "realized_pnl": "1824.52"
+      },
+      {
+        "journal_day": "2026-06-07",
+        "realized_pnl": "-413.27"
+      },
+      {
+        "journal_day": "2026-06-08",
+        "realized_pnl": "-163.00"
+      },
+      {
+        "journal_day": "2026-06-09",
+        "realized_pnl": "-150.00"
+      },
+      {
+        "journal_day": "2026-06-10",
+        "realized_pnl": "-442.71"
+      },
+      {
+        "journal_day": "2026-06-11",
+        "realized_pnl": "777.21"
+      },
+      {
+        "journal_day": "2026-06-12",
+        "realized_pnl": "10.52"
+      },
+      {
+        "journal_day": "2026-06-15",
+        "realized_pnl": "213.00"
+      },
+      {
+        "journal_day": "2026-06-16",
+        "realized_pnl": "-163.34"
+      },
+      {
+        "journal_day": "2026-06-17",
+        "realized_pnl": "227.29"
+      },
+      {
+        "journal_day": "2026-06-18",
+        "realized_pnl": "-155.00"
+      },
+      {
+        "journal_day": "2026-06-19",
+        "realized_pnl": "399.00"
+      },
+      {
+        "journal_day": "2026-06-21",
+        "realized_pnl": "-128.50"
+      },
+      {
+        "journal_day": "2026-06-22",
+        "realized_pnl": "-200.00"
+      },
+      {
+        "journal_day": "2026-06-23",
+        "realized_pnl": "-240.00"
+      },
+      {
+        "journal_day": "2026-06-24",
+        "realized_pnl": "-225.50"
+      },
+      {
+        "journal_day": "2026-06-25",
+        "realized_pnl": "-226.79"
+      },
+      {
+        "journal_day": "2026-06-26",
+        "realized_pnl": "228.83"
+      }
+    ],
+    "label": "DAILY_LOSS_CONSEQUENTIAL"
+  },
+  "sensitivity": {
+    "accepted_fills": 409,
+    "terminal_fills": 406,
+    "skipped_busy": 1651,
+    "skipped_max_trades": 140,
+    "skipped_daily_loss": 57,
+    "proven_exercised": 31,
+    "unknown_exercised": 2,
+    "daily_loss_ids": [
+      "asia:2025-07-24T23:30:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2025-09-04T23:15:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2025-09-04T23:30:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-02-02T00:45:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-02-02T02:15:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2026-02-02T05:00:00+00:00:ema_pullback_trend:SHORT",
+      "asia:2026-02-02T05:15:00+00:00:ema_pullback_trend:SHORT",
+      "asia:2026-02-02T23:15:00+00:00:ema_pullback_trend:LONG",
+      "asia:2026-02-02T23:30:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-03-31T22:15:00+00:00:ema_pullback_trend:LONG",
+      "asia:2026-03-31T23:45:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-04-09T23:45:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-04-13T06:15:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-04-30T05:00:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2026-04-30T23:30:00+00:00:ema_pullback_trend:LONG",
+      "asia:2026-04-30T23:45:00+00:00:strat_22_continuation_observed:LONG",
+      "4hr:2026-05-11",
+      "asia:2026-05-11T22:30:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-05-11T23:00:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-05-11T23:30:00+00:00:ema_pullback_trend:LONG",
+      "asia:2026-05-14T23:00:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-05-14T23:30:00+00:00:ema_pullback_trend:LONG",
+      "asia:2026-05-26T23:30:00+00:00:ema_pullback_trend:LONG",
+      "asia:2026-06-03T22:30:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2026-06-03T23:45:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2026-06-04T03:00:00+00:00:ema_pullback_trend:SHORT",
+      "asia:2026-06-04T04:30:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-06-04T23:45:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2026-06-08T05:00:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2026-06-08T05:15:00+00:00:ema_pullback_trend:SHORT",
+      "asia:2026-06-08T06:00:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2026-06-09T03:00:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-06-09T03:30:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-06-09T04:00:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-06-09T04:15:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-06-09T04:30:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-06-09T04:45:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-06-09T06:00:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-06-09T23:00:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2026-06-09T23:45:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2026-06-16T23:15:00+00:00:ema_pullback_trend:SHORT",
+      "asia:2026-06-16T23:45:00+00:00:ema_pullback_trend:SHORT",
+      "asia:2026-06-18T05:30:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-06-18T22:15:00+00:00:ema_pullback_trend:LONG",
+      "asia:2026-06-18T23:00:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2026-06-18T23:30:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-06-22T23:00:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2026-06-22T23:15:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2026-06-22T23:30:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2026-06-23T03:30:00+00:00:strat_22_continuation_observed:SHORT",
+      "asia:2026-06-23T22:45:00+00:00:ema_pullback_trend:SHORT",
+      "asia:2026-06-23T23:30:00+00:00:ema_pullback_trend:SHORT",
+      "asia:2026-06-23T23:45:00+00:00:ema_pullback_trend:SHORT",
+      "asia:2026-06-24T04:15:00+00:00:ema_pullback_trend:SHORT",
+      "asia:2026-06-24T05:30:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-06-24T05:45:00+00:00:strat_22_continuation_observed:LONG",
+      "asia:2026-06-24T23:30:00+00:00:strat_22_continuation_observed:LONG"
+    ],
+    "daily_loss_days": [
+      "2025-07-24",
+      "2025-09-04",
+      "2026-02-02",
+      "2026-03-31",
+      "2026-04-09",
+      "2026-04-13",
+      "2026-04-30",
+      "2026-05-11",
+      "2026-05-14",
+      "2026-05-26",
+      "2026-06-03",
+      "2026-06-04",
+      "2026-06-08",
+      "2026-06-09",
+      "2026-06-16",
+      "2026-06-18",
+      "2026-06-22",
+      "2026-06-23",
+      "2026-06-24"
+    ],
+    "realized_pnl": "13292.39",
+    "sign": "positive",
+    "losing_days": 95,
+    "winning_days": 96,
+    "flat_days": 0,
+    "max_consecutive_losses": 9,
+    "max_dollar_drawdown": "1767.86",
+    "daily_path": [
+      {
+        "journal_day": "2025-07-24",
+        "realized_pnl": "-174.97"
+      },
+      {
+        "journal_day": "2025-07-25",
+        "realized_pnl": "52.15"
+      },
+      {
+        "journal_day": "2025-07-27",
+        "realized_pnl": "94.52"
+      },
+      {
+        "journal_day": "2025-07-29",
+        "realized_pnl": "74.84"
+      },
+      {
+        "journal_day": "2025-07-30",
+        "realized_pnl": "-71.00"
+      },
+      {
+        "journal_day": "2025-07-31",
+        "realized_pnl": "239.87"
+      },
+      {
+        "journal_day": "2025-08-03",
+        "realized_pnl": "-133.00"
+      },
+      {
+        "journal_day": "2025-08-04",
+        "realized_pnl": "301.96"
+      },
+      {
+        "journal_day": "2025-08-05",
+        "realized_pnl": "-98.76"
+      },
+      {
+        "journal_day": "2025-08-06",
+        "realized_pnl": "525.22"
+      },
+      {
+        "journal_day": "2025-08-08",
+        "realized_pnl": "-703.51"
+      },
+      {
+        "journal_day": "2025-08-21",
+        "realized_pnl": "-98.00"
+      },
+      {
+        "journal_day": "2025-08-22",
+        "realized_pnl": "-104.00"
+      },
+      {
+        "journal_day": "2025-08-24",
+        "realized_pnl": "-26.54"
+      },
+      {
+        "journal_day": "2025-08-25",
+        "realized_pnl": "62.00"
+      },
+      {
+        "journal_day": "2025-08-26",
+        "realized_pnl": "-34.67"
+      },
+      {
+        "journal_day": "2025-08-27",
+        "realized_pnl": "7.49"
+      },
+      {
+        "journal_day": "2025-08-28",
+        "realized_pnl": "54.50"
+      },
+      {
+        "journal_day": "2025-08-29",
+        "realized_pnl": "-27.50"
+      },
+      {
+        "journal_day": "2025-08-31",
+        "realized_pnl": "-28.50"
+      },
+      {
+        "journal_day": "2025-09-01",
+        "realized_pnl": "35.50"
+      },
+      {
+        "journal_day": "2025-09-02",
+        "realized_pnl": "162.95"
+      },
+      {
+        "journal_day": "2025-09-03",
+        "realized_pnl": "124.40"
+      },
+      {
+        "journal_day": "2025-09-04",
+        "realized_pnl": "-153.48"
+      },
+      {
+        "journal_day": "2025-09-05",
+        "realized_pnl": "422.21"
+      },
+      {
+        "journal_day": "2025-09-07",
+        "realized_pnl": "79.00"
+      },
+      {
+        "journal_day": "2025-09-08",
+        "realized_pnl": "6.55"
+      },
+      {
+        "journal_day": "2025-09-09",
+        "realized_pnl": "104.91"
+      },
+      {
+        "journal_day": "2025-09-10",
+        "realized_pnl": "202.02"
+      },
+      {
+        "journal_day": "2025-09-11",
+        "realized_pnl": "41.52"
+      },
+      {
+        "journal_day": "2025-09-12",
+        "realized_pnl": "-11.50"
+      },
+      {
+        "journal_day": "2025-09-14",
+        "realized_pnl": "-30.00"
+      },
+      {
+        "journal_day": "2025-09-15",
+        "realized_pnl": "823.90"
+      },
+      {
+        "journal_day": "2025-09-18",
+        "realized_pnl": "-12.50"
+      },
+      {
+        "journal_day": "2025-09-19",
+        "realized_pnl": "-103.50"
+      },
+      {
+        "journal_day": "2025-09-21",
+        "realized_pnl": "-42.05"
+      },
+      {
+        "journal_day": "2025-09-22",
+        "realized_pnl": "-69.67"
+      },
+      {
+        "journal_day": "2025-09-23",
+        "realized_pnl": "8.40"
+      },
+      {
+        "journal_day": "2025-09-24",
+        "realized_pnl": "-36.04"
+      },
+      {
+        "journal_day": "2025-09-25",
+        "realized_pnl": "5.50"
+      },
+      {
+        "journal_day": "2025-09-26",
+        "realized_pnl": "-46.99"
+      },
+      {
+        "journal_day": "2025-09-28",
+        "realized_pnl": "156.07"
+      },
+      {
+        "journal_day": "2025-09-29",
+        "realized_pnl": "-66.11"
+      },
+      {
+        "journal_day": "2025-09-30",
+        "realized_pnl": "-133.26"
+      },
+      {
+        "journal_day": "2025-10-01",
+        "realized_pnl": "277.66"
+      },
+      {
+        "journal_day": "2025-10-02",
+        "realized_pnl": "43.50"
+      },
+      {
+        "journal_day": "2025-10-03",
+        "realized_pnl": "71.00"
+      },
+      {
+        "journal_day": "2025-10-05",
+        "realized_pnl": "170.00"
+      },
+      {
+        "journal_day": "2025-10-06",
+        "realized_pnl": "-59.50"
+      },
+      {
+        "journal_day": "2025-10-07",
+        "realized_pnl": "-148.50"
+      },
+      {
+        "journal_day": "2025-10-08",
+        "realized_pnl": "66.50"
+      },
+      {
+        "journal_day": "2025-10-09",
+        "realized_pnl": "3.00"
+      },
+      {
+        "journal_day": "2025-10-10",
+        "realized_pnl": "1.50"
+      },
+      {
+        "journal_day": "2025-10-12",
+        "realized_pnl": "247.50"
+      },
+      {
+        "journal_day": "2025-10-13",
+        "realized_pnl": "-45.50"
+      },
+      {
+        "journal_day": "2025-10-14",
+        "realized_pnl": "494.50"
+      },
+      {
+        "journal_day": "2025-10-15",
+        "realized_pnl": "116.20"
+      },
+      {
+        "journal_day": "2025-10-16",
+        "realized_pnl": "-117.12"
+      },
+      {
+        "journal_day": "2025-10-17",
+        "realized_pnl": "155.37"
+      },
+      {
+        "journal_day": "2025-10-20",
+        "realized_pnl": "254.91"
+      },
+      {
+        "journal_day": "2025-10-21",
+        "realized_pnl": "-31.66"
+      },
+      {
+        "journal_day": "2025-10-22",
+        "realized_pnl": "-101.50"
+      },
+      {
+        "journal_day": "2025-10-23",
+        "realized_pnl": "97.50"
+      },
+      {
+        "journal_day": "2025-10-24",
+        "realized_pnl": "136.88"
+      },
+      {
+        "journal_day": "2025-10-27",
+        "realized_pnl": "194.87"
+      },
+      {
+        "journal_day": "2025-10-28",
+        "realized_pnl": "118.15"
+      },
+      {
+        "journal_day": "2025-10-29",
+        "realized_pnl": "-43.80"
+      },
+      {
+        "journal_day": "2025-10-30",
+        "realized_pnl": "166.14"
+      },
+      {
+        "journal_day": "2025-10-31",
+        "realized_pnl": "-66.50"
+      },
+      {
+        "journal_day": "2025-11-02",
+        "realized_pnl": "268.00"
+      },
+      {
+        "journal_day": "2025-11-03",
+        "realized_pnl": "112.50"
+      },
+      {
+        "journal_day": "2025-11-04",
+        "realized_pnl": "557.41"
+      },
+      {
+        "journal_day": "2025-11-05",
+        "realized_pnl": "-4.98"
+      },
+      {
+        "journal_day": "2025-11-06",
+        "realized_pnl": "2407.04"
+      },
+      {
+        "journal_day": "2025-11-20",
+        "realized_pnl": "-324.45"
+      },
+      {
+        "journal_day": "2025-11-24",
+        "realized_pnl": "96.75"
+      },
+      {
+        "journal_day": "2025-11-25",
+        "realized_pnl": "-39.00"
+      },
+      {
+        "journal_day": "2025-11-26",
+        "realized_pnl": "172.62"
+      },
+      {
+        "journal_day": "2025-11-27",
+        "realized_pnl": "-84.50"
+      },
+      {
+        "journal_day": "2025-11-28",
+        "realized_pnl": "124.00"
+      },
+      {
+        "journal_day": "2025-11-30",
+        "realized_pnl": "-380.98"
+      },
+      {
+        "journal_day": "2025-12-01",
+        "realized_pnl": "99.00"
+      },
+      {
+        "journal_day": "2025-12-02",
+        "realized_pnl": "-124.12"
+      },
+      {
+        "journal_day": "2025-12-03",
+        "realized_pnl": "-77.70"
+      },
+      {
+        "journal_day": "2025-12-04",
+        "realized_pnl": "-60.97"
+      },
+      {
+        "journal_day": "2025-12-05",
+        "realized_pnl": "47.06"
+      },
+      {
+        "journal_day": "2025-12-08",
+        "realized_pnl": "58.99"
+      },
+      {
+        "journal_day": "2025-12-09",
+        "realized_pnl": "-9.35"
+      },
+      {
+        "journal_day": "2025-12-10",
+        "realized_pnl": "77.00"
+      },
+      {
+        "journal_day": "2025-12-11",
+        "realized_pnl": "231.00"
+      },
+      {
+        "journal_day": "2025-12-15",
+        "realized_pnl": "252.97"
+      },
+      {
+        "journal_day": "2025-12-16",
+        "realized_pnl": "-6.78"
+      },
+      {
+        "journal_day": "2025-12-17",
+        "realized_pnl": "-56.97"
+      },
+      {
+        "journal_day": "2025-12-18",
+        "realized_pnl": "-97.04"
+      },
+      {
+        "journal_day": "2025-12-19",
+        "realized_pnl": "210.50"
+      },
+      {
+        "journal_day": "2025-12-22",
+        "realized_pnl": "95.00"
+      },
+      {
+        "journal_day": "2025-12-23",
+        "realized_pnl": "-69.97"
+      },
+      {
+        "journal_day": "2025-12-24",
+        "realized_pnl": "3.00"
+      },
+      {
+        "journal_day": "2025-12-25",
+        "realized_pnl": "-90.22"
+      },
+      {
+        "journal_day": "2025-12-28",
+        "realized_pnl": "-23.66"
+      },
+      {
+        "journal_day": "2025-12-29",
+        "realized_pnl": "-48.63"
+      },
+      {
+        "journal_day": "2025-12-30",
+        "realized_pnl": "108.92"
+      },
+      {
+        "journal_day": "2025-12-31",
+        "realized_pnl": "89.52"
+      },
+      {
+        "journal_day": "2026-01-02",
+        "realized_pnl": "226.00"
+      },
+      {
+        "journal_day": "2026-01-04",
+        "realized_pnl": "193.00"
+      },
+      {
+        "journal_day": "2026-01-05",
+        "realized_pnl": "-41.50"
+      },
+      {
+        "journal_day": "2026-01-06",
+        "realized_pnl": "-27.20"
+      },
+      {
+        "journal_day": "2026-01-07",
+        "realized_pnl": "76.00"
+      },
+      {
+        "journal_day": "2026-01-08",
+        "realized_pnl": "116.13"
+      },
+      {
+        "journal_day": "2026-01-09",
+        "realized_pnl": "118.77"
+      },
+      {
+        "journal_day": "2026-01-12",
+        "realized_pnl": "595.60"
+      },
+      {
+        "journal_day": "2026-01-13",
+        "realized_pnl": "-60.00"
+      },
+      {
+        "journal_day": "2026-01-14",
+        "realized_pnl": "26.71"
+      },
+      {
+        "journal_day": "2026-01-15",
+        "realized_pnl": "-139.50"
+      },
+      {
+        "journal_day": "2026-01-16",
+        "realized_pnl": "290.02"
+      },
+      {
+        "journal_day": "2026-01-20",
+        "realized_pnl": "-96.50"
+      },
+      {
+        "journal_day": "2026-01-21",
+        "realized_pnl": "-95.00"
+      },
+      {
+        "journal_day": "2026-01-22",
+        "realized_pnl": "-135.50"
+      },
+      {
+        "journal_day": "2026-01-23",
+        "realized_pnl": "35.00"
+      },
+      {
+        "journal_day": "2026-01-26",
+        "realized_pnl": "210.34"
+      },
+      {
+        "journal_day": "2026-01-27",
+        "realized_pnl": "197.50"
+      },
+      {
+        "journal_day": "2026-01-28",
+        "realized_pnl": "367.02"
+      },
+      {
+        "journal_day": "2026-01-29",
+        "realized_pnl": "123.48"
+      },
+      {
+        "journal_day": "2026-01-30",
+        "realized_pnl": "53.50"
+      },
+      {
+        "journal_day": "2026-02-01",
+        "realized_pnl": "-210.50"
+      },
+      {
+        "journal_day": "2026-02-02",
+        "realized_pnl": "-186.21"
+      },
+      {
+        "journal_day": "2026-02-03",
+        "realized_pnl": "-143.37"
+      },
+      {
+        "journal_day": "2026-02-04",
+        "realized_pnl": "-213.46"
+      },
+      {
+        "journal_day": "2026-02-05",
+        "realized_pnl": "3400.02"
+      },
+      {
+        "journal_day": "2026-03-29",
+        "realized_pnl": "-61.00"
+      },
+      {
+        "journal_day": "2026-03-30",
+        "realized_pnl": "281.20"
+      },
+      {
+        "journal_day": "2026-03-31",
+        "realized_pnl": "-173.59"
+      },
+      {
+        "journal_day": "2026-04-01",
+        "realized_pnl": "266.67"
+      },
+      {
+        "journal_day": "2026-04-02",
+        "realized_pnl": "72.26"
+      },
+      {
+        "journal_day": "2026-04-03",
+        "realized_pnl": "-40.50"
+      },
+      {
+        "journal_day": "2026-04-05",
+        "realized_pnl": "-84.06"
+      },
+      {
+        "journal_day": "2026-04-06",
+        "realized_pnl": "134.95"
+      },
+      {
+        "journal_day": "2026-04-07",
+        "realized_pnl": "-103.49"
+      },
+      {
+        "journal_day": "2026-04-08",
+        "realized_pnl": "298.89"
+      },
+      {
+        "journal_day": "2026-04-09",
+        "realized_pnl": "-167.74"
+      },
+      {
+        "journal_day": "2026-04-10",
+        "realized_pnl": "-670.72"
+      },
+      {
+        "journal_day": "2026-04-13",
+        "realized_pnl": "-196.08"
+      },
+      {
+        "journal_day": "2026-04-14",
+        "realized_pnl": "335.70"
+      },
+      {
+        "journal_day": "2026-04-15",
+        "realized_pnl": "39.50"
+      },
+      {
+        "journal_day": "2026-04-16",
+        "realized_pnl": "-107.11"
+      },
+      {
+        "journal_day": "2026-04-17",
+        "realized_pnl": "-94.30"
+      },
+      {
+        "journal_day": "2026-04-20",
+        "realized_pnl": "-129.11"
+      },
+      {
+        "journal_day": "2026-04-22",
+        "realized_pnl": "1362.02"
+      },
+      {
+        "journal_day": "2026-04-30",
+        "realized_pnl": "-198.15"
+      },
+      {
+        "journal_day": "2026-05-01",
+        "realized_pnl": "29.65"
+      },
+      {
+        "journal_day": "2026-05-03",
+        "realized_pnl": "-114.25"
+      },
+      {
+        "journal_day": "2026-05-04",
+        "realized_pnl": "-124.89"
+      },
+      {
+        "journal_day": "2026-05-05",
+        "realized_pnl": "1548.52"
+      },
+      {
+        "journal_day": "2026-05-06",
+        "realized_pnl": "-32.50"
+      },
+      {
+        "journal_day": "2026-05-07",
+        "realized_pnl": "-230.81"
+      },
+      {
+        "journal_day": "2026-05-08",
+        "realized_pnl": "133.50"
+      },
+      {
+        "journal_day": "2026-05-10",
+        "realized_pnl": "-100.56"
+      },
+      {
+        "journal_day": "2026-05-11",
+        "realized_pnl": "-188.50"
+      },
+      {
+        "journal_day": "2026-05-12",
+        "realized_pnl": "280.19"
+      },
+      {
+        "journal_day": "2026-05-13",
+        "realized_pnl": "208.00"
+      },
+      {
+        "journal_day": "2026-05-14",
+        "realized_pnl": "-199.00"
+      },
+      {
+        "journal_day": "2026-05-15",
+        "realized_pnl": "281.68"
+      },
+      {
+        "journal_day": "2026-05-17",
+        "realized_pnl": "-1177.70"
+      },
+      {
+        "journal_day": "2026-05-25",
+        "realized_pnl": "228.50"
+      },
+      {
+        "journal_day": "2026-05-26",
+        "realized_pnl": "-212.11"
+      },
+      {
+        "journal_day": "2026-05-27",
+        "realized_pnl": "213.00"
+      },
+      {
+        "journal_day": "2026-05-28",
+        "realized_pnl": "-85.63"
+      },
+      {
+        "journal_day": "2026-05-29",
+        "realized_pnl": "-110.50"
+      },
+      {
+        "journal_day": "2026-05-31",
+        "realized_pnl": "162.87"
+      },
+      {
+        "journal_day": "2026-06-01",
+        "realized_pnl": "-292.50"
+      },
+      {
+        "journal_day": "2026-06-02",
+        "realized_pnl": "-118.48"
+      },
+      {
+        "journal_day": "2026-06-03",
+        "realized_pnl": "-166.53"
+      },
+      {
+        "journal_day": "2026-06-04",
+        "realized_pnl": "-150.50"
+      },
+      {
+        "journal_day": "2026-06-05",
+        "realized_pnl": "1824.52"
+      },
+      {
+        "journal_day": "2026-06-07",
+        "realized_pnl": "-413.27"
+      },
+      {
+        "journal_day": "2026-06-08",
+        "realized_pnl": "-163.00"
+      },
+      {
+        "journal_day": "2026-06-09",
+        "realized_pnl": "-150.00"
+      },
+      {
+        "journal_day": "2026-06-10",
+        "realized_pnl": "-442.71"
+      },
+      {
+        "journal_day": "2026-06-11",
+        "realized_pnl": "777.21"
+      },
+      {
+        "journal_day": "2026-06-12",
+        "realized_pnl": "10.52"
+      },
+      {
+        "journal_day": "2026-06-15",
+        "realized_pnl": "213.00"
+      },
+      {
+        "journal_day": "2026-06-16",
+        "realized_pnl": "-163.34"
+      },
+      {
+        "journal_day": "2026-06-17",
+        "realized_pnl": "227.29"
+      },
+      {
+        "journal_day": "2026-06-18",
+        "realized_pnl": "-155.00"
+      },
+      {
+        "journal_day": "2026-06-19",
+        "realized_pnl": "399.00"
+      },
+      {
+        "journal_day": "2026-06-21",
+        "realized_pnl": "-128.50"
+      },
+      {
+        "journal_day": "2026-06-22",
+        "realized_pnl": "-200.00"
+      },
+      {
+        "journal_day": "2026-06-23",
+        "realized_pnl": "-240.00"
+      },
+      {
+        "journal_day": "2026-06-24",
+        "realized_pnl": "-225.50"
+      },
+      {
+        "journal_day": "2026-06-25",
+        "realized_pnl": "-226.79"
+      },
+      {
+        "journal_day": "2026-06-26",
+        "realized_pnl": "228.83"
+      }
+    ],
+    "label": "DAILY_LOSS_CONSEQUENTIAL"
+  },
+  "two_candidates": [
+    {
+      "source_id": "asia:2025-12-01T01:15:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "SKIPPED_BUSY_PORTFOLIO",
+      "sensitivity": "FILLED"
+    },
+    {
+      "source_id": "daily22:2026-02-05:2026-02-05T12:40:00+00:00",
+      "primary": "SKIPPED_BUSY_PORTFOLIO",
+      "sensitivity": "FILLED"
+    }
+  ],
+  "disposition_differences_beyond_two": [
+    {
+      "source_id": "322:2026-03-06",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "4hr:2026-02-10",
+      "primary": "SKIPPED_MAX_TRADES_PORTFOLIO",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "4hr:2026-02-12",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "4hr:2026-02-13",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "4hr:2026-03-02",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "4hr:2026-03-10",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2025-12-01T02:30:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2025-12-01T03:30:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2025-12-01T05:30:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "SKIPPED_BUSY_PORTFOLIO",
+      "sensitivity": "FILLED"
+    },
+    {
+      "source_id": "asia:2026-02-05T23:15:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-06T00:45:00+00:00:ema_pullback_trend:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-06T02:15:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-06T05:00:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-06T06:15:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-06T06:30:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-06T07:45:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-08T23:30:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-09T07:45:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-10T01:45:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-10T02:30:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-10T06:30:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-11T01:00:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-11T04:00:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-11T06:00:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-11T23:45:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-12T01:00:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-12T23:45:00+00:00:ema_pullback_trend:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-16T02:00:00+00:00:ema_pullback_trend:LONG",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-16T03:15:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-17T00:00:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-17T01:45:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-19T00:15:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-19T02:15:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-19T23:45:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-20T00:45:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-23T00:45:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-24T02:45:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-24T06:00:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-24T23:45:00+00:00:ema_pullback_trend:LONG",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-25T03:45:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-26T01:45:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-26T04:15:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-26T23:15:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-27T01:00:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-27T01:30:00+00:00:ema_pullback_trend:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-27T03:15:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "SKIPPED_MAX_TRADES_PORTFOLIO",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-27T04:15:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "SKIPPED_MAX_TRADES_PORTFOLIO",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-27T05:45:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "SKIPPED_MAX_TRADES_PORTFOLIO",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-27T06:30:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "SKIPPED_MAX_TRADES_PORTFOLIO",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-27T07:45:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "SKIPPED_MAX_TRADES_PORTFOLIO",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-02-27T08:00:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "SKIPPED_MAX_TRADES_PORTFOLIO",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-02T00:30:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-02T01:00:00+00:00:ema_pullback_trend:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-02T02:30:00+00:00:ema_pullback_trend:SHORT",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-02T03:00:00+00:00:ema_pullback_trend:SHORT",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-02T03:15:00+00:00:ema_pullback_trend:SHORT",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-02T03:30:00+00:00:ema_pullback_trend:SHORT",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-02T03:45:00+00:00:ema_pullback_trend:SHORT",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-02T04:00:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-02T04:15:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-02T04:45:00+00:00:ema_pullback_trend:SHORT",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-02T05:00:00+00:00:ema_pullback_trend:SHORT",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-02T05:30:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-02T23:45:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-03T02:30:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-03T04:15:00+00:00:ema_pullback_trend:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-04T00:30:00+00:00:ema_pullback_trend:LONG",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-04T02:45:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-04T08:00:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-04T23:15:00+00:00:ema_pullback_trend:LONG",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-05T02:00:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-05T23:30:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-05T23:45:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-06T00:00:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-09T03:00:00+00:00:ema_pullback_trend:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-09T05:45:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-09T06:30:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-09T22:15:00+00:00:ema_pullback_trend:LONG",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-09T22:30:00+00:00:ema_pullback_trend:LONG",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-09T22:45:00+00:00:ema_pullback_trend:LONG",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-09T23:15:00+00:00:ema_pullback_trend:LONG",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-09T23:30:00+00:00:ema_pullback_trend:LONG",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-10T00:45:00+00:00:ema_pullback_trend:LONG",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-10T05:45:00+00:00:ema_pullback_trend:LONG",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-10T06:00:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-10T06:15:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-10T06:30:00+00:00:ema_pullback_trend:LONG",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-10T07:00:00+00:00:ema_pullback_trend:LONG",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-10T22:15:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-10T23:30:00+00:00:ema_pullback_trend:SHORT",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-11T00:30:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-11T22:15:00+00:00:ema_pullback_trend:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-12T00:00:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-12T04:30:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-12T06:45:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-12T23:30:00+00:00:ema_pullback_trend:SHORT",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-12T23:45:00+00:00:ema_pullback_trend:SHORT",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-13T00:45:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-13T04:30:00+00:00:ema_pullback_trend:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-16T22:45:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-17T00:00:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-17T02:45:00+00:00:ema_pullback_trend:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-17T05:00:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "SKIPPED_MAX_TRADES_PORTFOLIO",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-17T22:30:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-18T04:15:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-18T22:30:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-19T00:00:00+00:00:ema_pullback_trend:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-19T04:30:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-20T00:00:00+00:00:ema_pullback_trend:LONG",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-20T02:30:00+00:00:ema_pullback_trend:LONG",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-20T03:30:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-20T04:45:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "SKIPPED_MAX_TRADES_PORTFOLIO",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-20T05:00:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "SKIPPED_MAX_TRADES_PORTFOLIO",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-20T06:45:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "SKIPPED_MAX_TRADES_PORTFOLIO",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-20T07:00:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "SKIPPED_MAX_TRADES_PORTFOLIO",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-22T22:45:00+00:00:ema_pullback_trend:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-23T23:45:00+00:00:ema_pullback_trend:LONG",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-24T00:30:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-25T00:15:00+00:00:ema_pullback_trend:LONG",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-25T03:15:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-25T04:45:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-25T05:00:00+00:00:ema_pullback_trend:LONG",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-25T05:45:00+00:00:ema_pullback_trend:LONG",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-25T06:45:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-25T22:15:00+00:00:ema_pullback_trend:SHORT",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-25T23:00:00+00:00:ema_pullback_trend:SHORT",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-25T23:30:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "SKIPPED_DAILY_LOSS",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-26T00:00:00+00:00:ema_pullback_trend:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-26T23:15:00+00:00:ema_pullback_trend:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-27T00:45:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-27T03:15:00+00:00:strat_22_continuation_observed:SHORT",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-27T04:00:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "SKIPPED_MAX_TRADES_PORTFOLIO",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-27T04:45:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "SKIPPED_MAX_TRADES_PORTFOLIO",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "asia:2026-03-27T05:30:00+00:00:strat_22_continuation_observed:LONG",
+      "primary": "SKIPPED_MAX_TRADES_PORTFOLIO",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "daily22:2026-02-17:2026-02-17T03:40:00+00:00",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "daily22:2026-03-16:2026-03-15T22:00:00+00:00",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "daily22:2026-03-20:2026-03-20T10:10:00+00:00",
+      "primary": "SKIPPED_MAX_TRADES_PORTFOLIO",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "miyagi:2026-02-11",
+      "primary": "SKIPPED_MAX_TRADES_PORTFOLIO",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "sustained:2026-02-16T07:30:00+00:00:2026-02-16T08:10:00+00:00",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "sustained:2026-02-25T09:30:00+00:00:2026-02-25T10:40:00+00:00",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    },
+    {
+      "source_id": "sustained:2026-03-18T01:00:00+00:00:2026-03-18T02:05:00+00:00",
+      "primary": "FILLED",
+      "sensitivity": "SKIPPED_BUSY_PORTFOLIO"
+    }
+  ],
+  "filled_differences_beyond_two": [
+    "322:2026-03-06",
+    "4hr:2026-02-12",
+    "4hr:2026-02-13",
+    "asia:2025-12-01T02:30:00+00:00:strat_22_continuation_observed:SHORT",
+    "asia:2025-12-01T03:30:00+00:00:strat_22_continuation_observed:SHORT",
+    "asia:2025-12-01T05:30:00+00:00:strat_22_continuation_observed:SHORT",
+    "asia:2026-02-05T23:15:00+00:00:strat_22_continuation_observed:SHORT",
+    "asia:2026-02-06T00:45:00+00:00:ema_pullback_trend:SHORT",
+    "asia:2026-02-08T23:30:00+00:00:strat_22_continuation_observed:LONG",
+    "asia:2026-02-09T07:45:00+00:00:strat_22_continuation_observed:SHORT",
+    "asia:2026-02-10T01:45:00+00:00:strat_22_continuation_observed:SHORT",
+    "asia:2026-02-10T02:30:00+00:00:strat_22_continuation_observed:SHORT",
+    "asia:2026-02-10T06:30:00+00:00:strat_22_continuation_observed:SHORT",
+    "asia:2026-02-11T01:00:00+00:00:strat_22_continuation_observed:LONG",
+    "asia:2026-02-11T04:00:00+00:00:strat_22_continuation_observed:LONG",
+    "asia:2026-02-11T06:00:00+00:00:strat_22_continuation_observed:SHORT",
+    "asia:2026-02-11T23:45:00+00:00:strat_22_continuation_observed:SHORT",
+    "asia:2026-02-12T01:00:00+00:00:strat_22_continuation_observed:LONG",
+    "asia:2026-02-12T23:45:00+00:00:ema_pullback_trend:SHORT",
+    "asia:2026-02-16T02:00:00+00:00:ema_pullback_trend:LONG",
+    "asia:2026-02-16T03:15:00+00:00:strat_22_continuation_observed:SHORT",
+    "asia:2026-02-17T00:00:00+00:00:strat_22_continuation_observed:LONG",
+    "asia:2026-02-17T01:45:00+00:00:strat_22_continuation_observed:SHORT",
+    "asia:2026-02-19T00:15:00+00:00:strat_22_continuation_observed:SHORT",
+    "asia:2026-02-19T02:15:00+00:00:strat_22_continuation_observed:LONG",
+    "asia:2026-02-19T23:45:00+00:00:strat_22_continuation_observed:LONG",
+    "asia:2026-02-20T00:45:00+00:00:strat_22_continuation_observed:LONG",
+    "asia:2026-02-23T00:45:00+00:00:strat_22_continuation_observed:SHORT",
+    "asia:2026-02-24T02:45:00+00:00:strat_22_continuation_observed:LONG",
+    "asia:2026-02-24T06:00:00+00:00:strat_22_continuation_observed:SHORT",
+    "asia:2026-02-24T23:45:00+00:00:ema_pullback_trend:LONG",
+    "asia:2026-02-25T03:45:00+00:00:strat_22_continuation_observed:SHORT",
+    "asia:2026-02-26T01:45:00+00:00:strat_22_continuation_observed:SHORT",
+    "asia:2026-02-26T04:15:00+00:00:strat_22_continuation_observed:SHORT",
+    "asia:2026-02-26T23:15:00+00:00:strat_22_continuation_observed:SHORT",
+    "asia:2026-02-27T01:00:00+00:00:strat_22_continuation_observed:SHORT",
+    "asia:2026-02-27T01:30:00+00:00:ema_pullback_trend:SHORT",
+    "asia:2026-03-02T00:30:00+00:00:strat_22_continuation_observed:SHORT",
+    "asia:2026-03-02T01:00:00+00:00:ema_pullback_trend:SHORT",
+    "asia:2026-03-03T02:30:00+00:00:strat_22_continuation_observed:SHORT",
+    "asia:2026-03-03T04:15:00+00:00:ema_pullback_trend:SHORT",
+    "asia:2026-03-04T00:30:00+00:00:ema_pullback_trend:LONG",
+    "asia:2026-03-04T02:45:00+00:00:strat_22_continuation_observed:SHORT",
+    "asia:2026-03-04T08:00:00+00:00:strat_22_continuation_observed:LONG",
+    "asia:2026-03-04T23:15:00+00:00:ema_pullback_trend:LONG",
+    "asia:2026-03-05T02:00:00+00:00:strat_22_continuation_observed:SHORT",
+    "asia:2026-03-06T00:00:00+00:00:strat_22_continuation_observed:LONG",
+    "asia:2026-03-09T03:00:00+00:00:ema_pullback_trend:SHORT",
+    "asia:2026-03-10T00:45:00+00:00:ema_pullback_trend:LONG",
+    "asia:2026-03-11T00:30:00+00:00:strat_22_continuation_observed:LONG",
+    "asia:2026-03-11T22:15:00+00:00:ema_pullback_trend:SHORT",
+    "asia:2026-03-12T00:00:00+00:00:strat_22_continuation_observed:SHORT",
+    "asia:2026-03-13T00:45:00+00:00:strat_22_continuation_observed:LONG",
+    "asia:2026-03-13T04:30:00+00:00:ema_pullback_trend:SHORT",
+    "asia:2026-03-16T22:45:00+00:00:strat_22_continuation_observed:SHORT",
+    "asia:2026-03-17T00:00:00+00:00:strat_22_continuation_observed:LONG",
+    "asia:2026-03-17T02:45:00+00:00:ema_pullback_trend:SHORT",
+    "asia:2026-03-17T22:30:00+00:00:strat_22_continuation_observed:SHORT",
+    "asia:2026-03-18T04:15:00+00:00:strat_22_continuation_observed:LONG",
+    "asia:2026-03-18T22:30:00+00:00:strat_22_continuation_observed:SHORT",
+    "asia:2026-03-19T00:00:00+00:00:ema_pullback_trend:SHORT",
+    "asia:2026-03-19T04:30:00+00:00:strat_22_continuation_observed:SHORT",
+    "asia:2026-03-20T00:00:00+00:00:ema_pullback_trend:LONG",
+    "asia:2026-03-20T02:30:00+00:00:ema_pullback_trend:LONG",
+    "asia:2026-03-20T03:30:00+00:00:strat_22_continuation_observed:SHORT",
+    "asia:2026-03-22T22:45:00+00:00:ema_pullback_trend:SHORT",
+    "asia:2026-03-23T23:45:00+00:00:ema_pullback_trend:LONG",
+    "asia:2026-03-24T00:30:00+00:00:strat_22_continuation_observed:SHORT",
+    "asia:2026-03-25T00:15:00+00:00:ema_pullback_trend:LONG",
+    "asia:2026-03-25T03:15:00+00:00:strat_22_continuation_observed:SHORT",
+    "asia:2026-03-26T00:00:00+00:00:ema_pullback_trend:SHORT",
+    "asia:2026-03-26T23:15:00+00:00:ema_pullback_trend:SHORT",
+    "asia:2026-03-27T00:45:00+00:00:strat_22_continuation_observed:SHORT",
+    "asia:2026-03-27T03:15:00+00:00:strat_22_continuation_observed:SHORT",
+    "daily22:2026-02-17:2026-02-17T03:40:00+00:00",
+    "daily22:2026-03-16:2026-03-15T22:00:00+00:00",
+    "sustained:2026-02-16T07:30:00+00:00:2026-02-16T08:10:00+00:00",
+    "sustained:2026-02-25T09:30:00+00:00:2026-02-25T10:40:00+00:00",
+    "sustained:2026-03-18T01:00:00+00:00:2026-03-18T02:05:00+00:00"
+  ],
+  "capacity_vs_primary": {
+    "capacity_only": 73,
+    "overlay_only": 69,
+    "both": 415
+  },
+  "capacity_vs_sensitivity": {
+    "capacity_only": 142,
+    "overlay_only": 63,
+    "both": 346
+  },
+  "downstream_capacity_chain_changed": true
+}

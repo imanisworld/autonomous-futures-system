@@ -165,3 +165,65 @@ def test_options_scanner_release_integrity_success_is_reported():
         assert result.returncode == 0, result.stderr + result.stdout
         assert "OK options-scanner release-integrity: deadbeefcafe" in result.stdout
         assert "ALARM" not in result.stdout
+
+
+def test_release_integrity_check_never_writes_bytecode_into_the_release():
+    # 2026-10-02: the gate's own import of ops.release_integrity wrote
+    # ops/__pycache__/release_integrity.cpython-314.pyc into the live release,
+    # which every later integrity check (and the bot's startup gate) refuses.
+    import shutil
+    import sys
+
+    repo = SCRIPT.parent.parent
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        live = root / "live"
+        (live / "ops").mkdir(parents=True)
+        shutil.copy(repo / "ops" / "__init__.py", live / "ops" / "__init__.py")
+        shutil.copy(repo / "ops" / "release_integrity.py", live / "ops" / "release_integrity.py")
+        # cd away from the checkout so `-m ops.release_integrity` resolves via
+        # PYTHONPATH to the live copy, as on the box.
+        env_python = (
+            f'cd "{root}"\nPYTHON="{sys.executable}"\n'
+            "unset PYTHONDONTWRITEBYTECODE PYTHONPYCACHEPREFIX\n"
+        )
+        # Only release_integrity_check runs, so no pins file is needed.
+        result = _run_sourced(root, live, root / "shared", env_python + "release_integrity_check\n")
+        # The module really ran against the live copy (it fails: no manifest).
+        assert "release integrity" in (result.stdout + result.stderr).lower(), result.stdout + result.stderr
+        assert "Traceback" not in result.stderr, result.stderr
+        assert not list(live.rglob("__pycache__")), result.stdout + result.stderr
+
+
+def test_release_integrity_check_passes_durable_fingerprint_pin():
+    # 2026-10-02..04: cron runs the gate without the .env in its environment.
+    # ops.release_integrity (#1056) reads EXPECTED_RELEASE_FINGERPRINT from the
+    # process environment and treats a matching-but-unpinned tree as UNPINNED
+    # (exit 1), so an intact release alarmed daily. The gate must hand the
+    # durable pin from $ENV_FILE to the check.
+    with tempfile.TemporaryDirectory() as tmp:
+        root, live, shared = _fixture(tmp)
+        stub = root / "python-stub.sh"
+        stub.write_text('#!/bin/bash\nprintf "pin=%s args=%s\\n" "${EXPECTED_RELEASE_FINGERPRINT-<unset>}" "$*"\n')
+        stub.chmod(0o755)
+        result = _run_sourced(
+            root, live, shared, f'PYTHON="{stub}"\nrelease_integrity_check\n'
+        )
+        assert result.returncode == 0, result.stderr + result.stdout
+        assert "pin=fp123 " in result.stdout, result.stdout
+        assert "-B -m ops.release_integrity" in result.stdout
+
+        # No pin in the env file -> the check still runs, unpinned on purpose.
+        (shared / ".env").write_text("EXPECTED_LIVE_COMMIT=abc123\n")
+        result = _run_sourced(
+            root, live, shared, f'PYTHON="{stub}"\nrelease_integrity_check\n'
+        )
+        assert result.returncode == 0, result.stderr + result.stdout
+        assert "pin= " in result.stdout, result.stdout
+
+
+def test_scanner_integrity_check_also_runs_without_bytecode():
+    text = SCRIPT.read_text()
+    calls = [line for line in text.splitlines() if "-m ops.release_integrity" in line]
+    assert len(calls) == 2
+    assert all(" -B -m ops.release_integrity" in line for line in calls)

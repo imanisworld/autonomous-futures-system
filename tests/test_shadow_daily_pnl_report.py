@@ -126,7 +126,8 @@ def test_stacked_trades_are_left_out_of_the_one_at_a_time_view(tmp_path):
     assert (mes["closed"], mes["wins"], mes["losses"], mes["no_fill"], mes["stacked"]) == (3, 1, 2, 1, 2)
     assert rep["by_instrument"]["MES"]["closed"] == 5          # raw total untouched
     text = sdp.format_digest(rep)
-    assert "One trade at a time per setup: 3 trades" in text and "2 overlapping trades left out" in text
+    assert "Total one at a time: 3 trades" in text and "2 overlapping trades left out" in text
+    assert "MES one at a time: 3 trades" in text
 
 
 def test_stacking_uses_real_bar_gaps_and_falls_back_to_15m(tmp_path):
@@ -194,3 +195,49 @@ def test_final_pass_without_first_and_rejects_today(tmp_path, capsys):
     assert "no first-pass report on file" in capsys.readouterr().out
     with pytest.raises(SystemExit):
         sdp.main(["--log-dir", str(tmp_path), "--day", "2999-01-01", "--final"])
+
+
+def test_open_overlapping_trades_are_not_counted_as_left_out(tmp_path):
+    # Final-pass shape: a held trade, a closed overlap and an overlap still open.
+    _bars(tmp_path, "MNQ", 1, 24)
+    rows = [
+        _filled("a", "MNQ", "LOSS", -8, "2026-09-23T01:00:00+00:00", 1, 4),
+        _filled("b", "MNQ", "WIN", 16, "2026-09-23T01:15:00+00:00", 1, 2),
+        _filled("c", "MNQ", "OPEN", None, "2026-09-23T01:30:00+00:00", 1, None),
+    ]
+    rep = sdp.build_report(rows, DAY, log_dir=tmp_path)
+    fs, total = rep["first_signal"], rep["by_instrument"]["MNQ"]
+    assert (fs["stacked"], fs["stacked_open"]) == (1, 1)
+    mnq = fs["by_instrument"]["MNQ"]
+    # kept + left out == the market's trade count (open trades are not trades yet)
+    assert mnq["closed"] + mnq["stacked"] == total["closed"] == 2
+    text = sdp.format_digest(rep)
+    assert "MNQ one at a time: 1 trades" in text
+    assert "(1 overlapping trades left out, 1 overlapping trades still open)" in text
+
+
+def test_only_open_overlaps_print_no_one_at_a_time_line(tmp_path):
+    # Nothing closed was left out, so the view would just repeat the total.
+    _bars(tmp_path, "MNQ", 1, 24)
+    rows = [
+        _filled("a", "MNQ", "LOSS", -8, "2026-09-23T01:00:00+00:00", 1, 4),
+        _filled("c", "MNQ", "OPEN", None, "2026-09-23T01:30:00+00:00", 1, None),
+    ]
+    rep = sdp.build_report(rows, DAY, log_dir=tmp_path)
+    assert (rep["first_signal"]["stacked"], rep["first_signal"]["stacked_open"]) == (0, 1)
+    assert "one at a time" not in sdp.format_digest(rep)
+
+
+def test_one_at_a_time_lines_stay_under_their_market_on_the_card(tmp_path):
+    from notifications.discord_card import text_card
+
+    _bars(tmp_path, "MES", 1, 24)
+    rows = [
+        _filled("a", "MES", "LOSS", -8, "2026-09-23T01:00:00+00:00", 1, 4),
+        _filled("b", "MES", "LOSS", -8, "2026-09-23T01:30:00+00:00", 1, 2),
+    ]
+    card = text_card(sdp.format_digest(sdp.build_report(rows, DAY, log_dir=tmp_path)))
+    names = [field["name"] for field in card["fields"]]
+    assert "One trade at a time" not in card.get("description", "")
+    assert names.index("Total one at a time") == names.index("All markets") + 1
+    assert names.index("MES one at a time") == names.index("MES (Micro S&P 500)") + 1

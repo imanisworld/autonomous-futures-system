@@ -183,7 +183,9 @@ def signature(today: Mapping[str, Any] | None) -> dict[str, Any]:
         "trade_count": int(today.get("trade_count") or 0),
         "wins": int(today.get("wins") or 0),
         "losses": int(today.get("losses") or 0),
-        "realized": today.get("realized_pnl_dollars"),
+        # today_pnl_dollars is the day's P&L; /status/today's legacy realized_pnl_dollars
+        # is cumulative account P&L and must not be shown as "day".
+        "realized": today.get("today_pnl_dollars"),
         "consecutive_losses": int(today.get("consecutive_losses") or 0),
         "max_consecutive_losses": int(today.get("max_consecutive_losses") or 0),
         "date": today.get("date"),
@@ -250,7 +252,7 @@ def daily_summary(today: Mapping[str, Any]) -> Event:
     trades = int(today.get("trade_count") or 0)
     wins = int(today.get("wins") or 0)
     losses = int(today.get("losses") or 0)
-    pnl = _money(today.get("realized_pnl_dollars"))
+    pnl = _money(today.get("today_pnl_dollars"))
     parts = [f"{trades} trade{'s' if trades != 1 else ''}"]
     if trades:
         parts.append(f"{wins}W-{losses}L")

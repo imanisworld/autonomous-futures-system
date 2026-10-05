@@ -110,6 +110,16 @@ def test_max_trades_reached_setup_still_observed_but_not_executed(config, tmp_pa
     assert result["execution_block"]["trade_count"] == config.max_trades_per_day
     assert result["execution_block"]["limit"] == config.max_trades_per_day
 
+    # Cap-only eligibility is evaluated without constructing a broker or
+    # changing the actual execution state. It may pass or fail another gate,
+    # but daily_trade_limit itself is deliberately removed from this observer.
+    post_cap = result["post_cap_eligibility"]
+    assert post_cap["observation_only"] is True
+    assert post_cap["execution_reachable"] is False
+    assert post_cap["daily_trade_limit_bypassed"] is True
+    assert post_cap["original_trade_count"] == config.max_trades_per_day
+    assert post_cap["risk_without_daily_cap"]["failed_rule"] != "daily_trade_limit"
+
     # Observation layer: the setup the engine found is recorded, not erased.
     assert result["observed_decision"] == "TRADE"
     assert result["candidate"] is not None
@@ -126,6 +136,7 @@ def test_max_trades_reached_setup_still_observed_but_not_executed(config, tmp_pa
     assert row["observed_decision"] == "TRADE"
     assert row["setup"] is not None and row["setup"]["strategy"]
     assert row["execution_block"]["code"] == "BLOCKED_MAX_TRADES"
+    assert row["post_cap_eligibility"] == post_cap
     assert row["reason"]
     # Never a counted or intent row.
     assert all(r.get("decision") not in {"TRADE_INTENT"} for r in new_rows)
@@ -146,6 +157,27 @@ def test_max_trades_reached_setup_still_observed_but_not_executed(config, tmp_pa
     assert all(o.get("stage") == "DECISION_BLOCKED" for o in stages), stages
     assert all(o.get("decision") == "BLOCKED_MAX_TRADES" for o in stages)
     assert len({(o.get("candidate_id"), o.get("stage")) for o in stages}) == len(stages)
+
+
+def test_post_cap_eligibility_never_constructs_a_broker(config, tmp_path, monkeypatch):
+    log_dir = str(tmp_path / "logs")
+    journal = JournalLogger(log_dir=log_dir)
+    for _ in range(config.max_trades_per_day):
+        _seed_approved_trade(journal, "WIN", 40.0)
+
+    def _forbidden(*args, **kwargs):
+        raise AssertionError("post-cap observation must not construct any broker")
+
+    monkeypatch.setattr("webhook.runner._make_broker", _forbidden)
+    monkeypatch.setattr("webhook.runner._paper_broker", _forbidden)
+
+    result = process_alert(
+        _trade_payload(30), config=config, log_dir=log_dir, for_date=TODAY
+    )
+
+    assert result["decision"] == "BLOCKED_MAX_TRADES"
+    assert result["post_cap_eligibility"]["execution_reachable"] is False
+    assert result.get("fill") is None
 
 
 def test_max_trades_reached_no_setup_is_distinguishable(config, tmp_path):

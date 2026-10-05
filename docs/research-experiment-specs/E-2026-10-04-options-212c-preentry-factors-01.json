@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "experiment_id": "E-2026-10-04-options-212c-preentry-factors-01",
+  "trial_id": "T-2026-10-04-prereg-options-212c-preentry-factors-2026-10-04-01",
+  "status": "SUPERSEDED",
+  "approved_by": null,
+  "approved_at": null,
+  "supersedes": null,
+  "hypothesis": "Among forward floor_ge1r activations scored once by the parent trial T-2026-10-02-prereg-options-212c-floor-outcome-2026-10-02-01, preregistered pre-entry factor levels (blind_window, clock_bucket, instrument_class, opening_bar; direction as stratifier) may show different TARGET_FIRST / INVALIDATION_FIRST / UNRESOLVED_AT_CLOSE composition. This companion describes only; it does not test or promote a filter.",
+  "prereg_path": "docs/prereg-options-212c-preentry-factors-2026-10-04.md",
+  "baseline": {
+    "commit_sha": "d970b4072a772e3ba50d81bac5b152c41e3ffbe6",
+    "label": "main at companion registration; parent E-2026-10-02-options-212c-floor-outcome-01 is DRAFT and unchanged"
+  },
+  "candidate": {
+    "commit_sha": null,
+    "change": "After the parent one-look, tabulate the parent's scored outcome classes by five frozen pre-entry factors computed solely from the parent's sealed snapshot fields (direction, first_sight_price, entry_trigger, structural_risk, first_sight_at, symbol, first_bar_start, session_open). Gate-bucket counts per session are reported as coverage context with no outcomes attached; a gate-contrast of non-activated episodes is UNAVAILABLE because the parent scorer refuses non-activated snapshots. No new data, scorer, adapter, or collection.",
+    "label": "preentry factor tables v0.1 — definitions seal only"
+  },
+  "data": {
+    "source": "Exclusively the parent trial's sealed options_212c_floor_outcome_path-v0.1 session records (hash-verified via the parent manifest.jsonl) and the parent's single one-look artifact. No ordinary ep-v0.1 or out-v0.1 file, no retrospective file, no refetch, no Signa/GEX/chain/volume source.",
+    "window": {
+      "start": "2026-10-05",
+      "end": "identical to the parent stopping rule: the session in which floor_ge1r activations first reach 25, including that full session, or the 60th eligible NYSE session, whichever comes first"
+    },
+    "dataset_id": "coverage://options-30m-forward-20/from-2026-10-05/floor-outcome/options_212c_floor_outcome_path-v0.1"
+  },
+  "population": "Options 30m STRAT_212_CONTINUATION; exact 20-symbol V1 universe [AAPL, AMZN, BAC, COIN, GE, GOOGL, INTC, IWM, JPM, MRK, MSFT, NFLX, NVDA, PLTR, QQQ, SPY, TLT, TSLA, WMT, XOM]; the activated episodes scored by parent trial T-2026-10-02-prereg-options-212c-floor-outcome-2026-10-02-01 over its forward window from 2026-10-05 (non-activated gate buckets contribute per-session counts only, no outcomes); sessions through 2026-10-02 inclusive are ineligible",
+  "setup_type": "options_212c_preentry_factors",
+  "timeframe": "30m",
+  "changed_variables": [
+    {
+      "name": "factor_tabulation",
+      "baseline_value": "none",
+      "candidate_value": "frozen_preentry_factor_tables_v0.1"
+    }
+  ],
+  "held_constant": [
+    "parent population, eligibility, and stopping rule",
+    "parent activation gate gate_bucket_floor WOULD_OTHERWISE_QUALIFY",
+    "parent measured_entry_price = first_sight_price, stored invalidation, floor target_1, same-session horizon",
+    "parent scorer options_212c_floor_outcome-v0.1 and its price-gap rules",
+    "parent sealed record options_212c_floor_outcome_path-v0.1, SESSION_SEAL_FIELDS, EPISODE_SNAPSHOT_FIELDS, manifest.jsonl",
+    "parent blind-collection contract and study_readout surface; this companion has no interim readout",
+    "parent one-look rule; this companion consumes that single look and adds none",
+    "outcome classes WIN=TARGET_FIRST, LOSS=INVALIDATION_FIRST, UNRESOLVED=UNRESOLVED_AT_CLOSE, EXCLUDED=AMBIGUOUS|DATA_INVALID; UNRESOLVED never folded",
+    "F1 direction LONG|SHORT is a stratifier only",
+    "F2 blind_window boundary is the existing BLIND_WINDOW_MATERIAL_R = 0.25 constant; RETRACED <= -0.25R, EXTENDED >= +0.25R, else FLAT",
+    "F3 clock_bucket is the parent's America/New_York hour of first_sight_at; levels never merged",
+    "F4 instrument_class INDEX_ETF = {SPY, QQQ, IWM, TLT}; SINGLE_STOCK = the other 16",
+    "F5 opening_bar OPENING when first_bar_start equals session_open as parsed instants else LATER",
+    "SPY/QQQ/hourly/daily alignment and late_floor are gate-constant among activations and are reported as verification counts, not factors",
+    "Gate-contrast of non-activated episodes UNAVAILABLE: parent scorer options_212c_floor_outcome-v0.1 raises not_activated for gate_bucket_floor != WOULD_OTHERWISE_QUALIFY; only gate-bucket counts are reported, no outcomes attached",
+    "component-level alignment, Signa, GEX, option chain, IV, spread, volume, liquidity are UNAVAILABLE and never reconstructed",
+    "fixed one-factor tables only; no model, interaction, level merge, new threshold, or subgroup selection",
+    "sample rule: no table and no factor marginal before parent stop_condition_met and one-look; publish only when parent result is DESCRIPTIVE MEASUREMENT; a level shows a rate only at >= 10 completed and >= 5 decided (WIN+LOSS) outcomes with Wilson 95% intervals; a comparative sentence needs >= 20 decided per compared level and expected >= 5 per cell, which is unreachable under the 25-activation cap, so this companion is counts-only and hypothesis-generating by design",
+    "declared mechanical confounds: F2 blind_window co-reports mean target_1_r, mean stop-R, and mean completed R per level and is compared on completed R not win rate; F3 clock_bucket is tied to UNRESOLVED via minutes_to_close_at_first_sight, reported as a nuisance covariate; F1 direction is a regime proxy and no cross-direction comparative sentence is permitted; WIN/(WIN+LOSS) and UNRESOLVED share are always shown side by side",
+    "excluded by name: n_events, last_bar_start, run_id, any bars-derived quantity, any out-v0.1 field, alignment component fields, late_floor, floor_remaining_rr, target_1_r as a factor",
+    "tables F2-F5 are published in full or not at all; no post-look merging, dropping, or primary ranking",
+    "effective_clusters = distinct (session_date, NY hour of first_sight_at) pairs with a completed outcome, and max_episodes_per_cluster, are required fields; no inferential test",
+    "code constants pinned to main d970b4072a772e3ba50d81bac5b152c41e3ffbe6: BLIND_WINDOW_MATERIAL_R, gate_bucket ordering, first_sight and alignment evaluation; a change is an amendment requiring a new ledger line before the look",
+    "no filter, scanner, sizing, watchlist, risk, or execution change under any result"
+  ],
+  "execution": {
+    "entry_logic": "None added. The parent's measured entry (first_sight_price at first_sight_at) is consumed as scored. No episode is entered, re-entered, or re-timed.",
+    "exit_logic": "None added. The parent's scorer classes are consumed as scored. No exit is redefined.",
+    "stop_logic": "None added. Stored invalidation as scored by the parent.",
+    "target_logic": "None added. Floor target_1 as scored by the parent. target_1_r at measured entry is reported as a secondary distribution only; no bucket is defined.",
+    "sizing": "None. One count per episode. No portfolio, overlap, or drawdown model.",
+    "friction": "None. No dollar P&L, no slippage, no option contract. Stage B is NOT EVALUATED."
+  },
+  "required_metrics": [
+    "population_size",
+    "setups_evaluated",
+    "activation_count",
+    "completed_trades",
+    "wins",
+    "losses",
+    "timeouts",
+    "ambiguous_count",
+    "data_invalid_count",
+    "gate_verification_counts",
+    "factor_table_blind_window",
+    "factor_table_clock_bucket",
+    "factor_table_instrument_class",
+    "factor_table_opening_bar",
+    "factor_tables_by_direction",
+    "gate_bucket_counts_by_session",
+    "unresolved_close_r_by_level",
+    "blind_window_geometry_by_level",
+    "minutes_to_close_by_outcome_class",
+    "direction_mix_counts",
+    "effective_clusters",
+    "max_episodes_per_cluster",
+    "secondary_target_1_r_distribution",
+    "cell_sample_rule_labels",
+    "parent_seal_sha256_list",
+    "parent_source_sha_list",
+    "parent_one_look_artifact_sha256",
+    "spec_hash"
+  ],
+  "acceptance_criteria": null,
+  "rejection_criteria": null,
+  "evidence_path": "docs/research-evidence/T-2026-10-04-prereg-options-212c-preentry-factors-2026-10-04-01/",
+  "variant_manifest": null,
+  "notes": "DRAFT companion definitions seal only. Registers which pre-entry factors will be tabulated against the parent forward study's single scored look and how each level is defined, before the parent's first eligible session 2026-10-05. The five operator-recommended factors (SPY alignment, QQQ alignment, hourly state incl. MISSING, daily state, late_floor) are constant by construction among activations because gate_bucket WOULD_OTHERWISE_QUALIFY requires alignment_ok and late is False (alert_ranker/coverage_outcomes.py gate_bucket; alert_ranker/coverage_observer.py observe_symbol); they are recorded as gate-verification counts. All Tier 1 factors derive from fields already in the parent's EPISODE_SNAPSHOT_FIELDS / SESSION_SEAL_FIELDS, so no parent change and no new capture is needed. A gate-contrast control (activated vs MARKET_ALIGNMENT_REJECTED outcomes) is UNAVAILABLE because the parent scorer refuses non-activated snapshots and no other outcome source is permitted; only gate-bucket counts are reported. There is no SUPPORTED outcome; written results are INVALID, INSUFFICIENT SAMPLE, or DESCRIPTIVE TABLES. No adapter is registered for options_212c_preentry_factors; the runner cannot execute this spec. Does not approve, collect, seal, score, or modify the parent. If the parent re-registers its window, this companion moves with it and never independently. Prior exposure: 2026-09-18 alignment stratification on the retrospective 150-symbol corpus; closed one-look identities and out-v0.1 outcome class (both UNRESOLVED_AT_CLOSE) of two activations on the ineligible 2026-09-09..15 window, read 2026-10-04; no forward outcome seen."
+}

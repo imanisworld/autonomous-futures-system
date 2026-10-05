@@ -1,8 +1,129 @@
 # Options — Current State Handoff
 
-_As of 2026-09-26. The newest dated repository refresh below governs source state; the latest verified box-specific sections govern runtime state until a fresh VPS check is performed. This is the single current-state authority for the options lane._
+_As of 2026-10-05. The newest dated repository refresh below governs source state; the latest verified box-specific sections govern runtime state until a fresh local/provider or VPS check is performed. This is the single current-state authority for the options lane._
 
 Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`; the read-only coverage evidence lane (observer, reducer, outcome study, after-close collector) is described in `docs/options-coverage-observer.md`.
+
+
+## Repository refresh — 2026-10-05 (forward `-02` re-registration + floor-eligible companion + blind-window prep; not run)
+
+Preparation only. **Not approval, not collection, not scoring, not a coverage-collector deploy.**
+
+- `E-2026-10-02-options-212c-floor-outcome-01` / `T-2026-10-02-prereg-options-212c-floor-outcome-2026-10-02-01` is **SUPERSEDED / NOT_RUN**. It was never approved, never collected, and never scored. 2026-10-05 is ineligible and is never backfilled.
+- `#1133` companion `E-2026-10-04-options-212c-preentry-factors-01` / `T-2026-10-04-prereg-options-212c-preentry-factors-2026-10-04-01` is **SUPERSEDED / NOT_RUN**. It was a definitions-only table over activations, where SPY/QQQ/hourly/daily/`late_floor` are constant. The operator chose the broader floor-eligible companion instead.
+- Successor spec `E-2026-10-04-options-212c-floor-outcome-02` (`status=DRAFT`) and trial `T-2026-10-04-prereg-options-212c-floor-outcome-2026-10-04-01` (`PLANNED`). Eligible start is **UNSET** until a pre-collection amendment names the first NYSE session strictly after the approved real capture path is merged to `main` **and deployed**.
+- Companion spec `E-2026-10-04-options-212c-floor-factor-01` (`status=DRAFT`) scores the floor-eligible population `gate_bucket_floor ∈ {MARKET_ALIGNMENT_REJECTED, WOULD_OTHERWISE_QUALIFY}`. It is descriptive / hypothesis-generating only. Direction is a stratifier, not a primary factor.
+- Path record identity is `options_212c_floor_outcome_path-v0.2`. Raw contemporaneous fields `spy_trend`, `qqq_trend`, `hourly_candle_type`, `daily_candle_type`, `alignment_failures`, `floor_remaining_rr`, `late_floor` are sealed; `ALIGNED` / `NOT_ALIGNED` / `MISSING` labels and remaining-R buckets are derived at score time.
+- Seal fail-closed additions: `source.request_end < session_close` refuses; any off-grid / extra bar refuses rather than being dropped. Missing on-grid members still seal as missing evidence and score `DATA_INVALID`.
+- Blind-window guard is collector-side presentation isolation (`alert_ranker/coverage_quarantine.py`, policy `research/coverage/blind_windows.json`). Raw `cov-v0.1` events and the `ep-v0.1` reduction are unchanged. Public `outcomes_*` / episode products withhold the registered 2-1-2 continuation V1-universe rows and bind a hash-verified quarantine file. This is not a trial seal and does not admit 2026-10-05.
+- Stage A walk remains `options_212c_floor_outcome-v0.1`. Stage B remains **NOT EVALUATED**. No adapter is registered; the generic runner cannot complete either spec.
+- No `logs/research_sealed/` tree exists locally. Box check at the 2026-10-04 audit: no floor-outcome unit, timer, or sealed dir; ordinary `afs-coverage-collector.timer` last ran 2026-10-02. **No Oct. 5 trial data exists.**
+
+## Repository refresh — 2026-10-04 (companion pre-entry factor DRAFT registered)
+
+Trial `T-2026-10-04-prereg-options-212c-preentry-factors-2026-10-04-01` / spec `E-2026-10-04-options-212c-preentry-factors-01` was registered **DRAFT / PLANNED / NOT RUN** as a definitions-only companion to `E-2026-10-02-options-212c-floor-outcome-01`. That companion tabulated activations only, so SPY/QQQ/hourly/daily/`late_floor` were constant. It is retained as provenance. The 2026-10-05 refresh above supersedes it. Coverage improvement remains proven; profitable missed trades and winner discrimination remain not proven. The closed 59-episode trial stays closed.
+
+## Repository refresh — 2026-10-02 (#1115 merged; forward machinery QA only)
+
+PR #1115 merged as `65847295521be1ff0d6b9ef89c8fb8699aff7735`. It registers `T-2026-10-02-prereg-options-212c-floor-outcome-2026-10-02-01` as **DRAFT / PLANNED / NOT RUN**. The registration is not collection authority. The frozen window still starts 2026-10-05 only if that first session is admitted under the reviewed seal-capture contract; otherwise the window must be registered again rather than slid forward.
+
+Draft PR #1121, reconciled onto `main` `08b99938d44369cd5eb1828c985e5179ae7fbd78`, is implementing **synthetic-only** machinery for independent QA: a pure in-memory seal builder plus the frozen Stage-A scoring/metric primitives. The builder joins each `ep-v0.1` episode to its exact first `cov-v0.1` event because `ep-v0.1` does not preserve `floor_target_2`; shared fields must cross-check before Target 2 is copied. It renders the canonical seal bytes and manifest digest but has no provider call, file writer/reader, timer/service hook, or experiment adapter. The scorer implements the preregistered first-sight gap/stop/Target 1/timeout rules and every required descriptive metric against synthetic/in-memory records only.
+
+**No trial data has been collected or scored.** The spec remains `DRAFT`; Stage B remains **NOT EVALUATED**; #1067/#1069/#1077 remain undeployed options changes; the production watchlist is not expanded and SPXW remains OFF. The next gate is exact-head CI plus independent review of the machinery branch. Only after that review and a separate operator GO may a real seal-capture integration be wired to provider/collector I/O.
+
+
+## Repository refresh — 2026-10-02 (forward outcome draft; not run)
+
+`main` at this registration is `d304c22eac0b95a93377230f2a238b97fb6d9a57` (#1114). The closed 59-episode result remains the #1113 preservation on `3f5e3f928d88fc3a8e43f11c159dd3dc3066f703`. The frozen 59-episode trial stays closed. No clean retrospective holdout for a `floor_ge1r` underlying-outcome test was found: 2026-09-09..2026-09-15 is the closed coverage window; 2026-09-16..2026-09-18 and the Sep 16-18 continuation postmortem are already outcome-exposed; the Epoch-3 journal audit viewed P&L through 2026-09-29T19:46:18Z. This checkout has no coverage outcome file after 2026-09-15. Later box sessions were not opened.
+
+A **DRAFT** forward design is registered and not approved to collect or score: `docs/prereg-options-212c-floor-outcome-2026-10-02.md`, spec `E-2026-10-02-options-212c-floor-outcome-01`, trial `T-2026-10-02-prereg-options-212c-floor-outcome-2026-10-02-01`, ledger event `PLANNED`. Measured entry is `first_sight_price`. The Stage A scorer is `options_212c_floor_outcome-v0.1`, which is separate from ordinary `out-v0.1`. The sealed session file freezes the episode snapshot and the 5-minute bars (`options_212c_floor_outcome_path-v0.1`); the one-look uses only that seal. The 5-minute grid is the first full bar with `start >= first_sight_at` through the last bar whose end is `<= session_close`. Canonical episode identity includes direction. Reaching 25 activations stops after that full session and does not drop the extra activations in it. Until the one look, the human-visible readout is `sessions_elapsed`, `stop_condition_met`, and `advance_refused`. The monitor counts only a hash-verified sealed snapshot, requires consecutive eligible NYSE sessions from 2026-10-05, and refuses to advance when the digest, an identity field, the reducer version, or a recognized gate is missing. Eligible sessions start 2026-10-05 only after this registration is on `main` and before that session is collected. Stage B option fills are **NOT EVALUATED**. Approval and scoring stay blocked until that scorer's metric check exists. No outcomes were scored, no experiment was run, and this trial's forward collection has not started. Fetched `main` at this correction is `ce7baa19a2692a4eeba60804f4f5214b9dfb73cd`.
+
+## Repository refresh — 2026-10-02 (59-episode one-look preserved)
+
+This refresh governs the frozen 59-episode experiment after its single run. The earlier same-day section that says the experiment is not run is the pre-run approval record.
+
+- The one-look ran once on merged `main` `d238ea4aee2f2e9f7dae0b09e90cbb65f1e4070c`. These evidence bytes were copied unchanged onto current `main` `329fb2c0867e886542690e5d5b936fb5061d901c`. The run was not repeated.
+- **Result: SUPPORTED BY THIS EXPERIMENT / coverage only / not edge.** On the frozen 59-episode population, `floor_ge1r` produced 2 activations and `nearest_v1` produced 0. That is a coverage rescue. It does not establish that those two activations would have been profitable trades. Strategy edge remains unproven. There is no P&L, expectancy, promotion, deployment, or execution conclusion.
+- Ledger disposition: `RESEARCH_ONLY`.
+- Result artifact: `docs/research-evidence/T-2026-09-25-prereg-options-212c-target-geometry-2026-09-25-01/runner_report.json`, SHA-256 `0d47bf46fd62748e9e6b67a248d2ef6ef76aad072e6ad1d2fd43192f7f3343e8`. The trial manifest `results_sha256` is that digest. Companion evidence bytes were copied with their original hashes and were not regenerated.
+- No further run, tuning, watchlist expansion, SPXW enablement, or deployment follows from this result.
+
+## Repository/runtime refresh — 2026-10-02 (proven gates; experiment not run)
+
+This refresh governs #1067 capacity, #1069 SPXW 0DTE, and the frozen 59-episode approval state. Earlier sections that still describe those two proofs as remaining, or the 59-episode spec as unapproved, are provenance of the earlier state.
+
+- Repository `main` when the proofs below were accepted: `a2dbac1424f92df12ee6255b354ecfbd8035a09e`. This refresh is recorded against `d04cd9ac477265267ddffbcd4d9c6ae6830d7cc0`.
+- **#1067 capacity gate = PROVEN / PASS.** Exact head `fd2809061961578f3b280eff3ab664d710099d03`. Exact-head CI green. Real-provider RTH result: 66/66 in 136.834056s of the 300s cadence, with 0 critical failures, timeouts, rate limits, and missing bars. Production watchlist stayed 20. Storage writes and alerts sent were 0. The proof does not authorize merge, deploy, or a 66-symbol production expansion.
+- **#1069 SPXW 0DTE provider gate = PROVEN / PASS.** Exact head `a265fe680b9b7e78d321a4a35f931bc4199aa22e`. Exact-head CI green. Refreshed RTH result: `has_0dte=true`, `has_1_plus=true`, 0DTE chain 2026-10-02 with 301 calls / 301 puts. The lane remained OFF. There was no deploy, journal write, or Discord send. The proof does not authorize merge, deploy, or SPXW enablement.
+- #1071 remains the completed Epoch-3 audit. Do not tune from the five priced closes.
+- #1077 merged as `8c4e2e472bd7926b46bcb83af1c7625117d3e769`. It adds display-only Signa-v2 Observation Rating / AFS Trade Grade surfaces; no scanner score, alert eligibility, setup state, contract selection, risk permission, order, or execution change. It is **not deployed** to the options scanner.
+- The options-scanner service was restarted by `apt-daily-upgrade` on 2026-10-02; that restart did not deploy #1077. Production remains the existing 20-symbol `OPTIONS_PAPER_V1` advisory/read-only posture with SPXW OFF.
+- Scanner memory-cap pressure remains an operator decision, not a strategy/evidence conclusion. Daily scan counts stayed steady through 2026-10-01; per-scan latency was not measured.
+- **59-episode experiment `E-2026-09-25-options-212c-target-geometry-01`:** this paragraph is the pre-run approval record. #1111 merged as `d238ea4aee2f2e9f7dae0b09e90cbb65f1e4070c` with `approved_by` Operator and `approved_at` 2026-10-02T16:05:00Z. The one-look result is in the preservation refresh above: SUPPORTED BY THIS EXPERIMENT, coverage only, `RESEARCH_ONLY`, not edge. The frozen contract stayed one-look, 59 members, baseline `nearest_v1`, candidate `floor_ge1r`, dataset hash `1963db73bccf0fd366eaaa077bb4e9582ed453ff220f1c5e789961096f3f113c`, population manifest hash `2ee0db9132fe6b5933bb4cc04fb6d0e1e2d63f88c6ebc9e95a42b26f49d83e4a`.
+
+
+## Repository refresh — 2026-09-29 (66-symbol expansion + SPXW paper lane + Epoch-3 audit)
+
+**No production change was performed by this refresh.** Production remains on the existing 20-symbol `OPTIONS_PAPER_V1` advisory/read-only posture. The 66-symbol universe is not deployed, the SPXW lane is disabled, and no strategy/risk/liquidity/DTE/alert rule was loosened.
+
+Three bounded PRs are now the active options workstream:
+
+| PR | Purpose | Exact head / status | Remaining gate |
+|---|---|---|---|
+| #1067 | Expand scanner coverage from 20 to 66 symbols; add isolated real-provider capacity preflight | `a4de6f986b4e19bca39e161248151f8e139eda0c`; exact-head CI green | Real 66/66 RTH capacity proof inside the existing 5-minute cadence with no critical provider/data failures |
+| #1069 | Separate SPX signal → SPXW paper lane with 0DTE vs 1+DTE cohorts | `d7a546c789c6ff6e23713357feb2228442211965`; exact-head CI green; provider mapping retest PASS; independent diff review no blocker | Confirm 0DTE appears during the next RTH session while lane remains OFF |
+| #1071 | Read-only Epoch-3 P&L / counterfactual-filter audit | `0dca986edbb975e75c7c086c8b53f3361fdc4c4f`; exact-head CI green; independent diff review APPROVE; real-data audit complete | No audit blocker; preserve result and do not tune from five priced closes |
+
+### What is now proven in source
+
+- The canonical candidate universe contains 66 unique symbols in deterministic CORE → EXPANDED → CONDITIONAL order. Existing V1 contract-quality, risk, DTE, Strat, Signa/GEX authority, and alert thresholds were not changed by the expansion.
+- The 66-symbol capacity harness fails closed without real credentials and cannot claim PASS from mocks/stubs.
+- The SPXW lane is isolated from the equity/ETF scanner: SPX is the setup authority, SPXW is the contract family, `OPTIONS_PAPER_SPXW_V1` is separate from `OPTIONS_PAPER_V1`, and the lane defaults OFF.
+- SPXW 0DTE and 1+DTE are separate evidence cohorts; neither is assumed superior.
+- SPXW lifecycle code now includes episode-key duplicate suppression, OPEN-position resolution, exact-contract re-quote, ask-entry/bid-exit P&L, underlying/premium-stop resolution, cohort preservation, and clearing of lane-local aggregate open risk after resolution.
+- The Epoch-3 audit reads SQLite read-only, uses the epoch boundary from `docs/options_v1_evidence_epoch.json`, excludes pre-Epoch-3 rows, counts financial outcome from recorded `pnl_dollars` rather than structural WIN/LOSS labels, excludes entry-consumed non-outcomes, and keeps COUNTERFACTUAL rows out of ACTIVE P&L.
+- The previously quoted all-time `-$12` paper total is **not** an Epoch-3 verdict; it mixes cohorts. Exact Epoch-3 performance is now verified separately below.
+
+### Epoch-3 audit result — 2026-09-29
+
+#1071 has completed its real-data gate using a verified read-only copy of the production options database: 9,734 journal rows, latest timestamp `2026-09-29T19:46:18Z`, with 337 rows inside V1-EPOCH-3.
+
+- ACTIVE: 7 rows total; 5 priced closed; 1 financial winner / 4 financial losers; 2 OPEN; net `-$247.00`.
+- Structural target/stop events: 1 / 4. Entry-consumed non-outcomes: 0.
+- COUNTERFACTUAL: 330 observations. They remain descriptive only and are not trade expectancy.
+- Largest counterfactual groups: `setup_proof_incomplete:market_not_aligned` = 75 observations / 34 priced / `-$1,596` observed; `timeframe_observation_only` = 240 / 89 / `-$1,629` observed.
+- The clean cohort is still too small for a strategy-edge conclusion: only five priced ACTIVE closes. No V1 rule change is justified by this result alone.
+
+### Remaining work before any activation
+
+The #1067 capacity and #1069 0DTE items in this 2026-09-29 list are superseded by the proven-gates refresh above. Use `docs/options-next-actions.md` as the durable **operational checklist only**. This file remains the current-state authority.
+
+1. #1071 COMPLETE: Epoch-3 audit preserved as above; do not tune from the five-close sample.
+2. During RTH, run #1067 with real Public + Alpaca SIP/bar-context credentials. PASS requires 66/66 within the existing five-minute cadence with no critical failures, rate-limit failures, timeouts, or missing/stale causal-bar failures.
+3. #1069 provider mapping/preflight is complete on `d7a546c`; during the same next RTH session, confirm SPXW 0DTE appears normally while the lane remains OFF.
+4. If and only if the remaining RTH evidence passes, obtain operator approval before merge/deploy/enable actions; then record any activation boundary in the evidence-epoch/current-state docs.
+5. Resolve old draft #1026 (read-only options audit wrappers) during later repo/VPS cleanup: explicitly keep/install later or close as obsolete. It does not block the three validations above.
+
+### SPX/SPXW provider result — 2026-09-29
+
+Initial #1069 real-provider validation failed on `5bcfb4d` because Public does not expose `SPXW` as an instrument and an SPX equity quote is not the index.
+
+The narrow provider-mapping correction on exact head `d7a546c789c6ff6e23713357feb2228442211965` is now verified:
+- SPX snapshot requests use `SPX` / `INDEX`.
+- SPXW expirations and chains query the `SPX` index chain and retain only OCC-root `SPXW` contracts.
+- Equity requests remain `EQUITY`.
+- Real provider preflight **PASS**: SPX price present; 40 eligible expirations; tested chain 599 calls / 599 puts; 1+DTE present.
+- SPXW lifecycle regression remains 27/27 passed.
+- CI is green on the exact head and independent diff review found no blocking issue.
+- The lane remained OFF with no journal, Discord, broker, deploy, or live-order side effects.
+
+0DTE could not be observed after the 2026-09-29 session had ended because that day's expiry was no longer listed. That remaining observation was closed by the 2026-10-02 refreshed RTH proof on `a265fe680b9b7e78d321a4a35f931bc4199aa22e`: `has_0dte=true`, lane still OFF.
+
+### Current confidence
+
+**High confidence:** source architecture, isolation, fail-closed behavior, CI, V1 rule preservation, SPXW episode/lifecycle mechanics, and Epoch-3 accounting logic.
+
+**Not yet proven as of 2026-09-29:** current-version trading expectancy. The 66-symbol cadence-capacity and next-session SPXW 0DTE sentences in this paragraph were closed by the 2026-10-02 proven-gates refresh. Epoch-3 P&L and the SPX/SPXW provider mapping are measured. Strategy edge remains unproven and production posture remains unchanged.
 
 ## Research / agent governance
 

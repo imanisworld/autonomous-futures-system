@@ -71,9 +71,33 @@ def test_validate_example_structurally_valid_but_not_executable():
     assert any(c.name == "approved_status" and not c.passed for c in blocked.integrity_checks)
 
 
-def test_discover_approved_is_empty_without_live_specs():
+def test_discover_approved_is_only_the_frozen_212c_experiment():
+    """Approved discovery stays an allowlist of one frozen experiment.
+
+    An empty result was the pre-approval tripwire. Approval of any other
+    spec, or loss of this spec's frozen identity, still fails.
+    """
     found = runner.discover_specs(ROOT, status="APPROVED", include_examples=False)
-    assert found == []
+    assert [path.name for path in found] == [
+        "E-2026-09-25-options-212c-target-geometry-01.json"
+    ]
+    spec = json.loads(found[0].read_text(encoding="utf-8"))
+    assert spec["status"] == "APPROVED"
+    assert spec["experiment_id"] == "E-2026-09-25-options-212c-target-geometry-01"
+    assert spec["data"]["population_count"] == 59
+    assert spec["data"]["dataset_hash"] == (
+        "1963db73bccf0fd366eaaa077bb4e9582ed453ff220f1c5e789961096f3f113c"
+    )
+    assert spec["data"]["population_manifest_sha256"] == (
+        "2ee0db9132fe6b5933bb4cc04fb6d0e1e2d63f88c6ebc9e95a42b26f49d83e4a"
+    )
+    assert spec["changed_variables"] == [
+        {
+            "name": "target_geometry_rule",
+            "baseline_value": "nearest_v1",
+            "candidate_value": "floor_ge1r",
+        }
+    ]
 
 
 def test_discover_examples_when_requested():

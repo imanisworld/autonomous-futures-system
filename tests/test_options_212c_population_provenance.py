@@ -1,20 +1,26 @@
-"""Provenance binding for the draft 2-1-2 target-geometry experiment.
+"""Provenance binding for the approved 2-1-2 target-geometry experiment.
 
-These tests do not approve the spec and do not score either arm.
+These tests verify the frozen approval contract and do not score either arm.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from pathlib import Path
 
 import pytest
 
+from ops.research_experiment_adapters import register_builtin_adapters
 from ops.research_experiment_adapters.options_212c_target_geometry import (
     population_manifest_sha256,
     verify_population_binding,
 )
-from ops.research_experiment_runner import discover_specs, run_validation
+from ops.research_experiment_runner import (
+    clear_execution_adapters,
+    discover_specs,
+    run_validation,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC_REL = "docs/research-experiment-specs/E-2026-09-25-options-212c-target-geometry-01.json"
@@ -44,9 +50,9 @@ def test_verified_population_manifest_matches_its_canonical_hash() -> None:
     recomputed = population_manifest_sha256(manifest["canonical"])
     again = population_manifest_sha256(json.loads(json.dumps(manifest["canonical"])))
 
-    assert spec["status"] == "DRAFT"
-    assert spec["approved_by"] is None
-    assert spec["approved_at"] is None
+    assert spec["status"] == "APPROVED"
+    assert spec["approved_by"] == "Operator"
+    assert spec["approved_at"] == "2026-10-02T16:05:00Z"
     assert manifest["manifest_sha256"] == recomputed == again
     assert manifest["canonical"]["population_count"] == 59
     assert len(manifest["canonical"]["episode_ids"]) == 59
@@ -67,18 +73,49 @@ def test_verified_population_manifest_matches_its_canonical_hash() -> None:
     ]
 
     trial = json.loads((ROOT / TRIAL_MANIFEST_REL).read_text(encoding="utf-8"))
-    assert trial["results_sha256"] is None
+    report = (
+        ROOT
+        / "docs/research-evidence"
+        / "T-2026-09-25-prereg-options-212c-target-geometry-2026-09-25-01"
+        / "runner_report.json"
+    )
+    report_sha = hashlib.sha256(report.read_bytes()).hexdigest()
+    assert report_sha == "0d47bf46fd62748e9e6b67a248d2ef6ef76aad072e6ad1d2fd43192f7f3343e8"
+    assert trial["results_sha256"] == report_sha
 
 
-def test_draft_spec_validates_and_stays_out_of_approved_discovery() -> None:
+def test_approved_spec_validates_and_is_discoverable_for_execution() -> None:
     report = run_validation(ROOT, ROOT / SPEC_REL, for_execution=False)
     assert report.status == "VALID"
 
+    clear_execution_adapters()
     blocked = run_validation(ROOT, ROOT / SPEC_REL, for_execution=True)
     assert blocked.status == "BLOCKED"
+    assert any(
+        check.name == "execution_adapter" and not check.passed
+        for check in blocked.integrity_checks
+    )
+
+    register_builtin_adapters()
+    try:
+        executable = run_validation(ROOT, ROOT / SPEC_REL, for_execution=True)
+    finally:
+        clear_execution_adapters()
+    assert executable.status == "VALID"
+    assert all(check.passed for check in executable.integrity_checks)
+    assert any(
+        check.name == "approved_status" and check.passed
+        for check in executable.integrity_checks
+    )
+    assert any(
+        check.name == "execution_adapter" and check.passed
+        for check in executable.integrity_checks
+    )
 
     approved = discover_specs(ROOT)
-    assert approved == []
+    assert [path.name for path in approved] == [
+        "E-2026-09-25-options-212c-target-geometry-01.json"
+    ]
     visible = discover_specs(ROOT, status=None)
     assert any(path.name == "E-2026-09-25-options-212c-target-geometry-01.json" for path in visible)
 

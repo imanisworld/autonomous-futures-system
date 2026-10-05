@@ -4,6 +4,29 @@
 
 _As of 2026-09-24 (runtime and current decisions: see the 2026-09-24 blocks in `docs/futures-current-status-2026-09-22.md`, then the reconciliation note below). This is the long futures handoff. Historical audit docs remain evidence records._
 
+## Release `c44d32b` deployed; 4HR natural-1m canonical epoch started — 2026-10-04
+
+- Deployed futures release: `c44d32bc4961e56fae5c5f88a976eb6783341638`, promoted 2026-10-04 21:29:09Z via `scripts/atomic_release.sh` build → verify → promote under explicit operator GO. Rollback target `489b55b91b6303c195c8e84bfcbf05ef32d1ab04` (`current.previous`).
+- Delta vs `489b55b`: #1095 + #1103 only, exactly 8 files (history-only PR #1123 made the SHA reachable from `main`). Candidate QA: 7359 passed, 8 skipped, 2 deselected main-relative governance comparisons.
+- Post-deploy read-only proof (21:29:39–21:30:05Z): symlink and futures-bot cwd on `c44d32b`; integrity OK 1633 files with the fingerprint pin; 0 release-tree `__pycache__`; `LIVE_TRADING_ENABLED=false`, `TRADOVATE_ENV=demo`, `MAX_CONTRACTS_HARD_CAP=1`; `ONE_MIN_TRIGGER_ENABLED` and `ONE_MIN_4HR_OBSERVER_ENABLED` both `true` with matching `EXPECTED_PROOF_` pins; `strat_4hr_retrigger` absent from `enabled_concepts`; broker position null; in-process preflight 0 positions / 0 working orders; live disarmed.
+- **Canonical 4HR natural-1m epoch start: 2026-10-04T21:30:05Z.** Prospective evidence only from here; nothing earlier counts. Details: `docs/4hr-natural-1m-observation-epoch-2026-10-01.md`; checkpoint: `docs/agent-work-state.md`.
+- Same day: #1129 drift-gate fingerprint-pin fix installed to `/root/bin/afs-drift-gate.sh` (backup kept; manual run OK; first cron run against `c44d32b` is 2026-10-05 11:05Z).
+- Strategy status is unchanged: 4HR MNQ remains whatever `docs/strategy-rules/Strategy_Inventory.md` says (PROMISING BUT UNPROVEN). Deployment of an observer is not a status change.
+
+## Repository research closeout — 2026-10-02
+
+Current repository `main` at this checkpoint: `5d19257e3a690851c0aa580135eba66536b09ec4` after PR #1118.
+
+- MNQ historical account-admission trial `T-2026-10-02-prereg-mnq-account-admission-overlay-draft-2026-10-02-01` is **CLOSED / INSUFFICIENT_EVIDENCE / DO NOT REDO**.
+- Preserved research head `990b11135a1c49bc972981ac302930cd4f7565a3` remains in merge ancestry.
+- Canonical result: `docs/research-evidence/T-2026-10-02-prereg-mnq-account-admission-overlay-draft-2026-10-02-01/result.json`.
+- Preserved `look.json` SHA-256: `0c6c084c830fa227951f2e8e4f47a85a2f22a72898014f243eced8ed8cc6f7e5`.
+- Ledger: `COMPLETED` / `RESEARCH_ONLY`; prereg classification remains `INSUFFICIENT_EVIDENCE`.
+- Neither historical pass is the account result. Do not select, average, rerun, reinterpret, or retune from them. `strategy_status_change_authorized = false`.
+- No deploy, restart, broker change, or runtime change came from this research closeout. Exact future account-order evidence must come from forward collection where request order is recorded.
+
+Durable next actions remain in `docs/futures-operator-todo.md`. Grok/agent resume state remains in `docs/agent-work-state.md`.
+
 ## Runtime reconciliation — 2026-09-30
 
 Verified runtime, the paper-collection six-market pin, the deferred
