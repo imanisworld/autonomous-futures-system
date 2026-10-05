@@ -24,10 +24,12 @@ cap-only shadow trade.
 ## Implemented repo-side
 
 This branch adds an inert evaluator that mirrors the local post-decision risk
-pipeline with exactly one deliberate change: `DailyState.trade_count` is reset
-on a deep copy before RiskEngine validation.
+pipeline with exactly one deliberate change: an observation-only RiskEngine
+subclass bypasses only `_check_daily_trade_limit`.
 
-Everything else in the reconstructed DailyState remains in force.
+The copied `DailyState.trade_count` is preserved unchanged so every other gate
+that depends on the real count, including reduced-mode
+`news_blackout_trade_limit`, remains authoritative.
 
 The evaluator:
 
@@ -138,7 +140,9 @@ remain `OUTCOME_UNVERIFIED`, not be forced through a convenient fill model.
 The branch adds tests proving:
 
 - removing the cap does not mutate the caller's setup or DailyState;
-- another risk gate still rejects after the count gate is bypassed;
+- another risk gate still rejects after the daily-cap gate is bypassed;
+- reduced-mode news blackout still sees the real post-cap `trade_count` and can
+  reject with `news_blackout_trade_limit`;
 - the evaluator refuses to run before capacity is actually reached;
 - stop-width transformation is applied only to the shadow copy;
 - the runner journals the post-cap eligibility record;
