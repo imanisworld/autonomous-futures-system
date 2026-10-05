@@ -168,6 +168,14 @@ def test_unset_start_is_dormant_and_writes_nothing(tmp_path: Path) -> None:
     assert not manifest_path(tmp_path).exists()
 
 
+def test_prestart_seal_artifact_is_a_hard_refusal(tmp_path: Path) -> None:
+    path = seal_path(tmp_path, DAY)
+    path.parent.mkdir(parents=True)
+    path.write_bytes(_empty_artifact().body)
+    with pytest.raises(CaptureIntegrationError, match="seal_exists_before_start"):
+        capture_progress(tmp_path)
+
+
 def test_october_fifth_or_earlier_cannot_be_registered_start(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
