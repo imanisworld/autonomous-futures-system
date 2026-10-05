@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import dataclasses
+from datetime import datetime, timezone
 
 import pytest
 
@@ -128,3 +129,37 @@ def test_observer_records_transformed_bracket_without_mutating_input(
     assert result["stop_multiplier_applied"] == 1.5
     assert result["transformed_setup"]["stop"] < setup.stop
     assert setup.stop == 19480.0
+
+
+def test_reduced_news_blackout_still_sees_real_trade_count(config, fresh_market_state):
+    cfg = dataclasses.replace(
+        config,
+        news_blackout_mode="reduced",
+        news_blackout_dates=["2026-06-17"],
+        news_blackout_max_trades=1,
+        news_blackout_cutoff_et="13:30",
+        max_consecutive_losses=9999,
+    )
+    state = copy.deepcopy(fresh_market_state)
+    state.timestamp = datetime(2026, 6, 17, 16, 0, tzinfo=timezone.utc)
+    daily = DailyState(
+        trade_count=cfg.max_trades_per_day,
+        consecutive_losses=0,
+        has_open_position=False,
+        realized_pnl_dollars=0.0,
+        account_balance=1500.0,
+        account_peak_balance=1500.0,
+    )
+
+    result = evaluate_post_cap_eligibility(
+        state=state,
+        setup=_setup(),
+        cfg=cfg,
+        daily_state=daily,
+        account_balance=1500.0,
+        account_peak_balance=1500.0,
+    )
+
+    assert result["eligible_except_daily_cap"] is False
+    assert result["original_trade_count"] == cfg.max_trades_per_day
+    assert result["risk_without_daily_cap"]["failed_rule"] == "news_blackout_trade_limit"
