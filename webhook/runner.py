@@ -2072,6 +2072,52 @@ def process_alert(
         result["reason"] = execution_block["reason"]
         result["observed_decision"] = decision.decision
         result["failed_gates"] = list(decision.failed_gates or []) + [_block_code]
+        # Post-cap eligibility observer: run the same local post-decision
+        # transforms/risk checks with ONLY the daily trade-count gate removed.
+        # This is inert evidence: journal-ledger account state only, no broker
+        # construction/read, no order path, no mutation of decision/daily_state.
+        _post_cap_eligibility = None
+        if (
+            _block_code == "BLOCKED_MAX_TRADES"
+            and decision.decision == "TRADE"
+            and decision.setup is not None
+        ):
+            try:
+                from adaptive.post_cap_eligibility import evaluate_post_cap_eligibility
+
+                _shadow_balance = journal.get_account_balance(
+                    cfg.position_sizing.starting_balance, today
+                )
+                _shadow_peak = journal.get_account_peak_balance(
+                    cfg.position_sizing.starting_balance, today
+                )
+                _inverse_shadow = bool(
+                    mnq_breakout_inverse_decision is not None
+                    and mnq_breakout_inverse_decision.apply_override
+                )
+                _post_cap_eligibility = evaluate_post_cap_eligibility(
+                    state=state,
+                    setup=decision.setup,
+                    cfg=cfg,
+                    daily_state=daily_state,
+                    account_balance=_shadow_balance,
+                    account_peak_balance=_shadow_peak,
+                    skip_stop_multiplier=_inverse_shadow,
+                    force_one_contract=_inverse_shadow,
+                )
+            except Exception as _post_cap_exc:  # evidence must never affect the block
+                logger.warning(
+                    "post-cap eligibility observer failed: %s", _post_cap_exc
+                )
+                _post_cap_eligibility = {
+                    "schema_version": 1,
+                    "observation_only": True,
+                    "execution_reachable": False,
+                    "status": "ERROR",
+                    "error": str(_post_cap_exc),
+                }
+            result["post_cap_eligibility"] = _post_cap_eligibility
+
         journal_entry = decision.to_dict()
         journal_entry["observed_decision"] = decision.decision
         journal_entry["observed_reason"] = decision.reason
@@ -2079,6 +2125,8 @@ def process_alert(
         journal_entry["reason"] = execution_block["reason"]
         journal_entry["failed_gates"] = result["failed_gates"]
         journal_entry["execution_block"] = execution_block
+        if _post_cap_eligibility is not None:
+            journal_entry["post_cap_eligibility"] = _post_cap_eligibility
         journal_entry["event_id"] = getattr(payload, "event_id", None)
         journal_entry["timeframe_minutes"] = bar_timeframe_minutes
         journal_entry["strategy_state"] = {
