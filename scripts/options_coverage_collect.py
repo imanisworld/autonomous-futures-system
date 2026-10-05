@@ -77,6 +77,13 @@ from alert_ranker.coverage_collector import (  # noqa: E402
 )
 from alert_ranker.coverage_outcomes import summarize_outcomes  # noqa: E402
 from alert_ranker.session_calendar import AlpacaSessionCalendar, Session, SessionCalendarError  # noqa: E402
+from ops.options_212c_floor_outcome_capture import (  # noqa: E402
+    CaptureIntegrationError,
+    capture_decision,
+    capture_progress,
+    inspect_seal,
+)
+from ops.options_212c_floor_outcome_monitor import ELIGIBLE_START  # noqa: E402
 from scripts.options_coverage_observer import DEFAULT_SQLITE, DEFAULT_UNIVERSE, load_universe  # noqa: E402
 from scripts.options_coverage_outcomes import write_markdown  # noqa: E402
 
@@ -120,6 +127,8 @@ class Collector:
         max_sessions: int = DEFAULT_MAX_SESSIONS,
         sleep: Callable[[float], None] = time.sleep,
         now: datetime | None = None,
+        capture_root: Path | None = None,
+        eligible_start: str | None = ELIGIBLE_START,
     ) -> None:
         self.data_dir = data_dir
         self.sqlite_path = sqlite_path
@@ -134,6 +143,8 @@ class Collector:
         self.max_sessions = max_sessions
         self.sleep = sleep
         self.now = now or datetime.now(timezone.utc)
+        self.capture_root = Path(capture_root) if capture_root is not None else ROOT
+        self.eligible_start = eligible_start
         self.daily_dir = data_dir / "daily"
         self.aggregate_dir = data_dir / "aggregate"
         self.runs_dir = data_dir / "runs"
@@ -158,15 +169,27 @@ class Collector:
             "--universe", str(self.universe_path),
         ]
 
-    def outcomes_cmd(self, session: Session) -> list[str]:
+    def outcomes_cmd(self, session: Session, coverage: Any | None = None) -> list[str]:
         day = session.date.isoformat()
-        return [
+        cmd = [
             self.python, str(OUTCOMES_SCRIPT),
             "--from", day, "--to", day,
             "--sqlite", str(self.sqlite_path),
             "--out", str(self.daily_dir),
             "--pause-seconds", "5",
         ]
+        if coverage is not None:
+            if coverage.run_id is None or coverage.ran_at is None:
+                raise CollectorError("capture_observer_identity_missing", day)
+            cmd.extend(
+                [
+                    "--capture-root", str(self.capture_root),
+                    "--capture-source-sha", self.source.sha,
+                    "--capture-observer-run-id", str(coverage.run_id),
+                    "--capture-observer-ran-at", str(coverage.ran_at),
+                ]
+            )
+        return cmd
 
     def episodes_cmd(self, session: Session) -> list[str]:
         return [
@@ -187,10 +210,57 @@ class Collector:
         outcomes = outcomes_completion(self.daily_dir, session.date, coverage if coverage.ok else None, reducer if coverage.ok else None)
         return coverage, outcomes, reducer
 
+    def _capture_progress(self) -> Any:
+        try:
+            return capture_progress(
+                self.capture_root,
+                eligible_start=self.eligible_start,
+            )
+        except CaptureIntegrationError as exc:
+            raise CollectorError(
+                "capture_integrity_refused", f"{exc.reason}: {exc.detail}"
+            ) from exc
+
+    def _capture_decision(self, session: Session) -> Any:
+        try:
+            return capture_decision(
+                self.capture_root,
+                session.date.isoformat(),
+                eligible_start=self.eligible_start,
+            )
+        except CaptureIntegrationError as exc:
+            raise CollectorError(
+                "capture_integrity_refused", f"{exc.reason}: {exc.detail}"
+            ) from exc
+
     def candidates(self, universe: Sequence[str]) -> tuple[list[Session], list[Session]]:
-        """(settled sessions since the collection start, those not yet complete) — oldest first."""
+        """Ordinary pending sessions plus at most the next blind trial seal."""
         settled = settled_sessions(self.now, self.collection_start)
-        pending = [s for s in settled if not (lambda c, o, _r: c.ok and o.ok)(*self.status_of(s, universe))]
+        pending = [
+            s
+            for s in settled
+            if not (lambda c, o, _r: c.ok and o.ok)(*self.status_of(s, universe))
+        ]
+
+        progress = self._capture_progress()
+        if (
+            progress.enabled
+            and not progress.stop_condition_met
+            and progress.next_session is not None
+        ):
+            next_capture = next(
+                (
+                    s
+                    for s in settled
+                    if s.date.isoformat() == progress.next_session
+                ),
+                None,
+            )
+            if next_capture is not None and all(
+                s.date != next_capture.date for s in pending
+            ):
+                pending.append(next_capture)
+                pending.sort(key=lambda s: s.date)
         return settled, pending
 
     # ------------------------------------------------------------------ #
@@ -277,10 +347,21 @@ class Collector:
         self.steps["observer"] = "repaired" if self.observer_repair else "ran"
         return after
 
-    def collect_outcomes(self, session: Session, coverage: Any) -> Any:
+    def collect_outcomes(
+        self,
+        session: Session,
+        coverage: Any,
+        *,
+        capture_required: bool = False,
+    ) -> Any:
         reducer = reduced_episode_count(self.sqlite_path, session.date)
         before = outcomes_completion(self.daily_dir, session.date, coverage, reducer)
         if before.ok:
+            if capture_required:
+                raise CollectorError(
+                    "capture_missing_after_outcomes",
+                    session.date.isoformat(),
+                )
             self.steps["outcomes"] = "already_complete"
             return before
         stem = daily_outcome_stem(self.daily_dir, session.date)
@@ -293,7 +374,26 @@ class Collector:
                     path.rename(path.with_name(f"{path.name}.tainted.{stamp}"))
             self.steps["outcomes_tainted_moved"] = stamp
             self.steps["outcomes_rerun_reason"] = "; ".join(before.problems)[:300]
-        self._run(self.outcomes_cmd(session), self._log_path(session, "outcomes"), "outcomes")
+        self._run(
+            self.outcomes_cmd(session, coverage if capture_required else None),
+            self._log_path(session, "outcomes"),
+            "outcomes",
+        )
+        if capture_required:
+            try:
+                sealed = inspect_seal(
+                    self.capture_root, session.date.isoformat()
+                )
+            except CaptureIntegrationError as exc:
+                raise CollectorError(
+                    "capture_postrun_invalid", f"{exc.reason}: {exc.detail}"
+                ) from exc
+            if not sealed.ok:
+                raise CollectorError(
+                    "capture_postrun_missing", session.date.isoformat()
+                )
+            self.steps["capture"] = "sealed"
+            self.outputs.append(sealed.path)
         unbound = outcomes_completion(self.daily_dir, session.date, None, reducer)
         if not unbound.ok:
             raise CollectorError("outcomes_incomplete", "; ".join(unbound.problems))
@@ -366,10 +466,23 @@ class Collector:
         """Collect one session end to end. Returns the ledger status. Raises CollectorError on any failure."""
         self._reset_session_state()
         coverage_before, outcomes_before, _ = self.status_of(session, universe)
-        if coverage_before.ok and outcomes_before.ok:
-            self._record(session, STATUS_ALREADY_COLLECTED, coverage=coverage_before.to_dict(), outcomes=outcomes_before.to_dict())
+        capture_before = self._capture_decision(session)
+        capture_required = bool(capture_before.required)
+        if coverage_before.ok and outcomes_before.ok and not capture_required:
+            self._record(
+                session,
+                STATUS_ALREADY_COLLECTED,
+                coverage=coverage_before.to_dict(),
+                outcomes=outcomes_before.to_dict(),
+                capture=capture_before.to_public_dict(),
+            )
             print(f"{STATUS_ALREADY_COLLECTED}: {session.date} observer run {coverage_before.run_id}, {outcomes_before.episodes} episodes")
             return STATUS_ALREADY_COLLECTED
+        if capture_required and coverage_before.ok and outcomes_before.ok:
+            raise CollectorError(
+                "capture_missing_after_outcomes",
+                session.date.isoformat(),
+            )
         if self.authoritative_session(session) is None:
             self._record(session, STATUS_SKIPPED, reason="broker_calendar_closed")
             print(f"{STATUS_SKIPPED}: broker calendar reports no session on {session.date}")
@@ -378,15 +491,28 @@ class Collector:
         if not api_key or not secret_key:
             raise CollectorError("credentials_missing", "ALPACA_API_KEY/ALPACA_KEY + secret not set")
         started = datetime.now(timezone.utc)
-        self._record(session, "STARTED", started_at=started.isoformat(), observer_before=coverage_before.to_dict(), outcomes_before=outcomes_before.to_dict())
+        self._record(
+            session,
+            "STARTED",
+            started_at=started.isoformat(),
+            observer_before=coverage_before.to_dict(),
+            outcomes_before=outcomes_before.to_dict(),
+            capture_before=capture_before.to_public_dict(),
+        )
         coverage = self.collect_observer(session, universe)
         if self.steps.get("observer") in ("ran", "repaired") and self.pause_seconds > 0:
             self.sleep(self.pause_seconds)
-        outcomes = self.collect_outcomes(session, coverage)
+        outcomes = self.collect_outcomes(
+            session,
+            coverage,
+            capture_required=capture_required,
+        )
+        capture_after = self._capture_decision(session)
         self._record(
             session, STATUS_DONE, started_at=started.isoformat(), finished_at=datetime.now(timezone.utc).isoformat(),
             steps=dict(self.steps), coverage=coverage.to_dict(), outcomes=outcomes.to_dict(), outputs=list(self.outputs), logs=list(self.logs),
             observer_repair=self.observer_repair,
+            capture=capture_after.to_public_dict(),
         )
         print(f"{STATUS_DONE}: {session.date} observable {coverage.observable}/{coverage.requested} events {coverage.events}; episodes {outcomes.episodes} (clean {outcomes.clean})")
         return STATUS_DONE
@@ -421,9 +547,11 @@ class Collector:
                 plan = []
                 for s in targets:
                     c, o, r = self.status_of(s, universe)
+                    capture = self._capture_decision(s)
                     plan.append({"session_date": s.date.isoformat(), "close": s.close.isoformat(), "early_close": s.is_early_close,
                                  "observer": c.to_dict(), "outcomes": o.to_dict(), "reducer_episodes": r,
-                                 "commands": [self.observer_cmd(s), self.outcomes_cmd(s)]})
+                                 "capture": capture.to_public_dict(),
+                                 "commands": [self.observer_cmd(s), self.outcomes_cmd(s, c if capture.required and c.ok else None)]})
                 print(json.dumps({
                     "source": self.source.to_dict(), "settled_since_start": [s.date.isoformat() for s in settled],
                     "would_collect": plan, "deferred_beyond_max_sessions": [s.date.isoformat() for s in deferred],
@@ -480,6 +608,12 @@ def build_collector(args: argparse.Namespace, **overrides: Any) -> Collector:
         calendar_check=not args.no_calendar_check,
         max_sessions=args.max_sessions,
         now=datetime.fromisoformat(args.now) if args.now else None,
+        capture_root=Path(
+            args.capture_root
+            or env.get("OPTIONS_212C_CAPTURE_ROOT")
+            or ROOT
+        ),
+        eligible_start=ELIGIBLE_START,
     )
     kwargs.update(overrides)
     if "source" not in kwargs:
@@ -499,6 +633,7 @@ def main(argv: Sequence[str] | None = None, **overrides: Any) -> int:
     parser.add_argument("--max-sessions", type=int, default=DEFAULT_MAX_SESSIONS, help="Catch-up cap per run; the rest is deferred to the next run")
     parser.add_argument("--no-calendar-check", action="store_true", help="Skip the broker calendar cross-check")
     parser.add_argument("--require-pinned", action="store_true", help="Refuse to run unless this tree carries a release manifest naming its commit (systemd unit)")
+    parser.add_argument("--capture-root", help="Physical root containing the frozen logs/research_sealed trial path (systemd: /root/afs-shared/coverage)")
     parser.add_argument("--plan", action="store_true", help="Resolve the targets and report what would run; run nothing, write nothing")
     parser.add_argument("--now", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
