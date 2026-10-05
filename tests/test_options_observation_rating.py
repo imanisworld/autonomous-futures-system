@@ -14,7 +14,7 @@ from options_manager.plans import (
 from options_manager.storage import _snapshot_from_payload, _snapshot_to_payload
 
 
-def _observation(*, observed_at: str, rating: ObservationRatingSnapshot) -> PlanObservation:
+def _observation(*, observed_at: str, rating: ObservationRatingSnapshot | None) -> PlanObservation:
     return PlanObservation(
         ticker="AAPL",
         direction="CALL",
@@ -79,6 +79,66 @@ def test_observation_rating_is_telemetry_not_trade_authority():
     assert second.telemetry_only is True
 
 
+
+def _authority_projection(update):
+    snapshot = update.snapshot
+    return (
+        snapshot.status,
+        snapshot.actionable,
+        snapshot.conviction,
+        snapshot.conviction_confirmation_count,
+        snapshot.entry_trigger,
+        snapshot.underlying_invalidation,
+        snapshot.target_1,
+        snapshot.target_2,
+        snapshot.target_status,
+        snapshot.target_reason_code,
+        snapshot.blocking_reasons,
+        snapshot.contract_plan,
+        snapshot.risk_plan,
+    )
+
+
+def test_zero_and_hundred_ratings_have_identical_authority():
+    zero = update_trade_thesis(
+        None,
+        _observation(
+            observed_at="2026-10-01T10:00:00-04:00",
+            rating=ObservationRatingSnapshot(rating=0.0),
+        ),
+    )
+    hundred = update_trade_thesis(
+        None,
+        _observation(
+            observed_at="2026-10-01T10:00:00-04:00",
+            rating=ObservationRatingSnapshot(rating=100.0),
+        ),
+    )
+
+    assert _authority_projection(zero) == _authority_projection(hundred)
+
+
+def test_missing_and_present_rating_have_identical_authority():
+    missing = update_trade_thesis(
+        None,
+        _observation(
+            observed_at="2026-10-01T10:00:00-04:00",
+            rating=None,
+        ),
+    )
+    present = update_trade_thesis(
+        None,
+        _observation(
+            observed_at="2026-10-01T10:00:00-04:00",
+            rating=ObservationRatingSnapshot(
+                rating=99.0,
+                components=(("strat_htf", 99.0),),
+            ),
+        ),
+    )
+
+    assert _authority_projection(missing) == _authority_projection(present)
+
 def test_observation_rating_validates_bounds_and_duplicate_components():
     with pytest.raises(ValueError, match="between 0 and 100"):
         update_trade_thesis(
@@ -130,6 +190,13 @@ def test_observation_rating_storage_round_trip_pins_authority_flags():
     tampered_rating["trade_authority"] = True
     tampered["observation_rating"] = tampered_rating
     with pytest.raises(ValueError, match="must not have trade authority"):
+        _snapshot_from_payload(tampered)
+
+    tampered = dict(payload)
+    tampered_rating = dict(stored)
+    tampered_rating["observation_only"] = False
+    tampered["observation_rating"] = tampered_rating
+    with pytest.raises(ValueError, match="must be observation_only"):
         _snapshot_from_payload(tampered)
 
 
