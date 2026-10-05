@@ -20,7 +20,7 @@ also in `refs/pull/1137/head`):
 
 | Original branch | Tip SHA | Disposition |
 |---|---|---|
-| `ops/post-cap-eligibility-shadow-20261005` | `deb23464882c5f58c01fa95d246650efdc8556d6` | MERGED via #1137 as `4433c0e`; tip ancestor of `main` |
+| `ops/post-cap-eligibility-shadow-20261005` | `deb23464882c5f58c01fa95d246650efdc8556d6` | MERGED via #1137 as `4433c0e`; tip ancestor of `main`; remote already gone by cleanup (GitHub delete-on-merge / pruned); local review tracker removed |
 | `cursor/review-1137-ffce` (local only) | tracked `ops/post-cap…` at `deb2346` | SAFE DELETE LOCAL after merge |
 
 Kept, not deleted: open PR heads, `release/*`, `hold/*`, `archive/*`,
