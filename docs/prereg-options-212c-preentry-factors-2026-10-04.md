@@ -44,7 +44,7 @@ The operator brief recommended SPY alignment, QQQ alignment, hourly candle state
 | Daily candle state | same, `daily == desired_candle` | same |
 | `late_floor` / remaining-R | `gate_bucket` returns `LATE_AT_FIRST_SIGHT` unless `late is False`; `_late` already encodes `remaining < MIN_REMAINING_RR` | `coverage_outcomes.gate_bucket`; `coverage_observer._late` |
 
-A contingency table on a constant factor has one row. These five are therefore recorded as **gate-verification counts** (each must be 100% within activations; any other value is `INVALID` for the affected episode) and are not primary factors. Testing whether the alignment gate itself discriminates outcomes requires scoring episodes the gate rejected; that is addressed as Tier 2 below and is explicitly not actionable evidence.
+A contingency table on a constant factor has one row. These five are therefore recorded as **gate-verification counts** (each must be 100% within activations; any other value is `INVALID` for the affected episode) and are not primary factors. Testing whether the alignment gate itself discriminates outcomes requires scoring episodes the gate rejected; the parent scorer cannot do that, so the contrast is UNAVAILABLE in this trial (see below).
 
 ## Primary factors (Tier 1) — frozen
 
@@ -56,7 +56,7 @@ At most five. Every factor is computed from fields already frozen in the parent'
 | F2 | `blind_window` | `RETRACED`, `FLAT`, `EXTENDED` | `b = sign(direction) × (first_sight_price − entry_trigger) / structural_risk`, `sign = +1 LONG, −1 SHORT`. `RETRACED` when `b ≤ −0.25`, `EXTENDED` when `b ≥ +0.25`, else `FLAT`. The boundary is the existing constant `BLIND_WINDOW_MATERIAL_R = 0.25` in `alert_ranker/coverage_outcomes.py`; no other boundary may be substituted. | `direction`, `first_sight_price`, `entry_trigger`, `structural_risk` |
 | F3 | `clock_bucket` | `10`, `11`, `12`, `13`, `14`, `15` (America/New_York hour) | Exchange-local hour containing `first_sight_at`. This is the parent's own preregistered `concentration_by_clock_bucket` definition reused verbatim. Levels are not merged after outcomes are seen; empty levels are reported as empty. | `first_sight_at` |
 | F4 | `instrument_class` | `INDEX_ETF`, `SINGLE_STOCK` | `INDEX_ETF` = {`SPY`, `QQQ`, `IWM`, `TLT`}; `SINGLE_STOCK` = the other 16 V1 symbols. Fixed list; no reassignment. | `symbol` |
-| F5 | `opening_bar` | `OPENING`, `LATER` | `OPENING` when the setup bar `first_bar_start` equals the session's regular open (`session_open` in the session seal, i.e. 09:30 America/New_York); otherwise `LATER`. Reuses the 2026-09-18 family-validation convention "opening bars excluded". | `first_bar_start`, `session_open` |
+| F5 | `opening_bar` | `OPENING`, `LATER` | `OPENING` when the setup bar `first_bar_start` equals the session's regular open (`session_open` in the session seal, i.e. 09:30 America/New_York) **as parsed instants**, not as strings; otherwise `LATER`. Reuses the 2026-09-18 family-validation convention "opening bars excluded". | `first_bar_start`, `session_open` |
 
 Secondary pre-entry descriptors, reported as distributions only and **not** tabulated against outcome: floor `target_1_r` at measured entry (continuous; no bucket is defined here), presence of `floor_target_2` (expected constant, geometry requires it), `first_sight_after_close` (expected constant `false`).
 
@@ -70,18 +70,9 @@ Secondary pre-entry descriptors, reported as distributions only and **not** tabu
 
 The following are never inputs, factors, or covariates: `n_events`, `last_bar_start`, `run_id` (computed from bars after the first opportunity), any quantity derived from `bars`, any `out-v0.1` field, `spy_trend`, `qqq_trend`, `hourly_candle_type`, `daily_candle_type`, `alignment_failures`, `late_floor`, `floor_remaining_rr`, `target_1_r` as a factor.
 
-## Tier 2 — gate-contrast, hypothesis-generating only
+## Gate-contrast control — UNAVAILABLE in this trial
 
-The sealed record contains every structurally selected episode with its `gate_bucket_floor` and its 5-minute bars, not only activations. Tier 2 scores, with the parent's unchanged scorer, the episodes whose only failing gate was market alignment, and places them beside activations:
-
-| Row | Definition from `gate_bucket_floor` only |
-|---|---|
-| `ACTIVATED` | `WOULD_OTHERWISE_QUALIFY` |
-| `ALIGNMENT_REJECTED` | `MARKET_ALIGNMENT_REJECTED` (floor geometry was valid; alignment failed; lateness unknown because the gate stops at alignment) |
-
-`TARGET_GEOMETRY_REJECTED` episodes are not scored: floor `target_1` is null and no outcome class is defined. `LATE_AT_FIRST_SIGHT` episodes are not scored: entering late is not the parent's execution model.
-
-Tier 2 is labeled **NON-ACTIONABLE CONTROL** in every table. It can suggest whether the alignment gate is doing work. It cannot show that rejected setups were profitable missed trades: no option contract, fill, or cost exists for them, and the parent's entry model was never meant to execute them.
+The sealed record contains every structurally selected episode with its `gate_bucket_floor`, not only activations, so a contrast of `WOULD_OTHERWISE_QUALIFY` against `MARKET_ALIGNMENT_REJECTED` outcomes would be the natural test of whether the alignment gate does work. **It is not part of this trial.** The parent scorer `options_212c_floor_outcome-v0.1` refuses non-activated snapshots (`score_snapshot` raises `not_activated` for any `gate_bucket_floor` other than `WOULD_OTHERWISE_QUALIFY`) and its session walker scores activations only; `MARKET_ALIGNMENT_REJECTED` episodes are additionally returned before lateness and after-close are evaluated, so they may be unpriced or after-close. No outcome class for a non-activated episode exists in the parent's one look, and this document defines no scorer. Producing one would require a separately registered scorer extension; reading it here would violate the single-pass rule under "Outcome definition" and make this trial `INVALID`. Only gate-bucket **counts** (`TARGET_GEOMETRY_REJECTED`, `MARKET_ALIGNMENT_REJECTED`, `LATE_AT_FIRST_SIGHT`, `WOULD_OTHERWISE_QUALIFY`) per session are reported, as coverage context, with no outcomes attached.
 
 **Component-level alignment is UNAVAILABLE.** `EPISODE_SNAPSHOT_FIELDS` does not retain `spy_trend`, `qqq_trend`, `hourly_candle_type`, `daily_candle_type`, `late_floor`, or `floor_remaining_rr`. Recovering which component failed would require a separate companion record captured from the `cov-v0.1` first event on the same timer as the path seal, from the first eligible session. No such capture job exists, none is defined by this document, and none is authorized. If it is later built, it needs its own registration; component-level fields for sessions sealed before that are unavailable and are never reconstructed from a later observer run.
 
@@ -102,11 +93,11 @@ UNRESOLVED is never folded into WIN or LOSS. `close_r` for UNRESOLVED rows is re
 
 ## Analysis — fixed tables only
 
-For each Tier 1 factor F2–F5: one table of counts `WIN / LOSS / UNRESOLVED / EXCLUDED` by factor level, pooled, then stratified by F1. Tier 2: the same table with rows `ACTIVATED` and `ALIGNMENT_REJECTED`, pooled and by F1. Reported per cell: counts; and, only where the cell qualifies under the sample rule, `WIN / (WIN + LOSS)` with a Wilson 95% interval, and mean completed R.
+For each Tier 1 factor F2–F5: one table of counts `WIN / LOSS / UNRESOLVED / EXCLUDED` by factor level, pooled, then stratified by F1. Reported per cell: counts; and, only where the cell qualifies under the sample rule, `WIN / (WIN + LOSS)` with a Wilson 95% interval, and mean completed R.
 
 Forbidden: any model fit; any interaction or two-factor table; any merge or split of levels after outcomes are seen; any threshold other than the frozen constants; selecting or ranking subgroups; computing additional factors; any p-value presented as a decision.
 
-Multiplicity disclosure: exactly four primary outcome contrasts (F2–F5) plus one Tier 2 contrast, each shown pooled and in two direction strata. Anyone who nonetheless computes a test must divide α by 5 for Tier 1 and label the result descriptive.
+Multiplicity disclosure: exactly four primary outcome contrasts (F2–F5), each shown pooled and in two direction strata. Anyone who nonetheless computes a test must divide α by 4 and label the result descriptive.
 
 ## Sample rules — frozen
 
@@ -139,11 +130,13 @@ There is no `SUPPORTED` outcome. Winner discrimination remains **not proven** un
 - Collector identity: the parent seal's `source.source_sha` is recorded per session in the companion artifact; a drift across sessions is reported, not repaired.
 - Spec: `docs/research-experiment-specs/E-2026-10-04-options-212c-preentry-factors-01.json`; `python scripts/afs_experiment_runner.py validate --spec …` prints its `spec_hash`; that hash is recorded in the evidence artifact.
 - Inputs: exclusively the parent's sealed session records, identified per session by the `manifest.jsonl` SHA-256 already defined by the parent. The companion evidence artifact lists `session_date`, parent seal SHA-256, and the parent one-look artifact SHA-256 it consumed. A record whose digest does not match is not an input.
-- Prior exposure, disclosed: a 2026-09-18 descriptive family validation stratified 2-1-2 continuation 1R rates by SPY/QQQ/daily/hourly alignment on a retrospective 150-symbol corpus that contains the closed 59 episodes; the closed one-look exposed two activations and their identities. No forward-window outcome has been seen. Tier 1 factors F2–F5 were chosen because they are not those already-exposed gate factors.
+- Prior exposure, disclosed: a 2026-09-18 descriptive family validation stratified 2-1-2 continuation 1R rates by SPY/QQQ/daily/hourly alignment on a retrospective 150-symbol corpus that contains the closed 59 episodes; the closed one-look exposed two activations, their identities, and their `out-v0.1` outcome class (both `UNRESOLVED_AT_CLOSE`), read on 2026-10-04 during the read-only inventory that preceded this document. That window (2026-09-09 to 2026-09-15) is ineligible for the parent and cannot enter this trial. No forward-window outcome has been seen. Tier 1 factors F2–F5 were chosen because they are not those already-exposed gate factors.
 
 ## Independent review before registration
 
-A fresh-context red-team was given the operator's protocol text only (no outcome file, no closed-trial evidence) on 2026-10-04 and returned `PROTOCOL NEEDS REVISION`. Its blocker — every recommended factor is constant inside the activated population and none is in the seal — matches the finding above. Its major findings (F2 geometric confound, F1 regime proxy, F3/UNRESOLVED time confound, post-entry `ep-v0.1` fields, cell sizes under the 25 cap, inheritance of the parent verdict, code-constant pinning) are incorporated in the sections marked above. Its suggested factors `floor_target_2` presence and `floor_rescued` were not adopted: the first is constant because the floor geometry rejects a missing second target, and the second needs a companion capture record that does not exist and cannot exist before 2026-10-05.
+A fresh-context red-team was given the operator's protocol text only (no outcome file, no closed-trial evidence) on 2026-10-04 and returned `PROTOCOL NEEDS REVISION`. Its report is unarchived: it exists only in the originating agent session and is summarized here; treat the summary as the author's, not as an independent artifact. Its blocker — every recommended factor is constant inside the activated population and none is in the seal — matches the finding above. Its major findings (F2 geometric confound, F1 regime proxy, F3/UNRESOLVED time confound, post-entry `ep-v0.1` fields, cell sizes under the 25 cap, inheritance of the parent verdict, code-constant pinning) are incorporated in the sections marked above. Its suggested factors `floor_target_2` presence and `floor_rescued` were not adopted: the first is constant because the floor geometry rejects a missing second target, and the second needs a companion capture record that does not exist and cannot exist before 2026-10-05.
+
+A second fresh-context reviewer read the registration diff against the pinned code on 2026-10-04 and returned `REQUEST CHANGES` with one blocker: the earlier draft's Tier 2 gate-contrast asked the parent's unchanged scorer to score `MARKET_ALIGNMENT_REJECTED` episodes, which that scorer refuses by contract, while this document's own single-pass rule forbade any other source. Tier 2 was therefore removed and recorded as UNAVAILABLE above; the prior-exposure disclosure was completed; F5 equality was restated on parsed instants. That review is likewise unarchived outside the originating session.
 
 ## Authority boundary
 
