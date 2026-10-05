@@ -299,6 +299,11 @@ def capture_progress(root: Path) -> CaptureProgress:
     """
     start = _validate_eligible_start(ELIGIBLE_START)
     if start is None:
+        directory = seal_directory(root)
+        if manifest_path(root).exists() or (
+            directory.exists() and any(directory.glob("*.json"))
+        ):
+            raise CaptureIntegrationError("seal_exists_before_start")
         return CaptureProgress(
             enabled=False,
             eligible_start=None,
