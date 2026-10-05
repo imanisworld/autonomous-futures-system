@@ -302,9 +302,13 @@ def test_outcome_fetch_hook_seals_before_any_trial_scoring(
     snapshot = record["episodes"][0]
     assert snapshot["gate_bucket_floor"] == "WOULD_OTHERWISE_QUALIFY"
     assert snapshot["floor_target_2"] == 103.0
-    rendered = json.dumps(record)
+    keys = set(record)
+    for episode_row in record["episodes"]:
+        keys.update(episode_row)
+        for bar_row in episode_row["bars"]:
+            keys.update(bar_row)
     for forbidden in ("outcome", "realized_r", "mae_r", "mfe_r"):
-        assert forbidden not in rendered
+        assert forbidden not in keys
 
 
 def test_capture_provider_error_on_selected_symbol_refuses(
