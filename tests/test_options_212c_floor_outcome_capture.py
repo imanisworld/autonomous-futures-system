@@ -17,6 +17,7 @@ from alert_ranker.causal_bars import Bar
 from alert_ranker.coverage_episodes import reduce_events
 from alert_ranker.coverage_observer import OBSERVER_VERSION
 from alert_ranker.session_calendar import nyse_session_for
+import ops.options_212c_floor_outcome_capture as capture_module
 from ops.options_212c_floor_outcome_capture import (
     CaptureIntegrationError,
     capture_decision,
@@ -157,24 +158,30 @@ def _bars(day: str = DAY) -> list[Bar]:
 
 
 def test_unset_start_is_dormant_and_writes_nothing(tmp_path: Path) -> None:
-    decision = capture_decision(tmp_path, DAY, eligible_start=None)
+    decision = capture_decision(tmp_path, DAY)
     assert decision.required is False
     assert decision.reason == "eligible_start_unset"
     assert decision.progress.enabled is False
     with pytest.raises(CaptureIntegrationError, match="capture_not_allowed"):
-        write_artifact_once(tmp_path, _empty_artifact(), eligible_start=None)
+        write_artifact_once(tmp_path, _empty_artifact())
     assert not seal_path(tmp_path, DAY).exists()
     assert not manifest_path(tmp_path).exists()
 
 
-def test_october_fifth_or_earlier_cannot_be_registered_start(tmp_path: Path) -> None:
+def test_october_fifth_or_earlier_cannot_be_registered_start(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(capture_module, "ELIGIBLE_START", "2026-10-05")
     with pytest.raises(CaptureIntegrationError, match="eligible_start_invalid"):
-        capture_progress(tmp_path, eligible_start="2026-10-05")
+        capture_progress(tmp_path)
 
 
-def test_write_once_manifest_once_and_advance_blind_monitor(tmp_path: Path) -> None:
+def test_write_once_manifest_once_and_advance_blind_monitor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(capture_module, "ELIGIBLE_START", DAY)
     artifact = _empty_artifact()
-    first = write_artifact_once(tmp_path, artifact, eligible_start=DAY)
+    first = write_artifact_once(tmp_path, artifact)
     assert first.ok
     path = seal_path(tmp_path, DAY)
     assert path.read_bytes() == artifact.body
@@ -184,7 +191,7 @@ def test_write_once_manifest_once_and_advance_blind_monitor(tmp_path: Path) -> N
     assert len(lines) == 1
     assert json.loads(lines[0]) == artifact.manifest
 
-    progress = capture_progress(tmp_path, eligible_start=DAY)
+    progress = capture_progress(tmp_path)
     assert progress.sessions_elapsed == 1
     assert progress.next_session == DAY2
     public = progress.to_public_dict()
@@ -192,12 +199,37 @@ def test_write_once_manifest_once_and_advance_blind_monitor(tmp_path: Path) -> N
     assert "episodes" not in json.dumps(public)
 
     # Idempotence verifies the existing bytes; it never rewrites or appends.
-    second = write_artifact_once(tmp_path, artifact, eligible_start=DAY)
+    second = write_artifact_once(tmp_path, artifact)
     assert second == first
     assert len(manifest_path(tmp_path).read_text().splitlines()) == 1
 
+    mismatched = _empty_artifact()
+    mismatched_record = dict(mismatched.record)
+    mismatched_record["captured_at"] = (
+        _session().close + timedelta(minutes=32)
+    ).astimezone(UTC).isoformat()
+    mismatched_body = canonical_seal_bytes(mismatched_record)
+    mismatched_digest = seal_sha256(mismatched_record)
+    mismatched = SealedSessionArtifact(
+        record=mismatched_record,
+        body=mismatched_body,
+        sha256=mismatched_digest,
+        manifest={
+            "session_date": DAY,
+            "byte_length": len(mismatched_body),
+            "sha256": mismatched_digest,
+        },
+    )
+    with pytest.raises(
+        CaptureIntegrationError, match="seal_already_exists_mismatch"
+    ):
+        write_artifact_once(tmp_path, mismatched)
 
-def test_partial_or_tampered_seal_refuses_without_repair(tmp_path: Path) -> None:
+
+def test_partial_or_tampered_seal_refuses_without_repair(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(capture_module, "ELIGIBLE_START", DAY)
     path = seal_path(tmp_path, DAY)
     path.parent.mkdir(parents=True)
     path.write_bytes(_empty_artifact().body)
@@ -212,7 +244,7 @@ def test_partial_or_tampered_seal_refuses_without_repair(tmp_path: Path) -> None
         inspect_seal(tmp_path, DAY)
 
     manifest_path(tmp_path).unlink()
-    write_artifact_once(tmp_path, _empty_artifact(), eligible_start=DAY)
+    write_artifact_once(tmp_path, _empty_artifact())
     os.chmod(path, 0o644)
     body = bytearray(path.read_bytes())
     body[-2] ^= 1
@@ -221,9 +253,12 @@ def test_partial_or_tampered_seal_refuses_without_repair(tmp_path: Path) -> None
         load_verified_seals(tmp_path)
 
 
-def test_out_of_sequence_session_refuses(tmp_path: Path) -> None:
+def test_out_of_sequence_session_refuses(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(capture_module, "ELIGIBLE_START", DAY)
     with pytest.raises(CaptureIntegrationError, match="capture_out_of_sequence"):
-        capture_decision(tmp_path, DAY2, eligible_start=DAY)
+        capture_decision(tmp_path, DAY2)
 
 
 def test_outcome_fetch_hook_seals_before_any_trial_scoring(
@@ -232,7 +267,7 @@ def test_outcome_fetch_hook_seals_before_any_trial_scoring(
     event = _event()
     episode = reduce_events([event])[0]
     session = _session()
-    monkeypatch.setattr(outcome_script, "ELIGIBLE_START", DAY)
+    monkeypatch.setattr(capture_module, "ELIGIBLE_START", DAY)
 
     request = {
         "session_date": DAY,
@@ -270,7 +305,7 @@ def test_capture_provider_error_on_selected_symbol_refuses(
     event = _event()
     episode = reduce_events([event])[0]
     session = _session()
-    monkeypatch.setattr(outcome_script, "ELIGIBLE_START", DAY)
+    monkeypatch.setattr(capture_module, "ELIGIBLE_START", DAY)
     request = {
         "session_date": DAY,
         "root": tmp_path,
