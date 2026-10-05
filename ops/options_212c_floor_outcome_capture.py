@@ -21,8 +21,15 @@ from typing import Any, Mapping
 from alert_ranker.session_calendar import nyse_session_for
 from ops.options_212c_floor_outcome_monitor import (
     ELIGIBLE_START,
+    EPISODE_SNAPSHOT_FIELDS,
+    FAMILY,
     INELIGIBLE_THROUGH,
     PATH_RECORD_ROOT,
+    PATH_RECORD_VERSION,
+    REDUCER_VERSION,
+    SESSION_SEAL_FIELDS,
+    TRIAL_ID,
+    V1_UNIVERSE,
     canonical_seal_bytes,
     study_readout,
 )
@@ -30,6 +37,17 @@ from ops.options_212c_floor_outcome_study import SealedSessionArtifact
 
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _MANIFEST_FIELDS = frozenset({"session_date", "byte_length", "sha256"})
+_SOURCE_FIELDS = frozenset(
+    {
+        "provider",
+        "request_start",
+        "request_end",
+        "observer_run_id",
+        "observer_ran_at",
+        "source_sha",
+    }
+)
+_BAR_FIELDS = frozenset({"start", "open", "high", "low", "close"})
 
 
 class CaptureIntegrationError(RuntimeError):
@@ -148,6 +166,46 @@ def _next_session(value: str) -> str:
         if nyse_session_for(day) is not None:
             return day.isoformat()
     raise CaptureIntegrationError("next_session_unavailable", value)
+
+
+def _validate_artifact_schema(record: Mapping[str, Any]) -> None:
+    """Refuse any capture body that drifts from the frozen path-v0.2 schema."""
+
+    if set(record) != set(SESSION_SEAL_FIELDS):
+        raise CaptureIntegrationError("artifact_session_fields_invalid")
+    if (
+        record.get("path_record_version") != PATH_RECORD_VERSION
+        or record.get("trial_id") != TRIAL_ID
+    ):
+        raise CaptureIntegrationError("artifact_identity_invalid")
+    session_date = _validate_session_date(
+        str(record.get("session_date") or "")
+    )
+    source = record.get("source")
+    if not isinstance(source, Mapping) or set(source) != _SOURCE_FIELDS:
+        raise CaptureIntegrationError("artifact_source_fields_invalid")
+    episodes = record.get("episodes")
+    if not isinstance(episodes, list):
+        raise CaptureIntegrationError("artifact_episodes_invalid")
+    for episode in episodes:
+        if (
+            not isinstance(episode, Mapping)
+            or set(episode) != set(EPISODE_SNAPSHOT_FIELDS)
+        ):
+            raise CaptureIntegrationError("artifact_episode_fields_invalid")
+        if (
+            episode.get("session_date") != session_date
+            or episode.get("family") != FAMILY
+            or episode.get("symbol") not in V1_UNIVERSE
+            or episode.get("reducer_version") != REDUCER_VERSION
+        ):
+            raise CaptureIntegrationError("artifact_episode_identity_invalid")
+        bars = episode.get("bars")
+        if not isinstance(bars, list):
+            raise CaptureIntegrationError("artifact_bars_invalid")
+        for bar in bars:
+            if not isinstance(bar, Mapping) or set(bar) != _BAR_FIELDS:
+                raise CaptureIntegrationError("artifact_bar_fields_invalid")
 
 
 def _manifest_line(entry: Mapping[str, Any]) -> str:
@@ -376,6 +434,7 @@ def write_artifact_once(
 ) -> SealCheck:
     """Write one immutable session file and one manifest line, exactly once."""
 
+    _validate_artifact_schema(artifact.record)
     session_date = _validate_session_date(
         str(artifact.record.get("session_date") or "")
     )
