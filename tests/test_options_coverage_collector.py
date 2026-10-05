@@ -44,6 +44,7 @@ from alert_ranker.coverage_episodes import REDUCER_VERSION, Episode
 from alert_ranker.coverage_observer import OBSERVED_TIMEFRAME, OBSERVER_VERSION
 from alert_ranker.coverage_outcomes import OUTCOME_VERSION, measure_episode, summarize_outcomes
 from alert_ranker.session_calendar import nyse_session_for
+import ops.options_212c_floor_outcome_capture as capture_module
 from ops.options_212c_floor_outcome_capture import (
     capture_decision,
     manifest_path as capture_manifest_path,
@@ -946,7 +947,6 @@ class CaptureRunner(FakeRunner):
                 observer_run_id=run_id,
                 observer_ran_at=ran_at,
             ),
-            eligible_start=CAPTURE_DAY.isoformat(),
         )
         return code
 
@@ -957,13 +957,12 @@ def make_capture_cli_args(tmp_path: Path, **extra):
         collection_start=CAPTURE_DAY,
         now=CAPTURE_SETTLED,
         capture_root=tmp_path / "capture",
-        eligible_start=CAPTURE_DAY.isoformat(),
         **extra,
     )
 
 
 def test_unset_capture_start_leaves_ordinary_command_unchanged(tmp_path):
-    kw = make_cli_args(tmp_path, capture_root=tmp_path / "capture", eligible_start=None)
+    kw = make_cli_args(tmp_path, capture_root=tmp_path / "capture")
     collector = cli.Collector(**kw)
     decision = collector._capture_decision(SESSION)
     assert decision.required is False and decision.reason == "eligible_start_unset"
@@ -971,7 +970,10 @@ def test_unset_capture_start_leaves_ordinary_command_unchanged(tmp_path):
     assert not any(part.startswith("--capture-") for part in command)
 
 
-def test_next_eligible_session_is_candidate_even_when_ordinary_products_exist(tmp_path):
+def test_next_eligible_session_is_candidate_even_when_ordinary_products_exist(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(capture_module, "ELIGIBLE_START", CAPTURE_DAY.isoformat())
     kw = make_capture_cli_args(tmp_path)
     seed_complete(kw["sqlite_path"], kw["data_dir"] / "daily", CAPTURE_DAY)
     collector = cli.Collector(**kw)
@@ -981,12 +983,14 @@ def test_next_eligible_session_is_candidate_even_when_ordinary_products_exist(tm
     decision = capture_decision(
         kw["capture_root"],
         CAPTURE_DAY.isoformat(),
-        eligible_start=CAPTURE_DAY.isoformat(),
     )
     assert decision.required is True
 
 
-def test_existing_ordinary_products_with_missing_required_seal_refuse_backfill(tmp_path, creds):
+def test_existing_ordinary_products_with_missing_required_seal_refuse_backfill(
+    tmp_path, creds, monkeypatch
+):
+    monkeypatch.setattr(capture_module, "ELIGIBLE_START", CAPTURE_DAY.isoformat())
     kw = make_capture_cli_args(tmp_path)
     seed_complete(kw["sqlite_path"], kw["data_dir"] / "daily", CAPTURE_DAY)
     runner = CaptureRunner(kw["sqlite_path"], kw["data_dir"] / "daily")
@@ -998,7 +1002,10 @@ def test_existing_ordinary_products_with_missing_required_seal_refuse_backfill(t
     assert not capture_seal_path(kw["capture_root"], CAPTURE_DAY.isoformat()).exists()
 
 
-def test_first_eligible_session_seals_once_and_rerun_does_not_duplicate(tmp_path, creds):
+def test_first_eligible_session_seals_once_and_rerun_does_not_duplicate(
+    tmp_path, creds, monkeypatch
+):
+    monkeypatch.setattr(capture_module, "ELIGIBLE_START", CAPTURE_DAY.isoformat())
     kw = make_capture_cli_args(tmp_path)
     runner = CaptureRunner(kw["sqlite_path"], kw["data_dir"] / "daily")
     assert cli.main([], runner=runner, **kw) == 0
