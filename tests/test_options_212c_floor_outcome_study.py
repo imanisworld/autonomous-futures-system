@@ -12,21 +12,39 @@ from alert_ranker.causal_bars import Bar
 from alert_ranker.coverage_episodes import Episode, REDUCER_VERSION
 from alert_ranker.coverage_observer import OBSERVER_VERSION
 from alert_ranker.session_calendar import nyse_session_for
+from ops.options_212c_floor_outcome_monitor import (
+    EPISODE_SNAPSHOT_FIELDS,
+    PATH_RECORD_VERSION,
+    PRE_ENTRY_FACTOR_FIELDS,
+    TRIAL_ID,
+    bind_seal,
+    study_readout,
+)
 from ops.options_212c_floor_outcome_study import (
+    ALIGNED,
     AMBIGUOUS,
     DATA_INVALID,
+    MISSING,
+    NOT_ALIGNED,
+    POPULATION_ACTIVATED,
+    POPULATION_FLOOR_ELIGIBLE,
+    PRIMARY_FACTORS,
     REQUIRED_METRICS,
     STOP,
     TARGET,
     TIMEOUT,
     StudyContractError,
+    aggregate_factor_metrics,
     aggregate_metrics,
     build_session_artifact,
+    expected_starts,
+    factor_labels,
     score_session_record,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-SPEC = ROOT / "docs/research-experiment-specs/E-2026-10-02-options-212c-floor-outcome-01.json"
+SPEC = ROOT / "docs/research-experiment-specs/E-2026-10-04-options-212c-floor-outcome-02.json"
+# Synthetic session for scorer tests only; the real window never includes it.
 DAY = "2026-10-05"
 
 
@@ -57,8 +75,8 @@ def _episode(**overrides) -> Episode:
         floor_rescued=False,
         spy_trend="bullish",
         qqq_trend="bullish",
-        hourly_candle_type="2U",
-        daily_candle_type="2U",
+        hourly_candle_type="two_up",
+        daily_candle_type="two_up",
         spy_aligned=True,
         qqq_aligned=True,
         hourly_aligned=True,
@@ -413,3 +431,236 @@ def test_spec_stays_draft_and_metric_contract_matches() -> None:
     assert spec["acceptance_criteria"] is None
     assert spec["rejection_criteria"] is None
     assert tuple(spec["required_metrics"]) == REQUIRED_METRICS
+    assert spec["trial_id"] == TRIAL_ID
+    assert spec["supersedes"] == "E-2026-10-02-options-212c-floor-outcome-01"
+
+
+# --------------------------------------------------------------------------- #
+# path-v0.2 seal: pre-entry factors, request_end and off-grid refusals
+# --------------------------------------------------------------------------- #
+
+
+def test_seal_carries_raw_pre_entry_factors_and_no_derived_label() -> None:
+    artifact = _artifact()
+    snap = artifact.record["episodes"][0]
+    assert artifact.record["path_record_version"] == PATH_RECORD_VERSION == "options_212c_floor_outcome_path-v0.2"
+    assert set(snap) == set(EPISODE_SNAPSHOT_FIELDS)
+    assert snap["spy_trend"] == "bullish" and snap["hourly_candle_type"] == "two_up"
+    assert snap["floor_remaining_rr"] == 1.75 and snap["late_floor"] is False
+    for derived in (b"ALIGNED", b"NOT_ALIGNED", b"MISSING", b"remaining_r_bucket", b"spy_alignment"):
+        assert derived not in artifact.body
+
+
+def test_seal_refuses_factor_drift_against_the_first_event() -> None:
+    session = nyse_session_for(datetime.fromisoformat(DAY).date())
+    ep = _episode()
+    for patch in ({"spy_trend": "bearish"}, {"hourly_candle_type": None}, {"floor_remaining_rr": 1.0}, {"alignment_failures": "spy"}):
+        with pytest.raises(StudyContractError, match="episode_population_drift"):
+            build_session_artifact(session, [ep], [_event(ep, **patch)], {ep.symbol: _bars()}, source=_source(), captured_at=datetime(2026, 10, 5, 20, 31, tzinfo=timezone.utc))
+
+
+def test_seal_refuses_request_end_before_close() -> None:
+    session = nyse_session_for(datetime.fromisoformat(DAY).date())
+    ep = _episode()
+    src = _source()
+    src["request_end"] = f"{DAY}T19:55:00+00:00"
+    with pytest.raises(StudyContractError, match="request_end_before_close"):
+        build_session_artifact(session, [ep], [_event(ep)], {ep.symbol: _bars()[:3]}, source=src, captured_at=datetime(2026, 10, 5, 20, 31, tzinfo=timezone.utc))
+    # a late request_end is fine; only a short one is a capture failure
+    src["request_end"] = f"{DAY}T20:05:00+00:00"
+    assert build_session_artifact(session, [ep], [_event(ep)], {ep.symbol: _bars()}, source=src, captured_at=datetime(2026, 10, 5, 20, 31, tzinfo=timezone.utc)).sha256
+
+
+@pytest.mark.parametrize(
+    ("start", "reason"),
+    [
+        (datetime(2026, 10, 5, 14, 22, tzinfo=timezone.utc), "bar_outside_session_grid"),  # off the 5-minute grid
+        (datetime(2026, 10, 5, 13, 25, tzinfo=timezone.utc), "bar_outside_session_grid"),  # before the open
+        (datetime(2026, 10, 5, 20, 0, tzinfo=timezone.utc), "bar_outside_session_grid"),  # ends after the close
+        (datetime(2026, 10, 5, 14, 20, tzinfo=timezone.utc), "duplicate_bar"),
+    ],
+)
+def test_seal_refuses_unexpected_bars_instead_of_dropping_them(start: datetime, reason: str) -> None:
+    session = nyse_session_for(datetime.fromisoformat(DAY).date())
+    ep = _episode()
+    bars = _bars() + [Bar(start=start, open=100.3, high=100.6, low=100.0, close=100.4, volume=1)]
+    with pytest.raises(StudyContractError, match=reason):
+        build_session_artifact(session, [ep], [_event(ep)], {ep.symbol: bars}, source=_source(), captured_at=datetime(2026, 10, 5, 20, 31, tzinfo=timezone.utc))
+    # on-grid bars before first sight are legitimate inputs and are simply not sealed
+    early = [Bar(start=datetime(2026, 10, 5, 13, 30, tzinfo=timezone.utc), open=100.3, high=100.6, low=100.0, close=100.4, volume=1)] + _bars()
+    artifact = build_session_artifact(session, [ep], [_event(ep)], {ep.symbol: early}, source=_source(), captured_at=datetime(2026, 10, 5, 20, 31, tzinfo=timezone.utc))
+    assert artifact.record["episodes"][0]["bars"][0]["start"] == f"{DAY}T14:20:00+00:00"
+
+
+# --------------------------------------------------------------------------- #
+# SHORT direction, early close, seal -> monitor
+# --------------------------------------------------------------------------- #
+
+
+def _short_episode() -> Episode:
+    return _episode(
+        direction="SHORT", entry_trigger=100.0, invalidation=101.0, risk=1.0,
+        floor_target_1=98.0, floor_rr_1=2.0, nearest_target_1=99.0,
+        first_sight_price=99.75, floor_remaining_rr=1.75, nearest_remaining_rr=0.75,
+        spy_trend="bearish", qqq_trend="bearish", hourly_candle_type="two_down", daily_candle_type="two_down",
+        run_id=f"AAPL|{DAY}|SHORT|run1",
+    )
+
+
+def _short_bars(first: tuple[float, float, float, float]) -> list[Bar]:
+    out: list[Bar] = []
+    cursor = datetime(2026, 10, 5, 14, 20, tzinfo=timezone.utc)
+    close = datetime(2026, 10, 5, 20, 0, tzinfo=timezone.utc)
+    i = 0
+    while cursor + timedelta(minutes=5) <= close:
+        o, h, l, c = first if i == 0 else (99.7, 100.0, 99.4, 99.6)
+        out.append(Bar(start=cursor, open=o, high=h, low=l, close=c, volume=1))
+        cursor += timedelta(minutes=5)
+        i += 1
+    return out
+
+
+@pytest.mark.parametrize(
+    ("first", "expected", "expected_r", "flag"),
+    [
+        ((101.5, 102.0, 101.2, 101.6), STOP, -1.75, "gap_through_stop"),
+        ((97.5, 98.2, 96.8, 97.6), TARGET, 1.75, "gap_through_target_1"),
+        ((99.75, 101.1, 97.9, 99.5), AMBIGUOUS, None, "gap_or_range_spans_stop_and_target"),
+        ((99.75, 101.0, 99.5, 100.5), STOP, -1.25, None),
+        ((99.75, 99.9, 98.0, 98.5), TARGET, 1.75, None),
+        ((99.7, 100.0, 99.4, 99.6), TIMEOUT, 0.15, None),
+    ],
+)
+def test_short_direction_rules_mirror_long(first, expected, expected_r, flag) -> None:
+    session = nyse_session_for(datetime.fromisoformat(DAY).date())
+    ep = _short_episode()
+    artifact = build_session_artifact(session, [ep], [_event(ep, floor_target_2=97.0)], {ep.symbol: _short_bars(first)}, source=_source(), captured_at=datetime(2026, 10, 5, 20, 31, tzinfo=timezone.utc))
+    row = score_session_record(artifact.record)["rows"][0]
+    assert row["direction"] == "SHORT"
+    assert row["outcome"] == expected
+    assert row["realized_r"] == expected_r
+    if flag:
+        assert flag in row["flags"]
+    if flag == "gap_through_target_1":
+        assert row["target_2_reached"] is True
+    if expected == TIMEOUT:
+        assert row["mae_r"] == -0.25 and row["mfe_r"] == 0.35
+    assert row["factors"] == {f: ALIGNED for f in PRIMARY_FACTORS if f != "remaining_r_bucket"} | {"remaining_r_bucket": "ge1p5_lt2"}
+
+
+def test_early_close_session_grid_ends_at_the_early_close() -> None:
+    early = nyse_session_for(datetime(2026, 11, 27).date())  # day after Thanksgiving, 13:00 ET
+    assert early is not None and early.is_early_close
+    grid = expected_starts(early, "2026-11-27T14:17:57+00:00")
+    assert grid[0].isoformat() == "2026-11-27T14:30:00+00:00"
+    assert grid[-1] + timedelta(minutes=5) == early.close.astimezone(timezone.utc)
+    assert len(grid) == 42
+    # a full-session feed for the early-close day seals and times out at the early close
+    ep = _episode(session_date="2026-11-27", first_bar_start="2026-11-27T14:30:00+00:00", first_bar_close="2026-11-27T15:00:00+00:00", last_bar_start="2026-11-27T14:30:00+00:00", first_sight_at="2026-11-27T15:17:57+00:00", run_id="AAPL|2026-11-27|LONG|run1")
+    bars = []
+    cursor = early.open.astimezone(timezone.utc)
+    while cursor + timedelta(minutes=5) <= early.close.astimezone(timezone.utc):
+        bars.append(Bar(start=cursor, open=100.3, high=100.6, low=100.0, close=100.4, volume=1))
+        cursor += timedelta(minutes=5)
+    src = _source()
+    src.update(request_start="2026-11-27T14:30:00+00:00", request_end="2026-11-27T18:00:00+00:00", observer_ran_at="2026-11-27T18:30:00+00:00")
+    artifact = build_session_artifact(early, [ep], [_event(ep)], {ep.symbol: bars}, source=src, captured_at=datetime(2026, 11, 27, 18, 31, tzinfo=timezone.utc))
+    sealed = artifact.record["episodes"][0]["bars"]
+    assert sealed[0]["start"] == "2026-11-27T15:20:00+00:00" and sealed[-1]["start"] == "2026-11-27T17:55:00+00:00"
+    row = score_session_record(artifact.record)["rows"][0]
+    assert row["outcome"] == TIMEOUT and row["realized_r"] == 0.15
+
+
+def test_seal_feeds_monitor_and_monitor_refuses_without_a_registered_start() -> None:
+    start = "2026-10-06"  # first session after the ineligible span; synthetic only
+    session = nyse_session_for(datetime.fromisoformat(start).date())
+    ep = _episode(session_date=start, first_bar_start=f"{start}T13:30:00+00:00", first_bar_close=f"{start}T14:00:00+00:00", last_bar_start=f"{start}T13:30:00+00:00", first_sight_at=f"{start}T14:17:57+00:00", run_id=f"AAPL|{start}|LONG|run1")
+    bars = [Bar(start=b.start + timedelta(days=1), open=b.open, high=b.high, low=b.low, close=b.close, volume=1) for b in _bars()]
+    src = _source()
+    src.update(request_start=f"{start}T13:30:00+00:00", request_end=f"{start}T20:00:00+00:00", observer_ran_at=f"{start}T20:30:00+00:00")
+    artifact = build_session_artifact(session, [ep], [_event(ep)], {ep.symbol: bars}, source=src, captured_at=datetime(2026, 10, 6, 20, 31, tzinfo=timezone.utc))
+    seal = bind_seal(json.loads(artifact.body))
+    assert seal["sha256"] == artifact.sha256 == artifact.manifest["sha256"]
+    assert study_readout([seal], eligible_start=start) == {"sessions_elapsed": 1, "stop_condition_met": False, "stop_condition": None, "advance_refused": False}
+    # no registered start → refuse; a start inside the ineligible span → refuse
+    assert study_readout([seal])["advance_refused"] is True
+    assert study_readout([seal], eligible_start="2026-10-05")["advance_refused"] is True
+    assert study_readout([seal], eligible_start="2026-10-04")["advance_refused"] is True  # not a session
+    tampered = json.loads(artifact.body)
+    tampered["episodes"][0]["bars"][0]["close"] = 999.0
+    assert study_readout([{"sha256": artifact.sha256, "record": tampered}], eligible_start=start)["sessions_elapsed"] == 0
+
+
+# --------------------------------------------------------------------------- #
+# companion: floor-eligible population, score-time factor labels
+# --------------------------------------------------------------------------- #
+
+
+def test_factor_labels_are_derived_at_score_time_with_explicit_missing() -> None:
+    snap = {"direction": "LONG", "spy_trend": "bullish", "qqq_trend": "neutral", "hourly_candle_type": None, "daily_candle_type": "two_up", "floor_remaining_rr": 2.4, "late_floor": False}
+    assert factor_labels(snap) == {"spy_alignment": ALIGNED, "qqq_alignment": NOT_ALIGNED, "hourly_alignment": MISSING, "daily_alignment": ALIGNED, "remaining_r_bucket": "ge2"}
+    snap.update(direction="SHORT", spy_trend="bearish", floor_remaining_rr=1.2)
+    assert factor_labels(snap)["spy_alignment"] == ALIGNED and factor_labels(snap)["daily_alignment"] == NOT_ALIGNED
+    assert factor_labels(snap)["remaining_r_bucket"] == "ge1_lt1p5"
+    assert factor_labels({**snap, "late_floor": True})["remaining_r_bucket"] == "LATE"
+    assert factor_labels({**snap, "floor_remaining_rr": None, "late_floor": None})["remaining_r_bucket"] == MISSING
+
+
+def test_companion_scores_alignment_rejected_but_not_late_and_aggregates_by_stratum() -> None:
+    session = nyse_session_for(datetime.fromisoformat(DAY).date())
+    activated = _episode()
+    rejected = _episode(symbol="MSFT", spy_trend="bearish", spy_aligned=False, alignment_ok=False, alignment_failures="spy", would_qualify_floor_rule=False, rejections_floor_rule=["market_alignment:spy"], run_id=f"MSFT|{DAY}|LONG|run1")
+    rejected_late = _episode(symbol="NVDA", spy_trend="bearish", spy_aligned=False, alignment_ok=False, alignment_failures="spy", late_floor=True, floor_remaining_rr=0.5, would_qualify_floor_rule=False, run_id=f"NVDA|{DAY}|LONG|run1")
+    geometry_rejected = _episode(symbol="AMZN", floor_geometry_ok=False, floor_target_1=None, floor_rr_1=None, floor_remaining_rr=None, late_floor=None, would_qualify_floor_rule=False, run_id=f"AMZN|{DAY}|LONG|run1")
+    eps = [activated, rejected, rejected_late, geometry_rejected]
+    events = [_event(activated), _event(rejected), _event(rejected_late), _event(geometry_rejected, floor_target_2=None)]
+    artifact = build_session_artifact(session, eps, events, {e.symbol: _bars(first_high=102.1) for e in eps}, source=_source(), captured_at=datetime(2026, 10, 5, 20, 31, tzinfo=timezone.utc))
+    gates = {s["symbol"]: s["gate_bucket_floor"] for s in artifact.record["episodes"]}
+    assert gates == {"AAPL": "WOULD_OTHERWISE_QUALIFY", "MSFT": "MARKET_ALIGNMENT_REJECTED", "NVDA": "MARKET_ALIGNMENT_REJECTED", "AMZN": "TARGET_GEOMETRY_REJECTED"}
+
+    primary = score_session_record(artifact.record)
+    assert primary["population"] == POPULATION_ACTIVATED
+    assert [r["ticker"] for r in primary["rows"]] == ["AAPL"]
+
+    companion = score_session_record(artifact.record, population=POPULATION_FLOOR_ELIGIBLE)
+    assert companion["population_size"] == 4
+    assert sorted(r["ticker"] for r in companion["rows"]) == ["AAPL", "MSFT"]  # NVDA is late; AMZN has no floor geometry
+    by_ticker = {r["ticker"]: r for r in companion["rows"]}
+    assert by_ticker["AAPL"]["factors"]["spy_alignment"] == ALIGNED
+    assert by_ticker["MSFT"]["factors"]["spy_alignment"] == NOT_ALIGNED
+    assert by_ticker["MSFT"]["outcome"] == TARGET
+
+    table = aggregate_factor_metrics([companion])
+    assert table["population"] == POPULATION_FLOOR_ELIGIBLE
+    assert set(table["by_factor"]) == set(PRIMARY_FACTORS)
+    assert table["by_factor"]["spy_alignment"][ALIGNED]["count"] == 1
+    assert table["by_factor"]["spy_alignment"][NOT_ALIGNED]["count"] == 1
+    assert table["by_factor"]["spy_alignment"][MISSING]["count"] == 0
+    # cells below the preregistered minimum report counts only
+    assert table["by_factor"]["spy_alignment"][ALIGNED]["suppressed"] is True
+    assert table["by_factor"]["spy_alignment"][ALIGNED]["metrics"] is None
+    assert table["by_gate_bucket_floor"]["MARKET_ALIGNMENT_REJECTED"]["count"] == 1
+    assert table["by_direction"]["LONG"]["count"] == 2 and table["by_direction"]["SHORT"]["count"] == 0
+    assert set(REQUIRED_METRICS).issubset(table["overall"])
+    with pytest.raises(StudyContractError, match="population_invalid"):
+        aggregate_factor_metrics([primary])
+
+
+def test_companion_cell_releases_metrics_at_the_minimum() -> None:
+    rows = [
+        {"episode_id": str(i), "ticker": "AAPL", "session_date": DAY, "direction": "LONG", "gate_bucket_floor": "WOULD_OTHERWISE_QUALIFY", "clock_bucket": "10:00 ET", "outcome": TARGET if i % 2 else STOP, "realized_r": 1.5 if i % 2 else -1.0, "mae_r": -0.2, "mfe_r": 0.8, "factors": {f: ALIGNED for f in PRIMARY_FACTORS[:-1]} | {"remaining_r_bucket": "ge2"}, "flags": []}
+        for i in range(5)
+    ]
+    table = aggregate_factor_metrics([{"population": POPULATION_FLOOR_ELIGIBLE, "population_size": 5, "rows": rows}])
+    cell = table["by_factor"]["remaining_r_bucket"]["ge2"]
+    assert cell["completed"] == 5 and cell["suppressed"] is False
+    assert cell["metrics"]["wins"]["count"] == 2
+    assert table["by_factor"]["remaining_r_bucket"]["ge1_lt1p5"] == {"count": 0, "completed": 0, "metrics": None, "suppressed": True}
+
+
+def test_scoring_refuses_a_snapshot_missing_a_v02_factor_field() -> None:
+    record = json.loads(_artifact().body)
+    del record["episodes"][0]["spy_trend"]
+    with pytest.raises(StudyContractError, match="snapshot_field_missing"):
+        score_session_record(record)
+    assert PRE_ENTRY_FACTOR_FIELDS == ("spy_trend", "qqq_trend", "hourly_candle_type", "daily_candle_type", "alignment_failures", "floor_remaining_rr", "late_floor")

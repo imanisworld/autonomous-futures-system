@@ -17,6 +17,7 @@ from ops.options_212c_floor_outcome_monitor import (
     EPISODE_IDENTITY_KEYS,
     EPISODE_SNAPSHOT_FIELDS,
     FIVE_MINUTE_GRID,
+    INELIGIBLE_THROUGH,
     PATH_RECORD_INTEGRITY,
     PATH_RECORD_ROOT,
     PATH_RECORD_VERSION,
@@ -27,6 +28,7 @@ from ops.options_212c_floor_outcome_monitor import (
     SESSION_SEAL_FIELDS,
     STUDY_ONLY_METRICS,
     STUDY_SCORER_VERSION,
+    SUPERSEDED_TRIAL_ID,
     THRESHOLD_CROSSING_RULE,
     TRIAL_ID,
     bind_seal,
@@ -42,7 +44,8 @@ from ops.research_experiment_runner import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-DRAFT_REL = "docs/research-experiment-specs/E-2026-10-02-options-212c-floor-outcome-01.json"
+DRAFT_REL = "docs/research-experiment-specs/E-2026-10-04-options-212c-floor-outcome-02.json"
+SUPERSEDED_REL = "docs/research-experiment-specs/E-2026-10-02-options-212c-floor-outcome-01.json"
 CLOSED_REL = "docs/research-experiment-specs/E-2026-09-25-options-212c-target-geometry-01.json"
 CLOSED_REPORT = (
     "docs/research-evidence/"
@@ -51,6 +54,7 @@ CLOSED_REPORT = (
 CLOSED_REPORT_SHA256 = (
     "0d47bf46fd62748e9e6b67a248d2ef6ef76aad072e6ad1d2fd43192f7f3343e8"
 )
+START = "2026-10-06"
 
 
 def _draft() -> dict:
@@ -64,8 +68,12 @@ def test_draft_is_registered_and_not_executable(tmp_path: Path) -> None:
     assert spec["approved_at"] is None
     assert spec["acceptance_criteria"] is None
     assert spec["rejection_criteria"] is None
-    assert spec["data"]["window"]["start"] == "2026-10-05"
+    assert spec["data"]["window"]["start"].startswith("UNSET:")
     assert spec["setup_type"] == "options_212c_floor_underlying_outcome"
+    assert spec["supersedes"] == "E-2026-10-02-options-212c-floor-outcome-01"
+    assert spec["trial_id"] == TRIAL_ID
+    assert "2026-10-05" in spec["population"]
+    assert "never backfilled" in spec["population"]
     assert "2026-09-09" not in spec["population"]
     assert "2026-09-15" not in spec["population"]
 
@@ -87,6 +95,23 @@ def test_draft_is_registered_and_not_executable(tmp_path: Path) -> None:
     assert [path.name for path in approved] == [
         "E-2026-09-25-options-212c-target-geometry-01.json"
     ]
+
+    superseded = json.loads((ROOT / SUPERSEDED_REL).read_text(encoding="utf-8"))
+    assert superseded["status"] == "SUPERSEDED"
+    assert superseded["trial_id"] == SUPERSEDED_TRIAL_ID
+
+
+def test_unset_and_ineligible_starts_refuse_the_readout() -> None:
+    seal = _session(START, [])
+    assert study_readout([seal]) == {
+        "sessions_elapsed": 0,
+        "stop_condition_met": False,
+        "stop_condition": None,
+        "advance_refused": True,
+    }
+    assert study_readout([seal], eligible_start=INELIGIBLE_THROUGH)["advance_refused"] is True
+    assert study_readout([seal], eligible_start="2026-10-04")["advance_refused"] is True
+    assert _readout([seal])["advance_refused"] is False
 
 
 def test_entry_gap_and_blind_readout_are_frozen() -> None:
@@ -164,10 +189,14 @@ def _episode(
     }
 
 
+def _readout(sealed_sessions):
+    return study_readout(sealed_sessions, eligible_start=START)
+
+
 def _session(session_date: str, episodes: list[dict]) -> dict:
     record = {
         "path_record_version": PATH_RECORD_VERSION,
-        "trial_id": "T-2026-10-02-prereg-options-212c-floor-outcome-2026-10-02-01",
+        "trial_id": TRIAL_ID,
         "session_date": session_date,
         "session_open": f"{session_date}T13:30:00+00:00",
         "session_close": f"{session_date}T20:00:00+00:00",
@@ -179,16 +208,16 @@ def _session(session_date: str, episodes: list[dict]) -> dict:
 
 
 def test_readout_hides_activation_path_and_outcome_fields() -> None:
-    quiet = study_readout([_session("2026-10-05", [])])
-    loud = study_readout(
+    quiet = _readout([_session("2026-10-06", [])])
+    loud = _readout(
         [
             _session(
-                "2026-10-05",
+                "2026-10-06",
                 [
-                    _episode("2026-10-05"),
-                    _episode("2026-10-05"),
-                    _episode("2026-10-05", symbol="MSFT", bar="15:00:00+00:00", gate="LATE_AT_FIRST_SIGHT"),
-                    _episode("2026-10-05", symbol="NVDA", bar="15:05:00+00:00", gate="MARKET_ALIGNMENT_REJECTED"),
+                    _episode("2026-10-06"),
+                    _episode("2026-10-06"),
+                    _episode("2026-10-06", symbol="MSFT", bar="15:00:00+00:00", gate="LATE_AT_FIRST_SIGHT"),
+                    _episode("2026-10-06", symbol="NVDA", bar="15:05:00+00:00", gate="MARKET_ALIGNMENT_REJECTED"),
                 ],
             )
         ]
@@ -208,7 +237,7 @@ def test_readout_hides_activation_path_and_outcome_fields() -> None:
 
 def _eligible_dates(count: int) -> list[str]:
     found: list[str] = []
-    day = date(2026, 10, 5)
+    day = date.fromisoformat(START)
     while len(found) < count:
         if nyse_session_for(day) is not None:
             found.append(day.isoformat())
@@ -218,12 +247,12 @@ def _eligible_dates(count: int) -> list[str]:
 
 def test_readout_names_the_stopping_condition_without_a_count() -> None:
     below = [
-        _episode("2026-10-05", bar=f"14:{index:02d}:00+00:00")
+        _episode("2026-10-06", bar=f"14:{index:02d}:00+00:00")
         for index in range(ACTIVATION_CAP - 1)
     ]
-    at_cap = below + [_episode("2026-10-05", bar="15:30:00+00:00")]
-    assert study_readout([_session("2026-10-05", below)])["stop_condition_met"] is False
-    fired = study_readout([_session("2026-10-05", at_cap)])
+    at_cap = below + [_episode("2026-10-06", bar="15:30:00+00:00")]
+    assert _readout([_session("2026-10-06", below)])["stop_condition_met"] is False
+    fired = _readout([_session("2026-10-06", at_cap)])
     assert fired["sessions_elapsed"] == 1
     assert fired["stop_condition_met"] is True
     assert fired["stop_condition"] == "activation_cap"
@@ -233,8 +262,8 @@ def test_readout_names_the_stopping_condition_without_a_count() -> None:
     almost = [_session(day, []) for day in _eligible_dates(SESSION_CAP - 1)]
     capped_days = _eligible_dates(SESSION_CAP)
     capped = [_session(day, []) for day in capped_days]
-    assert study_readout(almost)["stop_condition_met"] is False
-    capped_readout = study_readout(capped)
+    assert _readout(almost)["stop_condition_met"] is False
+    capped_readout = _readout(capped)
     assert capped_readout["sessions_elapsed"] == SESSION_CAP
     assert capped_readout["stop_condition"] == "session_cap"
     assert date(2026, 11, 26).isoformat() not in capped_days
@@ -244,22 +273,22 @@ def test_readout_names_the_stopping_condition_without_a_count() -> None:
         _episode(capped_days[-1], bar=f"14:{index:02d}:00+00:00")
         for index in range(ACTIVATION_CAP)
     ]
-    both = study_readout(capped[:-1] + [_session(capped_days[-1], both_rows)])
+    both = _readout(capped[:-1] + [_session(capped_days[-1], both_rows)])
     assert both["sessions_elapsed"] == SESSION_CAP
     assert both["stop_condition"] == "activation_cap_and_session_cap"
 
 
 def test_direction_is_inside_the_identity_and_outside_the_readout() -> None:
     longs = [
-        _episode("2026-10-05", direction="LONG", bar=f"14:{index:02d}:00+00:00")
+        _episode("2026-10-06", direction="LONG", bar=f"14:{index:02d}:00+00:00")
         for index in range(ACTIVATION_CAP - 1)
     ]
-    assert study_readout([_session("2026-10-05", longs)])["stop_condition_met"] is False
-    fired = study_readout(
+    assert _readout([_session("2026-10-06", longs)])["stop_condition_met"] is False
+    fired = _readout(
         [
             _session(
-                "2026-10-05",
-                longs + [_episode("2026-10-05", direction="SHORT", bar="14:00:00+00:00")],
+                "2026-10-06",
+                longs + [_episode("2026-10-06", direction="SHORT", bar="14:00:00+00:00")],
             )
         ]
     )
@@ -277,28 +306,28 @@ def test_direction_is_inside_the_identity_and_outside_the_readout() -> None:
 
 
 def test_missing_identity_or_hash_refuses_to_advance() -> None:
-    day1 = "2026-10-05"
+    day1 = "2026-10-06"
     prior = [_episode(day1, bar=f"14:{index:02d}:00+00:00") for index in range(ACTIVATION_CAP - 1)]
-    broken = _episode("2026-10-06", bar="15:00:00+00:00")
+    broken = _episode("2026-10-07", bar="15:00:00+00:00")
     del broken["direction"]
-    refused = study_readout([_session(day1, prior), _session("2026-10-06", [broken])])
+    refused = _readout([_session(day1, prior), _session("2026-10-07", [broken])])
     assert refused == {
         "sessions_elapsed": 1,
         "stop_condition_met": False,
         "stop_condition": None,
         "advance_refused": True,
     }
-    missing_gate = _episode("2026-10-06", bar="15:05:00+00:00")
+    missing_gate = _episode("2026-10-07", bar="15:05:00+00:00")
     del missing_gate["gate_bucket_floor"]
-    assert study_readout([_session(day1, prior), _session("2026-10-06", [missing_gate])])["advance_refused"] is True
+    assert _readout([_session(day1, prior), _session("2026-10-07", [missing_gate])])["advance_refused"] is True
     unbound = _session(day1, prior + [_episode(day1, bar="15:30:00+00:00")])
     unbound["sha256"] = "0" * 64
-    assert study_readout([unbound])["advance_refused"] is True
-    assert study_readout([unbound])["sessions_elapsed"] == 0
-    assert study_readout([unbound])["stop_condition_met"] is False
-    stale = _session("2026-10-06", [_episode("2026-10-06")])
+    assert _readout([unbound])["advance_refused"] is True
+    assert _readout([unbound])["sessions_elapsed"] == 0
+    assert _readout([unbound])["stop_condition_met"] is False
+    stale = _session("2026-10-07", [_episode("2026-10-07")])
     stale["record"]["episodes"][0]["bars"][0]["close"] = 9
-    assert study_readout([_session(day1, prior), stale]) == {
+    assert _readout([_session(day1, prior), stale]) == {
         "sessions_elapsed": 0,
         "stop_condition_met": False,
         "stop_condition": None,
@@ -307,9 +336,9 @@ def test_missing_identity_or_hash_refuses_to_advance() -> None:
 
 
 def test_a_missing_eligible_session_refuses_to_advance() -> None:
-    day1, day2, day3 = "2026-10-05", "2026-10-06", "2026-10-07"
+    day1, day2, day3 = "2026-10-06", "2026-10-07", "2026-10-08"
     prior = [_episode(day1, bar=f"14:{index:02d}:00+00:00") for index in range(ACTIVATION_CAP - 1)]
-    skipped = study_readout(
+    skipped = _readout(
         [_session(day1, prior), _session(day3, [_episode(day3, bar="15:00:00+00:00")])]
     )
     assert skipped == {
@@ -318,24 +347,24 @@ def test_a_missing_eligible_session_refuses_to_advance() -> None:
         "stop_condition": None,
         "advance_refused": True,
     }
-    assert study_readout([_session(day3, [])])["sessions_elapsed"] == 0
-    friday, monday, tuesday = "2026-10-09", "2026-10-12", "2026-10-13"
-    prefix = [_session(day, []) for day in _eligible_dates(5)]
-    assert [item["record"]["session_date"] for item in prefix][-1] == friday
-    continuous = study_readout(prefix + [_session(monday, [])])
-    assert continuous["sessions_elapsed"] == 6
+    assert _readout([_session(day3, [])])["sessions_elapsed"] == 0
+    thursday, monday, tuesday = "2026-10-09", "2026-10-12", "2026-10-13"
+    prefix = [_session(day, []) for day in _eligible_dates(4)]
+    assert [item["record"]["session_date"] for item in prefix][-1] == thursday
+    continuous = _readout(prefix + [_session(monday, [])])
+    assert continuous["sessions_elapsed"] == 5
     assert continuous["advance_refused"] is False
-    gapped_monday = study_readout(prefix + [_session(tuesday, [])])
+    gapped_monday = _readout(prefix + [_session(tuesday, [])])
     assert gapped_monday["advance_refused"] is True
-    assert gapped_monday["sessions_elapsed"] == 5
+    assert gapped_monday["sessions_elapsed"] == 4
     assert RECOGNIZED_GATES == frozenset(BUCKET_ORDER)
     assert REDUCER_VERSION == EPISODE_REDUCER_VERSION
 
 
 def test_unknown_gate_or_seal_identity_refuses_to_advance() -> None:
-    day1, day2 = "2026-10-05", "2026-10-06"
+    day1, day2 = "2026-10-06", "2026-10-07"
     unknown = _episode(day2, gate="NOT_A_GATE")
-    refused = study_readout([_session(day1, []), _session(day2, [unknown])])
+    refused = _readout([_session(day1, []), _session(day2, [unknown])])
     assert refused == {
         "sessions_elapsed": 1,
         "stop_condition_met": False,
@@ -344,25 +373,26 @@ def test_unknown_gate_or_seal_identity_refuses_to_advance() -> None:
     }
     wrong_reducer = _episode(day1)
     wrong_reducer["reducer_version"] = "ep-v0.2"
-    assert study_readout([_session(day1, [wrong_reducer])])["sessions_elapsed"] == 0
+    assert _readout([_session(day1, [wrong_reducer])])["sessions_elapsed"] == 0
     wrong_version = _session(day1, [])
     wrong_version["record"]["path_record_version"] = "other"
-    assert study_readout([bind_seal(wrong_version["record"])])["advance_refused"] is True
+    assert _readout([bind_seal(wrong_version["record"])])["advance_refused"] is True
     wrong_trial = _session(day2, [])
     wrong_trial["record"]["trial_id"] = "other-trial"
-    assert study_readout([_session(day1, []), bind_seal(wrong_trial["record"])]) == refused
-    assert TRIAL_ID in (ROOT / "docs/prereg-options-212c-floor-outcome-2026-10-02.md").read_text(encoding="utf-8")
+    assert _readout([_session(day1, []), bind_seal(wrong_trial["record"])]) == refused
+    assert TRIAL_ID in (ROOT / "docs/prereg-options-212c-floor-outcome-2026-10-04.md").read_text(encoding="utf-8")
+    assert SUPERSEDED_TRIAL_ID in (ROOT / "docs/prereg-options-212c-floor-outcome-2026-10-02.md").read_text(encoding="utf-8")
 
 
 def test_threshold_crossing_session_is_included_in_full() -> None:
-    day1, day2, day3 = "2026-10-05", "2026-10-06", "2026-10-07"
+    day1, day2, day3 = "2026-10-06", "2026-10-07", "2026-10-08"
     prior = [
         _episode(day1, bar=f"14:{index:02d}:00+00:00")
         for index in range(ACTIVATION_CAP - 1)
     ]
     crossing = [_episode(day2, bar=f"15:{index:02d}:00+00:00") for index in range(3)]
     later = [_episode(day3, bar="14:00:00+00:00")]
-    readout = study_readout(
+    readout = _readout(
         [_session(day1, prior), _session(day2, crossing), _session(day3, later)]
     )
     assert readout == {

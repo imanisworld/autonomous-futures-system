@@ -47,6 +47,7 @@ from zoneinfo import ZoneInfo
 from alert_ranker.coverage_episodes import REDUCER_VERSION, reduce_events
 from alert_ranker.coverage_observer import OBSERVER_VERSION
 from alert_ranker.coverage_outcomes import OUTCOME_VERSION, EpisodeOutcome, PathView
+from alert_ranker.coverage_quarantine import verify_quarantine_block
 from alert_ranker.session_calendar import EXCHANGE_TIMEZONE, Session, nyse_session_for
 
 __all__ = [
@@ -440,10 +441,17 @@ class OutcomesCheck:
     episodes: int = 0
     clean: int = 0
     provider_errors: int = 0
+    # Structural rows withheld from the public product by a verified
+    # blind-window quarantine. Counted into ``episodes`` so the file still
+    # reconciles with the reducer; never broken down further.
+    quarantined: int = 0
     problems: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
-        return {"ok": self.ok, "episodes": self.episodes, "clean": self.clean, "provider_errors": self.provider_errors, "problems": list(self.problems)}
+        return {
+            "ok": self.ok, "episodes": self.episodes, "clean": self.clean, "provider_errors": self.provider_errors,
+            "quarantined": self.quarantined, "problems": list(self.problems),
+        }
 
 
 def daily_outcome_stem(daily_dir: Path, session_date: date) -> Path:
@@ -557,6 +565,26 @@ def outcomes_completion(daily_dir: Path, session_date: date, coverage: CoverageC
     if errors:
         check.problems.append(f"provider_errors:{len(errors)}")
     check.episodes = len(episodes)
+    # A blind-window quarantine withholds rows from the public product. The
+    # public block must bind byte-exactly to its quarantine file before the
+    # withheld count is allowed to reconcile the episode total.
+    blocks = summary.get("quarantine")
+    if blocks is not None:
+        if not isinstance(blocks, list) or not blocks:
+            check.problems.append("quarantine_block_malformed")
+        else:
+            for block in blocks:
+                if not isinstance(block, dict):
+                    check.problems.append("quarantine_block_malformed")
+                    continue
+                problems = verify_quarantine_block(daily_dir, block)
+                if block.get("kind") != "outcomes" or block.get("date_from") != day or block.get("date_to") != day:
+                    problems.append("quarantine_identity:range")
+                if problems:
+                    check.problems.extend(problems)
+                    continue
+                check.quarantined += int(block["quarantined_rows"])
+            check.episodes += check.quarantined
     if check.episodes <= 0:
         check.problems.append("no_episodes")
     total = summary.get("total") or {}
@@ -719,6 +747,29 @@ def load_daily_outcomes(daily_dir: Path, sessions: Sequence[Session]) -> tuple[l
     return outcomes, present, missing, errors, provenance
 
 
+def daily_quarantine_blocks(daily_dir: Path, sessions: Sequence[Session]) -> dict[str, list[dict[str, Any]]]:
+    """Verified blind-window quarantine blocks per stored daily file (provenance only).
+
+    Fails closed when a daily file carries a block that no longer binds to its
+    quarantine file: an aggregate must not be built over a product whose
+    withheld rows cannot be proven intact.
+    """
+    out: dict[str, list[dict[str, Any]]] = {}
+    for session in sessions:
+        json_path = daily_outcome_stem(daily_dir, session.date).with_suffix(".json")
+        if not json_path.exists():
+            continue
+        payload = json.loads(json_path.read_text())
+        blocks = (payload.get("summary") or {}).get("quarantine") or []
+        for block in blocks:
+            problems = verify_quarantine_block(daily_dir, block) if isinstance(block, dict) else ["quarantine_block_malformed"]
+            if problems:
+                raise CollectorError("aggregate_quarantine_unverified", f"{session.date.isoformat()}: {'; '.join(problems)}")
+        if blocks:
+            out[session.date.isoformat()] = [dict(b) for b in blocks]
+    return out
+
+
 def stamp_reducer_aggregate(path: Path, source: SourceProvenance, date_from: date, date_to: date) -> dict[str, Any]:
     """Make the reducer's ``episodes_<from>_<to>.json`` self-describing.
 
@@ -734,6 +785,13 @@ def stamp_reducer_aggregate(path: Path, source: SourceProvenance, date_from: dat
         raise CollectorError("aggregate_unparseable", f"{path}: {exc}") from exc
     if not isinstance(payload, dict) or "episodes" not in payload:
         raise CollectorError("aggregate_malformed", str(path))
+    quarantine_blocks = payload.get("quarantine") or []
+    quarantined = 0
+    for qblock in quarantine_blocks:
+        problems = verify_quarantine_block(path.parent, qblock) if isinstance(qblock, dict) else ["quarantine_block_malformed"]
+        if problems:
+            raise CollectorError("aggregate_quarantine_unverified", "; ".join(problems))
+        quarantined += int(qblock["quarantined_rows"])
     block = {
         "source": source.to_dict(),
         "collector_id": COLLECTOR_ID,
@@ -743,6 +801,7 @@ def stamp_reducer_aggregate(path: Path, source: SourceProvenance, date_from: dat
         "date_from": date_from.isoformat(),
         "date_to": date_to.isoformat(),
         "episodes": len(payload.get("episodes") or []),
+        "quarantined_episodes": quarantined,
         "stamped_at": datetime.now(timezone.utc).isoformat(),
     }
     payload["provenance"] = block

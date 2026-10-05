@@ -2,7 +2,7 @@
 
 <!-- trial_id: T-2026-10-04-prereg-options-212c-preentry-factors-2026-10-04-01 -->
 
-**Status: DRAFT — NOT APPROVED — NOT RUN.**
+**Status: SUPERSEDED — NOT APPROVED — NOT RUN.** Replaced by `E-2026-10-04-options-212c-floor-factor-01` / `T-2026-10-04-prereg-options-212c-floor-factor-2026-10-04-01` (floor-eligible population). Parent `-01` is also SUPERSEDED. 2026-10-05 was never admitted. Do not collect or score this trial.
 
 **Trial ID:** `T-2026-10-04-prereg-options-212c-preentry-factors-2026-10-04-01`
 

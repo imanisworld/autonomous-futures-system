@@ -17,13 +17,21 @@ from zoneinfo import ZoneInfo
 
 from alert_ranker.causal_bars import MINUTE_5, Bar
 from alert_ranker.coverage_episodes import Episode, REDUCER_VERSION, reduce_events
-from alert_ranker.coverage_observer import OBSERVED_TIMEFRAME, OBSERVER_VERSION
+from alert_ranker.coverage_observer import (
+    MIN_REMAINING_RR,
+    OBSERVED_TIMEFRAME,
+    OBSERVER_VERSION,
+    TWO_DOWN,
+    TWO_UP,
+)
 from alert_ranker.coverage_outcomes import gate_bucket
 from alert_ranker.session_calendar import EXCHANGE_TIMEZONE, Session, nyse_session_for
 from ops.options_212c_floor_outcome_monitor import (
     ACTIVATION_GATE,
+    COMPANION_GATES,
     FAMILY,
     PATH_RECORD_VERSION,
+    PRE_ENTRY_FACTOR_FIELDS,
     RECOGNIZED_GATES,
     TRIAL_ID,
     V1_UNIVERSE,
@@ -38,6 +46,29 @@ AMBIGUOUS = "AMBIGUOUS"
 DATA_INVALID = "DATA_INVALID"
 COMPLETED = frozenset({TARGET, STOP, TIMEOUT})
 FIVE = MINUTE_5.delta
+
+# Scored populations. "activated" is the primary Stage-A study; "floor_eligible"
+# is the descriptive companion (activated plus MARKET_ALIGNMENT_REJECTED with a
+# priced, not-late first sight). Nothing else is scored.
+POPULATION_ACTIVATED = "activated"
+POPULATION_FLOOR_ELIGIBLE = "floor_eligible"
+POPULATIONS = frozenset({POPULATION_ACTIVATED, POPULATION_FLOOR_ELIGIBLE})
+
+# Pre-entry factor labels, derived at score time only. Fixed before any seal.
+ALIGNED, NOT_ALIGNED, MISSING = "ALIGNED", "NOT_ALIGNED", "MISSING"
+ALIGNMENT_LABELS = (ALIGNED, NOT_ALIGNED, MISSING)
+# Remaining-R bins at first sight versus floor Target 1. Edges come from the
+# existing MIN_REMAINING_RR constant and fixed half-R steps; not optimized.
+REMAINING_R_EDGES = (MIN_REMAINING_RR, MIN_REMAINING_RR + 0.5, MIN_REMAINING_RR + 1.0)
+REMAINING_R_LABELS = ("LATE", "ge1_lt1p5", "ge1p5_lt2", "ge2", MISSING)
+PRIMARY_FACTORS = (
+    "spy_alignment",
+    "qqq_alignment",
+    "hourly_alignment",
+    "daily_alignment",
+    "remaining_r_bucket",
+)
+MIN_CELL_COMPLETED = 5
 
 REQUIRED_METRICS = (
     "population_size",
@@ -108,6 +139,22 @@ def _num(value: Any, field: str, *, nullable: bool = False) -> float | None:
     return out
 
 
+def _opt_str(value: Any, field: str) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value:
+        raise StudyContractError("string_invalid", field)
+    return value
+
+
+def _opt_bool(value: Any, field: str) -> bool | None:
+    if value is None:
+        return None
+    if not isinstance(value, bool):
+        raise StudyContractError("bool_invalid", field)
+    return value
+
+
 def _episode_id(ep: Episode) -> str:
     return "|".join(
         (ep.symbol, ep.session_date, ep.direction, ep.first_bar_start, ep.family)
@@ -165,12 +212,44 @@ def _bar_dict(bar: Bar) -> dict[str, Any]:
     }
 
 
+def session_grid(session: Session) -> list[datetime]:
+    """Every full 5-minute bar start inside the regular session."""
+    return expected_starts(session, session.open.astimezone(timezone.utc).isoformat())
+
+
+def _refuse_off_grid_bars(
+    session: Session, bars_by_symbol: Mapping[str, Sequence[Bar]]
+) -> None:
+    """Fail closed on any supplied bar that is not a member of the session grid.
+
+    The capture is given regular-session 5-minute bars. A bar that starts off
+    the 5-minute grid, before the open, or whose end is after the close is
+    unexpected data: it is refused here rather than silently discarded, so an
+    unexpected provider shape can never be papered over at seal time. Bars on
+    the grid but before an episode's first sight are legitimate inputs (the
+    same symbol feed serves every episode) and are simply not sealed.
+    """
+    allowed = set(session_grid(session))
+    for symbol in sorted(bars_by_symbol):
+        seen: set[datetime] = set()
+        for bar in bars_by_symbol[symbol]:
+            if bar.start_utc not in allowed:
+                raise StudyContractError(
+                    "bar_outside_session_grid",
+                    f"{symbol}@{bar.start_utc.isoformat()}",
+                )
+            if bar.start_utc in seen:
+                raise StudyContractError("duplicate_bar", f"{symbol}@{bar.start_utc.isoformat()}")
+            seen.add(bar.start_utc)
+
+
 def _sealed_bars(
     ep: Episode, session: Session, bars: Sequence[Bar]
 ) -> list[dict[str, Any]]:
     """Seal the causal bars actually available on the frozen grid.
 
-    A missing grid member is preserved as missing evidence: the seal is still
+    Off-grid bars were already refused by :func:`_refuse_off_grid_bars`. A
+    missing grid member is preserved as missing evidence: the seal is still
     written and the one-look scorer classifies that episode DATA_INVALID.
     Refetching later would violate the preregistration.
     """
@@ -210,6 +289,11 @@ def _crosscheck_reduced_episode(supplied: Episode, derived: Episode) -> None:
         "floor_geometry_ok",
         "alignment_ok",
         "late_floor",
+        "spy_trend",
+        "qqq_trend",
+        "hourly_candle_type",
+        "daily_candle_type",
+        "alignment_failures",
     )
     for field in exact_fields:
         if getattr(supplied, field) != getattr(derived, field):
@@ -220,6 +304,7 @@ def _crosscheck_reduced_episode(supplied: Episode, derived: Episode) -> None:
         "risk",
         "floor_target_1",
         "first_sight_price",
+        "floor_remaining_rr",
     )
     for field in numeric_fields:
         if not _same(getattr(supplied, field), getattr(derived, field)):
@@ -239,6 +324,11 @@ def _crosscheck(ep: Episode, event: Mapping[str, Any]) -> None:
         "bar_start": ep.first_bar_start,
         "first_sight_at": ep.first_sight_at,
         "first_sight_after_close": ep.first_sight_after_close,
+        "spy_trend": ep.spy_trend,
+        "qqq_trend": ep.qqq_trend,
+        "hourly_candle_type": ep.hourly_candle_type,
+        "daily_candle_type": ep.daily_candle_type,
+        "late_floor": ep.late_floor,
     }
     for field, wanted in exact.items():
         got = (
@@ -249,12 +339,15 @@ def _crosscheck(ep: Episode, event: Mapping[str, Any]) -> None:
         wanted_cmp = bool(wanted) if field == "first_sight_after_close" else wanted
         if got != wanted_cmp:
             raise StudyContractError("episode_event_mismatch", field)
+    if (event.get("alignment_failures") or "") != (ep.alignment_failures or ""):
+        raise StudyContractError("episode_event_mismatch", "alignment_failures")
     for field, wanted in (
         ("entry_trigger", ep.entry_trigger),
         ("invalidation", ep.invalidation),
         ("risk", ep.risk),
         ("floor_target_1", ep.floor_target_1),
         ("first_sight_price", ep.first_sight_price),
+        ("floor_remaining_rr", ep.floor_remaining_rr),
     ):
         if not _same(event.get(field), wanted):
             raise StudyContractError("episode_event_mismatch", field)
@@ -288,6 +381,13 @@ def build_session_artifact(
     ):
         if field not in source:
             raise StudyContractError("source_field_missing", field)
+    # A bar request that ended before the close cannot have produced the full
+    # grid. That is a capture failure, not market missing data: refuse the seal
+    # instead of sealing a truncated grid that would only surface as
+    # DATA_INVALID at the blind one-look.
+    if _dt(source["request_end"], "request_end") < session.close.astimezone(timezone.utc):
+        raise StudyContractError("request_end_before_close")
+    _refuse_off_grid_bars(session, bars_by_symbol)
 
     event_index: dict[
         tuple[str, str, str, str, str], Mapping[str, Any]
@@ -399,6 +499,17 @@ def build_session_artifact(
                 "bars": _sealed_bars(
                     ep, session, bars_by_symbol.get(ep.symbol, ())
                 ),
+                # path-v0.2 pre-entry factors: raw contemporaneous values from
+                # the cross-checked first event. No derived label is stored.
+                "spy_trend": _opt_str(ep.spy_trend, "spy_trend"),
+                "qqq_trend": _opt_str(ep.qqq_trend, "qqq_trend"),
+                "hourly_candle_type": _opt_str(ep.hourly_candle_type, "hourly_candle_type"),
+                "daily_candle_type": _opt_str(ep.daily_candle_type, "daily_candle_type"),
+                "alignment_failures": ep.alignment_failures or "",
+                "floor_remaining_rr": _num(
+                    ep.floor_remaining_rr, "floor_remaining_rr", nullable=True
+                ),
+                "late_floor": _opt_bool(ep.late_floor, "late_floor"),
             }
         )
 
@@ -440,11 +551,76 @@ def _r(direction: str, price: float, entry: float, risk: float) -> float:
     )
 
 
+def _alignment_label(value: Any, desired: str) -> str:
+    if value is None:
+        return MISSING
+    return ALIGNED if value == desired else NOT_ALIGNED
+
+
+def factor_labels(snapshot: Mapping[str, Any]) -> dict[str, str]:
+    """Derive the preregistered pre-entry factor labels from raw sealed fields.
+
+    Computed at score time only; never stored in the seal. Direction decides
+    the desired trend/candle but is itself only a stratifier, not a factor.
+    ``MISSING`` is explicit for an unavailable hourly/daily candle or index
+    trend. The remaining-R bucket uses fixed edges from ``REMAINING_R_EDGES``.
+    """
+    direction = snapshot.get("direction")
+    if direction == "LONG":
+        trend, candle = "bullish", TWO_UP
+    elif direction == "SHORT":
+        trend, candle = "bearish", TWO_DOWN
+    else:
+        raise StudyContractError("snapshot_identity_invalid", "direction")
+    late = snapshot.get("late_floor")
+    remaining = snapshot.get("floor_remaining_rr")
+    if late is True:
+        bucket = "LATE"
+    elif remaining is None or late is None:
+        bucket = MISSING
+    else:
+        value = float(remaining)
+        lo, mid, hi = REMAINING_R_EDGES
+        if value < lo:
+            bucket = "LATE"
+        elif value < mid:
+            bucket = "ge1_lt1p5"
+        elif value < hi:
+            bucket = "ge1p5_lt2"
+        else:
+            bucket = "ge2"
+    return {
+        "spy_alignment": _alignment_label(snapshot.get("spy_trend"), trend),
+        "qqq_alignment": _alignment_label(snapshot.get("qqq_trend"), trend),
+        "hourly_alignment": _alignment_label(snapshot.get("hourly_candle_type"), candle),
+        "daily_alignment": _alignment_label(snapshot.get("daily_candle_type"), candle),
+        "remaining_r_bucket": bucket,
+    }
+
+
+def in_population(snapshot: Mapping[str, Any], population: str) -> bool:
+    """Membership test for the two scored populations. Uses pre-entry fields only."""
+    gate = snapshot.get("gate_bucket_floor")
+    if population == POPULATION_ACTIVATED:
+        return gate == ACTIVATION_GATE
+    if population == POPULATION_FLOOR_ELIGIBLE:
+        if gate == ACTIVATION_GATE:
+            return True
+        return (
+            gate in COMPANION_GATES
+            and snapshot.get("late_floor") is False
+            and snapshot.get("first_sight_after_close") is False
+        )
+    raise StudyContractError("population_invalid", str(population))
+
+
 def _invalid(snapshot: Mapping[str, Any], reason: str) -> dict[str, Any]:
     return {
         "episode_id": snapshot.get("episode_id"),
         "ticker": snapshot.get("symbol"),
         "session_date": snapshot.get("session_date"),
+        "direction": snapshot.get("direction"),
+        "gate_bucket_floor": snapshot.get("gate_bucket_floor"),
         "clock_bucket": None,
         "outcome": DATA_INVALID,
         "realized_r": None,
@@ -452,6 +628,7 @@ def _invalid(snapshot: Mapping[str, Any], reason: str) -> dict[str, Any]:
         "mfe_r": None,
         "target_2_reached": False,
         "target_2_hit_at": None,
+        "factors": None,
         "flags": [reason],
     }
 
@@ -508,16 +685,25 @@ def _validate_bar_rows(
 
 
 def score_snapshot(
-    snapshot: Mapping[str, Any], session: Session
+    snapshot: Mapping[str, Any],
+    session: Session,
+    *,
+    population: str = POPULATION_ACTIVATED,
 ) -> dict[str, Any]:
-    """Frozen first-sight Stage-A scorer for one activated sealed snapshot."""
+    """Frozen first-sight Stage-A scorer for one sealed snapshot in ``population``.
 
-    if snapshot.get("gate_bucket_floor") != ACTIVATION_GATE:
-        raise StudyContractError("not_activated")
+    The walk (options_212c_floor_outcome-v0.1) is identical for both scored
+    populations; only membership differs. Factor labels are derived here from
+    the raw sealed pre-entry fields and attached to the row.
+    """
+
+    if not in_population(snapshot, population):
+        raise StudyContractError("not_in_population", population)
     try:
         _symbol, _session_date, direction, _first_bar_start, _family = (
             _validate_snapshot_identity(snapshot, session)
         )
+        factors = factor_labels(snapshot)
         if snapshot.get("first_sight_after_close") is not False:
             raise StudyContractError("first_sight_after_close")
         sight_utc = _dt(snapshot.get("first_sight_at"), "first_sight_at")
@@ -628,6 +814,8 @@ def score_snapshot(
         "episode_id": snapshot.get("episode_id"),
         "ticker": snapshot.get("symbol"),
         "session_date": snapshot.get("session_date"),
+        "direction": direction,
+        "gate_bucket_floor": snapshot.get("gate_bucket_floor"),
         "clock_bucket": f"{sight.hour:02d}:00 ET",
         "outcome": outcome,
         "realized_r": None if result is None else round(result, 6),
@@ -635,13 +823,26 @@ def score_snapshot(
         "mfe_r": round(mfe, 6),
         "target_2_reached": target2_reached,
         "target_2_hit_at": target2_hit_at,
+        "factors": factors,
         "flags": flags,
     }
 
 
-def score_session_record(record: Mapping[str, Any]) -> dict[str, Any]:
-    """Synthetic/in-memory only; no digest reader and no real one-look adapter."""
+def score_session_record(
+    record: Mapping[str, Any],
+    *,
+    population: str = POPULATION_ACTIVATED,
+) -> dict[str, Any]:
+    """Synthetic/in-memory only; no digest reader and no real one-look adapter.
 
+    The one-look adapter (not built) must verify the manifest SHA-256 of the
+    sealed bytes before handing the parsed record to this function, and must
+    apply the preregistered INSUFFICIENT SAMPLE / DESCRIPTIVE MEASUREMENT
+    verdict rule to the aggregate. Neither is done here.
+    """
+
+    if population not in POPULATIONS:
+        raise StudyContractError("population_invalid", str(population))
     if (
         record.get("path_record_version") != PATH_RECORD_VERSION
         or record.get("trial_id") != TRIAL_ID
@@ -666,10 +867,14 @@ def score_session_record(record: Mapping[str, Any]) -> dict[str, Any]:
         seen_ids.add(eid)
         if snap.get("gate_bucket_floor") not in RECOGNIZED_GATES:
             raise StudyContractError("gate_invalid")
-        if snap.get("gate_bucket_floor") == ACTIVATION_GATE:
-            rows.append(score_snapshot(snap, session))
+        for field in PRE_ENTRY_FACTOR_FIELDS:
+            if field not in snap:
+                raise StudyContractError("snapshot_field_missing", field)
+        if in_population(snap, population):
+            rows.append(score_snapshot(snap, session, population=population))
     return {
         "session_date": record.get("session_date"),
+        "population": population,
         "population_size": len(episodes),
         "rows": rows,
     }
@@ -934,3 +1139,86 @@ def aggregate_metrics(
     if set(REQUIRED_METRICS) - set(metrics):
         raise AssertionError("preregistered metric missing")
     return metrics
+
+
+def _cell(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """One stratum. Full metric table only at MIN_CELL_COMPLETED completed rows."""
+    completed = sum(1 for r in rows if r.get("outcome") in COMPLETED)
+    cell: dict[str, Any] = {"count": len(rows), "completed": completed}
+    if completed >= MIN_CELL_COMPLETED:
+        cell["metrics"] = aggregate_metrics(
+            [{"population_size": len(rows), "rows": list(rows)}]
+        )
+        cell["suppressed"] = False
+    else:
+        cell["metrics"] = None
+        cell["suppressed"] = True
+    return cell
+
+
+def aggregate_factor_metrics(
+    session_scores: Sequence[Mapping[str, Any]]
+) -> dict[str, Any]:
+    """Descriptive companion table (options_212c_floor_factor-v0.1).
+
+    Input is the floor-eligible population scored by :func:`score_session_record`
+    with ``population="floor_eligible"``. One table per primary factor, each
+    label its own stratum, plus the same split by direction. No interaction
+    cells, no ranking, no threshold. Cells below MIN_CELL_COMPLETED completed
+    rows report counts only. This is hypothesis-generating, not an edge test.
+    """
+    for score in session_scores:
+        if score.get("population") != POPULATION_FLOOR_ELIGIBLE:
+            raise StudyContractError("population_invalid", str(score.get("population")))
+    rows = [
+        r
+        for x in session_scores
+        for r in (x.get("rows") or [])
+        if isinstance(r, Mapping)
+    ]
+    for row in rows:
+        if row.get("outcome") != DATA_INVALID and not isinstance(row.get("factors"), Mapping):
+            raise StudyContractError("factors_missing", str(row.get("episode_id")))
+    labelled = [r for r in rows if isinstance(r.get("factors"), Mapping)]
+
+    by_factor: dict[str, dict[str, Any]] = {}
+    by_factor_direction: dict[str, dict[str, dict[str, Any]]] = {}
+    for factor in PRIMARY_FACTORS:
+        labels = REMAINING_R_LABELS if factor == "remaining_r_bucket" else ALIGNMENT_LABELS
+        by_factor[factor] = {
+            label: _cell([r for r in labelled if r["factors"].get(factor) == label])
+            for label in labels
+        }
+        by_factor_direction[factor] = {
+            label: {
+                direction: _cell(
+                    [
+                        r
+                        for r in labelled
+                        if r["factors"].get(factor) == label
+                        and r.get("direction") == direction
+                    ]
+                )
+                for direction in ("LONG", "SHORT")
+            }
+            for label in labels
+        }
+    by_gate = {
+        gate: _cell([r for r in rows if r.get("gate_bucket_floor") == gate])
+        for gate in sorted(COMPANION_GATES)
+    }
+    by_direction = {
+        direction: _cell([r for r in rows if r.get("direction") == direction])
+        for direction in ("LONG", "SHORT")
+    }
+    return {
+        "scorer": "options_212c_floor_factor-v0.1",
+        "population": POPULATION_FLOOR_ELIGIBLE,
+        "min_cell_completed": MIN_CELL_COMPLETED,
+        "overall": aggregate_metrics(session_scores),
+        "by_gate_bucket_floor": by_gate,
+        "by_direction": by_direction,
+        "by_factor": by_factor,
+        "by_factor_and_direction": by_factor_direction,
+        "data_invalid_unlabelled": len(rows) - len(labelled),
+    }

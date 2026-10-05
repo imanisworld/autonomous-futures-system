@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "experiment_id": "E-2026-10-04-options-212c-floor-factor-01",
+  "trial_id": "T-2026-10-04-prereg-options-212c-floor-factor-2026-10-04-01",
+  "status": "DRAFT",
+  "approved_by": null,
+  "approved_at": null,
+  "supersedes": "E-2026-10-04-options-212c-preentry-factors-01",
+  "hypothesis": "On forward 30m STRAT_212_CONTINUATION floor-eligible first-sight paths, contemporaneous pre-entry factors (SPY, QQQ, hourly with MISSING explicit, daily, remaining-R / late_floor) may describe different R distributions. This draft does not claim any factor is an edge or a winner discriminator.",
+  "prereg_path": "docs/prereg-options-212c-floor-factor-2026-10-04.md",
+  "baseline": {
+    "commit_sha": "d970b4072a772e3ba50d81bac5b152c41e3ffbe6",
+    "label": "main at companion registration; primary -02 is DRAFT and shares the same unset window"
+  },
+  "candidate": {
+    "commit_sha": null,
+    "change": "Descriptive one-look of the same sealed path-v0.2 records over the floor-eligible population, scored by options_212c_floor_outcome-v0.1 and stratified by options_212c_floor_factor-v0.1 labels derived at score time. No second target, no option fill model, no interaction search.",
+    "label": "floor-eligible first-sight underlying path by pre-entry factor — options_212c_floor_factor-v0.1"
+  },
+  "data": {
+    "source": "The same sealed options_212c_floor_outcome_path-v0.2 session files as T-2026-10-04-prereg-options-212c-floor-outcome-2026-10-04-01. The companion writes no second seal. Ordinary ep-v0.1 and out-v0.1 files are not an input.",
+    "window": {
+      "start": "UNSET: same registered eligible start as E-2026-10-04-options-212c-floor-outcome-02; the first NYSE session strictly after the approved real capture path is merged to main AND deployed; 2026-10-05 and every earlier session are ineligible and are never backfilled",
+      "end": "same stop as the primary: the session in which floor_ge1r activations first reach 25, including that full session, or 60 NYSE sessions from the eligible start, whichever comes first"
+    },
+    "dataset_id": "coverage://options-30m-forward-20/from-registered-start/floor-eligible-factor/options_212c_floor_outcome_path-v0.2/options_212c_floor_factor-v0.1"
+  },
+  "population": "Options 30m STRAT_212_CONTINUATION; exact 20-symbol V1 universe [AAPL, AMZN, BAC, COIN, GE, GOOGL, INTC, IWM, JPM, MRK, MSFT, NFLX, NVDA, PLTR, QQQ, SPY, TLT, TSLA, WMT, XOM]; floor-eligible first-sight episodes with floor_geometry_ok, first_sight_after_close false, and late_floor false, corresponding to gate_bucket_floor in {MARKET_ALIGNMENT_REJECTED, WOULD_OTHERWISE_QUALIFY}; same forward NYSE window as T-2026-10-04-prereg-options-212c-floor-outcome-2026-10-04-01; the eligible start is the first NYSE session strictly after the approved real capture path is merged to main and deployed, fixed by a pre-collection amendment before the first seal; sessions through 2026-10-05 inclusive are ineligible and are never backfilled",
+  "setup_type": "options_212c_floor_preentry_factor",
+  "timeframe": "30m",
+  "changed_variables": [
+    {
+      "name": "outcome_measurement",
+      "baseline_value": "not_measured",
+      "candidate_value": "floor_eligible_first_sight_underlying_path_by_preentry_factor"
+    }
+  ],
+  "held_constant": [
+    "same path-v0.2 seals as the primary trial; no second seal",
+    "walk options_212c_floor_outcome-v0.1 unchanged; measured_entry_price = first_sight_price",
+    "population gate_bucket_floor in {MARKET_ALIGNMENT_REJECTED, WOULD_OTHERWISE_QUALIFY} with late_floor false and first_sight_after_close false",
+    "raw sealed fields spy_trend, qqq_trend, hourly_candle_type, daily_candle_type, alignment_failures, floor_remaining_rr, late_floor",
+    "derived labels ALIGNED / NOT_ALIGNED / MISSING and remaining-R buckets computed at score time only",
+    "hourly MISSING is explicit and is not treated as aligned",
+    "direction is a stratifier only",
+    "no ML, interaction cells, threshold optimization, Signa/GEX retrofit, or retrospective outcome mining",
+    "cells with fewer than 5 completed outcomes report counts only",
+    "20-symbol V1 universe",
+    "cov-v0.1 observer and ep-v0.1 episode identity",
+    "no option contract, premium, or dollar P&L model",
+    "no watchlist, SPXW, risk, or execution change",
+    "ordinary coverage products for this population are quarantined during the blind window (presentation only)"
+  ],
+  "execution": {
+    "entry_logic": "measured_entry_price = first_sight_price. Membership is floor-eligible, not activation-only. Direction is a stratifier only.",
+    "exit_logic": "Same options_212c_floor_outcome-v0.1 walk as the primary. TARGET_FIRST uses floor target_1_r. INVALIDATION_FIRST uses the open's R when the bar opens beyond the stop, otherwise the invalidation's R. A bar that reaches both stop and Target 1 is AMBIGUOUS. Timeout is UNRESOLVED_AT_CLOSE. DATA_INVALID is excluded. No trailing exit and no Target 2 exit.",
+    "stop_logic": "Stored invalidation from the sealed snapshot. Same gap and DATA_INVALID rules as the primary.",
+    "target_logic": "Unchanged floor_ge1r target_1. Target 2 is recorded only. A gap through Target 2 that also reaches the stop is AMBIGUOUS.",
+    "sizing": "None. One underlying R per completed floor-eligible episode. No portfolio, overlap, or drawdown model.",
+    "friction": "No dollar P&L and no added slippage. Stage B option fills are NOT EVALUATED."
+  },
+  "required_metrics": [
+    "population_size",
+    "setups_evaluated",
+    "activation_count",
+    "completed_trades",
+    "wins",
+    "losses",
+    "timeouts",
+    "ambiguous_count",
+    "data_invalid_count",
+    "win_rate",
+    "loss_rate",
+    "expectancy",
+    "mean_r",
+    "median_result",
+    "average_winner",
+    "average_loser",
+    "payoff_ratio",
+    "mae",
+    "mfe",
+    "mae_distribution",
+    "mfe_distribution",
+    "target_hit_rate",
+    "stop_hit_rate",
+    "timeout_rate",
+    "concentration_by_ticker",
+    "concentration_by_session_date",
+    "concentration_by_clock_bucket",
+    "outcome_concentration",
+    "by_factor",
+    "by_factor_and_direction",
+    "by_gate_bucket_floor",
+    "by_direction"
+  ],
+  "acceptance_criteria": null,
+  "rejection_criteria": null,
+  "evidence_path": "docs/research-evidence/T-2026-10-04-prereg-options-212c-floor-factor-2026-10-04-01/",
+  "variant_manifest": null,
+  "notes": "DRAFT companion registration only. Descriptive / hypothesis-generating; not confirmatory winner discrimination and not an edge test. Shares the primary path-v0.2 seals and the unset eligible start. 2026-10-05 is ineligible and is never backfilled. Stage A walk is options_212c_floor_outcome-v0.1. Factor labels are derived at score time by options_212c_floor_factor-v0.1. The one-look adapter must verify manifest SHA-256 independently and enforce INSUFFICIENT SAMPLE / DESCRIPTIVE MEASUREMENT. Stage B is NOT EVALUATED. Approval and scoring are blocked until every required_metrics field is fail-closed. The generic runner cannot complete this spec. The closed 59-episode trial stays closed."
+}

@@ -60,6 +60,7 @@ from alert_ranker.coverage_collector import (  # noqa: E402
     append_ledger,
     base_record,
     daily_outcome_stem,
+    daily_quarantine_blocks,
     load_daily_outcomes,
     observer_completion,
     outcomes_completion,
@@ -321,6 +322,9 @@ class Collector:
             raise CollectorError("aggregate_tainted_daily", json.dumps(errors)[:400])
         if session.date.isoformat() not in present:
             raise CollectorError("aggregate_missing_target_session", session.date.isoformat())
+        # Daily files already hold only public rows; the roll-up inherits the
+        # blind-window quarantine and records each verified binding block.
+        quarantine = daily_quarantine_blocks(self.daily_dir, sessions)
         summary = summarize_outcomes(outcomes)
         summary["date_from"], summary["date_to"] = self.collection_start.isoformat(), session.date.isoformat()
         summary["episodes"] = len(outcomes)
@@ -335,6 +339,8 @@ class Collector:
         summary["sessions_provenance"] = provenance
         summary["constituent_source_shas"] = sorted({p["source_sha"] for p in provenance.values()})
         summary["reducer_aggregate"] = {"path": str(episodes_json), "provenance": reducer_provenance}
+        if quarantine:
+            summary["quarantine_by_session"] = quarantine
         stem = aggregate_stem(self.aggregate_dir, self.collection_start, session.date)
         stem.with_suffix(".json").write_text(json.dumps({"summary": summary, "episodes": [o.to_row() for o in outcomes]}, indent=1, sort_keys=True))
         write_markdown(stem.with_suffix(".md"), summary, summary["date_from"], summary["date_to"], {})
