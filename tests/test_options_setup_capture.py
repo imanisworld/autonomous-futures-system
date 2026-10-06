@@ -62,6 +62,9 @@ from alert_ranker.setup_capture_engine import (
 )
 from alert_ranker.setup_capture_store import JournalLocked, SetupCaptureJournal
 
+# Direct loopback peer for TestClient: /setup-capture is gated (not in
+# PUBLIC_PATHS). Blank access_token allows only unproxied loopback.
+LOCAL_PEER = ("127.0.0.1", 50000)
 NY = ZoneInfo("America/New_York")
 OCT5_HIGH = 770.0768
 OCT5_LOW = 769.17
@@ -763,11 +766,12 @@ def test_health_survives_unreadable_default_capture_journal(tmp_path, monkeypatc
         sqlite_path=tmp_path / "options_scanner.sqlite",
     )
     app = create_app(cfg)
-    with TestClient(app) as client:
+    with TestClient(app, client=LOCAL_PEER) as client:
         health = client.get("/health")
         assert health.status_code == 200
         body = health.json()
         assert body["status"] == "healthy"
+        assert body["access_gate"] == "direct_loopback_only"
         assert body["setup_capture"]["reason"] == "journal_unreadable"
         assert body["setup_capture"]["watching_count"] == 0
         # /health must not leak absolute capture-journal filesystem paths.
@@ -810,7 +814,7 @@ def test_health_setup_capture_omits_internal_journal_path(tmp_path):
     )
     (tmp_path / "options_setup_capture.jsonl").write_text("")
     app = create_app(cfg)
-    with TestClient(app) as client:
+    with TestClient(app, client=LOCAL_PEER) as client:
         health = client.get("/health")
         assert health.status_code == 200
         sc = health.json()["setup_capture"]

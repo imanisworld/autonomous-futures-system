@@ -156,6 +156,9 @@ class ScannerConfig:
     #   flag to restore the old hourly requirement.
     paper_v1_daily_min_target_rr: float = 1.0
     paper_v1_daily_require_hourly_alignment: bool = False
+    # In-app access gate (see alert_ranker/access_gate.py). Blank means only
+    # direct, unproxied loopback requests reach non-public routes.
+    access_token: str = field(default="", repr=False)
     # Observation-only setup capture (WATCHING → TRIGGERED). Default on
     # because it has no Discord, no contract selection, and no risk authority.
     # Disable with OPTIONS_SETUP_CAPTURE_ENABLED=false. The watcher is a
@@ -306,4 +309,5 @@ def load_config(environ: Iterable[tuple[str, str]] | None = None) -> ScannerConf
         alpaca_trading_base_url=env.get(
             "ALPACA_ENDPOINT", "https://paper-api.alpaca.markets"
         ).strip().rstrip("/"),
+        access_token=env.get("OPTIONS_SCANNER_ACCESS_TOKEN", "").strip(),
     )

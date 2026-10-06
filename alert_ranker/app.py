@@ -1,9 +1,11 @@
 """FastAPI app and scheduler lifecycle for the advisory options scanner.
 
 The service has no broker order-submission authority and binds to localhost.
-Production exposure is controlled by the reverse proxy: operator endpoints stay
-protected, while ``/public/status`` is an explicit allowlist-only summary for the
-public Vantage Point UI. The module-level launch path remains gated behind
+Operator endpoints are protected in-app by ``access_gate`` (token, session
+cookie, or a direct unproxied loopback request) so exposure does not depend on
+reverse-proxy auth alone; ``/health`` and ``/public/status`` are the only
+unauthenticated routes, and ``/public/status`` is an explicit allowlist-only
+summary for the public Vantage Point UI. The module-level launch path remains gated behind
 ``OPTIONS_SCANNER_ENABLED=true`` (default off).
 """
 
@@ -23,6 +25,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
+from .access_gate import gate_mode, install_access_gate
 from .bar_context import create_bar_context
 from .config import DEFAULT_SIGNA_CONTEXT_PULL_INCLUDE, ScannerConfig, _as_bool, load_config
 from .discord import DiscordAlerter
@@ -250,6 +253,7 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
                 scheduler.shutdown(wait=False)
 
     app = FastAPI(title="Advisory Options Scanner", lifespan=lifespan)
+    install_access_gate(app, cfg.access_token)
     if scanner is not None:
         app.state.scanner = scanner
 
@@ -279,6 +283,7 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
             "provider_profile": provider_profile,
             "tastytrade_configured": cfg.tastytrade_configured,
             "signa_context_pull_enabled": cfg.signa_context_pull_enabled,
+            "access_gate": gate_mode(cfg.access_token),
             "setup_capture": _setup_capture_telemetry(cfg, include_journal_path=False),
         }
 

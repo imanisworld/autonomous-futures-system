@@ -58,22 +58,23 @@ Every substantial unit of work must leave:
 
 If the agent cannot persist this file, it must return this payload verbatim-ready for the next agent/operator to save.
 
-## Current checkpoint — 2026-10-06 (options setup-capture observer v0.2; /health journal-path redaction; merge/deploy not authorized)
+## Current checkpoint — 2026-10-06 (#1145 merged; #1146 updating from new main; no timer install)
 
-Branch `cursor/options-setup-capture-observer-0010` (draft PR #1145). Merged with `main` `55b9d4d`. **Code fix commits:** round-1 `d29b2cb`; round-3 B6/B8/B13 `8a5eeed`; round-4 B7 `00dbd59`; `/health` omits absolute capture-journal path on tip after this checkpoint. Fetch HEAD before acting. Options current-state authority remains `docs/options-current-state-handoff.md`. Futures runtime checkpoint (c44d32b) below is unchanged.
+`main` tip after #1145 squash-merge: `ae8c8970966e4ed09d6679fe8d873f4b7de27cd9`. Active PR: #1146 `security/options-scanner-access-gate-20261006` (merging `origin/main` into gate branch; keep both access_gate + setup_capture; loopback TestClient for `/setup-capture`). Options current-state authority remains `docs/options-current-state-handoff.md`. Futures runtime checkpoint (c44d32b) below is unchanged. **No observer timer install.**
 
 ### DONE / DO NOT REDO
 
 - Oct. 5 SPY shadow 9925/9933 audit: late `H1_222_CONTINUATION` AHEAD after trigger 770.0768; not a prospective catch. Do not retune Strat from them.
-- Observer scaffold + B1–B13 red-team fixes (see prior checkpoints; fix SHAs `d29b2cb` / `8a5eeed` / `00dbd59`).
-- `/health` setup_capture telemetry omits absolute journal filesystem path; `/setup-capture` retains path for operators. Regression asserts no `/root/afs-shared` / `options_setup_capture.jsonl` on `/health`.
-- Merge order (operator): finish/prove #1145 → then #1146 security gate → Claude stack. Do not merge #1146 before #1145. No timer install yet.
+- Observer scaffold + B1–B13 red-team fixes (see prior checkpoints; fix SHAs `d29b2cb` / `8a5eeed` / `00dbd59` / journal-path redaction on tip).
+- `/health` setup_capture telemetry omits absolute journal filesystem path; `/setup-capture` retains path for operators.
+- **#1145 MERGED** into `main` as `ae8c897` (2026-10-06). Observation-only setup-capture collector landed. Timer units remain uninstalled.
+- Merge order (operator): #1145 done → #1146 security gate from new main → Claude stack. No timer install yet.
 
 ### OPEN / NOT MERGE-CLEARED
 
-- Independent Grok options diff re-review / PASS of the current tip.
-- Exact-head CI green on the new tip after push.
-- Operator merge GO for #1145, then #1146 update from new main, then separate observer timer install GO.
+- #1146 merge conflict resolution (keep both `/health` keys + config fields) + loopback `/setup-capture` TestClient.
+- Exact-head CI green + independent security review on #1146 tip after push.
+- Operator merge GO for #1146 if CI/security clean; then Claude PR stack in dependency order.
 - Live A13 sessions and Public INDEX real-time entitlement remain UNVERIFIED.
 - CodeQL medium alerts on `/health`/`/setup-capture` may need operator dismissal (do not claim CodeQL green).
 
@@ -81,17 +82,17 @@ Branch `cursor/options-setup-capture-observer-0010` (draft PR #1145). Merged wit
 
 - Do not invent a scoring producer (#1089 stays telemetry).
 - Do not enable SPXW, expand production watchlist, or promote 1H to ACTIVE.
-- Do not merge or deploy without explicit operator GO.
-- Do not merge #1146 before #1145 PASS.
+- Do not deploy without explicit operator GO.
 - Do not expose `/root/afs-shared/...` capture-journal paths on `/health`.
 - Do not install the observer timer without a separate install GO.
+- Do not re-merge or re-land #1145 (already on main as `ae8c897`).
 
 ### NEXT
 
-1. Grok re-tests exact current head; Cursor fixes any remaining findings.
-2. On PASS → operator merge #1145.
-3. Then #1146 rebase/update from new main (loopback client for /setup-capture; keep route protected).
-4. Post-#1146: observer install GO + live prove; forward-proof epoch later.
+1. Finish #1146 merge from `ae8c897` main: resolve overlap (both sides), loopback tests, push.
+2. Re-run #1146 CI + independent security review; merge if clean.
+3. Then reconcile remaining Claude PR stack in dependency order.
+4. Separate operator GO later for observer timer install + live prove.
 
 ## Governance PR provenance — 2026-10-06 (docs-only; does not override runtime NEXT)
 
