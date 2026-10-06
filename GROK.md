@@ -25,9 +25,9 @@ Grok may:
 - discover and compare futures or options contracts using operator-authorized read-only broker/account/market data;
 - use connected Robinhood/Webull data when available for account context, contract availability, liquidity/DTE/spread screening, and advisory research;
 - inspect narrow repository/runtime/log/status evidence through approved read-only paths;
-- review PRs/diffs and identify defects/gaps;
+- perform first-pass PR/diff triage and identify research-relevant defects/gaps; independent breaker/QA remains Claude/Codex-owned;
 - develop specific strategy/variant hypotheses;
-- draft bounded experiment proposals with a frozen baseline, single defined variant, data window, fill/slippage assumptions, OOS requirement, and pass/fail criteria;
+- draft bounded experiment proposals for ChatGPT/operator approval and preregistration, with a frozen baseline, single defined variant, data window, fill/slippage assumptions, OOS requirement, and pass/fail criteria;
 - propose documentation/checkpoint updates and small implementation changes for independent review.
 
 A setup, contract, or hypothesis found by Grok is **research/advisory output**, not execution authority.
