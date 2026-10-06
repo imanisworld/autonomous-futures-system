@@ -13,6 +13,7 @@ import asyncio
 import os
 import json
 from datetime import datetime, timezone
+from pathlib import Path
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -40,6 +41,8 @@ from .rh_options import (
 )
 from .lifecycle import classify_candidate
 from .scanner import OptionsScanner
+from .setup_capture import DEFAULT_JOURNAL
+from .setup_capture_store import SetupCaptureJournal
 from .storage import ScanStorage
 from .signa_context_store import SHARED_PROXY_SYMBOLS, SignaContextStore
 from sources.signa_discovery import (
@@ -82,6 +85,37 @@ SHADOW_OUTCOME_STATUSES = {
     "OPEN", "WIN", "LOSS", "BREAKEVEN", "CANCELLED", "EXPIRED", "REJECTED",
     "TARGET_CONSUMED_AT_ENTRY", "STOP_CONSUMED_AT_ENTRY",
 }
+
+
+def _setup_capture_telemetry(cfg: ScannerConfig) -> dict[str, Any]:
+    """Read the watcher journal without attaching a job to the scanner loop."""
+    path = Path(getattr(cfg, "setup_capture_journal", None) or DEFAULT_JOURNAL)
+    payload: dict[str, Any] = {
+        "enabled": bool(getattr(cfg, "setup_capture_enabled", True)),
+        "observation_only": True,
+        "execution_authority": False,
+        "trade_authority": False,
+        "scanner_embedded": False,
+        "journal": str(path),
+    }
+    if not path.exists():
+        payload.update({"watching_count": 0, "missed_late_count": 0, "reason": "journal_missing"})
+        return payload
+    try:
+        counts = SetupCaptureJournal(path).counts()
+    except Exception as exc:  # noqa: BLE001 - status surface is fail-soft
+        payload.update({"watching_count": 0, "missed_late_count": 0, "reason": type(exc).__name__})
+        return payload
+    payload.update(
+        {
+            "watching_count": counts.get("watching", 0),
+            "missed_late_count": counts.get("missed_late", 0),
+            "structure_count": counts.get("structure_count", 0),
+            "counts": counts,
+        }
+    )
+    return payload
+
 
 def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | None = None) -> FastAPI:
     cfg = config or load_config()
@@ -187,11 +221,20 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
             "provider_profile": provider_profile,
             "tastytrade_configured": cfg.tastytrade_configured,
             "signa_context_pull_enabled": cfg.signa_context_pull_enabled,
+            "setup_capture": _setup_capture_telemetry(cfg),
         }
 
     @app.get("/status")
     async def status() -> dict[str, Any]:
         return get_scanner().status()
+
+    @app.get("/setup-capture")
+    async def setup_capture_status() -> dict[str, Any]:
+        """Read-only journal telemetry. The watcher is a separate systemd unit."""
+        payload = _setup_capture_telemetry(cfg)
+        payload["ok"] = True
+        payload["scanner_embedded"] = False
+        return payload
 
     @app.get("/public/status")
     async def public_status() -> dict[str, Any]:
@@ -208,6 +251,11 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
         latest = scanner_status.get("latest") or []
         signa_rows = scanner_status.get("signa") or []
         policy = scanner_status.get("paper_policy") or {}
+        capture_public = {
+            "enabled": bool(getattr(cfg, "setup_capture_enabled", True)),
+            "watching_count": int(_setup_capture_telemetry(cfg).get("watching_count") or 0),
+            "missed_late_count": int(_setup_capture_telemetry(cfg).get("missed_late_count") or 0),
+        }
 
         return {
             "public_safe": True,
@@ -240,6 +288,14 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
                     and bool(row.get("alert_suppression_reason"))
                 ),
                 "recent_signa_context_rows": len(signa_rows),
+                "setup_capture_watching": int(capture_public.get("watching_count") or 0),
+                "setup_capture_missed_late": int(capture_public.get("missed_late_count") or 0),
+            },
+            "setup_capture": {
+                "enabled": bool(capture_public.get("enabled", True)),
+                "observation_only": True,
+                "execution_authority": False,
+                "scanner_embedded": False,
             },
             "paper_policy": {
                 "id": policy.get("id"),

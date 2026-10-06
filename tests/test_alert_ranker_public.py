@@ -9,6 +9,7 @@ the read-only path guards.
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -120,6 +121,41 @@ def test_successful_underlying_quote(tmp_path):
             (QUOTES_PATH, "Bearer short-lived-token"),
             (QUOTES_PATH, "Bearer short-lived-token"),
         ]
+
+    asyncio.run(run())
+
+
+def test_spx_quote_uses_index_instrument_type(tmp_path):
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        auth = auth_ok(request)
+        if auth:
+            return auth
+        payload = json.loads(request.content.decode("utf-8"))
+        seen.append(payload)
+        quote = {
+            "instrument": {"symbol": "SPX", "type": "INDEX"},
+            "outcome": "SUCCESS",
+            "last": "5750.25",
+            "lastTimestamp": fresh_ts(),
+            "bid": "5750.00",
+            "ask": "5750.50",
+            "volume": 0,
+        }
+        return httpx.Response(200, json={"quotes": [quote]})
+
+    cfg = public_config(tmp_path)
+
+    async def run():
+        public = make_client(cfg, handler)
+        snapshot = await public.fetch_market_snapshot("SPX")
+        assert snapshot.error is None
+        assert snapshot.price == 5750.25
+        assert seen[0]["instruments"][0] == {"symbol": "SPX", "type": "INDEX"}
+        spxw = await public.fetch_market_snapshot("SPXW")
+        assert spxw.error == "spxw_is_option_root_not_underlying"
+        assert spxw.price is None
 
     asyncio.run(run())
 

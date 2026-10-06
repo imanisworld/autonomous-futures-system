@@ -58,7 +58,33 @@ Every substantial unit of work must leave:
 
 If the agent cannot persist this file, it must return this payload verbatim-ready for the next agent/operator to save.
 
-## Current checkpoint — 2026-10-04 ~21:30Z (c44d32b deployed; canonical 4HR epoch started)
+## Current checkpoint — 2026-10-06 (options setup-capture observer v0.2; merge/deploy not authorized)
+
+Branch `cursor/options-setup-capture-observer-0010` from `main` `31c9281f41e61791dc050d74f33acf02f87085e4` (#1089). Options current-state authority remains `docs/options-current-state-handoff.md`. Futures checkpoint below is unchanged.
+
+### DONE / DO NOT REDO
+
+- Oct. 5 SPY shadow 9925/9933 audit: late `H1_222_CONTINUATION` AHEAD after trigger 770.0768; not a prospective catch. Do not retune Strat from them.
+- Red-team addenda 1–3 folded: pre-open two-sided pending 2-2 WATCHING, 122-style JSONL collector (not scanner jobs), SIP-measured lag, `MISSED_LATE` / `GAP_THROUGH_OPEN`, full 1H + stubs, structure key with close+pattern+levels, SPX Public INDEX 1m fail-closed, never `OPTIONS_SCANNER_WATCHLIST`.
+- Flagged out of scope: `/webhook/alert` no allowlist; `/shadow-journal` 200s from outside IPs (auth gate unverified).
+
+### DO NOT REDO
+
+- Do not invent a scoring producer (#1089 stays telemetry).
+- Do not enable SPXW, expand production watchlist, or promote 1H to ACTIVE.
+- Do not merge or deploy without explicit operator GO.
+- Do not reuse `trigger_time.arm_trigger_setup` / `_family_for_break` (cancels 222 continuation).
+- Do not write WATCHING into `options_shadow_journal` as OPEN.
+
+### NEXT
+
+1. Independent options diff review of the capture PR.
+2. Exact-head CI green.
+3. Operator merge GO, then a separate observer-only timer install GO.
+4. Post-install: journal WATCHING before the next RTH open; no order/risk consumption. If RTH has no setup, do not fabricate a live trigger.
+
+
+## Previous checkpoint — 2026-10-04 ~21:30Z (c44d32b deployed; canonical 4HR epoch started)
 
 Exact release `c44d32bc4961e56fae5c5f88a976eb6783341638` was built, verified, and promoted successfully. Rollback remains the prior `489b55b` release.
 
