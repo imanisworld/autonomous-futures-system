@@ -1,0 +1,13 @@
+# Template for the release pin that keeps the observation-only 1-2-2 collector
+# on an integrity-checked immutable release instead of the mutable live path
+# (/root/autonomous-futures-system follows futures-bot releases, not this lane).
+#
+# The box's real drop-in is not tracked in Git. Compare it to this template
+# with `ops/options_observer_status.py` (runtime_tree must be PINNED_RELEASE).
+# Replace @RELEASE_SHA@ with the exact reviewed collector release. Changing the
+# pinned release inside the frozen 122-IEX-E1 epoch requires operator GO.
+[Service]
+WorkingDirectory=/root/afs-releases/@RELEASE_SHA@
+Environment=PYTHONPATH=/root/afs-releases/@RELEASE_SHA@
+ExecStart=
+ExecStart=/root/afs-releases/@RELEASE_SHA@/.venv/bin/python -m scripts.options_122_prospective_collect --env-file /root/afs-shared/.env --journal /root/afs-shared/logs/options_122_prospective.jsonl --raw-trade-dir /root/afs-shared/logs/options_122_source_trades --max-capture-lag-seconds 120
