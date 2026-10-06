@@ -105,6 +105,11 @@ Independent Claude final re-review of the new exact head. Do not merge or deploy
 - **#1145 MERGED** into `main` as `ae8c897` (2026-10-06). Observation-only setup-capture collector landed. Timer units remain uninstalled.
 - **#1146 MERGED** into `main` as `445393f` (2026-10-06). Options scanner in-app access gate landed.
 
+### OPEN / UNVERIFIED
+
+- Live A13 sessions and Public INDEX real-time entitlement remain UNVERIFIED.
+- CodeQL medium alerts on `/health`/`/setup-capture` may need operator dismissal (do not claim CodeQL green).
+
 ### DO NOT REDO
 
 - Do not invent a scoring producer (#1089 stays telemetry).
