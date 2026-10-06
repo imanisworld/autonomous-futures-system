@@ -71,20 +71,22 @@ If the agent cannot persist this file, it must return this payload verbatim-read
 
 ### OPEN / NOT MERGE-CLEARED
 
-- **HOLD — tip moved again on #1149.** Grok PASS applies only to exact tip `0df3a38`. Operator noted live head `661340e` (binding re-scope) as **NOT cleared**; by check time head had already advanced to `3f92b503f1aae181bf3ec48455b5028f271d21bc` (also **NOT cleared**).
-  - Do **not** merge `661340e`, `3f92b50`, or any other tip until Grok PASS + Operator merge GO on the exact current head.
+- **HOLD confirmed on #1149.** Live tip `3f92b503f1aae181bf3ec48455b5028f271d21bc` is **uncleared**. Prior PASS on `0df3a38` remains tip-bound/stale.
+  - Do **not** merge any #1149 tip until Grok PASS + Operator GO on the exact current head.
+  - **Prefer freezing the tip while review runs** — tip churn burns review cycles. Cursor will not push further commits to this PR during HOLD.
 - Conveyor remaining after #1149: #1150 → #1151 → #1152 → #1153 → #1154.
 - No observer timer install. No deploy / VPS mutation.
 
 ### DO NOT REDO
 
-- Do not merge #1149 on `0df3a38` after tip moved, nor `661340e` without a fresh Grok PASS + operator GO on that exact SHA.
+- Do not merge #1149 without fresh Grok PASS + operator GO on that exact SHA.
+- Do not push tip-churn commits to #1149 during independent review HOLD.
 - Do not install observer timer / status wrapper / release-pin drop-in without separate install GO.
 - Do not deploy, restart services, or change VPS config.
 
 ### NEXT
 
-1. Wait for Grok PASS + operator merge GO on exact current #1149 tip (fetch HEAD; last seen `3f92b50`).
+1. Freeze tip at `3f92b50` (or whatever HEAD is when review starts); wait Grok PASS + operator GO on that exact SHA.
 2. After external merge: conveyor-sync #1150 onto new main; stop for independent review.
 3. Separate operator GO later for observer timer install + live prove.
 
