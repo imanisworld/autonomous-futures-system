@@ -191,6 +191,8 @@ runtime modules.
 ## 8. Relation to the Experiment Runner
 
 Implemented on `main` by #1047 (`df58d556fb1c1a462b2e968f3a6e7f47e6a7117a`).
+Canonical typed evidence contract (U1) lives in `ops/evidence_row.py` and is
+enforced by `ops/research_experiment_runner.py`.
 
 CLI:
 
@@ -208,8 +210,70 @@ The runner must:
 - never promote, merge, deploy, or submit broker orders.
 
 Result labels are mechanical against preregistered criteria. Integrity failures
-(`population_size_differs`, `required_metric_missing`, unresolved SHAs, etc.)
-are `INVALID EXPERIMENT`, not evidence against the candidate.
+(`population_size_differs`, `required_metric_missing`, unresolved SHAs, typed
+evidence-contract failures, etc.) are `INVALID EXPERIMENT`, not evidence
+against the candidate.
+
+### 8.1 Common evidence envelope
+
+Every runner-written evidence bundle includes `evidence_envelope.json` with a
+common identity layer:
+
+- `schema_version` (evidence-row schema, currently `1.0.0`)
+- `experiment_id`, `trial_id`, `setup_type`
+- `evidence_type` (`coverage` or `trade_execution`; **required** on new specs)
+- `promotion_eligible` (`false` for coverage; trade_execution may be `true`)
+- `strategy_identity` when applicable
+- `code_sha` (real 40-hex commit SHA; `unknown` is rejected), `data_identity`,
+  `runner_version`, `generated_at`
+- `execution_model_id` when the evidence type requires frozen execution assumptions
+- `preregistration_identity` when present; `prior_exposure_identity` only from an
+  explicit prior-exposure field (never from `population`)
+
+This envelope is identity/provenance only. It does not invent trade fields.
+
+Frozen pre-U1 options experiment IDs may omit `evidence_type` and are treated as
+`coverage`. New specs that omit `evidence_type` fail closed.
+
+### 8.2 Typed evidence rows
+
+Evidence types are explicit. Do **not** force trade fields onto every experiment.
+Coverage evidence cannot carry trade-lookalike fields to bypass trade validation.
+
+| `evidence_type` | Meaning | Trade fill / stop / target / MAE / MFE / P&L required? |
+|---|---|---|
+| `coverage` | Non-trade measurement (for example options coverage/geometry); not promotion-eligible | **no** |
+| `trade_execution` | Promotion-quality futures trade execution evidence | **yes**, via the typed row contract |
+
+`trade_execution` rows must carry causal timing fields that remain distinct:
+
+1. `signal_ts` — signal formation time  
+2. `decision_ts` — decision availability time (`>= signal_ts`)  
+3. `earliest_legal_order_ts` — earliest legal submission time (`>= decision_ts`)  
+4. `fill_ts` — actual/simulated fill time (`>= earliest_legal_order_ts` when filled)
+
+Filled rows with `fill_ts < earliest_legal_order_ts` fail closed as
+`INVALID EXPERIMENT`. Exact equality is allowed when the frozen execution model
+permits it. `NO_FILL` rows must not carry exit / P&L / MAE / MFE / R outcome
+fields. `FILLED` rows require `direction` (`LONG`/`SHORT`) with consistent
+brackets, `costs_fees >= 0`, `net_pnl = gross_pnl - costs_fees` within $0.01,
+`mfe >= 0`, and `mae <= 0`. Row `data_fingerprint` must match the experiment
+dataset identity.
+
+Trade scoring uses canonical `r_multiple` on `FILLED` rows only. Legacy funnel
+keys (`entered` / `completed` / `result`) are rejected on `trade_execution`.
+A `NO_FILL` never scores as a win.
+
+### 8.3 Execution-model identity
+
+Trade experiments pin a frozen `execution_assumptions` bundle on the spec
+(entry/fill model, same-bar ambiguity rule, stop/target handling, slippage,
+commission, exchange/broker fees, sizing). The runner derives a stable
+`execution_model_id` from that bundle. Historical studies keep their pinned
+assumptions; later brokerage-fee changes must not silently rewrite them.
+
+Missing execution-model identity, missing data identity, evidence-type mismatch,
+or non-finite economic fields fail closed.
 
 ---
 
