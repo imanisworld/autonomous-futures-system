@@ -710,6 +710,12 @@ def _handle_alert_blocking(payload: AlertPayload) -> None:
             except Exception as _disc_exc:
                 logger.warning("Discord notification error: %s", _disc_exc)
                 notify_discord(payload=payload, result=result, config=_config)
+        try:
+            from notifications.futures_advisory import notify_futures_advisory
+
+            notify_futures_advisory(result, config=_config)
+        except Exception:
+            logger.warning("futures advisory notification skipped", exc_info=True)
         logger.info("Alert processed: %s -> %s", payload.ticker, result.get("decision"))
     except Exception as exc:
         logger.exception("Error processing alert for %s: %s", payload.ticker, exc)
@@ -2791,6 +2797,16 @@ def _dashboard_payload(for_date: date) -> dict:
         audit = entry.get("execution_audit") or (entry.get("outcome") or {}).get("execution_audit")
         if isinstance(audit, dict):
             execution_audits.append({"ts": entry.get("ts"), **audit})
+    try:
+        from notifications.futures_advisory import format_advisory_card, journal_advisory_records
+
+        futures_advisory = []
+        for rec in journal_advisory_records(entries):
+            item = dict(rec)
+            item["card_text"] = format_advisory_card(item)
+            futures_advisory.append(item)
+    except Exception:  # noqa: BLE001 — dashboard presentation must never affect trading
+        futures_advisory = []
     return {
         "date": daily_state.date,
         "live_trading_enabled": _config.live_trading_enabled,
@@ -2849,6 +2865,7 @@ def _dashboard_payload(for_date: date) -> dict:
         ),
         "alert_validation": alert_validation,
         "shadow_feed_status": _shadow_feed_status(),
+        "futures_advisory": futures_advisory,
         "expected_timeframe_minutes": int(getattr(_config, "expected_timeframe_minutes", 15)),
         # Feed-health window + stale threshold from the one shared definition, so the
         # dashboards stop deciding "is a webhook expected now?" with their own clocks.
@@ -3520,6 +3537,13 @@ _DASHBOARD_HTML = r"""<!doctype html>
       .strategy-meta { grid-template-columns:1fr; }
     }
 
+    .advisory-list { display:grid; gap:10px; margin-top:8px; }
+    .advisory-card {
+      white-space:pre-wrap; font-family:var(--font-console); font-size:12px; line-height:1.45;
+      background:rgba(8,7,6,.34); border:1px solid var(--line-soft); border-radius:8px; padding:10px 12px;
+      color:var(--text); overflow-wrap:anywhere;
+    }
+    .advisory-note { margin-top:8px; color:var(--muted); font-size:12px; line-height:1.45; }
     .monitorbar {
       margin: 8px 12px 0; padding: 9px 12px; border-radius: 10px;
       background: rgba(0,213,255,0.08); border: 1px solid rgba(0,213,255,0.30);
@@ -4397,10 +4421,23 @@ _DASHBOARD_HTML = r"""<!doctype html>
       }
 
       html += compactPnl(today);
+      html += renderFuturesAdvisory(today);
       el('tab-home').innerHTML = html;
       var opsBtn = el('open-ops');
       if (opsBtn) opsBtn.addEventListener('click', openOpsModal);
       updateAgeText();
+    }
+    function renderFuturesAdvisory(today) {
+      var items = (today && today.futures_advisory) || [];
+      var body;
+      if (!items.length) {
+        body = '<p class="advisory-note">No recorded shadow/candidate setups on the current journal day yet. Cards appear only from journaled geometry, not guesses.</p>';
+      } else {
+        body = '<div class="advisory-list">' + items.slice().reverse().map(function (item) {
+          return '<pre class="advisory-card">' + esc(item.card_text || '') + '</pre>';
+        }).join('') + '</div>';
+      }
+      return card('Qualified setups (advisory only)', body + '<p class="advisory-note">SHADOW / ADVISORY ONLY. Rank, when shown, is experimental and unvalidated. Missing fields stay missing. This panel cannot place an order.</p>', 'accent-yellow');
     }
     function kv(k, v) { return '<dt>' + esc(k) + '</dt><dd>' + v + '</dd>'; }
     function card(title, body, cls) {
@@ -4537,6 +4574,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
 
       html += '<div class="futures-layout"><div class="futures-main">';
       html += futuresOverview(fr);
+      html += renderFuturesAdvisory(today);
       html += renderStrategyMatrix();
       html += '<div class="instrument-grid">' +
         instrumentCard('MES', today) +
