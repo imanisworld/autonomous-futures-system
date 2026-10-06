@@ -71,24 +71,24 @@ If the agent cannot persist this file, it must return this payload verbatim-read
 
 ### OPEN / NOT MERGE-CLEARED
 
-- **HOLD — do NOT merge #1148.** Tip moved to `8a6a642783a0c819aeb9b768c918c11d1c56ac77` (resync onto `de4486d` / #1155). Prior Grok PASS on `27dc28e` is **stale**.
-  - Wait for independent **Grok PASS + Operator merge GO** on the exact current head only.
-- Remaining after #1148: #1149 → #1150 → (#1151+#1154) → (#1152+#1153). Do not merge #1149+.
-- Live A13 / Public INDEX entitlement UNVERIFIED.
-- No observer timer install.
+- **HOLD — no merge GO on #1149.** Independent Grok review of tip `ac0b8ed`: **CHANGES REQUIRED**.
+  - Blockers: (1) `evaluate_rh_options` still returns WATCH + order ticket + shadow when `_risk_check` refuses (`nan_premium`; quantity over `planned_risk_cap`); (2) `quantity=0/-1/-3` → `approved=True`; (3) bool premium/quantity intake can approve.
+  - Tip moved to `0df3a38` claiming fixes; Grok re-reviewing that exact head. **Do not merge until Grok PASS + Operator merge GO on exact current head.**
+- Conveyor remaining after #1149: #1150 → #1151 → #1152 → #1153 → #1154.
+- No observer timer install. No deploy / VPS mutation.
 
 ### DO NOT REDO
 
-- Do not merge #1148 on `27dc28e` / `fe88ade` or any tip without fresh Grok PASS + operator GO on that exact SHA.
+- Do not merge #1149 on `ac0b8ed` (FAIL tip) or any tip without fresh Grok PASS + operator GO.
 - Do not install observer timer / status wrapper / release-pin drop-in without separate install GO.
 - Do not deploy, restart services, or change VPS config.
-- Do not re-merge #1145/#1146/#1147.
 
 ### NEXT
 
-1. Wait for Grok PASS + operator merge GO on exact #1148 tip `8a6a642`.
-2. Only after that GO: merge #1148, then reconcile #1149 for review and stop again.
+1. Wait for Grok PASS + operator merge GO on exact #1149 tip (claimed `0df3a38`).
+2. After external merge: conveyor-sync #1150 onto new main; stop for independent review.
 3. Separate operator GO later for observer timer install + live prove.
+
 
 ## Governance PR provenance — 2026-10-06 (docs-only; does not override runtime NEXT)
 
