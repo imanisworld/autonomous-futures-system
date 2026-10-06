@@ -1,0 +1,78 @@
+# Options contract quality gate — audit and fail-closed repair (2026-10-06)
+
+Advisory / paper authority only. No broker submission, no scanner (`alert_ranker`)
+change, no V1 rule change.
+
+## Canonical authority
+
+`options_manager/validation/contract_quality_gate.py` (`evaluate_contract_quality`,
+`check_contract_quality_intake`). It feeds `advisory_decision` and
+`plans/proof_adapter`; its validated values become `ContractPlanSnapshot`.
+The production V1 scanner has its own frozen selector (`alert_ranker/paper_v1.py`),
+which this PR does not touch.
+
+## Required-field coverage
+
+| Requirement | Status before this PR |
+|---|---|
+| expiration, DTE, strike, premium, bid, ask, spread %, volume, OI | present, required at intake |
+| IV/event risk, theta risk | present (`none/low/moderate/high`; high blocks, moderate warns) |
+| premium stop | optional on the gate; **missing stop is blocked by the canonical portfolio intake** (`test_missing_numeric_premium_stop_blocks`) |
+| max contracts, max dollar risk | present; planned risk = (premium − premium_stop) × 100 × contracts must be ≤ stated max and ≤ $300 |
+| distance to target | present, < 2% blocks |
+| realistic target feasibility | **missing** → added optional `expected_move_percent`; target beyond it warns |
+| low liquidity / wide spread must not pass quietly | blocks (volume < 100, OI < 500, spread > 10%) — **but see fail-opens below** |
+| missing contract data fails closed | yes for absent fields; **no for NaN/inf** |
+| 45+ DTE swings preferred / 14–44 warn / 0DTE exceptional only | present and pinned by tests |
+
+## Fail-opens found and fixed
+
+1. **Non-finite numbers passed.** `float("nan")` is accepted by intake coercion
+   and compares False against every threshold, so a NaN `spread_percent`,
+   `premium`, `bid`, `ask`, `distance_to_target`, `max_dollar_risk`, or
+   `premium_stop` produced PASS. Now any non-finite numeric field blocks
+   before thresholds run.
+2. **Understated spread passed.** `spread_percent` was taken from the caller
+   without checking it against the quote. The wide-spread rule now uses the
+   wider of the supplied and quote-implied spread. No threshold changed.
+3. **Crossed quote passed.** `ask < bid` now blocks.
+
+33 of the 44 tests in the first fix commit failed on the base gate; all pass after the fix. Existing
+options/advisory/plan/portfolio tests: 2844 passed, 1 skipped.
+
+## Not changed
+
+Thresholds, DTE policy, risk caps, the premium-stop optionality at gate level
+(the canonical intake already blocks a missing stop), the V1 scanner selector,
+and any broker/order path.
+
+## Integration pass (post-#1145/#1146)
+
+Re-verified on the rebased head. Explicit coverage added (no gate change):
+every required field blocks when absent, `None`, or empty; zero/negative
+premium, bid, ask, volume, OI, strike, contracts, max risk and negative DTE
+block; unsupported states (direction, IV/theta severity, trade style,
+non-boolean exception flag, non-integer DTE) block; non-mapping payloads
+block; the module references no order/broker/HTTP client.
+
+## Independent review follow-ups
+
+The independent review returned PASS and flagged four non-blocking findings.
+All four are fixed:
+
+- **Exact-limit spread.** A quote at exactly 10% spread (e.g. 1.90/2.10)
+  computed as 10.000000000000009% and blocked. The quote-implied spread is now
+  rounded to 6 decimals, so the 10% limit means what it says. A quote just
+  over the limit still blocks.
+- **Overflow.** Oversized numbers (`volume=10**400`, a 400-digit string,
+  `inf` in an integer field) raised `OverflowError` and crashed the caller.
+  They now return BLOCK.
+- **Huge quotes.** `bid + ask` could overflow to inf and give an implied
+  spread of 0. The mid is now computed as `bid/2 + ask/2`, and a non-finite
+  implied spread blocks.
+- **Booleans on intake.** A boolean in a numeric intake field (for example
+  `bid=True`) used to become 1.0. It now blocks.
+
+`tests/test_options_contract_quality_fail_closed.py` has 125 tests. 10 of
+them fail on the pre-follow-up head.
+
