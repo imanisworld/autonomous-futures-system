@@ -159,6 +159,13 @@ class ScannerConfig:
     # In-app access gate (see alert_ranker/access_gate.py). Blank means only
     # direct, unproxied loopback requests reach non-public routes.
     access_token: str = field(default="", repr=False)
+    # Observation-only setup capture (WATCHING → TRIGGERED). Default on
+    # because it has no Discord, no contract selection, and no risk authority.
+    # Disable with OPTIONS_SETUP_CAPTURE_ENABLED=false. The watcher is a
+    # oneshot systemd timer, not an APScheduler job.
+    setup_capture_enabled: bool = True
+    setup_capture_journal: str = "/root/afs-shared/logs/options_setup_capture.jsonl"
+    setup_capture_raw_trade_dir: str = "/root/afs-shared/logs/options_setup_capture_source_trades"
 
     @property
     def rh_configured(self) -> bool:
@@ -288,6 +295,17 @@ def load_config(environ: Iterable[tuple[str, str]] | None = None) -> ScannerConf
         paper_v1_daily_require_hourly_alignment=_as_bool(
             env.get("OPTIONS_PAPER_V1_DAILY_REQUIRE_HOURLY"), False
         ),
+        setup_capture_enabled=_as_bool(env.get("OPTIONS_SETUP_CAPTURE_ENABLED"), True),
+        setup_capture_journal=env.get(
+            "OPTIONS_SETUP_CAPTURE_JOURNAL",
+            "/root/afs-shared/logs/options_setup_capture.jsonl",
+        ).strip()
+        or "/root/afs-shared/logs/options_setup_capture.jsonl",
+        setup_capture_raw_trade_dir=env.get(
+            "OPTIONS_SETUP_CAPTURE_RAW_TRADE_DIR",
+            "/root/afs-shared/logs/options_setup_capture_source_trades",
+        ).strip()
+        or "/root/afs-shared/logs/options_setup_capture_source_trades",
         alpaca_trading_base_url=env.get(
             "ALPACA_ENDPOINT", "https://paper-api.alpaca.markets"
         ).strip().rstrip("/"),

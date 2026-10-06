@@ -1,0 +1,29 @@
+[Unit]
+Description=AFS options setup-capture observation-only collector
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Integrity flag: the 122 collector uses WorkingDirectory=/root/autonomous-futures-system
+# (repo checkout, not the integrity-pinned /root/afs-releases/<sha> path). This unit
+# follows that pattern for code, but the journal path is ABSOLUTE under
+# /root/afs-shared/logs so Friday WATCHING survives a promote and ProtectSystem=strict.
+WorkingDirectory=/root/autonomous-futures-system
+EnvironmentFile=/root/afs-shared/.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/root/autonomous-futures-system/.venv/bin/python -m scripts.options_setup_capture_collect --env-file /root/afs-shared/.env --journal /root/afs-shared/logs/options_setup_capture.jsonl --raw-trade-dir /root/afs-shared/logs/options_setup_capture_source_trades
+Restart=no
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/root/afs-shared/logs
+
+# Observation only: no scanner DB, broker, risk, order, alert, Discord, or ACTIVE state.
+# Watcher universe is SPY/QQQ/SPX in code; never OPTIONS_SCANNER_WATCHLIST.
+#
+# Timer-install prerequisite: measurable NTP offset via systemd-timesyncd
+# (`timedatectl` NTPSynchronized=yes + Offset:) or chrony with
+# `Leap status : Normal` and `System time` within 30s (never Last offset alone;
+# never override NTPSynchronized=no). Otherwise every run is clock_unsynced.

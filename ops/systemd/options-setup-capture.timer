@@ -1,0 +1,11 @@
+[Unit]
+Description=Run AFS options setup-capture observer each minute around RTH
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 09..16:*:00 America/New_York
+AccuracySec=1s
+Persistent=false
+Unit=options-setup-capture.service
+
+[Install]
+WantedBy=timers.target

@@ -431,6 +431,8 @@ def test_public_status_is_allowlisted_and_omits_operator_detail(tmp_path):
         assert '"ticker"' not in response.text
         assert '"contract"' not in response.text
         assert "AAPL" not in response.text
+        assert "/root/afs-shared" not in response.text
+        assert "options_setup_capture.jsonl" not in response.text
 
 
 def test_scanner_dashboard_html_is_served(tmp_path):
