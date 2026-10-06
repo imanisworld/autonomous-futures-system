@@ -58,9 +58,44 @@ Every substantial unit of work must leave:
 
 If the agent cannot persist this file, it must return this payload verbatim-ready for the next agent/operator to save.
 
-## Current checkpoint — 2026-10-06 (#1145 merged; #1146 updating from new main; no timer install)
+## Current checkpoint — 2026-10-06 (U1: experiment runner trade_execution evidence contract)
 
-`main` tip after #1145 squash-merge: `ae8c8970966e4ed09d6679fe8d873f4b7de27cd9`. Active PR: #1146 `security/options-scanner-access-gate-20261006` (merging `origin/main` into gate branch; keep both access_gate + setup_capture; loopback TestClient for `/setup-capture`). Options current-state authority remains `docs/options-current-state-handoff.md`. Futures runtime checkpoint (c44d32b) below is unchanged. **No observer timer install.**
+Task: U1 only from the AFS Core Completion Audit — finish the existing Experiment Runner's canonical evidence contract for promotion-quality futures trade experiments. Research/evidence plumbing only. No U2/U3. No strategy/risk/broker/runtime/deploy.
+
+### VERIFIED
+
+- `#1144` merged at squash `4573265`; `#1143` rebased onto that main and squash-merged as `55b9d4d`.
+- U1 rebase base includes `#1145` (`ae8c897`) and `#1146` (`445393f`) on `origin/main`.
+- Existing runner + options coverage adapter remain the single runner path; no second runner invented.
+
+### CHANGED
+
+- Branch `cursor/u1-trade-evidence-contract-f2da`.
+- New `ops/evidence_row.py`: common evidence envelope, typed `trade_execution` rows, causal timing, frozen `execution_model_id`.
+- `ops/research_experiment_runner.py` fail-closes on typed evidence violations and writes `evidence_envelope.json`.
+- Schema/docs extended with optional `evidence_type` / `execution_assumptions` (default remains coverage-compatible).
+
+### TESTS
+
+- `python3 -m pytest -q tests/test_evidence_row.py tests/test_afs_experiment_runner.py tests/test_research_experiment_spec.py tests/test_options_212c_target_geometry_adapter.py` → **50 passed**.
+- Full `python3 -m pytest -q` → **7525 passed, 8 skipped**.
+
+### RUNTIME MUTATIONS
+
+None. No deploy, no VPS, no broker, no strategy change.
+
+### DONE / DO NOT REDO for this lane
+
+- Do not start U2 (dev/validation/OOS partitions) or U3 (futures adapter) in this PR.
+- Do not migrate historical evidence or rewrite frozen studies to new costs.
+
+### NEXT
+
+Independent Claude/Codex breaker QA of the U1 PR. Do not merge or deploy from this session until that review.
+
+## Previous lane checkpoint — 2026-10-06 (#1145 merged; #1146 on main as `445393f`; no timer install)
+
+`#1145` squash-merge: `ae8c8970966e4ed09d6679fe8d873f4b7de27cd9`. `#1146` security gate landed on `main` as `445393fe0b65c74be47a86e9fa14295a7af0c69a`. Options current-state authority remains `docs/options-current-state-handoff.md`. Futures runtime checkpoint (c44d32b) below is unchanged. **No observer timer install.** Kept as provenance while U1 is the active current checkpoint above.
 
 ### DONE / DO NOT REDO
 
@@ -68,15 +103,7 @@ If the agent cannot persist this file, it must return this payload verbatim-read
 - Observer scaffold + B1–B13 red-team fixes (see prior checkpoints; fix SHAs `d29b2cb` / `8a5eeed` / `00dbd59` / journal-path redaction on tip).
 - `/health` setup_capture telemetry omits absolute journal filesystem path; `/setup-capture` retains path for operators.
 - **#1145 MERGED** into `main` as `ae8c897` (2026-10-06). Observation-only setup-capture collector landed. Timer units remain uninstalled.
-- Merge order (operator): #1145 done → #1146 security gate from new main → Claude stack. No timer install yet.
-
-### OPEN / NOT MERGE-CLEARED
-
-- #1146 merge conflict resolution (keep both `/health` keys + config fields) + loopback `/setup-capture` TestClient.
-- Exact-head CI green + independent security review on #1146 tip after push.
-- Operator merge GO for #1146 if CI/security clean; then Claude PR stack in dependency order.
-- Live A13 sessions and Public INDEX real-time entitlement remain UNVERIFIED.
-- CodeQL medium alerts on `/health`/`/setup-capture` may need operator dismissal (do not claim CodeQL green).
+- **#1146 MERGED** into `main` as `445393f` (2026-10-06). Options scanner in-app access gate landed.
 
 ### DO NOT REDO
 
@@ -85,14 +112,11 @@ If the agent cannot persist this file, it must return this payload verbatim-read
 - Do not deploy without explicit operator GO.
 - Do not expose `/root/afs-shared/...` capture-journal paths on `/health`.
 - Do not install the observer timer without a separate install GO.
-- Do not re-merge or re-land #1145 (already on main as `ae8c897`).
+- Do not re-merge or re-land #1145/#1146.
 
-### NEXT
+### NEXT (options observer lane; not U1)
 
-1. Finish #1146 merge from `ae8c897` main: resolve overlap (both sides), loopback tests, push.
-2. Re-run #1146 CI + independent security review; merge if clean.
-3. Then reconcile remaining Claude PR stack in dependency order.
-4. Separate operator GO later for observer timer install + live prove.
+Separate operator GO later for observer timer install + live prove. U1 rebase/delta review is the active NEXT above.
 
 ## Governance PR provenance — 2026-10-06 (docs-only; does not override runtime NEXT)
 
@@ -113,9 +137,9 @@ Task: remove overlapping agent responsibilities and make the research pipeline e
 - PR workflow note: independent review/merge state is transient GitHub metadata, not the durable runtime NEXT. After this PR is resolved, follow the current runtime checkpoint below.
 - DO NOT REDO: do not recreate a second role matrix, experiment selector, or parallel research queue elsewhere.
 
-## Previous lane checkpoint — 2026-10-06 (PR #1143: PAPER posture + advisory Discord off alert lock; merged via #1143)
+## Superseded / provenance — 2026-10-06 (PR #1143: PAPER posture + advisory Discord off alert lock)
 
-Task: close the two remaining independent-QA blockers on existing branch `cursor/futures-advisory-visibility-f2da`, plus local presentation corrections. No scope expansion. Do not merge or deploy.
+Task: close the two remaining independent-QA blockers on existing branch `cursor/futures-advisory-visibility-f2da`, plus local presentation corrections. No scope expansion. **Superseded** after `#1143` merged to `main` as `55b9d4d`; kept as provenance.
 
 ### VERIFIED
 
