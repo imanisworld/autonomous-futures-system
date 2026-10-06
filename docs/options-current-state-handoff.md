@@ -127,7 +127,7 @@ The narrow provider-mapping correction on exact head `d7a546c789c6ff6e23713357fe
 
 ## Research / agent governance
 
-Repository-wide research roles are locked in `AGENTS.md` and apply to the options lane as well: Grok (when used) proposes outside research/hypotheses; Cursor performs repository-aware mechanical work on already-defined trials; Claude/Codex act as independent breaker/QA; ChatGPT + operator reconcile conflicting evidence and approve status/progression decisions.
+Repository-wide research roles are locked in `AGENTS.md` and apply to the options lane as well: Grok owns research/edge discovery and read-only contract discovery/comparison (including operator-authorized Robinhood/Webull account/market context when available); Cursor implements approved changes and runs already registered and approved trials; Claude/Codex act as independent breaker/QA; ChatGPT + operator choose which hypotheses are worth registering, reconcile conflicting evidence, and approve status/progression decisions. Broker/account linkage remains data context only and does not grant Grok or any other agent order authority.
 
 This file remains the **options current-state authority**. Do not create a parallel options strategy inventory, experiment selector, or agent-maintained status file. Agents may read this file and propose updates, but must not silently maintain competing current-state truth. Existing frozen cohorts, forward boundaries, one-look rules, and evidence contracts remain controlling unless an explicitly reviewed options change replaces them.
 

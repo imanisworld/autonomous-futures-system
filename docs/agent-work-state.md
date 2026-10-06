@@ -58,6 +58,25 @@ Every substantial unit of work must leave:
 
 If the agent cannot persist this file, it must return this payload verbatim-ready for the next agent/operator to save.
 
+## Governance PR provenance — 2026-10-06 (docs-only; does not override runtime NEXT)
+
+Task: remove overlapping agent responsibilities and make the research pipeline explicit without changing trading behavior.
+
+- Base `main`: `31c9281f41e61791dc050d74f33acf02f87085e4`.
+- Branch: `docs/clarify-agent-roles-20261006`.
+- Grok role proposed: research / edge discovery / read-only futures+options contract discovery and comparison, including operator-authorized Robinhood/Webull account/market context when available.
+- Cursor role proposed: implement approved changes, fix proven defects, and run registered and approved trials mechanically.
+- Claude/Codex role remains independent breaker / QA.
+- ChatGPT + operator own experiment approval/registration, reconciliation, status changes, and progression decisions.
+- Forward paper/demo/observer lanes remain evidence collectors, not research agents.
+- Read-only broker/account linkage is explicitly data context only; it grants no order/cancel/replace/exercise/close authority.
+- Research flow: Grok proposes → ChatGPT/operator approve/register → Cursor runs/builds → Claude/Codex attacks → ChatGPT/operator decide.
+- Files changed on this branch: `AGENTS.md`, `GROK.md`, `docs/options-current-state-handoff.md`, this checkpoint.
+- Runtime mutations: none.
+- Strategy/risk/broker/execution changes: none.
+- PR workflow note: independent review/merge state is transient GitHub metadata, not the durable runtime NEXT. After this PR is resolved, follow the current runtime checkpoint below.
+- DO NOT REDO: do not recreate a second role matrix, experiment selector, or parallel research queue elsewhere.
+
 ## Current checkpoint — 2026-10-04 ~21:30Z (c44d32b deployed; canonical 4HR epoch started)
 
 Exact release `c44d32bc4961e56fae5c5f88a976eb6783341638` was built, verified, and promoted successfully. Rollback remains the prior `489b55b` release.
