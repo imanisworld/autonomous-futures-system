@@ -294,6 +294,41 @@
     },
     "notes": {
       "type": "string"
+    },
+    "chronological_partitions": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Optional U2 chronological partitions. When present, an active evaluation_partition is mandatory and windows are half-open [start, end) in UTC, non-overlapping, ordered development → validation → untouched_oos. Omitted on frozen pre-U2 legacy specs for compatibility.",
+      "required": ["development", "validation", "untouched_oos"],
+      "properties": {
+        "development": { "$ref": "#/$defs/partition_window" },
+        "validation": { "$ref": "#/$defs/partition_window" },
+        "untouched_oos": { "$ref": "#/$defs/partition_window" }
+      }
+    },
+    "evaluation_partition": {
+      "type": "string",
+      "enum": ["development", "validation", "untouched_oos"],
+      "description": "Active chronological partition for this run. Mandatory when chronological_partitions are declared. CLI --partition must not contradict this field. untouched_oos is once-only per exact approved trial_id."
+    }
+  },
+  "$defs": {
+    "partition_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": {
+        "start": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Inclusive half-open window start (YYYY-MM-DD or timezone-aware ISO-8601). Normalized to UTC before comparison."
+        },
+        "end": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Exclusive half-open window end (YYYY-MM-DD or timezone-aware ISO-8601). Membership is start <= ts < end. Must be strictly after start. Next partition must begin at or after this end."
+        }
+      }
     }
   },
   "allOf": [
