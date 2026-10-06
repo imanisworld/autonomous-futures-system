@@ -83,7 +83,8 @@ Task: close the two remaining independent-QA blockers on existing branch `cursor
 
 ### VERIFIED
 
-- Independent breaker QA at exact head `13ae326c466e7ef19703efc65f6f35d04e721b6f`: prior three HOLD findings remain fixed; two new blockers were real (PAPER on unselected TRADE candidates; synchronous `notify_futures_advisory()` inside `_handle_alert_blocking` / `_alert_lock`).
+- Independent breaker QA at exact prior head `13ae326c466e7ef19703efc65f6f35d04e721b6f`: prior three HOLD findings remain fixed; two new blockers were real (PAPER on unselected TRADE candidates; synchronous `notify_futures_advisory()` inside `_handle_alert_blocking` / `_alert_lock`).
+- Code fix commit: `02eb57577ead63a3a42a5532093042ed863552af`.
 - Canonical identity remains `strategy.shadow_resolver._candidate_key(...)`. This change does not edit `_candidate_key()` or resolver outcome math.
 
 ### CHANGED
@@ -95,7 +96,8 @@ Task: close the two remaining independent-QA blockers on existing branch `cursor
 
 ### TESTS
 
-Pending this session's pytest run.
+- `python3 -m pytest -q tests/test_futures_advisory.py` → **27 passed**.
+- `python3 -m pytest -q tests/test_futures_advisory.py tests/test_discord_notifier.py tests/test_candidate_snapshot.py tests/test_why_no_trade_report.py tests/test_shadow_resolver.py tests/test_shadow_setups.py tests/test_discord_card.py tests/test_discord_router.py tests/test_observation_discord_route.py tests/test_viewer.py tests/test_webhook.py tests/test_e2e_scenarios.py tests/test_notification_market_gate.py tests/test_observation_discord_delivery.py tests/test_one_min_response_audit.py` → **346 passed, 1 Starlette TestClient deprecation warning**.
 
 ### RUNTIME MUTATIONS
 
