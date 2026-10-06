@@ -18,7 +18,7 @@ from zoneinfo import ZoneInfo
 import pytest
 from fastapi.testclient import TestClient
 
-from alert_ranker.app import _setup_capture_telemetry, create_app
+from alert_ranker.app import _latest_clock_unsynced, _setup_capture_telemetry, create_app
 from alert_ranker.causal_bars import MINUTE_30, Bar
 from alert_ranker.config import ScannerConfig
 from alert_ranker.market_data import PUBLIC_ALLOWED_PREFIXES, PUBLIC_MARKETDATA_PREFIX
@@ -1012,6 +1012,31 @@ def test_clock_unsynced_is_data_blocked(tmp_path):
     assert "clock_unsynced" in text
 
 
+def test_clock_unsynced_status_clears_after_healthy_run(tmp_path):
+    """/setup-capture clock_unsynced must reflect the latest _clock record only."""
+    oracle = BarAvailabilityOracle(oct2_30m(), session_closes=oct2_session_closes())
+    journal = SetupCaptureJournal(tmp_path / "options_setup_capture.jsonl")
+    bad = SetupCaptureEngine(
+        journal=journal,
+        bar_oracle=lambda sym, now: oracle.serve(now) if sym == "SPY" else [],
+        iex_prints=lambda *a: [],
+        sip_prints=lambda *a: [],
+        clock_offset_s=31,
+    )
+    assert bad.run(now=et(2026, 10, 2, 16, 16))["reason"] == "clock_unsynced"
+    assert _latest_clock_unsynced(journal.peek_state()) is True
+    good = SetupCaptureEngine(
+        journal=journal,
+        bar_oracle=lambda sym, now: oracle.serve(now) if sym == "SPY" else [],
+        iex_prints=lambda *a: [],
+        sip_prints=lambda *a: [],
+        clock_offset_s=0.0,
+    )
+    for _ in range(3):
+        good.run(now=et(2026, 10, 2, 16, 16))
+    assert _latest_clock_unsynced(journal.peek_state()) is False
+
+
 def test_arming_race_first_minute_after_ready(tmp_path):
     """3/55 crosses in the first minute after ready — arm at close, poll +60s."""
     session = nyse_session_for(et(2026, 10, 5, 12, 0).date())
@@ -1210,11 +1235,11 @@ def test_b6_detected_at_after_iex_fetch_only(tmp_path):
     summary = eng.run(now=et(2026, 10, 5, 9, 31, 0))
     row = [r for r in eng.journal.list_all() if r.timeframe == "1H"][0]
     detected = datetime.fromisoformat(row.detected_at)
-    # At least one 90 s fetch completed before the stamp (30m and/or 1H).
-    assert detected >= et(2026, 10, 5, 9, 32, 30).astimezone(timezone.utc)
-    assert row.true_lag_seconds is not None
-    assert row.true_lag_seconds >= 130
-    assert summary["cycle_seconds"] is not None and summary["cycle_seconds"] >= 90
+    # Two structures × 90 s fetch = 09:34:00; lag vs 09:30:20 = 220 s.
+    # These exact bounds fail on the pre-fix 1b8dc74 code (130 s / 09:32:30).
+    assert detected == et(2026, 10, 5, 9, 34, 0).astimezone(timezone.utc)
+    assert row.true_lag_seconds == 220.0
+    assert summary["cycle_seconds"] is not None and summary["cycle_seconds"] >= 180
     assert summary["cycle_over_cadence"] is True
 
 
@@ -1228,19 +1253,84 @@ def test_b7_clock_offset_failure_blocks(monkeypatch):
     assert collect._clock_offset_seconds() > 30
 
 
-def test_b7_chronyc_tracking_offset_is_used(monkeypatch):
+_CHRONY_OK = """\
+Reference ID    : A9FEA97B ()
+Stratum         : 3
+System time     : 0.012345678 seconds fast of NTP time
+Last offset     : +0.000001234 seconds
+Leap status     : Normal
+"""
+
+_CHRONY_NEVER_SYNCED = """\
+Reference ID    : 00000000 ()
+Stratum         : 0
+System time     : 0.000000000 seconds slow of NTP time
+Last offset     : +0.000000000 seconds
+Leap status     : Not synchronised
+"""
+
+_CHRONY_STALE_SYSTEM_TIME = """\
+Reference ID    : A9FEA97B ()
+Stratum         : 3
+System time     : 45.200000000 seconds fast of NTP time
+Last offset     : +0.000012000 seconds
+Leap status     : Normal
+"""
+
+
+def test_b7_chronyc_tracking_uses_system_time_when_leap_normal(monkeypatch):
     import scripts.options_setup_capture_collect as collect
 
     def fake_run(cmd, **_k):
         if cmd[:1] == ["chronyc"]:
-            return SimpleNamespace(
-                returncode=0,
-                stdout="Last offset             : +0.012345678 seconds\n",
-            )
+            return SimpleNamespace(returncode=0, stdout=_CHRONY_OK)
         raise FileNotFoundError("timedatectl")
 
     monkeypatch.setattr(collect.subprocess, "run", fake_run)
     assert abs(collect._clock_offset_seconds() - 0.012345678) < 1e-9
+
+
+def test_b7a_unsynced_kernel_not_overridden_by_chrony(monkeypatch):
+    """(a) NTPSynchronized=no must fail closed even if chrony looks idle-zero."""
+    import scripts.options_setup_capture_collect as collect
+
+    def fake_run(cmd, **_k):
+        if cmd[:3] == ["timedatectl", "show", "-p"]:
+            return SimpleNamespace(returncode=0, stdout="no\n")
+        if cmd[:1] == ["chronyc"]:
+            return SimpleNamespace(returncode=0, stdout=_CHRONY_NEVER_SYNCED)
+        return SimpleNamespace(returncode=0, stdout="")
+
+    monkeypatch.setattr(collect.subprocess, "run", fake_run)
+    assert collect._clock_offset_seconds() > 30
+
+
+def test_b7b_no_timedatectl_unsynced_chrony_fails_closed(monkeypatch):
+    """(b) missing timedatectl + chrony Never synced → fail closed."""
+    import scripts.options_setup_capture_collect as collect
+
+    def fake_run(cmd, **_k):
+        if cmd[:1] == ["chronyc"]:
+            return SimpleNamespace(returncode=0, stdout=_CHRONY_NEVER_SYNCED)
+        raise FileNotFoundError("timedatectl")
+
+    monkeypatch.setattr(collect.subprocess, "run", fake_run)
+    assert collect._clock_offset_seconds() > 30
+
+
+def test_b7c_chrony_system_time_not_last_offset(monkeypatch):
+    """(c) System time 45 s off must fail even when Last offset is tiny."""
+    import scripts.options_setup_capture_collect as collect
+
+    def fake_run(cmd, **_k):
+        if cmd[:1] == ["chronyc"]:
+            return SimpleNamespace(returncode=0, stdout=_CHRONY_STALE_SYSTEM_TIME)
+        raise FileNotFoundError("timedatectl")
+
+    monkeypatch.setattr(collect.subprocess, "run", fake_run)
+    offset = collect._clock_offset_seconds()
+    assert abs(offset) > 30
+    assert abs(offset - 45.2) < 1e-6
 
 
 def test_b8_missing_alpaca_creds_fail_closed(tmp_path):
@@ -1351,6 +1441,35 @@ def test_b8_iex_unknown_condition_terminals_and_dedupes_source_blocked(tmp_path,
     # Two structures (30m + 1H) → at most one SOURCE_BLOCKED each (de-duped).
     assert blocked_rows <= 4
     assert blocked_rows >= 1
+
+
+def test_iex_no_cross_sip_error_retries_before_data_blocked(tmp_path):
+    """Transient SIP error at reconcile_at must use the 30-minute retry budget."""
+    o = BarAvailabilityOracle(oct2_30m(), session_closes=oct2_session_closes())
+    j = SetupCaptureJournal(tmp_path / "j.jsonl")
+    sip_calls = {"n": 0}
+
+    def bars(sym, now):
+        return o.serve(now) if sym == "SPY" else []
+
+    def iex(sym, s, e):
+        return []
+
+    def sip(sym, s, e):
+        sip_calls["n"] += 1
+        raise RuntimeError("sip trade provider HTTP 429")
+
+    eng = SetupCaptureEngine(journal=j, bar_oracle=bars, iex_prints=iex, sip_prints=sip)
+    eng.run(now=et(2026, 10, 2, 16, 16))
+    eng.run(now=et(2026, 10, 5, 10, 46, 0))
+    mid = [x for x in j.list_all() if x.timeframe == "1H"][0]
+    assert mid.status == STATUS_WATCHING
+    assert sip_calls["n"] >= 1
+    # Deadline = watch_until+16m+30m = 11:16 ET.
+    eng.run(now=et(2026, 10, 5, 11, 16, 0))
+    final = [x for x in j.list_all() if x.timeframe == "1H"][0]
+    assert final.status == STATUS_DATA_BLOCKED
+    assert "sip_reconcile_failed" in final.status_reason
 
 
 def test_b13_provisional_catch_excluded_and_sip_retries_capped(tmp_path):

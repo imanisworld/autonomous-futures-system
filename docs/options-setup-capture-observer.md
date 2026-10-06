@@ -117,10 +117,14 @@ sight is `MISSED_LATE` here.
 ## Timer-install prerequisites (separate operator GO after merge)
 
 - **Clock sync with a measurable offset:** prefer `systemd-timesyncd` so
-  `timedatectl timesync-status` reports `Offset:`. On hosts that use chrony
-  instead, `chronyc tracking` (`Last offset`) is accepted. If neither yields
-  an offset, every oneshot run ends `DATA_BLOCKED clock_unsynced` and status
-  counts alone will not explain empty watches until `/setup-capture` is read.
+  `timedatectl show -p NTPSynchronized` is `yes` and
+  `timedatectl timesync-status` reports `Offset:`. On chrony hosts, the
+  collector accepts `chronyc tracking` only when `Leap status : Normal` and
+  uses the absolute `System time` offset (not `Last offset`). Chrony never
+  overrides `NTPSynchronized=no`. If neither path yields a synced measured
+  offset within 30 s, every oneshot run ends `DATA_BLOCKED clock_unsynced`;
+  `/setup-capture` reports `clock_unsynced` from the latest `_clock` record
+  only (clears after a healthy run).
 - Public INDEX real-time vs delayed entitlement for SPX remains UNVERIFIED.
 - Do not enable the timer without an explicit install GO.
 

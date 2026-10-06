@@ -50,8 +50,12 @@ _OFFSET_RE = re.compile(
 )
 
 
-_CHRONY_OFFSET_RE = re.compile(
-    r"^\s*Last offset\s*:\s*([+-]?\d+(?:\.\d+)?)\s*seconds",
+_CHRONY_SYSTEM_TIME_RE = re.compile(
+    r"^\s*System time\s*:\s*([+-]?\d+(?:\.\d+)?)\s*seconds\s+(fast|slow)\b",
+    re.IGNORECASE | re.MULTILINE,
+)
+_CHRONY_LEAP_RE = re.compile(
+    r"^\s*Leap status\s*:\s*(.+?)\s*$",
     re.IGNORECASE | re.MULTILINE,
 )
 
@@ -71,7 +75,12 @@ def _parse_offset_match(match: re.Match[str] | None) -> float | None:
 
 
 def _clock_offset_from_chrony() -> float | None:
-    """Read Last offset from chronyc tracking when systemd-timesyncd is absent."""
+    """Read chronyc System time only when Leap status is Normal.
+
+    Never treats ``Last offset`` as the clock error: that field can be near
+    zero while ``System time`` is tens of seconds off, or while chrony has
+    never synced (Leap status Not synchronised).
+    """
     try:
         proc = subprocess.run(
             ["chronyc", "tracking"],
@@ -84,18 +93,28 @@ def _clock_offset_from_chrony() -> float | None:
         return None
     if proc.returncode != 0:
         return None
-    match = _CHRONY_OFFSET_RE.search(proc.stdout or "")
+    text = proc.stdout or ""
+    leap = _CHRONY_LEAP_RE.search(text)
+    if leap is None or leap.group(1).strip().lower() != "normal":
+        return None
+    match = _CHRONY_SYSTEM_TIME_RE.search(text)
     if match is None:
         return None
-    return float(match.group(1))
+    value = abs(float(match.group(1)))
+    # "fast of NTP" => local clock ahead (positive); "slow" => behind.
+    if match.group(2).lower() == "slow":
+        return -value
+    return value
 
 
 def _clock_offset_seconds() -> float:
     """Fail-closed clock check with a measured offset when available.
 
-    Prefers timedatectl/systemd-timesyncd; falls back to chronyc tracking.
-    Missing tools, unsynced NTP, or unparseable offset all return a sentinel
-    above CLOCK_SKEW_LIMIT_SECONDS so the engine journals DATA_BLOCKED.
+    Prefers timedatectl/systemd-timesyncd. Chrony is used only when
+    timedatectl is missing, or when NTP is synced but timesync-status has no
+    Offset line (chrony-managed hosts). Chrony never overrides
+    NTPSynchronized=no. Missing tools, unsynced NTP, or unparseable offset
+    return a sentinel above CLOCK_SKEW_LIMIT_SECONDS.
     """
     unsynced = CLOCK_SKEW_LIMIT_SECONDS + 1.0
     try:
@@ -107,12 +126,13 @@ def _clock_offset_seconds() -> float:
             timeout=2,
         )
     except (FileNotFoundError, subprocess.TimeoutExpired):
+        # timedatectl absent: chrony may be the only clock authority.
         chrony = _clock_offset_from_chrony()
         return unsynced if chrony is None else chrony
     synced = (synced_proc.stdout or "").strip().lower()
     if synced not in {"yes", "1", "true"}:
-        chrony = _clock_offset_from_chrony()
-        return unsynced if chrony is None else chrony
+        # Kernel reports unsynced — never let chrony override that.
+        return unsynced
     try:
         status_proc = subprocess.run(
             ["timedatectl", "timesync-status"],
@@ -127,6 +147,7 @@ def _clock_offset_seconds() -> float:
     parsed = _parse_offset_match(_OFFSET_RE.search(status_proc.stdout or ""))
     if parsed is not None:
         return parsed
+    # Synced but no systemd-timesyncd Offset line (typical chrony host).
     chrony = _clock_offset_from_chrony()
     return unsynced if chrony is None else chrony
 

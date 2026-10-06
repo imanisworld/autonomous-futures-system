@@ -26,7 +26,7 @@ from .setup_capture import (
 _VERSION_PREFIX = "capture-v"
 # Diagnostic-only record types must never mutate watching/terminal state.
 _DIAGNOSTIC_RECORD_TYPES = frozenset(
-    {"JOURNAL_REPAIR", "SOURCE_BLOCKED", "COLLECTOR_ERROR"}
+    {"JOURNAL_REPAIR", "SOURCE_BLOCKED", "COLLECTOR_ERROR", "COLLECTOR_STATUS"}
 )
 _STATE_RECORD_TYPES = frozenset(
     {"WATCHING", "RESOLUTION", "RECONCILIATION", "SOURCE_DRIFT"}
@@ -36,6 +36,14 @@ _STATE_RECORD_TYPES = frozenset(
 class JournalLocked(RuntimeError):
     def __init__(self) -> None:
         super().__init__(STATUS_LOCKED)
+
+
+class JournalFormatError(RuntimeError):
+    """Typed journal parse failure; ``code`` is the only safe HTTP reason."""
+
+    def __init__(self, code: str) -> None:
+        self.code = code
+        super().__init__(code)
 
 
 def _parse_ts(value: Any) -> datetime | None:
@@ -193,6 +201,7 @@ class SetupCaptureJournal:
         fingerprints: dict[str, str] = {}
         high_water: dict[str, str] = {}
         errors: list[dict[str, Any]] = []
+        clock_records: list[dict[str, Any]] = []
         source_blocked_reasons: dict[str, str] = {}
         for number, raw in enumerate(lines, start=1):
             if not raw.strip():
@@ -200,17 +209,19 @@ class SetupCaptureJournal:
             try:
                 row = json.loads(raw)
             except json.JSONDecodeError as exc:
-                raise RuntimeError(f"journal_corrupt_line_{number}") from exc
+                raise JournalFormatError(f"journal_corrupt_line_{number}") from exc
             if not isinstance(row, dict) or not row.get("structure_key"):
-                raise RuntimeError(f"journal_invalid_row_{number}")
+                raise JournalFormatError(f"journal_invalid_row_{number}")
             version = str(row.get("capture_version") or "")
             if version and not version.startswith(_VERSION_PREFIX):
-                raise RuntimeError(f"journal_collector_version_mismatch_{number}")
+                raise JournalFormatError(f"journal_collector_version_mismatch_{number}")
             key = str(row["structure_key"])
             record_type = str(row.get("record_type") or "")
             if record_type in _DIAGNOSTIC_RECORD_TYPES:
                 if record_type == "COLLECTOR_ERROR":
                     errors.append(row)
+                if key == "_clock" and record_type in {"COLLECTOR_ERROR", "COLLECTOR_STATUS"}:
+                    clock_records.append(row)
                 if record_type == "SOURCE_BLOCKED":
                     source_blocked_reasons[key] = str(row.get("status_reason") or "")
                 continue
@@ -234,6 +245,7 @@ class SetupCaptureJournal:
             "fingerprints": fingerprints,
             "high_water": high_water,
             "errors": errors,
+            "clock_records": clock_records,
             "source_blocked_reasons": source_blocked_reasons,
             "repaired_torn_line": repaired_torn_line,
         }

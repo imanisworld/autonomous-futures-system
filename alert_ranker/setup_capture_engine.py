@@ -209,6 +209,17 @@ class SetupCaptureEngine:
         except JournalLocked:
             return {"ok": False, "status": "LOCKED"}
         try:
+            # Clear sticky clock_unsynced on /setup-capture: latest _clock
+            # record must reflect a healthy check, not a prior blocked run.
+            self.journal.append(
+                {
+                    "record_type": "COLLECTOR_STATUS",
+                    "structure_key": "_clock",
+                    "status_reason": "clock_ok",
+                    "clock_offset_s": self.clock_offset_s,
+                    "observed_at": self._detect_time(started).isoformat(),
+                }
+            )
             summary = self._run_locked(started)
         finally:
             self.journal.release()
@@ -579,12 +590,23 @@ class SetupCaptureEngine:
                     window_end=_aware(armed.watch_until),
                 )
             except Exception as exc:  # noqa: BLE001
-                return self._terminal_data_blocked(
-                    watching,
-                    reason=f"sip_reconcile:{exc}",
+                # Same 30-minute retry budget as provisional TRIGGERED reconcile;
+                # one transient SIP error must not burn MISSED_LATE forever.
+                reason = f"sip_reconcile:{exc}"
+                self._append_source_blocked(
+                    structure_key=armed.structure_key,
+                    reason=reason,
                     detected_at=detected_at,
                     state=state,
                 )
+                if detected_at >= self._sip_reconcile_deadline(armed):
+                    return self._terminal_data_blocked(
+                        watching,
+                        reason="sip_reconcile_failed",
+                        detected_at=detected_at,
+                        state=state,
+                    )
+                return 0, 1
 
         pair = classify_iex_sip_pair(
             iex=iex_result,

@@ -43,7 +43,7 @@ from .rh_options import (
 from .lifecycle import classify_candidate
 from .scanner import OptionsScanner
 from .setup_capture import DEFAULT_JOURNAL
-from .setup_capture_store import SetupCaptureJournal
+from .setup_capture_store import JournalFormatError, SetupCaptureJournal
 from .storage import ScanStorage
 from .signa_context_store import SHARED_PROXY_SYMBOLS, SignaContextStore
 from sources.signa_discovery import (
@@ -91,12 +91,27 @@ SHADOW_OUTCOME_STATUSES = {
 _JOURNAL_REASON_RE = re.compile(r"^journal_[a-z_]+_\d+$")
 
 
-def _sanitize_journal_reason(exc: BaseException) -> str:
-    """Allowlist fixed journal_*_N codes; never pass arbitrary exception text."""
-    text = str(exc).strip()
-    if _JOURNAL_REASON_RE.match(text):
-        return text
+def _journal_reason_code(exc: BaseException) -> str:
+    """Emit only a typed journal_*_N code attribute — never str(exc)."""
+    code = getattr(exc, "code", None)
+    if isinstance(code, str) and _JOURNAL_REASON_RE.match(code):
+        return code
     return "journal_unreadable"
+
+
+def _latest_clock_unsynced(peek: dict[str, Any]) -> bool:
+    """True only when the latest _clock diagnostic is clock_unsynced (not sticky)."""
+    records = list(peek.get("clock_records") or [])
+    if not records:
+        # Legacy journals: fall back to last COLLECTOR_ERROR on _clock.
+        records = [
+            err
+            for err in (peek.get("errors") or [])
+            if str(err.get("structure_key") or "") == "_clock"
+        ]
+    if not records:
+        return False
+    return str(records[-1].get("status_reason") or "") == "clock_unsynced"
 
 
 def _setup_capture_telemetry(cfg: ScannerConfig) -> dict[str, Any]:
@@ -130,17 +145,15 @@ def _setup_capture_telemetry(cfg: ScannerConfig) -> dict[str, Any]:
         journal = SetupCaptureJournal(path, create=False)
         peek = journal.peek_state()
         counts = SetupCaptureJournal._counts_from_state(peek)
-        # Surface clock_unsynced so /setup-capture explains empty watches when
-        # the collector is blocked by an unsynced clock (timedatectl/chrony).
-        clock_unsynced = any(
-            str(err.get("status_reason") or "") == "clock_unsynced"
-            for err in peek.get("errors") or []
-        )
+        clock_unsynced = _latest_clock_unsynced(peek)
     except OSError:
         payload["reason"] = "journal_unreadable"
         return payload
-    except RuntimeError as exc:
-        payload["reason"] = _sanitize_journal_reason(exc)
+    except JournalFormatError as exc:
+        payload["reason"] = _journal_reason_code(exc)
+        return payload
+    except RuntimeError:
+        payload["reason"] = "journal_unreadable"
         return payload
     payload.update(
         {
