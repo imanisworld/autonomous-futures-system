@@ -710,12 +710,19 @@ def _handle_alert_blocking(payload: AlertPayload) -> None:
             except Exception as _disc_exc:
                 logger.warning("Discord notification error: %s", _disc_exc)
                 notify_discord(payload=payload, result=result, config=_config)
-        try:
-            from notifications.futures_advisory import notify_futures_advisory
+        # Advisory Discord is presentation-only. Gate on the same market/session
+        # permission as decision-channel cards, then enqueue so HTTP/retries
+        # cannot hold _alert_lock or delay later futures bars.
+        _advisory_allowed = _notify_allowed
+        if not _wants_decision_notification:
+            _advisory_allowed, _, _ = _decision_notification_market_gate(payload, result)
+        if _advisory_allowed:
+            try:
+                from notifications.futures_advisory import notify_futures_advisory
 
-            notify_futures_advisory(result, config=_config)
-        except Exception:
-            logger.warning("futures advisory notification skipped", exc_info=True)
+                notify_futures_advisory(dict(result), config=_config)
+            except Exception:
+                logger.warning("futures advisory notification skipped", exc_info=True)
         logger.info("Alert processed: %s -> %s", payload.ticker, result.get("decision"))
     except Exception as exc:
         logger.exception("Error processing alert for %s: %s", payload.ticker, exc)

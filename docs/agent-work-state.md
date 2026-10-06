@@ -77,9 +77,43 @@ Task: remove overlapping agent responsibilities and make the research pipeline e
 - PR workflow note: independent review/merge state is transient GitHub metadata, not the durable runtime NEXT. After this PR is resolved, follow the current runtime checkpoint below.
 - DO NOT REDO: do not recreate a second role matrix, experiment selector, or parallel research queue elsewhere.
 
-## Current checkpoint — 2026-10-06 (PR #1143 HOLD fixes: OPEN, candidate_key join, panel name)
+## Current checkpoint — 2026-10-06 (PR #1143: PAPER posture + advisory Discord off alert lock)
 
-Task: three presentation/evidence correctness fixes on existing branch `cursor/futures-advisory-visibility-f2da`. No scope expansion.
+Task: close the two remaining independent-QA blockers on existing branch `cursor/futures-advisory-visibility-f2da`, plus local presentation corrections. No scope expansion. Do not merge or deploy.
+
+### VERIFIED
+
+- Independent breaker QA at exact head `13ae326c466e7ef19703efc65f6f35d04e721b6f`: prior three HOLD findings remain fixed; two new blockers were real (PAPER on unselected TRADE candidates; synchronous `notify_futures_advisory()` inside `_handle_alert_blocking` / `_alert_lock`).
+- Canonical identity remains `strategy.shadow_resolver._candidate_key(...)`. This change does not edit `_candidate_key()` or resolver outcome math.
+
+### CHANGED
+
+- `_posture()` returns `PAPER` on a TRADE bar only when `selected is True`; unselected candidates stay `SHADOW / ADVISORY ONLY`.
+- Advisory Discord uses the observation-style daemon queue: `_handle_alert_blocking` copies `dict(result)` and enqueues; HTTP/retries/429 sleeps run off `_alert_lock`.
+- Discord fan-out capped at `MAX_ADVISORY_CARDS_PER_ALERT = 3` (delivery only).
+- Evidence labels match the leading inventory verdict; same-key different stop/target does not attach; orphan SHADOW_OUTCOME cards are presentation-deduped; resolver identity reconstruction prefers `ts` before `timestamp`.
+
+### TESTS
+
+Pending this session's pytest run.
+
+### RUNTIME MUTATIONS
+
+None. No deploy, no VPS, no env, no broker.
+
+### DONE / DO NOT REDO for this lane
+
+- Do not recreate candidate detection, shadow resolution, or a new ranker.
+- Do not retune confluence weights or change inverse/evidence epochs.
+- Do not change Discord router retry policy globally.
+
+### NEXT
+
+Independent Claude/Codex breaker-QA re-review of PR #1143. Do not merge or deploy.
+
+## Superseded / provenance — 2026-10-06 (PR #1143 HOLD fixes: OPEN, candidate_key join, panel name)
+
+Task: three presentation/evidence correctness fixes on existing branch `cursor/futures-advisory-visibility-f2da`. No scope expansion. **Superseded** by the PAPER-posture / alert-lock checkpoint above; kept as provenance of the prior HOLD round.
 
 ### VERIFIED
 
@@ -96,9 +130,9 @@ Task: three presentation/evidence correctness fixes on existing branch `cursor/f
 
 Re-review PR #1143. Do not merge or deploy.
 
-## Current checkpoint — 2026-10-06 (futures advisory visibility, source-only)
+## Superseded / provenance — 2026-10-06 (futures advisory visibility, source-only)
 
-Task: surface already-recorded futures shadow/candidate setups to the operator in real time. Presentation only. No deploy, merge, VPS, strategy, risk, or broker changes.
+Task: surface already-recorded futures shadow/candidate setups to the operator in real time. Presentation only. No deploy, merge, VPS, strategy, risk, or broker changes. **Superseded** as an active current checkpoint; kept as provenance of the original advisory-visibility implementation.
 
 ### VERIFIED
 

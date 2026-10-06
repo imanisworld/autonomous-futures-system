@@ -7,7 +7,11 @@ candidate/journal row does not already carry.
 
 from __future__ import annotations
 
+import json
 import logging
+import queue
+import threading
+import time
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
@@ -18,6 +22,7 @@ logger = logging.getLogger(__name__)
 ADVISORY_ONLY = "SHADOW / ADVISORY ONLY"
 RANK_STATUS = "EXPERIMENTAL / UNVALIDATED SYSTEM RANK"
 EXECUTION_CAPABLE = False
+MAX_ADVISORY_CARDS_PER_ALERT = 3
 _DUPLICATE_DECISIONS = frozenset({"BLOCKED_DUPLICATE_BAR", "DUPLICATE_IGNORED"})
 _EVIDENCE_LABELS = (
     "PROMISING BUT UNPROVEN",
@@ -96,11 +101,19 @@ def _strategy_title(strategy: str) -> str:
 
 
 def _evidence_label(verdict: str) -> Optional[str]:
-    upper = (verdict or "").upper()
-    for label in _EVIDENCE_LABELS:
-        if label in upper:
-            return label
-    return None
+    """Match the leading inventory verdict label, not an embedded substring.
+
+    ``NOT VALIDATED`` must not classify as ``VALIDATED``. Embedded labels such
+    as ``PAPER PROOF`` inside a later clause must not override the leading
+    verdict. Unknown leading text is omitted rather than guessed.
+    """
+    upper = (verdict or "").strip().upper()
+    if not upper:
+        return None
+    leading = [label for label in _EVIDENCE_LABELS if upper.startswith(label)]
+    if not leading:
+        return None
+    return max(leading, key=len)
 
 
 def _inventory_rows() -> list[dict[str, Any]]:
@@ -218,7 +231,7 @@ def _posture(src: dict[str, Any], result: dict[str, Any], *, source: str) -> str
     if decision in {"SHADOW_NO_ORDER", "ORDER_SUPPRESSED"}:
         return ADVISORY_ONLY
     if decision == "TRADE":
-        return "PAPER"
+        return "PAPER" if src.get("selected") is True else ADVISORY_ONLY
     if _present(src.get("strategy_permission_status")):
         return str(src["strategy_permission_status"])
     return ADVISORY_ONLY
@@ -248,13 +261,17 @@ def _resolver_lane(src: dict[str, Any], source: str) -> Optional[str]:
 
 
 def _resolver_bar_ts(src: dict[str, Any], result: dict[str, Any], source: str) -> Optional[str]:
-    for key in ("candidate_bar_ts", "bar_ts", "detected_at", "ts"):
+    for key in ("candidate_bar_ts", "bar_ts", "detected_at"):
+        if _present(src.get(key)):
+            return str(src[key])
+    # Mirror strategy.shadow_resolver._pending_from_row: ts before timestamp.
+    for key in ("ts", "timestamp"):
         if _present(src.get(key)):
             return str(src[key])
     if source == "shadow_outcome":
         return None
     context = result.get("context") if isinstance(result.get("context"), dict) else {}
-    for key in ("timestamp", "ts"):
+    for key in ("ts", "timestamp"):
         if _present(result.get(key)):
             return str(result[key])
         if _present(context.get(key)):
@@ -386,6 +403,31 @@ def _outcome_candidate_key(outcome_row: dict[str, Any]) -> Optional[str]:
     return _canonical_candidate_key(outcome_row, outcome_row, source="shadow_outcome")
 
 
+def _geometry_fields(src: dict[str, Any]) -> dict[str, float]:
+    geo = _geometry(src)
+    nested = src.get("shadow_outcome") if isinstance(src.get("shadow_outcome"), dict) else {}
+    if nested:
+        nested_geo = _geometry(nested)
+        for key in ("stop", "target"):
+            if key not in geo and key in nested_geo:
+                geo[key] = nested_geo[key]
+    return geo
+
+
+def _bracket_conflict(record: dict[str, Any], outcome_row: dict[str, Any]) -> bool:
+    """Defensive presentation check: same resolver key, different stop/target.
+
+    Does not change strategy.shadow_resolver._candidate_key() identity. If both
+    sides carry stop and/or target, those recorded values must match.
+    """
+    rec = _geometry_fields(record)
+    out = _geometry_fields(outcome_row)
+    for key in ("stop", "target"):
+        if key in rec and key in out and rec[key] != out[key]:
+            return True
+    return False
+
+
 def _unique_outcome_row(
     record: dict[str, Any],
     outcome_rows: list[dict[str, Any]],
@@ -399,9 +441,19 @@ def _unique_outcome_row(
         out_key = _outcome_candidate_key(row)
         if out_key == rec_key:
             matches.append(row)
-    if len(matches) == 1:
-        return matches[0]
-    return None
+    if len(matches) != 1:
+        return None
+    if _bracket_conflict(record, matches[0]):
+        return None
+    return matches[0]
+
+
+def _row_fingerprint(row: dict[str, Any]) -> str:
+    return json.dumps(row, sort_keys=True, default=str)
+
+
+def _orphan_dedup_key(row: dict[str, Any], out_key: Optional[str]) -> str:
+    return f"key:{out_key}" if out_key else f"bytes:{_row_fingerprint(row)}"
 
 
 def build_advisory_records(result: dict[str, Any]) -> list[dict[str, Any]]:
@@ -460,16 +512,25 @@ def build_advisory_records(result: dict[str, Any]) -> list[dict[str, Any]]:
         key = _outcome_candidate_key(row)
         if key:
             matched_outcome_keys.add(key)
+    seen_orphans: set[str] = set()
     for row in outcome_rows:
         out_key = _outcome_candidate_key(row)
         if out_key and out_key in matched_outcome_keys:
             continue
         if out_key and any(item.get("candidate_key") == out_key for item in records):
             continue
+        fingerprint = _orphan_dedup_key(row, out_key)
+        if fingerprint in seen_orphans:
+            continue
+        seen_orphans.add(fingerprint)
         sourced = dict(row)
         record = _base_record(sourced, result, source="shadow_outcome")
         if record is None:
             continue
+        identity = _identity_key(record)
+        if identity in seen:
+            continue
+        seen.add(identity)
         record.update(_outcome_from_shadow_row(row))
         records.append(record)
     return records
@@ -576,10 +637,15 @@ def journal_advisory_records(entries: Iterable[dict[str, Any]]) -> list[dict[str
         for record in records
         if record.get("candidate_key") and record.get("outcome")
     }
+    seen_orphans: set[str] = set()
     for row in outcomes:
         out_key = _outcome_candidate_key(row)
         if out_key and out_key in matched_keys:
             continue
+        fingerprint = _orphan_dedup_key(row, out_key)
+        if fingerprint in seen_orphans:
+            continue
+        seen_orphans.add(fingerprint)
         extra = _base_record(row, row, source="shadow_outcome")
         if extra is None:
             extra = {
@@ -603,20 +669,127 @@ def journal_advisory_records(entries: Iterable[dict[str, Any]]) -> list[dict[str
     return records[-20:]
 
 
+def discord_advisory_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Discord-delivery subset. Does not cap journals, dashboard, or evidence."""
+    return list(records[:MAX_ADVISORY_CARDS_PER_ALERT])
+
+
+def _redact(exc: BaseException) -> str:
+    from notifications.discord_router import redact_webhooks
+
+    return redact_webhooks(exc)
+
+
+# Background delivery matches notifications.observation_notifier: the alert path
+# that holds _alert_lock only formats and enqueues. HTTP, retries, and 429
+# sleeps run on one daemon thread and cannot delay later futures bars.
+MAX_RETRY_WAIT = 30.0
+MIN_SEND_INTERVAL = 1.0
+MAX_QUEUE_MESSAGES = 20
+MAX_MESSAGE_AGE = 600.0
+DELIVERY_MODE = "background"
+
+
+class _Dispatcher:
+    """One daemon thread draining a bounded queue of advisory webhook bodies."""
+
+    def __init__(self, *, sleep=time.sleep, clock=time.monotonic) -> None:
+        self._queue: "queue.Queue[tuple[object, dict, int, float]]" = queue.Queue(
+            maxsize=MAX_QUEUE_MESSAGES
+        )
+        self._sleep = sleep
+        self._clock = clock
+        self._lock = threading.Lock()
+        self._thread: Optional[threading.Thread] = None
+        self.delivered_cards = 0
+        self.dropped_cards = 0
+
+    def submit(self, router, messages: list[tuple[dict, int]]) -> int:
+        """Enqueue without blocking; returns the number of cards accepted."""
+        self._ensure_thread()
+        accepted = 0
+        for body, cards in messages:
+            try:
+                self._queue.put_nowait((router, body, cards, self._clock()))
+                accepted += cards
+            except queue.Full:
+                self.dropped_cards += cards
+                logger.error(
+                    "futures advisory Discord queue full (%d messages); %d card(s) dropped.",
+                    MAX_QUEUE_MESSAGES,
+                    cards,
+                )
+        return accepted
+
+    def _ensure_thread(self) -> None:
+        with self._lock:
+            if self._thread is None or not self._thread.is_alive():
+                self._thread = threading.Thread(
+                    target=self._run, name="futures-advisory-discord", daemon=True
+                )
+                self._thread.start()
+
+    def _run(self) -> None:
+        while True:
+            router, body, cards, queued_at = self._queue.get()
+            try:
+                age = self._clock() - queued_at
+                if age > MAX_MESSAGE_AGE:
+                    self.dropped_cards += cards
+                    logger.error(
+                        "futures advisory Discord message %.0fs old; %d card(s) dropped.",
+                        age,
+                        cards,
+                    )
+                    continue
+                if router.send("signal", body, max_retry_wait=MAX_RETRY_WAIT):
+                    self.delivered_cards += cards
+                else:
+                    self.dropped_cards += cards
+                    logger.error(
+                        "futures advisory Discord delivery failed; %d card(s) dropped.",
+                        cards,
+                    )
+            except Exception as exc:  # noqa: BLE001 - the worker must survive anything
+                self.dropped_cards += cards
+                logger.warning(
+                    "futures advisory Discord worker error; %d card(s) dropped: %s: %s",
+                    cards,
+                    type(exc).__name__,
+                    _redact(exc),
+                )
+            finally:
+                self._queue.task_done()
+                self._sleep(MIN_SEND_INTERVAL)
+
+    def join(self, timeout: float = 5.0) -> bool:
+        """Test helper: wait until everything queued has been handled."""
+        deadline = time.monotonic() + timeout
+        while self._queue.unfinished_tasks and time.monotonic() < deadline:
+            time.sleep(0.01)
+        return not self._queue.unfinished_tasks
+
+
+_DISPATCHER = _Dispatcher()
+
+
 def notify_futures_advisory(
     result: dict[str, Any],
     *,
     config: Any = None,
     router: Any = None,
 ) -> int:
-    """Send advisory cards on the existing signal Discord route. Fail-soft.
+    """Enqueue advisory cards on the existing signal Discord route. Fail-soft.
 
-    Never reaches a broker. A Discord failure cannot change trading state.
+    The caller that holds _alert_lock must not wait for Discord HTTP. A Discord
+    failure cannot change trading state. The result snapshot is copied so
+    notification work never mutates the trading decision dict.
     """
     del config  # reserved for callers that already hold SystemConfig
     if not isinstance(result, dict) or result.get("smoke_test"):
         return 0
-    records = build_advisory_records(result)
+    snapshot = dict(result)
+    records = discord_advisory_records(build_advisory_records(snapshot))
     if not records:
         return 0
     try:
@@ -626,11 +799,17 @@ def notify_futures_advisory(
         active_router = router or DiscordRouter()
         if not active_router.is_enabled("signal"):
             return 0
+        messages = [
+            (card_payload(format_advisory_card(record), source="futures advisory"), 1)
+            for record in records
+        ]
+        inline = router is not None or DELIVERY_MODE == "inline"
+        if not inline:
+            return _DISPATCHER.submit(active_router, messages)
         sent = 0
-        for record in records:
-            body = card_payload(format_advisory_card(record), source="futures advisory")
+        for body, cards in messages:
             if active_router.send("signal", body):
-                sent += 1
+                sent += cards
         return sent
     except Exception:  # noqa: BLE001 — notification must never affect trading
         logger.warning("futures advisory Discord notification skipped", exc_info=True)

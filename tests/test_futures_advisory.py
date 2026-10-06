@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import ast
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
 from strategy.shadow_resolver import _candidate_key
 
 from notifications.futures_advisory import (
+    ADVISORY_ONLY,
+    MAX_ADVISORY_CARDS_PER_ALERT,
     RANK_STATUS,
+    _evidence_label,
     advisory_can_place_order,
     attach_runtime_sources,
     build_advisory_records,
@@ -479,3 +483,348 @@ def test_notify_skips_when_signal_route_disabled():
             raise AssertionError("disabled route must not send")
 
     assert notify_futures_advisory(_result(), router=_Router()) == 0
+
+
+def test_trade_bar_paper_posture_only_for_selected_candidate():
+    selected = _candidate(
+        selected=True,
+        attempted=True,
+        reject_reason=None,
+        reject_code=None,
+    )
+    rejected = _candidate(
+        strategy="vwap_hold",
+        entry=24300.0,
+        stop=24290.0,
+        target=24320.0,
+        selected=False,
+        attempted=False,
+        reject_code="not_selected",
+        reject_reason="lower rank / not selected",
+    )
+    records = build_advisory_records(
+        _result(
+            decision="TRADE",
+            gate_reason=None,
+            reason=None,
+            candidate_audit=[selected, rejected],
+        )
+    )
+    assert len(records) == 2
+    by_selected = {row["selected"]: row for row in records}
+    assert by_selected[True]["posture"] == "PAPER"
+    assert by_selected[False]["posture"] == ADVISORY_ONLY
+    assert by_selected[False]["suppression_reason"] == "lower rank / not selected"
+    assert "Status: PAPER" in format_advisory_card(by_selected[True])
+    rejected_card = format_advisory_card(by_selected[False])
+    assert "Status: SHADOW / ADVISORY ONLY" in rejected_card
+    assert "Status: PAPER" not in rejected_card
+    assert "Why execution was blocked/suppressed: lower rank / not selected" in rejected_card
+    assert "Selected: no" in rejected_card
+
+
+def test_evidence_label_matches_leading_verdict_not_substring():
+    assert _evidence_label("NOT VALIDATED") is None
+    assert _evidence_label("VALIDATED") == "VALIDATED"
+    assert _evidence_label("BROKEN — earlier PAPER PROOF was withdrawn") == "BROKEN"
+    assert _evidence_label("PROMISING BUT UNPROVEN / see PAPER PROOF notes") == "PROMISING BUT UNPROVEN"
+    assert _evidence_label("PAPER PROOF") == "PAPER PROOF"
+    assert _evidence_label("WAIT — positive aggregate") == "WAIT"
+    assert _evidence_label("") is None
+
+
+def test_same_resolver_key_different_bracket_does_not_attach_outcome():
+    ts = "2026-05-23T14:30:00+00:00"
+    key = _candidate_key("shadow_setups", "MNQ", ts, "orb_false_break_fade", "SHORT", 24310.0)
+    records = build_advisory_records(
+        _result(
+            timestamp=ts,
+            candidate_audit=[],
+            shadow_candidates=[
+                {
+                    "strategy": "orb_false_break_fade",
+                    "direction": "SHORT",
+                    "entry": 24310.0,
+                    "stop": 24320.0,
+                    "target": 24290.0,
+                    "rr_ratio": 2.0,
+                }
+            ],
+            shadow_outcomes=[
+                {
+                    "lane": "shadow_setups",
+                    "instrument": "MNQ",
+                    "strategy": "orb_false_break_fade",
+                    "direction": "SHORT",
+                    "entry": 24310.0,
+                    "stop": 24399.0,
+                    "target": 24200.0,
+                    "candidate_bar_ts": ts,
+                    "candidate_key": key,
+                    "shadow_outcome": {
+                        "result": "WIN",
+                        "exit_reason": "TARGET_HIT",
+                        "pnl_ticks": 80.0,
+                    },
+                }
+            ],
+        )
+    )
+    observed = [row for row in records if row.get("source") == "shadow_setups"]
+    assert len(observed) == 1
+    assert observed[0]["candidate_key"] == key
+    assert "outcome" not in observed[0]
+    assert "Later outcome" not in format_advisory_card(observed[0])
+
+
+def test_duplicate_orphan_shadow_outcomes_emit_one_advisory_card():
+    ts = "2026-05-23T14:30:00+00:00"
+    key = _candidate_key("shadow_setups", "MNQ", ts, "gap_fill", "LONG", 1.0)
+    row = {
+        "type": "SHADOW_OUTCOME",
+        "lane": "shadow_setups",
+        "instrument": "MNQ",
+        "strategy": "gap_fill",
+        "direction": "LONG",
+        "entry": 1.0,
+        "stop": 0.0,
+        "target": 3.0,
+        "candidate_key": key,
+        "candidate_bar_ts": ts,
+        "shadow_outcome": {"result": "WIN", "exit_reason": "TARGET_HIT", "pnl_ticks": 8.0},
+    }
+    journaled = journal_advisory_records([row, dict(row)])
+    wins = [item for item in journaled if item.get("outcome") == "WIN"]
+    assert len(wins) == 1
+    built = build_advisory_records(
+        _result(candidate_audit=[], shadow_candidates=[], shadow_outcomes=[row, dict(row)])
+    )
+    assert len([item for item in built if item.get("outcome") == "WIN"]) == 1
+
+
+def test_resolver_identity_prefers_journal_ts_over_timestamp():
+    ts = "2026-05-23T14:30:00+00:00"
+    wrong = "2099-01-01T00:00:00+00:00"
+    geometry = {
+        "strategy": "orb_false_break_fade",
+        "direction": "SHORT",
+        "entry": 24310.0,
+        "stop": 24320.0,
+        "target": 24290.0,
+        "rr_ratio": 2.0,
+    }
+    expected = _candidate_key(
+        "shadow_setups", "MNQ", ts, geometry["strategy"], geometry["direction"], geometry["entry"]
+    )
+    wrong_key = _candidate_key(
+        "shadow_setups", "MNQ", wrong, geometry["strategy"], geometry["direction"], geometry["entry"]
+    )
+    records = build_advisory_records(
+        _result(
+            timestamp=wrong,
+            ts=ts,
+            candidate_audit=[],
+            shadow_candidates=[geometry],
+        )
+    )
+    assert records[0]["candidate_key"] == expected
+    assert records[0]["candidate_key"] != wrong_key
+
+
+def test_discord_fanout_is_capped_without_capping_records():
+    rows = [
+        _candidate(
+            strategy=f"orb_reclaim_{idx}",
+            entry=24310.0 + idx,
+            stop=24300.0 + idx,
+            target=24333.0 + idx,
+        )
+        for idx in range(5)
+    ]
+    result = _result(candidate_audit=rows)
+    records = build_advisory_records(result)
+    assert len(records) == 5
+    assert MAX_ADVISORY_CARDS_PER_ALERT == 3
+
+    class _Router:
+        def __init__(self):
+            self.sent = []
+
+        def is_enabled(self, route):
+            return route == "signal"
+
+        def send(self, route, body):
+            self.sent.append(body)
+            return True
+
+    router = _Router()
+    assert notify_futures_advisory(result, router=router) == MAX_ADVISORY_CARDS_PER_ALERT
+    assert len(router.sent) == MAX_ADVISORY_CARDS_PER_ALERT
+    assert len(build_advisory_records(result)) == 5
+
+
+def test_discord_failure_cannot_mutate_trading_result():
+    result = _result(decision="TRADE", candidate_audit=[_candidate(selected=True)])
+    before = json.dumps(result, sort_keys=True, default=str)
+
+    class _Boom:
+        def is_enabled(self, route):
+            return True
+
+        def send(self, *args, **kwargs):
+            raise RuntimeError("discord down")
+
+    assert notify_futures_advisory(result, router=_Boom()) == 0
+    assert json.dumps(result, sort_keys=True, default=str) == before
+    assert result["decision"] == "TRADE"
+
+
+def test_background_advisory_delivery_does_not_block_the_caller(monkeypatch):
+    import threading
+    import time
+
+    import notifications.futures_advisory as advisory
+
+    dispatcher = advisory._Dispatcher(sleep=lambda _s: None)
+    monkeypatch.setattr(advisory, "_DISPATCHER", dispatcher)
+    monkeypatch.setattr(advisory, "DELIVERY_MODE", "background")
+    gate = threading.Event()
+    http_calls = []
+
+    class _Router:
+        def is_enabled(self, route):
+            return route == "signal"
+
+        def send(self, *args, **kwargs):
+            gate.wait(10)
+            http_calls.append(args)
+            return True
+
+    monkeypatch.setattr(
+        "notifications.discord_router.DiscordRouter",
+        lambda *a, **k: _Router(),
+    )
+    started = time.monotonic()
+    accepted = notify_futures_advisory(_result())
+    elapsed = time.monotonic() - started
+    assert accepted == 1
+    assert elapsed < 0.5
+    assert http_calls == []
+    gate.set()
+    assert dispatcher.join(5)
+    assert len(http_calls) == 1
+
+
+def test_handle_alert_blocking_completes_without_advisory_http(monkeypatch):
+    import threading
+    import time
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    import notifications.futures_advisory as advisory
+    import webhook.app as app_module
+    from webhook.payload import AlertPayload
+
+    dispatcher = advisory._Dispatcher(sleep=lambda _s: None)
+    monkeypatch.setattr(advisory, "_DISPATCHER", dispatcher)
+    monkeypatch.setattr(advisory, "DELIVERY_MODE", "background")
+
+    selected = _candidate(selected=True, attempted=True, reject_reason=None, reject_code=None)
+    rejected = _candidate(
+        strategy="vwap_hold",
+        entry=24300.0,
+        stop=24290.0,
+        target=24320.0,
+        selected=False,
+        reject_reason="lower rank / not selected",
+    )
+    result = _result(
+        decision="TRADE",
+        gate_reason=None,
+        reason=None,
+        candidate_audit=[selected, rejected],
+    )
+    payload = AlertPayload(
+        ticker="MNQ1!",
+        timestamp=datetime(2026, 9, 21, 10, 0, tzinfo=ZoneInfo("America/New_York")).isoformat(),
+        timeframe="15",
+        open=25000.0,
+        high=25010.0,
+        low=24990.0,
+        close=25005.0,
+    )
+    monkeypatch.setattr(app_module, "process_alert", lambda *a, **k: result)
+    monkeypatch.setattr(app_module, "_record_latest_webhook", lambda *a, **k: None)
+    monkeypatch.setattr(app_module, "append_observer_response_audit", lambda *a, **k: None)
+    monkeypatch.setattr(app_module, "notify_discord", lambda **k: None)
+    monkeypatch.setattr(app_module._config, "live_quote_enabled", False)
+    monkeypatch.setattr(app_module._config, "discord_notify_decisions", ["TRADE"])
+    monkeypatch.setattr(
+        app_module,
+        "_decision_notification_market_gate",
+        lambda *a, **k: (True, None, "MNQ"),
+    )
+
+    gate = threading.Event()
+    advisory_http = []
+    decision_http = []
+
+    class _Router:
+        def is_enabled(self, route):
+            return route == "signal"
+
+        def send(self, route, body, **kwargs):
+            text = str(body)
+            if "futures advisory" in text or "ADVISORY ONLY" in text:
+                gate.wait(10)
+                advisory_http.append(text)
+            else:
+                decision_http.append(text)
+            return True
+
+    monkeypatch.setattr("notifications.discord_router.DiscordRouter", lambda *a, **k: _Router())
+    started = time.monotonic()
+    app_module._handle_alert_blocking(payload)
+    elapsed = time.monotonic() - started
+    assert elapsed < 0.5
+    assert advisory_http == []
+    assert result["decision"] == "TRADE"
+    gate.set()
+    assert dispatcher.join(5)
+    assert len(advisory_http) == 2
+
+
+def test_handle_alert_does_not_launch_advisory_when_notifications_not_allowed(monkeypatch):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    import notifications.futures_advisory as advisory
+    import webhook.app as app_module
+    from webhook.payload import AlertPayload
+
+    launched = []
+    monkeypatch.setattr(advisory, "notify_futures_advisory", lambda *a, **k: launched.append(1))
+    payload = AlertPayload(
+        ticker="MNQ1!",
+        timestamp=datetime(2026, 9, 19, 10, 0, tzinfo=ZoneInfo("America/New_York")).isoformat(),
+        timeframe="15",
+        open=25000.0,
+        high=25010.0,
+        low=24990.0,
+        close=25005.0,
+    )
+    result = _result(decision="TRADE", candidate_audit=[_candidate(selected=True)])
+    monkeypatch.setattr(app_module, "process_alert", lambda *a, **k: result)
+    monkeypatch.setattr(app_module, "_record_latest_webhook", lambda *a, **k: None)
+    monkeypatch.setattr(app_module, "append_observer_response_audit", lambda *a, **k: None)
+    monkeypatch.setattr(app_module, "notify_discord", lambda **k: None)
+    monkeypatch.setattr(app_module._config, "live_quote_enabled", False)
+    monkeypatch.setattr(app_module._config, "discord_notify_decisions", ["TRADE"])
+    monkeypatch.setattr(
+        app_module,
+        "_decision_notification_market_gate",
+        lambda *a, **k: (False, "MARKET_CLOSED_AT_SIGNAL", "MNQ"),
+    )
+    app_module._handle_alert_blocking(payload)
+    assert launched == []
+    assert result["decision"] == "TRADE"
