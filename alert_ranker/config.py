@@ -156,6 +156,11 @@ class ScannerConfig:
     #   flag to restore the old hourly requirement.
     paper_v1_daily_min_target_rr: float = 1.0
     paper_v1_daily_require_hourly_alignment: bool = False
+    # Isolated SPX → SPXW paper lane (OPTIONS_PAPER_SPXW_V1). Default OFF.
+    # Never adds SPX/SPXW to the equity watchlist; separate journal + schedule.
+    spxw_paper_lane_enabled: bool = False
+    spxw_interval_minutes: int = 5
+    spxw_sqlite_path: Path = Path("logs/options_spxw_scanner.sqlite")
 
     @property
     def rh_configured(self) -> bool:
@@ -284,6 +289,16 @@ def load_config(environ: Iterable[tuple[str, str]] | None = None) -> ScannerConf
         ),
         paper_v1_daily_require_hourly_alignment=_as_bool(
             env.get("OPTIONS_PAPER_V1_DAILY_REQUIRE_HOURLY"), False
+        ),
+        spxw_paper_lane_enabled=_as_bool(
+            env.get("OPTIONS_SPXW_PAPER_LANE_ENABLED"), False
+        ),
+        spxw_interval_minutes=_as_int(
+            env.get("OPTIONS_SPXW_INTERVAL_MINUTES"),
+            _as_int(env.get("OPTIONS_SCANNER_INTERVAL_MINUTES"), 5),
+        ),
+        spxw_sqlite_path=Path(
+            env.get("OPTIONS_SPXW_SQLITE_PATH", "logs/options_spxw_scanner.sqlite")
         ),
         alpaca_trading_base_url=env.get(
             "ALPACA_ENDPOINT", "https://paper-api.alpaca.markets"

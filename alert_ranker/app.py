@@ -40,6 +40,8 @@ from .rh_options import (
 )
 from .lifecycle import classify_candidate
 from .scanner import OptionsScanner
+from .spxw_lane import SpxwPaperLane
+from .spxw_storage import SpxwStorage
 from .storage import ScanStorage
 from .signa_context_store import SHARED_PROXY_SYMBOLS, SignaContextStore
 from sources.signa_discovery import (
@@ -93,14 +95,28 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
         nonlocal scanner
         storage = ScanStorage(cfg.sqlite_path)
         async with create_market_data_client(cfg) as market_data, DiscordAlerter(cfg, storage) as discord:
+            bar_context = create_bar_context(cfg)
             scanner = scanner or OptionsScanner(
                 cfg,
                 market_data,
                 storage,
                 discord,
-                bar_context=create_bar_context(cfg),
+                bar_context=bar_context,
             )
             app.state.scanner = scanner
+            # Isolated SPX→SPXW paper lane. Constructed and scheduled only when
+            # explicitly enabled (default off). Never mutates the equity watchlist
+            # and never shares OPTIONS_PAPER_V1 journal rows.
+            app.state.spxw_lane = None
+            if cfg.spxw_paper_lane_enabled:
+                spxw_lane = SpxwPaperLane(
+                    config=cfg,
+                    market_data=market_data,
+                    storage=SpxwStorage(cfg.spxw_sqlite_path),
+                    equity_watchlist=cfg.watchlist,
+                    bar_context=bar_context,
+                )
+                app.state.spxw_lane = spxw_lane
             # Restart recovery / legacy-backlog reconciliation: OPEN rows that
             # never met candidate requirements are reclassified REJECTED
             # (append-only outcome note, row data preserved). Idempotent.
@@ -127,6 +143,25 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
                 max_instances=1,
                 coalesce=True,
             )
+            if cfg.spxw_paper_lane_enabled and app.state.spxw_lane is not None:
+                scheduler.add_job(
+                    app.state.spxw_lane.run_scheduled_scan,
+                    "interval",
+                    minutes=cfg.spxw_interval_minutes,
+                    id="options-spx-spxw-scan",
+                    replace_existing=True,
+                    max_instances=1,
+                    coalesce=True,
+                )
+                scheduler.add_job(
+                    app.state.spxw_lane.resolve_open_positions,
+                    "interval",
+                    minutes=cfg.spxw_interval_minutes,
+                    id="options-spx-spxw-resolve",
+                    replace_existing=True,
+                    max_instances=1,
+                    coalesce=True,
+                )
             if rh_client and rh_client.configured:
                 def _auto_check_job():
                     auto_check_positions(storage, cfg.discord_webhook_url, rh_client)
@@ -152,10 +187,12 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
                 )
             scheduler.start()
             app_state["scheduler"] = scheduler
+            app.state.scheduler = scheduler
             try:
                 yield
             finally:
                 scheduler.shutdown(wait=False)
+                app.state.scheduler = None
 
     app = FastAPI(title="Advisory Options Scanner", lifespan=lifespan)
     if scanner is not None:
@@ -192,6 +229,20 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
     @app.get("/status")
     async def status() -> dict[str, Any]:
         return get_scanner().status()
+
+    @app.get("/spxw/status")
+    async def spxw_status() -> dict[str, Any]:
+        """Read-only status for the isolated SPX→SPXW paper lane."""
+        lane = getattr(app.state, "spxw_lane", None)
+        if lane is None:
+            return {
+                "lane": "SPX_SPXW_PAPER",
+                "enabled": bool(cfg.spxw_paper_lane_enabled),
+                "live_execution": False,
+                "broker_order_path": False,
+                "available": False,
+            }
+        return lane.status()
 
     @app.get("/public/status")
     async def public_status() -> dict[str, Any]:

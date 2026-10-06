@@ -9,6 +9,7 @@ the read-only path guards.
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -437,5 +438,176 @@ def test_option_chain_missing_one_side_timestamp_does_not_synthesize_quote_time(
         assert call.ask_timestamp is None
         assert call.quote_timestamp is None
         assert call.source == PUBLIC_OPTION_CHAIN_SOURCE
+
+    asyncio.run(run())
+
+
+def _json_body(request: httpx.Request) -> dict:
+    return json.loads(request.content)
+
+
+def test_spx_snapshot_uses_index_not_equity(tmp_path):
+    """SPX equity quotes are not the index. Public prices SPX only as INDEX."""
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        auth = auth_ok(request)
+        if auth:
+            return auth
+        body = _json_body(request)
+        seen.append(body)
+        instrument = body["instruments"][0]
+        assert instrument == {"symbol": "SPX", "type": "INDEX"}
+        return httpx.Response(
+            200,
+            json=quote_payload(
+                instrument={"symbol": "SPX", "type": "INDEX"},
+                last="7670.25",
+                bid=None,
+                ask=None,
+            ),
+        )
+
+    cfg = public_config(tmp_path)
+
+    async def run():
+        public = make_client(cfg, handler)
+        snapshot = await public.fetch_market_snapshot("spx")
+        assert snapshot.error is None
+        assert snapshot.ticker == "SPX"
+        assert snapshot.price == 7670.25
+        assert snapshot.bid is None and snapshot.ask is None
+        assert seen == [{"instruments": [{"symbol": "SPX", "type": "INDEX"}]}]
+
+    asyncio.run(run())
+
+
+def test_spxw_expirations_and_chain_use_spx_index_and_drop_other_roots(tmp_path):
+    """SPXW is not a Public instrument. Weeklies are the SPX index chain."""
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        auth = auth_ok(request)
+        if auth:
+            return auth
+        body = _json_body(request)
+        seen.append((request.url.path, body))
+        assert body["instrument"] == {"symbol": "SPX", "type": "INDEX"}
+        if request.url.path == EXPIRATIONS_PATH:
+            return httpx.Response(
+                200,
+                json={"baseSymbol": "SPX-INDEX", "expirations": ["2099-01-16", "2099-01-17"]},
+            )
+        assert body["expirationDate"] == "2099-01-16"
+        def contract(symbol: str) -> dict:
+            return {
+                "instrument": {"symbol": symbol, "type": "OPTION"},
+                "outcome": "SUCCESS",
+                "last": "2.10",
+                "bid": "2.05",
+                "bidTimestamp": "2026-09-18T13:59:58Z",
+                "ask": "2.15",
+                "askTimestamp": "2026-09-18T14:00:01Z",
+                "volume": 350,
+                "openInterest": 1500,
+                "optionDetails": {
+                    "greeks": {"delta": "0.52", "impliedVolatility": "0.19"},
+                    "strikePrice": "6700",
+                    "midPrice": "2.10",
+                },
+            }
+        return httpx.Response(
+            200,
+            json={
+                "baseSymbol": "SPX-INDEX",
+                "calls": [
+                    contract("SPX990116C06700000"),
+                    contract("SPXW990116C06700000"),
+                ],
+                "puts": [contract("SPXW990116P06700000"), contract("SPX990116P06700000")],
+            },
+        )
+
+    cfg = public_config(tmp_path)
+
+    async def run():
+        public = make_client(cfg, handler)
+        expirations = await public.fetch_option_expirations("SPXW")
+        assert expirations == ["2099-01-16", "2099-01-17"]
+        chain = await public.fetch_option_chain("spxw", "2099-01-16")
+        assert chain.error is None
+        assert chain.underlying == "SPXW"
+        assert chain.expiration == "2099-01-16"
+        assert [item.symbol for item in chain.calls] == ["SPXW990116C06700000"]
+        assert [item.symbol for item in chain.puts] == ["SPXW990116P06700000"]
+        assert seen == [
+            (EXPIRATIONS_PATH, {"instrument": {"symbol": "SPX", "type": "INDEX"}}),
+            (
+                CHAIN_PATH,
+                {
+                    "instrument": {"symbol": "SPX", "type": "INDEX"},
+                    "expirationDate": "2099-01-16",
+                },
+            ),
+        ]
+
+    asyncio.run(run())
+
+
+def test_spxw_chain_without_spxw_root_fails_closed(tmp_path):
+    def handler(request: httpx.Request) -> httpx.Response:
+        auth = auth_ok(request)
+        if auth:
+            return auth
+        contract = {
+            "instrument": {"symbol": "SPX990116C06700000", "type": "OPTION"},
+            "outcome": "SUCCESS",
+            "last": "2.10",
+            "bid": "2.05",
+            "bidTimestamp": "2026-09-18T13:59:58Z",
+            "ask": "2.15",
+            "askTimestamp": "2026-09-18T14:00:01Z",
+            "volume": 350,
+            "openInterest": 1500,
+            "optionDetails": {"strikePrice": "6700", "midPrice": "2.10"},
+        }
+        return httpx.Response(
+            200, json={"baseSymbol": "SPX-INDEX", "calls": [contract], "puts": []}
+        )
+
+    cfg = public_config(tmp_path)
+
+    async def run():
+        public = make_client(cfg, handler)
+        chain = await public.fetch_option_chain("SPXW", "2099-01-16")
+        assert chain.error == "empty_chain"
+        assert chain.calls == () and chain.puts == ()
+
+    asyncio.run(run())
+
+
+def test_equity_option_request_stays_equity(tmp_path):
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        auth = auth_ok(request)
+        if auth:
+            return auth
+        body = _json_body(request)
+        seen.append(body)
+        if request.url.path == EXPIRATIONS_PATH:
+            return httpx.Response(
+                200, json={"baseSymbol": "SPY", "expirations": ["2099-01-16"]}
+            )
+        return httpx.Response(200, json={"baseSymbol": "SPY", "calls": [], "puts": []})
+
+    cfg = public_config(tmp_path)
+
+    async def run():
+        public = make_client(cfg, handler)
+        await public.fetch_option_expirations("spy")
+        await public.fetch_option_chain("SPY", "2099-01-16")
+        assert seen[0] == {"instrument": {"symbol": "SPY", "type": "EQUITY"}}
+        assert seen[1]["instrument"] == {"symbol": "SPY", "type": "EQUITY"}
 
     asyncio.run(run())

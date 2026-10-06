@@ -112,6 +112,13 @@ PUBLIC_AUTH_TOKEN_PATH = "/userapiauthservice/personal/access-tokens"
 PUBLIC_MARKETDATA_PREFIX = "/userapigateway/marketdata"
 PUBLIC_ALLOWED_PREFIXES = (PUBLIC_MARKETDATA_PREFIX,)
 PUBLIC_OPTION_CHAIN_SOURCE = "public:/userapigateway/marketdata/{accountId}/option-chain"
+# Public prices the S&P 500 index only as SPX/INDEX. An EQUITY quote for SPX
+# is not that index. SPXW is not an instrument: option-expirations and
+# option-chain 400 ("Instrument SPXW is not available on Public."). The docs
+# type UNDERLYING_SECURITY_FOR_INDEX_OPTION is rejected as malformed JSON.
+# Weeklies are returned on the SPX index chain with OCC root SPXW.
+PUBLIC_INDEX_QUOTE_SYMBOL = "SPX"
+PUBLIC_INDEX_OPTION_ROOT = "SPXW"
 
 
 @dataclass(frozen=True)
@@ -282,7 +289,7 @@ class PublicMarketDataClient:
             return MarketSnapshot(symbol, error=preflight)
         body = await self._post_marketdata(
             self._marketdata_path("quotes"),
-            {"instruments": [{"symbol": symbol, "type": "EQUITY"}]},
+            {"instruments": [_public_quote_instrument(symbol)]},
         )
         if body is None:
             return MarketSnapshot(symbol, error=self.last_error)
@@ -331,7 +338,7 @@ class PublicMarketDataClient:
             return []
         body = await self._post_marketdata(
             self._marketdata_path("option-expirations"),
-            {"instrument": {"symbol": symbol, "type": "EQUITY"}},
+            {"instrument": _public_option_instrument(symbol)},
         )
         if body is None:
             return []
@@ -357,7 +364,7 @@ class PublicMarketDataClient:
         body = await self._post_marketdata(
             self._marketdata_path("option-chain"),
             {
-                "instrument": {"symbol": symbol, "type": "EQUITY"},
+                "instrument": _public_option_instrument(symbol),
                 "expirationDate": expiration,
             },
         )
@@ -365,6 +372,9 @@ class PublicMarketDataClient:
             return OptionChain(symbol, expiration, error=self.last_error)
         calls = _parse_public_contracts(body.get("calls"), "CALL")
         puts = _parse_public_contracts(body.get("puts"), "PUT")
+        if symbol == PUBLIC_INDEX_OPTION_ROOT:
+            calls = tuple(item for item in calls if _occ_option_root(item.symbol) == symbol)
+            puts = tuple(item for item in puts if _occ_option_root(item.symbol) == symbol)
         if not calls and not puts:
             self.last_error = "empty_chain"
             return OptionChain(symbol, expiration, error=self.last_error)
@@ -497,6 +507,29 @@ def build_provider_capabilities(
         base_url="",
         last_error=last_error or "unsupported_provider",
     )
+
+
+
+def _public_quote_instrument(symbol: str) -> dict[str, str]:
+    if symbol == PUBLIC_INDEX_QUOTE_SYMBOL:
+        return {"symbol": symbol, "type": "INDEX"}
+    return {"symbol": symbol, "type": "EQUITY"}
+
+
+def _public_option_instrument(symbol: str) -> dict[str, str]:
+    if symbol == PUBLIC_INDEX_OPTION_ROOT:
+        return {"symbol": PUBLIC_INDEX_QUOTE_SYMBOL, "type": "INDEX"}
+    return {"symbol": symbol, "type": "EQUITY"}
+
+
+def _occ_option_root(symbol: str) -> str:
+    compact = str(symbol or "").replace(" ", "").upper()
+    root: list[str] = []
+    for char in compact:
+        if not char.isalpha():
+            break
+        root.append(char)
+    return "".join(root)
 
 
 def _assert_read_only_path(path: str, allowed_prefixes: tuple[str, ...]) -> None:
