@@ -71,24 +71,23 @@ If the agent cannot persist this file, it must return this payload verbatim-read
 
 ### OPEN / NOT MERGE-CLEARED
 
-- **#1148** resynced onto `main` `de4486d` (#1155). Exact tip for CI + delta review: `8a6a642783a0c819aeb9b768c918c11d1c56ac77` (ancestor `27dc28e` has the fe88ade blocker fixes).
-  - Local delta `/options-diff-review` on `8a6a642`: **APPROVE**; three Grok blockers re-checked → all BLOCK; gate tests 165 passed.
-  - **Await CI green on `8a6a642`**, then merge only if PASS (operator pipeline). Do not merge #1149+.
-- Remaining after #1148: #1149 → #1150 → (#1151+#1154) → (#1152+#1153).
+- **HOLD — do NOT merge #1148.** Tip moved to `8a6a642783a0c819aeb9b768c918c11d1c56ac77` (resync onto `de4486d` / #1155). Prior Grok PASS on `27dc28e` is **stale**.
+  - Wait for independent **Grok PASS + Operator merge GO** on the exact current head only.
+- Remaining after #1148: #1149 → #1150 → (#1151+#1154) → (#1152+#1153). Do not merge #1149+.
 - Live A13 / Public INDEX entitlement UNVERIFIED.
 - No observer timer install.
 
 ### DO NOT REDO
 
-- Do not merge #1148 on stale tips `fe88ade` / `27dc28e` (pre-`de4486d` sync) or without CI green on exact tip.
+- Do not merge #1148 on `27dc28e` / `fe88ade` or any tip without fresh Grok PASS + operator GO on that exact SHA.
 - Do not install observer timer / status wrapper / release-pin drop-in without separate install GO.
 - Do not deploy, restart services, or change VPS config.
 - Do not re-merge #1145/#1146/#1147.
 
 ### NEXT
 
-1. Wait CI on #1148 tip `8a6a642`; merge if CI PASS (local delta review already APPROVE).
-2. After merge: reconcile #1149 for review and stop again.
+1. Wait for Grok PASS + operator merge GO on exact #1148 tip `8a6a642`.
+2. Only after that GO: merge #1148, then reconcile #1149 for review and stop again.
 3. Separate operator GO later for observer timer install + live prove.
 
 ## Governance PR provenance — 2026-10-06 (docs-only; does not override runtime NEXT)
