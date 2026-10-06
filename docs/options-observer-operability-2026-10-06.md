@@ -1,9 +1,8 @@
 # Options prospective observer — operability and runtime-integrity (2026-10-06)
 
 > **Integration pass (post-#1145 `ae8c897` / #1146 `445393f`).** Reconciled with
-> the merged setup-capture observer. The earlier speculative
-> `options_prospective_trigger_monitor_heartbeat.json` file does not exist and
-> was removed: #1145 records its heartbeat as `_clock` rows inside
+> the merged setup-capture observer. There is no separate heartbeat file:
+> #1145 records its heartbeat as `_clock` rows inside
 > `options_setup_capture.jsonl`. `options-setup-capture.service/.timer` and
 > that journal are now allowlisted. `scripts/options_setup_capture_status.py`
 > (from #1145) previously called repairing reads (`counts()` / `list_all()` with
