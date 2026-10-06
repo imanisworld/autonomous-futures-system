@@ -335,8 +335,13 @@ def evaluate_rh_options(
     timestamp = now or datetime.now(timezone.utc)
     failed_gates = _hard_gates(inputs, timestamp)
     warnings = [] if failed_gates else _soft_warnings(inputs)
-    decision = "NO_TRADE" if failed_gates else "WATCH" if warnings else "TRADE"
     risk_result = _risk_check(inputs)
+    if not risk_result.get("approved"):
+        # The risk check is binding: a refused risk result can never produce
+        # a ticket or a shadow record, whatever the setup gates say.
+        failed_gates = [*failed_gates, f"risk:{risk_result.get('failed_rule')}"]
+        warnings = []
+    decision = "NO_TRADE" if failed_gates else "WATCH" if warnings else "TRADE"
     order_ticket = _build_order_ticket(inputs) if decision != "NO_TRADE" else None
     broker_preview = RHAdvisoryBroker().preview_order(order_ticket)
     shadow_id = None
@@ -809,6 +814,17 @@ def _soft_warnings(inputs: RHOptionsInput) -> list[str]:
 
 
 def _risk_check(inputs: RHOptionsInput) -> dict[str, Any]:
+    numbers = {
+        "premium": inputs.premium,
+        "max_premium_per_contract": inputs.max_premium_per_contract,
+        "quantity": inputs.quantity,
+        "max_contracts": inputs.max_contracts,
+    }
+    for name, value in numbers.items():
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
+            return {"approved": False, "failed_rule": "risk_invalid", "reason": f"{name} must be a finite positive number."}
+    if int(inputs.quantity) != inputs.quantity or inputs.quantity < 1:
+        return {"approved": False, "failed_rule": "risk_invalid", "reason": "quantity must be a whole number of contracts >= 1."}
     if inputs.premium * 100 > inputs.max_premium_per_contract:
         return {
             "approved": False,
@@ -837,7 +853,9 @@ def _risk_check(inputs: RHOptionsInput) -> dict[str, Any]:
     # Planned risk is the premium-stop loss, never the full debit:
     # (entry - premium_stop) x 100 x contracts, capped like every other lane.
     planned_risk = round(risk * CONTRACT_MULTIPLIER * inputs.quantity, 2)
-    if not math.isfinite(planned_risk) or planned_risk > MAX_TRADE_RISK_DOLLARS:
+    if not math.isfinite(planned_risk) or planned_risk <= 0:
+        return {"approved": False, "failed_rule": "risk_invalid", "reason": "Planned premium-stop risk must be positive."}
+    if planned_risk > MAX_TRADE_RISK_DOLLARS:
         return {
             "approved": False,
             "failed_rule": "planned_risk_cap",

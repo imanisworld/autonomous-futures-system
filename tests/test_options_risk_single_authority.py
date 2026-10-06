@@ -216,3 +216,46 @@ def test_rh_evaluator_refuses_non_finite_premium():
 
     out = _risk_check(_rh_inputs(premium=float("nan")))
     assert out["approved"] is False
+
+
+# --- The risk check is binding at the evaluator level (independent review) ---
+
+
+def _evaluate(tmp_path, **overrides):
+    from datetime import datetime, timezone
+
+    from alert_ranker.rh_options import evaluate_rh_options
+    from alert_ranker.storage import ScanStorage
+
+    storage = ScanStorage(str(tmp_path / "scan.sqlite"))
+    inputs = _rh_inputs(gex_regime="LOW_PINNING", **overrides)
+    return evaluate_rh_options(inputs, storage=storage, now=datetime(2026, 10, 6, 15, tzinfo=timezone.utc))
+
+
+def test_rh_evaluator_baseline_within_cap_still_produces_a_ticket(tmp_path):
+    out = _evaluate(tmp_path, quantity=2)  # planned risk $240
+    assert out["decision"] in {"TRADE", "WATCH"}
+    assert out["risk_result"]["approved"] is True
+    assert out["order_ticket"] is not None
+
+
+@pytest.mark.parametrize(
+    "overrides,rule",
+    [
+        ({"premium": float("nan")}, "risk_invalid"),
+        ({"premium": float("inf")}, "risk_invalid"),
+        ({"max_premium_per_contract": float("nan")}, "risk_invalid"),
+        ({"quantity": 0}, "risk_invalid"),
+        ({"quantity": -5}, "risk_invalid"),
+        ({"quantity": 3}, "planned_risk_cap"),
+        ({"quantity": 10**9, "max_contracts": 10**9}, "planned_risk_cap"),
+    ],
+)
+def test_rh_evaluator_refused_risk_means_no_trade_no_ticket_no_shadow(tmp_path, overrides, rule):
+    out = _evaluate(tmp_path, **overrides)
+    assert out["risk_result"]["approved"] is False
+    assert out["risk_result"]["failed_rule"] == rule
+    assert out["decision"] == "NO_TRADE"
+    assert f"risk:{rule}" in out["failed_gates"]
+    assert out["order_ticket"] is None
+    assert out["shadow_id"] is None
