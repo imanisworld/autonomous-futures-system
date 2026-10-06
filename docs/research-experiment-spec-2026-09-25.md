@@ -277,7 +277,8 @@ or non-finite economic fields fail closed.
 
 ### 8.4 Chronological partitions (U2)
 
-Specs may declare `chronological_partitions` with three non-overlapping windows:
+Specs may declare `chronological_partitions` with three non-overlapping
+half-open windows `[start, end)` in UTC:
 
 1. `development` — fitting / iteration window  
 2. `validation` — held-out confirmation window after development  
@@ -288,16 +289,40 @@ Ordering is fail-closed:
 - each window requires `start` / `end` with `end > start`
 - `development.end <= validation.start`
 - `validation.end <= untouched_oos.start`
+- all boundaries normalize to UTC before comparison / fingerprinting
 
-Pre-U2 legacy specs may omit `chronological_partitions` and keep working.
-`evaluation_partition` without declared partitions fails closed.
+When `chronological_partitions` are declared, an active
+`evaluation_partition` is **mandatory** (on the spec or via CLI
+`--partition`). Declared partitions with no active partition are INVALID.
+CLI `--partition` must not contradict a partition declared on the spec.
+No declared partitions + no active partition remains valid for legacy specs.
 
-`untouched_oos` is once-only for the **exact** approved `experiment_id` +
-`trial_id` identity (plus the declared OOS window fingerprint). There is no
-silent family-wide OOS lock. A durable receipt is appended to
-`docs/research-oos-consumption-ledger.jsonl` only after a **VALID** OOS
-evaluation completes; invalid/blocked/incomplete runs do not consume the
-window. A second OOS attempt for the same exact identity fails closed.
+The resolved active partition and its normalized window are passed into
+`ExperimentContext`. For `trade_execution`, every scored row's `signal_ts`
+must satisfy `start <= signal_ts < end`. Coverage evidence must not invent
+timestamps; if it cannot prove membership in an untouched OOS window, it
+must not claim `untouched_oos`. Development runs must not score OOS-dated
+rows and OOS runs must not score development-dated rows.
+
+`untouched_oos` is once-only for the **exact** approved `trial_id`.
+Renaming `experiment_id`, reformatting an equivalent window string, or
+changing the OOS window under the same trial cannot grant a second look.
+The normalized OOS window fingerprint is preserved on the receipt as
+recorded evidence only — it is not the reuse key. There is no silent
+family-wide OOS lock.
+
+Write ordering is fail-closed: validity is determined in memory first;
+an exclusive lock covers OOS receipt check + append; the receipt is
+appended to `docs/research-oos-consumption-ledger.jsonl` **before** any
+VALID OOS evidence bundle is written. If receipt append fails, no VALID
+OOS bundle is written. If bundle writing crashes after receipt append,
+the trial remains consumed. Invalid/blocked/incomplete runs do not
+consume the window. Concurrent duplicate consumption is prevented with
+`fcntl` exclusive locking.
+
+The ledger is a repo-governed append-only artifact. Fresh checkouts and
+independent agents must see prior OOS consumption; CI enforces
+register-before-count consistency against the trial ledger.
 
 Development and validation partitions may be re-run when governance allows;
 U2 does not change lifecycle semantics beyond the OOS once-only gate.

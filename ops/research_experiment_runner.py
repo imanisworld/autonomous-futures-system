@@ -65,6 +65,8 @@ class ExperimentContext:
     spec_path: Path
     spec_hash: str
     runner_version: str = RUNNER_VERSION
+    evaluation_partition: str | None = None
+    partition_window: dict[str, str] | None = None
 
 
 @dataclass
@@ -400,6 +402,7 @@ def validate_experiment(
     *,
     for_execution: bool = False,
     first_rows: Mapping[str, dict[str, Any]] | None = None,
+    evaluation_partition: str | None = None,
 ) -> tuple[dict[str, Any], list[CheckResult], list[str]]:
     schema = load_schema(root)
     spec = load_spec(spec_path)
@@ -425,7 +428,9 @@ def validate_experiment(
     checks.extend(validate_linkage(root, spec, first_rows=first_rows))
     checks.extend(validate_dataset_identity(spec, root))
     checks.extend(validate_commit_arms(root, spec, for_execution=for_execution))
-    for name, passed, evidence in partition_contract.partition_check_results(spec):
+    for name, passed, evidence in partition_contract.partition_check_results(
+        spec, cli_partition=evaluation_partition
+    ):
         checks.append(CheckResult(name, passed, evidence))
 
     if for_execution:
@@ -726,9 +731,14 @@ def run_validation(
     *,
     for_execution: bool = False,
     first_rows: Mapping[str, dict[str, Any]] | None = None,
+    evaluation_partition: str | None = None,
 ) -> RunnerReport:
     spec, checks, schema_errors = validate_experiment(
-        root, spec_path, for_execution=for_execution, first_rows=first_rows
+        root,
+        spec_path,
+        for_execution=for_execution,
+        first_rows=first_rows,
+        evaluation_partition=evaluation_partition,
     )
     failed = [c for c in checks if not c.passed]
     errors = list(schema_errors)
@@ -1068,17 +1078,27 @@ def execute_experiment(
 
     Fail-closed: non-APPROVED, unresolved SHAs, missing adapter, or incomplete
     required metrics => no promotional claim and no silent continuation.
+
+    U2 OOS ordering (fail-closed): determine VALID in memory → exclusive lock →
+    append OOS receipt → then write evidence bundle. Crash after receipt append
+    leaves the trial consumed.
     """
     validation = run_validation(
-        root, spec_path, for_execution=True, first_rows=first_rows
+        root,
+        spec_path,
+        for_execution=True,
+        first_rows=first_rows,
+        evaluation_partition=evaluation_partition,
     )
     if validation.status != "VALID":
         return validation
 
     spec = load_spec(spec_path)
     try:
-        active_partition = partition_contract.resolve_evaluation_partition(
-            spec, override=evaluation_partition
+        active_partition, active_window, frozen_partitions = (
+            partition_contract.resolve_active_partition(
+                spec, cli_partition=evaluation_partition
+            )
         )
     except partition_contract.PartitionContractError as exc:
         return RunnerReport(
@@ -1109,47 +1129,14 @@ def execute_experiment(
             warnings=[],
         )
 
-    partition_errors = partition_contract.validate_spec_partitions(
-        {**spec, **({"evaluation_partition": active_partition} if active_partition else {})}
-    )
-    if partition_errors:
-        return RunnerReport(
-            status="INVALID",
-            experiment_id=spec.get("experiment_id"),
-            trial_id=spec.get("trial_id"),
-            baseline_sha=validation.baseline_sha,
-            candidate_sha=validation.candidate_sha,
-            population=spec.get("population"),
-            changed_variables=list(spec.get("changed_variables") or []),
-            held_constant=list(spec.get("held_constant") or []),
-            integrity_checks=list(validation.integrity_checks)
-            + [
-                CheckResult(
-                    "chronological_partitions",
-                    False,
-                    "; ".join(partition_errors),
-                )
-            ],
-            baseline_metrics=None,
-            candidate_metrics=None,
-            delta=None,
-            coverage_funnel=None,
-            concentration=None,
-            evidence_classification={
-                "VERIFIED": [],
-                "INFERENCE": [],
-                "UNKNOWN": ["chronological partition contract failed closed"],
-            },
-            result="INVALID EXPERIMENT",
-            artifacts=validation.artifacts,
-            qa_handoff=validation.qa_handoff,
-            errors=list(partition_errors),
-            warnings=[],
-        )
-
+    trial_id = str(spec.get("trial_id") or "").strip()
     if active_partition == partition_contract.PARTITION_UNTOUCHED_OOS:
         try:
-            partition_contract.assert_oos_available(root, spec=spec)
+            if not trial_id:
+                raise partition_contract.PartitionContractError(
+                    "OOS evaluation requires trial_id"
+                )
+            partition_contract.assert_oos_available(root, trial_id=trial_id)
         except partition_contract.PartitionContractError as exc:
             return RunnerReport(
                 status="INVALID",
@@ -1186,17 +1173,20 @@ def execute_experiment(
         spec=spec,
         spec_path=spec_path,
         spec_hash=sha256_file(spec_path),
+        evaluation_partition=active_partition,
+        partition_window=dict(active_window) if active_window is not None else None,
     )
 
     baseline_arm, candidate_arm = _run_both_arms(adapter, ctx)
 
     checks = list(validation.integrity_checks)
-    if active_partition is not None:
+    if active_partition is not None and active_window is not None:
         checks.append(
             CheckResult(
                 "evaluation_partition",
                 True,
-                f"evaluation_partition={active_partition}",
+                f"evaluation_partition={active_partition} "
+                f"window=[{active_window['start']}, {active_window['end']})",
             )
         )
     if active_partition == partition_contract.PARTITION_UNTOUCHED_OOS:
@@ -1204,7 +1194,7 @@ def execute_experiment(
             CheckResult(
                 "oos_once_only",
                 True,
-                "untouched_oos available for this exact experiment/trial",
+                "untouched_oos available for this exact trial (pre-check)",
             )
         )
     try:
@@ -1276,6 +1266,70 @@ def execute_experiment(
             artifacts=validation.artifacts,
             qa_handoff=validation.qa_handoff,
             errors=list(evidence_errors),
+            warnings=baseline_arm.warnings + candidate_arm.warnings,
+        )
+
+    partition_row_errors = (
+        partition_contract.assert_members_match_active_partition(
+            baseline_arm.members,
+            evidence_type=evidence_type,
+            active_partition=active_partition,
+            active_window=active_window,
+        )
+        + partition_contract.assert_members_match_active_partition(
+            candidate_arm.members,
+            evidence_type=evidence_type,
+            active_partition=active_partition,
+            active_window=active_window,
+        )
+    )
+    checks.append(
+        CheckResult(
+            "partition_membership",
+            not partition_row_errors,
+            (
+                f"scored rows inside active partition {active_partition} "
+                f"[{active_window['start']}, {active_window['end']})"
+                if active_partition and active_window and not partition_row_errors
+                else (
+                    "no active partition (legacy path)"
+                    if not active_partition
+                    else "; ".join(partition_row_errors)
+                )
+            ),
+        )
+    )
+    if partition_row_errors:
+        return RunnerReport(
+            status="INVALID",
+            experiment_id=spec.get("experiment_id"),
+            trial_id=spec.get("trial_id"),
+            baseline_sha=baseline_arm.commit_sha,
+            candidate_sha=candidate_arm.commit_sha,
+            population=spec.get("population"),
+            changed_variables=list(spec.get("changed_variables") or []),
+            held_constant=list(spec.get("held_constant") or []),
+            integrity_checks=checks,
+            baseline_metrics=None,
+            candidate_metrics=None,
+            delta=None,
+            coverage_funnel={
+                "baseline": coverage_funnel(baseline_arm.members),
+                "candidate": coverage_funnel(candidate_arm.members),
+            },
+            concentration={
+                "baseline": concentration(baseline_arm.members),
+                "candidate": concentration(candidate_arm.members),
+            },
+            evidence_classification={
+                "VERIFIED": [],
+                "INFERENCE": [],
+                "UNKNOWN": ["active partition membership failed closed before metrics"],
+            },
+            result="INVALID EXPERIMENT",
+            artifacts=validation.artifacts,
+            qa_handoff=validation.qa_handoff,
+            errors=list(partition_row_errors),
             warnings=baseline_arm.warnings + candidate_arm.warnings,
         )
 
@@ -1380,6 +1434,7 @@ def execute_experiment(
     result_label, classification = classify_experiment_result(
         spec, baseline_metrics, candidate_metrics
     )
+    # Validity is determined in memory before any OOS receipt or evidence write.
     report = RunnerReport(
         status="VALID",
         experiment_id=spec.get("experiment_id"),
@@ -1427,6 +1482,10 @@ def execute_experiment(
         warnings=baseline_arm.warnings + candidate_arm.warnings,
     )
     report.artifacts["criteria_classification"] = classification
+    report.artifacts["evaluation_partition"] = active_partition
+    report.artifacts["partition_window"] = (
+        dict(active_window) if active_window is not None else None
+    )
     report.evidence_classification["VERIFIED"].append(
         "runner has zero promotion/merge/deploy/strategy-change authority"
     )
@@ -1437,75 +1496,103 @@ def execute_experiment(
     )
     if active_partition is not None:
         repro += f" --partition {active_partition}"
-    if write_evidence:
-        out_dir = evidence_dir or (root / spec["evidence_path"])
-        artifact_paths = write_evidence_bundle(
-            out_dir,
-            report=report,
-            spec=spec,
-            baseline_raw={"members": baseline_arm.members, "raw": baseline_arm.raw},
-            candidate_raw={"members": candidate_arm.members, "raw": candidate_arm.raw},
-            reproduction_command=repro,
-            evaluation_partition=active_partition,
-        )
-        report.artifacts["evidence_dir"] = str(out_dir)
-        report.artifacts["files"] = artifact_paths
-        report.artifacts["reproduction_command"] = repro
+    report.artifacts["reproduction_command"] = repro
 
-    # Durable OOS receipt only after a VALID untouched_oos evaluation completes.
-    # Invalid/blocked/incomplete runs must not consume the window.
-    if (
-        report.status == "VALID"
-        and active_partition == partition_contract.PARTITION_UNTOUCHED_OOS
-    ):
+    out_dir = evidence_dir or (root / spec["evidence_path"])
+    oos_receipt: dict[str, Any] | None = None
+
+    # OOS: append durable receipt under exclusive lock BEFORE evidence bundle.
+    if active_partition == partition_contract.PARTITION_UNTOUCHED_OOS:
+        assert frozen_partitions is not None
         try:
-            partitions = partition_contract.freeze_chronological_partitions(
-                spec.get("chronological_partitions")
-            )
             code_sha = report.candidate_sha or report.baseline_sha
             if not code_sha:
                 raise partition_contract.PartitionContractError(
                     "cannot record OOS receipt without a real code_sha"
                 )
-            receipt = partition_contract.build_oos_receipt(
+            report_sha = sha256_bytes(
+                (
+                    json.dumps(report.to_dict(), indent=2, sort_keys=True) + "\n"
+                ).encode("utf-8")
+            )
+            oos_receipt = partition_contract.build_oos_receipt(
                 spec=spec,
-                partitions=partitions,
+                partitions=frozen_partitions,
                 code_sha=str(code_sha),
                 runner_version=RUNNER_VERSION,
                 consumed_at=utc_now(),
-                evidence_path=str(report.artifacts.get("evidence_dir") or spec.get("evidence_path")),
-                runner_report_sha256=(
-                    (report.artifacts.get("files") or {}).get("runner_report.json.sha256")
-                    if isinstance(report.artifacts.get("files"), dict)
-                    else None
-                ),
+                evidence_path=str(out_dir),
+                runner_report_sha256=report_sha,
             )
-            ledger_path = partition_contract.append_oos_receipt(root, receipt)
+            ledger_path = partition_contract.consume_oos_receipt(root, oos_receipt)
             report.artifacts["oos_consumption_ledger"] = str(ledger_path)
-            if write_evidence:
-                out_dir = Path(str(report.artifacts.get("evidence_dir")))
-                receipt_path = partition_contract.write_oos_receipt_artifact(
-                    out_dir, receipt
-                )
-                files = report.artifacts.setdefault("files", {})
-                if isinstance(files, dict):
-                    files[partition_contract.OOS_RECEIPT_FILENAME] = receipt_path.as_posix()
-                    files[
-                        f"{partition_contract.OOS_RECEIPT_FILENAME}.sha256"
-                    ] = sha256_bytes(receipt_path.read_bytes())
-            report.artifacts["oos_consumption_receipt"] = receipt
+            report.artifacts["oos_consumption_receipt"] = oos_receipt
             report.evidence_classification["VERIFIED"].append(
-                "untouched_oos consumption receipt recorded for this exact experiment/trial only"
+                "untouched_oos consumption receipt recorded for this exact trial only"
             )
+            report.integrity_checks = list(report.integrity_checks) + [
+                CheckResult(
+                    "oos_receipt_write",
+                    True,
+                    f"OOS receipt appended before evidence bundle "
+                    f"(receipt_identity={oos_receipt['receipt_identity']})",
+                )
+            ]
         except partition_contract.PartitionContractError as exc:
-            # Race / double-consume after a valid run: fail closed and do not
-            # leave a promotional VALID claim without the durable receipt.
+            # Already consumed / append failure: no VALID OOS bundle.
             report.status = "INVALID"
             report.result = "INVALID EXPERIMENT"
             report.errors = list(report.errors) + [str(exc)]
             report.integrity_checks = list(report.integrity_checks) + [
                 CheckResult("oos_receipt_write", False, str(exc))
             ]
+            return report
+
+    if write_evidence:
+        try:
+            artifact_paths = write_evidence_bundle(
+                out_dir,
+                report=report,
+                spec=spec,
+                baseline_raw={"members": baseline_arm.members, "raw": baseline_arm.raw},
+                candidate_raw={
+                    "members": candidate_arm.members,
+                    "raw": candidate_arm.raw,
+                },
+                reproduction_command=repro,
+                evaluation_partition=active_partition,
+            )
+            report.artifacts["evidence_dir"] = str(out_dir)
+            report.artifacts["files"] = artifact_paths
+            if oos_receipt is not None:
+                receipt_path = partition_contract.write_oos_receipt_artifact(
+                    out_dir, oos_receipt
+                )
+                files = report.artifacts.setdefault("files", {})
+                if isinstance(files, dict):
+                    files[partition_contract.OOS_RECEIPT_FILENAME] = (
+                        receipt_path.as_posix()
+                    )
+                    files[
+                        f"{partition_contract.OOS_RECEIPT_FILENAME}.sha256"
+                    ] = sha256_bytes(receipt_path.read_bytes())
+        except Exception as exc:  # noqa: BLE001 — fail-closed after OOS consume
+            if oos_receipt is not None:
+                # Receipt already committed: trial remains consumed (intentional).
+                report.status = "INVALID"
+                report.result = "INVALID EXPERIMENT"
+                report.errors = list(report.errors) + [
+                    f"evidence bundle write failed after OOS receipt commit: {exc}"
+                ]
+                report.integrity_checks = list(report.integrity_checks) + [
+                    CheckResult(
+                        "evidence_bundle_after_oos_receipt",
+                        False,
+                        "OOS receipt committed; bundle write failed; trial remains consumed",
+                    )
+                ]
+                return report
+            raise
 
     return report
 
@@ -1526,6 +1613,8 @@ def _run_both_arms(
             spec_path=ctx.spec_path,
             spec_hash=ctx.spec_hash,
             runner_version=ctx.runner_version,
+            evaluation_partition=ctx.evaluation_partition,
+            partition_window=ctx.partition_window,
         )
     )
     candidate = adapter(
@@ -1535,6 +1624,8 @@ def _run_both_arms(
             spec_path=ctx.spec_path,
             spec_hash=ctx.spec_hash,
             runner_version=ctx.runner_version,
+            evaluation_partition=ctx.evaluation_partition,
+            partition_window=ctx.partition_window,
         )
     )
     return baseline, candidate

@@ -6,20 +6,31 @@ or rewrite historical evidence.
 
 Partition contract (when declared on a spec):
   development → validation → untouched_oos
-with non-overlapping, chronologically ordered windows.
+with non-overlapping, chronologically ordered half-open windows [start, end)
+in UTC.
 
-OOS consumption is scoped to the exact approved experiment_id + trial_id
-identity (plus the declared untouched_oos window fingerprint). There is no
-silent family-wide OOS lock.
+Active evaluation partition is mandatory when chronological_partitions are
+declared. Scored trade_execution rows must have signal_ts inside the active
+window. Coverage may not claim untouched_oos without timestamp membership
+proof (timestamps are never invented).
+
+OOS consumption is once-only per exact approved trial_id. experiment_id
+renames, equivalent window reformatting, and OOS window changes under the
+same trial cannot grant a second look. The normalized OOS window fingerprint
+is recorded as evidence only — it is not the reuse key. There is no
+family-wide OOS lock.
 """
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
+import os
+from contextlib import contextmanager
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, Iterator, Mapping, Optional, Sequence
 
 PARTITION_DEVELOPMENT = "development"
 PARTITION_VALIDATION = "validation"
@@ -31,9 +42,13 @@ ORDERED_PARTITIONS = (
 )
 KNOWN_PARTITIONS = frozenset(ORDERED_PARTITIONS)
 
-OOS_RECEIPT_SCHEMA_VERSION = "1.0.0"
+OOS_RECEIPT_SCHEMA_VERSION = "1.1.0"
 OOS_LEDGER_REL = "docs/research-oos-consumption-ledger.jsonl"
+OOS_LEDGER_LOCK_REL = "docs/research-oos-consumption-ledger.jsonl.lock"
 OOS_RECEIPT_FILENAME = "oos_consumption_receipt.json"
+
+# Optional coverage membership timestamp keys (never invented by the runner).
+COVERAGE_MEMBERSHIP_TS_KEYS = ("signal_ts", "timestamp", "event_ts", "bar_ts")
 
 
 class PartitionContractError(ValueError):
@@ -48,10 +63,15 @@ def _canonical_json(payload: Mapping[str, Any]) -> str:
     return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
 
 
+def _format_utc(dt: datetime) -> str:
+    return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
 def parse_boundary(value: Any, *, field_name: str) -> datetime:
     """Parse a partition boundary as a timezone-aware UTC datetime.
 
     Accepts YYYY-MM-DD (treated as 00:00:00Z) or ISO-8601 timestamps.
+    Naive timestamps are rejected; all comparisons use UTC.
     """
     if not isinstance(value, str) or not value.strip():
         raise PartitionContractError(f"{field_name} must be a non-empty date/timestamp")
@@ -77,6 +97,11 @@ def parse_boundary(value: Any, *, field_name: str) -> datetime:
     return parsed.astimezone(timezone.utc)
 
 
+def parse_membership_ts(value: Any, *, field_name: str) -> datetime:
+    """Parse a scored-row timestamp for partition membership (UTC)."""
+    return parse_boundary(value, field_name=field_name)
+
+
 def _normalize_window(raw: Any, *, partition: str) -> dict[str, str]:
     if not isinstance(raw, Mapping):
         raise PartitionContractError(
@@ -92,11 +117,12 @@ def _normalize_window(raw: Any, *, partition: str) -> dict[str, str]:
         raise PartitionContractError(
             f"chronological_partitions.{partition} requires end > start"
         )
-    return {"start": str(raw["start"]).strip(), "end": str(raw["end"]).strip()}
+    # Store UTC-normalized forms so equivalent raw strings fingerprint identically.
+    return {"start": _format_utc(start), "end": _format_utc(end)}
 
 
 def freeze_chronological_partitions(raw: Any) -> dict[str, dict[str, str]]:
-    """Validate and return a frozen partition bundle."""
+    """Validate and return a frozen partition bundle with UTC-normalized windows."""
     if raw is None:
         raise PartitionContractError("chronological_partitions is missing")
     if not isinstance(raw, Mapping):
@@ -114,7 +140,6 @@ def freeze_chronological_partitions(raw: Any) -> dict[str, dict[str, str]]:
     frozen = {
         name: _normalize_window(raw[name], partition=name) for name in ORDERED_PARTITIONS
     }
-    # Chronological non-overlap: development ends before validation begins, etc.
     bounds = {
         name: (
             parse_boundary(frozen[name]["start"], field_name=f"{name}.start"),
@@ -133,68 +158,139 @@ def freeze_chronological_partitions(raw: Any) -> dict[str, dict[str, str]]:
     return frozen
 
 
-def resolve_evaluation_partition(
-    spec: Mapping[str, Any],
-    *,
-    override: Optional[str] = None,
-) -> Optional[str]:
-    """Return the active evaluation partition, or None when not declared."""
-    raw = override if override is not None else spec.get("evaluation_partition")
-    if raw is None or raw == "":
-        return None
-    text = str(raw).strip()
-    if text not in KNOWN_PARTITIONS:
-        raise PartitionContractError(
-            f"unknown evaluation_partition {text!r}; expected one of "
-            f"{list(ORDERED_PARTITIONS)}"
-        )
-    return text
+def window_bounds(window: Mapping[str, str]) -> tuple[datetime, datetime]:
+    start = parse_boundary(window["start"], field_name="window.start")
+    end = parse_boundary(window["end"], field_name="window.end")
+    return start, end
+
+
+def timestamp_in_window(ts: datetime, window: Mapping[str, str]) -> bool:
+    """Half-open membership: start <= ts < end (UTC)."""
+    if ts.tzinfo is None:
+        raise PartitionContractError("membership timestamp must be timezone-aware UTC")
+    start, end = window_bounds(window)
+    utc_ts = ts.astimezone(timezone.utc)
+    return start <= utc_ts < end
 
 
 def partitions_declared(spec: Mapping[str, Any]) -> bool:
     return isinstance(spec.get("chronological_partitions"), Mapping)
 
 
-def validate_spec_partitions(spec: Mapping[str, Any]) -> list[str]:
-    """Return error strings for partition contract violations (empty if ok)."""
-    errors: list[str] = []
+def resolve_active_partition(
+    spec: Mapping[str, Any],
+    *,
+    cli_partition: Optional[str] = None,
+) -> tuple[Optional[str], Optional[dict[str, str]], Optional[dict[str, dict[str, str]]]]:
+    """Resolve active evaluation partition and its normalized window.
+
+    Returns (active_partition, active_window, frozen_partitions).
+
+    Rules:
+    - No declared partitions + no active partition → legacy OK (all None).
+    - Declared partitions + no active partition → INVALID.
+    - CLI --partition must not silently contradict spec evaluation_partition.
+    """
     has_partitions = partitions_declared(spec)
-    try:
-        evaluation = resolve_evaluation_partition(spec)
-    except PartitionContractError as exc:
-        return [str(exc)]
+    spec_raw = spec.get("evaluation_partition")
+    spec_partition: Optional[str] = None
+    if _present(spec_raw):
+        text = str(spec_raw).strip()
+        if text not in KNOWN_PARTITIONS:
+            raise PartitionContractError(
+                f"unknown evaluation_partition {text!r}; expected one of "
+                f"{list(ORDERED_PARTITIONS)}"
+            )
+        spec_partition = text
+
+    cli_resolved: Optional[str] = None
+    if cli_partition is not None and str(cli_partition).strip() != "":
+        text = str(cli_partition).strip()
+        if text not in KNOWN_PARTITIONS:
+            raise PartitionContractError(
+                f"unknown CLI --partition {text!r}; expected one of "
+                f"{list(ORDERED_PARTITIONS)}"
+            )
+        cli_resolved = text
+
+    if (
+        cli_resolved is not None
+        and spec_partition is not None
+        and cli_resolved != spec_partition
+    ):
+        raise PartitionContractError(
+            f"CLI --partition {cli_resolved!r} contradicts spec "
+            f"evaluation_partition {spec_partition!r}"
+        )
+
+    active = cli_resolved if cli_resolved is not None else spec_partition
 
     if not has_partitions:
-        if evaluation is not None:
-            errors.append(
+        if active is not None:
+            raise PartitionContractError(
                 "evaluation_partition requires chronological_partitions on the spec"
             )
-        return errors
+        return None, None, None
 
+    frozen = freeze_chronological_partitions(spec.get("chronological_partitions"))
+    if active is None:
+        raise PartitionContractError(
+            "chronological_partitions declared but no active evaluation_partition; "
+            "set evaluation_partition on the spec or pass --partition"
+        )
+    return active, dict(frozen[active]), frozen
+
+
+def validate_spec_partitions(
+    spec: Mapping[str, Any],
+    *,
+    cli_partition: Optional[str] = None,
+) -> list[str]:
+    """Return error strings for partition contract violations (empty if ok)."""
     try:
-        freeze_chronological_partitions(spec.get("chronological_partitions"))
+        resolve_active_partition(spec, cli_partition=cli_partition)
     except PartitionContractError as exc:
-        errors.append(str(exc))
-    return errors
+        return [str(exc)]
+    return []
 
 
 def oos_window_fingerprint(partitions: Mapping[str, Mapping[str, str]]) -> str:
+    """Fingerprint of the UTC-normalized untouched_oos window (evidence only)."""
     window = partitions[PARTITION_UNTOUCHED_OOS]
     digest = hashlib.sha256(_canonical_json(dict(window)).encode("utf-8")).hexdigest()
     return f"oos-{digest[:32]}"
 
 
-def receipt_identity_key(
-    *,
-    experiment_id: str,
-    trial_id: str,
-    oos_fingerprint: str,
-) -> str:
-    return f"{experiment_id}|{trial_id}|{oos_fingerprint}"
+def receipt_reuse_key(*, trial_id: str) -> str:
+    """Once-only OOS reuse key: exact approved trial_id only."""
+    text = str(trial_id or "").strip()
+    if not text:
+        raise PartitionContractError("OOS receipt requires trial_id")
+    return f"trial:{text}"
 
 
 def oos_ledger_path(root: Path) -> Path:
     return root / OOS_LEDGER_REL
+
+
+def oos_ledger_lock_path(root: Path) -> Path:
+    return root / OOS_LEDGER_LOCK_REL
+
+
+@contextmanager
+def oos_ledger_lock(root: Path) -> Iterator[None]:
+    """Exclusive fcntl lock around OOS receipt check + append."""
+    lock_path = oos_ledger_lock_path(root)
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    handle = open(lock_path, "a+", encoding="utf-8")
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        yield
+    finally:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        finally:
+            handle.close()
 
 
 def _iter_ledger_receipts(root: Path) -> list[dict[str, Any]]:
@@ -216,58 +312,103 @@ def _iter_ledger_receipts(root: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def find_oos_consumption(
-    root: Path,
-    *,
-    experiment_id: str,
-    trial_id: str,
-    oos_fingerprint: str,
-) -> Optional[dict[str, Any]]:
-    key = receipt_identity_key(
-        experiment_id=experiment_id,
-        trial_id=trial_id,
-        oos_fingerprint=oos_fingerprint,
-    )
+def find_oos_consumption(root: Path, *, trial_id: str) -> Optional[dict[str, Any]]:
+    """Find prior OOS consumption for this exact trial_id (reuse key)."""
+    key = receipt_reuse_key(trial_id=trial_id)
     for row in _iter_ledger_receipts(root):
         if str(row.get("receipt_identity") or "") == key:
             return row
-        # Defensive match on explicit fields if identity missing on older rows.
-        if (
-            str(row.get("experiment_id") or "") == experiment_id
-            and str(row.get("trial_id") or "") == trial_id
-            and str(row.get("oos_fingerprint") or "") == oos_fingerprint
-        ):
+        if str(row.get("trial_id") or "").strip() == str(trial_id).strip():
             return row
     return None
 
 
-def assert_oos_available(
-    root: Path,
-    *,
-    spec: Mapping[str, Any],
-) -> dict[str, dict[str, str]]:
-    """Fail closed if this exact experiment/trial already consumed its OOS window."""
-    partitions = freeze_chronological_partitions(spec.get("chronological_partitions"))
-    experiment_id = str(spec.get("experiment_id") or "").strip()
-    trial_id = str(spec.get("trial_id") or "").strip()
-    if not experiment_id or not trial_id:
-        raise PartitionContractError(
-            "OOS evaluation requires experiment_id and trial_id"
-        )
-    fingerprint = oos_window_fingerprint(partitions)
-    existing = find_oos_consumption(
-        root,
-        experiment_id=experiment_id,
-        trial_id=trial_id,
-        oos_fingerprint=fingerprint,
-    )
+def assert_oos_available(root: Path, *, trial_id: str) -> None:
+    """Fail closed if this exact trial already consumed its OOS look."""
+    existing = find_oos_consumption(root, trial_id=trial_id)
     if existing is not None:
         raise PartitionContractError(
-            "untouched_oos already consumed for this exact experiment/trial "
-            f"(receipt_identity={receipt_identity_key(experiment_id=experiment_id, trial_id=trial_id, oos_fingerprint=fingerprint)}; "
-            f"consumed_at={existing.get('consumed_at')!r})"
+            "untouched_oos already consumed for this exact trial "
+            f"(receipt_identity={receipt_reuse_key(trial_id=trial_id)}; "
+            f"consumed_at={existing.get('consumed_at')!r}; "
+            f"prior_experiment_id={existing.get('experiment_id')!r})"
         )
-    return partitions
+
+
+def _coverage_membership_ts(row: Mapping[str, Any]) -> Optional[datetime]:
+    for key in COVERAGE_MEMBERSHIP_TS_KEYS:
+        if _present(row.get(key)):
+            return parse_membership_ts(row[key], field_name=key)
+    return None
+
+
+def assert_members_match_active_partition(
+    members: Sequence[Mapping[str, Any]],
+    *,
+    evidence_type: str,
+    active_partition: Optional[str],
+    active_window: Optional[Mapping[str, str]],
+) -> list[str]:
+    """Fail closed when scored rows fall outside the active half-open window.
+
+    trade_execution: every row's signal_ts must satisfy start <= ts < end.
+    coverage: if membership timestamps are present they must fall in-window;
+    untouched_oos without any membership timestamp cannot claim the partition.
+    """
+    if active_partition is None or active_window is None:
+        return []
+    errors: list[str] = []
+    if evidence_type == "trade_execution":
+        if not members:
+            return ["trade_execution arm produced no members for partition check"]
+        for index, row in enumerate(members):
+            if not isinstance(row, Mapping):
+                errors.append(f"member[{index}]: row must be an object")
+                continue
+            if not _present(row.get("signal_ts")):
+                errors.append(
+                    f"member[{index}]: trade_execution requires signal_ts inside "
+                    f"active partition {active_partition}"
+                )
+                continue
+            try:
+                ts = parse_membership_ts(row["signal_ts"], field_name="signal_ts")
+            except PartitionContractError as exc:
+                errors.append(f"member[{index}]: {exc}")
+                continue
+            if not timestamp_in_window(ts, active_window):
+                errors.append(
+                    f"member[{index}]: signal_ts {row['signal_ts']!r} outside "
+                    f"active partition {active_partition} window "
+                    f"[{active_window['start']}, {active_window['end']})"
+                )
+        return errors
+
+    # coverage
+    seen_any = False
+    for index, row in enumerate(members):
+        if not isinstance(row, Mapping):
+            continue
+        try:
+            ts = _coverage_membership_ts(row)
+        except PartitionContractError as exc:
+            errors.append(f"member[{index}]: {exc}")
+            continue
+        if ts is None:
+            continue
+        seen_any = True
+        if not timestamp_in_window(ts, active_window):
+            errors.append(
+                f"member[{index}]: coverage timestamp outside active partition "
+                f"{active_partition} window "
+                f"[{active_window['start']}, {active_window['end']})"
+            )
+    if active_partition == PARTITION_UNTOUCHED_OOS and not seen_any and not errors:
+        errors.append(
+            "coverage evidence cannot claim untouched_oos without timestamp "
+            "membership proof (refusing to invent timestamps)"
+        )
+    return errors
 
 
 def build_oos_receipt(
@@ -285,11 +426,7 @@ def build_oos_receipt(
     trial_id = str(spec["trial_id"])
     receipt = {
         "schema_version": OOS_RECEIPT_SCHEMA_VERSION,
-        "receipt_identity": receipt_identity_key(
-            experiment_id=experiment_id,
-            trial_id=trial_id,
-            oos_fingerprint=fingerprint,
-        ),
+        "receipt_identity": receipt_reuse_key(trial_id=trial_id),
         "experiment_id": experiment_id,
         "trial_id": trial_id,
         "partition": PARTITION_UNTOUCHED_OOS,
@@ -298,37 +435,46 @@ def build_oos_receipt(
         "code_sha": code_sha,
         "runner_version": runner_version,
         "consumed_at": consumed_at,
-        "scope": "exact_experiment_trial",
+        "scope": "exact_trial",
         "family_wide_lock": False,
     }
     if _present(evidence_path):
         receipt["evidence_path"] = str(evidence_path)
     if _present(runner_report_sha256):
         receipt["runner_report_sha256"] = str(runner_report_sha256)
+    data = spec.get("data") if isinstance(spec.get("data"), Mapping) else {}
+    if _present(data.get("dataset_hash")):
+        receipt["dataset_hash"] = str(data["dataset_hash"])
     return receipt
 
 
 def append_oos_receipt(root: Path, receipt: Mapping[str, Any]) -> Path:
-    """Append a durable OOS consumption receipt. Fail closed on identity collision."""
-    experiment_id = str(receipt["experiment_id"])
+    """Append a durable OOS consumption receipt. Fail closed on trial collision.
+
+    Caller must hold oos_ledger_lock. Does not write evidence bundles.
+    """
     trial_id = str(receipt["trial_id"])
-    fingerprint = str(receipt["oos_fingerprint"])
-    existing = find_oos_consumption(
-        root,
-        experiment_id=experiment_id,
-        trial_id=trial_id,
-        oos_fingerprint=fingerprint,
-    )
+    existing = find_oos_consumption(root, trial_id=trial_id)
     if existing is not None:
         raise PartitionContractError(
             "refusing to write OOS receipt: untouched_oos already consumed for "
-            f"experiment_id={experiment_id!r} trial_id={trial_id!r}"
+            f"trial_id={trial_id!r}"
         )
     path = oos_ledger_path(root)
     path.parent.mkdir(parents=True, exist_ok=True)
+    line = json.dumps(dict(receipt), sort_keys=True) + "\n"
     with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(dict(receipt), sort_keys=True) + "\n")
+        handle.write(line)
+        handle.flush()
+        os.fsync(handle.fileno())
     return path
+
+
+def consume_oos_receipt(root: Path, receipt: Mapping[str, Any]) -> Path:
+    """Atomically check + append OOS receipt under an exclusive lock."""
+    with oos_ledger_lock(root):
+        assert_oos_available(root, trial_id=str(receipt["trial_id"]))
+        return append_oos_receipt(root, receipt)
 
 
 def write_oos_receipt_artifact(evidence_dir: Path, receipt: Mapping[str, Any]) -> Path:
@@ -340,9 +486,13 @@ def write_oos_receipt_artifact(evidence_dir: Path, receipt: Mapping[str, Any]) -
     return path
 
 
-def partition_check_results(spec: Mapping[str, Any]) -> list[tuple[str, bool, str]]:
+def partition_check_results(
+    spec: Mapping[str, Any],
+    *,
+    cli_partition: Optional[str] = None,
+) -> list[tuple[str, bool, str]]:
     """Return (name, passed, evidence) tuples for runner integrity checks."""
-    errors = validate_spec_partitions(spec)
+    errors = validate_spec_partitions(spec, cli_partition=cli_partition)
     if not partitions_declared(spec) and not errors:
         return [
             (
@@ -353,12 +503,16 @@ def partition_check_results(spec: Mapping[str, Any]) -> list[tuple[str, bool, st
         ]
     if errors:
         return [("chronological_partitions", False, "; ".join(errors))]
-    frozen = freeze_chronological_partitions(spec.get("chronological_partitions"))
+    active, window, frozen = resolve_active_partition(
+        spec, cli_partition=cli_partition
+    )
+    assert frozen is not None and active is not None and window is not None
     return [
         (
             "chronological_partitions",
             True,
             "development→validation→untouched_oos ordered without overlap "
-            f"(oos_fingerprint={oos_window_fingerprint(frozen)})",
+            f"(active={active}; window=[{window['start']}, {window['end']}); "
+            f"oos_fingerprint={oos_window_fingerprint(frozen)})",
         )
     ]

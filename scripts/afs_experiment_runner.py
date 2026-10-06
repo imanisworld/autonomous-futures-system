@@ -132,8 +132,10 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         choices=["development", "validation", "untouched_oos"],
         help=(
-            "Chronological evaluation partition. Required for OOS once-only "
-            "consumption when chronological_partitions are declared."
+            "Active chronological evaluation partition. Mandatory when "
+            "chronological_partitions are declared; must not contradict the "
+            "spec's evaluation_partition. untouched_oos is once-only per "
+            "exact approved trial_id."
         ),
     )
     run.set_defaults(func=cmd_run)
