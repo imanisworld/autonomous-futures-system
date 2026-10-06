@@ -2,7 +2,27 @@
 
 _As of 2026-10-05. The newest dated repository refresh below governs source state; the latest verified box-specific sections govern runtime state until a fresh local/provider or VPS check is performed. This is the single current-state authority for the options lane._
 
-Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`; the read-only coverage evidence lane (observer, reducer, outcome study, after-close collector) is described in `docs/options-coverage-observer.md`.
+Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`; the read-only coverage evidence lane (observer, reducer, outcome study, after-close collector) is described in `docs/options-coverage-observer.md`. The observation-only **setup-capture** lifecycle (`WATCHING` → `TRIGGERED` / `MISSED_LATE`) is described in `docs/options-setup-capture-observer.md`.
+
+
+## Repository refresh — 2026-10-06 (setup-capture observer v0.2; not deployed)
+
+**Capture plumbing only. Not a strategy change, not a scoring model, not SPXW enablement, not a watchlist expansion of `OPTIONS_PAPER_V1`, not merge/deploy authority.**
+
+Oct. 5 SPY shadow records 9925 (`2026-10-05T14:16:45Z`) and 9933 (`14:31:45Z`) were `H1_222_CONTINUATION` LONG/CALL, trigger `770.0768`, invalidation `769.17`, geometry `AHEAD`, lane `COUNTERFACTUAL`. They are **not** prospective catches. Do not rewrite that history.
+
+What landed in source on `cursor/options-setup-capture-observer-0010`:
+
+- Oneshot JSONL collector (122 timer pattern), **not** a scanner APScheduler job. Arms two-sided pending 2-2 (all four 2U/2D combos) from completed Public bars **before** the next RTH open. Watch window starts at that open; AH Fri 16:06 and premarket are ignored.
+- Structure key `ticker|timeframe|structure_close_ts|pattern` (levels are attributes / fingerprint; bar revision → `SOURCE_DRIFT`); direction added at TRIGGERED. 9925/9933 link to one key. Existing shadow rows are not altered.
+- IEX first-boundary for equities; capture lag measured against the **SIP-reconciled** cross. IEX miss + SIP hit = `MISSED_LATE`. Opening gap-through is `GAP_THROUGH_OPEN`.
+- Full next 1H candle including 15:30/12:30 stubs as watch candles (the 960 s H1 observer only ever sees the first 30m bar of the current hour).
+- SPX on the watcher's own list via Public INDEX 1m bars (bar resolution, fail-closed delayed). Never `OPTIONS_SCANNER_WATCHLIST`. SPXW stays OFF.
+- Journal absolute path `/root/afs-shared/logs/options_setup_capture.jsonl`. 122 `WorkingDirectory` is the unpinned checkout; flagged.
+
+Out of scope (flagged): `POST /webhook/alert` has no ticker allowlist; `GET /shadow-journal` 200s from outside IPs (auth gate unverified).
+
+Merge, options-scanner deploy, and any execution-flag change still require explicit operator approval.
 
 
 ## Repository refresh — 2026-10-05 (forward `-02` re-registration + floor-eligible companion + blind-window prep; not run)
@@ -127,7 +147,7 @@ The narrow provider-mapping correction on exact head `d7a546c789c6ff6e23713357fe
 
 ## Research / agent governance
 
-Repository-wide research roles are locked in `AGENTS.md` and apply to the options lane as well: Grok (when used) proposes outside research/hypotheses; Cursor performs repository-aware mechanical work on already-defined trials; Claude/Codex act as independent breaker/QA; ChatGPT + operator reconcile conflicting evidence and approve status/progression decisions.
+Repository-wide research roles are locked in `AGENTS.md` and apply to the options lane as well: Grok owns research/edge discovery and read-only contract discovery/comparison (including operator-authorized Robinhood/Webull account/market context when available); Cursor implements approved changes and runs already registered and approved trials; Claude/Codex act as independent breaker/QA; ChatGPT + operator choose which hypotheses are worth registering, reconcile conflicting evidence, and approve status/progression decisions. Broker/account linkage remains data context only and does not grant Grok or any other agent order authority.
 
 This file remains the **options current-state authority**. Do not create a parallel options strategy inventory, experiment selector, or agent-maintained status file. Agents may read this file and propose updates, but must not silently maintain competing current-state truth. Existing frozen cohorts, forward boundaries, one-look rules, and evidence contracts remain controlling unless an explicitly reviewed options change replaces them.
 
