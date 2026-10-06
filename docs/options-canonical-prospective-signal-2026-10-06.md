@@ -9,11 +9,10 @@ Builds on `options_evidence/strategy_epochs.py`.
 
 This is a schema, validation and read-only adapter. It has no provider, no file writer, no runtime wiring and no authority.
 
-> **Integration pass (post-#1145 `ae8c897` / #1146 `445393f`).** The first draft
-> of this module was written while #1145 was not on GitHub. It assumed levels
-> and direction were part of the identity. That assumption is gone. The model now follows the merged
-> setup-capture observer exactly, and the adapter consumes the #1145 journal instead of a
-> speculative format.
+> **Integration pass (post-#1145 `ae8c897` / #1146 `445393f`).** The model
+> follows the merged #1145 setup-capture observer exactly: levels and
+> direction are attributes, not identity. The adapter consumes the #1145
+> journal.
 
 ## Source of truth
 
