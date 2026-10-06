@@ -60,7 +60,7 @@ If the agent cannot persist this file, it must return this payload verbatim-read
 
 ## Current checkpoint — 2026-10-06 (options setup-capture observer v0.2; B1–B12 red-team fixes; merge/deploy not authorized)
 
-Branch `cursor/options-setup-capture-observer-0010` (draft PR #1145). Merged with `main` `55b9d4d`. Current HEAD `1b8dc7466596080a8c06a9d400ad479b84c2bf32`. Do not treat older `7cd4f04` / `e317ee3` / pre-merge `6545822` / merge `f7ea3de` / `b0bcbe3` as review-cleared for merge. Options current-state authority remains `docs/options-current-state-handoff.md`. Futures runtime checkpoint (c44d32b) below is unchanged.
+Branch `cursor/options-setup-capture-observer-0010` (draft PR #1145). Merged with `main` `55b9d4d`. Last CI-green tip verified in-session: `c68a11d14adfdce7001f0980fbf008873af4213b` (fetch HEAD before acting if tip moved). Do not treat older `7cd4f04` / `e317ee3` / pre-merge `6545822` / merge `f7ea3de` as review-cleared for merge. Options current-state authority remains `docs/options-current-state-handoff.md`. Futures runtime checkpoint (c44d32b) below is unchanged.
 
 ### DONE / DO NOT REDO
 
@@ -70,7 +70,7 @@ Branch `cursor/options-setup-capture-observer-0010` (draft PR #1145). Merged wit
 - B11: `/health` fail-softs unreadable `/root/...` journal paths.
 - Red-team E review (`E_PR1145_review.md`) B1–B12 **code fixes landed** on this branch (still need independent re-review): SIP reconcile after `watch_until+16m` (B1); provisional IEX TRIGGERED + later SIP RECONCILIATION (B2); SOURCE_BLOCKED diagnostic-only (B3); torn-line truncate-then-repair (B4); status `read_counts()` pure read (B5); post-fetch `wall_clock` / overrun (B6); clock check fail-closed + measured offset (B7); missing creds / delayed SPX fail-closed (B8); structure key without levels + SOURCE_DRIFT (B9); THIRTY_MINUTE fetch + intra-bucket reject (B10); lean `alert_ranker/alpaca_trades.py` (B12).
 - Local full suite on post-B1–B12 + main merge: `pytest -q` → 7563 passed, 8 skipped.
-- Exact-head GitHub CI `tests` + `handoff-fields` green on `1b8dc74` (and prior tip `b0bcbe3`). Handoff **Status** must remain a bare enum token.
+- Exact-head GitHub CI `tests` + `handoff-fields` green on `c68a11d` (and prior tips `1b8dc74` / `b0bcbe3`). Handoff **Status** must remain a bare enum token.
 
 ### OPEN / NOT MERGE-CLEARED
 
@@ -89,7 +89,7 @@ Branch `cursor/options-setup-capture-observer-0010` (draft PR #1145). Merged wit
 
 ### NEXT
 
-1. Independent options diff review of PR #1145 at HEAD `1b8dc74` (or successor if only docs pin moves).
+1. Independent options diff review of PR #1145 at tip `c68a11d` (or successor if only docs pin moves).
 2. Operator merge GO, then a separate observer-only timer install GO.
 3. Post-install: journal WATCHING before the next RTH open; no order/risk consumption. If RTH has no setup, do not fabricate a live trigger.
 
