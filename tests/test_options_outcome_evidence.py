@@ -7,7 +7,7 @@ import pytest
 
 from options_evidence import outcome as oc
 from options_evidence import signal as sg
-from tests.test_options_prospective_signal import T0, opened
+from tests.test_options_prospective_signal import T0, opened, trigger
 
 TRIG = T0 + timedelta(minutes=10)
 M = oc.Measured
@@ -15,10 +15,7 @@ M = oc.Measured
 
 def triggered_signal() -> sg.ProspectiveSignal:
     journal = sg.SignalJournal()
-    s = opened(journal)
-    return journal.append(sg.state_event(journal, s.signal_id, sg.LifecycleState.TRIGGERED,
-                                         market_time=TRIG, detected_at=TRIG + timedelta(seconds=2),
-                                         reason="break"))
+    return trigger(journal, opened(journal), at=TRIG, detected=TRIG + timedelta(seconds=2))
 
 
 def outcome(signal: sg.ProspectiveSignal, **overrides) -> oc.OutcomeEvidence:
@@ -147,3 +144,12 @@ def test_premium_stop_must_be_below_entry():
     s = triggered_signal()
     bad = outcome(s, premium_stop=M.derived(3.50))
     assert "premium_stop must be below premium_entry" in oc.validate_outcome(bad, s)
+
+
+def test_outcome_requires_a_resolved_signal():
+    journal = sg.SignalJournal()
+    watching = opened(journal)
+    o = outcome(triggered_signal())
+    assert oc.validate_outcome(o, watching)[0].startswith("outcome requires a resolved signal")
+    with pytest.raises(oc.OutcomeError, match="resolved signal"):
+        oc.underlying_r(watching, 500.0)
