@@ -29,7 +29,14 @@ def epoch(oos=OOS) -> StrategyEpoch:
         strategy="322",
         epoch="2026Q4_v1",
         status=EpochStatus.FROZEN,
-        definition={},
+        definition={
+            "authority": {
+                "observation_only": True,
+                "execution_authority": False,
+                "risk_reservation": False,
+                "trade_alerts": False,
+            }
+        },
         thresholds={},
         definition_sha256="f" * 64,
         effective_from=AT,
@@ -40,7 +47,7 @@ def epoch(oos=OOS) -> StrategyEpoch:
         if oos is None
         else OOSReference("oos", "docs/r.json", "b" * 64, tuple(oos), "ask/bid + fees"),
         supersedes=None,
-        observation_only=False,
+        observation_only=True,
     )
 
 
