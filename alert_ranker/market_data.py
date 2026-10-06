@@ -10,6 +10,7 @@ from typing import Any, Protocol
 import httpx
 
 from .config import ScannerConfig, resolve_alpaca_credentials
+from .setup_capture import OPTION_ROOT_SYMBOLS, quote_instrument_type
 from .tastytrade_client import MarketSnapshot, READ_ONLY_PREFIXES, TastytradeClient
 
 
@@ -110,7 +111,9 @@ class _HttpProvider:
 
 PUBLIC_AUTH_TOKEN_PATH = "/userapiauthservice/personal/access-tokens"
 PUBLIC_MARKETDATA_PREFIX = "/userapigateway/marketdata"
+PUBLIC_HISTORICDATA_PREFIX = "/userapigateway/historicdata"
 PUBLIC_ALLOWED_PREFIXES = (PUBLIC_MARKETDATA_PREFIX,)
+PUBLIC_HISTORICDATA_ALLOWED_PREFIXES = (PUBLIC_HISTORICDATA_PREFIX,)
 PUBLIC_OPTION_CHAIN_SOURCE = "public:/userapigateway/marketdata/{accountId}/option-chain"
 
 
@@ -280,9 +283,13 @@ class PublicMarketDataClient:
         if preflight:
             self.last_error = preflight
             return MarketSnapshot(symbol, error=preflight)
+        if symbol in OPTION_ROOT_SYMBOLS:
+            self.last_error = "spxw_is_option_root_not_underlying"
+            return MarketSnapshot(symbol, error=self.last_error)
+        instrument_type = quote_instrument_type(symbol)
         body = await self._post_marketdata(
             self._marketdata_path("quotes"),
-            {"instruments": [{"symbol": symbol, "type": "EQUITY"}]},
+            {"instruments": [{"symbol": symbol, "type": instrument_type}]},
         )
         if body is None:
             return MarketSnapshot(symbol, error=self.last_error)
@@ -322,6 +329,80 @@ class PublicMarketDataClient:
             quote_timestamp=str(quote_ts) if quote_ts else None,
             stale=stale,
         )
+
+    async def fetch_historic_chart(
+        self,
+        ticker: str,
+        *,
+        instrument_type: str,
+        period: str,
+        aggregation: str | None = None,
+    ) -> dict[str, Any]:
+        """Read-only Public historic chart (EQUITY or INDEX).
+
+        Quotes remain on the marketdata allowlist. This path is a separate
+        GET-only historicdata prefix and never includes trading/account
+        endpoints. Optional ``aggregation`` (e.g. ONE_MINUTE) is appended.
+        """
+        symbol = ticker.upper()
+        itype = instrument_type.strip().upper()
+        chart_period = period.strip().upper()
+        if itype not in {"EQUITY", "INDEX"}:
+            self.last_error = "unsupported_historic_instrument_type"
+            return {}
+        if chart_period not in {"DAY", "WEEK"}:
+            self.last_error = "unsupported_historic_period"
+            return {}
+        agg = (aggregation or "").strip().upper()
+        if agg and agg not in {"ONE_MINUTE", "FIVE_MINUTE", "THIRTY_MINUTE"}:
+            self.last_error = "unsupported_historic_aggregation"
+            return {}
+        if symbol in OPTION_ROOT_SYMBOLS:
+            self.last_error = "spxw_is_option_root_not_underlying"
+            return {}
+        preflight = self._preflight_error()
+        if preflight:
+            self.last_error = preflight
+            return {}
+        path = f"{PUBLIC_HISTORICDATA_PREFIX}/{itype}/{symbol}/{chart_period}"
+        if agg:
+            path = f"{path}/{agg}"
+        _assert_read_only_path(path, PUBLIC_HISTORICDATA_ALLOWED_PREFIXES)
+        token = await self._ensure_token()
+        if token is None:
+            return {}
+        client = self._ensure_client()
+        try:
+            response = await client.get(
+                path,
+                headers={"Authorization": f"Bearer {token}"},
+                params={"tradingSessionToggle": "REGULAR_HOURS"},
+            )
+        except httpx.TimeoutException:
+            self.last_error = "timeout"
+            return {}
+        except httpx.HTTPError:
+            self.last_error = "network_error"
+            return {}
+        if response.status_code in {401, 403}:
+            self.last_error = "authentication_failed"
+            return {}
+        if response.status_code == 429:
+            self.last_error = "rate_limited"
+            return {}
+        if not response.is_success:
+            self.last_error = f"http_status_{response.status_code}"
+            return {}
+        try:
+            body = response.json()
+        except ValueError:
+            self.last_error = "unsupported_response_shape"
+            return {}
+        if not isinstance(body, dict):
+            self.last_error = "unsupported_response_shape"
+            return {}
+        self.last_error = None
+        return body
 
     async def fetch_option_expirations(self, ticker: str) -> list[str]:
         symbol = ticker.upper()
