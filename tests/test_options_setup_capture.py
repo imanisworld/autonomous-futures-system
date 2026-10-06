@@ -43,6 +43,7 @@ from alert_ranker.setup_capture import (
     TapePrint,
     catch_count,
     consume_risk_budget,
+    format_level,
     link_scanner_first_sight,
     quantize_level,
     quote_instrument_type,
@@ -152,11 +153,14 @@ def make_engine(
     clock_offset_s: float = 0.0,
     fetch_delay: timedelta = timedelta(0),
     chain_hook=None,
+    equity_feed_available: bool = True,
+    wall_clock=None,
+    spy_only: bool = True,
 ):
     journal = SetupCaptureJournal(tmp_path / "options_setup_capture.jsonl")
 
     def bars(symbol: str, now: datetime):
-        if symbol != "SPY":
+        if spy_only and symbol != "SPY":
             return []
         return oracle.serve(now)
 
@@ -177,13 +181,21 @@ def make_engine(
     return SetupCaptureEngine(
         journal=journal,
         bar_oracle=bars,
-        iex_prints=iex_fn,
-        sip_prints=sip_fn,
+        iex_prints=iex_fn if equity_feed_available else None,
+        sip_prints=sip_fn if equity_feed_available else None,
         index_minutes=index_fn,
         clock_offset_s=clock_offset_s,
         fetch_delay=fetch_delay,
+        wall_clock=wall_clock,
         chain_hook=chain_hook,
     )
+
+
+def minute_loop(engine: SetupCaptureEngine, start: datetime, end: datetime) -> None:
+    t = start
+    while t <= end:
+        engine.run(now=t)
+        t += timedelta(minutes=1)
 
 
 def watching_rows(engine: SetupCaptureEngine) -> list[CaptureRecord]:
@@ -332,8 +344,14 @@ def test_c1i_lag_measured_against_sip(tmp_path):
     )
     engine.run(now=et(2026, 10, 2, 16, 16))
     engine.run(now=et(2026, 10, 5, 9, 34, 0))
+    provisional = watching_rows(engine)[0]
+    assert provisional.status == STATUS_TRIGGERED
+    assert provisional.trigger_feed == "iex"
+    # SIP reconcile only after watch_until + 16m (10:46 ET).
+    engine.run(now=et(2026, 10, 5, 10, 46, 0))
     row = watching_rows(engine)[0]
     assert row.status == STATUS_TRIGGERED
+    assert row.sip_crossed_at is not None
     assert row.capture_late is True
     assert row.true_lag_seconds is not None and row.true_lag_seconds >= 220
     assert catch_count([row]) == 0
@@ -597,8 +615,6 @@ def test_c3d_native_30m_and_5m_aggregate_same_fingerprint():
         timeframe="1H",
         structure_close=et(2026, 10, 2, 16, 0),
         pattern="222:2U:2U",
-        trigger=770.0768000001,
-        invalidation=769.17,
     )
     k2 = structure_key(
         ticker="SPY",
@@ -608,7 +624,22 @@ def test_c3d_native_30m_and_5m_aggregate_same_fingerprint():
         trigger=770.0768,
         invalidation=769.17,
     )
-    assert k1 == k2
+    assert k1 == k2 == "SPY|1H|2026-10-02T20:00:00Z|222:2U:2U"
+    armed = ArmedStructure(
+        ticker="SPY",
+        timeframe="1H",
+        pattern="222:2U:2U",
+        two_back_type="2U",
+        previous_type="2U",
+        boundary_high=a,
+        boundary_low=769.17,
+        structure_close=et(2026, 10, 2, 16, 0),
+        knowable_at=et(2026, 10, 2, 16, 0),
+        watch_start=et(2026, 10, 5, 9, 30),
+        watch_until=et(2026, 10, 5, 10, 30),
+        setup_bar_start=et(2026, 10, 2, 15, 30),
+    )
+    assert format_level(b) in armed.fingerprint()
 
 
 def test_c3b_second_process_exits_locked(tmp_path):
@@ -625,11 +656,19 @@ def test_c3b_second_process_exits_locked(tmp_path):
 
 def test_c4c_torn_trailing_line_is_repaired(tmp_path):
     path = tmp_path / "options_setup_capture.jsonl"
-    path.write_text('{"record_type":"WATCHING","structure_key":"SPY|1H|x|222:2U:2U|770.0768|769.1700","status":"WATCHING","ticker":"SPY","timeframe":"1H","pattern":"222:2U:2U","boundary_high":770.0768,"boundary_low":769.17,"persisted_at":"2026-10-02T20:16:00+00:00","capture_version":"capture-v0.2"}\n{not json')
+    key = "SPY|1H|2026-10-02T20:00:00Z|222:2U:2U"
+    path.write_text(
+        '{"record_type":"WATCHING","structure_key":"%s","status":"WATCHING","ticker":"SPY","timeframe":"1H","pattern":"222:2U:2U","boundary_high":770.0768,"boundary_low":769.17,"persisted_at":"2026-10-02T20:16:00+00:00","capture_version":"capture-v0.2"}\n{not json'
+        % key
+    )
     store = SetupCaptureJournal(path)
     state = store.load_state()
     assert state["repaired_torn_line"] is True
-    assert "SPY|1H|x|222:2U:2U|770.0768|769.1700" in state["current"]
+    assert key in state["current"]
+    # Second load must not crash-loop (B4).
+    state2 = store.load_state()
+    assert key in state2["current"]
+    assert '"JOURNAL_REPAIR"' in path.read_text()
 
 
 def test_c4d_version_bump_keeps_friday_watching(tmp_path):
@@ -773,11 +812,15 @@ def test_a4_import_graph_excludes_signa_gex_paper_chain():
         "setup_capture_store.py",
         "setup_capture_engine.py",
         "setup_capture_runtime.py",
+        "alpaca_trades.py",
     ):
         path = ROOT / "alert_ranker" / name
         source = path.read_text()
         assert module_has_no_execution_imports(source)
         assert_no_forbidden_imports(path)
+    collect = (ROOT / "scripts" / "options_setup_capture_collect.py").read_text()
+    assert "options_122_iex_provisional_audit" not in collect
+    assert "from alert_ranker.alpaca_trades import" in collect
 
 
 def test_c8a_watchlist_unchanged_and_universe_is_spy_qqq_spx():
@@ -1015,3 +1058,273 @@ def test_oct5_honest_replay_watching_then_iex_or_sip(tmp_path):
         known=[],
     )
     assert k == row.structure_key
+
+
+def test_b1_oct5_sip_only_at_real_60s_cadence_is_missed_late(tmp_path):
+    """B1: no clock jump — SIP reconcile after watch_until+16m, not EXPIRED at 10:30."""
+    eng = make_engine(
+        tmp_path,
+        BarAvailabilityOracle(oct2_30m(), session_closes=oct2_session_closes()),
+        iex=[],
+        sip=[_print(et(2026, 10, 5, 9, 30, 40), 770.09, feed="sip")],
+    )
+    eng.run(now=et(2026, 10, 2, 16, 16))
+    minute_loop(eng, et(2026, 10, 5, 9, 30), et(2026, 10, 5, 10, 50))
+    row = watching_rows(eng)[0]
+    assert row.status == STATUS_MISSED_LATE
+    assert row.status_reason == "iex_no_cross_sip_cross"
+
+
+def test_b2_delayed_sip_plan_provisional_triggered_then_reconcile(tmp_path):
+    """B2: IEX catch writes TRIGGERED immediately; SIP queried only at reconcile."""
+    o = BarAvailabilityOracle(oct2_30m(), session_closes=oct2_session_closes())
+    j = SetupCaptureJournal(tmp_path / "j.jsonl")
+    state = {"now": None}
+    cross_iex = _print(et(2026, 10, 5, 9, 30, 20), 770.10)
+    cross_sip = _print(et(2026, 10, 5, 9, 30, 20), 770.10, feed="sip")
+
+    def bars(sym, now):
+        return o.serve(now) if sym == "SPY" else []
+
+    def iex(sym, s, e):
+        return [p for p in [cross_iex] if s <= p.ts_utc < e]
+
+    def sip(sym, s, e):
+        if state["now"] is not None and e > state["now"] - timedelta(minutes=15):
+            raise RuntimeError(
+                "sip trade provider HTTP 403: subscription does not permit querying recent SIP data"
+            )
+        return [p for p in [cross_sip] if s <= p.ts_utc < e]
+
+    eng = SetupCaptureEngine(journal=j, bar_oracle=bars, iex_prints=iex, sip_prints=sip)
+    state["now"] = et(2026, 10, 2, 16, 16)
+    eng.run(now=state["now"])
+    first = None
+    t = et(2026, 10, 5, 9, 31)
+    while t <= et(2026, 10, 5, 10, 50):
+        state["now"] = t
+        eng.run(now=t)
+        r = [x for x in j.list_all() if x.timeframe == "1H"][0]
+        if r.status != STATUS_WATCHING and first is None:
+            first = (t, r.status, r.capture_late, r.trigger_feed)
+        t += timedelta(minutes=1)
+    assert first is not None
+    assert first[0] == et(2026, 10, 5, 9, 31)
+    assert first[1] == STATUS_TRIGGERED
+    assert first[2] is False
+    assert first[3] == "iex"
+    errs = sum(1 for line in (tmp_path / "j.jsonl").read_text().splitlines() if '"COLLECTOR_ERROR"' in line)
+    assert errs == 0
+    final = [x for x in j.list_all() if x.timeframe == "1H"][0]
+    assert final.sip_crossed_at is not None
+
+
+def test_b3_transient_iex_429_recovers_to_triggered(tmp_path):
+    o = BarAvailabilityOracle(oct2_30m(), session_closes=oct2_session_closes())
+    j = SetupCaptureJournal(tmp_path / "j.jsonl")
+
+    def bars(sym, now):
+        return o.serve(now) if sym == "SPY" else []
+
+    def iex(sym, s, e):
+        if e <= et(2026, 10, 5, 9, 31, 0).astimezone(timezone.utc) + timedelta(seconds=1):
+            raise RuntimeError("iex trade provider HTTP 429")
+        return [p for p in [_print(et(2026, 10, 5, 9, 31, 20), 770.10)] if s <= p.ts_utc < e]
+
+    def sip(sym, s, e):
+        return [p for p in [_print(et(2026, 10, 5, 9, 31, 20), 770.10, feed="sip")] if s <= p.ts_utc < e]
+
+    eng = SetupCaptureEngine(journal=j, bar_oracle=bars, iex_prints=iex, sip_prints=sip)
+    eng.run(now=et(2026, 10, 2, 16, 16))
+    eng.run(now=et(2026, 10, 5, 9, 31, 0))
+    mid = [r for r in j.list_all() if r.timeframe == "1H"][0]
+    assert mid.status == STATUS_WATCHING
+    eng.run(now=et(2026, 10, 5, 9, 32, 0))
+    row = [r for r in j.list_all() if r.timeframe == "1H"][0]
+    assert row.status == STATUS_TRIGGERED
+    assert row.timeframe == "1H"
+
+
+def test_b4_torn_line_second_load_is_clean(tmp_path):
+    p = tmp_path / "j.jsonl"
+    p.write_text(
+        '{"record_type":"WATCHING","structure_key":"k","status":"WATCHING","capture_version":"capture-v0.2"}\n{"record_type":"RESOL'
+    )
+    j = SetupCaptureJournal(p)
+    j.load_state()
+    state = j.load_state()
+    assert "k" in state["current"]
+    assert state["current"]["k"].status == STATUS_WATCHING
+
+
+def test_b5_status_read_leaves_journal_byte_identical(tmp_path):
+    p = tmp_path / "j.jsonl"
+    p.write_text(
+        '{"record_type":"WATCHING","structure_key":"k","status":"WATCHING","capture_version":"capture-v0.2"}\n{"partial'
+    )
+    before = p.read_bytes()
+    counts = SetupCaptureJournal(p, create=False).read_counts()
+    after = p.read_bytes()
+    assert after == before
+    assert counts["watching"] == 1
+
+
+def test_b6_post_fetch_timestamps_and_overrun(tmp_path):
+    oracle = BarAvailabilityOracle(oct2_30m(), session_closes=oct2_session_closes())
+    ticks = {"n": 0}
+
+    def clock():
+        ticks["n"] += 1
+        return et(2026, 10, 5, 9, 31, 0) + timedelta(seconds=50 * ticks["n"])
+
+    engine = make_engine(
+        tmp_path,
+        oracle,
+        iex=[_print(et(2026, 10, 5, 9, 30, 20), 770.10)],
+        sip=[_print(et(2026, 10, 5, 9, 30, 20), 770.10, feed="sip")],
+        wall_clock=clock,
+    )
+    engine.run(now=et(2026, 10, 2, 16, 16))
+    summary = engine.run(now=et(2026, 10, 5, 9, 31, 0))
+    row = watching_rows(engine)[0]
+    detected = datetime.fromisoformat(row.detected_at)
+    assert detected > et(2026, 10, 5, 9, 31, 0).astimezone(timezone.utc)
+    assert summary["cycle_seconds"] is not None and summary["cycle_seconds"] > 0
+    assert summary["cycle_over_cadence"] is True
+
+
+def test_b7_clock_offset_failure_blocks(monkeypatch):
+    import scripts.options_setup_capture_collect as collect
+
+    def boom(*_a, **_k):
+        raise FileNotFoundError("timedatectl")
+
+    monkeypatch.setattr(collect.subprocess, "run", boom)
+    assert collect._clock_offset_seconds() > 30
+
+
+def test_b8_missing_alpaca_creds_fail_closed(tmp_path):
+    eng = make_engine(
+        tmp_path,
+        BarAvailabilityOracle(oct2_30m(), session_closes=oct2_session_closes()),
+        equity_feed_available=False,
+    )
+    eng.run(now=et(2026, 10, 2, 16, 16))
+    minute_loop(eng, et(2026, 10, 5, 9, 30), et(2026, 10, 5, 10, 50))
+    row = watching_rows(eng)[0]
+    assert row.status == STATUS_DATA_BLOCKED
+    assert "alpaca_credentials_missing" in row.status_reason
+
+
+def test_b8_spx_delayed_index_keeps_watching_until_print(tmp_path):
+    o = BarAvailabilityOracle(oct2_30m(), session_closes=oct2_session_closes())
+    j = SetupCaptureJournal(tmp_path / "j.jsonl")
+
+    def bars(sym, now):
+        return o.serve(now) if sym == "SPX" else []
+
+    cross = IndexMinuteBar(
+        start=et(2026, 10, 5, 10, 20).astimezone(timezone.utc),
+        open=770.0,
+        high=770.5,
+        low=769.9,
+        close=770.3,
+    )
+
+    def idx(sym, s, e):
+        return [b for b in [cross] if b.window_end + timedelta(minutes=15) <= e and s <= b.start < e]
+
+    eng = SetupCaptureEngine(journal=j, bar_oracle=bars, index_minutes=idx)
+    eng.run(now=et(2026, 10, 2, 16, 16))
+    minute_loop(eng, et(2026, 10, 5, 9, 30), et(2026, 10, 5, 10, 50))
+    row = [x for x in j.list_all() if x.ticker == "SPX" and x.timeframe == "1H"][0]
+    assert row.status == STATUS_TRIGGERED
+    assert row.data_delayed is True or row.capture_late is True
+
+
+def test_b9_level_revision_one_key_and_source_drift(tmp_path):
+    bars = oct2_30m()
+    first = _bar(et(2026, 10, 2, 15, 30), OCT5_HIGH, 769.18)
+    second = _bar(et(2026, 10, 2, 15, 30), OCT5_HIGH, OCT5_LOW)
+    j = SetupCaptureJournal(tmp_path / "j.jsonl")
+    served = {"v": first}
+
+    def bars_fn(sym, now):
+        if sym != "SPY":
+            return []
+        out = [b for b in bars if b.start_utc != first.start_utc]
+        out.append(served["v"])
+        out.sort(key=lambda b: b.start_utc)
+        return [b for b in out if b.start_utc + timedelta(minutes=30) <= now]
+
+    eng = SetupCaptureEngine(
+        journal=j, bar_oracle=bars_fn, iex_prints=lambda *a: [], sip_prints=lambda *a: []
+    )
+    eng.run(now=et(2026, 10, 2, 16, 0, 5))
+    served["v"] = second
+    eng.run(now=et(2026, 10, 2, 16, 1, 5))
+    keys = sorted(
+        {
+            r.structure_key
+            for r in j.list_all()
+            if r.timeframe == "1H" and r.status == STATUS_WATCHING
+        }
+    )
+    assert len(keys) == 1
+    assert "SOURCE_DRIFT" in (tmp_path / "j.jsonl").read_text()
+    watching = [r for r in j.list_all() if r.structure_key == keys[0]][0]
+    assert abs(watching.boundary_low - OCT5_LOW) < 1e-6
+
+
+def test_b10_five_minute_rows_rejected_as_thirty_minute():
+    base = et(2026, 10, 2, 15, 30).astimezone(timezone.utc)
+    rows = [
+        {
+            "timestamp": (base + timedelta(minutes=5 * i)).isoformat(),
+            "open": 1,
+            "high": 2 + i,
+            "low": 1,
+            "close": 1,
+            "volume": 1,
+        }
+        for i in range(6)
+    ]
+    with pytest.raises(ValueError, match="unexpected_bar_spacing"):
+        parse_complete_grid_bars(
+            {"regularMarket": {"bars": rows}},
+            timeframe=MINUTE_30,
+            decision_ts=et(2026, 10, 2, 16, 1),
+        )
+
+
+def test_b12_collector_transitive_import_graph_excludes_forbidden():
+    import subprocess
+    import sys
+
+    # Clean interpreter: the pytest process already imported paper_v1 via other tests.
+    script = r"""
+import importlib, sys
+importlib.import_module("scripts.options_setup_capture_collect")
+forbidden = {
+    "alert_ranker.paper_v1",
+    "alert_ranker.trigger_time",
+    "alert_ranker.discord",
+    "alert_ranker.scanner_legacy",
+    "sources.signa_client",
+    "sources.gex_client",
+    "scripts.options_122_iex_provisional_audit",
+}
+loaded = set(sys.modules)
+bad = sorted(forbidden & loaded)
+assert not bad, bad
+assert "alert_ranker.alpaca_trades" in loaded
+"""
+    proc = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=str(ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+

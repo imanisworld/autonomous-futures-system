@@ -88,10 +88,10 @@ SHADOW_OUTCOME_STATUSES = {
 
 
 def _setup_capture_telemetry(cfg: ScannerConfig) -> dict[str, Any]:
-    """Read the watcher journal without attaching a job to the scanner loop.
+    """Pure-read watcher journal telemetry (no repair, no mkdir, no append).
 
     /health and /public/status must not 500 when the default shared-log path is
-    missing or unreadable (GitHub runners cannot stat ``/root/...``).
+    missing or unreadable, and must not mutate the journal from the scanner loop.
     """
     path = Path(getattr(cfg, "setup_capture_journal", None) or DEFAULT_JOURNAL)
     payload: dict[str, Any] = {
@@ -105,19 +105,21 @@ def _setup_capture_telemetry(cfg: ScannerConfig) -> dict[str, Any]:
         "missed_late_count": 0,
     }
     try:
-        try:
-            exists = path.exists()
-        except OSError:
-            payload["reason"] = "journal_unreadable"
-            return payload
-        if not exists:
-            payload["reason"] = "journal_missing"
-            return payload
-        counts = SetupCaptureJournal(path).counts()
-    except Exception as exc:  # noqa: BLE001 - observer I/O must not take down /health
-        payload["reason"] = (
-            "journal_unreadable" if isinstance(exc, OSError) else type(exc).__name__
-        )
+        exists = path.exists()
+    except OSError:
+        payload["reason"] = "journal_unreadable"
+        return payload
+    if not exists:
+        payload["reason"] = "journal_missing"
+        return payload
+    try:
+        counts = SetupCaptureJournal(path, create=False).read_counts()
+    except OSError:
+        payload["reason"] = "journal_unreadable"
+        return payload
+    except RuntimeError as exc:
+        # Corrupt mid-file lines are operator-visible; do not mask as unreadable.
+        payload["reason"] = str(exc)
         return payload
     payload.update(
         {

@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import re
 import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -25,11 +26,13 @@ from typing import Any, Sequence
 
 from dotenv import load_dotenv
 
+from alert_ranker.alpaca_trades import HistoricalTradeProvider
 from alert_ranker.causal_bars import MINUTE_1, MINUTE_30, Bar
 from alert_ranker.config import load_config, resolve_alpaca_credentials
 from alert_ranker.market_data import PublicMarketDataClient
 from alert_ranker.public_chart_bars import parse_complete_grid_bars
 from alert_ranker.setup_capture import (
+    CLOCK_SKEW_LIMIT_SECONDS,
     DEFAULT_JOURNAL,
     DEFAULT_RAW_TRADE_DIR,
     IndexMinuteBar,
@@ -41,11 +44,21 @@ from alert_ranker.setup_capture_engine import SetupCaptureEngine, alpaca_spx_for
 from alert_ranker.setup_capture_store import SetupCaptureJournal
 
 COLLECTOR_ID = "OPTIONS_SETUP_CAPTURE_COLLECTOR"
+_OFFSET_RE = re.compile(
+    r"^\s*Offset:\s*([+-]?\d+(?:\.\d+)?)\s*(ms|s|us|µs|ns)?",
+    re.IGNORECASE | re.MULTILINE,
+)
 
 
 def _clock_offset_seconds() -> float:
+    """Fail-closed clock check with a measured offset when available.
+
+    Missing/timeout timedatectl, unsynced NTP, or unparseable offset all return
+    a sentinel above CLOCK_SKEW_LIMIT_SECONDS so the engine journals DATA_BLOCKED.
+    """
+    unsynced = CLOCK_SKEW_LIMIT_SECONDS + 1.0
     try:
-        proc = subprocess.run(
+        synced_proc = subprocess.run(
             ["timedatectl", "show", "-p", "NTPSynchronized", "--value"],
             check=False,
             capture_output=True,
@@ -53,11 +66,32 @@ def _clock_offset_seconds() -> float:
             timeout=2,
         )
     except (FileNotFoundError, subprocess.TimeoutExpired):
-        return 0.0
-    synced = (proc.stdout or "").strip().lower()
-    if synced and synced not in {"yes", "1", "true"}:
-        return 31.0
-    return 0.0
+        return unsynced
+    synced = (synced_proc.stdout or "").strip().lower()
+    if synced not in {"yes", "1", "true"}:
+        return unsynced
+    try:
+        status_proc = subprocess.run(
+            ["timedatectl", "timesync-status"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return unsynced
+    match = _OFFSET_RE.search(status_proc.stdout or "")
+    if match is None:
+        return unsynced
+    value = float(match.group(1))
+    unit = (match.group(2) or "s").lower()
+    if unit == "ms":
+        return value / 1000.0
+    if unit in {"us", "µs"}:
+        return value / 1_000_000.0
+    if unit == "ns":
+        return value / 1_000_000_000.0
+    return value
 
 
 def _as_prints(trades: Sequence[Any], feed: str) -> list[TapePrint]:
@@ -82,11 +116,14 @@ def _as_prints(trades: Sequence[Any], feed: str) -> list[TapePrint]:
 async def _fetch_week_bars(cfg, symbol: str, now: datetime) -> list[Bar]:
     async with PublicMarketDataClient(cfg) as pub:
         itype = quote_instrument_type(symbol)
-        payload = await pub.fetch_historic_chart(symbol, instrument_type=itype, period="WEEK")
+        payload = await pub.fetch_historic_chart(
+            symbol,
+            instrument_type=itype,
+            period="WEEK",
+            aggregation="THIRTY_MINUTE",
+        )
         if not payload:
-            payload = await pub.fetch_historic_chart(symbol, instrument_type=itype, period="DAY")
-        if not payload:
-            return []
+            raise RuntimeError(f"public_week_bars_unavailable:{symbol}")
         return list(parse_complete_grid_bars(payload, timeframe=MINUTE_30, decision_ts=now))
 
 
@@ -96,7 +133,7 @@ async def _fetch_index_minutes(cfg, symbol: str, start: datetime, end: datetime)
             symbol, instrument_type="INDEX", period="DAY", aggregation="ONE_MINUTE"
         )
         if not payload:
-            return []
+            raise RuntimeError(f"public_index_minutes_unavailable:{symbol}")
         bars = parse_complete_grid_bars(payload, timeframe=MINUTE_1, decision_ts=end)
         return [
             IndexMinuteBar(
@@ -116,13 +153,11 @@ def _live_run(args: argparse.Namespace) -> dict[str, Any]:
     if args.env_file:
         load_dotenv(args.env_file, override=True)
     cfg = load_config()
-    journal = SetupCaptureJournal(args.journal)
+    journal = SetupCaptureJournal(args.journal, create=True)
     key, secret = resolve_alpaca_credentials()
     iex_provider = None
     sip_provider = None
     if key and secret:
-        from scripts.options_122_iex_provisional_audit import HistoricalTradeProvider
-
         iex_provider = HistoricalTradeProvider(cfg.alpaca_data_base_url, key, secret, "iex")
         sip_provider = HistoricalTradeProvider(cfg.alpaca_data_base_url, key, secret, "sip")
 
@@ -132,14 +167,14 @@ def _live_run(args: argparse.Namespace) -> dict[str, Any]:
     def iex_prints(symbol: str, start: datetime, end: datetime) -> list[TapePrint]:
         alpaca_spx_forbidden(symbol)
         if iex_provider is None:
-            return []
+            raise RuntimeError("alpaca_credentials_missing")
         trades = asyncio.run(iex_provider.fetch_trades(symbol=symbol, start=start, end=end))
         return _as_prints(trades, "iex")
 
     def sip_prints(symbol: str, start: datetime, end: datetime) -> list[TapePrint]:
         alpaca_spx_forbidden(symbol)
         if sip_provider is None:
-            return []
+            raise RuntimeError("alpaca_credentials_missing")
         trades = asyncio.run(sip_provider.fetch_trades(symbol=symbol, start=start, end=end))
         return _as_prints(trades, "sip")
 
@@ -149,17 +184,19 @@ def _live_run(args: argparse.Namespace) -> dict[str, Any]:
     engine = SetupCaptureEngine(
         journal=journal,
         bar_oracle=bar_oracle,
-        iex_prints=iex_prints,
-        sip_prints=sip_prints,
+        iex_prints=iex_prints if iex_provider is not None else None,
+        sip_prints=sip_prints if sip_provider is not None else None,
         index_minutes=index_minutes,
         clock_offset_s=_clock_offset_seconds(),
+        wall_clock=lambda: datetime.now(timezone.utc),
         enabled=bool(getattr(cfg, "setup_capture_enabled", True)),
     )
-    now = datetime.now(timezone.utc)
-    summary = engine.run(now=now)
+    cycle_start = datetime.now(timezone.utc)
+    summary = engine.run(now=cycle_start)
     summary["collector_id"] = COLLECTOR_ID
     summary["universe"] = list(watcher_universe())
     summary["journal"] = str(journal.path)
+    summary["cycle_start"] = cycle_start.isoformat()
     return summary
 
 
@@ -172,6 +209,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if not Path(args.journal).is_absolute():
         raise SystemExit("setup_capture_journal_must_be_absolute")
+    if args.dry_run:
+        raise SystemExit("setup_capture_dry_run_not_implemented")
     print(json.dumps(_live_run(args), indent=2, sort_keys=True, default=str))
     return 0
 

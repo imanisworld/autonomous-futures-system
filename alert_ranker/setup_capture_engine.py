@@ -32,7 +32,6 @@ from .setup_capture import (
     STATUS_NO_TRIGGER,
     STATUS_TRIGGERED,
     STATUS_WATCHING,
-    WATCHER_UNIVERSE,
     ArmedStructure,
     CaptureRecord,
     IndexMinuteBar,
@@ -45,7 +44,6 @@ from .setup_capture import (
     consume_risk_budget,
     first_boundary_from_index_minutes,
     first_boundary_from_prints,
-    quote_instrument_type,
     rebuild_session_dailies,
     rebuild_session_hours,
     record_watching,
@@ -71,6 +69,7 @@ FORBIDDEN_IMPORTS = frozenset(
         "execution",
         "execution.broker_interface",
         "options_manager.order_ticket",
+        "scripts.options_122_iex_provisional_audit",
     }
 )
 
@@ -137,6 +136,7 @@ class SetupCaptureEngine:
     session_lookup: Callable = nyse_session_for
     clock_offset_s: float = 0.0
     fetch_delay: timedelta = timedelta(0)
+    wall_clock: Callable[[], datetime] | None = None
     enabled: bool = True
     last_error: str | None = None
     last_run_at: str | None = None
@@ -144,6 +144,11 @@ class SetupCaptureEngine:
     after_triggered: Callable[[CaptureRecord], None] | None = None
     chain_hook: Callable[[], None] | None = None
     _armed_cache: dict[str, ArmedStructure] = field(default_factory=dict)
+
+    def _detect_time(self, now: datetime) -> datetime:
+        if self.wall_clock is not None:
+            return _aware(self.wall_clock())
+        return _aware(now) + self.fetch_delay
 
     def telemetry(self) -> dict[str, Any]:
         counts = self.journal.counts()
@@ -191,7 +196,7 @@ class SetupCaptureEngine:
                         "status": STATUS_DATA_BLOCKED,
                         "status_reason": "clock_unsynced",
                         "clock_offset_s": self.clock_offset_s,
-                        "observed_at": started.isoformat(),
+                        "observed_at": self._detect_time(started).isoformat(),
                     }
                 )
             finally:
@@ -205,24 +210,27 @@ class SetupCaptureEngine:
             summary = self._run_locked(started)
         finally:
             self.journal.release()
-        summary["cycle_seconds"] = (_aware(now) + self.fetch_delay - started).total_seconds()
+        ended = self._detect_time(started)
+        summary["cycle_seconds"] = (ended - started).total_seconds()
         self.cycle_seconds = summary["cycle_seconds"]
         summary["cycle_over_cadence"] = summary["cycle_seconds"] > 45
+        summary["observed_at"] = ended.isoformat()
         return summary
 
     def _run_locked(self, now: datetime) -> dict[str, Any]:
-        state = self.journal.load_state()
+        state = self.journal.load_state(repair=True)
         summary: dict[str, Any] = {
             "ok": True,
             "armed_written": 0,
             "resolutions_written": 0,
             "source_blocked": 0,
+            "reconciliations_written": 0,
         }
         for symbol in watcher_universe():
             if symbol in OPTION_ROOT_SYMBOLS:
                 continue
             try:
-                armed_n, res_n, blocked_n = self._cycle_symbol(symbol, now, state)
+                armed_n, res_n, blocked_n, recon_n = self._cycle_symbol(symbol, now, state)
             except Exception as exc:  # noqa: BLE001 - observer fail-closed
                 self.last_error = f"{symbol}:{type(exc).__name__}"
                 self.journal.append(
@@ -230,9 +238,8 @@ class SetupCaptureEngine:
                         "record_type": "COLLECTOR_ERROR",
                         "structure_key": f"{symbol}|cycle",
                         "ticker": symbol,
-                        "status": STATUS_DATA_BLOCKED,
                         "status_reason": f"source_error:{type(exc).__name__}",
-                        "observed_at": now.isoformat(),
+                        "observed_at": self._detect_time(now).isoformat(),
                     }
                 )
                 summary["source_blocked"] += 1
@@ -240,21 +247,23 @@ class SetupCaptureEngine:
             summary["armed_written"] += armed_n
             summary["resolutions_written"] += res_n
             summary["source_blocked"] += blocked_n
+            summary["reconciliations_written"] += recon_n
         return summary
 
-    def _cycle_symbol(self, symbol: str, now: datetime, state: dict[str, Any]) -> tuple[int, int, int]:
+    def _cycle_symbol(
+        self, symbol: str, now: datetime, state: dict[str, Any]
+    ) -> tuple[int, int, int, int]:
         bars = list(self.bar_oracle(symbol, now))
         sessions = sessions_covering(now - timedelta(days=10), now + timedelta(days=1))
         current_session = self.session_lookup(now.astimezone(timezone.utc).date())
         if current_session is None:
-            # Weekend/holiday: still arm from completed history and watch Monday.
             for session in reversed(sessions):
                 if session.close.astimezone(timezone.utc) <= now:
                     current_session = session
                     break
         if current_session is None:
-            return 0, 0, 0
-        armed_n = res_n = blocked_n = 0
+            return 0, 0, 0, 0
+        armed_n = res_n = blocked_n = recon_n = 0
         series = {
             "30m": bars,
             "1H": rebuild_session_hours(bars, sessions=sessions, cutoff=now),
@@ -270,15 +279,13 @@ class SetupCaptureEngine:
                         {
                             "record_type": "COLLECTOR_ERROR",
                             "structure_key": f"{symbol}|1H|vendor",
-                            "status": STATUS_DATA_BLOCKED,
                             "status_reason": "vendor_hour_bars_unused",
-                            "observed_at": now.isoformat(),
+                            "observed_at": self._detect_time(now).isoformat(),
                         }
                     )
                     continue
             if len(completed) < 3:
                 continue
-            # Session of the last completed bar.
             last = completed[-1]
             bar_session = self.session_lookup(last.start_utc.astimezone(timezone.utc).date())
             if bar_session is None:
@@ -300,7 +307,13 @@ class SetupCaptureEngine:
             res, blocked = self._resolve(armed, now, state)
             res_n += res
             blocked_n += blocked
-        return armed_n, res_n, blocked_n
+        for rec in list(state["current"].values()):
+            if rec.ticker != symbol or rec.status != STATUS_TRIGGERED:
+                continue
+            if rec.trigger_feed != "iex" or rec.sip_crossed_at:
+                continue
+            recon_n += self._reconcile_sip(rec, now, state)
+        return armed_n, res_n, blocked_n, recon_n
 
     def _rehydrate(self, rec: CaptureRecord) -> ArmedStructure:
         return ArmedStructure(
@@ -322,6 +335,7 @@ class SetupCaptureEngine:
 
     def _persist_arm(self, armed: ArmedStructure, now: datetime, state: dict[str, Any]) -> int:
         self._armed_cache[armed.structure_key] = armed
+        detected = self._detect_time(now)
         current = state["current"].get(armed.structure_key)
         if current is not None and current.status in {
             STATUS_TRIGGERED,
@@ -347,29 +361,47 @@ class SetupCaptureEngine:
                     "revision": armed.revision,
                     "boundary_high": armed.boundary_high,
                     "boundary_low": armed.boundary_low,
-                    "observed_at": now.isoformat(),
+                    "observed_at": detected.isoformat(),
                     "status_reason": "completed_bar_revision",
                 }
             )
-            watching = record_watching(armed, now=now, clock_offset_s=self.clock_offset_s)
+            watching = record_watching(armed, now=detected, clock_offset_s=self.clock_offset_s)
             watching = replace(watching, first_seen_at=current.first_seen_at, revision=armed.revision)
-            self.journal.append_record("WATCHING", watching, fingerprint=fp, observed_at=now.isoformat())
+            self.journal.append_record(
+                "WATCHING", watching, fingerprint=fp, observed_at=detected.isoformat()
+            )
             state["watching"][armed.structure_key] = watching
             state["current"][armed.structure_key] = watching
             return 0
         if current is not None and current.status == STATUS_WATCHING:
             return 0
-        record = record_watching(armed, now=now, clock_offset_s=self.clock_offset_s)
+        record = record_watching(armed, now=detected, clock_offset_s=self.clock_offset_s)
         self.journal.append_record(
             "WATCHING",
             record,
             fingerprint=armed.fingerprint(),
-            observed_at=now.isoformat(),
+            observed_at=detected.isoformat(),
         )
         state["watching"][armed.structure_key] = record
         state["current"][armed.structure_key] = record
         state["fingerprints"][armed.structure_key] = armed.fingerprint()
         return 1
+
+    def _append_source_blocked(
+        self, *, structure_key: str, reason: str, detected_at: datetime
+    ) -> None:
+        """Diagnostic only — never terminalizes WATCHING."""
+        self.journal.append(
+            {
+                "record_type": "SOURCE_BLOCKED",
+                "structure_key": structure_key,
+                "status_reason": reason,
+                "observed_at": detected_at.isoformat(),
+            }
+        )
+
+    def _sip_reconcile_at(self, armed: ArmedStructure) -> datetime:
+        return _aware(armed.watch_until) + SIP_RECONCILE_DELAY
 
     def _resolve(self, armed: ArmedStructure, now: datetime, state: dict[str, Any]) -> tuple[int, int]:
         watching = state["current"].get(armed.structure_key)
@@ -377,7 +409,7 @@ class SetupCaptureEngine:
             return 0, 0
         if now < _aware(armed.watch_start):
             return 0, 0
-        detected_at = now + self.fetch_delay
+        detected_at = self._detect_time(now)
         window_end = min(detected_at, _aware(armed.watch_until))
         high_water = state["high_water"].get(armed.structure_key)
         query_start = _aware(armed.watch_start)
@@ -385,117 +417,154 @@ class SetupCaptureEngine:
             hw = datetime.fromisoformat(high_water)
             if hw > query_start:
                 query_start = hw
+        reconcile_at = self._sip_reconcile_at(armed)
+
         if armed.ticker == "SPX":
-            if self.index_minutes is None:
-                self.journal.append(
-                    {
-                        "record_type": "SOURCE_BLOCKED",
-                        "structure_key": armed.structure_key,
-                        "status": STATUS_DATA_BLOCKED,
-                        "status_reason": "spx_index_minutes_unavailable",
-                        "observed_at": detected_at.isoformat(),
-                    }
+            return self._resolve_spx(armed, watching, now, detected_at, window_end, state)
+
+        if self.iex_prints is None:
+            self._append_source_blocked(
+                structure_key=armed.structure_key,
+                reason="alpaca_credentials_missing",
+                detected_at=detected_at,
+            )
+            if detected_at >= reconcile_at:
+                blocked = replace(
+                    watching,
+                    status=STATUS_DATA_BLOCKED,
+                    status_reason="alpaca_credentials_missing",
+                    persisted_at=_iso(detected_at) or "",
+                    detected_at=_iso(detected_at),
+                    prospective_catch=False,
                 )
-                return 0, 1
-            bars = list(self.index_minutes(armed.ticker, _aware(armed.watch_start), window_end))
-            result = first_boundary_from_index_minutes(
-                bars,
+                self.journal.append_record(
+                    "RESOLUTION", blocked, observed_at=detected_at.isoformat()
+                )
+                state["terminal"][armed.structure_key] = blocked
+                state["current"][armed.structure_key] = blocked
+                state["watching"].pop(armed.structure_key, None)
+                return 1, 1
+            return 0, 1
+
+        try:
+            iex_rows = list(self.iex_prints(armed.ticker, query_start, window_end))
+            iex_result = first_boundary_from_prints(
+                iex_rows,
                 armed=armed,
                 window_start=_aware(armed.watch_start),
                 window_end=window_end,
-                now=detected_at,
-                max_age_seconds=SPX_MAX_BAR_AGE_SECONDS,
             )
-            sip_result = None
-        else:
-            if self.iex_prints is None:
-                return 0, 0
-            try:
-                iex_rows = list(self.iex_prints(armed.ticker, query_start, window_end))
-                result = first_boundary_from_prints(
-                    iex_rows,
-                    armed=armed,
-                    window_start=_aware(armed.watch_start),
-                    window_end=window_end,
-                    )
-            except Exception as exc:  # noqa: BLE001
-                self.journal.append(
-                    {
-                        "record_type": "SOURCE_BLOCKED",
-                        "structure_key": armed.structure_key,
-                        "status": STATUS_DATA_BLOCKED,
-                        "status_reason": str(exc),
-                        "observed_at": detected_at.isoformat(),
-                    }
+        except Exception as exc:  # noqa: BLE001 - transient source error
+            self._append_source_blocked(
+                structure_key=armed.structure_key,
+                reason=str(exc),
+                detected_at=detected_at,
+            )
+            if detected_at >= reconcile_at:
+                blocked = replace(
+                    watching,
+                    status=STATUS_DATA_BLOCKED,
+                    status_reason=str(exc),
+                    persisted_at=_iso(detected_at) or "",
+                    detected_at=_iso(detected_at),
+                    prospective_catch=False,
                 )
-                if now >= _aware(armed.watch_until):
-                    blocked = replace(
-                        watching,
-                        status=STATUS_DATA_BLOCKED,
-                        status_reason=str(exc),
-                        persisted_at=_iso(detected_at) or "",
-                        detected_at=_iso(detected_at),
+                self.journal.append_record(
+                    "RESOLUTION", blocked, observed_at=detected_at.isoformat()
+                )
+                state["terminal"][armed.structure_key] = blocked
+                state["current"][armed.structure_key] = blocked
+                state["watching"].pop(armed.structure_key, None)
+                return 1, 1
+            return 0, 1
+
+        if iex_result.get("status") == STATUS_DATA_BLOCKED:
+            self._append_source_blocked(
+                structure_key=armed.structure_key,
+                reason=str(iex_result.get("reason_code") or "source_blocked"),
+                detected_at=detected_at,
+            )
+            return 0, 1
+
+        if iex_result.get("status") == "PROVEN":
+            # Provisional TRIGGERED from IEX; SIP reconciliation is a later row.
+            resolved = resolve_break(
+                watching,
+                armed,
+                break_result=iex_result,
+                now=detected_at,
+                detected_at=detected_at,
+                sip_result=None,
+                had_pre_cross_watching=True,
+            )
+            self.journal.append_record(
+                "RESOLUTION",
+                resolved,
+                observed_at=detected_at.isoformat(),
+                fingerprint=armed.fingerprint(),
+                provisional_sip_pending=True,
+            )
+            state["terminal"][armed.structure_key] = resolved
+            state["current"][armed.structure_key] = resolved
+            state["watching"].pop(armed.structure_key, None)
+            if self.chain_hook is not None:
+                self.chain_hook()
+            if self.after_triggered is not None:
+                self.after_triggered(resolved)
+            return 1, 0
+
+        # IEX NO_BREAK: hold through watch_until until SIP reconcile is due.
+        if detected_at < reconcile_at:
+            state["high_water"][armed.structure_key] = window_end.isoformat()
+            return 0, 0
+
+        sip_result: dict[str, Any] | None = None
+        if self.sip_prints is not None:
+            try:
+                # Query the completed watch window only — always outside the
+                # 15-minute delayed-SIP entitlement boundary at reconcile_at.
+                sip_rows = list(
+                    self.sip_prints(
+                        armed.ticker,
+                        _aware(armed.watch_start),
+                        _aware(armed.watch_until),
                     )
-                    self.journal.append_record("RESOLUTION", blocked, observed_at=detected_at.isoformat())
-                    state["terminal"][armed.structure_key] = blocked
-                    state["current"][armed.structure_key] = blocked
-                    return 1, 1
-                return 0, 1
-            sip_result = None
-            if self.sip_prints is not None and (
-                result.get("status") in {"NO_BREAK", "PROVEN"}
-                and detected_at >= _aware(armed.watch_until) + SIP_RECONCILE_DELAY
-                or result.get("status") == "PROVEN"
-            ):
-                sip_rows = list(self.sip_prints(armed.ticker, _aware(armed.watch_start), window_end))
+                )
                 sip_result = first_boundary_from_prints(
                     sip_rows,
                     armed=armed,
                     window_start=_aware(armed.watch_start),
-                    window_end=min(window_end, _aware(armed.watch_until)),
+                    window_end=_aware(armed.watch_until),
                 )
-            pair = classify_iex_sip_pair(
-                iex=result,
-                sip=sip_result or {"status": "NO_BREAK"},
-                watch_elapsed=detected_at >= _aware(armed.watch_until),
-            )
-            if pair == "iex_no_cross_sip_cross":
-                result = dict(sip_result or {})
-                result["reason_override"] = "iex_no_cross_sip_cross"
-            elif pair == "expired_or_no_trigger":
-                expired = replace(
+            except Exception as exc:  # noqa: BLE001
+                self._append_source_blocked(
+                    structure_key=armed.structure_key,
+                    reason=f"sip_reconcile:{exc}",
+                    detected_at=detected_at,
+                )
+                blocked = replace(
                     watching,
-                    status=STATUS_EXPIRED,
-                    status_reason="watch_window_elapsed_without_trigger",
+                    status=STATUS_DATA_BLOCKED,
+                    status_reason=f"sip_reconcile:{exc}",
                     persisted_at=_iso(detected_at) or "",
                     detected_at=_iso(detected_at),
                     prospective_catch=False,
                 )
-                self.journal.append_record("RESOLUTION", expired, observed_at=detected_at.isoformat())
-                state["terminal"][armed.structure_key] = expired
-                state["current"][armed.structure_key] = expired
-                state["watching"].pop(armed.structure_key, None)
-                return 1, 0
-        if result.get("status") == "NO_BREAK":
-            if detected_at >= _aware(armed.watch_until):
-                expired = replace(
-                    watching,
-                    status=STATUS_EXPIRED,
-                    status_reason="watch_window_elapsed_without_trigger",
-                    persisted_at=_iso(detected_at) or "",
-                    detected_at=_iso(detected_at),
-                    prospective_catch=False,
+                self.journal.append_record(
+                    "RESOLUTION", blocked, observed_at=detected_at.isoformat()
                 )
-                self.journal.append_record("RESOLUTION", expired, observed_at=detected_at.isoformat())
-                state["terminal"][armed.structure_key] = expired
-                state["current"][armed.structure_key] = expired
+                state["terminal"][armed.structure_key] = blocked
+                state["current"][armed.structure_key] = blocked
                 state["watching"].pop(armed.structure_key, None)
-                return 1, 0
-            state["high_water"][armed.structure_key] = window_end.isoformat()
-            return 0, 0
-        had_pre = watching.status == STATUS_WATCHING
-        if result.get("reason_override") == "iex_no_cross_sip_cross" and had_pre:
-            # IEX never printed through; SIP did. That is MISSED_LATE, not a catch.
+                return 1, 1
+
+        pair = classify_iex_sip_pair(
+            iex=iex_result,
+            sip=sip_result or {"status": "NO_BREAK"},
+            watch_elapsed=True,
+        )
+        if pair == "iex_no_cross_sip_cross":
+            result = dict(sip_result or {})
             resolved = replace(
                 watching,
                 status=STATUS_MISSED_LATE,
@@ -518,16 +587,114 @@ class SetupCaptureEngine:
                     else armed.short_setup_type()
                 ),
             )
-        else:
-            resolved = resolve_break(
-                watching,
-                armed,
-                break_result=result,
-                now=now,
-                detected_at=detected_at,
-                sip_result=sip_result,
-                had_pre_cross_watching=had_pre,
+            self.journal.append_record(
+                "RESOLUTION", resolved, observed_at=detected_at.isoformat()
             )
+            state["terminal"][armed.structure_key] = resolved
+            state["current"][armed.structure_key] = resolved
+            state["watching"].pop(armed.structure_key, None)
+            return 1, 0
+
+        expired = replace(
+            watching,
+            status=STATUS_EXPIRED,
+            status_reason="watch_window_elapsed_without_trigger",
+            persisted_at=_iso(detected_at) or "",
+            detected_at=_iso(detected_at),
+            prospective_catch=False,
+        )
+        self.journal.append_record("RESOLUTION", expired, observed_at=detected_at.isoformat())
+        state["terminal"][armed.structure_key] = expired
+        state["current"][armed.structure_key] = expired
+        state["watching"].pop(armed.structure_key, None)
+        return 1, 0
+
+    def _resolve_spx(
+        self,
+        armed: ArmedStructure,
+        watching: CaptureRecord,
+        now: datetime,
+        detected_at: datetime,
+        window_end: datetime,
+        state: dict[str, Any],
+    ) -> tuple[int, int]:
+        if self.index_minutes is None:
+            self._append_source_blocked(
+                structure_key=armed.structure_key,
+                reason="spx_index_minutes_unavailable",
+                detected_at=detected_at,
+            )
+            if detected_at >= _aware(armed.watch_until):
+                blocked = replace(
+                    watching,
+                    status=STATUS_DATA_BLOCKED,
+                    status_reason="spx_index_minutes_unavailable",
+                    persisted_at=_iso(detected_at) or "",
+                    detected_at=_iso(detected_at),
+                    data_delayed=True,
+                    prospective_catch=False,
+                )
+                self.journal.append_record(
+                    "RESOLUTION", blocked, observed_at=detected_at.isoformat()
+                )
+                state["terminal"][armed.structure_key] = blocked
+                state["current"][armed.structure_key] = blocked
+                state["watching"].pop(armed.structure_key, None)
+                return 1, 1
+            return 0, 1
+        try:
+            # Fetch through detected_at so delayed vendors can publish bars
+            # whose start is still inside the watch window.
+            bars = list(
+                self.index_minutes(armed.ticker, _aware(armed.watch_start), detected_at)
+            )
+        except Exception as exc:  # noqa: BLE001
+            self._append_source_blocked(
+                structure_key=armed.structure_key,
+                reason=str(exc),
+                detected_at=detected_at,
+            )
+            return 0, 1
+        result = first_boundary_from_index_minutes(
+            bars,
+            armed=armed,
+            window_start=_aware(armed.watch_start),
+            window_end=_aware(armed.watch_until),
+            now=detected_at,
+            max_age_seconds=SPX_MAX_BAR_AGE_SECONDS,
+        )
+        if result.get("status") == "NO_BREAK":
+            if result.get("data_delayed"):
+                # Fail closed on delay: keep WATCHING; never EXPIRED with
+                # data_delayed=False while the feed is still lagging.
+                return 0, 0
+            if detected_at >= _aware(armed.watch_until):
+                expired = replace(
+                    watching,
+                    status=STATUS_EXPIRED,
+                    status_reason="watch_window_elapsed_without_trigger",
+                    persisted_at=_iso(detected_at) or "",
+                    detected_at=_iso(detected_at),
+                    data_delayed=False,
+                    prospective_catch=False,
+                )
+                self.journal.append_record(
+                    "RESOLUTION", expired, observed_at=detected_at.isoformat()
+                )
+                state["terminal"][armed.structure_key] = expired
+                state["current"][armed.structure_key] = expired
+                state["watching"].pop(armed.structure_key, None)
+                return 1, 0
+            return 0, 0
+        resolved = resolve_break(
+            watching,
+            armed,
+            break_result=result,
+            now=detected_at,
+            detected_at=detected_at,
+            sip_result=None,
+            had_pre_cross_watching=True,
+        )
         self.journal.append_record(
             "RESOLUTION",
             resolved,
@@ -543,11 +710,73 @@ class SetupCaptureEngine:
             self.after_triggered(resolved)
         return 1, 0
 
-    def submit_broker_order(self, *args: Any, **kwargs: Any) -> None:
-        submit_broker_order(*args, **kwargs)
-
-    def consume_risk_budget(self, *args: Any, **kwargs: Any) -> bool:
-        return consume_risk_budget(*args, **kwargs)
+    def _reconcile_sip(
+        self, triggered: CaptureRecord, now: datetime, state: dict[str, Any]
+    ) -> int:
+        armed = self._armed_cache.get(triggered.structure_key) or self._rehydrate(triggered)
+        detected_at = self._detect_time(now)
+        if detected_at < self._sip_reconcile_at(armed):
+            return 0
+        if self.sip_prints is None:
+            return 0
+        try:
+            sip_rows = list(
+                self.sip_prints(
+                    armed.ticker,
+                    _aware(armed.watch_start),
+                    _aware(armed.watch_until),
+                )
+            )
+            sip_result = first_boundary_from_prints(
+                sip_rows,
+                armed=armed,
+                window_start=_aware(armed.watch_start),
+                window_end=_aware(armed.watch_until),
+            )
+        except Exception as exc:  # noqa: BLE001
+            self._append_source_blocked(
+                structure_key=armed.structure_key,
+                reason=f"sip_reconcile:{exc}",
+                detected_at=detected_at,
+            )
+            return 0
+        if sip_result.get("status") != "PROVEN" or sip_result.get("print") is None:
+            return 0
+        sip_print = sip_result["print"]
+        true_lag = (detected_at - _aware(sip_print.ts_utc)).total_seconds()
+        # Lag for catch classification uses the original TRIGGERED detection
+        # time against the SIP cross, not the reconcile clock.
+        original_detected = (
+            datetime.fromisoformat(triggered.detected_at)
+            if triggered.detected_at
+            else detected_at
+        )
+        catch_lag = (original_detected - _aware(sip_print.ts_utc)).total_seconds()
+        capture_late = catch_lag > MAX_CAPTURE_LAG_SECONDS or bool(triggered.capture_late)
+        prospective = (
+            triggered.status == STATUS_TRIGGERED
+            and not capture_late
+            and not triggered.gap_through
+        )
+        updated = replace(
+            triggered,
+            sip_crossed_at=_iso(sip_print.ts_utc),
+            true_lag_seconds=catch_lag,
+            capture_late=capture_late,
+            prospective_catch=prospective,
+            status_reason=(
+                "sip_reconciled_capture_late" if capture_late else "sip_reconciled"
+            ),
+        )
+        self.journal.append_record(
+            "RECONCILIATION",
+            updated,
+            observed_at=detected_at.isoformat(),
+            reconcile_true_lag_seconds=true_lag,
+        )
+        state["terminal"][armed.structure_key] = updated
+        state["current"][armed.structure_key] = updated
+        return 1
 
 
 def module_has_no_execution_imports(source: str) -> bool:
@@ -565,7 +794,11 @@ def module_has_no_execution_imports(source: str) -> bool:
                 return False
             if "signa" in module.lower() or "gex" in module.lower():
                 return False
-            if module in {"alert_ranker.paper_v1", "alert_ranker.discord", "alert_ranker.scanner_legacy"}:
+            if module in {
+                "alert_ranker.paper_v1",
+                "alert_ranker.discord",
+                "alert_ranker.scanner_legacy",
+            }:
                 return False
     return True
 

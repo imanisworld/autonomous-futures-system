@@ -161,10 +161,17 @@ def structure_key(
     timeframe: str,
     structure_close: datetime,
     pattern: str,
-    trigger: float,
-    invalidation: float,
+    trigger: float | None = None,
+    invalidation: float | None = None,
 ) -> str:
-    """Identity of one pending structure. Direction is added only at TRIGGERED."""
+    """Identity of one pending structure.
+
+    Levels are attributes (and part of fingerprint), not part of the key, so a
+    completed-bar revision updates the same structure via SOURCE_DRIFT instead
+    of opening a duplicate WATCHING row. ``trigger`` / ``invalidation`` remain
+    accepted for call-site compatibility and scanner linking only.
+    """
+    del trigger, invalidation
     close = _aware(structure_close).strftime("%Y-%m-%dT%H:%M:%SZ")
     return "|".join(
         (
@@ -172,8 +179,6 @@ def structure_key(
             timeframe,
             close,
             pattern,
-            format_level(trigger),
-            format_level(invalidation),
         )
     )
 
@@ -421,8 +426,6 @@ class ArmedStructure:
             timeframe=self.timeframe,
             structure_close=self.structure_close,
             pattern=self.pattern,
-            trigger=self.boundary_high,
-            invalidation=self.boundary_low,
         )
 
     def long_setup_type(self) -> str:

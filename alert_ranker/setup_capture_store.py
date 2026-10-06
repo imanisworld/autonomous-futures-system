@@ -24,6 +24,13 @@ from .setup_capture import (
 )
 
 _VERSION_PREFIX = "capture-v"
+# Diagnostic-only record types must never mutate watching/terminal state.
+_DIAGNOSTIC_RECORD_TYPES = frozenset(
+    {"JOURNAL_REPAIR", "SOURCE_BLOCKED", "COLLECTOR_ERROR"}
+)
+_STATE_RECORD_TYPES = frozenset(
+    {"WATCHING", "RESOLUTION", "RECONCILIATION", "SOURCE_DRIFT"}
+)
 
 
 class JournalLocked(RuntimeError):
@@ -97,11 +104,12 @@ def _record_from_row(row: Mapping[str, Any]) -> CaptureRecord:
 
 
 class SetupCaptureJournal:
-    def __init__(self, path: Path | str):
+    def __init__(self, path: Path | str, *, create: bool = True):
         self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
         self.lock_path = self.path.with_suffix(self.path.suffix + ".lock")
         self._lock_handle = None
+        if create:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
 
     def acquire(self, *, blocking: bool = False) -> None:
         self.lock_path.parent.mkdir(parents=True, exist_ok=True)
@@ -160,8 +168,19 @@ class SetupCaptureJournal:
             return raw_lines[:-1], torn, True
         return raw_lines, None, False
 
-    def load_state(self) -> dict[str, Any]:
-        lines, torn, had_torn = self._read_lines()
+    def _rewrite_complete_lines(self, lines: list[str]) -> None:
+        """Truncate a torn trailing fragment before appending JOURNAL_REPAIR."""
+        with self.path.open("w", encoding="utf-8") as handle:
+            for raw in lines:
+                handle.write(raw)
+                if not raw.endswith("\n"):
+                    handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+
+    def _build_state(
+        self, lines: list[str], *, repaired_torn_line: bool
+    ) -> dict[str, Any]:
         watching: dict[str, CaptureRecord] = {}
         terminal: dict[str, CaptureRecord] = {}
         fingerprints: dict[str, str] = {}
@@ -181,35 +200,21 @@ class SetupCaptureJournal:
                 raise RuntimeError(f"journal_collector_version_mismatch_{number}")
             key = str(row["structure_key"])
             record_type = str(row.get("record_type") or "")
-            if record_type == "JOURNAL_REPAIR":
+            if record_type in _DIAGNOSTIC_RECORD_TYPES:
+                if record_type == "COLLECTOR_ERROR":
+                    errors.append(row)
                 continue
-            if record_type in {"WATCHING", "RESOLUTION", "RECONCILIATION", "SOURCE_DRIFT", "SOURCE_BLOCKED"}:
+            if record_type in _STATE_RECORD_TYPES:
                 rec = _record_from_row(row)
-                fp = rec.fingerprint() if hasattr(rec, "fingerprint") else None
                 if row.get("fingerprint"):
                     fingerprints[key] = str(row["fingerprint"])
                 if rec.high_water_ts:
                     high_water[key] = rec.high_water_ts
                 if rec.status == STATUS_WATCHING and rec.structure_key not in terminal:
-                    if key not in watching:
-                        watching[key] = rec
-                    else:
-                        watching[key] = rec
+                    watching[key] = rec
                 if rec.status in TERMINAL_STATUSES:
                     terminal[key] = rec
                     watching.pop(key, None)
-            elif record_type == "COLLECTOR_ERROR":
-                errors.append(row)
-        if had_torn:
-            self.append(
-                {
-                    "record_type": "JOURNAL_REPAIR",
-                    "structure_key": "_journal",
-                    "status_reason": "torn_trailing_line_quarantined",
-                    "observed_at": datetime.now(timezone.utc).isoformat(),
-                    "torn_preview": (torn or "")[:80],
-                }
-            )
         current = dict(terminal)
         current.update(watching)
         return {
@@ -219,8 +224,29 @@ class SetupCaptureJournal:
             "fingerprints": fingerprints,
             "high_water": high_water,
             "errors": errors,
-            "repaired_torn_line": had_torn,
+            "repaired_torn_line": repaired_torn_line,
         }
+
+    def load_state(self, *, repair: bool = True) -> dict[str, Any]:
+        lines, torn, had_torn = self._read_lines()
+        if had_torn and repair:
+            self._rewrite_complete_lines(lines)
+            self.append(
+                {
+                    "record_type": "JOURNAL_REPAIR",
+                    "structure_key": "_journal",
+                    "status_reason": "torn_trailing_line_quarantined",
+                    "observed_at": datetime.now(timezone.utc).isoformat(),
+                    "torn_preview": (torn or "")[:80],
+                }
+            )
+            lines, _, _ = self._read_lines()
+            return self._build_state(lines, repaired_torn_line=True)
+        return self._build_state(lines, repaired_torn_line=False)
+
+    def peek_state(self) -> dict[str, Any]:
+        """Pure read for status surfaces: never appends, never truncates."""
+        return self.load_state(repair=False)
 
     def get(self, key: str) -> CaptureRecord | None:
         return self.load_state()["current"].get(key)
@@ -233,8 +259,16 @@ class SetupCaptureJournal:
         current.sort(key=lambda row: row.persisted_at, reverse=True)
         return current[:limit]
 
-    def counts(self) -> dict[str, Any]:
-        state = self.load_state()
+    def counts(self, *, repair: bool = True) -> dict[str, Any]:
+        state = self.load_state(repair=repair)
+        return self._counts_from_state(state)
+
+    def read_counts(self) -> dict[str, Any]:
+        """Status-only counts: byte-identical journal, no mkdir side effects."""
+        return self.counts(repair=False)
+
+    @staticmethod
+    def _counts_from_state(state: Mapping[str, Any]) -> dict[str, Any]:
         by_status: dict[str, int] = {}
         for rec in state["current"].values():
             by_status[rec.status] = by_status.get(rec.status, 0) + 1

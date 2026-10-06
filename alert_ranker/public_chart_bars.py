@@ -147,12 +147,14 @@ def parse_complete_grid_bars(
     step = timeframe.seconds
     out: list[Bar] = []
     seen: set[datetime] = set()
+    raw_starts: list[datetime] = []
     for raw in items:
         if not isinstance(raw, Mapping):
             raise ValueError("public chart bar row invalid")
         start = _aware(raw.get("timestamp"))
         if start.second != 0 or start.microsecond != 0:
             continue
+        raw_starts.append(start)
         offset_minutes = start.minute * 60 + start.second
         if step > 0 and (offset_minutes % step) != 0:
             continue
@@ -163,4 +165,16 @@ def parse_complete_grid_bars(
         seen.add(start)
         out.append(_bar(raw, start))
     out.sort(key=lambda item: item.start_utc)
+    # Reject denser series (e.g. Public DAY default 5-minute rows) that place
+    # additional starts inside an accepted timeframe bucket.
+    for bar in out:
+        denser = [
+            start
+            for start in raw_starts
+            if bar.start_utc < start < bar.start_utc + timeframe.delta
+        ]
+        if denser:
+            raise ValueError(
+                f"unexpected_bar_spacing:intra_bucket_rows:{len(denser)}"
+            )
     return tuple(out)
