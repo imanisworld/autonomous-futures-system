@@ -450,6 +450,7 @@ def validate_trade_execution_row(
         raise EvidenceContractError("costs_fees must be >= 0")
     gross = float(row["gross_pnl"])
     net = float(row["net_pnl"])
+    r_multiple = float(row["r_multiple"])
     if abs(net - (gross - costs)) > PNL_TOLERANCE:
         raise EvidenceContractError(
             "net_pnl must equal gross_pnl - costs_fees within $0.01"
@@ -458,6 +459,37 @@ def validate_trade_execution_row(
         raise EvidenceContractError("mfe must be >= 0")
     if float(row["mae"]) > 0:
         raise EvidenceContractError("mae must be <= 0")
+
+    # Directional consistency: trade scoring uses r_multiple, so it must not
+    # contradict reported net P&L. Flat net (within eps) cannot score as a win.
+    eps = PNL_TOLERANCE
+    if net > eps and r_multiple <= 0:
+        raise EvidenceContractError(
+            "r_multiple must be > 0 when net_pnl is positive"
+        )
+    if net < -eps and r_multiple >= 0:
+        raise EvidenceContractError(
+            "r_multiple must be < 0 when net_pnl is negative"
+        )
+    if abs(net) <= eps and r_multiple > 0:
+        raise EvidenceContractError(
+            "r_multiple must be <= 0 when net_pnl is flat within tolerance"
+        )
+
+    # Directional consistency only: do not recompute exact dollar P&L from
+    # contract metadata. Adverse price movement cannot report positive gross.
+    fill_price = float(row["fill_price"])
+    exit_price = float(row["exit_price"])
+    direction_sign = 1.0 if direction == "LONG" else -1.0
+    move = direction_sign * (exit_price - fill_price)
+    if move > 0 and gross < -eps:
+        raise EvidenceContractError(
+            "gross_pnl must be >= 0 (within tolerance) when price move is favorable"
+        )
+    if move < 0 and gross > eps:
+        raise EvidenceContractError(
+            "gross_pnl must be <= 0 (within tolerance) when price move is adverse"
+        )
 
     fill_ts = parse_ts(row["fill_ts"], field_name="fill_ts")
     exit_ts = parse_ts(row["exit_ts"], field_name="exit_ts")

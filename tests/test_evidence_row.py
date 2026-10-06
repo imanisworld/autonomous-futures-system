@@ -514,6 +514,46 @@ def test_case_d_filled_requires_long_or_short_direction():
         er.validate_trade_execution_row(_trade_row(direction="FLAT"))
 
 
+def test_case_f_negative_net_pnl_with_positive_r_is_invalid():
+    """Case F: negative net P&L with positive R must fail closed."""
+    with pytest.raises(
+        er.EvidenceContractError, match="r_multiple must be < 0 when net_pnl is negative"
+    ):
+        er.validate_trade_execution_row(
+            _trade_row(
+                exit_price=24300.25,
+                exit_reason="STOP_HIT",
+                mae=-10.0,
+                mfe=1.0,
+                gross_pnl=-20.0,
+                costs_fees=2.5,
+                net_pnl=-22.5,
+                r_multiple=1.5,
+            )
+        )
+
+
+def test_case_h_adverse_move_with_positive_gross_is_invalid():
+    """Case H: adverse price movement with positive gross P&L must fail closed."""
+    with pytest.raises(
+        er.EvidenceContractError,
+        match="gross_pnl must be <= 0 .* when price move is adverse",
+    ):
+        er.validate_trade_execution_row(
+            _trade_row(
+                fill_price=24310.50,
+                exit_price=24300.25,
+                exit_reason="STOP_HIT",
+                mae=-10.0,
+                mfe=1.0,
+                gross_pnl=20.0,
+                costs_fees=2.5,
+                net_pnl=17.5,
+                r_multiple=1.0,
+            )
+        )
+
+
 def test_short_bracket_valid():
     er.validate_trade_execution_row(
         _trade_row(
@@ -521,6 +561,15 @@ def test_short_bracket_valid():
             intended_entry=24310.25,
             stop=24320.25,
             target=24300.25,
+            fill_price=24310.50,
+            exit_price=24300.25,
+            exit_reason="TARGET_HIT",
+            mae=-2.0,
+            mfe=10.0,
+            gross_pnl=20.5,
+            costs_fees=2.5,
+            net_pnl=18.0,
+            r_multiple=1.8,
         )
     )
 

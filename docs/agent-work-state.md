@@ -58,27 +58,27 @@ Every substantial unit of work must leave:
 
 If the agent cannot persist this file, it must return this payload verbatim-ready for the next agent/operator to save.
 
-## Current checkpoint — 2026-10-06 (U1 HOLD fixes: evidence-type bypass + trade scoring + row consistency)
+## Current checkpoint — 2026-10-06 (U1: r_multiple / P&L direction consistency)
 
-Task: Continue PR #1155 only. Close Claude breaker HOLD items on the U1 trade_execution evidence contract. Research/evidence plumbing only. No U2/U3. No merge/deploy.
+Task: Continue PR #1155 only. Prior three Claude HOLD blockers closed at `5325eb1`. Fix the narrow new U1 blocker: FILLED rows must not report contradictory `r_multiple` vs `net_pnl`, or favorable gross P&L on adverse price move. Research/evidence plumbing only. No U2/U3. No merge/deploy.
 
 ### VERIFIED
 
-- Prior U1 head under HOLD: `78b91d83bbc354e7a74737914216049a0710f43c`.
+- Reviewed head before this patch: `5325eb126a5476fe9b0a885621f32a6297cf2a68`.
+- Claude APPROVED U1 logic at `dc9963548502415c12fb8356fb83348b106e6a87`; this branch is a rebase-only onto current `main`.
 - Branch remains `cursor/u1-trade-evidence-contract-f2da`.
 - U1 rebase base includes `#1145` (`ae8c897`) and `#1146` (`445393f`) on `origin/main`.
+- Prior three blockers remain closed; only Cases F/H consistency added.
 - Existing runner + options coverage adapter remain the single runner path; no second runner invented.
 
 ### CHANGED
 
-- `evidence_type` required for new specs; grandfather only frozen legacy options experiment IDs; coverage `promotion_eligible=false`.
-- `trade_execution` scores from canonical FILLED `r_multiple` only; legacy `entered`/`completed`/`result` rejected.
-- Row consistency: NO_FILL forbids outcome fields; FILLED requires LONG/SHORT brackets, cost/PnL/MAE/MFE rules; fingerprint bound to dataset identity; `code_sha=unknown` rejected; prior_exposure not from population.
-- Adversarial Cases A–D covered in `tests/test_evidence_row.py`.
+- `validate_trade_execution_row`: enforce `r_multiple` sign vs `net_pnl` (eps=`PNL_TOLERANCE`); enforce directional `gross_pnl` vs signed fill→exit move (no dollar recomputation).
+- Cases F/H regression tests added.
 
 ### TESTS
 
-- Focused + full suite results recorded after this HOLD fix SHA (see PR body).
+- Focused + full suite + exact-head CI/handoff recorded in PR body after the new SHA.
 
 ### RUNTIME MUTATIONS
 
@@ -86,12 +86,12 @@ None. No deploy, no VPS, no broker, no strategy change.
 
 ### DONE / DO NOT REDO for this lane
 
-- Do not start U2 (dev/validation/OOS partitions) or U3 (futures adapter) in this PR.
-- Do not migrate historical evidence or rewrite frozen studies to new costs.
+- Do not start U2/U3 in this PR.
+- Do not address Claude minor findings unless required by this blocker.
 
 ### NEXT
 
-Independent Claude breaker re-review of the new exact head. Do not merge or deploy.
+Independent Claude final re-review of the new exact head. Do not merge or deploy.
 
 ## Previous lane checkpoint — 2026-10-06 (#1145 merged; #1146 on main as `445393f`; no timer install)
 
