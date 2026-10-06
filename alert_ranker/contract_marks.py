@@ -8,6 +8,7 @@ use the existing SQLite connection context and are advisory/paper-only.
 from __future__ import annotations
 
 import json
+import math
 from datetime import datetime, timezone
 from typing import Any
 
@@ -157,7 +158,9 @@ def aggregate_open_planned_risk(storage) -> float:
                 risk = float(contract["planned_risk_dollars"])
             except (KeyError, TypeError, ValueError):
                 return float("inf")
-            if risk < 0:
+            # NaN compares False to "< 0", so it must be named explicitly or a
+            # damaged row would make the whole aggregate NaN and pass the cap.
+            if not math.isfinite(risk) or risk < 0:
                 return float("inf")
             total += risk
     return round(total, 2)

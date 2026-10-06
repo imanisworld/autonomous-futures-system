@@ -7,6 +7,7 @@ shadow-journal the idea. It never connects to Robinhood or any broker API.
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import asdict, dataclass
 from datetime import date, datetime, timezone
@@ -15,6 +16,7 @@ from typing import Any
 import httpx
 
 from . import plain_text as pt
+from .paper_v1 import CONTRACT_MULTIPLIER, MAX_TRADE_RISK_DOLLARS
 from .scorer import ScoreResult
 from .storage import ScanStorage
 
@@ -136,6 +138,9 @@ def _parse_rh_inputs(body: dict[str, Any]) -> RHOptionsInput:
     missing = [name for name in required if body.get(name) in {None, ""}]
     if missing:
         raise ValueError(f"Missing required RH options field(s): {', '.join(missing)}")
+    booleans = [name for name in _RH_NUMERIC_FIELDS if isinstance(body.get(name), bool)]
+    if booleans:
+        raise ValueError(f"Invalid RH options input: boolean is not a number for {', '.join(booleans)}")
 
     try:
         return RHOptionsInput(
@@ -159,10 +164,10 @@ def _parse_rh_inputs(body: dict[str, Any]) -> RHOptionsInput:
             open_interest=int(body["open_interest"]) if body.get("open_interest") is not None else None,
             nine_ma=_optional_float(body.get("nine_ma")),
             max_premium_per_contract=float(body.get("max_premium_per_contract", 250.0)),
-            quantity=int(body.get("quantity", 1)),
-            max_contracts=int(body.get("max_contracts", 2)),
+            quantity=_whole_contracts(body.get("quantity", 1), "quantity"),
+            max_contracts=_whole_contracts(body.get("max_contracts", 2), "max_contracts"),
         )
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"Invalid RH options input: {exc}") from exc
 
 
@@ -333,8 +338,15 @@ def evaluate_rh_options(
     timestamp = now or datetime.now(timezone.utc)
     failed_gates = _hard_gates(inputs, timestamp)
     warnings = [] if failed_gates else _soft_warnings(inputs)
-    decision = "NO_TRADE" if failed_gates else "WATCH" if warnings else "TRADE"
     risk_result = _risk_check(inputs)
+    binding = _planned_risk_guard(inputs)
+    if binding is not None:
+        # Fail-closed rules bind: invalid inputs or premium-stop risk over the
+        # canonical cap never produce a ticket or a shadow record. R:R and
+        # debit-cap refusals stay advisory in risk_result, as before.
+        failed_gates = [*failed_gates, f"risk:{binding['failed_rule']}"]
+        warnings = []
+    decision = "NO_TRADE" if failed_gates else "WATCH" if warnings else "TRADE"
     order_ticket = _build_order_ticket(inputs) if decision != "NO_TRADE" else None
     broker_preview = RHAdvisoryBroker().preview_order(order_ticket)
     shadow_id = None
@@ -806,7 +818,44 @@ def _soft_warnings(inputs: RHOptionsInput) -> list[str]:
     return warnings
 
 
+def _planned_risk_guard(inputs: RHOptionsInput) -> dict[str, Any] | None:
+    """Binding refusal (or None): invalid inputs or planned risk over the cap."""
+    numbers = {
+        "premium": inputs.premium,
+        "max_premium_per_contract": inputs.max_premium_per_contract,
+        "quantity": inputs.quantity,
+        "max_contracts": inputs.max_contracts,
+    }
+    for name, value in numbers.items():
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
+            return {"approved": False, "failed_rule": "risk_invalid", "reason": f"{name} must be a finite positive number."}
+    if int(inputs.quantity) != inputs.quantity or inputs.quantity < 1:
+        return {"approved": False, "failed_rule": "risk_invalid", "reason": "quantity must be a whole number of contracts >= 1."}
+    _, _, stop_mult = _trade_style_and_target(inputs)
+    risk = inputs.premium - round(inputs.premium * stop_mult, 2)
+    if not math.isfinite(risk) or risk <= 0:
+        return {"approved": False, "failed_rule": "risk_invalid", "reason": "Premium risk must be positive."}
+    # Planned risk is the premium-stop loss, never the full debit:
+    # (entry - premium_stop) x 100 x contracts, capped like every other lane.
+    planned_risk = round(risk * CONTRACT_MULTIPLIER * inputs.quantity, 2)
+    if not math.isfinite(planned_risk) or planned_risk <= 0:
+        return {"approved": False, "failed_rule": "risk_invalid", "reason": "Planned premium-stop risk must be positive."}
+    if planned_risk > MAX_TRADE_RISK_DOLLARS:
+        return {
+            "approved": False,
+            "failed_rule": "planned_risk_cap",
+            "reason": (
+                f"Planned premium-stop risk ${planned_risk:.2f} exceeds "
+                f"${MAX_TRADE_RISK_DOLLARS:.2f}."
+            ),
+        }
+    return None
+
+
 def _risk_check(inputs: RHOptionsInput) -> dict[str, Any]:
+    binding = _planned_risk_guard(inputs)
+    if binding is not None:
+        return binding
     if inputs.premium * 100 > inputs.max_premium_per_contract:
         return {
             "approved": False,
@@ -830,8 +879,6 @@ def _risk_check(inputs: RHOptionsInput) -> dict[str, Any]:
     target = round(inputs.premium * target_mult, 2)
     risk = entry - stop
     reward = target - entry
-    if risk <= 0:
-        return {"approved": False, "failed_rule": "risk_invalid", "reason": "Premium risk must be positive."}
     rr = reward / risk
     min_rr = {"SCALP_INTRADAY": 0.75, "SCALP": 1.0, "SWING": 2.0}.get(trade_style, 1.0)
     if rr < min_rr:
@@ -902,6 +949,24 @@ def _normalize_signal_direction(value: Any) -> str:
 
 def _directions_conflict(daily: str, weekly: str) -> bool:
     return (daily == "BULLISH" and weekly == "BEARISH") or (daily == "BEARISH" and weekly == "BULLISH")
+
+
+_RH_NUMERIC_FIELDS = (
+    "signa_score", "gex_support_wall", "gex_resistance_wall", "current_price", "premium",
+    "dte", "strike", "option_volume", "open_interest", "nine_ma",
+    "max_premium_per_contract", "quantity", "max_contracts",
+)
+
+
+def _whole_contracts(value: Any, name: str) -> int:
+    """Contract counts are whole numbers; never truncate 1.5 to 1."""
+    try:
+        number = float(value)
+    except OverflowError as exc:
+        raise ValueError(f"{name} is not a finite number") from exc
+    if not number.is_integer():
+        raise ValueError(f"{name} must be a whole number of contracts")
+    return int(number)
 
 
 def _optional_float(value: Any) -> float | None:
