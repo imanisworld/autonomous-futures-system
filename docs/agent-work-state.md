@@ -72,10 +72,11 @@ If the agent cannot persist this file, it must return this payload verbatim-read
 
 ### OPEN / NOT MERGE-CLEARED
 
-- Claude options PR stack reconcile (dependency order) against `445393f`:
-  1. Independent on `main`: **#1147** → **#1148** → **#1149** → **#1150**
-  2. Then stacked: **#1151** + **#1154** (on #1150) → **#1152** + **#1153** (on #1151)
-- Independent review still pending on each Claude PR before merge GO.
+- Claude options PR stack **synced to `445393f`** (conflict-free merges pushed). Tips:
+  - #1147 `8175e11` · #1148 `4ffdd3a` · #1149 `1ddf4cb` · #1150 `f1253a8`
+  - #1151 `47ea595` · #1154 `b06247a` · #1152 `df3530a` · #1153 `bd6d069`
+- Merge order still: #1147 → #1148 → #1149 → #1150 → (#1151 + #1154) → (#1152 + #1153).
+- Independent review + CI green on each tip still required before merge GO. Do not auto-merge.
 - Live A13 sessions and Public INDEX real-time entitlement remain UNVERIFIED.
 - CodeQL medium alerts on `/health`/`/setup-capture` may need operator dismissal (do not claim CodeQL green).
 
@@ -90,10 +91,9 @@ If the agent cannot persist this file, it must return this payload verbatim-read
 
 ### NEXT
 
-1. Merge `origin/main` (`445393f`) into Claude independent PRs #1147→#1150 (no conflicts expected; re-run CI).
-2. After #1150 lands (or is updated), retarget/update stacked #1151/#1154 then #1152/#1153.
-3. Independent review + operator merge GO per PR; do not auto-merge the stack.
-4. Separate operator GO later for observer timer install + live prove.
+1. Wait CI on #1147 tip `8175e11`; independent `/options-diff-review`; merge only with operator GO.
+2. Proceed #1148 → #1149 → #1150 the same way; then stacked PRs (retarget to `main` after bases land).
+3. Separate operator GO later for observer timer install + live prove.
 
 ## Governance PR provenance — 2026-10-06 (docs-only; does not override runtime NEXT)
 
