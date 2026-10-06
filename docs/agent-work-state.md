@@ -71,8 +71,8 @@ If the agent cannot persist this file, it must return this payload verbatim-read
 
 ### OPEN / NOT MERGE-CLEARED
 
-- **HOLD — tip moved again on #1149.** Grok PASS applies only to exact tip `0df3a38`. Live head is now `661340e` (binding re-scope) and is **NOT cleared**.
-  - Do **not** merge `661340e` or any other tip until Grok PASS + Operator merge GO on the exact current head.
+- **HOLD — tip moved again on #1149.** Grok PASS applies only to exact tip `0df3a38`. Operator noted live head `661340e` (binding re-scope) as **NOT cleared**; by check time head had already advanced to `3f92b503f1aae181bf3ec48455b5028f271d21bc` (also **NOT cleared**).
+  - Do **not** merge `661340e`, `3f92b50`, or any other tip until Grok PASS + Operator merge GO on the exact current head.
 - Conveyor remaining after #1149: #1150 → #1151 → #1152 → #1153 → #1154.
 - No observer timer install. No deploy / VPS mutation.
 
@@ -84,7 +84,7 @@ If the agent cannot persist this file, it must return this payload verbatim-read
 
 ### NEXT
 
-1. Wait for Grok PASS + operator merge GO on exact current #1149 tip (`661340e` until it moves again).
+1. Wait for Grok PASS + operator merge GO on exact current #1149 tip (fetch HEAD; last seen `3f92b50`).
 2. After external merge: conveyor-sync #1150 onto new main; stop for independent review.
 3. Separate operator GO later for observer timer install + live prove.
 
