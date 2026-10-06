@@ -479,18 +479,75 @@ def test_mutating_the_source_mapping_after_load_cannot_change_the_epoch(tmp_path
     assert epoch.definition["authority"]["execution_authority"] is False
 
 
-def test_validate_epochs_refuses_malformed_direct_construction():
-    def make(**kw):
-        base = dict(
-            strategy="322", epoch="e1", status=se.EpochStatus.FROZEN, definition={}, thresholds={},
-            definition_sha256="c" * 64, effective_from=datetime(2026, 10, 1, tzinfo=timezone.utc),
-            effective_until=None, source_commit="a" * 40, preregistration_doc="p.md", oos_reference=None,
-            supersedes=None, observation_only=True,
-        )
-        base.update(kw)
-        return se.StrategyEpoch(**base)
+_OBS_AUTHORITY = {
+    "observation_only": True,
+    "execution_authority": False,
+    "risk_reservation": False,
+    "trade_alerts": False,
+}
 
-    for bad in (make(supersedes=["x"]), make(supersedes="e1"), make(effective_from=None), make(strategy=3)):
+
+def _direct(**kw) -> se.StrategyEpoch:
+    base = dict(
+        strategy="322", epoch="e1", status=se.EpochStatus.FROZEN, definition={"authority": dict(_OBS_AUTHORITY)},
+        thresholds={}, definition_sha256="c" * 64, effective_from=datetime(2026, 10, 1, tzinfo=timezone.utc),
+        effective_until=None, source_commit="a" * 40, preregistration_doc="p.md", oos_reference=None,
+        supersedes=None, observation_only=True,
+    )
+    base.update(kw)
+    return se.StrategyEpoch(**base)
+
+
+def test_valid_direct_construction_is_accepted():
+    epoch = _direct()
+    assert se.assert_observation_only(epoch) is epoch
+    assert se.validate_epochs([epoch]).get("322", "e1") is epoch
+
+
+@pytest.mark.parametrize(
+    "overrides, match",
+    [
+        ({"observation_only": False}, "observation_only must be true"),
+        ({"observation_only": 1}, "observation_only must be true"),
+        ({"observation_only": None}, "observation_only must be true"),
+        ({"definition": {}}, "authority must be an object"),
+        ({"definition": None}, "definition must be a mapping"),
+        ({"definition": {"authority": {**_OBS_AUTHORITY, "execution_authority": True}}}, "execution_authority must be false"),
+        ({"definition": {"authority": {**_OBS_AUTHORITY, "risk_reservation": True}}}, "risk_reservation must be false"),
+        ({"definition": {"authority": {**_OBS_AUTHORITY, "trade_alerts": True}}}, "trade_alerts must be false"),
+        ({"definition": {"authority": {**_OBS_AUTHORITY, "observation_only": False}}}, "observation_only must be true"),
+        ({"definition": {"authority": {**_OBS_AUTHORITY, "execution_authority": 0}}}, "execution_authority must be false"),
+        ({"definition": {"authority": {**_OBS_AUTHORITY, "tradable": False}}}, "unknown keys"),
+        ({"definition": {"authority": {k: v for k, v in _OBS_AUTHORITY.items() if k != "trade_alerts"}}}, "trade_alerts must be stated"),
+        ({"status": "DRAFT"}, "status must be an EpochStatus"),
+        ({"status": None}, "status must be an EpochStatus"),
+    ],
+)
+def test_direct_construction_cannot_bypass_authority_invariants(overrides, match):
+    with pytest.raises(se.RegistryError, match=match):
+        _direct(**overrides)
+
+
+def test_post_construction_tampering_is_caught_at_validation_and_registry_boundaries():
+    for field, value in (
+        ("observation_only", False),
+        ("definition", {"authority": {**_OBS_AUTHORITY, "execution_authority": True}}),
+        ("status", "FROZEN"),
+    ):
+        epoch = _direct()
+        object.__setattr__(epoch, field, value)  # bypasses __post_init__
+        with pytest.raises(se.RegistryError):
+            se.assert_observation_only(epoch)
+        with pytest.raises(se.RegistryError):
+            se.validate_epochs([epoch])
+        with pytest.raises(se.RegistryError):
+            se.EpochRegistry((epoch,))
+    with pytest.raises(se.RegistryError):
+        se.EpochRegistry(("not an epoch",))  # type: ignore[arg-type]
+
+
+def test_validate_epochs_refuses_malformed_direct_construction():
+    for bad in (_direct(supersedes=["x"]), _direct(supersedes="e1"), _direct(effective_from=None), _direct(strategy=3)):
         with pytest.raises(se.RegistryError):
             se.validate_epochs([bad])
     with pytest.raises(se.RegistryError):

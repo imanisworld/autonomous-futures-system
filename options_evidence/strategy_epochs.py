@@ -285,6 +285,9 @@ class StrategyEpoch:
         # Read-only from construction on, whether built by the loader or directly.
         object.__setattr__(self, "definition", _freeze(self.definition))
         object.__setattr__(self, "thresholds", _freeze(self.thresholds))
+        # The authority invariants hold for every epoch, not only file-loaded
+        # ones: a directly constructed epoch cannot opt out of them.
+        assert_observation_only(self)
 
     @property
     def key(self) -> tuple[str, str]:
@@ -294,6 +297,27 @@ class StrategyEpoch:
         if self.effective_from is None or at < self.effective_from:
             return False
         return self.effective_until is None or at < self.effective_until
+
+
+def assert_observation_only(epoch: StrategyEpoch) -> StrategyEpoch:
+    """Raise RegistryError unless ``epoch`` is an observation-only epoch.
+
+    The shared authority boundary: ``StrategyEpoch`` construction,
+    ``validate_epochs`` and ``EpochRegistry`` all call it, so the invariants do
+    not depend on whether an epoch came from the registry file or from code.
+    Consumers that accept a ``StrategyEpoch`` may call it again at use time.
+    """
+    if not isinstance(epoch, StrategyEpoch):
+        raise RegistryError(f"expected StrategyEpoch, not {type(epoch).__name__}")
+    label = f"{epoch.strategy}/{epoch.epoch}"
+    if not isinstance(epoch.status, EpochStatus):
+        raise RegistryError(f"{label}: status must be an EpochStatus, not {type(epoch.status).__name__}")
+    if epoch.observation_only is not True:
+        raise RegistryError(f"{label}: observation_only must be true; a strategy epoch grants nothing")
+    if not isinstance(epoch.definition, Mapping):
+        raise RegistryError(f"{label}.definition must be a mapping")
+    _check_authority(epoch.definition.get("authority"), label)
+    return epoch
 
 
 def _epoch_from_mapping(raw: Any, index: int) -> StrategyEpoch:
@@ -387,6 +411,12 @@ def _epoch_from_mapping(raw: Any, index: int) -> StrategyEpoch:
 class EpochRegistry:
     epochs: tuple[StrategyEpoch, ...]
 
+    def __post_init__(self) -> None:
+        epochs = tuple(self.epochs)
+        for item in epochs:
+            assert_observation_only(item)
+        object.__setattr__(self, "epochs", epochs)
+
     def get(self, strategy: str, epoch: str) -> StrategyEpoch | None:
         for item in self.epochs:
             if item.key == (strategy, epoch):
@@ -402,6 +432,7 @@ def validate_epochs(epochs: Iterable[StrategyEpoch]) -> EpochRegistry:
     for item in items:
         if not isinstance(item, StrategyEpoch):
             raise RegistryError(f"registry entries must be StrategyEpoch, not {type(item).__name__}")
+        assert_observation_only(item)
         if not isinstance(item.strategy, str) or not isinstance(item.epoch, str):
             raise RegistryError("strategy and epoch must be strings")
         if item.supersedes is not None and not isinstance(item.supersedes, str):
@@ -409,7 +440,7 @@ def validate_epochs(epochs: Iterable[StrategyEpoch]) -> EpochRegistry:
         if item.supersedes == item.epoch:
             raise RegistryError(f"{item.strategy}/{item.epoch}: an epoch cannot supersede itself")
         if item.status is not EpochStatus.DRAFT and not isinstance(item.effective_from, datetime):
-            raise RegistryError(f"{item.strategy}/{item.epoch}: {getattr(item.status, "value", item.status)} epochs require effective_from")
+            raise RegistryError(f"{item.strategy}/{item.epoch}: {item.status.value} epochs require effective_from")
     keys = [e.key for e in items]
     dupes = sorted({k for k in keys if keys.count(k) > 1})
     if dupes:

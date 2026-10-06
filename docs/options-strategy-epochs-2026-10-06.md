@@ -29,6 +29,7 @@ preregistration. Results from different epochs are never pooled.
 | Unknown keys refused, not ignored | allowlists at registry (`schema`, `notes`, `epochs`), epoch, `oos_reference` and `authority` level; `tradable`, `active`, `trading_authority`, a top-level `observation_only` etc. are refused; duplicate JSON object keys are refused |
 | No coercion | identifiers and SHAs must be `str` and match in full (a trailing newline fails); text fields are non-blank without surrounding whitespace; `r_outcomes` is a non-empty JSON list of finite non-bool numbers (strings/bools refused); thresholds are finite non-bool numbers; `NaN`/`Infinity` refused |
 | One error type | every malformed input (unrepresentable dates, overflow, absurd nesting, wrong types) raises `RegistryError`, never an internal exception |
+| Authority holds however an epoch is created | `assert_observation_only` runs in `StrategyEpoch.__post_init__`, `validate_epochs` and `EpochRegistry.__post_init__`: `observation_only is True`, `status` is an `EpochStatus`, and `definition.authority` passes the same exact-four-boolean check as the loader. A directly constructed epoch (as fitness/readiness code and tests do) cannot opt out; consumers may call it again at use time |
 | Loaded settings are immutable | `definition`/`thresholds` are deep-frozen (read-only mappings, tuples) on construction; freezing does not change the hash |
 | New signals stamped only by exact match | `resolve_epoch`: running definition must be exactly the material sections and hash-match a FROZEN epoch covering the timestamp; anything else, including malformed/non-finite input, is `UNREGISTERED_EPOCH`; a naive/invalid `at` raises `RegistryError` |
 | History never relabelled | `epoch_label_for_record` returns the record's own `strategy_epoch` only if it names a FROZEN/RETIRED epoch of the record's `strategy` (both exact strings), else `LEGACY_UNVERSIONED` (no stamp) / `UNREGISTERED_EPOCH`; it never assigns |
@@ -68,3 +69,13 @@ agent one.
    `FROZEN_PINS`.
 3. To retire the previous epoch, set its `effective_until`. That is the only
    field you may add to a frozen entry.
+
+## Known non-blocking follow-ups
+
+These fail closed (they raise; nothing is labelled or authorised) but raise a
+built-in exception instead of `RegistryError`. They are reachable only from
+Python callers, not from registry JSON:
+
+1. `resolve_epoch` with a broken `tzinfo` on `at`, or `registry=None`.
+2. `epoch_label_for_record` with an array-like `strategy_epoch` value, or `registry=None`.
+3. `load_registry(None)` / a non-path argument.
