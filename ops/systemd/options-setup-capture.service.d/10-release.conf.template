@@ -1,0 +1,13 @@
+# Optional release pin for the observation-only setup-capture collector (#1145).
+#
+# #1145 deliberately runs from the mutable live checkout
+# (/root/autonomous-futures-system) and keeps state on the shared log volume.
+# This template pins the CODE to one integrity-checked immutable release instead,
+# without moving the journal. Applying it is an operator decision (separate GO,
+# together with the timer-install GO). Verify the effective tree with
+# `ops/options_observer_status.py --unit options-setup-capture.service`.
+[Service]
+WorkingDirectory=/root/afs-releases/@RELEASE_SHA@
+Environment=PYTHONPATH=/root/afs-releases/@RELEASE_SHA@
+ExecStart=
+ExecStart=/root/afs-releases/@RELEASE_SHA@/.venv/bin/python -m scripts.options_setup_capture_collect --env-file /root/afs-shared/.env --journal /root/afs-shared/logs/options_setup_capture.jsonl --raw-trade-dir /root/afs-shared/logs/options_setup_capture_source_trades
