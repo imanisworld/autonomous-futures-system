@@ -58,23 +58,24 @@ Every substantial unit of work must leave:
 
 If the agent cannot persist this file, it must return this payload verbatim-ready for the next agent/operator to save.
 
-## Current checkpoint — 2026-10-06 (#1145 merged; #1146 updating from new main; no timer install)
+## Current checkpoint — 2026-10-06 (#1145+#1146 on main; Claude stack reconcile started; no timer install)
 
-`main` tip after #1145 squash-merge: `ae8c8970966e4ed09d6679fe8d873f4b7de27cd9`. Active PR: #1146 `security/options-scanner-access-gate-20261006` (merging `origin/main` into gate branch; keep both access_gate + setup_capture; loopback TestClient for `/setup-capture`). Options current-state authority remains `docs/options-current-state-handoff.md`. Futures runtime checkpoint (c44d32b) below is unchanged. **No observer timer install.**
+`main` tip: `445393fe0b65c74be47a86e9fa14295a7af0c69a` (**#1146** squash-merge). Prior: `ae8c8970966e4ed09d6679fe8d873f4b7de27cd9` (**#1145**). Options current-state authority remains `docs/options-current-state-handoff.md`. Futures runtime checkpoint (c44d32b) below is unchanged. **No observer timer install.**
 
 ### DONE / DO NOT REDO
 
 - Oct. 5 SPY shadow 9925/9933 audit: late `H1_222_CONTINUATION` AHEAD after trigger 770.0768; not a prospective catch. Do not retune Strat from them.
-- Observer scaffold + B1–B13 red-team fixes (see prior checkpoints; fix SHAs `d29b2cb` / `8a5eeed` / `00dbd59` / journal-path redaction on tip).
+- Observer scaffold + B1–B13 red-team fixes (see prior checkpoints; fix SHAs `d29b2cb` / `8a5eeed` / `00dbd59` / journal-path redaction).
 - `/health` setup_capture telemetry omits absolute journal filesystem path; `/setup-capture` retains path for operators.
 - **#1145 MERGED** into `main` as `ae8c897` (2026-10-06). Observation-only setup-capture collector landed. Timer units remain uninstalled.
-- Merge order (operator): #1145 done → #1146 security gate from new main → Claude stack. No timer install yet.
+- **#1146 MERGED** into `main` as `445393f` (2026-10-06). In-app access gate; CI green + independent security review PASS on tip `3a204ff` before merge. `/setup-capture` stays gated.
 
 ### OPEN / NOT MERGE-CLEARED
 
-- #1146 merge conflict resolution (keep both `/health` keys + config fields) + loopback `/setup-capture` TestClient.
-- Exact-head CI green + independent security review on #1146 tip after push.
-- Operator merge GO for #1146 if CI/security clean; then Claude PR stack in dependency order.
+- Claude options PR stack reconcile (dependency order) against `445393f`:
+  1. Independent on `main`: **#1147** → **#1148** → **#1149** → **#1150**
+  2. Then stacked: **#1151** + **#1154** (on #1150) → **#1152** + **#1153** (on #1151)
+- Independent review still pending on each Claude PR before merge GO.
 - Live A13 sessions and Public INDEX real-time entitlement remain UNVERIFIED.
 - CodeQL medium alerts on `/health`/`/setup-capture` may need operator dismissal (do not claim CodeQL green).
 
@@ -85,13 +86,13 @@ If the agent cannot persist this file, it must return this payload verbatim-read
 - Do not deploy without explicit operator GO.
 - Do not expose `/root/afs-shared/...` capture-journal paths on `/health`.
 - Do not install the observer timer without a separate install GO.
-- Do not re-merge or re-land #1145 (already on main as `ae8c897`).
+- Do not re-merge or re-land #1145 (`ae8c897`) or #1146 (`445393f`).
 
 ### NEXT
 
-1. Finish #1146 merge from `ae8c897` main: resolve overlap (both sides), loopback tests, push.
-2. Re-run #1146 CI + independent security review; merge if clean.
-3. Then reconcile remaining Claude PR stack in dependency order.
+1. Merge `origin/main` (`445393f`) into Claude independent PRs #1147→#1150 (no conflicts expected; re-run CI).
+2. After #1150 lands (or is updated), retarget/update stacked #1151/#1154 then #1152/#1153.
+3. Independent review + operator merge GO per PR; do not auto-merge the stack.
 4. Separate operator GO later for observer timer install + live prove.
 
 ## Governance PR provenance — 2026-10-06 (docs-only; does not override runtime NEXT)
