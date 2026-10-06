@@ -152,6 +152,24 @@ def test_catch_classification_is_unchanged_by_adaptation(tmp_path):
     assert len(valid) == catch_count(official.values()) >= 1
 
 
+def test_adapted_signals_round_trip_through_canonical_records(tmp_path):
+    """Adapter output must serialize and verify (ISO-string row times are normalized)."""
+    engine = _engine(
+        tmp_path,
+        iex=[_print(et(2026, 10, 5, 9, 30, 20), 770.10)],
+        sip=[_print(et(2026, 10, 5, 9, 30, 20), 770.10, feed="sip")],
+    )
+    engine.run(now=et(2026, 10, 2, 16, 16))
+    engine.run(now=et(2026, 10, 5, 9, 31, 0))
+    engine.run(now=et(2026, 10, 5, 10, 46, 0))
+    fold = ca.fold_capture_rows(_rows(engine))
+    records = [sg.to_record(s) for s in fold.journal.signals()]
+    assert records
+    for record in records:
+        assert sg.verify_record(json.loads(json.dumps(record))) == []
+    assert all(c.detected_at.tzinfo is not None for s in fold.journal.signals() for c in s.history)
+
+
 def test_repeated_scanner_sightings_link_without_duplicating(tmp_path):
     engine = _engine(tmp_path)
     engine.run(now=et(2026, 10, 2, 16, 16))

@@ -353,6 +353,13 @@ class SignalEvent:
     reason: str = ""
     payload: Mapping[str, Any] = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        # Times are normalized at the boundary so no ISO string leaks into
+        # StateChange / to_record (adapter rows carry ISO strings).
+        object.__setattr__(self, "detected_at", _utc(self.detected_at, "detected_at"))
+        if self.market_time is not None:
+            object.__setattr__(self, "market_time", _utc(self.market_time, "market_time"))
+
 
 def open_signal(
     identity: StructureIdentity,
