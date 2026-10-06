@@ -65,7 +65,7 @@ Task: remove overlapping agent responsibilities and make the research pipeline e
 - Base `main`: `31c9281f41e61791dc050d74f33acf02f87085e4`.
 - Branch: `docs/clarify-agent-roles-20261006`.
 - Grok role proposed: research / edge discovery / read-only futures+options contract discovery and comparison, including operator-authorized Robinhood/Webull account/market context when available.
-- Cursor role proposed: implement approved changes, fix proven defects, and run registered/approved trials mechanically.
+- Cursor role proposed: implement approved changes, fix proven defects, and run registered and approved trials mechanically.
 - Claude/Codex role remains independent breaker / QA.
 - ChatGPT + operator own experiment approval/registration, reconciliation, status changes, and progression decisions.
 - Forward paper/demo/observer lanes remain evidence collectors, not research agents.
