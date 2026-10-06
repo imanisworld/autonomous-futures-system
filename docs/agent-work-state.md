@@ -58,25 +58,22 @@ Every substantial unit of work must leave:
 
 If the agent cannot persist this file, it must return this payload verbatim-ready for the next agent/operator to save.
 
-## Current checkpoint — 2026-10-06 (#1145 merged; #1146 updating from new main; no timer install)
+## Current checkpoint — 2026-10-06 (post-#1145/#1146 integration pass; stack review-ready; no merge/deploy/timer)
 
-`main` tip after #1145 squash-merge: `ae8c8970966e4ed09d6679fe8d873f4b7de27cd9`. Active PR: #1146 `security/options-scanner-access-gate-20261006` (merging `origin/main` into gate branch; keep both access_gate + setup_capture; loopback TestClient for `/setup-capture`). Options current-state authority remains `docs/options-current-state-handoff.md`. Futures runtime checkpoint (c44d32b) below is unchanged. **No observer timer install.**
+`main` tip: `445393fe0b65c74be47a86e9fa14295a7af0c69a`. #1145 merged as `ae8c897`, #1146 merged as `445393f`. Options current-state authority remains `docs/options-current-state-handoff.md`. The futures runtime checkpoint (c44d32b) below is unchanged. **No observer timer install.**
 
 ### DONE / DO NOT REDO
 
 - Oct. 5 SPY shadow 9925/9933 audit: late `H1_222_CONTINUATION` AHEAD after trigger 770.0768; not a prospective catch. Do not retune Strat from them.
-- Observer scaffold + B1–B13 red-team fixes (see prior checkpoints; fix SHAs `d29b2cb` / `8a5eeed` / `00dbd59` / journal-path redaction on tip).
-- `/health` setup_capture telemetry omits absolute journal filesystem path; `/setup-capture` retains path for operators.
-- **#1145 MERGED** into `main` as `ae8c897` (2026-10-06). Observation-only setup-capture collector landed. Timer units remain uninstalled.
-- Merge order (operator): #1145 done → #1146 security gate from new main → Claude stack. No timer install yet.
+- #1145 MERGED (`ae8c897`): observation-only setup-capture collector. Timer units remain uninstalled.
+- #1146 MERGED (`445393f`): scanner in-app access gate. `/setup-capture` private; `/health` redacted.
+- Claude stack #1147–#1154 reconciled onto the real #1145 schema (see the handoff 2026-10-06 integration-pass table). Fixes found in this pass: #1145 status script mutated the journal on read (#1147); RH evaluator lacked the planned-risk cap and approved NaN risk (#1149); fitness and research took signal integrity from the outcome row (#1152/#1153); canonical events kept ISO-string times (#1151).
 
 ### OPEN / NOT MERGE-CLEARED
 
-- #1146 merge conflict resolution (keep both `/health` keys + config fields) + loopback `/setup-capture` TestClient.
-- Exact-head CI green + independent security review on #1146 tip after push.
-- Operator merge GO for #1146 if CI/security clean; then Claude PR stack in dependency order.
+- Stack PRs #1147–#1154 need independent review and operator merge GO. Stacked PRs (#1151–#1154) do not run handoff-fields until rebased onto main by merge order.
+- #1145 unit runs from the live tree; release-pin drop-in (#1147 template) not installed.
 - Live A13 sessions and Public INDEX real-time entitlement remain UNVERIFIED.
-- CodeQL medium alerts on `/health`/`/setup-capture` may need operator dismissal (do not claim CodeQL green).
 
 ### DO NOT REDO
 
@@ -85,14 +82,14 @@ If the agent cannot persist this file, it must return this payload verbatim-read
 - Do not deploy without explicit operator GO.
 - Do not expose `/root/afs-shared/...` capture-journal paths on `/health`.
 - Do not install the observer timer without a separate install GO.
-- Do not re-merge or re-land #1145 (already on main as `ae8c897`).
+- Do not re-merge or re-land #1145 or #1146.
+- Do not register a tradable epoch or declare options Day 1 without the readiness gate returning READY.
 
 ### NEXT
 
-1. Finish #1146 merge from `ae8c897` main: resolve overlap (both sides), loopback tests, push.
-2. Re-run #1146 CI + independent security review; merge if clean.
-3. Then reconcile remaining Claude PR stack in dependency order.
-4. Separate operator GO later for observer timer install + live prove.
+1. Independent review of #1149, #1148 and #1147, then #1150 → #1151 → #1152 / #1153 / #1154. Operator merge GO per PR.
+2. Separate operator GO: deploy release-pinned #1145 collector + install timer + observer status tool; prove capture/dedupe live.
+3. Only then preregister a tradable epoch (resolved stop/target, OOS R, cost model, `FitnessPolicy`) and run the readiness gate.
 
 ## Governance PR provenance — 2026-10-06 (docs-only; does not override runtime NEXT)
 

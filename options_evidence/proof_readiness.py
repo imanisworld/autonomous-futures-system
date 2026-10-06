@@ -16,8 +16,11 @@ Prerequisites derived from the epoch registry (cannot be asserted by hand):
 Prerequisites that need runtime evidence (an ``EvidenceRef`` with a source and
 a timestamp; a bare True is refused):
 
-* ``capture_integrity``          -- timely pre-trigger capture proven live;
-* ``dedupe``                     -- structure-level dedupe proven live;
+* ``capture_integrity``          -- timely pre-trigger capture proven live by
+  the #1145 setup-capture observer; build it with ``capture_integrity_evidence``
+  from #1145 records (``is_prospective_catch`` / ``catch_count``), never by hand;
+* ``dedupe``                     -- one #1145 ``structure_key`` -> one canonical
+  signal per epoch, proven on live journal output;
 * ``data_source_frozen``         -- the live feed matches the epoch's source;
 * ``integrity_monitoring_active``-- read-only observer status shows OK.
 """
@@ -26,7 +29,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Mapping
+from typing import Any, Iterable, Mapping
+
+from alert_ranker.setup_capture import (
+    STATUS_AMBIGUOUS,
+    STATUS_DATA_BLOCKED,
+    STATUS_MISSED_LATE,
+    STATUS_TRIGGERED,
+    catch_count,
+    is_prospective_catch,
+)
 
 from .strategy_epochs import EpochRegistry, EpochStatus, StrategyEpoch
 
@@ -69,6 +81,37 @@ class Readiness:
     @property
     def blockers(self) -> tuple[str, ...]:
         return tuple(f"{name}: {why}" for name, (ok, why) in self.checks.items() if not ok)
+
+
+def capture_integrity_evidence(
+    records: Iterable[Any],
+    *,
+    source: str,
+    observed_at: datetime,
+) -> EvidenceRef:
+    """``capture_integrity`` evidence from #1145 current records for a window.
+
+    Fails closed. Passes only when the window holds at least one #1145
+    prospective catch and *every* triggered structure is one: a MISSED_LATE,
+    a TRIGGERED row that is late or still pending SIP, a DATA_BLOCKED or an
+    AMBIGUOUS row each fail it. GAP_THROUGH_OPEN, INVALIDATED, EXPIRED and
+    NO_TRIGGER are market outcomes, not capture failures.
+    """
+    rows = list(records)
+
+    def status(row: Any) -> str:
+        return str(row.get("status") if isinstance(row, Mapping) else getattr(row, "status", ""))
+
+    catches = catch_count(rows)
+    failures = {
+        "triggered_not_catch": sum(1 for r in rows if status(r) == STATUS_TRIGGERED and not is_prospective_catch(r)),
+        "missed_late": sum(1 for r in rows if status(r) == STATUS_MISSED_LATE),
+        "data_blocked": sum(1 for r in rows if status(r) == STATUS_DATA_BLOCKED),
+        "ambiguous": sum(1 for r in rows if status(r) == STATUS_AMBIGUOUS),
+    }
+    passed = catches >= 1 and not any(failures.values())
+    note = f"catch_count={catches} " + " ".join(f"{k}={v}" for k, v in failures.items())
+    return EvidenceRef(passed, source, observed_at, note)
 
 
 def _unresolved(value: Any) -> bool:
