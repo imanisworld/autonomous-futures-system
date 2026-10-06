@@ -58,41 +58,35 @@ Every substantial unit of work must leave:
 
 If the agent cannot persist this file, it must return this payload verbatim-ready for the next agent/operator to save.
 
-## Current checkpoint — 2026-10-06 (#1145+#1146 on main; Claude stack reconcile started; no timer install)
+## Current checkpoint — 2026-10-06 (#1145+#1146+#1147 on main; #1148 synced for review; no timer install)
 
-`main` tip: `445393fe0b65c74be47a86e9fa14295a7af0c69a` (**#1146** squash-merge). Prior: `ae8c8970966e4ed09d6679fe8d873f4b7de27cd9` (**#1145**). Options current-state authority remains `docs/options-current-state-handoff.md`. Futures runtime checkpoint (c44d32b) below is unchanged. **No observer timer install.**
+`main` tip: `53dda445028c1c9d3ac99d94dc35ce4bcf9cfd3c` (**#1147** squash-merge of exact tip `beb389ac0285de1e9de59eaefccfa2af5bd9da30`). Prior: `445393f` (#1146), `ae8c897` (#1145). Options current-state authority remains `docs/options-current-state-handoff.md`. Futures runtime checkpoint (c44d32b) below is unchanged. **No observer timer install. No VPS/deploy mutation.**
 
 ### DONE / DO NOT REDO
 
-- Oct. 5 SPY shadow 9925/9933 audit: late `H1_222_CONTINUATION` AHEAD after trigger 770.0768; not a prospective catch. Do not retune Strat from them.
-- Observer scaffold + B1–B13 red-team fixes (see prior checkpoints; fix SHAs `d29b2cb` / `8a5eeed` / `00dbd59` / journal-path redaction).
-- `/health` setup_capture telemetry omits absolute journal filesystem path; `/setup-capture` retains path for operators.
-- **#1145 MERGED** into `main` as `ae8c897` (2026-10-06). Observation-only setup-capture collector landed. Timer units remain uninstalled.
-- **#1146 MERGED** into `main` as `445393f` (2026-10-06). In-app access gate; CI green + independent security review PASS on tip `3a204ff` before merge. `/setup-capture` stays gated.
+- **#1145 MERGED** `ae8c897`. Observation-only setup-capture collector. Timer units uninstalled.
+- **#1146 MERGED** `445393f`. In-app access gate; CI + security PASS on `3a204ff`.
+- **#1147 MERGED** `53dda44` from cleared tip `beb389a` (operator GO; independent Grok re-review PASS). Read-only observer status tool + release-pin template. Stale APPROVE on `8175e11` invalidated.
+- #1148 re-synced to post-#1147 main for review only: tip `fe88ade997ba79de312fb4ce06871bf6a382ba87`.
 
 ### OPEN / NOT MERGE-CLEARED
 
-- Claude options PR stack **synced to `445393f`** (conflict-free merges pushed). Tips:
-  - #1147 `8175e11` · #1148 `4ffdd3a` · #1149 `1ddf4cb` · #1150 `f1253a8`
-  - #1151 `47ea595` · #1154 `b06247a` · #1152 `df3530a` · #1153 `bd6d069`
-- Merge order still: #1147 → #1148 → #1149 → #1150 → (#1151 + #1154) → (#1152 + #1153).
-- Independent review + CI green on each tip still required before merge GO. Do not auto-merge.
-- Live A13 sessions and Public INDEX real-time entitlement remain UNVERIFIED.
-- CodeQL medium alerts on `/health`/`/setup-capture` may need operator dismissal (do not claim CodeQL green).
+- Next merge candidate: **#1148** tip `fe88ade` — needs independent review + separate merge GO. Do not merge #1149+.
+- Remaining after #1148: #1149 → #1150 → (#1151+#1154) → (#1152+#1153).
+- Live A13 / Public INDEX entitlement UNVERIFIED.
+- Cited evidence path `/workspace/afs-shared/early_capture_redteam_2026-10-06/PR1147_beb389a_review.md` was **not found in this Cloud Agent workspace** (operator authorization + Grok PASS accepted).
 
 ### DO NOT REDO
 
-- Do not invent a scoring producer (#1089 stays telemetry).
-- Do not enable SPXW, expand production watchlist, or promote 1H to ACTIVE.
-- Do not deploy without explicit operator GO.
-- Do not expose `/root/afs-shared/...` capture-journal paths on `/health`.
-- Do not install the observer timer without a separate install GO.
-- Do not re-merge or re-land #1145 (`ae8c897`) or #1146 (`445393f`).
+- Do not merge #1148+ without a new operator GO on the exact tip.
+- Do not install observer timer / status wrapper / release-pin drop-in without separate install GO.
+- Do not deploy, restart services, or change VPS config.
+- Do not re-merge #1145/#1146/#1147.
 
 ### NEXT
 
-1. Wait CI on #1147 tip `8175e11`; independent `/options-diff-review`; merge only with operator GO.
-2. Proceed #1148 → #1149 → #1150 the same way; then stacked PRs (retarget to `main` after bases land).
+1. Independent review of #1148 exact tip `fe88ade`; wait for operator merge GO.
+2. Only after that GO: merge #1148, then reconcile #1149 for review and stop again.
 3. Separate operator GO later for observer timer install + live prove.
 
 ## Governance PR provenance — 2026-10-06 (docs-only; does not override runtime NEXT)
