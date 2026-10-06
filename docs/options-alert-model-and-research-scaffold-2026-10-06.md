@@ -3,14 +3,24 @@
 Both modules read from the canonical prospective signal (`options_evidence/signal.py`).
 Neither one is wired to production. Neither one can grant authority.
 
+> **Integration pass (post-#1145 / #1146).** The canonical signal now mirrors
+> the #1145 setup-capture model: WATCHING is two-sided and has no direction
+> until the first break. The alerts and research modules were updated to match.
+
 ## Alert / surfacing model: `options_evidence/alerts.py` (Workstream 11)
 
 - **Kinds.** WATCHING, NEAR_TRIGGER, TRIGGERED, MISSED_GAP, MISSED_LATE,
-  INVALIDATED, EXPIRED. Each one is projected 1:1 from the lifecycle state.
+  INVALIDATED, EXPIRED, DATA_BLOCKED, AMBIGUOUS. Each one is projected 1:1
+  from the lifecycle state. For a #1145 capture, that state comes through
+  `capture_adapter`.
   OUTCOME_CLOSED is research bookkeeping, so it is never surfaced.
 - **NEAR_TRIGGER.** This is the only derived kind. It applies when a signal is
-  WATCHING and is within `near_trigger_r` risk units of its trigger.
-  `near_trigger_r` is a **required** policy value and has no default.
+  WATCHING and is within `near_trigger_r` of the **nearer** boundary.
+  - The distance is measured in units of the setup range (`boundary_high - boundary_low`).
+  - The alert reports `near_side` HIGH or LOW. It never reports a direction:
+    `direction`, `trigger` and `invalidation` stay null until the watcher
+    resolves the break.
+  - `near_trigger_r` is a **required** policy value and has no default.
   - When the price is through the trigger but the watcher has not resolved it,
     the alert stays NEAR_TRIGGER. A TRIGGERED alert comes only from the
     watcher's canonical state.
@@ -55,8 +65,14 @@ signal that has not triggered yet, the cutoff is its first-seen time.
 
 The population contains only signals that meet all of these conditions:
 - in a **registered** strategy epoch
-- VALID data integrity and VALID signal integrity
+- VALID data integrity and VALID signal integrity on **both** the canonical
+  signal record and the outcome record
+  - The signal record is authoritative, so a #1145 late or gap capture stays
+    out even when its outcome row claims VALID.
 - a known `result_R`
+
+The result never selects rows: winners, losers and scratches all stay in, and
+a test pins this.
 
 Legacy and unregistered rows are excluded and counted, as are rows with
 degraded integrity or an unknown result.

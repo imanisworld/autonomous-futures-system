@@ -6,26 +6,48 @@ import pytest
 
 from options_evidence import alerts as al
 from options_evidence import signal as sg
-from tests.test_options_prospective_signal import T0, opened
+from tests.test_options_prospective_signal import HIGH, LOW, T0, opened, trigger
 
 NOW = T0 + timedelta(minutes=5)
 
 
 def watching():
     journal = sg.SignalJournal()
-    return journal, opened(journal)  # LONG trigger 501.25, invalidation 498.10 (R = 3.15)
+    return journal, opened(journal)  # two-sided: high 501.25 / low 498.10 (range 3.15)
+
+
+RANGE = HIGH - LOW
 
 
 def test_watching_alert_and_near_trigger_from_canonical_state_only():
     _, s = watching()
-    far = al.alert_for(s, as_of=NOW, last_price=499.0, near_trigger_r=0.25)
-    assert far.kind is al.AlertKind.WATCHING
+    far = al.alert_for(s, as_of=NOW, last_price=499.70, near_trigger_r=0.25)
+    assert far.kind is al.AlertKind.WATCHING and far.near_side == "HIGH"
     near = al.alert_for(s, as_of=NOW, last_price=500.80, near_trigger_r=0.25)
     assert near.kind is al.AlertKind.NEAR_TRIGGER
-    assert near.distance_to_trigger_r == pytest.approx((501.25 - 500.80) / 3.15)
-    # Through the trigger but watcher has not resolved: NEAR_TRIGGER, never synthetic TRIGGERED.
+    assert near.near_side == "HIGH"
+    assert near.distance_to_trigger_r == pytest.approx((HIGH - 500.80) / RANGE)
+    # Through the boundary but watcher has not resolved: NEAR_TRIGGER, never synthetic TRIGGERED.
     through = al.alert_for(s, as_of=NOW, last_price=502.0, near_trigger_r=0.25)
     assert through.kind is al.AlertKind.NEAR_TRIGGER
+
+
+def test_watching_near_trigger_is_two_sided_and_never_implies_direction():
+    _, s = watching()
+    low = al.alert_for(s, as_of=NOW, last_price=498.40, near_trigger_r=0.25)
+    assert low.kind is al.AlertKind.NEAR_TRIGGER and low.near_side == "LOW"
+    assert low.distance_to_trigger_r == pytest.approx((498.40 - LOW) / RANGE)
+    record = low.to_record()
+    assert record["direction"] is None and record["trigger"] is None and record["invalidation"] is None
+    assert (record["boundary_high"], record["boundary_low"]) == (HIGH, LOW)
+
+
+def test_resolved_alert_carries_direction_from_canonical_state():
+    journal, s = watching()
+    s = trigger(journal, s, at=NOW, direction="SHORT")
+    alert = al.alert_for(s, as_of=NOW + timedelta(seconds=6), last_price=400.0, near_trigger_r=0.25)
+    assert alert.kind is al.AlertKind.TRIGGERED
+    assert (alert.direction, alert.trigger, alert.invalidation, alert.near_side) == ("SHORT", LOW, HIGH, None)
 
 
 def test_near_trigger_distance_is_a_required_policy_input():
@@ -41,16 +63,21 @@ def test_near_trigger_distance_is_a_required_policy_input():
     [
         (sg.LifecycleState.TRIGGERED, al.AlertKind.TRIGGERED, {}),
         (sg.LifecycleState.MISSED_LATE, al.AlertKind.MISSED_LATE, {}),
-        (sg.LifecycleState.MISSED_GAP, al.AlertKind.MISSED_GAP, {"gap_open_price": 503.0}),
+        (sg.LifecycleState.MISSED_GAP, al.AlertKind.MISSED_GAP, {"gap_through": True, "first_print_price": 503.0}),
         (sg.LifecycleState.INVALIDATED, al.AlertKind.INVALIDATED, {}),
         (sg.LifecycleState.EXPIRED, al.AlertKind.EXPIRED, {}),
+        (sg.LifecycleState.DATA_BLOCKED, al.AlertKind.DATA_BLOCKED, {}),
+        (sg.LifecycleState.AMBIGUOUS, al.AlertKind.AMBIGUOUS, {}),
     ],
 )
 def test_each_lifecycle_state_maps_to_its_alert(state, kind, payload):
     journal, s = watching()
-    market = NOW if state in (sg.LifecycleState.TRIGGERED, sg.LifecycleState.MISSED_LATE, sg.LifecycleState.MISSED_GAP) else None
-    s = journal.append(sg.state_event(journal, s.signal_id, state, market_time=market,
-                                      detected_at=NOW + timedelta(seconds=5), reason="x", payload=payload))
+    resolved = state in (sg.LifecycleState.TRIGGERED, sg.LifecycleState.MISSED_LATE, sg.LifecycleState.MISSED_GAP)
+    if resolved:
+        s = trigger(journal, s, at=NOW, state=state, detected=NOW + timedelta(seconds=5), **payload)
+    else:
+        s = journal.append(sg.state_event(journal, s.signal_id, state,
+                                          detected_at=NOW + timedelta(seconds=5), reason="x", payload=payload))
     alert = al.alert_for(s, as_of=NOW + timedelta(seconds=6), last_price=600.0, near_trigger_r=0.25)
     assert alert.kind is kind  # price is ignored once the state has resolved
 
@@ -61,8 +88,7 @@ def test_outcome_closed_is_not_surfaced():
                                       detected_at=NOW, reason="window closed"))
     assert al.alert_for(s, as_of=NOW) is not None
     journal2, s2 = watching()
-    s2 = journal2.append(sg.state_event(journal2, s2.signal_id, sg.LifecycleState.MISSED_LATE,
-                                        market_time=NOW, detected_at=NOW, reason="late"))
+    s2 = trigger(journal2, s2, at=NOW, state=sg.LifecycleState.MISSED_LATE, detected=NOW)
     s2 = journal2.append(sg.state_event(journal2, s2.signal_id, sg.LifecycleState.OUTCOME_CLOSED,
                                         detected_at=NOW + timedelta(hours=1), reason="c",
                                         payload={"outcome_ref": "o"}))
@@ -81,7 +107,7 @@ def test_alerts_never_carry_trade_authority():
 def test_ledger_suppresses_repeat_notices_per_signal_and_kind():
     _, s = watching()
     ledger = al.AlertLedger()
-    cycles = [al.alert_for(s, as_of=NOW + timedelta(minutes=i), last_price=499.0, near_trigger_r=0.25) for i in range(10)]
+    cycles = [al.alert_for(s, as_of=NOW + timedelta(minutes=i), last_price=499.70, near_trigger_r=0.25) for i in range(10)]
     assert len(ledger.admit_many(cycles)) == 1
     near = al.alert_for(s, as_of=NOW, last_price=501.0, near_trigger_r=0.25)
     assert ledger.admit(near) is not None

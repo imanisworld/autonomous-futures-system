@@ -10,8 +10,9 @@ Hygiene enforced:
   trigger detection time is look-ahead and is refused;
 * missing factors are explicit (``status=UNAVAILABLE`` + reason), never imputed;
 * the research population is only signals in a *registered* strategy epoch
-  with VALID data/signal integrity and a known result -- legacy, unregistered,
-  and degraded rows are excluded and counted;
+  with VALID data/signal integrity on both the canonical signal record and the
+  outcome record, and a known result -- legacy, unregistered, and degraded
+  rows are excluded and counted; the result never selects (losers stay in);
 * the observational setup rating (#1089) may be recorded as a factor under
   test; it is never an outcome label and never a filter.
 """
@@ -149,8 +150,12 @@ def research_population(
         if label == UNREGISTERED_EPOCH:
             drop("unregistered_epoch")
             continue
+        # Integrity must be VALID on the canonical signal record (authoritative:
+        # a late / gap capture stays out whatever the outcome row claims) and
+        # on the outcome record.
         if any(
-            outcome_record.get(k) != IntegrityStatus.VALID.value
+            record.get(k) != IntegrityStatus.VALID.value
+            for record in (signal_record, outcome_record)
             for k in ("data_integrity", "signal_integrity")
         ):
             drop("integrity")

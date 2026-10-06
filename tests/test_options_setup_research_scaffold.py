@@ -8,7 +8,7 @@ import pytest
 from options_evidence import research_features as rf
 from options_evidence import signal as sg
 from options_evidence.strategy_epochs import load_registry
-from tests.test_options_prospective_signal import T0, opened
+from tests.test_options_prospective_signal import T0, opened, trigger
 
 TRIG = T0 + timedelta(minutes=10)
 
@@ -16,9 +16,9 @@ TRIG = T0 + timedelta(minutes=10)
 def triggered():
     journal = sg.SignalJournal()
     s = opened(journal)
-    return journal.append(sg.state_event(journal, s.signal_id, sg.LifecycleState.TRIGGERED,
-                                         market_time=TRIG, detected_at=TRIG + timedelta(seconds=3),
-                                         reason="break"))
+    s = trigger(journal, s, at=TRIG)
+    return journal.append(sg.integrity_event(journal, s.signal_id, detected_at=TRIG + timedelta(seconds=4),
+                                             signal_integrity="VALID", data_integrity="VALID"))
 
 
 def all_factors(**observed):
@@ -101,3 +101,33 @@ def test_population_is_clean_registered_prospective_only():
         "unregistered_epoch": 1,
     }
     json.dumps(pop.rows)  # serialisable
+
+
+def test_population_never_selects_on_result_and_signal_integrity_is_authoritative():
+    registry = load_registry()
+    s = triggered()
+    late = s.__class__(**{**s.__dict__, "signal_integrity": sg.IntegrityStatus.DEGRADED})
+    joined = [_records(s, result=1.5), _records(s, result=-1.0), _records(s, result=0.0), _records(late)]
+    pop = rf.research_population(registry, joined)
+    assert sorted(r["result_r"] for r in pop.rows) == [-1.0, 0.0, 1.5]  # losers stay in
+    # a DEGRADED (late/gap) canonical signal is excluded even though its outcome row says VALID
+    assert pop.excluded == {"integrity": 1}
+
+
+def test_lookahead_cutoff_is_trigger_detection_for_adapted_1145_capture(tmp_path):
+    from options_evidence import capture_adapter as ca
+    from tests.test_options_capture_adapter import _engine, _print, et
+
+    engine = _engine(
+        tmp_path,
+        iex=[_print(et(2026, 10, 5, 9, 30, 20), 770.10)],
+        sip=[_print(et(2026, 10, 5, 9, 30, 20), 770.10, feed="sip")],
+    )
+    engine.run(now=et(2026, 10, 2, 16, 16))
+    engine.run(now=et(2026, 10, 5, 9, 31, 0))
+    fold = ca.fold_capture_rows(ca.read_capture_journal(engine.journal.path))
+    s = next(x for x in fold.journal.signals() if x.state is sg.LifecycleState.TRIGGERED)
+    cutoff = s.trigger_detection_time
+    rf.build_feature_row(s, all_factors(gex_regime=("NEG_GAMMA", cutoff)))
+    with pytest.raises(rf.ResearchError, match="look-ahead"):
+        rf.build_feature_row(s, all_factors(gex_regime=("NEG_GAMMA", cutoff + timedelta(seconds=1))))

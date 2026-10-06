@@ -5,8 +5,11 @@ rows, never re-derives a trigger, and never decides trade authority. Every
 alert states ``trade_authority: False``; authority lives in the fitness /
 human-approval layer.
 
-``NEAR_TRIGGER`` is the only derived kind: a WATCHING signal whose last price
-is within ``near_trigger_r`` risk units of its trigger. The distance is a
+``NEAR_TRIGGER`` is the only derived kind. WATCHING is two-sided (#1145): a
+watching structure has no direction, trigger or invalidation until the first
+break, so the distance is to the *nearest* boundary in units of the setup
+range (``boundary_high - boundary_low``), and the alert names that side
+(``near_side`` HIGH/LOW). It never implies a direction. The threshold is a
 required policy input -- there is no default.
 
 Delivery is separate and **off by default** (``DeliveryPolicy.enabled=False``).
@@ -24,7 +27,7 @@ from typing import Any, Iterable
 
 from .signal import LifecycleState, ProspectiveSignal
 
-SCHEMA = "options-signal-alert-v1"
+SCHEMA = "options-signal-alert-v2"
 
 
 class AlertKind(str, Enum):
@@ -35,6 +38,8 @@ class AlertKind(str, Enum):
     MISSED_LATE = "MISSED_LATE"
     INVALIDATED = "INVALIDATED"
     EXPIRED = "EXPIRED"
+    DATA_BLOCKED = "DATA_BLOCKED"
+    AMBIGUOUS = "AMBIGUOUS"
 
 
 _STATE_TO_KIND = {
@@ -44,6 +49,8 @@ _STATE_TO_KIND = {
     LifecycleState.MISSED_LATE: AlertKind.MISSED_LATE,
     LifecycleState.INVALIDATED: AlertKind.INVALIDATED,
     LifecycleState.EXPIRED: AlertKind.EXPIRED,
+    LifecycleState.DATA_BLOCKED: AlertKind.DATA_BLOCKED,
+    LifecycleState.AMBIGUOUS: AlertKind.AMBIGUOUS,
     # OUTCOME_CLOSED is research bookkeeping, not a surfaced alert.
 }
 
@@ -54,15 +61,18 @@ class SignalAlert:
     structure_id: str
     kind: AlertKind
     ticker: str
-    direction: str
+    direction: str | None  # None while WATCHING (two-sided)
     timeframe: str
     pattern: str
     strategy: str
     strategy_epoch: str
-    trigger: float
-    invalidation: float
+    boundary_high: float
+    boundary_low: float
+    trigger: float | None  # None while WATCHING
+    invalidation: float | None
     as_of: datetime
     distance_to_trigger_r: float | None = None
+    near_side: str | None = None  # WATCHING only: "HIGH" / "LOW"
 
     @property
     def trade_authority(self) -> bool:
@@ -80,21 +90,35 @@ class SignalAlert:
             "pattern": self.pattern,
             "strategy": self.strategy,
             "strategy_epoch": self.strategy_epoch,
+            "boundary_high": self.boundary_high,
+            "boundary_low": self.boundary_low,
             "trigger": self.trigger,
             "invalidation": self.invalidation,
             "as_of": self.as_of.isoformat(),
             "distance_to_trigger_r": self.distance_to_trigger_r,
+            "near_side": self.near_side,
             "trade_authority": False,
             "advisory_note": "Lifecycle notice only. Trade authority is decided elsewhere.",
         }
 
 
-def distance_to_trigger_r(signal: ProspectiveSignal, last_price: float) -> float:
-    """Remaining move to the trigger in the signal's own risk units (>= 0 before the break)."""
-    unit = abs(signal.trigger - signal.invalidation)
+def distance_to_trigger_r(signal: ProspectiveSignal, last_price: float) -> tuple[float, str | None]:
+    """Remaining move to a trigger in units of the setup range.
+
+    WATCHING (two-sided): distance to the nearer boundary and that side;
+    <= 0 means price is through it but the watcher has not resolved yet.
+    Resolved: distance to the resolved trigger (side None).
+    """
+    unit = signal.levels.boundary_high - signal.levels.boundary_low
+    if not (math.isfinite(unit) and unit > 0):
+        raise ValueError("setup range must be finite and > 0")
+    if signal.direction is None:
+        to_high = (signal.levels.boundary_high - last_price) / unit
+        to_low = (last_price - signal.levels.boundary_low) / unit
+        return (to_high, "HIGH") if to_high <= to_low else (to_low, "LOW")
     if signal.direction == "LONG":
-        return (signal.trigger - last_price) / unit
-    return (last_price - signal.trigger) / unit
+        return (signal.trigger - last_price) / unit, None  # type: ignore[operator]
+    return (last_price - signal.trigger) / unit, None  # type: ignore[operator]
 
 
 def alert_for(
@@ -110,13 +134,13 @@ def alert_for(
     kind = _STATE_TO_KIND.get(signal.state)
     if kind is None:
         return None
-    distance = None
+    distance = side = None
     if signal.state is LifecycleState.WATCHING and last_price is not None:
         if near_trigger_r is None or not (math.isfinite(near_trigger_r) and near_trigger_r > 0):
             raise ValueError("near_trigger_r must be an explicit positive policy value")
         if not math.isfinite(float(last_price)) or float(last_price) <= 0:
             raise ValueError("last_price must be finite and > 0")
-        distance = distance_to_trigger_r(signal, float(last_price))
+        distance, side = distance_to_trigger_r(signal, float(last_price))
         # Past the trigger while still WATCHING means the watcher has not
         # resolved it yet; surface NEAR_TRIGGER, never a synthetic TRIGGERED.
         if distance <= near_trigger_r:
@@ -131,10 +155,13 @@ def alert_for(
         pattern=signal.pattern,
         strategy=signal.strategy,
         strategy_epoch=signal.strategy_epoch,
+        boundary_high=signal.levels.boundary_high,
+        boundary_low=signal.levels.boundary_low,
         trigger=signal.trigger,
         invalidation=signal.invalidation,
         as_of=as_of,
         distance_to_trigger_r=distance,
+        near_side=side,
     )
 
 
