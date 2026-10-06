@@ -275,6 +275,33 @@ assumptions; later brokerage-fee changes must not silently rewrite them.
 Missing execution-model identity, missing data identity, evidence-type mismatch,
 or non-finite economic fields fail closed.
 
+### 8.4 Chronological partitions (U2)
+
+Specs may declare `chronological_partitions` with three non-overlapping windows:
+
+1. `development` — fitting / iteration window  
+2. `validation` — held-out confirmation window after development  
+3. `untouched_oos` — once-only out-of-sample window after validation  
+
+Ordering is fail-closed:
+
+- each window requires `start` / `end` with `end > start`
+- `development.end <= validation.start`
+- `validation.end <= untouched_oos.start`
+
+Pre-U2 legacy specs may omit `chronological_partitions` and keep working.
+`evaluation_partition` without declared partitions fails closed.
+
+`untouched_oos` is once-only for the **exact** approved `experiment_id` +
+`trial_id` identity (plus the declared OOS window fingerprint). There is no
+silent family-wide OOS lock. A durable receipt is appended to
+`docs/research-oos-consumption-ledger.jsonl` only after a **VALID** OOS
+evaluation completes; invalid/blocked/incomplete runs do not consume the
+window. A second OOS attempt for the same exact identity fails closed.
+
+Development and validation partitions may be re-run when governance allows;
+U2 does not change lifecycle semantics beyond the OOS once-only gate.
+
 ---
 
 ## 9. Authority boundary

@@ -58,9 +58,42 @@ Every substantial unit of work must leave:
 
 If the agent cannot persist this file, it must return this payload verbatim-ready for the next agent/operator to save.
 
-## Current checkpoint — 2026-10-06 (U1: r_multiple / P&L direction consistency)
+## Current checkpoint — 2026-10-06 (U2: chronological partitions + once-only OOS)
 
-Task: Continue PR #1155 only. Prior three Claude HOLD blockers closed at `5325eb1`. Fix the narrow new U1 blocker: FILLED rows must not report contradictory `r_multiple` vs `net_pnl`, or favorable gross P&L on adverse price move. Research/evidence plumbing only. No U2/U3. No merge/deploy.
+Task: U2 only from clean main after U1 merge (`de4486d`). Mechanically enforce chronological experiment partitions development → validation → untouched_oos with once-only OOS consumption per exact experiment/trial. Research/evidence plumbing only. No U3. No deploy. No merge from this session.
+
+### VERIFIED
+
+- Base `origin/main`: `de4486d6cef0c8116edce70d5f164b958de90a2e` (U1 merged).
+- Branch `cursor/u2-chronological-partitions-f2da`.
+- Single Experiment Runner retained; no second runner.
+
+### CHANGED
+
+- New `ops/experiment_partitions.py` (partition validation + durable OOS receipts).
+- Runner/schema/docs/CLI wired for optional `chronological_partitions` / `evaluation_partition`.
+- Legacy specs without partitions remain compatible; U1 trade evidence path unchanged when partitions omitted.
+
+### TESTS
+
+- Recorded in PR body after focused + full suite.
+
+### RUNTIME MUTATIONS
+
+None. No deploy, no VPS, no broker, no strategy change.
+
+### DONE / DO NOT REDO for this lane
+
+- Do not start U3 in this PR.
+- Do not invent a family-wide OOS lock.
+
+### NEXT
+
+Independent Claude breaker QA of the U2 PR. Do not merge or deploy.
+
+## Superseded / provenance — 2026-10-06 (U1: r_multiple / P&L direction consistency; merged via #1155)
+
+Task: Continue PR #1155 only. Prior three Claude HOLD blockers closed at `5325eb1`. Fix the narrow new U1 blocker: FILLED rows must not report contradictory `r_multiple` vs `net_pnl`, or favorable gross P&L on adverse price move. Research/evidence plumbing only. No U2/U3. No merge/deploy. **Superseded** after `#1155` squash-merged to `main` as `de4486d`.
 
 ### VERIFIED
 

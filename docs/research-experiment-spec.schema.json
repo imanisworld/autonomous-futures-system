@@ -294,6 +294,41 @@
     },
     "notes": {
       "type": "string"
+    },
+    "chronological_partitions": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Optional U2 chronological partitions. When present, windows must be non-overlapping and ordered development → validation → untouched_oos. Omitted on frozen pre-U2 legacy specs for compatibility.",
+      "required": ["development", "validation", "untouched_oos"],
+      "properties": {
+        "development": { "$ref": "#/$defs/partition_window" },
+        "validation": { "$ref": "#/$defs/partition_window" },
+        "untouched_oos": { "$ref": "#/$defs/partition_window" }
+      }
+    },
+    "evaluation_partition": {
+      "type": "string",
+      "enum": ["development", "validation", "untouched_oos"],
+      "description": "Which chronological partition this run evaluates. untouched_oos is once-only per exact experiment_id+trial_id."
+    }
+  },
+  "$defs": {
+    "partition_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": {
+        "start": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Inclusive partition start (YYYY-MM-DD or timezone-aware ISO-8601)."
+        },
+        "end": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Exclusive-or-later boundary; must be strictly after start. Next partition must begin at or after this end."
+        }
+      }
     }
   },
   "allOf": [
