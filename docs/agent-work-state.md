@@ -58,6 +58,41 @@ Every substantial unit of work must leave:
 
 If the agent cannot persist this file, it must return this payload verbatim-ready for the next agent/operator to save.
 
+## Current checkpoint — 2026-10-06 (options setup-capture observer v0.2; /health journal-path redaction; merge/deploy not authorized)
+
+Branch `cursor/options-setup-capture-observer-0010` (draft PR #1145). Merged with `main` `55b9d4d`. **Code fix commits:** round-1 `d29b2cb`; round-3 B6/B8/B13 `8a5eeed`; round-4 B7 `00dbd59`; `/health` omits absolute capture-journal path on tip after this checkpoint. Fetch HEAD before acting. Options current-state authority remains `docs/options-current-state-handoff.md`. Futures runtime checkpoint (c44d32b) below is unchanged.
+
+### DONE / DO NOT REDO
+
+- Oct. 5 SPY shadow 9925/9933 audit: late `H1_222_CONTINUATION` AHEAD after trigger 770.0768; not a prospective catch. Do not retune Strat from them.
+- Observer scaffold + B1–B13 red-team fixes (see prior checkpoints; fix SHAs `d29b2cb` / `8a5eeed` / `00dbd59`).
+- `/health` setup_capture telemetry omits absolute journal filesystem path; `/setup-capture` retains path for operators. Regression asserts no `/root/afs-shared` / `options_setup_capture.jsonl` on `/health`.
+- Merge order (operator): finish/prove #1145 → then #1146 security gate → Claude stack. Do not merge #1146 before #1145. No timer install yet.
+
+### OPEN / NOT MERGE-CLEARED
+
+- Independent Grok options diff re-review / PASS of the current tip.
+- Exact-head CI green on the new tip after push.
+- Operator merge GO for #1145, then #1146 update from new main, then separate observer timer install GO.
+- Live A13 sessions and Public INDEX real-time entitlement remain UNVERIFIED.
+- CodeQL medium alerts on `/health`/`/setup-capture` may need operator dismissal (do not claim CodeQL green).
+
+### DO NOT REDO
+
+- Do not invent a scoring producer (#1089 stays telemetry).
+- Do not enable SPXW, expand production watchlist, or promote 1H to ACTIVE.
+- Do not merge or deploy without explicit operator GO.
+- Do not merge #1146 before #1145 PASS.
+- Do not expose `/root/afs-shared/...` capture-journal paths on `/health`.
+- Do not install the observer timer without a separate install GO.
+
+### NEXT
+
+1. Grok re-tests exact current head; Cursor fixes any remaining findings.
+2. On PASS → operator merge #1145.
+3. Then #1146 rebase/update from new main (loopback client for /setup-capture; keep route protected).
+4. Post-#1146: observer install GO + live prove; forward-proof epoch later.
+
 ## Governance PR provenance — 2026-10-06 (docs-only; does not override runtime NEXT)
 
 Task: remove overlapping agent responsibilities and make the research pipeline explicit without changing trading behavior.
@@ -77,7 +112,7 @@ Task: remove overlapping agent responsibilities and make the research pipeline e
 - PR workflow note: independent review/merge state is transient GitHub metadata, not the durable runtime NEXT. After this PR is resolved, follow the current runtime checkpoint below.
 - DO NOT REDO: do not recreate a second role matrix, experiment selector, or parallel research queue elsewhere.
 
-## Current checkpoint — 2026-10-06 (PR #1143: PAPER posture + advisory Discord off alert lock)
+## Previous lane checkpoint — 2026-10-06 (PR #1143: PAPER posture + advisory Discord off alert lock; merged via #1143)
 
 Task: close the two remaining independent-QA blockers on existing branch `cursor/futures-advisory-visibility-f2da`, plus local presentation corrections. No scope expansion. Do not merge or deploy.
 
@@ -167,7 +202,7 @@ None. No deploy, no VPS, no env, no broker.
 
 Independent review of PR #1143. Operator may deploy an exact reviewed SHA later. Do not merge or deploy from this session.
 
-## Current checkpoint — 2026-10-04 ~21:30Z (c44d32b deployed; canonical 4HR epoch started)
+## Previous checkpoint — 2026-10-04 ~21:30Z (c44d32b deployed; canonical 4HR epoch started)
 
 Exact release `c44d32bc4961e56fae5c5f88a976eb6783341638` was built, verified, and promoted successfully. Rollback remains the prior `489b55b` release.
 
