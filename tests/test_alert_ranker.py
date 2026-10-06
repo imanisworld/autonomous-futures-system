@@ -26,6 +26,10 @@ from alert_ranker.storage import ScanStorage
 from alert_ranker.tastytrade_client import TastytradeClient, parse_iv_rank
 from sources.signa_client import SignaSignal
 
+# Direct, unproxied loopback peer: the scanner access gate admits it when no
+# access token is configured (see alert_ranker/access_gate.py).
+LOCAL_PEER = ("127.0.0.1", 50000)
+
 
 def scanner_config(tmp_path: Path, webhook_url: str = "") -> ScannerConfig:
     return ScannerConfig(
@@ -365,7 +369,7 @@ def test_health_status_watchlist_and_webhook_endpoints_work(tmp_path):
     cfg = scanner_config(tmp_path)
     app = create_app(cfg)
 
-    with TestClient(app) as client:
+    with TestClient(app, client=LOCAL_PEER) as client:
         assert client.get("/health").json()["status"] == "healthy"
         assert client.get("/watchlist").json() == {"watchlist": ["AAPL"]}
         webhook = client.post("/webhook/alert", json=candidate_payload())
@@ -395,7 +399,7 @@ def test_public_status_is_allowlisted_and_omits_operator_detail(tmp_path):
     cfg = scanner_config(tmp_path)
     app = create_app(cfg)
 
-    with TestClient(app) as client:
+    with TestClient(app, client=LOCAL_PEER) as client:
         webhook = client.post("/webhook/alert", json=candidate_payload())
         assert webhook.status_code == 200
 
@@ -427,13 +431,15 @@ def test_public_status_is_allowlisted_and_omits_operator_detail(tmp_path):
         assert '"ticker"' not in response.text
         assert '"contract"' not in response.text
         assert "AAPL" not in response.text
+        assert "/root/afs-shared" not in response.text
+        assert "options_setup_capture.jsonl" not in response.text
 
 
 def test_scanner_dashboard_html_is_served(tmp_path):
     cfg = scanner_config(tmp_path)
     app = create_app(cfg)
 
-    with TestClient(app) as client:
+    with TestClient(app, client=LOCAL_PEER) as client:
         response = client.get("/")
         assert response.status_code == 200
         assert "Options Scanner" in response.text
@@ -453,7 +459,7 @@ def test_scanner_dashboard_data_dependencies_match_browser_contract(tmp_path):
     object.__setattr__(cfg, "signa_api_enabled", True)
     app = create_app(cfg)
 
-    with TestClient(app) as client:
+    with TestClient(app, client=LOCAL_PEER) as client:
         webhook = client.post(
             "/webhook/alert",
             json=candidate_payload(
@@ -491,7 +497,7 @@ def test_shadow_journal_endpoint_lists_and_updates_outcomes(tmp_path):
     cfg = scanner_config(tmp_path)
     app = create_app(cfg)
 
-    with TestClient(app) as client:
+    with TestClient(app, client=LOCAL_PEER) as client:
         webhook = client.post("/webhook/alert", json=candidate_payload(ticker="SPY", option_mark=2.1))
         shadow_id = webhook.json()["results"][0]["shadow_id"]
         listed = client.get("/shadow-journal").json()
@@ -527,7 +533,7 @@ def test_shadow_journal_summary_reports_paper_stats(tmp_path):
     cfg = scanner_config(tmp_path)
     app = create_app(cfg)
 
-    with TestClient(app) as client:
+    with TestClient(app, client=LOCAL_PEER) as client:
         spy = client.post("/webhook/alert", json=candidate_payload(ticker="SPY", option_mark=2.0))
         qqq = client.post("/webhook/alert", json=candidate_payload(ticker="QQQ", option_mark=4.0))
         spy_shadow = spy.json()["results"][0]["shadow_id"]
@@ -564,7 +570,7 @@ def test_shadow_outcome_update_rejects_invalid_status_and_missing_id(tmp_path):
     cfg = scanner_config(tmp_path)
     app = create_app(cfg)
 
-    with TestClient(app) as client:
+    with TestClient(app, client=LOCAL_PEER) as client:
         bad_status = client.patch(
             "/shadow-journal/1/outcome",
             json={"status": "FILLED", "outcome": {}},
@@ -656,7 +662,7 @@ def test_webhook_context_passes_rich_alert_fields_to_storage_status(tmp_path):
     cfg = scanner_config(tmp_path)
     app = create_app(cfg)
 
-    with TestClient(app) as client:
+    with TestClient(app, client=LOCAL_PEER) as client:
         body = setup_payload(
             ticker="NVDA",
             contract="NVDA $950 Call - Jun 20",
@@ -748,7 +754,7 @@ def test_options_webhook_persists_valuation_context(tmp_path):
     cfg = scanner_config(tmp_path)
     app = create_app(cfg)
 
-    with TestClient(app) as client:
+    with TestClient(app, client=LOCAL_PEER) as client:
         body = setup_payload(
             ticker="SPY",
             option_type="call",

@@ -7,6 +7,10 @@ from alert_ranker.config import ScannerConfig
 from alert_ranker.signa_context_store import SignaContextStore
 from sources.signa_discovery import manual_context_records_from_text
 
+# Direct, unproxied loopback peer: the scanner access gate admits it when no
+# access token is configured (see alert_ranker/access_gate.py).
+LOCAL_PEER = ("127.0.0.1", 50000)
+
 
 def _config(tmp_path: Path) -> ScannerConfig:
     return ScannerConfig(
@@ -47,7 +51,7 @@ def test_context_store_records_manual_rows_without_trade_authority(tmp_path):
 
 def test_options_app_manual_signa_context_ingest_route(tmp_path):
     app = create_app(config=_config(tmp_path))
-    client = TestClient(app)
+    client = TestClient(app, client=LOCAL_PEER)
     response = client.post(
         "/signa/context/ingest",
         json={
@@ -95,7 +99,7 @@ def test_options_app_direct_signa_pull_route_is_read_only(tmp_path, monkeypatch)
     cfg = _config(tmp_path)
     cfg = cfg.__class__(**{**cfg.__dict__, "signa_api_key_configured": True})
     app = create_app(config=cfg)
-    client = TestClient(app)
+    client = TestClient(app, client=LOCAL_PEER)
 
     response = client.post(
         "/signa/context/pull",
@@ -117,7 +121,7 @@ def test_options_app_direct_signa_pull_route_is_read_only(tmp_path, monkeypatch)
 
 def test_direct_signa_pull_requires_key(tmp_path):
     app = create_app(config=_config(tmp_path))
-    client = TestClient(app)
+    client = TestClient(app, client=LOCAL_PEER)
     response = client.post("/signa/context/pull", json={"symbols": ["SPY"]})
     assert response.status_code == 503
 
@@ -192,7 +196,7 @@ def test_context_board_groups_latest_context_by_ticker_and_source(tmp_path):
 
 def test_options_app_signa_context_board_route_is_context_only(tmp_path):
     app = create_app(config=_config(tmp_path))
-    client = TestClient(app)
+    client = TestClient(app, client=LOCAL_PEER)
     response = client.post(
         "/signa/context/ingest",
         json={"text": "ticker: SPY\nsource: options_flow\ndirection: bullish\ncount: 4"},
@@ -245,7 +249,7 @@ def test_shadow_journal_reports_signa_context_without_authority(tmp_path):
         "data_as_of": "2026-09-20T13:00:00Z",
     })
     app = create_app(config=cfg, scanner=SimpleNamespace(storage=storage))
-    client = TestClient(app)
+    client = TestClient(app, client=LOCAL_PEER)
     response = client.get("/shadow-journal")
     assert response.status_code == 200
     body = response.json()
