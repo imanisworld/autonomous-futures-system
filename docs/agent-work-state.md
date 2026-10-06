@@ -58,41 +58,40 @@ Every substantial unit of work must leave:
 
 If the agent cannot persist this file, it must return this payload verbatim-ready for the next agent/operator to save.
 
-## Current checkpoint — 2026-10-06 (options setup-capture observer v0.2; B7 chrony fail-open fix; merge/deploy not authorized)
+## Current checkpoint — 2026-10-06 (options setup-capture observer v0.2; /health journal-path redaction; merge/deploy not authorized)
 
-Branch `cursor/options-setup-capture-observer-0010` (draft PR #1145). Merged with `main` `55b9d4d`. **Code fix commits:** round-1 `d29b2cb`; round-3 B6/B8/B13 `8a5eeed`; round-4 B7 chrony + sticky clock/status follow-ups on the tip after this checkpoint. Fetch HEAD before acting. Options current-state authority remains `docs/options-current-state-handoff.md`. Futures runtime checkpoint (c44d32b) below is unchanged.
+Branch `cursor/options-setup-capture-observer-0010` (draft PR #1145). Merged with `main` `55b9d4d`. **Code fix commits:** round-1 `d29b2cb`; round-3 B6/B8/B13 `8a5eeed`; round-4 B7 `00dbd59`; `/health` omits absolute capture-journal path on tip after this checkpoint. Fetch HEAD before acting. Options current-state authority remains `docs/options-current-state-handoff.md`. Futures runtime checkpoint (c44d32b) below is unchanged.
 
 ### DONE / DO NOT REDO
 
 - Oct. 5 SPY shadow 9925/9933 audit: late `H1_222_CONTINUATION` AHEAD after trigger 770.0768; not a prospective catch. Do not retune Strat from them.
-- Observer scaffold: pre-open two-sided pending 2-2 WATCHING, 122-style JSONL collector (not scanner jobs), `MISSED_LATE` / `GAP_THROUGH_OPEN`, full 1H + stubs, SPX Public INDEX 1m, never `OPTIONS_SCANNER_WATCHLIST`.
-- Flagged out of scope: `/webhook/alert` no allowlist; `/shadow-journal` 200s from outside IPs (auth gate unverified).
-- Round-1/3: B1–B6, B8–B13 verified at `8a5eeed` re-review.
-- Round-4 B7: chrony must not override `NTPSynchronized=no`; requires `Leap status : Normal`; uses `System time` (not `Last offset`); sticky `clock_unsynced` cleared by latest `_clock`/`clock_ok`; test_b6 exact 09:34:00 / 220 s; IEX-no-cross SIP errors use 30 m retry budget; `JournalFormatError.code` for status reasons (CodeQL medium alerts may still need operator dismissal — do not claim CodeQL green).
+- Observer scaffold + B1–B13 red-team fixes (see prior checkpoints; fix SHAs `d29b2cb` / `8a5eeed` / `00dbd59`).
+- `/health` setup_capture telemetry omits absolute journal filesystem path; `/setup-capture` retains path for operators. Regression asserts no `/root/afs-shared` / `options_setup_capture.jsonl` on `/health`.
+- Merge order (operator): finish/prove #1145 → then #1146 security gate → Claude stack. Do not merge #1146 before #1145. No timer install yet.
 
 ### OPEN / NOT MERGE-CLEARED
 
-- Independent options diff re-review of the post-B7 tip (prior `8a5eeed` review is CHANGES REQUIRED / stale for merge).
+- Independent Grok options diff re-review / PASS of the current tip.
 - Exact-head CI green on the new tip after push.
-- CodeQL medium alerts at `/health` and `/setup-capture` (false positives after typed `code`; dismiss with justification if still open).
-- Operator merge GO, then a separate observer-only timer install GO — **not** authorized by green CI alone.
+- Operator merge GO for #1145, then #1146 update from new main, then separate observer timer install GO.
 - Live A13 sessions and Public INDEX real-time entitlement remain UNVERIFIED.
+- CodeQL medium alerts on `/health`/`/setup-capture` may need operator dismissal (do not claim CodeQL green).
 
 ### DO NOT REDO
 
 - Do not invent a scoring producer (#1089 stays telemetry).
 - Do not enable SPXW, expand production watchlist, or promote 1H to ACTIVE.
 - Do not merge or deploy without explicit operator GO.
-- Do not reuse `trigger_time.arm_trigger_setup` / `_family_for_break` (cancels 222 continuation).
-- Do not write WATCHING into `options_shadow_journal` as OPEN.
-- Do not claim chrony `Last offset` alone is a valid clock prerequisite; do not claim CodeQL green while medium alerts remain open.
+- Do not merge #1146 before #1145 PASS.
+- Do not expose `/root/afs-shared/...` capture-journal paths on `/health`.
+- Do not install the observer timer without a separate install GO.
 
 ### NEXT
 
-1. Push round-4 tip; confirm exact-head CI green.
-2. Independent options diff re-review of that tip.
-3. Operator merge GO, then a separate observer-only timer install GO (synced clock + INDEX entitlement).
-4. Post-install: journal WATCHING before the next RTH open; no order/risk consumption. If RTH has no setup, do not fabricate a live trigger.
+1. Grok re-tests exact current head; Cursor fixes any remaining findings.
+2. On PASS → operator merge #1145.
+3. Then #1146 rebase/update from new main (loopback client for /setup-capture; keep route protected).
+4. Post-#1146: observer install GO + live prove; forward-proof epoch later.
 
 ## Governance PR provenance — 2026-10-06 (docs-only; does not override runtime NEXT)
 
