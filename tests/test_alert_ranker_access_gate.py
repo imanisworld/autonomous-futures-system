@@ -31,6 +31,9 @@ PRIVATE_READS = [
     "/shadow-journal",
     "/shadow-journal/summary",
     "/shadow-journal/1",
+    # Added by the setup-capture observer (#1145). Listed here so either merge
+    # order keeps it gated; the gate refuses it before routing even when absent.
+    "/setup-capture",
     "/signa/context/recent",
     "/signa/context/board",
     "/rh-options/recent",
