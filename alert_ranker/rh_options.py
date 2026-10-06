@@ -336,10 +336,12 @@ def evaluate_rh_options(
     failed_gates = _hard_gates(inputs, timestamp)
     warnings = [] if failed_gates else _soft_warnings(inputs)
     risk_result = _risk_check(inputs)
-    if not risk_result.get("approved"):
-        # The risk check is binding: a refused risk result can never produce
-        # a ticket or a shadow record, whatever the setup gates say.
-        failed_gates = [*failed_gates, f"risk:{risk_result.get('failed_rule')}"]
+    binding = _planned_risk_guard(inputs)
+    if binding is not None:
+        # Fail-closed rules bind: invalid inputs or premium-stop risk over the
+        # canonical cap never produce a ticket or a shadow record. R:R and
+        # debit-cap refusals stay advisory in risk_result, as before.
+        failed_gates = [*failed_gates, f"risk:{binding['failed_rule']}"]
         warnings = []
     decision = "NO_TRADE" if failed_gates else "WATCH" if warnings else "TRADE"
     order_ticket = _build_order_ticket(inputs) if decision != "NO_TRADE" else None
@@ -813,7 +815,8 @@ def _soft_warnings(inputs: RHOptionsInput) -> list[str]:
     return warnings
 
 
-def _risk_check(inputs: RHOptionsInput) -> dict[str, Any]:
+def _planned_risk_guard(inputs: RHOptionsInput) -> dict[str, Any] | None:
+    """Binding refusal (or None): invalid inputs or planned risk over the cap."""
     numbers = {
         "premium": inputs.premium,
         "max_premium_per_contract": inputs.max_premium_per_contract,
@@ -825,6 +828,31 @@ def _risk_check(inputs: RHOptionsInput) -> dict[str, Any]:
             return {"approved": False, "failed_rule": "risk_invalid", "reason": f"{name} must be a finite positive number."}
     if int(inputs.quantity) != inputs.quantity or inputs.quantity < 1:
         return {"approved": False, "failed_rule": "risk_invalid", "reason": "quantity must be a whole number of contracts >= 1."}
+    _, _, stop_mult = _trade_style_and_target(inputs)
+    risk = inputs.premium - round(inputs.premium * stop_mult, 2)
+    if not math.isfinite(risk) or risk <= 0:
+        return {"approved": False, "failed_rule": "risk_invalid", "reason": "Premium risk must be positive."}
+    # Planned risk is the premium-stop loss, never the full debit:
+    # (entry - premium_stop) x 100 x contracts, capped like every other lane.
+    planned_risk = round(risk * CONTRACT_MULTIPLIER * inputs.quantity, 2)
+    if not math.isfinite(planned_risk) or planned_risk <= 0:
+        return {"approved": False, "failed_rule": "risk_invalid", "reason": "Planned premium-stop risk must be positive."}
+    if planned_risk > MAX_TRADE_RISK_DOLLARS:
+        return {
+            "approved": False,
+            "failed_rule": "planned_risk_cap",
+            "reason": (
+                f"Planned premium-stop risk ${planned_risk:.2f} exceeds "
+                f"${MAX_TRADE_RISK_DOLLARS:.2f}."
+            ),
+        }
+    return None
+
+
+def _risk_check(inputs: RHOptionsInput) -> dict[str, Any]:
+    binding = _planned_risk_guard(inputs)
+    if binding is not None:
+        return binding
     if inputs.premium * 100 > inputs.max_premium_per_contract:
         return {
             "approved": False,
@@ -848,22 +876,6 @@ def _risk_check(inputs: RHOptionsInput) -> dict[str, Any]:
     target = round(inputs.premium * target_mult, 2)
     risk = entry - stop
     reward = target - entry
-    if not math.isfinite(risk) or risk <= 0:
-        return {"approved": False, "failed_rule": "risk_invalid", "reason": "Premium risk must be positive."}
-    # Planned risk is the premium-stop loss, never the full debit:
-    # (entry - premium_stop) x 100 x contracts, capped like every other lane.
-    planned_risk = round(risk * CONTRACT_MULTIPLIER * inputs.quantity, 2)
-    if not math.isfinite(planned_risk) or planned_risk <= 0:
-        return {"approved": False, "failed_rule": "risk_invalid", "reason": "Planned premium-stop risk must be positive."}
-    if planned_risk > MAX_TRADE_RISK_DOLLARS:
-        return {
-            "approved": False,
-            "failed_rule": "planned_risk_cap",
-            "reason": (
-                f"Planned premium-stop risk ${planned_risk:.2f} exceeds "
-                f"${MAX_TRADE_RISK_DOLLARS:.2f}."
-            ),
-        }
     rr = reward / risk
     min_rr = {"SCALP_INTRADAY": 0.75, "SCALP": 1.0, "SWING": 2.0}.get(trade_style, 1.0)
     if rr < min_rr:

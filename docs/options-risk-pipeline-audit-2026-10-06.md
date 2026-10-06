@@ -18,7 +18,7 @@ closed.
 | `options_manager/validation/portfolio_risk_gate.py` | `planned_risk_from_premium_stop`; aggregate budget has no default (None blocks); capital deployed, position count, correlation reported separately | correct | **canonical authority for the options_manager advisory / plan lane** (`options_manager/app.py` → `advisory_decision`) |
 | `options_manager/validation/contract_quality_gate.py` | (premium − premium_stop) × 100 × contracts ≤ stated max ≤ $300 | correct; NaN gap fixed in PR #1148 | contract facts |
 | `options_manager/risk_gate.py` `evaluate_packet` | **full debit** `max_premium × 100 × contracts` + contract-count cap | legacy | **not wired into any service.** Its `RiskGateResult` still gates the legacy library chain `paper_sim` / `fill_stress` / `dry_run_review` → `human_confirm` → `order_ticket` → `broker_boundary` |
-| `alert_ranker/rh_options.py` `_risk_check` (manual RH evaluator, `/rh-options/evaluate`, gated by #1146) | per-contract + **full-debit** caps and stop-based R:R; **no planned-risk cap; NaN premium approved** | **fixed here (integration pass)**: premium-stop planned risk × contracts ≤ $300; non-finite, non-positive or fractional inputs refused; a refused risk result forces `NO_TRADE` (no ticket, no shadow record) | advisory/manual only; RH `submit_order` is a stub |
+| `alert_ranker/rh_options.py` `_risk_check` (manual RH evaluator, `/rh-options/evaluate`, gated by #1146) | per-contract + **full-debit** caps and stop-based R:R; **no planned-risk cap; NaN premium approved** | **fixed here (integration pass)**: binding `_planned_risk_guard`, so premium-stop planned risk × contracts ≤ $300 and non-finite or non-positive inputs refused, forcing `NO_TRADE` (no ticket, no shadow record); R:R and debit caps stay advisory | advisory/manual only; RH `submit_order` is a stub |
 | `risk/options_risk_engine.py` | per-contract and total **debit** caps; stop-based R:R only | legacy | futures options companion only; `OPTIONS_COMPANION_ENABLED=false` by default |
 
 ## Findings
@@ -52,28 +52,39 @@ closed.
    `evaluate_rh_options` set its decision from the setup gates and ignored
    `risk_result`. A NaN premium or a huge quantity still returned TRADE with
    an order ticket and a shadow record, and quantity 0 or negative was
-   approved. Now:
-   - Any refused risk result is a hard gate (`risk:<rule>`). It produces
-     `NO_TRADE`, with no ticket and no shadow record.
-   - `premium`, `max_premium_per_contract`, `quantity` and `max_contracts`
-     must be finite and positive.
-   - `quantity` must be a whole number ≥ 1.
-   - Planned risk must be greater than 0, matching `paper_v1`.
+   approved.
 
-   Tests at the `evaluate_rh_options` level cover NaN/inf premium, a NaN
-   premium cap, quantity 0/−5, and over-cap quantities. All 7 fail on the
-   prior head.
+   Now `_planned_risk_guard` is a **binding** gate (`risk:<rule>` →
+   `NO_TRADE`, with no ticket and no shadow record). It refuses a ticket when:
+   - `premium`, `max_premium_per_contract`, `quantity` or `max_contracts` is
+     not finite or not positive;
+   - `quantity` is not a whole number ≥ 1;
+   - premium risk or planned risk is ≤ 0;
+   - planned premium-stop risk is greater than $300.
 
-   Intended tightening: short-dated (0–7 DTE) multi-contract tickets whose
-   premium-stop risk exceeds $300 used to be approved and are now refused.
-   For example, premium 2.50 × 2 contracts at DTE 5 is $324. The $300
-   boundary itself passes, as it does in `paper_v1`.
+   The guard runs before, and independently of, the advisory checks, so a
+   debit-cap refusal cannot hide an over-cap quantity.
+
+   R:R (`rr_too_low`) and the debit caps stay **advisory** in `risk_result`,
+   as before. The 0–7 DTE tier cannot meet its R:R floor by construction, so
+   making R:R binding would have closed that lane; a test pins that it stays
+   open. `per_contract_premium` was already a hard gate (`premium_over_cap`).
+
+   Behaviour change, measured against `main` over 3,960 premium × DTE ×
+   quantity inputs: every changed decision is `planned_risk_cap` on a ticket
+   of two or more contracts whose premium-stop risk exceeds $300 (115 at 2
+   contracts, 410 at 3, 645 at 5). No single-contract decision changes and
+   nothing changes because of R:R. The $300 boundary passes, as in `paper_v1`.
+
+   The API and text parsers truncate a fractional quantity to an integer
+   (rounding down, which is safe) before the guard sees it. A fractional
+   quantity given to the dataclass directly is refused.
 
 ## Changed
 
 - `alert_ranker/contract_marks.py`: non-finite stored risk ⇒ ∞.
 - `alert_ranker/paper_v1.py`: refuse non-finite / negative / missing open risk.
-- `alert_ranker/rh_options.py`: planned-risk cap, non-finite / non-positive / fractional refusal in `_risk_check`; a refused risk result forces `NO_TRADE` in `evaluate_rh_options`.
+- `alert_ranker/rh_options.py`: binding `_planned_risk_guard` (finite/positive inputs, whole quantity ≥ 1, planned premium-stop risk in (0, $300]) forces `NO_TRADE` in `evaluate_rh_options`; R:R and debit caps unchanged and advisory.
 - `tests/test_options_risk_single_authority.py`: NaN regressions (8 fail on
   base), V1 ↔ canonical parity, cap agreement, canonical service does not
   import the legacy gate, legacy importer allowlist.

@@ -259,3 +259,21 @@ def test_rh_evaluator_refused_risk_means_no_trade_no_ticket_no_shadow(tmp_path, 
     assert f"risk:{rule}" in out["failed_gates"]
     assert out["order_ticket"] is None
     assert out["shadow_id"] is None
+
+
+@pytest.mark.parametrize("dte", [3, 10, 30])
+def test_rh_evaluator_rr_refusal_stays_advisory_not_binding(tmp_path, dte):
+    # 0-7 DTE scalps cannot meet their R:R floor by construction; R:R stays an
+    # advisory risk_result field and must not close the lane.
+    out = _evaluate(tmp_path, premium=1.00, dte=dte, quantity=1)
+    assert not any(g.startswith("risk:") for g in out["failed_gates"])
+    if out["risk_result"]["approved"] is False:
+        assert out["risk_result"]["failed_rule"] in {"rr_too_low", "per_contract_premium", "total_premium"}
+    assert out["decision"] in {"TRADE", "WATCH"}
+    assert out["order_ticket"] is not None
+
+
+def test_rh_evaluator_planned_cap_binds_even_when_debit_cap_fires_first(tmp_path):
+    out = _evaluate(tmp_path, quantity=10**9, max_contracts=1)
+    assert "risk:planned_risk_cap" in out["failed_gates"]
+    assert out["decision"] == "NO_TRADE" and out["order_ticket"] is None
