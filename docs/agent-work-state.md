@@ -58,15 +58,17 @@ Every substantial unit of work must leave:
 
 If the agent cannot persist this file, it must return this payload verbatim-ready for the next agent/operator to save.
 
-## Current checkpoint — 2026-10-06 (options setup-capture observer v0.2; merge/deploy not authorized)
+## Current checkpoint — 2026-10-06 (options setup-capture observer v0.2; CI green; merge/deploy not authorized)
 
-Branch `cursor/options-setup-capture-observer-0010` from `main` `31c9281f41e61791dc050d74f33acf02f87085e4` (#1089). Options current-state authority remains `docs/options-current-state-handoff.md`. Futures checkpoint below is unchanged.
+Branch `cursor/options-setup-capture-observer-0010` (`7cd4f04203f0cb31e546ff1eea9370acdaca372a`) from `main` `31c9281f41e61791dc050d74f33acf02f87085e4` (#1089). Draft PR #1145. Options current-state authority remains `docs/options-current-state-handoff.md`. Futures checkpoint below is unchanged.
 
 ### DONE / DO NOT REDO
 
 - Oct. 5 SPY shadow 9925/9933 audit: late `H1_222_CONTINUATION` AHEAD after trigger 770.0768; not a prospective catch. Do not retune Strat from them.
 - Red-team addenda 1–3 folded: pre-open two-sided pending 2-2 WATCHING, 122-style JSONL collector (not scanner jobs), SIP-measured lag, `MISSED_LATE` / `GAP_THROUGH_OPEN`, full 1H + stubs, structure key with close+pattern+levels, SPX Public INDEX 1m fail-closed, never `OPTIONS_SCANNER_WATCHLIST`.
 - Flagged out of scope: `/webhook/alert` no allowlist; `/shadow-journal` 200s from outside IPs (auth gate unverified).
+- `/health` fail-softs `journal_unreadable` when `Path.exists()` raises `PermissionError` on `/root/afs-shared/logs/options_setup_capture.jsonl` (GitHub runner /root is not searchable).
+- Exact-head CI green on `7cd4f04`: tests, handoff-fields, CodeQL Analyze (python/actions). Local: 182 passed (capture + public INDEX + daily-strat + evidence-hardening + paper_v1 + aggregate-risk + HTTP + endpoint-safety + alert_ranker + security_hardening).
 
 ### DO NOT REDO
 
@@ -75,13 +77,13 @@ Branch `cursor/options-setup-capture-observer-0010` from `main` `31c9281f41e6179
 - Do not merge or deploy without explicit operator GO.
 - Do not reuse `trigger_time.arm_trigger_setup` / `_family_for_break` (cancels 222 continuation).
 - Do not write WATCHING into `options_shadow_journal` as OPEN.
+- Do not re-audit the PermissionError `/health` crash; it is fixed on this SHA.
 
 ### NEXT
 
-1. Independent options diff review of the capture PR.
-2. Exact-head CI green.
-3. Operator merge GO, then a separate observer-only timer install GO.
-4. Post-install: journal WATCHING before the next RTH open; no order/risk consumption. If RTH has no setup, do not fabricate a live trigger.
+1. Independent options diff review of the capture PR (`source-command-options-diff-review`).
+2. Operator merge GO, then a separate observer-only timer install GO.
+3. Post-install: journal WATCHING before the next RTH open; no order/risk consumption. If RTH has no setup, do not fabricate a live trigger.
 
 
 ## Previous checkpoint — 2026-10-04 ~21:30Z (c44d32b deployed; canonical 4HR epoch started)
