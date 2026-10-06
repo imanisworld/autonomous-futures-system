@@ -6,6 +6,8 @@ import ast
 from pathlib import Path
 from types import SimpleNamespace
 
+from strategy.shadow_resolver import _candidate_key
+
 from notifications.futures_advisory import (
     RANK_STATUS,
     advisory_can_place_order,
@@ -194,8 +196,13 @@ def test_missing_fields_stay_missing_instead_of_being_fabricated():
 
 
 def test_outcome_display_uses_canonical_shadow_result():
+    ts = "2026-05-23T14:30:00+00:00"
+    key = _candidate_key(
+        "shadow_setups", "MNQ", ts, "orb_false_break_fade", "SHORT", 24310.0
+    )
     records = build_advisory_records(
         _result(
+            timestamp=ts,
             shadow_candidates=[
                 {
                     "strategy": "orb_false_break_fade",
@@ -211,10 +218,13 @@ def test_outcome_display_uses_canonical_shadow_result():
             candidate_audit=[],
             shadow_outcomes=[
                 {
+                    "lane": "shadow_setups",
                     "instrument": "MNQ",
                     "strategy": "orb_false_break_fade",
                     "direction": "SHORT",
                     "entry": 24310.0,
+                    "candidate_bar_ts": ts,
+                    "candidate_key": key,
                     "shadow_outcome": {
                         "result": "WIN",
                         "exit_reason": "TARGET_HIT",
@@ -224,11 +234,181 @@ def test_outcome_display_uses_canonical_shadow_result():
             ],
         )
     )
+    assert records[0]["candidate_key"] == key
     assert records[0]["outcome"] == "WIN"
     assert records[0]["pnl_ticks"] == 80.0
     card = format_advisory_card(records[0])
     assert "Later outcome: WIN (TARGET_HIT)" in card
     assert "Simulated ticks: 80.0" in card
+
+
+def test_shadow_candidate_without_outcome_omits_later_outcome_line():
+    records = build_advisory_records(
+        _result(
+            candidate_audit=[],
+            shadow_candidates=[
+                {
+                    "strategy": "orb_false_break_fade",
+                    "direction": "SHORT",
+                    "entry": 24310.0,
+                    "stop": 24320.0,
+                    "target": 24290.0,
+                    "rr_ratio": 2.0,
+                    "notes": "false break of the opening-range high",
+                }
+            ],
+        )
+    )
+    assert len(records) == 1
+    assert "outcome" not in records[0]
+    card = format_advisory_card(records[0])
+    assert "Later outcome" not in card
+    assert "OPEN" not in card
+    assert "NO_FILL" not in card
+    assert "PENDING" not in card
+
+
+def test_canonical_open_outcome_is_displayed():
+    ts = "2026-05-23T14:30:00+00:00"
+    key = _candidate_key(
+        "shadow_setups", "MNQ", ts, "orb_false_break_fade", "LONG", 100.0
+    )
+    records = build_advisory_records(
+        _result(
+            timestamp=ts,
+            candidate_audit=[],
+            shadow_candidates=[
+                {
+                    "strategy": "orb_false_break_fade",
+                    "direction": "LONG",
+                    "entry": 100.0,
+                    "stop": 90.0,
+                    "target": 120.0,
+                    "rr_ratio": 2.0,
+                }
+            ],
+            shadow_outcomes=[
+                {
+                    "lane": "shadow_setups",
+                    "instrument": "MNQ",
+                    "strategy": "orb_false_break_fade",
+                    "direction": "LONG",
+                    "entry": 100.0,
+                    "candidate_key": key,
+                    "candidate_bar_ts": ts,
+                    "shadow_outcome": {
+                        "result": "OPEN",
+                        "exit_reason": "EOD_OPEN",
+                        "pnl_ticks": None,
+                    },
+                }
+            ],
+        )
+    )
+    assert records[0]["outcome"] == "OPEN"
+    card = format_advisory_card(records[0])
+    assert "Later outcome: OPEN (EOD_OPEN)" in card
+
+
+def test_outcomes_join_only_on_canonical_candidate_key():
+    ts_win = "2026-05-23T14:30:00+00:00"
+    ts_loss = "2026-05-23T15:00:00+00:00"
+    geometry = {
+        "strategy": "orb_false_break_fade",
+        "direction": "SHORT",
+        "entry": 24310.0,
+        "stop": 24320.0,
+        "target": 24290.0,
+        "rr_ratio": 2.0,
+    }
+    key_win = _candidate_key(
+        "shadow_setups", "MNQ", ts_win, geometry["strategy"], geometry["direction"], geometry["entry"]
+    )
+    key_loss = _candidate_key(
+        "shadow_setups", "MNQ", ts_loss, geometry["strategy"], geometry["direction"], geometry["entry"]
+    )
+    assert key_win != key_loss
+    records = journal_advisory_records(
+        [
+            {
+                "type": "DECISION",
+                "ts": ts_win,
+                "instrument": "MNQ",
+                "decision": "NO_TRADE",
+                "shadow_candidates": [geometry],
+            },
+            {
+                "type": "DECISION",
+                "ts": ts_loss,
+                "instrument": "MNQ",
+                "decision": "NO_TRADE",
+                "shadow_candidates": [geometry],
+            },
+            {
+                "type": "SHADOW_OUTCOME",
+                "lane": "shadow_setups",
+                "instrument": "MNQ",
+                "strategy": geometry["strategy"],
+                "direction": geometry["direction"],
+                "entry": geometry["entry"],
+                "candidate_key": key_win,
+                "candidate_bar_ts": ts_win,
+                "shadow_outcome": {"result": "WIN", "exit_reason": "TARGET_HIT", "pnl_ticks": 80.0},
+            },
+            {
+                "type": "SHADOW_OUTCOME",
+                "lane": "shadow_setups",
+                "instrument": "MNQ",
+                "strategy": geometry["strategy"],
+                "direction": geometry["direction"],
+                "entry": geometry["entry"],
+                "candidate_key": key_loss,
+                "candidate_bar_ts": ts_loss,
+                "shadow_outcome": {"result": "LOSS", "exit_reason": "STOP_HIT", "pnl_ticks": -40.0},
+            },
+        ]
+    )
+    by_key = {row["candidate_key"]: row for row in records if row.get("candidate_key")}
+    assert by_key[key_win]["outcome"] == "WIN"
+    assert by_key[key_loss]["outcome"] == "LOSS"
+    assert by_key[key_win]["detection_timestamp"] == ts_win
+    assert by_key[key_loss]["detection_timestamp"] == ts_loss
+
+
+def test_loose_geometry_does_not_attach_when_candidate_key_cannot_be_proven():
+    records = build_advisory_records(
+        _result(
+            candidate_audit=[
+                _candidate(strategy="orb_false_break_fade", direction="SHORT", entry=24310.0)
+            ],
+            shadow_candidates=[],
+            shadow_outcomes=[
+                {
+                    "instrument": "MNQ",
+                    "strategy": "orb_false_break_fade",
+                    "direction": "SHORT",
+                    "entry": 24310.0,
+                    "shadow_outcome": {"result": "WIN", "pnl_ticks": 80.0},
+                }
+            ],
+        )
+    )
+    observed = [row for row in records if row.get("source") == "candidate_audit"]
+    assert observed and "outcome" not in observed[0]
+
+
+def test_dashboard_panel_is_observed_candidates_not_qualified():
+    text = (ROOT / "webhook" / "app.py").read_text(encoding="utf-8")
+    assert "Observed setup candidates (advisory only)" in text
+    assert "Qualified setups (advisory only)" not in text
+
+
+def test_rejected_candidate_card_is_not_endorsed_as_a_good_trade():
+    card = format_advisory_card(build_advisory_records(_result())[0])
+    assert "Selected: no" in card
+    assert "Why setup qualified" not in card
+    assert "best trade" not in card.lower()
+    assert "Setup notes: price reclaimed the opening-range high" in card
 
 
 def test_duplicate_bars_do_not_surface_advisory_cards():
@@ -253,9 +433,12 @@ def test_attach_runtime_sources_copies_recorded_decision_fields_only():
 
 
 def test_journal_advisory_joins_canonical_shadow_outcome():
+    ts = "2026-09-16T09:00:00+00:00"
+    key = _candidate_key("shadow_setups", "MNQ", ts, "gap_fill", "LONG", 1.0)
     entries = [
         {
             "type": "DECISION",
+            "ts": ts,
             "instrument": "MNQ",
             "decision": "NO_TRADE",
             "shadow_candidates": [
@@ -271,14 +454,18 @@ def test_journal_advisory_joins_canonical_shadow_outcome():
         },
         {
             "type": "SHADOW_OUTCOME",
+            "lane": "shadow_setups",
             "instrument": "MNQ",
             "strategy": "gap_fill",
             "direction": "LONG",
             "entry": 1.0,
+            "candidate_key": key,
+            "candidate_bar_ts": ts,
             "shadow_outcome": {"result": "NO_FILL", "pnl_ticks": None},
         },
     ]
     records = journal_advisory_records(entries)
+    assert records[0]["candidate_key"] == key
     assert records[0]["outcome"] == "NO_FILL"
     assert "pnl_ticks" not in records[0]
 

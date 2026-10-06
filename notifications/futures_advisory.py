@@ -226,6 +226,7 @@ def _posture(src: dict[str, Any], result: dict[str, Any], *, source: str) -> str
 
 def _identity_key(record: dict[str, Any]) -> tuple[Any, ...]:
     return (
+        record.get("candidate_key"),
         record.get("instrument"),
         record.get("strategy"),
         record.get("direction"),
@@ -233,6 +234,74 @@ def _identity_key(record: dict[str, Any]) -> tuple[Any, ...]:
         record.get("stop"),
         record.get("target"),
         record.get("detection_timestamp"),
+    )
+
+
+def _resolver_lane(src: dict[str, Any], source: str) -> Optional[str]:
+    if _present(src.get("lane")):
+        return str(src["lane"])
+    if source == "shadow_setups":
+        return "shadow_setups"
+    if source in {"range_signal", "shadow_range_signal"}:
+        return "range_signal"
+    return None
+
+
+def _resolver_bar_ts(src: dict[str, Any], result: dict[str, Any], source: str) -> Optional[str]:
+    for key in ("candidate_bar_ts", "bar_ts", "detected_at", "ts"):
+        if _present(src.get(key)):
+            return str(src[key])
+    if source == "shadow_outcome":
+        return None
+    context = result.get("context") if isinstance(result.get("context"), dict) else {}
+    for key in ("timestamp", "ts"):
+        if _present(result.get(key)):
+            return str(result[key])
+        if _present(context.get(key)):
+            return str(context[key])
+    return None
+
+
+def _canonical_candidate_key(
+    src: dict[str, Any],
+    result: dict[str, Any],
+    *,
+    source: str,
+) -> Optional[str]:
+    """Resolver identity: recorded candidate_key, else reconstruct via _candidate_key.
+
+    Does not invent a looser join. Missing lane/timestamp/geometry means no key.
+    """
+    if _present(src.get("candidate_key")):
+        return str(src["candidate_key"])
+    lane = _resolver_lane(src, source)
+    bar_ts = _resolver_bar_ts(src, result, source)
+    instrument = src.get("instrument") or src.get("symbol") or result.get("instrument")
+    context = result.get("context") if isinstance(result.get("context"), dict) else {}
+    if not _present(instrument):
+        instrument = context.get("instrument")
+    strategy = src.get("strategy")
+    direction = str(src.get("direction") or src.get("candidate_direction") or "").upper()
+    if not lane or not bar_ts or not _present(instrument) or not _present(strategy):
+        return None
+    if direction not in {"LONG", "SHORT"}:
+        return None
+    try:
+        entry = float(src["entry"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    from strategy.shadow_resolver import _candidate_key, _population_fields
+
+    epoch, variant = _population_fields(src, result)
+    return _candidate_key(
+        lane,
+        str(instrument).replace("1!", ""),
+        bar_ts,
+        str(strategy),
+        direction,
+        entry,
+        epoch,
+        variant,
     )
 
 
@@ -280,8 +349,10 @@ def _base_record(
         record["session"] = session
     ts = (
         src.get("detected_at")
+        or src.get("candidate_bar_ts")
         or src.get("ts")
         or result.get("timestamp")
+        or result.get("ts")
         or context.get("ts")
     )
     if _present(ts):
@@ -294,9 +365,12 @@ def _base_record(
     if _present(condition):
         record["market_condition"] = condition
     if _present(src.get("notes")):
-        record["why_setup_qualified"] = src["notes"]
+        record["setup_notes"] = src["notes"]
     elif _present(src.get("direction_reason")):
-        record["why_setup_qualified"] = src["direction_reason"]
+        record["setup_notes"] = src["direction_reason"]
+    candidate_key = _canonical_candidate_key(src, result, source=source)
+    if candidate_key:
+        record["candidate_key"] = candidate_key
     suppression = _suppression_reason(src, result)
     if suppression:
         record["suppression_reason"] = suppression
@@ -308,17 +382,26 @@ def _base_record(
     return record
 
 
-def _match_outcome(record: dict[str, Any], outcome_row: dict[str, Any]) -> bool:
-    if str(outcome_row.get("instrument") or "") != str(record.get("instrument") or ""):
-        return False
-    if str(outcome_row.get("strategy") or "") != str(record.get("strategy") or ""):
-        return False
-    if str(outcome_row.get("direction") or "").upper() != str(record.get("direction") or "").upper():
-        return False
-    try:
-        return float(outcome_row.get("entry")) == float(record.get("entry"))
-    except (TypeError, ValueError):
-        return False
+def _outcome_candidate_key(outcome_row: dict[str, Any]) -> Optional[str]:
+    return _canonical_candidate_key(outcome_row, outcome_row, source="shadow_outcome")
+
+
+def _unique_outcome_row(
+    record: dict[str, Any],
+    outcome_rows: list[dict[str, Any]],
+) -> Optional[dict[str, Any]]:
+    """Attach an outcome only when exactly one canonical candidate_key matches."""
+    rec_key = record.get("candidate_key")
+    if not rec_key:
+        return None
+    matches: list[dict[str, Any]] = []
+    for row in outcome_rows:
+        out_key = _outcome_candidate_key(row)
+        if out_key == rec_key:
+            matches.append(row)
+    if len(matches) == 1:
+        return matches[0]
+    return None
 
 
 def build_advisory_records(result: dict[str, Any]) -> list[dict[str, Any]]:
@@ -368,13 +451,20 @@ def build_advisory_records(result: dict[str, Any]) -> list[dict[str, Any]]:
 
     outcomes = result.get("shadow_outcomes")
     outcome_rows = [row for row in outcomes if isinstance(row, dict)] if isinstance(outcomes, list) else []
+    matched_outcome_keys: set[str] = set()
     for record in records:
-        for row in outcome_rows:
-            if _match_outcome(record, row):
-                record.update(_outcome_from_shadow_row(row))
-                break
+        row = _unique_outcome_row(record, outcome_rows)
+        if row is None:
+            continue
+        record.update(_outcome_from_shadow_row(row))
+        key = _outcome_candidate_key(row)
+        if key:
+            matched_outcome_keys.add(key)
     for row in outcome_rows:
-        if any(_match_outcome(record, row) for record in records):
+        out_key = _outcome_candidate_key(row)
+        if out_key and out_key in matched_outcome_keys:
+            continue
+        if out_key and any(item.get("candidate_key") == out_key for item in records):
             continue
         sourced = dict(row)
         record = _base_record(sourced, result, source="shadow_outcome")
@@ -421,8 +511,8 @@ def format_advisory_card(record: dict[str, Any]) -> str:
         lines.append(f"Market/session context: {' · '.join(bits)}")
     if _present(record.get("detection_timestamp")):
         lines.append(f"Detected: {pe.et_time(record['detection_timestamp'])}")
-    if _present(record.get("why_setup_qualified")):
-        lines.append(f"Why setup qualified: {record['why_setup_qualified']}")
+    if _present(record.get("setup_notes")):
+        lines.append(f"Setup notes: {record['setup_notes']}")
     if "selected" in record:
         lines.append("Selected: yes" if record["selected"] else "Selected: no")
     if "attempted" in record:
@@ -438,8 +528,6 @@ def format_advisory_card(record: dict[str, Any]) -> str:
             lines.append(f"Simulated ticks: {record['pnl_ticks']}")
         if record.get("pnl_dollars") is not None:
             lines.append(f"Simulated P&L: {pe.money(record['pnl_dollars'])}")
-    elif record.get("source") in {"shadow_setups", "shadow_outcome"}:
-        lines.append("Later outcome: OPEN")
     lines.append(_FOOTER)
     return "\n".join(lines)
 
@@ -479,15 +567,19 @@ def journal_advisory_records(entries: Iterable[dict[str, Any]]) -> list[dict[str
             continue
         pending.extend(build_advisory_records(entry))
     for record in pending:
-        for row in outcomes:
-            if _match_outcome(record, row):
-                record.update(_outcome_from_shadow_row(row))
-                break
+        row = _unique_outcome_row(record, outcomes)
+        if row is not None:
+            record.update(_outcome_from_shadow_row(row))
         records.append(record)
-    unmatched_outcomes = [
-        row for row in outcomes if not any(_match_outcome(record, row) for record in records)
-    ]
-    for row in unmatched_outcomes:
+    matched_keys = {
+        str(record["candidate_key"])
+        for record in records
+        if record.get("candidate_key") and record.get("outcome")
+    }
+    for row in outcomes:
+        out_key = _outcome_candidate_key(row)
+        if out_key and out_key in matched_keys:
+            continue
         extra = _base_record(row, row, source="shadow_outcome")
         if extra is None:
             extra = {
@@ -503,6 +595,9 @@ def journal_advisory_records(entries: Iterable[dict[str, Any]]) -> list[dict[str
             if _present(row.get("direction")):
                 extra["direction"] = row["direction"]
             extra.update(_geometry(row))
+            key = _outcome_candidate_key(row)
+            if key:
+                extra["candidate_key"] = key
         extra.update(_outcome_from_shadow_row(row))
         records.append(extra)
     return records[-20:]

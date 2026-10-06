@@ -4437,7 +4437,7 @@ _DASHBOARD_HTML = r"""<!doctype html>
           return '<pre class="advisory-card">' + esc(item.card_text || '') + '</pre>';
         }).join('') + '</div>';
       }
-      return card('Qualified setups (advisory only)', body + '<p class="advisory-note">SHADOW / ADVISORY ONLY. Rank, when shown, is experimental and unvalidated. Missing fields stay missing. This panel cannot place an order.</p>', 'accent-yellow');
+      return card('Observed setup candidates (advisory only)', body + '<p class="advisory-note">SHADOW / ADVISORY ONLY. Rank, when shown, is experimental and unvalidated. Missing fields stay missing. Rejected or unselected candidates are observations, not endorsed trades. This panel cannot place an order.</p>', 'accent-yellow');
     }
     function kv(k, v) { return '<dt>' + esc(k) + '</dt><dd>' + v + '</dd>'; }
     function card(title, body, cls) {

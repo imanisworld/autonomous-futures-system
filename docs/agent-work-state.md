@@ -77,6 +77,25 @@ Task: remove overlapping agent responsibilities and make the research pipeline e
 - PR workflow note: independent review/merge state is transient GitHub metadata, not the durable runtime NEXT. After this PR is resolved, follow the current runtime checkpoint below.
 - DO NOT REDO: do not recreate a second role matrix, experiment selector, or parallel research queue elsewhere.
 
+## Current checkpoint — 2026-10-06 (PR #1143 HOLD fixes: OPEN, candidate_key join, panel name)
+
+Task: three presentation/evidence correctness fixes on existing branch `cursor/futures-advisory-visibility-f2da`. No scope expansion.
+
+### VERIFIED
+
+- Independent review HOLD on PR #1143: fabricated OPEN; loose outcome join; "Qualified setups" label.
+- Canonical identity remains `strategy.shadow_resolver._candidate_key(lane, instrument, bar_ts, strategy, direction, entry[, epoch, variant])`.
+
+### CHANGED
+
+- Omit Later outcome unless a recorded canonical SHADOW_OUTCOME exists.
+- Join outcomes only on unique reconstructed/recorded `candidate_key`.
+- Dashboard panel renamed to Observed setup candidates (advisory only). Card line "Why setup qualified" → "Setup notes".
+
+### NEXT
+
+Re-review PR #1143. Do not merge or deploy.
+
 ## Current checkpoint — 2026-10-06 (futures advisory visibility, source-only)
 
 Task: surface already-recorded futures shadow/candidate setups to the operator in real time. Presentation only. No deploy, merge, VPS, strategy, risk, or broker changes.
