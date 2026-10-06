@@ -122,3 +122,59 @@ def parse_regular_market_bars(
         ignored_off_grid_rows=off_grid,
         ignored_outside_session_rows=outside,
     )
+
+
+def parse_complete_grid_bars(
+    payload: Mapping[str, Any],
+    *,
+    timeframe: Timeframe,
+    decision_ts: datetime,
+) -> tuple[Bar, ...]:
+    """Keep complete grid-aligned regular-session bars across sessions.
+
+    Unlike :func:`parse_regular_market_bars`, this does not clip to a single
+    session. Capture needs several completed 30-minute bars to arm a setup.
+    """
+    if decision_ts.tzinfo is None or decision_ts.utcoffset() is None:
+        raise ValueError("decision_ts must be timezone-aware")
+    point = decision_ts.astimezone(timezone.utc)
+    regular = payload.get("regularMarket")
+    if not isinstance(regular, Mapping):
+        raise ValueError("public chart regularMarket missing")
+    items = regular.get("bars")
+    if not isinstance(items, list):
+        raise ValueError("public chart regularMarket bars missing")
+    step = timeframe.seconds
+    out: list[Bar] = []
+    seen: set[datetime] = set()
+    raw_starts: list[datetime] = []
+    for raw in items:
+        if not isinstance(raw, Mapping):
+            raise ValueError("public chart bar row invalid")
+        start = _aware(raw.get("timestamp"))
+        if start.second != 0 or start.microsecond != 0:
+            continue
+        raw_starts.append(start)
+        offset_minutes = start.minute * 60 + start.second
+        if step > 0 and (offset_minutes % step) != 0:
+            continue
+        if start + timeframe.delta > point:
+            continue
+        if start in seen:
+            raise ValueError(f"duplicate public chart bar start: {start.isoformat()}")
+        seen.add(start)
+        out.append(_bar(raw, start))
+    out.sort(key=lambda item: item.start_utc)
+    # Reject denser series (e.g. Public DAY default 5-minute rows) that place
+    # additional starts inside an accepted timeframe bucket.
+    for bar in out:
+        denser = [
+            start
+            for start in raw_starts
+            if bar.start_utc < start < bar.start_utc + timeframe.delta
+        ]
+        if denser:
+            raise ValueError(
+                f"unexpected_bar_spacing:intra_bucket_rows:{len(denser)}"
+            )
+    return tuple(out)

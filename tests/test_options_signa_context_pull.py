@@ -8,6 +8,10 @@ from scripts.options_signa_context_pull import build_symbols, market_is_open, pu
 from sources.signa_discovery import SignaDiscoveryResponse
 from sources.signa_snapshot_store import SignaSnapshotStore
 
+# Direct, unproxied loopback peer: the scanner access gate admits it when no
+# access token is configured (see alert_ranker/access_gate.py).
+LOCAL_PEER = ("127.0.0.1", 50000)
+
 
 def _config(tmp_path: Path) -> ScannerConfig:
     return ScannerConfig(
@@ -243,7 +247,7 @@ def test_signa_context_pull_endpoint_default_is_conservative(tmp_path, monkeypat
     monkeypatch.setattr(app_module, "pull_context", fake_pull_context)
     cfg = _config(tmp_path)
     app = app_module.create_app(config=cfg)
-    client = TestClient(app)
+    client = TestClient(app, client=LOCAL_PEER)
 
     response = client.post("/signa/context/pull", json={"symbols": ["SPY"]})
 
