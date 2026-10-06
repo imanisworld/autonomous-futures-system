@@ -60,7 +60,7 @@ If the agent cannot persist this file, it must return this payload verbatim-read
 
 ## Current checkpoint — 2026-10-06 (options setup-capture observer v0.2; B1–B12 red-team fixes; merge/deploy not authorized)
 
-Branch `cursor/options-setup-capture-observer-0010` (draft PR #1145). Merged with `main` `55b9d4d`. Current HEAD `b0bcbe30c3f665116db6d10f950b31cb44d610d5`. Do not treat older `7cd4f04` / `e317ee3` / pre-merge `6545822` / merge `f7ea3de` as review-cleared. Options current-state authority remains `docs/options-current-state-handoff.md`. Futures runtime checkpoint (c44d32b) below is unchanged.
+Branch `cursor/options-setup-capture-observer-0010` (draft PR #1145). Merged with `main` `55b9d4d`. Current HEAD `1b8dc7466596080a8c06a9d400ad479b84c2bf32`. Do not treat older `7cd4f04` / `e317ee3` / pre-merge `6545822` / merge `f7ea3de` / `b0bcbe3` as review-cleared for merge. Options current-state authority remains `docs/options-current-state-handoff.md`. Futures runtime checkpoint (c44d32b) below is unchanged.
 
 ### DONE / DO NOT REDO
 
@@ -69,12 +69,12 @@ Branch `cursor/options-setup-capture-observer-0010` (draft PR #1145). Merged wit
 - Flagged out of scope: `/webhook/alert` no allowlist; `/shadow-journal` 200s from outside IPs (auth gate unverified).
 - B11: `/health` fail-softs unreadable `/root/...` journal paths.
 - Red-team E review (`E_PR1145_review.md`) B1–B12 **code fixes landed** on this branch (still need independent re-review): SIP reconcile after `watch_until+16m` (B1); provisional IEX TRIGGERED + later SIP RECONCILIATION (B2); SOURCE_BLOCKED diagnostic-only (B3); torn-line truncate-then-repair (B4); status `read_counts()` pure read (B5); post-fetch `wall_clock` / overrun (B6); clock check fail-closed + measured offset (B7); missing creds / delayed SPX fail-closed (B8); structure key without levels + SOURCE_DRIFT (B9); THIRTY_MINUTE fetch + intra-bucket reject (B10); lean `alert_ranker/alpaca_trades.py` (B12).
-- Local full suite on HEAD `b0bcbe3` (post-B1–B12 + main merge): `pytest -q` → 7563 passed, 8 skipped.
+- Local full suite on post-B1–B12 + main merge: `pytest -q` → 7563 passed, 8 skipped.
+- Exact-head GitHub CI `tests` + `handoff-fields` green on `1b8dc74` (and prior tip `b0bcbe3`). Handoff **Status** must remain a bare enum token.
 
 ### OPEN / NOT MERGE-CLEARED
 
 - Independent options diff review must re-run against the post-B1–B12 + main-merge HEAD (prior review at `e317ee3` is stale; CHANGES REQUIRED there is not a merge GO).
-- Exact-head full CI + Agent Handoff Check green on the pushed HEAD (handoff Status must be a bare enum token).
 - Operator merge GO, then a separate observer-only timer install GO — **not** authorized by green CI alone.
 - Live A13 sessions and Public INDEX real-time entitlement remain UNVERIFIED.
 
@@ -89,10 +89,9 @@ Branch `cursor/options-setup-capture-observer-0010` (draft PR #1145). Merged wit
 
 ### NEXT
 
-1. Confirm exact-head CI + handoff check green on the pushed HEAD.
-2. Independent options diff review of PR #1145 at that HEAD.
-3. Operator merge GO, then a separate observer-only timer install GO.
-4. Post-install: journal WATCHING before the next RTH open; no order/risk consumption. If RTH has no setup, do not fabricate a live trigger.
+1. Independent options diff review of PR #1145 at HEAD `1b8dc74` (or successor if only docs pin moves).
+2. Operator merge GO, then a separate observer-only timer install GO.
+3. Post-install: journal WATCHING before the next RTH open; no order/risk consumption. If RTH has no setup, do not fabricate a live trigger.
 
 ## Governance PR provenance — 2026-10-06 (docs-only; does not override runtime NEXT)
 
