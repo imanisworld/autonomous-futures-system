@@ -35,6 +35,8 @@ FROZEN_AFTER_APPROVED = {
     "data",
     "population",
     "setup_type",
+    "evidence_type",
+    "execution_assumptions",
     "timeframe",
     "changed_variables",
     "held_constant",

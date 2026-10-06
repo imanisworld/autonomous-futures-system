@@ -415,6 +415,7 @@ def _seed_mini_repo(root: Path) -> None:
         },
         "population": population,
         "setup_type": "demo_setup",
+        "evidence_type": "coverage",
         "timeframe": "5m",
         "changed_variables": [
             {"name": "entry_delay_bars", "baseline_value": 0, "candidate_value": 1}
