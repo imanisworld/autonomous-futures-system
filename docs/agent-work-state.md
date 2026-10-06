@@ -60,7 +60,7 @@ If the agent cannot persist this file, it must return this payload verbatim-read
 
 ## Current checkpoint — 2026-10-06 (options setup-capture observer v0.2; B1–B12 red-team fixes; merge/deploy not authorized)
 
-Branch `cursor/options-setup-capture-observer-0010` (draft PR #1145) from `main` `31c9281f41e61791dc050d74f33acf02f87085e4` (#1089). Options current-state authority remains `docs/options-current-state-handoff.md`. Futures checkpoint below is unchanged. **Fetch current HEAD before acting** — do not use the older `7cd4f04` / `e317ee3` SHAs as “review cleared.”
+Branch `cursor/options-setup-capture-observer-0010` at `654582248a7483b7d8b0809b93ecc0c23f88a9f9` (draft PR #1145) from `main` `31c9281f41e61791dc050d74f33acf02f87085e4` (#1089). Options current-state authority remains `docs/options-current-state-handoff.md`. Futures checkpoint below is unchanged. **Fetch current HEAD before acting** — do not use the older `7cd4f04` / `e317ee3` SHAs as “review cleared.”
 
 ### DONE / DO NOT REDO
 
