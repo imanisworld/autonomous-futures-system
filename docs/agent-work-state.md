@@ -58,7 +58,7 @@ Every substantial unit of work must leave:
 
 If the agent cannot persist this file, it must return this payload verbatim-ready for the next agent/operator to save.
 
-## Proposed governance checkpoint — 2026-10-06 (docs-only role split; branch pending review)
+## Governance PR provenance — 2026-10-06 (docs-only; does not override runtime NEXT)
 
 Task: remove overlapping agent responsibilities and make the research pipeline explicit without changing trading behavior.
 
@@ -74,8 +74,8 @@ Task: remove overlapping agent responsibilities and make the research pipeline e
 - Files changed on this branch: `AGENTS.md`, `GROK.md`, `docs/options-current-state-handoff.md`, this checkpoint.
 - Runtime mutations: none.
 - Strategy/risk/broker/execution changes: none.
-- NEXT: independent review of the docs diff; if accepted, merge the docs-only PR, then have Grok resume using `GROK.md` and current authoritative lane records.
-- DO NOT REDO: do not recreate a second role matrix or parallel research queue elsewhere.
+- PR workflow note: independent review/merge state is transient GitHub metadata, not the durable runtime NEXT. After this PR is resolved, follow the current runtime checkpoint below.
+- DO NOT REDO: do not recreate a second role matrix, experiment selector, or parallel research queue elsewhere.
 
 ## Current checkpoint — 2026-10-04 ~21:30Z (c44d32b deployed; canonical 4HR epoch started)
 
