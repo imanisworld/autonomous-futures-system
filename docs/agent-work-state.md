@@ -67,9 +67,12 @@ Task: Continue PR #1157 only. Claude breaker-QA HOLD on `cea37f5` with three U2 
 - Prior HOLD head: `cea37f51dc5795c654dec299d7145e3e59c697ff`.
 - Base/current main: `e86c55c7c78de56dfff0ca9adf1237ea29caa8d3` (unchanged; no rebase required for this fix).
 - Branch `cursor/u2-chronological-partitions-f2da` / PR #1157.
+- Exact head: `62b22a7e91a29b337d7195b479f25641ded8b238`.
 - Focused partition + OOS ledger tests: 36 passed.
 - U1 `tests/test_evidence_row.py`: 36 passed.
 - Full `python3 -m pytest -q`: 7718 passed, 8 skipped.
+- Exact-head CI `tests` → success (run 37517964518).
+- Exact-head Agent Handoff → success (run 37518006760).
 
 ### CHANGED
 
