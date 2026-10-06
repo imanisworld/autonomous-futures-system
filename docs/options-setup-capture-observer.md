@@ -28,7 +28,9 @@ Oct. 5 SPY shadow 9925 / 9933 were `H1_222_CONTINUATION` AHEAD after trigger
 - 1H episode buckets use the **scan clock** while candles use `now-960s`, so
   every 1H setup straddles two buckets (9925 and 9933). Replay: 2.00x on 1H,
   1.75x on 4H_RTH. This watcher keys
-  `ticker|timeframe|structure_close_ts|pattern|trigger|invalidation` and adds
+  `ticker|timeframe|structure_close_ts|pattern` (levels are attributes /
+  fingerprint only, so a bar revision emits `SOURCE_DRIFT` instead of a
+  duplicate key) and adds
   direction only at TRIGGERED. Existing shadow rows are not rewritten.
 - With the 960 s cutoff the current 1H candle only ever contains its first
   30m bar. Second-half-hour crosses and 15:30/12:30 stub **watch** candles are
