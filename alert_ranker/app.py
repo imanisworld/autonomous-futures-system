@@ -1,19 +1,23 @@
 """FastAPI app and scheduler lifecycle for the advisory options scanner.
 
 The service has no broker order-submission authority and binds to localhost.
-Production exposure is controlled by the reverse proxy: operator endpoints stay
-protected, while ``/public/status`` is an explicit allowlist-only summary for the
-public Vantage Point UI. The module-level launch path remains gated behind
+Operator endpoints are protected in-app by ``access_gate`` (token, session
+cookie, or a direct unproxied loopback request) so exposure does not depend on
+reverse-proxy auth alone; ``/health`` and ``/public/status`` are the only
+unauthenticated routes, and ``/public/status`` is an explicit allowlist-only
+summary for the public Vantage Point UI. The module-level launch path remains gated behind
 ``OPTIONS_SCANNER_ENABLED=true`` (default off).
 """
 
 from __future__ import annotations
 
 import asyncio
-import os
 import json
-from datetime import datetime, timezone
+import os
+import re
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 import uvicorn
@@ -21,6 +25,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
+from .access_gate import gate_mode, install_access_gate
 from .bar_context import create_bar_context
 from .config import DEFAULT_SIGNA_CONTEXT_PULL_INCLUDE, ScannerConfig, _as_bool, load_config
 from .discord import DiscordAlerter
@@ -40,6 +45,8 @@ from .rh_options import (
 )
 from .lifecycle import classify_candidate
 from .scanner import OptionsScanner
+from .setup_capture import DEFAULT_JOURNAL
+from .setup_capture_store import JournalFormatError, SetupCaptureJournal
 from .storage import ScanStorage
 from .signa_context_store import SHARED_PROXY_SYMBOLS, SignaContextStore
 from sources.signa_discovery import (
@@ -82,6 +89,94 @@ SHADOW_OUTCOME_STATUSES = {
     "OPEN", "WIN", "LOSS", "BREAKEVEN", "CANCELLED", "EXPIRED", "REJECTED",
     "TARGET_CONSUMED_AT_ENTRY", "STOP_CONSUMED_AT_ENTRY",
 }
+
+
+_JOURNAL_REASON_RE = re.compile(r"^journal_[a-z_]+_\d+$")
+
+
+def _journal_reason_code(exc: BaseException) -> str:
+    """Emit only a typed journal_*_N code attribute — never str(exc)."""
+    code = getattr(exc, "code", None)
+    if isinstance(code, str) and _JOURNAL_REASON_RE.match(code):
+        return code
+    return "journal_unreadable"
+
+
+def _latest_clock_unsynced(peek: dict[str, Any]) -> bool:
+    """True only when the latest _clock diagnostic is clock_unsynced (not sticky)."""
+    records = list(peek.get("clock_records") or [])
+    if not records:
+        # Legacy journals: fall back to last COLLECTOR_ERROR on _clock.
+        records = [
+            err
+            for err in (peek.get("errors") or [])
+            if str(err.get("structure_key") or "") == "_clock"
+        ]
+    if not records:
+        return False
+    return str(records[-1].get("status_reason") or "") == "clock_unsynced"
+
+
+def _setup_capture_telemetry(
+    cfg: ScannerConfig, *, include_journal_path: bool = False
+) -> dict[str, Any]:
+    """Pure-read watcher journal telemetry (no repair, no mkdir, no append).
+
+    /health and /public/status must not 500 when the default shared-log path is
+    missing or unreadable, and must not mutate the journal from the scanner loop.
+    Absolute journal filesystem paths are operator-only (``/setup-capture``);
+    they must never appear on ``/health`` or other public surfaces.
+    """
+    path = Path(getattr(cfg, "setup_capture_journal", None) or DEFAULT_JOURNAL)
+    payload: dict[str, Any] = {
+        "enabled": bool(getattr(cfg, "setup_capture_enabled", True)),
+        "observation_only": True,
+        "execution_authority": False,
+        "trade_authority": False,
+        "scanner_embedded": False,
+        "watching_count": 0,
+        "missed_late_count": 0,
+        "data_blocked_count": 0,
+        "clock_unsynced": False,
+    }
+    if include_journal_path:
+        payload["journal"] = str(path)
+    try:
+        exists = path.exists()
+    except OSError:
+        payload["reason"] = "journal_unreadable"
+        return payload
+    if not exists:
+        payload["reason"] = "journal_missing"
+        return payload
+    try:
+        journal = SetupCaptureJournal(path, create=False)
+        peek = journal.peek_state()
+        counts = SetupCaptureJournal._counts_from_state(peek)
+        clock_unsynced = _latest_clock_unsynced(peek)
+    except OSError:
+        payload["reason"] = "journal_unreadable"
+        return payload
+    except JournalFormatError as exc:
+        payload["reason"] = _journal_reason_code(exc)
+        return payload
+    except RuntimeError:
+        payload["reason"] = "journal_unreadable"
+        return payload
+    payload.update(
+        {
+            "watching_count": counts.get("watching", 0),
+            "missed_late_count": counts.get("missed_late", 0),
+            "data_blocked_count": counts.get("data_blocked", 0),
+            "structure_count": counts.get("structure_count", 0),
+            "counts": counts,
+            "clock_unsynced": clock_unsynced,
+        }
+    )
+    if clock_unsynced:
+        payload["reason"] = "clock_unsynced"
+    return payload
+
 
 def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | None = None) -> FastAPI:
     cfg = config or load_config()
@@ -158,6 +253,7 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
                 scheduler.shutdown(wait=False)
 
     app = FastAPI(title="Advisory Options Scanner", lifespan=lifespan)
+    install_access_gate(app, cfg.access_token)
     if scanner is not None:
         app.state.scanner = scanner
 
@@ -187,11 +283,25 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
             "provider_profile": provider_profile,
             "tastytrade_configured": cfg.tastytrade_configured,
             "signa_context_pull_enabled": cfg.signa_context_pull_enabled,
+            "access_gate": gate_mode(cfg.access_token),
+            "setup_capture": _setup_capture_telemetry(cfg, include_journal_path=False),
         }
 
     @app.get("/status")
     async def status() -> dict[str, Any]:
         return get_scanner().status()
+
+    @app.get("/setup-capture")
+    async def setup_capture_status() -> dict[str, Any]:
+        """Read-only journal telemetry. The watcher is a separate systemd unit.
+
+        Operator/private surface: may include the absolute journal path.
+        Do not expose this path on ``/health`` or ``/public/status``.
+        """
+        payload = _setup_capture_telemetry(cfg, include_journal_path=True)
+        payload["ok"] = True
+        payload["scanner_embedded"] = False
+        return payload
 
     @app.get("/public/status")
     async def public_status() -> dict[str, Any]:
@@ -208,6 +318,12 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
         latest = scanner_status.get("latest") or []
         signa_rows = scanner_status.get("signa") or []
         policy = scanner_status.get("paper_policy") or {}
+        capture_tel = health_status.get("setup_capture") or {}
+        capture_public = {
+            "enabled": bool(getattr(cfg, "setup_capture_enabled", True)),
+            "watching_count": int(capture_tel.get("watching_count") or 0),
+            "missed_late_count": int(capture_tel.get("missed_late_count") or 0),
+        }
 
         return {
             "public_safe": True,
@@ -240,6 +356,14 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
                     and bool(row.get("alert_suppression_reason"))
                 ),
                 "recent_signa_context_rows": len(signa_rows),
+                "setup_capture_watching": int(capture_public.get("watching_count") or 0),
+                "setup_capture_missed_late": int(capture_public.get("missed_late_count") or 0),
+            },
+            "setup_capture": {
+                "enabled": bool(capture_public.get("enabled", True)),
+                "observation_only": True,
+                "execution_authority": False,
+                "scanner_embedded": False,
             },
             "paper_policy": {
                 "id": policy.get("id"),

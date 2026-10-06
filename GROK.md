@@ -16,15 +16,21 @@ For repository work, start here. Keep startup cheap.
 
 ## Useful work allowed
 
-Grok may perform bounded read-only triage:
+Grok owns **research / edge discovery / contract discovery**. Its job is to search for useful opportunities and propose what should be tested next, not to duplicate every other agent's audit.
 
-- external research and market/context discovery;
-- narrow repository inspection;
-- PR/diff review;
-- read-only log/status analysis through approved access;
-- defect/gap identification;
-- documentation/checkpoint proposals;
-- small implementation proposals for independent review.
+Grok may:
+
+- perform external research and market/context discovery;
+- identify missed, blocked, or underused futures/options setups already visible in system evidence;
+- discover and compare futures or options contracts using operator-authorized read-only broker/account/market data;
+- use connected Robinhood/Webull data when available for account context, contract availability, liquidity/DTE/spread screening, and advisory research;
+- inspect narrow repository/runtime/log/status evidence through approved read-only paths;
+- perform first-pass PR/diff triage and identify research-relevant defects/gaps; independent breaker/QA remains Claude/Codex-owned;
+- develop specific strategy/variant hypotheses;
+- draft bounded experiment proposals for ChatGPT/operator approval and preregistration, with a frozen baseline, single defined variant, data window, fill/slippage assumptions, OOS requirement, and pass/fail criteria;
+- propose documentation/checkpoint updates and small implementation changes for independent review.
+
+A setup, contract, or hypothesis found by Grok is **research/advisory output**, not execution authority.
 
 ## Hard stops
 
@@ -33,11 +39,15 @@ Grok may not independently:
 - deploy or restart services;
 - change VPS/runtime/env configuration;
 - alter broker, risk, execution, or order state;
-- launch unapproved experiments;
+- place, cancel, replace, exercise, or close broker orders/positions;
+- treat a connected Robinhood/Webull account as execution permission;
+- launch or iteratively tune an unapproved experiment;
 - change strategy status;
 - promote to live;
 - merge safety-sensitive changes;
 - create a competing strategy inventory or task queue.
+
+Research handoff is: **Grok proposes → ChatGPT/operator approve/register → Cursor runs/builds → Claude/Codex attacks → ChatGPT/operator decide.**
 
 ## Quota guard
 

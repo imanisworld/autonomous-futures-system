@@ -4,6 +4,16 @@ _As of 2026-10-02. Operational checklist only. The authoritative options status 
 
 ## Now — no production mutation
 
+### Setup-capture observer (late first-sight + SPX observation)
+
+- [x] Source on `cursor/options-setup-capture-observer-0010`: oneshot JSONL collector, pre-open two-sided pending 2-2 WATCHING, SIP-lag, `MISSED_LATE`, `GAP_THROUGH_OPEN`, full-hour + stub watch, SPX INDEX 1m. Not scanner-embedded.
+- [x] Oct. 5 SPY 9925/9933 documented as **not** a prospective catch. Structure key links both. Do not rewrite that history.
+- [ ] Independent options diff review of the capture PR.
+- [ ] Exact-head CI green.
+- [ ] Operator GO required before merge.
+- [ ] Separate operator GO required before installing `options-setup-capture.timer` (observer-only). Do not change live-trading/execution flags.
+- [ ] Out of scope: webhook/alert ticker allowlist; confirm nginx auth on `/shadow-journal` after outside-IP 200s (2026-10-06).
+
 
 ### 2-1-2 floor-outcome forward study
 
