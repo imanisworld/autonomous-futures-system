@@ -141,3 +141,73 @@ def test_intake_coerces_expected_move_and_rejects_garbage():
     assert ok.verdict == GateVerdict.WARN
     bad = check_contract_quality_intake(_payload(expected_move_percent="lots"))
     assert bad.verdict == GateVerdict.BLOCK
+
+
+# ── integration pass: every required field fails closed when missing ────────
+
+REQUIRED = [
+    "ticker", "direction", "expiration", "strike", "premium", "bid", "ask",
+    "spread_percent", "volume", "open_interest", "dte", "max_contracts",
+    "max_dollar_risk", "distance_to_target", "iv_event_risk", "theta_risk",
+]
+
+
+@pytest.mark.parametrize("field", REQUIRED)
+@pytest.mark.parametrize("missing", [None, ""])
+def test_intake_missing_required_field_blocks(field, missing):
+    payload = _payload()
+    payload[field] = missing
+    result = check_contract_quality_intake(payload)
+    assert result.verdict == GateVerdict.BLOCK
+    assert any(field in reason for reason in result.blocking_reasons)
+
+
+@pytest.mark.parametrize("field", REQUIRED)
+def test_intake_absent_required_field_blocks(field):
+    payload = _payload()
+    del payload[field]
+    assert check_contract_quality_intake(payload).verdict == GateVerdict.BLOCK
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"premium": 0}, {"bid": 0}, {"ask": 0}, {"volume": 0}, {"open_interest": 0},
+        {"dte": -1}, {"strike": 0}, {"max_contracts": 0}, {"max_dollar_risk": 0},
+    ],
+)
+def test_zero_or_negative_contract_facts_block(overrides):
+    assert evaluate_contract_quality(_contract(**overrides)).verdict == GateVerdict.BLOCK
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"direction": "STRADDLE"},
+        {"iv_event_risk": "extreme"},
+        {"theta_risk": "?"},
+        {"trade_style": "lottery"},
+        {"dte_exceptional": "maybe"},
+        {"dte": "soon"},
+    ],
+)
+def test_unsupported_contract_state_blocks(overrides):
+    assert check_contract_quality_intake(_payload(**overrides)).verdict == GateVerdict.BLOCK
+
+
+def test_non_mapping_payload_blocks():
+    for payload in (None, [], "SPY 500C", 42):
+        assert check_contract_quality_intake(payload).verdict == GateVerdict.BLOCK
+
+
+def test_gate_is_advisory_only_and_cannot_submit():
+    import ast
+    from pathlib import Path
+
+    from options_manager.validation import contract_quality_gate as gate
+
+    tree = ast.parse(Path(gate.__file__).read_text())
+    names = {n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)} | {
+        n.id for n in ast.walk(tree) if isinstance(n, ast.Name)
+    }
+    assert not {"submit_order", "place_order", "broker", "requests", "httpx"} & names

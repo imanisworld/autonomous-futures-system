@@ -45,3 +45,14 @@ options/advisory/plan/portfolio tests: 2844 passed, 1 skipped.
 Thresholds, DTE policy, risk caps, the premium-stop optionality at gate level
 (the canonical intake already blocks a missing stop), the V1 scanner selector,
 and any broker/order path.
+
+## Integration pass (post-#1145/#1146)
+
+Re-verified on the rebased head. Explicit coverage added (no gate change):
+every required field blocks when absent, `None`, or empty; zero/negative
+premium, bid, ask, volume, OI, strike, contracts, max risk and negative DTE
+block; unsupported states (direction, IV/theta severity, trade style,
+non-boolean exception flag, non-integer DTE) block; non-mapping payloads
+block; the module references no order/broker/HTTP client. 109 tests in
+`tests/test_options_contract_quality_fail_closed.py`.
+
