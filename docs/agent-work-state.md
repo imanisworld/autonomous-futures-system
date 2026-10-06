@@ -77,6 +77,41 @@ Task: remove overlapping agent responsibilities and make the research pipeline e
 - PR workflow note: independent review/merge state is transient GitHub metadata, not the durable runtime NEXT. After this PR is resolved, follow the current runtime checkpoint below.
 - DO NOT REDO: do not recreate a second role matrix, experiment selector, or parallel research queue elsewhere.
 
+## Current checkpoint — 2026-10-06 (futures advisory visibility, source-only)
+
+Task: surface already-recorded futures shadow/candidate setups to the operator in real time. Presentation only. No deploy, merge, VPS, strategy, risk, or broker changes.
+
+### VERIFIED
+
+- `origin/main` at start of this work: `31c9281`.
+- Existing machinery: `strategy/shadow_setups.py` (geometry + `resolve_shadow_candidate`), `strategy/signal_engine.py` (`candidate_audit` / rank metadata), `webhook/runner.py` (`_record_candidate_audit`, journal `shadow_candidates`, `resolve_pending_shadow_outcomes`), `strategy/shadow_resolver.py` (canonical `SHADOW_OUTCOME`), `scripts/why_no_trade_report.py`, Discord decision cards, dashboard inventory/log.
+- Gap was presentation: candidate_audit was not copied onto `process_alert` result; Discord default notify list misses `SHADOW_NO_ORDER`; dashboard `_public_entry` stripped candidate geometry.
+
+### CHANGED
+
+- Branch `cursor/futures-advisory-visibility-f2da`, draft PR #1143.
+- New `notifications/futures_advisory.py` + `tests/test_futures_advisory.py`.
+- `webhook/runner.py` copies recorded candidate_audit / shadow outcomes onto the alert result.
+- `webhook/app.py` sends advisory cards on the existing Discord signal route and lists them on Home/Futures dashboard tabs.
+
+### TESTS
+
+- `python3 -m pytest -q tests/test_futures_advisory.py tests/test_discord_notifier.py tests/test_candidate_snapshot.py tests/test_why_no_trade_report.py` → **40 passed**.
+- `python3 -m pytest -q tests/test_shadow_resolver.py tests/test_shadow_setups.py tests/test_candidate_snapshot.py tests/test_discord_card.py tests/test_discord_router.py tests/test_observation_discord_route.py tests/test_viewer.py tests/test_webhook.py tests/test_e2e_scenarios.py` → **257 passed, 1 warning**.
+
+### RUNTIME MUTATIONS
+
+None. No deploy, no VPS, no env, no broker.
+
+### DONE / DO NOT REDO for this lane
+
+- Do not recreate candidate detection, shadow resolution, or a new ranker.
+- Do not retune confluence weights or change inverse/evidence epochs.
+
+### NEXT
+
+Independent review of PR #1143. Operator may deploy an exact reviewed SHA later. Do not merge or deploy from this session.
+
 ## Current checkpoint — 2026-10-04 ~21:30Z (c44d32b deployed; canonical 4HR epoch started)
 
 Exact release `c44d32bc4961e56fae5c5f88a976eb6783341638` was built, verified, and promoted successfully. Rollback remains the prior `489b55b` release.

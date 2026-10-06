@@ -32,6 +32,7 @@ _EVIDENCE_LABELS = (
 )
 _INSTRUMENTS = ("MNQ", "MES", "NQ", "ES", "MGC", "MCL")
 _INVENTORY_CACHE: Optional[list[dict[str, Any]]] = None
+_TITLE_ACRONYMS = {"orb", "vwap", "pdh", "pdl", "4hr", "60m", "htf"}
 
 _FOOTER = (
     "ADVISORY ONLY · cannot place an order · recorded system state only · "
@@ -81,7 +82,17 @@ def _strategy_title(strategy: str) -> str:
     text = str(strategy or "").strip()
     if not text:
         return text
-    return text.replace("_", " ")
+    try:
+        from ops.project_check.daily import STRATEGY_NAME_ALIASES
+
+        aliases = [name for name, concept in STRATEGY_NAME_ALIASES.items() if concept == text]
+        raw = aliases[0] if len(aliases) == 1 else text.replace("_", " ")
+    except Exception:  # noqa: BLE001 — display fallback only
+        raw = text.replace("_", " ")
+    parts = []
+    for part in raw.split():
+        parts.append(part.upper() if part.lower() in _TITLE_ACRONYMS else part.capitalize())
+    return " ".join(parts)
 
 
 def _evidence_label(verdict: str) -> Optional[str]:
