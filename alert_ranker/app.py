@@ -114,11 +114,15 @@ def _latest_clock_unsynced(peek: dict[str, Any]) -> bool:
     return str(records[-1].get("status_reason") or "") == "clock_unsynced"
 
 
-def _setup_capture_telemetry(cfg: ScannerConfig) -> dict[str, Any]:
+def _setup_capture_telemetry(
+    cfg: ScannerConfig, *, include_journal_path: bool = False
+) -> dict[str, Any]:
     """Pure-read watcher journal telemetry (no repair, no mkdir, no append).
 
     /health and /public/status must not 500 when the default shared-log path is
     missing or unreadable, and must not mutate the journal from the scanner loop.
+    Absolute journal filesystem paths are operator-only (``/setup-capture``);
+    they must never appear on ``/health`` or other public surfaces.
     """
     path = Path(getattr(cfg, "setup_capture_journal", None) or DEFAULT_JOURNAL)
     payload: dict[str, Any] = {
@@ -127,12 +131,13 @@ def _setup_capture_telemetry(cfg: ScannerConfig) -> dict[str, Any]:
         "execution_authority": False,
         "trade_authority": False,
         "scanner_embedded": False,
-        "journal": str(path),
         "watching_count": 0,
         "missed_late_count": 0,
         "data_blocked_count": 0,
         "clock_unsynced": False,
     }
+    if include_journal_path:
+        payload["journal"] = str(path)
     try:
         exists = path.exists()
     except OSError:
@@ -274,7 +279,7 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
             "provider_profile": provider_profile,
             "tastytrade_configured": cfg.tastytrade_configured,
             "signa_context_pull_enabled": cfg.signa_context_pull_enabled,
-            "setup_capture": _setup_capture_telemetry(cfg),
+            "setup_capture": _setup_capture_telemetry(cfg, include_journal_path=False),
         }
 
     @app.get("/status")
@@ -283,8 +288,12 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
 
     @app.get("/setup-capture")
     async def setup_capture_status() -> dict[str, Any]:
-        """Read-only journal telemetry. The watcher is a separate systemd unit."""
-        payload = _setup_capture_telemetry(cfg)
+        """Read-only journal telemetry. The watcher is a separate systemd unit.
+
+        Operator/private surface: may include the absolute journal path.
+        Do not expose this path on ``/health`` or ``/public/status``.
+        """
+        payload = _setup_capture_telemetry(cfg, include_journal_path=True)
         payload["ok"] = True
         payload["scanner_embedded"] = False
         return payload

@@ -110,7 +110,10 @@ sight is `MISSED_LATE` here.
 ## Operator surfaces
 
 - `GET /setup-capture` — journal counts (scanner-embedded = false); surfaces
-  `clock_unsynced` when the collector is blocked by clock skew
+  `clock_unsynced` when the collector is blocked by clock skew; may include the
+  absolute journal path (operator/private)
+- `GET /health` — setup_capture counts/reasons only; **no** absolute journal
+  filesystem path (`/root/afs-shared/...` must not appear)
 - `python -m scripts.options_setup_capture_status`
 - systemd `options-setup-capture.timer`
 

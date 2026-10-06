@@ -770,13 +770,60 @@ def test_health_survives_unreadable_default_capture_journal(tmp_path, monkeypatc
         assert body["status"] == "healthy"
         assert body["setup_capture"]["reason"] == "journal_unreadable"
         assert body["setup_capture"]["watching_count"] == 0
+        # /health must not leak absolute capture-journal filesystem paths.
+        assert "journal" not in body["setup_capture"]
+        assert "/root/afs-shared" not in health.text
+        assert "options_setup_capture.jsonl" not in health.text
+        assert DEFAULT_JOURNAL not in health.text
         public = client.get("/public/status")
         assert public.status_code == 200
         assert public.json()["counts"]["setup_capture_watching"] == 0
         assert "/root/afs-shared" not in public.text
+        assert "options_setup_capture.jsonl" not in public.text
         capture = client.get("/setup-capture")
         assert capture.status_code == 200
         assert capture.json()["reason"] == "journal_unreadable"
+        # Operator /setup-capture may still name the journal path.
+        assert capture.json().get("journal") == DEFAULT_JOURNAL
+
+
+def test_health_setup_capture_omits_internal_journal_path(tmp_path):
+    """Regression: public /health must not expose /root/afs-shared journal paths."""
+    cfg = ScannerConfig(
+        market_data_provider="tastytrade",
+        tastytrade_username="user",
+        tastytrade_password="pass",
+        tastytrade_base_url="https://api.tastyworks.com",
+        public_api_key_configured=False,
+        public_base_url="https://api.public.com",
+        alpaca_api_key_configured=False,
+        alpaca_secret_key_configured=False,
+        alpaca_paper=True,
+        alpaca_data_base_url="https://data.alpaca.markets",
+        port=8010,
+        discord_webhook_url="",
+        watchlist=["AAPL"],
+        interval_minutes=5,
+        sqlite_path=tmp_path / "options_scanner.sqlite",
+        setup_capture_journal=str(tmp_path / "options_setup_capture.jsonl"),
+        setup_capture_enabled=True,
+    )
+    (tmp_path / "options_setup_capture.jsonl").write_text("")
+    app = create_app(cfg)
+    with TestClient(app) as client:
+        health = client.get("/health")
+        assert health.status_code == 200
+        sc = health.json()["setup_capture"]
+        assert "journal" not in sc
+        assert sc.get("enabled") is True
+        assert sc.get("observation_only") is True
+        assert "/root/" not in health.text
+        assert "/afs-shared" not in health.text
+        assert "options_setup_capture.jsonl" not in health.text
+        # Even the configured tmp journal path must not appear on /health.
+        assert str(tmp_path / "options_setup_capture.jsonl") not in health.text
+        private = client.get("/setup-capture").json()
+        assert private.get("journal") == str(tmp_path / "options_setup_capture.jsonl")
 
 
 def test_c1g_unknown_condition_writes_source_blocked(tmp_path):
