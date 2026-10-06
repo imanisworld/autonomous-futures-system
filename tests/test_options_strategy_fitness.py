@@ -241,7 +241,8 @@ def test_checkpoints_are_policy_not_hard_coded():
 
 
 def test_observation_from_records_never_turns_unknown_into_zero():
-    signal = {"signal_id": "sg_1", "strategy": "322", "strategy_epoch": "2026Q4_v1"}
+    signal = {"signal_id": "sg_1", "strategy": "322", "strategy_epoch": "2026Q4_v1",
+              "data_integrity": "VALID", "signal_integrity": "VALID"}
     outcome = {
         "signal_id": "sg_1",
         "executed": False,
@@ -260,3 +261,66 @@ def test_fitness_module_is_isolated_from_risk_and_execution():
     modules |= {a.name for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names}
     for forbidden in ("risk", "execution", "options_manager", "alert_ranker", "webhook", "broker"):
         assert not any(m == forbidden or m.startswith(forbidden + ".") for m in modules), forbidden
+
+
+# ── integration with the canonical signal / #1145 capture ───────────────────
+
+
+def _outcome_record(signal_id, r, **kw):
+    return {
+        "signal_id": signal_id,
+        "executed": False,
+        "result_r": {"value": r, "status": "DERIVED", "reason": "", "source": ""},
+        "data_integrity": "VALID",
+        "signal_integrity": "VALID",  # an outcome row cannot launder signal integrity
+        **kw,
+    }
+
+
+def test_late_or_gap_capture_never_judges_fitness_even_with_a_valid_outcome_row(tmp_path):
+    from dataclasses import replace as dc_replace
+
+    from options_evidence import capture_adapter as ca
+    from options_evidence import signal as sg
+    from tests.test_options_capture_adapter import _engine, _print, et
+
+    engine = _engine(
+        tmp_path,
+        iex=[_print(et(2026, 10, 5, 9, 30, 20), 770.10)],
+        sip=[_print(et(2026, 10, 5, 9, 30, 20), 770.09, feed="sip", trade_id="s1")],
+    )
+    engine.run(now=et(2026, 10, 5, 10, 16, 45))  # cold start → MISSED_LATE
+    fold = ca.fold_capture_rows(
+        ca.read_capture_journal(engine.journal.path), strategy="322", strategy_epoch="2026Q4_v1"
+    )
+    records = [sg.to_record(s) for s in fold.journal.signals()]
+    assert records and all(r["signal_integrity"] != "VALID" for r in records if r["lifecycle_state"] == "MISSED_LATE")
+    obs = [fx.Observation.from_records(r, _outcome_record(r["signal_id"], -1.0)) for r in records]
+    verdict = fx.evaluate_fitness(epoch(), obs)
+    assert verdict.valid_n == 0
+    assert sum(verdict.excluded.values()) == len(records)
+
+
+def test_only_prospective_catches_judge_fitness(tmp_path):
+    from options_evidence import capture_adapter as ca
+    from options_evidence import signal as sg
+    from tests.test_options_capture_adapter import _engine, _print, et
+
+    engine = _engine(
+        tmp_path,
+        iex=[_print(et(2026, 10, 5, 9, 30, 20), 770.10)],
+        sip=[_print(et(2026, 10, 5, 9, 30, 20), 770.10, feed="sip")],
+    )
+    engine.run(now=et(2026, 10, 2, 16, 16))
+    engine.run(now=et(2026, 10, 5, 9, 31, 0))
+    engine.run(now=et(2026, 10, 5, 10, 46, 0))
+    fold = ca.fold_capture_rows(
+        ca.read_capture_journal(engine.journal.path), strategy="322", strategy_epoch="2026Q4_v1"
+    )
+    records = [sg.to_record(s) for s in fold.journal.signals()]
+    catches = [r for r in records if r["lifecycle_state"] == "TRIGGERED" and r["signal_integrity"] == "VALID"]
+    obs = [fx.Observation.from_records(r, _outcome_record(r["signal_id"], 1.0)) for r in records]
+    verdict = fx.evaluate_fitness(epoch(), obs)
+    assert verdict.valid_n == len(catches) >= 1
+    # Fitness never touches authority on its own; revocation still requires apply_verdict.
+    assert all(not r["execution_authority"] for r in records)

@@ -109,14 +109,34 @@ class Observation:
             strategy_epoch=str(signal_record["strategy_epoch"]),
             result_r=result_r_value(outcome_record),
             executed=bool(outcome_record.get("executed")),
-            data_integrity=IntegrityStatus(outcome_record.get("data_integrity", "UNKNOWN")),
-            signal_integrity=IntegrityStatus(outcome_record.get("signal_integrity", "UNKNOWN")),
+            # The canonical signal is authoritative for signal integrity (a late
+            # or gap capture stays excluded whatever the outcome row says);
+            # data integrity is the worse of the two records.
+            data_integrity=_worst(
+                signal_record.get("data_integrity", "UNKNOWN"),
+                outcome_record.get("data_integrity", "UNKNOWN"),
+            ),
+            signal_integrity=IntegrityStatus(signal_record.get("signal_integrity", "UNKNOWN")),
             execution_integrity=IntegrityStatus(outcome_record.get("execution_integrity", "NOT_APPLICABLE")),
             mae_r=known("mae_r"),
             mfe_r=known("mfe_r"),
             gross_pnl=known("gross_pnl"),
             net_pnl=known("net_pnl"),
         )
+
+
+_INTEGRITY_RANK = {
+    IntegrityStatus.VALID: 0,
+    IntegrityStatus.NOT_APPLICABLE: 0,
+    IntegrityStatus.DEGRADED: 1,
+    IntegrityStatus.UNKNOWN: 2,
+    IntegrityStatus.INVALID: 3,
+}
+
+
+def _worst(*values: Any) -> IntegrityStatus:
+    statuses = [IntegrityStatus(v) for v in values]
+    return max(statuses, key=lambda st: _INTEGRITY_RANK[st])
 
 
 def classify(obs: Observation, epoch: StrategyEpoch) -> str:
