@@ -58,25 +58,29 @@ Every substantial unit of work must leave:
 
 If the agent cannot persist this file, it must return this payload verbatim-ready for the next agent/operator to save.
 
-## Current checkpoint — 2026-10-06 (U2: chronological partitions + once-only OOS)
+## Current checkpoint — 2026-10-06 (U2 HOLD fix: B1–B3 + durable OOS ledger)
 
-Task: U2 only from clean main after U1 merge (`de4486d`). Mechanically enforce chronological experiment partitions development → validation → untouched_oos with once-only OOS consumption per exact experiment/trial. Research/evidence plumbing only. No U3. No deploy. No merge from this session.
+Task: Continue PR #1157 only. Claude breaker-QA HOLD on `cea37f5` with three U2 blockers (B1 active partition not tied to scored data; B2 weak OOS receipt identity; B3 crash/race fail-open) plus receipt durability. Fix only these. No U3. No merge. No deploy.
 
 ### VERIFIED
 
-- Base `origin/main`: `de4486d6cef0c8116edce70d5f164b958de90a2e` (U1 merged).
-- Branch `cursor/u2-chronological-partitions-f2da`.
-- Single Experiment Runner retained; no second runner.
+- Prior HOLD head: `cea37f51dc5795c654dec299d7145e3e59c697ff`.
+- Base/current main: `e86c55c7c78de56dfff0ca9adf1237ea29caa8d3` (unchanged; no rebase required for this fix).
+- Branch `cursor/u2-chronological-partitions-f2da` / PR #1157.
+- Focused partition + OOS ledger tests: 36 passed.
+- U1 `tests/test_evidence_row.py`: 36 passed.
+- Full `python3 -m pytest -q`: 7718 passed, 8 skipped.
 
 ### CHANGED
 
-- New `ops/experiment_partitions.py` (partition validation + durable OOS receipts).
-- Runner/schema/docs/CLI wired for optional `chronological_partitions` / `evaluation_partition`.
-- Legacy specs without partitions remain compatible; U1 trade evidence path unchanged when partitions omitted.
+- B1: mandatory active partition when declared; CLI/spec contradiction fail-closed; half-open UTC `[start,end)`; `ExperimentContext` carries partition+window; trade/coverage membership gates; coverage cannot claim `untouched_oos` without timestamp proof.
+- B2: once-only keyed by `trial:{trial_id}` only; window fingerprint is evidence, not reuse key; rename/reformat/window-change/dataset-hash-change cannot second-look.
+- B3: VALID in memory → `fcntl` exclusive lock → receipt append/fsync → then evidence bundle; receipt failure writes no VALID OOS bundle; crash after receipt leaves trial consumed.
+- Durability: repo-governed `docs/research-oos-consumption-ledger.jsonl` + `tests/test_research_oos_consumption_ledger.py` register-before-count.
 
 ### TESTS
 
-- Recorded in PR body after focused + full suite.
+- Recorded in PR body after focused + full suite + exact-head CI/handoff.
 
 ### RUNTIME MUTATIONS
 
@@ -86,10 +90,11 @@ None. No deploy, no VPS, no broker, no strategy change.
 
 - Do not start U3 in this PR.
 - Do not invent a family-wide OOS lock.
+- Do not merge or deploy from this session.
 
 ### NEXT
 
-Independent Claude breaker QA of the U2 PR. Do not merge or deploy.
+Independent Claude breaker re-review of the new exact head for B1–B3 + durability + P1–P14. Do not merge or deploy.
 
 ## Superseded / provenance — 2026-10-06 (U1: r_multiple / P&L direction consistency; merged via #1155)
 
