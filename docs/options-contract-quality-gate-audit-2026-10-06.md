@@ -37,7 +37,7 @@ which this PR does not touch.
    wider of the supplied and quote-implied spread. No threshold changed.
 3. **Crossed quote passed.** `ask < bid` now blocks.
 
-33 of the 44 new tests fail on the base gate; all pass after the fix. Existing
+33 of the 44 tests in the first fix commit failed on the base gate; all pass after the fix. Existing
 options/advisory/plan/portfolio tests: 2844 passed, 1 skipped.
 
 ## Not changed
@@ -53,6 +53,26 @@ every required field blocks when absent, `None`, or empty; zero/negative
 premium, bid, ask, volume, OI, strike, contracts, max risk and negative DTE
 block; unsupported states (direction, IV/theta severity, trade style,
 non-boolean exception flag, non-integer DTE) block; non-mapping payloads
-block; the module references no order/broker/HTTP client. 109 tests in
-`tests/test_options_contract_quality_fail_closed.py`.
+block; the module references no order/broker/HTTP client.
+
+## Independent review follow-ups
+
+The independent review returned PASS and flagged four non-blocking findings.
+All four are fixed:
+
+- **Exact-limit spread.** A quote at exactly 10% spread (e.g. 1.90/2.10)
+  computed as 10.000000000000009% and blocked. The quote-implied spread is now
+  rounded to 6 decimals, so the 10% limit means what it says. A quote just
+  over the limit still blocks.
+- **Overflow.** Oversized numbers (`volume=10**400`, a 400-digit string,
+  `inf` in an integer field) raised `OverflowError` and crashed the caller.
+  They now return BLOCK.
+- **Huge quotes.** `bid + ask` could overflow to inf and give an implied
+  spread of 0. The mid is now computed as `bid/2 + ask/2`, and a non-finite
+  implied spread blocks.
+- **Booleans on intake.** A boolean in a numeric intake field (for example
+  `bid=True`) used to become 1.0. It now blocks.
+
+`tests/test_options_contract_quality_fail_closed.py` has 125 tests. 10 of
+them fail on the pre-follow-up head.
 

@@ -103,7 +103,7 @@ def _non_finite_fields(contract: ContractQualityInput) -> list[str]:
             continue
         try:
             number = float(value)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             bad.append(name)
             continue
         # Finite check without importing math (module import allowlist).
@@ -159,8 +159,13 @@ def evaluate_contract_quality(contract: ContractQualityInput) -> ContractQuality
     # by the quote itself, so an understated spread_percent cannot pass.
     quoted_spread = None
     if contract.bid > 0 and contract.ask >= contract.bid:
-        mid = (contract.bid + contract.ask) / 2.0
-        quoted_spread = (contract.ask - contract.bid) / mid * 100.0
+        # Halve before adding so huge quotes cannot overflow the mid to inf;
+        # round so an exactly-10% quote is not pushed over by float error.
+        mid = contract.bid / 2.0 + contract.ask / 2.0
+        quoted_spread = round((contract.ask - contract.bid) / mid * 100.0, 6)
+        if quoted_spread != quoted_spread or quoted_spread in (float("inf"), float("-inf")):
+            blocking.append("quote-implied spread is not a finite number")
+            quoted_spread = None
     if contract.spread_percent < 0:
         blocking.append("missing/invalid spread_percent")
     else:
@@ -347,6 +352,8 @@ def check_contract_quality_intake(payload: Any) -> ContractQualityResult:
     for name in _REQUIRED_FIELD_NAMES:
         raw_value = payload[name]
         try:
+            if isinstance(raw_value, bool) and (name in _FLOAT_FIELDS or name in _INT_FIELDS):
+                raise TypeError("boolean is not a number")
             if name in _STR_FIELDS:
                 normalized[name] = str(raw_value)
             elif name in _FLOAT_FIELDS:
@@ -359,7 +366,7 @@ def check_contract_quality_intake(payload: Any) -> ContractQualityResult:
                 normalized[name] = _coerce_severity(raw_value)
             else:
                 normalized[name] = raw_value
-        except (TypeError, ValueError) as exc:
+        except (TypeError, ValueError, OverflowError) as exc:
             coercion_errors.append(f"invalid value for {name}: {exc}")
 
     for name in _BOOL_FIELDS:
@@ -372,8 +379,10 @@ def check_contract_quality_intake(payload: Any) -> ContractQualityResult:
     for name in ("premium_stop", "expected_move_percent"):
         if name in payload and payload[name] is not None:
             try:
+                if isinstance(payload[name], bool):
+                    raise TypeError("boolean is not a number")
                 normalized[name] = float(payload[name])
-            except (TypeError, ValueError) as exc:
+            except (TypeError, ValueError, OverflowError) as exc:
                 coercion_errors.append(f"invalid value for {name}: {exc}")
 
     if "trade_style" in payload and payload["trade_style"] is not None:

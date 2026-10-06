@@ -211,3 +211,48 @@ def test_gate_is_advisory_only_and_cannot_submit():
         n.id for n in ast.walk(tree) if isinstance(n, ast.Name)
     }
     assert not {"submit_order", "place_order", "broker", "requests", "httpx"} & names
+
+
+# --- Independent review follow-ups (exact-10% rounding, overflow, huge quotes, intake bools) ---
+
+
+@pytest.mark.parametrize(
+    "bid,ask,premium,stop",
+    [(1.90, 2.10, 2.00, 1.50), (0.95, 1.05, 1.00, 0.70)],
+)
+def test_quote_at_exactly_the_spread_limit_is_not_blocked_by_float_error(bid, ask, premium, stop):
+    result = check_contract_quality_intake(
+        _payload(bid=bid, ask=ask, premium=premium, premium_stop=stop, spread_percent=10.0)
+    )
+    assert not any("spread too wide" in r for r in result.blocking_reasons)
+
+
+def test_quote_just_over_the_spread_limit_still_blocks():
+    result = check_contract_quality_intake(_payload(bid=1.899, ask=2.10, spread_percent=10.0))
+    assert result.verdict == GateVerdict.BLOCK
+    assert any("spread too wide" in r for r in result.blocking_reasons)
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"volume": 10**400},
+        {"volume": "9" * 400},
+        {"max_contracts": "1" + "0" * 400},
+        {"volume": INF},
+        {"dte": INF},
+    ],
+)
+def test_oversized_numbers_block_instead_of_raising(overrides):
+    assert check_contract_quality_intake(_payload(**overrides)).verdict == GateVerdict.BLOCK
+
+
+def test_huge_quotes_cannot_overflow_the_implied_spread_to_zero():
+    result = check_contract_quality_intake(_payload(bid=1e308, ask=1.7e308, spread_percent=1.0))
+    assert result.verdict == GateVerdict.BLOCK
+
+
+@pytest.mark.parametrize("field", ["bid", "ask", "strike", "premium", "volume", "dte", "expected_move_percent"])
+def test_intake_rejects_booleans_in_numeric_fields(field):
+    result = check_contract_quality_intake(_payload(**{field: True}))
+    assert result.verdict == GateVerdict.BLOCK
