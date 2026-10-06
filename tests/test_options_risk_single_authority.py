@@ -277,3 +277,42 @@ def test_rh_evaluator_planned_cap_binds_even_when_debit_cap_fires_first(tmp_path
     out = _evaluate(tmp_path, quantity=10**9, max_contracts=1)
     assert "risk:planned_risk_cap" in out["failed_gates"]
     assert out["decision"] == "NO_TRADE" and out["order_ticket"] is None
+
+
+def _rh_body(**overrides):
+    body = {
+        "ticker": "SPY", "direction": "LONG", "contract_type": "CALL", "signa_score": 80,
+        "signa_grade": "A", "signa_daily_direction": "BULLISH", "signa_weekly_direction": "BULLISH",
+        "gex_regime": "LOW_PINNING", "current_price": 500.0, "premium": 2.40,
+        "expiry_date": "2026-12-18", "dte": 60, "strike": 505.0,
+        "max_premium_per_contract": 500.0, "quantity": 1, "max_contracts": 10,
+    }
+    body.update(overrides)
+    return body
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"premium": True},
+        {"quantity": True},
+        {"max_contracts": True},
+        {"max_premium_per_contract": True},
+        {"quantity": 1.5},
+        {"quantity": "2.5"},
+        {"quantity": 10**400},
+        {"quantity": float("inf")},
+    ],
+)
+def test_rh_intake_rejects_booleans_fractional_and_overflowing_counts(overrides):
+    from alert_ranker.rh_options import _parse_rh_inputs
+
+    with pytest.raises(ValueError):
+        _parse_rh_inputs(_rh_body(**overrides))
+
+
+def test_rh_intake_accepts_whole_number_counts():
+    from alert_ranker.rh_options import _parse_rh_inputs
+
+    parsed = _parse_rh_inputs(_rh_body(quantity="2", max_contracts=3.0))
+    assert (parsed.quantity, parsed.max_contracts) == (2, 3)

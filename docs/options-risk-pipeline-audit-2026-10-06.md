@@ -76,9 +76,11 @@ closed.
    contracts, 410 at 3, 645 at 5). No single-contract decision changes and
    nothing changes because of R:R. The $300 boundary passes, as in `paper_v1`.
 
-   The API and text parsers truncate a fractional quantity to an integer
-   (rounding down, which is safe) before the guard sees it. A fractional
-   quantity given to the dataclass directly is refused.
+   Intake (`_parse_rh_inputs`, used by `/rh-options/evaluate` and the
+   messy-text path) refuses with a 422:
+   - a boolean in any numeric field (`True` used to become 1);
+   - a fractional `quantity` or `max_contracts` (1.5 used to be truncated to 1);
+   - an overflowing or infinite count.
 
 ## Changed
 

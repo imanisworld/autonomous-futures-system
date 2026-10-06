@@ -138,6 +138,9 @@ def _parse_rh_inputs(body: dict[str, Any]) -> RHOptionsInput:
     missing = [name for name in required if body.get(name) in {None, ""}]
     if missing:
         raise ValueError(f"Missing required RH options field(s): {', '.join(missing)}")
+    booleans = [name for name in _RH_NUMERIC_FIELDS if isinstance(body.get(name), bool)]
+    if booleans:
+        raise ValueError(f"Invalid RH options input: boolean is not a number for {', '.join(booleans)}")
 
     try:
         return RHOptionsInput(
@@ -161,10 +164,10 @@ def _parse_rh_inputs(body: dict[str, Any]) -> RHOptionsInput:
             open_interest=int(body["open_interest"]) if body.get("open_interest") is not None else None,
             nine_ma=_optional_float(body.get("nine_ma")),
             max_premium_per_contract=float(body.get("max_premium_per_contract", 250.0)),
-            quantity=int(body.get("quantity", 1)),
-            max_contracts=int(body.get("max_contracts", 2)),
+            quantity=_whole_contracts(body.get("quantity", 1), "quantity"),
+            max_contracts=_whole_contracts(body.get("max_contracts", 2), "max_contracts"),
         )
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"Invalid RH options input: {exc}") from exc
 
 
@@ -946,6 +949,24 @@ def _normalize_signal_direction(value: Any) -> str:
 
 def _directions_conflict(daily: str, weekly: str) -> bool:
     return (daily == "BULLISH" and weekly == "BEARISH") or (daily == "BEARISH" and weekly == "BULLISH")
+
+
+_RH_NUMERIC_FIELDS = (
+    "signa_score", "gex_support_wall", "gex_resistance_wall", "current_price", "premium",
+    "dte", "strike", "option_volume", "open_interest", "nine_ma",
+    "max_premium_per_contract", "quantity", "max_contracts",
+)
+
+
+def _whole_contracts(value: Any, name: str) -> int:
+    """Contract counts are whole numbers; never truncate 1.5 to 1."""
+    try:
+        number = float(value)
+    except OverflowError as exc:
+        raise ValueError(f"{name} is not a finite number") from exc
+    if not number.is_integer():
+        raise ValueError(f"{name} must be a whole number of contracts")
+    return int(number)
 
 
 def _optional_float(value: Any) -> float | None:
