@@ -1,0 +1,54 @@
+{
+  "schema": "options-strategy-epochs-v1",
+  "notes": "Append new epochs; never edit a FROZEN/RETIRED entry's definition or thresholds. A material change is a new epoch with a new preregistration. effective_until is the only field that may be added to close an epoch.",
+  "epochs": [
+    {
+      "strategy": "options_122",
+      "epoch": "122-IEX-E1",
+      "status": "FROZEN",
+      "definition": {
+        "setup": {
+          "family": "STRAT_1_2_2",
+          "timeframe": "30m",
+          "rule": "completed directional 2 immediately after an inside 1 arms a watch; directional-2 high/low frozen before the next 30m watch window",
+          "universe": "PRIMARY_20"
+        },
+        "trigger": {
+          "rule": "first strict break opposite the directional 2 = provisional reversal; same-direction first break = cancellation; equality does not count; simultaneous/unknown fails closed",
+          "provisional_source": "alpaca_iex_trades",
+          "authoritative_reconciliation": "alpaca_sip_trades_delayed",
+          "decision_clock": "exact IEX price-forming trade timestamp",
+          "arm_source": "public_regular_session_chart"
+        },
+        "target": {
+          "strategy_stop": "UNRESOLVED",
+          "strategy_target": "UNRESOLVED",
+          "runner_policy": "UNRESOLVED",
+          "diagnostic_endpoint": "+1.0 directional-2 reference-range reach from exact IEX reversal timestamp (not a win/loss rule)"
+        },
+        "filters": {
+          "capture": "timely genuinely pre-armed IEX reversal only; existing OPTIONS_PAPER_V1 selector path unchanged; missing/stale quotes, replay mismatch or late capture fail closed"
+        },
+        "authority": {
+          "observation_only": true,
+          "execution_authority": false,
+          "risk_reservation": false,
+          "trade_alerts": false
+        }
+      },
+      "thresholds": {
+        "cadence_seconds": 60,
+        "max_capture_lag_seconds": 120,
+        "sip_reconcile_delay_minutes": 16
+      },
+      "definition_sha256": "2938a9074a7efce850f7ed97e05d255501fc4c3d50fd2647e00d47e5d7a93514",
+      "effective_from": "2026-09-21T13:00:00Z",
+      "effective_until": null,
+      "source_commit": "36e73f1981850b66b043d849ce877c15bd1ab3e7",
+      "preregistration_doc": "docs/options-122-prospective-collector-preregistration-2026-09-18.md",
+      "oos_reference": null,
+      "supersedes": null,
+      "notes": "Transcribed from the 2026-09-18 preregistration; source_commit is the immutable release that started collection (docs/options-122-prospective-deployment-2026-09-18.md). effective_from is the first scheduled activation (09:00 ET 2026-09-21); that day's window was lost to the release-retention incident and is not backfilled. Collector fix release db9bc7e2 changed no policy. No OOS reference exists: strategy stop/target are UNRESOLVED, so no fitness evaluation is possible for this epoch."
+    }
+  ]
+}
