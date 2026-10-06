@@ -60,7 +60,7 @@ If the agent cannot persist this file, it must return this payload verbatim-read
 
 ## Current checkpoint — 2026-10-06 (options setup-capture observer v0.2; B1–B12 red-team fixes; merge/deploy not authorized)
 
-Branch `cursor/options-setup-capture-observer-0010` (draft PR #1145), rebased/merged with `main` `55b9d4d`. Options current-state authority remains `docs/options-current-state-handoff.md`. Futures runtime checkpoint (c44d32b) below is unchanged. **Fetch current HEAD before acting** — do not use the older `7cd4f04` / `e317ee3` SHAs as “review cleared.”
+Branch `cursor/options-setup-capture-observer-0010` (draft PR #1145). Merged with `main` `55b9d4d`. Current head after post-merge follow-ups will be pinned in the commit that lands this checkpoint — do not treat older `7cd4f04` / `e317ee3` / pre-merge `6545822` as review-cleared. Options current-state authority remains `docs/options-current-state-handoff.md`. Futures runtime checkpoint (c44d32b) below is unchanged.
 
 ### DONE / DO NOT REDO
 
@@ -68,13 +68,13 @@ Branch `cursor/options-setup-capture-observer-0010` (draft PR #1145), rebased/me
 - Observer scaffold: pre-open two-sided pending 2-2 WATCHING, 122-style JSONL collector (not scanner jobs), `MISSED_LATE` / `GAP_THROUGH_OPEN`, full 1H + stubs, SPX Public INDEX 1m, never `OPTIONS_SCANNER_WATCHLIST`.
 - Flagged out of scope: `/webhook/alert` no allowlist; `/shadow-journal` 200s from outside IPs (auth gate unverified).
 - B11: `/health` fail-softs unreadable `/root/...` journal paths.
-- Red-team E review (`E_PR1145_review.md`) B1–B12 code fixes on this branch: SIP reconcile after `watch_until+16m` (B1); provisional IEX TRIGGERED + later SIP RECONCILIATION (B2); SOURCE_BLOCKED diagnostic-only (B3); torn-line truncate-then-repair (B4); status `read_counts()` pure read (B5); post-fetch `wall_clock` / overrun (B6); clock check fail-closed + measured offset (B7); missing creds / delayed SPX fail-closed (B8); structure key without levels + SOURCE_DRIFT (B9); THIRTY_MINUTE fetch + intra-bucket reject (B10); lean `alert_ranker/alpaca_trades.py` (B12).
-- Local full suite before main merge: `pytest -q` → 7536 passed, 8 skipped.
+- Red-team E review (`E_PR1145_review.md`) B1–B12 **code fixes landed** on this branch (still need independent re-review): SIP reconcile after `watch_until+16m` (B1); provisional IEX TRIGGERED + later SIP RECONCILIATION (B2); SOURCE_BLOCKED diagnostic-only (B3); torn-line truncate-then-repair (B4); status `read_counts()` pure read (B5); post-fetch `wall_clock` / overrun (B6); clock check fail-closed + measured offset (B7); missing creds / delayed SPX fail-closed (B8); structure key without levels + SOURCE_DRIFT (B9); THIRTY_MINUTE fetch + intra-bucket reject (B10); lean `alert_ranker/alpaca_trades.py` (B12).
+- Local full suite on post-B1–B12 code (before main merge): `pytest -q` → 7536 passed, 8 skipped.
 
 ### OPEN / NOT MERGE-CLEARED
 
-- Independent options diff review must re-run against the post-B1–B12 HEAD (prior review at `e317ee3` is stale).
-- Exact-head full CI green on the new HEAD (verify after push).
+- Independent options diff review must re-run against the post-B1–B12 + main-merge HEAD (prior review at `e317ee3` is stale; CHANGES REQUIRED there is not a merge GO).
+- Exact-head full CI + Agent Handoff Check green on the pushed HEAD (handoff Status must be a bare enum token).
 - Operator merge GO, then a separate observer-only timer install GO — **not** authorized by green CI alone.
 - Live A13 sessions and Public INDEX real-time entitlement remain UNVERIFIED.
 
@@ -85,12 +85,12 @@ Branch `cursor/options-setup-capture-observer-0010` (draft PR #1145), rebased/me
 - Do not merge or deploy without explicit operator GO.
 - Do not reuse `trigger_time.arm_trigger_setup` / `_family_for_break` (cancels 222 continuation).
 - Do not write WATCHING into `options_shadow_journal` as OPEN.
-- Do not claim “red-team addenda folded / merge GO next” while B1–B12 were open; that handoff was corrected.
+- Do not claim “red-team addenda folded / merge GO next” while independent re-review and exact-head CI are still open.
 
 ### NEXT
 
-1. Independent options diff review of PR #1145 at the post-B1–B12 HEAD.
-2. Confirm exact-head CI green.
+1. Confirm exact-head CI + handoff check green on the pushed HEAD.
+2. Independent options diff review of PR #1145 at that HEAD.
 3. Operator merge GO, then a separate observer-only timer install GO.
 4. Post-install: journal WATCHING before the next RTH open; no order/risk consumption. If RTH has no setup, do not fabricate a live trigger.
 
