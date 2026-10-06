@@ -221,21 +221,28 @@ common identity layer:
 
 - `schema_version` (evidence-row schema, currently `1.0.0`)
 - `experiment_id`, `trial_id`, `setup_type`
-- `evidence_type` (`coverage` or `trade_execution`; omitted specs default to `coverage`)
+- `evidence_type` (`coverage` or `trade_execution`; **required** on new specs)
+- `promotion_eligible` (`false` for coverage; trade_execution may be `true`)
 - `strategy_identity` when applicable
-- `code_sha`, `data_identity`, `runner_version`, `generated_at`
+- `code_sha` (real 40-hex commit SHA; `unknown` is rejected), `data_identity`,
+  `runner_version`, `generated_at`
 - `execution_model_id` when the evidence type requires frozen execution assumptions
-- `preregistration_identity` / `prior_exposure_identity` when present on the frozen spec
+- `preregistration_identity` when present; `prior_exposure_identity` only from an
+  explicit prior-exposure field (never from `population`)
 
 This envelope is identity/provenance only. It does not invent trade fields.
+
+Frozen pre-U1 options experiment IDs may omit `evidence_type` and are treated as
+`coverage`. New specs that omit `evidence_type` fail closed.
 
 ### 8.2 Typed evidence rows
 
 Evidence types are explicit. Do **not** force trade fields onto every experiment.
+Coverage evidence cannot carry trade-lookalike fields to bypass trade validation.
 
 | `evidence_type` | Meaning | Trade fill / stop / target / MAE / MFE / P&L required? |
 |---|---|---|
-| `coverage` (default) | Non-trade measurement (for example options coverage/geometry) | **no** |
+| `coverage` | Non-trade measurement (for example options coverage/geometry); not promotion-eligible | **no** |
 | `trade_execution` | Promotion-quality futures trade execution evidence | **yes**, via the typed row contract |
 
 `trade_execution` rows must carry causal timing fields that remain distinct:
@@ -247,7 +254,15 @@ Evidence types are explicit. Do **not** force trade fields onto every experiment
 
 Filled rows with `fill_ts < earliest_legal_order_ts` fail closed as
 `INVALID EXPERIMENT`. Exact equality is allowed when the frozen execution model
-permits it. `NO_FILL` rows must not fabricate `fill_price` / `fill_ts`.
+permits it. `NO_FILL` rows must not carry exit / P&L / MAE / MFE / R outcome
+fields. `FILLED` rows require `direction` (`LONG`/`SHORT`) with consistent
+brackets, `costs_fees >= 0`, `net_pnl = gross_pnl - costs_fees` within $0.01,
+`mfe >= 0`, and `mae <= 0`. Row `data_fingerprint` must match the experiment
+dataset identity.
+
+Trade scoring uses canonical `r_multiple` on `FILLED` rows only. Legacy funnel
+keys (`entered` / `completed` / `result`) are rejected on `trade_execution`.
+A `NO_FILL` never scores as a win.
 
 ### 8.3 Execution-model identity
 

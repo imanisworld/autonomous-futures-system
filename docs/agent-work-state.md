@@ -58,27 +58,27 @@ Every substantial unit of work must leave:
 
 If the agent cannot persist this file, it must return this payload verbatim-ready for the next agent/operator to save.
 
-## Current checkpoint — 2026-10-06 (U1: experiment runner trade_execution evidence contract)
+## Current checkpoint — 2026-10-06 (U1 HOLD fixes: evidence-type bypass + trade scoring + row consistency)
 
-Task: U1 only from the AFS Core Completion Audit — finish the existing Experiment Runner's canonical evidence contract for promotion-quality futures trade experiments. Research/evidence plumbing only. No U2/U3. No strategy/risk/broker/runtime/deploy.
+Task: Continue PR #1155 only. Close Claude breaker HOLD items on the U1 trade_execution evidence contract. Research/evidence plumbing only. No U2/U3. No merge/deploy.
 
 ### VERIFIED
 
-- `#1144` merged at squash `4573265`; `#1143` rebased onto that main and squash-merged as `55b9d4d`.
+- Prior U1 head under HOLD: `78b91d83bbc354e7a74737914216049a0710f43c`.
+- Branch remains `cursor/u1-trade-evidence-contract-f2da`.
 - U1 rebase base includes `#1145` (`ae8c897`) and `#1146` (`445393f`) on `origin/main`.
 - Existing runner + options coverage adapter remain the single runner path; no second runner invented.
 
 ### CHANGED
 
-- Branch `cursor/u1-trade-evidence-contract-f2da`.
-- New `ops/evidence_row.py`: common evidence envelope, typed `trade_execution` rows, causal timing, frozen `execution_model_id`.
-- `ops/research_experiment_runner.py` fail-closes on typed evidence violations and writes `evidence_envelope.json`.
-- Schema/docs extended with optional `evidence_type` / `execution_assumptions` (default remains coverage-compatible).
+- `evidence_type` required for new specs; grandfather only frozen legacy options experiment IDs; coverage `promotion_eligible=false`.
+- `trade_execution` scores from canonical FILLED `r_multiple` only; legacy `entered`/`completed`/`result` rejected.
+- Row consistency: NO_FILL forbids outcome fields; FILLED requires LONG/SHORT brackets, cost/PnL/MAE/MFE rules; fingerprint bound to dataset identity; `code_sha=unknown` rejected; prior_exposure not from population.
+- Adversarial Cases A–D covered in `tests/test_evidence_row.py`.
 
 ### TESTS
 
-- `python3 -m pytest -q tests/test_evidence_row.py tests/test_afs_experiment_runner.py tests/test_research_experiment_spec.py tests/test_options_212c_target_geometry_adapter.py` → **50 passed**.
-- Full `python3 -m pytest -q` → **7525 passed, 8 skipped**.
+- Focused + full suite results recorded after this HOLD fix SHA (see PR body).
 
 ### RUNTIME MUTATIONS
 
@@ -91,7 +91,7 @@ None. No deploy, no VPS, no broker, no strategy change.
 
 ### NEXT
 
-Independent Claude/Codex breaker QA of the U1 PR. Do not merge or deploy from this session until that review.
+Independent Claude breaker re-review of the new exact head. Do not merge or deploy.
 
 ## Previous lane checkpoint — 2026-10-06 (#1145 merged; #1146 on main as `445393f`; no timer install)
 

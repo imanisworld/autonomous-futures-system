@@ -180,7 +180,7 @@
     "evidence_type": {
       "type": "string",
       "enum": ["coverage", "trade_execution"],
-      "description": "Typed evidence contract for runner-produced members. Omitted defaults to coverage so non-trade experiments are not forced to supply fills/P&L."
+      "description": "Typed evidence contract for runner-produced members. Required on new specs. Only frozen pre-U1 options experiment IDs may omit it (treated as coverage). Coverage evidence is never promotion-eligible."
     },
     "execution_assumptions": {
       "type": "object",
