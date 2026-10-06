@@ -1,17 +1,56 @@
 # Options — Current State Handoff
 
-_As of 2026-10-05. The newest dated repository refresh below governs source state; the latest verified box-specific sections govern runtime state until a fresh local/provider or VPS check is performed. This is the single current-state authority for the options lane._
+_As of 2026-10-06. The newest dated repository refresh below governs source state; the latest verified box-specific sections govern runtime state until a fresh local/provider or VPS check is performed. This is the single current-state authority for the options lane._
 
 Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`; the read-only coverage evidence lane (observer, reducer, outcome study, after-close collector) is described in `docs/options-coverage-observer.md`. The observation-only **setup-capture** lifecycle (`WATCHING` → `TRIGGERED` / `MISSED_LATE`) is described in `docs/options-setup-capture-observer.md`.
 
 
-## Repository refresh — 2026-10-06 (setup-capture observer v0.2; not deployed)
+## Repository refresh — 2026-10-06 (post-#1145/#1146 integration pass; nothing merged, deployed or installed)
+
+**Source state:**
+- `main` is `445393f`.
+- #1145 (setup-capture observer) is merged as `ae8c897` and is the source of truth for:
+  - early capture
+  - WATCHING
+  - dedupe
+  - late and gap classification
+  - the SPX observer
+- #1146 (scanner access gate) is merged as `445393f` and is the source of truth for scanner access control.
+
+**Runtime state:**
+- The #1145 collector timer is **not installed**.
+- The #1145 unit runs from the live tree, which is flagged. #1147 carries a release-pin drop-in template.
+- Deployment of #1146 is unverified.
+
+The Claude evidence stack (#1147–#1154) has been reconciled onto the real #1145 schema. #1147 and #1148 are merged; the rest are review-ready, not merged.
+
+| PR | Scope | Status |
+|---|---|---|
+| #1149 | canonical planned-risk cap | Also enforced in the RH evaluator: `(entry − premium_stop) × 100 × contracts ≤ $300`. NaN risk is refused. |
+| #1148 | contract quality gate | **MERGED** as `e86c55c`. Fails closed on missing, zero, non-finite, oversized, boolean and unsupported fields, crossed quotes and understated spreads. |
+| #1147 | read-only observer status (**MERGED** as `53dda44`) | Reads #1145 directly: heartbeat (latest `_clock` row), WATCHING count, latest transition, SPX health. Also fixes a #1145 regression: `options_setup_capture_status.py` repaired, and so mutated, the journal on read. It now uses `peek_state()`. |
+| #1150 | strategy-epoch registry | `options_122` / `122-IEX-E1` only, FROZEN, non-tradable. No tradable epoch exists. |
+| #1151 | canonical prospective signal | `structure_id` is exactly the #1145 `structure_key`. `capture_adapter` folds the #1145 journal read-only. One key maps to one signal. Late, gap and expired classifications are preserved. Authority is refused. Missing evidence becomes `DATA_BLOCKED`. |
+| #1152 | fitness | Revoke-only. Signal integrity comes from the canonical signal record, so late and gap captures never judge fitness. |
+| #1153 | alerts and research | Alerts project lifecycle state only. NEAR_TRIGGER is two-sided while WATCHING. The research population never selects on result. The look-ahead cutoff is trigger detection time. |
+| #1154 | forward-proof readiness | `capture_integrity` evidence is derived from #1145 `catch_count` / `is_prospective_catch`. `122-IEX-E1` is **NOT READY**. Day 1 is not declared. Phase 2 is a checklist only. |
+
+**Not started:**
+- No observer timer install
+- No proof window
+- No options Day 1
+- No paper auto-submit
+- No tradable epoch
+
+The 2026-10-05 SPY 1H 2-2 structure was missed by the old scanner path. That fact stands, and it is not backfilled.
+
+## Repository refresh — 2026-10-06 (setup-capture observer v0.2; merged as #1145 `ae8c897`; not deployed)
 
 **Capture plumbing only. Not a strategy change, not a scoring model, not SPXW enablement, not a watchlist expansion of `OPTIONS_PAPER_V1`, not merge/deploy authority.**
 
 Oct. 5 SPY shadow records 9925 (`2026-10-05T14:16:45Z`) and 9933 (`14:31:45Z`) were `H1_222_CONTINUATION` LONG/CALL, trigger `770.0768`, invalidation `769.17`, geometry `AHEAD`, lane `COUNTERFACTUAL`. They are **not** prospective catches. Do not rewrite that history.
 
-What landed in source on `cursor/options-setup-capture-observer-0010`:
+What landed in source (branch `cursor/options-setup-capture-observer-0010`, merged to `main` as #1145 `ae8c897`):
 
 - Oneshot JSONL collector (122 timer pattern), **not** a scanner APScheduler job. Arms two-sided pending 2-2 (all four 2U/2D combos) from completed Public bars **before** the next RTH open. Watch window starts at that open; AH Fri 16:06 and premarket are ignored.
 - Structure key `ticker|timeframe|structure_close_ts|pattern` (levels are attributes / fingerprint; bar revision → `SOURCE_DRIFT`); direction added at TRIGGERED. 9925/9933 link to one key. Existing shadow rows are not altered.

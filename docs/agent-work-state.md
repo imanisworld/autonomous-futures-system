@@ -93,22 +93,25 @@ None. No deploy, no VPS, no broker, no strategy change.
 
 Independent Claude final re-review of the new exact head. Do not merge or deploy.
 
-## Previous lane checkpoint — 2026-10-06 (#1145 merged; #1146 on main as `445393f`; no timer install)
+## Options lane checkpoint — 2026-10-06 (post-#1145/#1146 integration pass; #1147 + #1148 merged; no deploy/timer)
 
-`#1145` squash-merge: `ae8c8970966e4ed09d6679fe8d873f4b7de27cd9`. `#1146` security gate landed on `main` as `445393fe0b65c74be47a86e9fa14295a7af0c69a`. Options current-state authority remains `docs/options-current-state-handoff.md`. Futures runtime checkpoint (c44d32b) below is unchanged. **No observer timer install.** Kept as provenance while U1 is the active current checkpoint above.
+`main` includes #1145 (`ae8c897`), #1146 (`445393f`), #1147 (`53dda44`) and #1148 (`e86c55c`). Options current-state authority remains `docs/options-current-state-handoff.md`. The futures runtime checkpoint (c44d32b) below is unchanged. **No observer timer install.** Kept below the U1 checkpoint, which is the active current checkpoint.
 
 ### DONE / DO NOT REDO
 
 - Oct. 5 SPY shadow 9925/9933 audit: late `H1_222_CONTINUATION` AHEAD after trigger 770.0768; not a prospective catch. Do not retune Strat from them.
 - Observer scaffold + B1–B13 red-team fixes (see prior checkpoints; fix SHAs `d29b2cb` / `8a5eeed` / `00dbd59` / journal-path redaction on tip).
-- `/health` setup_capture telemetry omits absolute journal filesystem path; `/setup-capture` retains path for operators.
-- **#1145 MERGED** into `main` as `ae8c897` (2026-10-06). Observation-only setup-capture collector landed. Timer units remain uninstalled.
-- **#1146 MERGED** into `main` as `445393f` (2026-10-06). Options scanner in-app access gate landed.
+- **#1145 MERGED** (`ae8c897`): observation-only setup-capture collector. Timer units remain uninstalled. `/health` setup_capture telemetry omits the journal path; `/setup-capture` is private.
+- **#1146 MERGED** (`445393f`): options scanner in-app access gate.
+- **#1147 MERGED** (`53dda44`): read-only observer status tool on the real #1145 journal; fixed the #1145 status script mutating the journal on read; release-pin drop-in template (not installed).
+- **#1148 MERGED** (`e86c55c`): contract-quality gate fails closed (non-finite, crossed, understated spread, overflow, boolean intake); exact-head Grok/independent review PASS on `8a6a642`.
+- Claude stack reconciled onto the real #1145 schema (handoff 2026-10-06 integration-pass table). Other fixes found in this pass: RH evaluator lacked the planned-risk cap and approved NaN risk (#1149); fitness and research took signal integrity from the outcome row (#1152/#1153); canonical events kept ISO-string times (#1151).
 
 ### OPEN / UNVERIFIED
 
+- Open stack PRs #1149, #1150, then #1151 → #1152 / #1153 and #1154 need exact-head independent review and operator merge GO. Stacked PRs (#1151–#1154) do not run CI until retargeted to `main`.
+- #1145 unit runs from the live tree; release-pin drop-in (#1147 template) not installed.
 - Live A13 sessions and Public INDEX real-time entitlement remain UNVERIFIED.
-- CodeQL medium alerts on `/health`/`/setup-capture` may need operator dismissal (do not claim CodeQL green).
 
 ### DO NOT REDO
 
@@ -117,11 +120,14 @@ Independent Claude final re-review of the new exact head. Do not merge or deploy
 - Do not deploy without explicit operator GO.
 - Do not expose `/root/afs-shared/...` capture-journal paths on `/health`.
 - Do not install the observer timer without a separate install GO.
-- Do not re-merge or re-land #1145/#1146.
+- Do not re-merge or re-land #1145, #1146, #1147 or #1148.
+- Do not register a tradable epoch or declare options Day 1 without the readiness gate returning READY.
 
-### NEXT (options observer lane; not U1)
+### NEXT (options lane; not U1)
 
-Separate operator GO later for observer timer install + live prove. U1 rebase/delta review is the active NEXT above.
+1. Exact-head independent review of #1149, then #1150 → #1151 → #1152 / #1153 / #1154. Operator merge GO per PR.
+2. Separate operator GO: deploy release-pinned #1145 collector + install timer + observer status tool; prove capture/dedupe live.
+3. Only then preregister a tradable epoch (resolved stop/target, OOS R, cost model, `FitnessPolicy`) and run the readiness gate.
 
 ## Governance PR provenance — 2026-10-06 (docs-only; does not override runtime NEXT)
 
