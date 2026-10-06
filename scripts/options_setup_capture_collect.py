@@ -50,11 +50,52 @@ _OFFSET_RE = re.compile(
 )
 
 
+_CHRONY_OFFSET_RE = re.compile(
+    r"^\s*Last offset\s*:\s*([+-]?\d+(?:\.\d+)?)\s*seconds",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def _parse_offset_match(match: re.Match[str] | None) -> float | None:
+    if match is None:
+        return None
+    value = float(match.group(1))
+    unit = (match.group(2) or "s").lower() if match.lastindex and match.lastindex >= 2 else "s"
+    if unit == "ms":
+        return value / 1000.0
+    if unit in {"us", "µs"}:
+        return value / 1_000_000.0
+    if unit == "ns":
+        return value / 1_000_000_000.0
+    return value
+
+
+def _clock_offset_from_chrony() -> float | None:
+    """Read Last offset from chronyc tracking when systemd-timesyncd is absent."""
+    try:
+        proc = subprocess.run(
+            ["chronyc", "tracking"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+    if proc.returncode != 0:
+        return None
+    match = _CHRONY_OFFSET_RE.search(proc.stdout or "")
+    if match is None:
+        return None
+    return float(match.group(1))
+
+
 def _clock_offset_seconds() -> float:
     """Fail-closed clock check with a measured offset when available.
 
-    Missing/timeout timedatectl, unsynced NTP, or unparseable offset all return
-    a sentinel above CLOCK_SKEW_LIMIT_SECONDS so the engine journals DATA_BLOCKED.
+    Prefers timedatectl/systemd-timesyncd; falls back to chronyc tracking.
+    Missing tools, unsynced NTP, or unparseable offset all return a sentinel
+    above CLOCK_SKEW_LIMIT_SECONDS so the engine journals DATA_BLOCKED.
     """
     unsynced = CLOCK_SKEW_LIMIT_SECONDS + 1.0
     try:
@@ -66,10 +107,12 @@ def _clock_offset_seconds() -> float:
             timeout=2,
         )
     except (FileNotFoundError, subprocess.TimeoutExpired):
-        return unsynced
+        chrony = _clock_offset_from_chrony()
+        return unsynced if chrony is None else chrony
     synced = (synced_proc.stdout or "").strip().lower()
     if synced not in {"yes", "1", "true"}:
-        return unsynced
+        chrony = _clock_offset_from_chrony()
+        return unsynced if chrony is None else chrony
     try:
         status_proc = subprocess.run(
             ["timedatectl", "timesync-status"],
@@ -79,19 +122,13 @@ def _clock_offset_seconds() -> float:
             timeout=2,
         )
     except (FileNotFoundError, subprocess.TimeoutExpired):
-        return unsynced
-    match = _OFFSET_RE.search(status_proc.stdout or "")
-    if match is None:
-        return unsynced
-    value = float(match.group(1))
-    unit = (match.group(2) or "s").lower()
-    if unit == "ms":
-        return value / 1000.0
-    if unit in {"us", "µs"}:
-        return value / 1_000_000.0
-    if unit == "ns":
-        return value / 1_000_000_000.0
-    return value
+        chrony = _clock_offset_from_chrony()
+        return unsynced if chrony is None else chrony
+    parsed = _parse_offset_match(_OFFSET_RE.search(status_proc.stdout or ""))
+    if parsed is not None:
+        return parsed
+    chrony = _clock_offset_from_chrony()
+    return unsynced if chrony is None else chrony
 
 
 def _as_prints(trades: Sequence[Any], feed: str) -> list[TapePrint]:

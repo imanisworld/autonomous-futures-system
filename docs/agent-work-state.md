@@ -58,9 +58,9 @@ Every substantial unit of work must leave:
 
 If the agent cannot persist this file, it must return this payload verbatim-ready for the next agent/operator to save.
 
-## Current checkpoint — 2026-10-06 (options setup-capture observer v0.2; B1–B12 red-team fixes; merge/deploy not authorized)
+## Current checkpoint — 2026-10-06 (options setup-capture observer v0.2; B6/B8/B13 re-review fixes; merge/deploy not authorized)
 
-Branch `cursor/options-setup-capture-observer-0010` (draft PR #1145). Merged with `main` `55b9d4d`. Last CI-green tip verified in-session: `c68a11d14adfdce7001f0980fbf008873af4213b` (fetch HEAD before acting if tip moved). Do not treat older `7cd4f04` / `e317ee3` / pre-merge `6545822` / merge `f7ea3de` as review-cleared for merge. Options current-state authority remains `docs/options-current-state-handoff.md`. Futures runtime checkpoint (c44d32b) below is unchanged.
+Branch `cursor/options-setup-capture-observer-0010` (draft PR #1145). Merged with `main` `55b9d4d`. **Code fix commits:** round-1 B1–B12 in `d29b2cb` (not docs pins `b0bcbe3`/`1b8dc74`); round-3 B6/B8/B13 on the tip after this checkpoint. Fetch HEAD before acting. Options current-state authority remains `docs/options-current-state-handoff.md`. Futures runtime checkpoint (c44d32b) below is unchanged.
 
 ### DONE / DO NOT REDO
 
@@ -68,13 +68,15 @@ Branch `cursor/options-setup-capture-observer-0010` (draft PR #1145). Merged wit
 - Observer scaffold: pre-open two-sided pending 2-2 WATCHING, 122-style JSONL collector (not scanner jobs), `MISSED_LATE` / `GAP_THROUGH_OPEN`, full 1H + stubs, SPX Public INDEX 1m, never `OPTIONS_SCANNER_WATCHLIST`.
 - Flagged out of scope: `/webhook/alert` no allowlist; `/shadow-journal` 200s from outside IPs (auth gate unverified).
 - B11: `/health` fail-softs unreadable `/root/...` journal paths.
-- Red-team E review (`E_PR1145_review.md`) B1–B12 **code fixes landed** on this branch (still need independent re-review): SIP reconcile after `watch_until+16m` (B1); provisional IEX TRIGGERED + later SIP RECONCILIATION (B2); SOURCE_BLOCKED diagnostic-only (B3); torn-line truncate-then-repair (B4); status `read_counts()` pure read (B5); post-fetch `wall_clock` / overrun (B6); clock check fail-closed + measured offset (B7); missing creds / delayed SPX fail-closed (B8); structure key without levels + SOURCE_DRIFT (B9); THIRTY_MINUTE fetch + intra-bucket reject (B10); lean `alert_ranker/alpaca_trades.py` (B12).
-- Local full suite on post-B1–B12 + main merge: `pytest -q` → 7563 passed, 8 skipped.
-- Exact-head GitHub CI `tests` + `handoff-fields` green on `c68a11d` (and prior tips `1b8dc74` / `b0bcbe3`). Handoff **Status** must remain a bare enum token.
+- Round-1 red-team B1–B5, B7, B9–B12 landed in `d29b2cb` (verified fixed at `1b8dc74` re-review).
+- Round-3 residuals: B6 post-IEX-fetch `detected_at` (clock advances only during fetch); B8 terminal `DATA_BLOCKED` for delayed SPX no-cross + IEX unknown-condition (de-duped `SOURCE_BLOCKED`); B13 catch_count requires SIP confirmation / BAR resolution, SIP retries capped with terminal `sip_reconcile_failed`.
+- Non-blocking: atomic journal rewrite (temp+fsync+rename); chronyc tracking fallback + `clock_unsynced` on `/setup-capture`; CodeQL reason allowlist `journal_*_N`.
+- Timer-install prerequisite documented: measurable NTP offset via systemd-timesyncd or chrony.
 
 ### OPEN / NOT MERGE-CLEARED
 
-- Independent options diff review must re-run against the post-B1–B12 + main-merge HEAD (prior review at `e317ee3` is stale; CHANGES REQUIRED there is not a merge GO).
+- Independent options diff re-review of the post-B6/B8/B13 tip (prior `1b8dc74` review is CHANGES REQUIRED / stale for merge).
+- Exact-head CI green on the new tip after push.
 - Operator merge GO, then a separate observer-only timer install GO — **not** authorized by green CI alone.
 - Live A13 sessions and Public INDEX real-time entitlement remain UNVERIFIED.
 
@@ -85,13 +87,14 @@ Branch `cursor/options-setup-capture-observer-0010` (draft PR #1145). Merged wit
 - Do not merge or deploy without explicit operator GO.
 - Do not reuse `trigger_time.arm_trigger_setup` / `_family_for_break` (cancels 222 continuation).
 - Do not write WATCHING into `options_shadow_journal` as OPEN.
-- Do not claim “red-team addenda folded / merge GO next” while independent re-review and exact-head CI are still open.
+- Do not claim B6 “post-fetch” or B8 “delayed SPX fail-closed” were complete before the round-3 tip; do not attribute code fixes to docs pins `b0bcbe3`/`1b8dc74`.
 
 ### NEXT
 
-1. Independent options diff review of PR #1145 at tip `c68a11d` (or successor if only docs pin moves).
-2. Operator merge GO, then a separate observer-only timer install GO.
-3. Post-install: journal WATCHING before the next RTH open; no order/risk consumption. If RTH has no setup, do not fabricate a live trigger.
+1. Push round-3 tip; confirm exact-head CI green.
+2. Independent options diff re-review of that tip.
+3. Operator merge GO, then a separate observer-only timer install GO (clock sync + INDEX entitlement).
+4. Post-install: journal WATCHING before the next RTH open; no order/risk consumption. If RTH has no setup, do not fabricate a live trigger.
 
 ## Governance PR provenance — 2026-10-06 (docs-only; does not override runtime NEXT)
 

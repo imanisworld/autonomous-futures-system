@@ -22,3 +22,7 @@ ReadWritePaths=/root/afs-shared/logs
 
 # Observation only: no scanner DB, broker, risk, order, alert, Discord, or ACTIVE state.
 # Watcher universe is SPY/QQQ/SPX in code; never OPTIONS_SCANNER_WATCHLIST.
+#
+# Timer-install prerequisite: a measurable NTP offset must be available via
+# `timedatectl timesync-status` (systemd-timesyncd) or `chronyc tracking`.
+# Without that, every oneshot run journals DATA_BLOCKED clock_unsynced.

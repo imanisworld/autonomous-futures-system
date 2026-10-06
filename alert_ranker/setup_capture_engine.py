@@ -24,6 +24,8 @@ from .setup_capture import (
     MAX_CAPTURE_LAG_SECONDS,
     OPTION_ROOT_SYMBOLS,
     SIP_RECONCILE_DELAY,
+    SIP_RECONCILE_RETRY_BUDGET,
+    SPX_DELAYED_TERMINAL_DELAY,
     SPX_MAX_BAR_AGE_SECONDS,
     STATUS_DATA_BLOCKED,
     STATUS_EXPIRED,
@@ -388,9 +390,17 @@ class SetupCaptureEngine:
         return 1
 
     def _append_source_blocked(
-        self, *, structure_key: str, reason: str, detected_at: datetime
+        self,
+        *,
+        structure_key: str,
+        reason: str,
+        detected_at: datetime,
+        state: dict[str, Any] | None = None,
     ) -> None:
-        """Diagnostic only — never terminalizes WATCHING."""
+        """Diagnostic only — never terminalizes WATCHING; de-dupe per key+reason."""
+        blocked = state.setdefault("source_blocked_reasons", {}) if state is not None else None
+        if blocked is not None and blocked.get(structure_key) == reason:
+            return
         self.journal.append(
             {
                 "record_type": "SOURCE_BLOCKED",
@@ -399,9 +409,41 @@ class SetupCaptureEngine:
                 "observed_at": detected_at.isoformat(),
             }
         )
+        if blocked is not None:
+            blocked[structure_key] = reason
 
     def _sip_reconcile_at(self, armed: ArmedStructure) -> datetime:
         return _aware(armed.watch_until) + SIP_RECONCILE_DELAY
+
+    def _sip_reconcile_deadline(self, armed: ArmedStructure) -> datetime:
+        return self._sip_reconcile_at(armed) + SIP_RECONCILE_RETRY_BUDGET
+
+    def _terminal_data_blocked(
+        self,
+        watching: CaptureRecord,
+        *,
+        reason: str,
+        detected_at: datetime,
+        state: dict[str, Any],
+        data_delayed: bool = False,
+        record_type: str = "RESOLUTION",
+    ) -> tuple[int, int]:
+        blocked = replace(
+            watching,
+            status=STATUS_DATA_BLOCKED,
+            status_reason=reason,
+            persisted_at=_iso(detected_at) or "",
+            detected_at=_iso(detected_at),
+            data_delayed=data_delayed,
+            prospective_catch=False,
+        )
+        self.journal.append_record(
+            record_type, blocked, observed_at=detected_at.isoformat()
+        )
+        state["terminal"][watching.structure_key] = blocked
+        state["current"][watching.structure_key] = blocked
+        state["watching"].pop(watching.structure_key, None)
+        return 1, 1
 
     def _resolve(self, armed: ArmedStructure, now: datetime, state: dict[str, Any]) -> tuple[int, int]:
         watching = state["current"].get(armed.structure_key)
@@ -409,8 +451,10 @@ class SetupCaptureEngine:
             return 0, 0
         if now < _aware(armed.watch_start):
             return 0, 0
-        detected_at = self._detect_time(now)
-        window_end = min(detected_at, _aware(armed.watch_until))
+        # Pre-fetch stamp bounds the trade query window; post-fetch stamp is
+        # used for detected_at / lag so fetch duration cannot understate lag.
+        query_now = self._detect_time(now)
+        window_end = min(query_now, _aware(armed.watch_until))
         high_water = state["high_water"].get(armed.structure_key)
         query_start = _aware(armed.watch_start)
         if high_water:
@@ -420,30 +464,23 @@ class SetupCaptureEngine:
         reconcile_at = self._sip_reconcile_at(armed)
 
         if armed.ticker == "SPX":
-            return self._resolve_spx(armed, watching, now, detected_at, window_end, state)
+            return self._resolve_spx(armed, watching, now, query_now, window_end, state)
 
         if self.iex_prints is None:
+            detected_at = self._detect_time(now)
             self._append_source_blocked(
                 structure_key=armed.structure_key,
                 reason="alpaca_credentials_missing",
                 detected_at=detected_at,
+                state=state,
             )
             if detected_at >= reconcile_at:
-                blocked = replace(
+                return self._terminal_data_blocked(
                     watching,
-                    status=STATUS_DATA_BLOCKED,
-                    status_reason="alpaca_credentials_missing",
-                    persisted_at=_iso(detected_at) or "",
-                    detected_at=_iso(detected_at),
-                    prospective_catch=False,
+                    reason="alpaca_credentials_missing",
+                    detected_at=detected_at,
+                    state=state,
                 )
-                self.journal.append_record(
-                    "RESOLUTION", blocked, observed_at=detected_at.isoformat()
-                )
-                state["terminal"][armed.structure_key] = blocked
-                state["current"][armed.structure_key] = blocked
-                state["watching"].pop(armed.structure_key, None)
-                return 1, 1
             return 0, 1
 
         try:
@@ -455,35 +492,40 @@ class SetupCaptureEngine:
                 window_end=window_end,
             )
         except Exception as exc:  # noqa: BLE001 - transient source error
+            detected_at = self._detect_time(now)
             self._append_source_blocked(
                 structure_key=armed.structure_key,
                 reason=str(exc),
                 detected_at=detected_at,
+                state=state,
             )
             if detected_at >= reconcile_at:
-                blocked = replace(
+                return self._terminal_data_blocked(
                     watching,
-                    status=STATUS_DATA_BLOCKED,
-                    status_reason=str(exc),
-                    persisted_at=_iso(detected_at) or "",
-                    detected_at=_iso(detected_at),
-                    prospective_catch=False,
+                    reason=str(exc),
+                    detected_at=detected_at,
+                    state=state,
                 )
-                self.journal.append_record(
-                    "RESOLUTION", blocked, observed_at=detected_at.isoformat()
-                )
-                state["terminal"][armed.structure_key] = blocked
-                state["current"][armed.structure_key] = blocked
-                state["watching"].pop(armed.structure_key, None)
-                return 1, 1
             return 0, 1
 
+        detected_at = self._detect_time(now)
+
         if iex_result.get("status") == STATUS_DATA_BLOCKED:
+            reason = str(iex_result.get("reason_code") or "source_blocked")
             self._append_source_blocked(
                 structure_key=armed.structure_key,
-                reason=str(iex_result.get("reason_code") or "source_blocked"),
+                reason=reason,
                 detected_at=detected_at,
+                state=state,
             )
+            if detected_at >= reconcile_at:
+                return self._terminal_data_blocked(
+                    watching,
+                    reason=reason,
+                    detected_at=detected_at,
+                    state=state,
+                    data_delayed=True,
+                )
             return 0, 1
 
         if iex_result.get("status") == "PROVEN":
@@ -537,26 +579,12 @@ class SetupCaptureEngine:
                     window_end=_aware(armed.watch_until),
                 )
             except Exception as exc:  # noqa: BLE001
-                self._append_source_blocked(
-                    structure_key=armed.structure_key,
+                return self._terminal_data_blocked(
+                    watching,
                     reason=f"sip_reconcile:{exc}",
                     detected_at=detected_at,
+                    state=state,
                 )
-                blocked = replace(
-                    watching,
-                    status=STATUS_DATA_BLOCKED,
-                    status_reason=f"sip_reconcile:{exc}",
-                    persisted_at=_iso(detected_at) or "",
-                    detected_at=_iso(detected_at),
-                    prospective_catch=False,
-                )
-                self.journal.append_record(
-                    "RESOLUTION", blocked, observed_at=detected_at.isoformat()
-                )
-                state["terminal"][armed.structure_key] = blocked
-                state["current"][armed.structure_key] = blocked
-                state["watching"].pop(armed.structure_key, None)
-                return 1, 1
 
         pair = classify_iex_sip_pair(
             iex=iex_result,
@@ -618,43 +646,48 @@ class SetupCaptureEngine:
         window_end: datetime,
         state: dict[str, Any],
     ) -> tuple[int, int]:
+        delayed_deadline = _aware(armed.watch_until) + SPX_DELAYED_TERMINAL_DELAY
         if self.index_minutes is None:
+            detected_at = self._detect_time(now)
             self._append_source_blocked(
                 structure_key=armed.structure_key,
                 reason="spx_index_minutes_unavailable",
                 detected_at=detected_at,
+                state=state,
             )
             if detected_at >= _aware(armed.watch_until):
-                blocked = replace(
+                return self._terminal_data_blocked(
                     watching,
-                    status=STATUS_DATA_BLOCKED,
-                    status_reason="spx_index_minutes_unavailable",
-                    persisted_at=_iso(detected_at) or "",
-                    detected_at=_iso(detected_at),
+                    reason="spx_index_minutes_unavailable",
+                    detected_at=detected_at,
+                    state=state,
                     data_delayed=True,
-                    prospective_catch=False,
                 )
-                self.journal.append_record(
-                    "RESOLUTION", blocked, observed_at=detected_at.isoformat()
-                )
-                state["terminal"][armed.structure_key] = blocked
-                state["current"][armed.structure_key] = blocked
-                state["watching"].pop(armed.structure_key, None)
-                return 1, 1
             return 0, 1
         try:
-            # Fetch through detected_at so delayed vendors can publish bars
+            # Fetch through query_now so delayed vendors can publish bars
             # whose start is still inside the watch window.
             bars = list(
                 self.index_minutes(armed.ticker, _aware(armed.watch_start), detected_at)
             )
         except Exception as exc:  # noqa: BLE001
+            detected_at = self._detect_time(now)
             self._append_source_blocked(
                 structure_key=armed.structure_key,
                 reason=str(exc),
                 detected_at=detected_at,
+                state=state,
             )
+            if detected_at >= delayed_deadline:
+                return self._terminal_data_blocked(
+                    watching,
+                    reason=str(exc),
+                    detected_at=detected_at,
+                    state=state,
+                    data_delayed=True,
+                )
             return 0, 1
+        detected_at = self._detect_time(now)
         result = first_boundary_from_index_minutes(
             bars,
             armed=armed,
@@ -665,8 +698,17 @@ class SetupCaptureEngine:
         )
         if result.get("status") == "NO_BREAK":
             if result.get("data_delayed"):
-                # Fail closed on delay: keep WATCHING; never EXPIRED with
-                # data_delayed=False while the feed is still lagging.
+                # Fail closed on delay: never EXPIRED with data_delayed=False
+                # while the feed is still lagging. Terminalize after the
+                # delayed-index budget so WATCHING cannot linger forever.
+                if detected_at >= delayed_deadline:
+                    return self._terminal_data_blocked(
+                        watching,
+                        reason="spx_index_delayed",
+                        detected_at=detected_at,
+                        state=state,
+                        data_delayed=True,
+                    )
                 return 0, 0
             if detected_at >= _aware(armed.watch_until):
                 expired = replace(
@@ -715,9 +757,20 @@ class SetupCaptureEngine:
     ) -> int:
         armed = self._armed_cache.get(triggered.structure_key) or self._rehydrate(triggered)
         detected_at = self._detect_time(now)
-        if detected_at < self._sip_reconcile_at(armed):
+        reconcile_at = self._sip_reconcile_at(armed)
+        if detected_at < reconcile_at:
             return 0
+        deadline = self._sip_reconcile_deadline(armed)
         if self.sip_prints is None:
+            if detected_at >= deadline:
+                self._terminal_data_blocked(
+                    triggered,
+                    reason="sip_reconcile_unavailable",
+                    detected_at=detected_at,
+                    state=state,
+                    record_type="RECONCILIATION",
+                )
+                return 1
             return 0
         try:
             sip_rows = list(
@@ -734,13 +787,39 @@ class SetupCaptureEngine:
                 window_end=_aware(armed.watch_until),
             )
         except Exception as exc:  # noqa: BLE001
+            reason = f"sip_reconcile:{exc}"
             self._append_source_blocked(
                 structure_key=armed.structure_key,
-                reason=f"sip_reconcile:{exc}",
+                reason=reason,
                 detected_at=detected_at,
+                state=state,
             )
+            if detected_at >= deadline:
+                self._terminal_data_blocked(
+                    triggered,
+                    reason="sip_reconcile_failed",
+                    detected_at=detected_at,
+                    state=state,
+                    record_type="RECONCILIATION",
+                )
+                return 1
             return 0
         if sip_result.get("status") != "PROVEN" or sip_result.get("print") is None:
+            self._append_source_blocked(
+                structure_key=armed.structure_key,
+                reason="sip_no_cross",
+                detected_at=detected_at,
+                state=state,
+            )
+            if detected_at >= deadline:
+                self._terminal_data_blocked(
+                    triggered,
+                    reason="sip_no_cross",
+                    detected_at=detected_at,
+                    state=state,
+                    record_type="RECONCILIATION",
+                )
+                return 1
             return 0
         sip_print = sip_result["print"]
         true_lag = (detected_at - _aware(sip_print.ts_utc)).total_seconds()

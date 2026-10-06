@@ -169,14 +169,21 @@ class SetupCaptureJournal:
         return raw_lines, None, False
 
     def _rewrite_complete_lines(self, lines: list[str]) -> None:
-        """Truncate a torn trailing fragment before appending JOURNAL_REPAIR."""
-        with self.path.open("w", encoding="utf-8") as handle:
+        """Atomically replace the journal with complete lines (torn tail dropped)."""
+        tmp_path = self.path.with_name(self.path.name + ".tmp")
+        with tmp_path.open("w", encoding="utf-8") as handle:
             for raw in lines:
                 handle.write(raw)
                 if not raw.endswith("\n"):
                     handle.write("\n")
             handle.flush()
             os.fsync(handle.fileno())
+        os.replace(tmp_path, self.path)
+        dir_fd = os.open(str(self.path.parent), os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
 
     def _build_state(
         self, lines: list[str], *, repaired_torn_line: bool
@@ -186,6 +193,7 @@ class SetupCaptureJournal:
         fingerprints: dict[str, str] = {}
         high_water: dict[str, str] = {}
         errors: list[dict[str, Any]] = []
+        source_blocked_reasons: dict[str, str] = {}
         for number, raw in enumerate(lines, start=1):
             if not raw.strip():
                 continue
@@ -203,6 +211,8 @@ class SetupCaptureJournal:
             if record_type in _DIAGNOSTIC_RECORD_TYPES:
                 if record_type == "COLLECTOR_ERROR":
                     errors.append(row)
+                if record_type == "SOURCE_BLOCKED":
+                    source_blocked_reasons[key] = str(row.get("status_reason") or "")
                 continue
             if record_type in _STATE_RECORD_TYPES:
                 rec = _record_from_row(row)
@@ -224,6 +234,7 @@ class SetupCaptureJournal:
             "fingerprints": fingerprints,
             "high_water": high_water,
             "errors": errors,
+            "source_blocked_reasons": source_blocked_reasons,
             "repaired_torn_line": repaired_torn_line,
         }
 

@@ -10,11 +10,12 @@ public Vantage Point UI. The module-level launch path remains gated behind
 from __future__ import annotations
 
 import asyncio
-import os
 import json
+import os
+import re
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from contextlib import asynccontextmanager
 from typing import Any
 
 import uvicorn
@@ -87,6 +88,17 @@ SHADOW_OUTCOME_STATUSES = {
 }
 
 
+_JOURNAL_REASON_RE = re.compile(r"^journal_[a-z_]+_\d+$")
+
+
+def _sanitize_journal_reason(exc: BaseException) -> str:
+    """Allowlist fixed journal_*_N codes; never pass arbitrary exception text."""
+    text = str(exc).strip()
+    if _JOURNAL_REASON_RE.match(text):
+        return text
+    return "journal_unreadable"
+
+
 def _setup_capture_telemetry(cfg: ScannerConfig) -> dict[str, Any]:
     """Pure-read watcher journal telemetry (no repair, no mkdir, no append).
 
@@ -103,6 +115,8 @@ def _setup_capture_telemetry(cfg: ScannerConfig) -> dict[str, Any]:
         "journal": str(path),
         "watching_count": 0,
         "missed_late_count": 0,
+        "data_blocked_count": 0,
+        "clock_unsynced": False,
     }
     try:
         exists = path.exists()
@@ -113,22 +127,33 @@ def _setup_capture_telemetry(cfg: ScannerConfig) -> dict[str, Any]:
         payload["reason"] = "journal_missing"
         return payload
     try:
-        counts = SetupCaptureJournal(path, create=False).read_counts()
+        journal = SetupCaptureJournal(path, create=False)
+        peek = journal.peek_state()
+        counts = SetupCaptureJournal._counts_from_state(peek)
+        # Surface clock_unsynced so /setup-capture explains empty watches when
+        # the collector is blocked by an unsynced clock (timedatectl/chrony).
+        clock_unsynced = any(
+            str(err.get("status_reason") or "") == "clock_unsynced"
+            for err in peek.get("errors") or []
+        )
     except OSError:
         payload["reason"] = "journal_unreadable"
         return payload
     except RuntimeError as exc:
-        # Corrupt mid-file lines are operator-visible; do not mask as unreadable.
-        payload["reason"] = str(exc)
+        payload["reason"] = _sanitize_journal_reason(exc)
         return payload
     payload.update(
         {
             "watching_count": counts.get("watching", 0),
             "missed_late_count": counts.get("missed_late", 0),
+            "data_blocked_count": counts.get("data_blocked", 0),
             "structure_count": counts.get("structure_count", 0),
             "counts": counts,
+            "clock_unsynced": clock_unsynced,
         }
     )
+    if clock_unsynced:
+        payload["reason"] = "clock_unsynced"
     return payload
 
 
@@ -266,10 +291,11 @@ def create_app(config: ScannerConfig | None = None, scanner: OptionsScanner | No
         latest = scanner_status.get("latest") or []
         signa_rows = scanner_status.get("signa") or []
         policy = scanner_status.get("paper_policy") or {}
+        capture_tel = health_status.get("setup_capture") or {}
         capture_public = {
             "enabled": bool(getattr(cfg, "setup_capture_enabled", True)),
-            "watching_count": int(_setup_capture_telemetry(cfg).get("watching_count") or 0),
-            "missed_late_count": int(_setup_capture_telemetry(cfg).get("missed_late_count") or 0),
+            "watching_count": int(capture_tel.get("watching_count") or 0),
+            "missed_late_count": int(capture_tel.get("missed_late_count") or 0),
         }
 
         return {

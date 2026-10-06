@@ -109,9 +109,20 @@ sight is `MISSED_LATE` here.
 
 ## Operator surfaces
 
-- `GET /setup-capture` — journal counts (scanner-embedded = false)
+- `GET /setup-capture` — journal counts (scanner-embedded = false); surfaces
+  `clock_unsynced` when the collector is blocked by clock skew
 - `python -m scripts.options_setup_capture_status`
 - systemd `options-setup-capture.timer`
+
+## Timer-install prerequisites (separate operator GO after merge)
+
+- **Clock sync with a measurable offset:** prefer `systemd-timesyncd` so
+  `timedatectl timesync-status` reports `Offset:`. On hosts that use chrony
+  instead, `chronyc tracking` (`Last offset`) is accepted. If neither yields
+  an offset, every oneshot run ends `DATA_BLOCKED clock_unsynced` and status
+  counts alone will not explain empty watches until `/setup-capture` is read.
+- Public INDEX real-time vs delayed entitlement for SPX remains UNVERIFIED.
+- Do not enable the timer without an explicit install GO.
 
 Merge and deploy remain **operator GO**. Do not fabricate a live trigger if
 RTH has no setup.

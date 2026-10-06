@@ -275,16 +275,24 @@ def test_a3_triggered_on_minute_poll_with_trade_fields(tmp_path):
     )
     engine.run(now=et(2026, 10, 2, 16, 16))
     engine.run(now=et(2026, 10, 5, 9, 31, 0))
+    provisional = watching_rows(engine)[0]
+    assert provisional.status == STATUS_TRIGGERED
+    assert provisional.setup_type == "H1_222_CONTINUATION"
+    assert provisional.direction == "LONG"
+    assert provisional.trigger_trade_id == "iex-20"
+    assert provisional.trigger_feed == "iex"
+    assert provisional.detected_at is not None
+    assert provisional.true_lag_seconds is not None
+    assert provisional.true_lag_seconds <= 120
+    # Provisional IEX rows are not catches until SIP confirms.
+    assert provisional.prospective_catch is False
+    assert provisional.sip_crossed_at is None
+    assert catch_count([provisional]) == 0
+    engine.run(now=et(2026, 10, 5, 10, 46, 0))
     row = watching_rows(engine)[0]
-    assert row.status == STATUS_TRIGGERED
-    assert row.setup_type == "H1_222_CONTINUATION"
-    assert row.direction == "LONG"
-    assert row.trigger_trade_id == "iex-20"
-    assert row.trigger_feed == "iex"
-    assert row.detected_at is not None
-    assert row.true_lag_seconds is not None
-    assert row.true_lag_seconds <= 120
+    assert row.sip_crossed_at is not None
     assert row.prospective_catch is True
+    assert catch_count([row]) == 1
 
 
 def test_c1d_watcher_cadence_not_scanner(tmp_path):
@@ -1169,27 +1177,44 @@ def test_b5_status_read_leaves_journal_byte_identical(tmp_path):
     assert counts["watching"] == 1
 
 
-def test_b6_post_fetch_timestamps_and_overrun(tmp_path):
+def test_b6_detected_at_after_iex_fetch_only(tmp_path):
+    """Clock advances only inside the IEX fetch; detected_at must be post-fetch."""
     oracle = BarAvailabilityOracle(oct2_30m(), session_closes=oct2_session_closes())
-    ticks = {"n": 0}
+    cross = _print(et(2026, 10, 5, 9, 30, 20), 770.10)
+    clock = {"t": et(2026, 10, 5, 9, 31, 0)}
 
-    def clock():
-        ticks["n"] += 1
-        return et(2026, 10, 5, 9, 31, 0) + timedelta(seconds=50 * ticks["n"])
+    def wall():
+        return clock["t"]
 
-    engine = make_engine(
-        tmp_path,
-        oracle,
-        iex=[_print(et(2026, 10, 5, 9, 30, 20), 770.10)],
-        sip=[_print(et(2026, 10, 5, 9, 30, 20), 770.10, feed="sip")],
-        wall_clock=clock,
+    def iex(sym, start, end):
+        # 90 s of wall time only during the fetch (E10-style).
+        clock["t"] = clock["t"] + timedelta(seconds=90)
+        return [p for p in [cross] if start <= p.ts_utc < end]
+
+    def sip(sym, start, end):
+        return [
+            p
+            for p in [_print(et(2026, 10, 5, 9, 30, 20), 770.10, feed="sip")]
+            if start <= p.ts_utc < end
+        ]
+
+    eng = SetupCaptureEngine(
+        journal=SetupCaptureJournal(tmp_path / "j.jsonl"),
+        bar_oracle=lambda sym, now: oracle.serve(now) if sym == "SPY" else [],
+        iex_prints=iex,
+        sip_prints=sip,
+        wall_clock=wall,
     )
-    engine.run(now=et(2026, 10, 2, 16, 16))
-    summary = engine.run(now=et(2026, 10, 5, 9, 31, 0))
-    row = watching_rows(engine)[0]
+    eng.run(now=et(2026, 10, 2, 16, 16))
+    clock["t"] = et(2026, 10, 5, 9, 31, 0)
+    summary = eng.run(now=et(2026, 10, 5, 9, 31, 0))
+    row = [r for r in eng.journal.list_all() if r.timeframe == "1H"][0]
     detected = datetime.fromisoformat(row.detected_at)
-    assert detected > et(2026, 10, 5, 9, 31, 0).astimezone(timezone.utc)
-    assert summary["cycle_seconds"] is not None and summary["cycle_seconds"] > 0
+    # At least one 90 s fetch completed before the stamp (30m and/or 1H).
+    assert detected >= et(2026, 10, 5, 9, 32, 30).astimezone(timezone.utc)
+    assert row.true_lag_seconds is not None
+    assert row.true_lag_seconds >= 130
+    assert summary["cycle_seconds"] is not None and summary["cycle_seconds"] >= 90
     assert summary["cycle_over_cadence"] is True
 
 
@@ -1201,6 +1226,21 @@ def test_b7_clock_offset_failure_blocks(monkeypatch):
 
     monkeypatch.setattr(collect.subprocess, "run", boom)
     assert collect._clock_offset_seconds() > 30
+
+
+def test_b7_chronyc_tracking_offset_is_used(monkeypatch):
+    import scripts.options_setup_capture_collect as collect
+
+    def fake_run(cmd, **_k):
+        if cmd[:1] == ["chronyc"]:
+            return SimpleNamespace(
+                returncode=0,
+                stdout="Last offset             : +0.012345678 seconds\n",
+            )
+        raise FileNotFoundError("timedatectl")
+
+    monkeypatch.setattr(collect.subprocess, "run", fake_run)
+    assert abs(collect._clock_offset_seconds() - 0.012345678) < 1e-9
 
 
 def test_b8_missing_alpaca_creds_fail_closed(tmp_path):
@@ -1240,6 +1280,113 @@ def test_b8_spx_delayed_index_keeps_watching_until_print(tmp_path):
     row = [x for x in j.list_all() if x.ticker == "SPX" and x.timeframe == "1H"][0]
     assert row.status == STATUS_TRIGGERED
     assert row.data_delayed is True or row.capture_late is True
+
+
+def test_b8_spx_delayed_no_cross_terminals_data_blocked(tmp_path):
+    """E7b: delayed feed with every bar present but no cross → DATA_BLOCKED."""
+    o = BarAvailabilityOracle(oct2_30m(), session_closes=oct2_session_closes())
+    j = SetupCaptureJournal(tmp_path / "j.jsonl")
+
+    def bars(sym, now):
+        return o.serve(now) if sym == "SPX" else []
+
+    def idx(sym, s, e):
+        # Publish every RTH minute bar 15 minutes late, never crossing levels.
+        out = []
+        t = et(2026, 10, 5, 9, 30)
+        while t < et(2026, 10, 5, 16, 0):
+            start = t.astimezone(timezone.utc)
+            published = start + timedelta(minutes=16)
+            if published <= e and s <= start < e:
+                out.append(
+                    IndexMinuteBar(
+                        start=start,
+                        open=769.5,
+                        high=769.8,
+                        low=769.4,
+                        close=769.6,
+                    )
+                )
+            t += timedelta(minutes=1)
+        return out
+
+    eng = SetupCaptureEngine(journal=j, bar_oracle=bars, index_minutes=idx)
+    eng.run(now=et(2026, 10, 2, 16, 16))
+    minute_loop(eng, et(2026, 10, 5, 9, 30), et(2026, 10, 5, 10, 50))
+    row = [x for x in j.list_all() if x.ticker == "SPX" and x.timeframe == "1H"][0]
+    assert row.status == STATUS_DATA_BLOCKED
+    assert row.data_delayed is True
+    assert "spx_index_delayed" in row.status_reason
+
+
+def test_b8_iex_unknown_condition_terminals_and_dedupes_source_blocked(tmp_path, monkeypatch):
+    """E12: unknown-condition DATA_BLOCKED → one SOURCE_BLOCKED then terminal."""
+    import alert_ranker.setup_capture_engine as eng_mod
+
+    o = BarAvailabilityOracle(oct2_30m(), session_closes=oct2_session_closes())
+    j = SetupCaptureJournal(tmp_path / "j.jsonl")
+
+    def bars(sym, now):
+        return o.serve(now) if sym == "SPY" else []
+
+    def iex(sym, s, e):
+        return [_print(et(2026, 10, 5, 9, 30, 20), 770.10)]
+
+    monkeypatch.setattr(
+        eng_mod,
+        "first_boundary_from_prints",
+        lambda *_a, **_k: {
+            "status": STATUS_DATA_BLOCKED,
+            "reason_code": "unknown_trade_condition",
+        },
+    )
+    eng = SetupCaptureEngine(journal=j, bar_oracle=bars, iex_prints=iex, sip_prints=lambda *a: [])
+    eng.run(now=et(2026, 10, 2, 16, 16))
+    minute_loop(eng, et(2026, 10, 5, 9, 30), et(2026, 10, 5, 10, 50))
+    row = [x for x in j.list_all() if x.timeframe == "1H"][0]
+    assert row.status == STATUS_DATA_BLOCKED
+    assert row.data_delayed is True
+    text = (tmp_path / "j.jsonl").read_text()
+    blocked_rows = text.count('"SOURCE_BLOCKED"')
+    # Two structures (30m + 1H) → at most one SOURCE_BLOCKED each (de-duped).
+    assert blocked_rows <= 4
+    assert blocked_rows >= 1
+
+
+def test_b13_provisional_catch_excluded_and_sip_retries_capped(tmp_path):
+    """Unconfirmed IEX TRIGGERED is not a catch; SIP failures terminalize."""
+    o = BarAvailabilityOracle(oct2_30m(), session_closes=oct2_session_closes())
+    j = SetupCaptureJournal(tmp_path / "j.jsonl")
+    sip_calls = {"n": 0}
+
+    def bars(sym, now):
+        return o.serve(now) if sym == "SPY" else []
+
+    def iex(sym, s, e):
+        return [p for p in [_print(et(2026, 10, 5, 9, 30, 20), 770.10)] if s <= p.ts_utc < e]
+
+    def sip(sym, s, e):
+        sip_calls["n"] += 1
+        raise RuntimeError("sip trade provider HTTP 403: delayed plan")
+
+    eng = SetupCaptureEngine(journal=j, bar_oracle=bars, iex_prints=iex, sip_prints=sip)
+    eng.run(now=et(2026, 10, 2, 16, 16))
+    eng.run(now=et(2026, 10, 5, 9, 31, 0))
+    provisional = [x for x in j.list_all() if x.timeframe == "1H"][0]
+    assert provisional.status == STATUS_TRIGGERED
+    assert provisional.sip_crossed_at is None
+    assert provisional.prospective_catch is False
+    assert catch_count(j.list_all()) == 0
+    # Through SIP deadline (watch_until+16m+30m = 11:16) and beyond.
+    minute_loop(eng, et(2026, 10, 5, 10, 46), et(2026, 10, 5, 11, 20))
+    final = [x for x in j.list_all() if x.timeframe == "1H"][0]
+    assert final.status == STATUS_DATA_BLOCKED
+    assert "sip_reconcile_failed" in final.status_reason
+    assert catch_count(j.list_all()) == 0
+    text = (tmp_path / "j.jsonl").read_text()
+    # De-duped SOURCE_BLOCKED — far below one-per-minute spam (660).
+    assert text.count('"SOURCE_BLOCKED"') < 20
+    assert sip_calls["n"] < 100
 
 
 def test_b9_level_revision_one_key_and_source_drift(tmp_path):

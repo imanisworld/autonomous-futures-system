@@ -71,6 +71,12 @@ MAX_CAPTURE_LAG_SECONDS = 120.0
 SPX_MAX_BAR_AGE_SECONDS = 120.0
 CLOCK_SKEW_LIMIT_SECONDS = 30.0
 SIP_RECONCILE_DELAY = timedelta(minutes=16)
+# Bound post-reconcile SIP retries so a permanently failing SIP feed cannot
+# spam SOURCE_BLOCKED once per minute for the rest of the session.
+SIP_RECONCILE_RETRY_BUDGET = timedelta(minutes=30)
+# Delayed SPX index feed with no cross: fail closed after the same budget as
+# SIP reconcile (watch_until + 16m), labeled data_delayed.
+SPX_DELAYED_TERMINAL_DELAY = SIP_RECONCILE_DELAY
 DEFAULT_JOURNAL = "/root/afs-shared/logs/options_setup_capture.jsonl"
 DEFAULT_RAW_TRADE_DIR = "/root/afs-shared/logs/options_setup_capture_source_trades"
 
@@ -851,6 +857,12 @@ def resolve_break(
         reason = "opening_print_gapped_through"
         catch = False
 
+    # Equity IEX prints without SIP confirmation are provisional only — lag is
+    # not SIP-measured yet, so they must not count as prospective catches.
+    if print is not None and sip_crossed is None and final_status == STATUS_TRIGGERED:
+        catch = False
+        reason = "provisional_iex_pending_sip"
+
     setup = _setup_type_for(armed, direction)
     return replace(
         watching,
@@ -898,6 +910,21 @@ def classify_iex_sip_pair(
     return "pending"
 
 
+def _sip_confirmed_or_bar_resolution(record: CaptureRecord | Mapping[str, Any]) -> bool:
+    """Trade-exact catches require SIP; SPX bar-resolution catches do not."""
+    if isinstance(record, CaptureRecord):
+        resolution = str(record.trigger_resolution or "")
+        feed = str(record.trigger_feed or "")
+        sip_crossed = record.sip_crossed_at
+    else:
+        resolution = str(record.get("trigger_resolution") or "")
+        feed = str(record.get("trigger_feed") or "")
+        sip_crossed = record.get("sip_crossed_at")
+    if resolution == "BAR" or feed == "public_index":
+        return True
+    return bool(sip_crossed)
+
+
 def is_prospective_catch(record: CaptureRecord | Mapping[str, Any]) -> bool:
     if isinstance(record, CaptureRecord):
         return bool(
@@ -905,12 +932,14 @@ def is_prospective_catch(record: CaptureRecord | Mapping[str, Any]) -> bool:
             and record.status == STATUS_TRIGGERED
             and not record.capture_late
             and not record.gap_through
+            and _sip_confirmed_or_bar_resolution(record)
         )
     return bool(
         record.get("prospective_catch")
         and str(record.get("status") or "") == STATUS_TRIGGERED
         and not record.get("capture_late")
         and not record.get("gap_through")
+        and _sip_confirmed_or_bar_resolution(record)
     )
 
 
