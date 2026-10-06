@@ -8,14 +8,19 @@ directly — they come from watcher.run(now=sim_now).
 from __future__ import annotations
 
 import json
+import os
 import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 import pytest
+from fastapi.testclient import TestClient
 
+from alert_ranker.app import _setup_capture_telemetry, create_app
 from alert_ranker.causal_bars import MINUTE_30, Bar
+from alert_ranker.config import ScannerConfig
 from alert_ranker.market_data import PUBLIC_ALLOWED_PREFIXES, PUBLIC_MARKETDATA_PREFIX
 from alert_ranker.paper_v1 import episode_bucket, setup_episode_key
 from alert_ranker.public_chart_bars import parse_complete_grid_bars
@@ -55,7 +60,6 @@ from alert_ranker.setup_capture_engine import (
     module_has_no_execution_imports,
 )
 from alert_ranker.setup_capture_store import JournalLocked, SetupCaptureJournal
-from alert_ranker.config import ScannerConfig
 
 NY = ZoneInfo("America/New_York")
 OCT5_HIGH = 770.0768
@@ -665,6 +669,67 @@ def test_c4b_unit_journal_is_absolute_shared_logs():
     assert "ProtectSystem=strict" in unit
     assert "ReadWritePaths=/root/afs-shared/logs" in unit
     assert DEFAULT_JOURNAL.startswith("/root/afs-shared/logs/")
+
+
+def _block_capture_journal_stat(monkeypatch) -> None:
+    real_stat = os.stat
+
+    def blocked_stat(path, *args, **kwargs):
+        target = os.fspath(path)
+        if target == DEFAULT_JOURNAL or str(target).endswith("options_setup_capture.jsonl"):
+            raise PermissionError(13, "Permission denied", target)
+        return real_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "stat", blocked_stat)
+
+
+def test_telemetry_fail_soft_when_journal_unreadable(monkeypatch):
+    _block_capture_journal_stat(monkeypatch)
+    cfg = SimpleNamespace(
+        setup_capture_journal=DEFAULT_JOURNAL,
+        setup_capture_enabled=True,
+    )
+    payload = _setup_capture_telemetry(cfg)
+    assert payload["reason"] == "journal_unreadable"
+    assert payload["watching_count"] == 0
+    assert payload["execution_authority"] is False
+    assert payload["scanner_embedded"] is False
+
+
+def test_health_survives_unreadable_default_capture_journal(tmp_path, monkeypatch):
+    _block_capture_journal_stat(monkeypatch)
+    cfg = ScannerConfig(
+        market_data_provider="tastytrade",
+        tastytrade_username="user",
+        tastytrade_password="pass",
+        tastytrade_base_url="https://api.tastyworks.com",
+        public_api_key_configured=False,
+        public_base_url="https://api.public.com",
+        alpaca_api_key_configured=False,
+        alpaca_secret_key_configured=False,
+        alpaca_paper=True,
+        alpaca_data_base_url="https://data.alpaca.markets",
+        port=8010,
+        discord_webhook_url="",
+        watchlist=["AAPL"],
+        interval_minutes=5,
+        sqlite_path=tmp_path / "options_scanner.sqlite",
+    )
+    app = create_app(cfg)
+    with TestClient(app) as client:
+        health = client.get("/health")
+        assert health.status_code == 200
+        body = health.json()
+        assert body["status"] == "healthy"
+        assert body["setup_capture"]["reason"] == "journal_unreadable"
+        assert body["setup_capture"]["watching_count"] == 0
+        public = client.get("/public/status")
+        assert public.status_code == 200
+        assert public.json()["counts"]["setup_capture_watching"] == 0
+        assert "/root/afs-shared" not in public.text
+        capture = client.get("/setup-capture")
+        assert capture.status_code == 200
+        assert capture.json()["reason"] == "journal_unreadable"
 
 
 def test_c1g_unknown_condition_writes_source_blocked(tmp_path):

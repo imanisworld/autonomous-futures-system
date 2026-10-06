@@ -88,7 +88,11 @@ SHADOW_OUTCOME_STATUSES = {
 
 
 def _setup_capture_telemetry(cfg: ScannerConfig) -> dict[str, Any]:
-    """Read the watcher journal without attaching a job to the scanner loop."""
+    """Read the watcher journal without attaching a job to the scanner loop.
+
+    /health and /public/status must not 500 when the default shared-log path is
+    missing or unreadable (GitHub runners cannot stat ``/root/...``).
+    """
     path = Path(getattr(cfg, "setup_capture_journal", None) or DEFAULT_JOURNAL)
     payload: dict[str, Any] = {
         "enabled": bool(getattr(cfg, "setup_capture_enabled", True)),
@@ -97,14 +101,23 @@ def _setup_capture_telemetry(cfg: ScannerConfig) -> dict[str, Any]:
         "trade_authority": False,
         "scanner_embedded": False,
         "journal": str(path),
+        "watching_count": 0,
+        "missed_late_count": 0,
     }
-    if not path.exists():
-        payload.update({"watching_count": 0, "missed_late_count": 0, "reason": "journal_missing"})
-        return payload
     try:
+        try:
+            exists = path.exists()
+        except OSError:
+            payload["reason"] = "journal_unreadable"
+            return payload
+        if not exists:
+            payload["reason"] = "journal_missing"
+            return payload
         counts = SetupCaptureJournal(path).counts()
-    except Exception as exc:  # noqa: BLE001 - status surface is fail-soft
-        payload.update({"watching_count": 0, "missed_late_count": 0, "reason": type(exc).__name__})
+    except Exception as exc:  # noqa: BLE001 - observer I/O must not take down /health
+        payload["reason"] = (
+            "journal_unreadable" if isinstance(exc, OSError) else type(exc).__name__
+        )
         return payload
     payload.update(
         {
