@@ -71,21 +71,20 @@ If the agent cannot persist this file, it must return this payload verbatim-read
 
 ### OPEN / NOT MERGE-CLEARED
 
-- **HOLD — no merge GO on #1149.** Independent Grok review of tip `ac0b8ed`: **CHANGES REQUIRED**.
-  - Blockers: (1) `evaluate_rh_options` still returns WATCH + order ticket + shadow when `_risk_check` refuses (`nan_premium`; quantity over `planned_risk_cap`); (2) `quantity=0/-1/-3` → `approved=True`; (3) bool premium/quantity intake can approve.
-  - Tip moved to `0df3a38` claiming fixes; Grok re-reviewing that exact head. **Do not merge until Grok PASS + Operator merge GO on exact current head.**
+- **HOLD — tip moved again on #1149.** Grok PASS applies only to exact tip `0df3a38`. Live head is now `661340e` (binding re-scope) and is **NOT cleared**.
+  - Do **not** merge `661340e` or any other tip until Grok PASS + Operator merge GO on the exact current head.
 - Conveyor remaining after #1149: #1150 → #1151 → #1152 → #1153 → #1154.
 - No observer timer install. No deploy / VPS mutation.
 
 ### DO NOT REDO
 
-- Do not merge #1149 on `ac0b8ed` (FAIL tip) or any tip without fresh Grok PASS + operator GO.
+- Do not merge #1149 on `0df3a38` after tip moved, nor `661340e` without a fresh Grok PASS + operator GO on that exact SHA.
 - Do not install observer timer / status wrapper / release-pin drop-in without separate install GO.
 - Do not deploy, restart services, or change VPS config.
 
 ### NEXT
 
-1. Wait for Grok PASS + operator merge GO on exact #1149 tip (claimed `0df3a38`).
+1. Wait for Grok PASS + operator merge GO on exact current #1149 tip (`661340e` until it moves again).
 2. After external merge: conveyor-sync #1150 onto new main; stop for independent review.
 3. Separate operator GO later for observer timer install + live prove.
 
