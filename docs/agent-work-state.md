@@ -60,7 +60,7 @@ If the agent cannot persist this file, it must return this payload verbatim-read
 
 ## Current checkpoint — 2026-10-06 (options setup-capture observer v0.2; B1–B12 red-team fixes; merge/deploy not authorized)
 
-Branch `cursor/options-setup-capture-observer-0010` at `654582248a7483b7d8b0809b93ecc0c23f88a9f9` (draft PR #1145) from `main` `31c9281f41e61791dc050d74f33acf02f87085e4` (#1089). Options current-state authority remains `docs/options-current-state-handoff.md`. Futures checkpoint below is unchanged. **Fetch current HEAD before acting** — do not use the older `7cd4f04` / `e317ee3` SHAs as “review cleared.”
+Branch `cursor/options-setup-capture-observer-0010` (draft PR #1145), rebased/merged with `main` `55b9d4d`. Options current-state authority remains `docs/options-current-state-handoff.md`. Futures runtime checkpoint (c44d32b) below is unchanged. **Fetch current HEAD before acting** — do not use the older `7cd4f04` / `e317ee3` SHAs as “review cleared.”
 
 ### DONE / DO NOT REDO
 
@@ -69,6 +69,7 @@ Branch `cursor/options-setup-capture-observer-0010` at `654582248a7483b7d8b0809b
 - Flagged out of scope: `/webhook/alert` no allowlist; `/shadow-journal` 200s from outside IPs (auth gate unverified).
 - B11: `/health` fail-softs unreadable `/root/...` journal paths.
 - Red-team E review (`E_PR1145_review.md`) B1–B12 code fixes on this branch: SIP reconcile after `watch_until+16m` (B1); provisional IEX TRIGGERED + later SIP RECONCILIATION (B2); SOURCE_BLOCKED diagnostic-only (B3); torn-line truncate-then-repair (B4); status `read_counts()` pure read (B5); post-fetch `wall_clock` / overrun (B6); clock check fail-closed + measured offset (B7); missing creds / delayed SPX fail-closed (B8); structure key without levels + SOURCE_DRIFT (B9); THIRTY_MINUTE fetch + intra-bucket reject (B10); lean `alert_ranker/alpaca_trades.py` (B12).
+- Local full suite before main merge: `pytest -q` → 7536 passed, 8 skipped.
 
 ### OPEN / NOT MERGE-CLEARED
 
@@ -93,6 +94,114 @@ Branch `cursor/options-setup-capture-observer-0010` at `654582248a7483b7d8b0809b
 3. Operator merge GO, then a separate observer-only timer install GO.
 4. Post-install: journal WATCHING before the next RTH open; no order/risk consumption. If RTH has no setup, do not fabricate a live trigger.
 
+## Governance PR provenance — 2026-10-06 (docs-only; does not override runtime NEXT)
+
+Task: remove overlapping agent responsibilities and make the research pipeline explicit without changing trading behavior.
+
+- Base `main`: `31c9281f41e61791dc050d74f33acf02f87085e4`.
+- Branch: `docs/clarify-agent-roles-20261006`.
+- Grok role proposed: research / edge discovery / read-only futures+options contract discovery and comparison, including operator-authorized Robinhood/Webull account/market context when available.
+- Cursor role proposed: implement approved changes, fix proven defects, and run registered and approved trials mechanically.
+- Claude/Codex role remains independent breaker / QA.
+- ChatGPT + operator own experiment approval/registration, reconciliation, status changes, and progression decisions.
+- Forward paper/demo/observer lanes remain evidence collectors, not research agents.
+- Read-only broker/account linkage is explicitly data context only; it grants no order/cancel/replace/exercise/close authority.
+- Research flow: Grok proposes → ChatGPT/operator approve/register → Cursor runs/builds → Claude/Codex attacks → ChatGPT/operator decide.
+- Files changed on this branch: `AGENTS.md`, `GROK.md`, `docs/options-current-state-handoff.md`, this checkpoint.
+- Runtime mutations: none.
+- Strategy/risk/broker/execution changes: none.
+- PR workflow note: independent review/merge state is transient GitHub metadata, not the durable runtime NEXT. After this PR is resolved, follow the current runtime checkpoint below.
+- DO NOT REDO: do not recreate a second role matrix, experiment selector, or parallel research queue elsewhere.
+
+## Previous lane checkpoint — 2026-10-06 (PR #1143: PAPER posture + advisory Discord off alert lock; merged via #1143)
+
+Task: close the two remaining independent-QA blockers on existing branch `cursor/futures-advisory-visibility-f2da`, plus local presentation corrections. No scope expansion. Do not merge or deploy.
+
+### VERIFIED
+
+- Independent breaker QA at exact prior head `13ae326c466e7ef19703efc65f6f35d04e721b6f`: prior three HOLD findings remain fixed; two new blockers were real (PAPER on unselected TRADE candidates; synchronous `notify_futures_advisory()` inside `_handle_alert_blocking` / `_alert_lock`).
+- Code fix commit: `02eb57577ead63a3a42a5532093042ed863552af`.
+- Canonical identity remains `strategy.shadow_resolver._candidate_key(...)`. This change does not edit `_candidate_key()` or resolver outcome math.
+
+### CHANGED
+
+- `_posture()` returns `PAPER` on a TRADE bar only when `selected is True`; unselected candidates stay `SHADOW / ADVISORY ONLY`.
+- Advisory Discord uses the observation-style daemon queue: `_handle_alert_blocking` copies `dict(result)` and enqueues; HTTP/retries/429 sleeps run off `_alert_lock`.
+- Discord fan-out capped at `MAX_ADVISORY_CARDS_PER_ALERT = 3` (delivery only).
+- Evidence labels match the leading inventory verdict; same-key different stop/target does not attach; orphan SHADOW_OUTCOME cards are presentation-deduped; resolver identity reconstruction prefers `ts` before `timestamp`.
+
+### TESTS
+
+- `python3 -m pytest -q tests/test_futures_advisory.py` → **27 passed**.
+- `python3 -m pytest -q tests/test_futures_advisory.py tests/test_discord_notifier.py tests/test_candidate_snapshot.py tests/test_why_no_trade_report.py tests/test_shadow_resolver.py tests/test_shadow_setups.py tests/test_discord_card.py tests/test_discord_router.py tests/test_observation_discord_route.py tests/test_viewer.py tests/test_webhook.py tests/test_e2e_scenarios.py tests/test_notification_market_gate.py tests/test_observation_discord_delivery.py tests/test_one_min_response_audit.py` → **346 passed, 1 Starlette TestClient deprecation warning**.
+
+### RUNTIME MUTATIONS
+
+None. No deploy, no VPS, no env, no broker.
+
+### DONE / DO NOT REDO for this lane
+
+- Do not recreate candidate detection, shadow resolution, or a new ranker.
+- Do not retune confluence weights or change inverse/evidence epochs.
+- Do not change Discord router retry policy globally.
+
+### NEXT
+
+Independent Claude/Codex breaker-QA re-review of PR #1143. Do not merge or deploy.
+
+## Superseded / provenance — 2026-10-06 (PR #1143 HOLD fixes: OPEN, candidate_key join, panel name)
+
+Task: three presentation/evidence correctness fixes on existing branch `cursor/futures-advisory-visibility-f2da`. No scope expansion. **Superseded** by the PAPER-posture / alert-lock checkpoint above; kept as provenance of the prior HOLD round.
+
+### VERIFIED
+
+- Independent review HOLD on PR #1143: fabricated OPEN; loose outcome join; "Qualified setups" label.
+- Canonical identity remains `strategy.shadow_resolver._candidate_key(lane, instrument, bar_ts, strategy, direction, entry[, epoch, variant])`.
+
+### CHANGED
+
+- Omit Later outcome unless a recorded canonical SHADOW_OUTCOME exists.
+- Join outcomes only on unique reconstructed/recorded `candidate_key`.
+- Dashboard panel renamed to Observed setup candidates (advisory only). Card line "Why setup qualified" → "Setup notes".
+
+### NEXT
+
+Re-review PR #1143. Do not merge or deploy.
+
+## Superseded / provenance — 2026-10-06 (futures advisory visibility, source-only)
+
+Task: surface already-recorded futures shadow/candidate setups to the operator in real time. Presentation only. No deploy, merge, VPS, strategy, risk, or broker changes. **Superseded** as an active current checkpoint; kept as provenance of the original advisory-visibility implementation.
+
+### VERIFIED
+
+- `origin/main` at start of this work: `31c9281`.
+- Existing machinery: `strategy/shadow_setups.py` (geometry + `resolve_shadow_candidate`), `strategy/signal_engine.py` (`candidate_audit` / rank metadata), `webhook/runner.py` (`_record_candidate_audit`, journal `shadow_candidates`, `resolve_pending_shadow_outcomes`), `strategy/shadow_resolver.py` (canonical `SHADOW_OUTCOME`), `scripts/why_no_trade_report.py`, Discord decision cards, dashboard inventory/log.
+- Gap was presentation: candidate_audit was not copied onto `process_alert` result; Discord default notify list misses `SHADOW_NO_ORDER`; dashboard `_public_entry` stripped candidate geometry.
+
+### CHANGED
+
+- Branch `cursor/futures-advisory-visibility-f2da`, draft PR #1143.
+- New `notifications/futures_advisory.py` + `tests/test_futures_advisory.py`.
+- `webhook/runner.py` copies recorded candidate_audit / shadow outcomes onto the alert result.
+- `webhook/app.py` sends advisory cards on the existing Discord signal route and lists them on Home/Futures dashboard tabs.
+
+### TESTS
+
+- `python3 -m pytest -q tests/test_futures_advisory.py tests/test_discord_notifier.py tests/test_candidate_snapshot.py tests/test_why_no_trade_report.py` → **40 passed**.
+- `python3 -m pytest -q tests/test_shadow_resolver.py tests/test_shadow_setups.py tests/test_candidate_snapshot.py tests/test_discord_card.py tests/test_discord_router.py tests/test_observation_discord_route.py tests/test_viewer.py tests/test_webhook.py tests/test_e2e_scenarios.py` → **257 passed, 1 warning**.
+
+### RUNTIME MUTATIONS
+
+None. No deploy, no VPS, no env, no broker.
+
+### DONE / DO NOT REDO for this lane
+
+- Do not recreate candidate detection, shadow resolution, or a new ranker.
+- Do not retune confluence weights or change inverse/evidence epochs.
+
+### NEXT
+
+Independent review of PR #1143. Operator may deploy an exact reviewed SHA later. Do not merge or deploy from this session.
 
 ## Previous checkpoint — 2026-10-04 ~21:30Z (c44d32b deployed; canonical 4HR epoch started)
 

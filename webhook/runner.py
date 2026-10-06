@@ -1245,6 +1245,12 @@ def process_alert(
             )
             if _resolved_shadow:
                 result["shadow_outcomes_resolved"] = len(_resolved_shadow)
+                try:
+                    from notifications.futures_advisory import attach_runtime_sources
+
+                    attach_runtime_sources(result, shadow_outcomes=_resolved_shadow)
+                except Exception:  # noqa: BLE001 — presentation plumbing must never affect trading
+                    logger.warning("futures advisory outcome attach failed", exc_info=True)
         except Exception:  # noqa: BLE001 — evidence lane must never break ingestion
             logger.warning("shadow outcome resolution failed", exc_info=True)
 
@@ -2057,6 +2063,12 @@ def process_alert(
     result["signa_status"] = decision.signa_status
     result["failed_gates"] = decision.failed_gates
     result["confidence_score"] = decision.confidence_score
+    try:
+        from notifications.futures_advisory import attach_runtime_sources
+
+        attach_runtime_sources(result, decision=decision)
+    except Exception:  # noqa: BLE001 — presentation plumbing must never affect trading
+        logger.warning("futures advisory source attach failed", exc_info=True)
     opportunity_candidate_ids = _record_candidate_audit(
         decision, state, log_dir, today
     )
