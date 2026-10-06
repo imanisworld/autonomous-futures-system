@@ -46,6 +46,8 @@ MAX_STRING = 160
 
 # Units an auditor may inspect. Nothing outside this set is queried.
 UNIT_ALLOWLIST = (
+    "options-setup-capture.service",
+    "options-setup-capture.timer",
     "options-122-prospective.service",
     "options-122-prospective.timer",
     "options-scanner.service",
@@ -54,7 +56,13 @@ UNIT_ALLOWLIST = (
 )
 
 # Oneshot units are inactive between runs; they are judged by last result.
-ONESHOT_UNITS = frozenset({"options-122-prospective.service", "afs-coverage-collector.service"})
+ONESHOT_UNITS = frozenset(
+    {
+        "options-setup-capture.service",
+        "options-122-prospective.service",
+        "afs-coverage-collector.service",
+    }
+)
 
 # systemctl properties requested. Never add Environment* properties.
 UNIT_PROPERTIES = (
@@ -80,17 +88,44 @@ _FORBIDDEN_PROPERTY = re.compile(r"environment|credential|loadcredential|setcred
 
 # Journals an auditor may inspect: logical name -> file name under the root.
 JOURNAL_ALLOWLIST = {
+    "options_setup_capture": "options_setup_capture.jsonl",
     "options_122_prospective": "options_122_prospective.jsonl",
 }
 
-# Optional heartbeat files (written by the trigger monitor once it exists).
-HEARTBEAT_ALLOWLIST = {
-    "options_prospective_trigger_monitor": "options_prospective_trigger_monitor_heartbeat.json",
-}
+# #1145 setup-capture journal contract (alert_ranker/setup_capture_store.py).
+# Mirrored here so this tool stays stdlib-only; a test pins parity with
+# SetupCaptureJournal.peek_state().
+CAPTURE_JOURNAL = "options_setup_capture"
+CAPTURE_STATE_RECORD_TYPES = frozenset({"WATCHING", "RESOLUTION", "RECONCILIATION", "SOURCE_DRIFT"})
+CAPTURE_TERMINAL_STATUSES = frozenset(
+    {
+        "TRIGGERED",
+        "INVALIDATED",
+        "EXPIRED",
+        "MISSED_LATE",
+        "GAP_THROUGH_OPEN",
+        "DATA_BLOCKED",
+        "AMBIGUOUS",
+        "NO_TRIGGER",
+    }
+)
+CAPTURE_HEARTBEAT_KEY = "_clock"  # COLLECTOR_STATUS clock_ok / COLLECTOR_ERROR clock_unsynced
+CAPTURE_INDEX_TICKERS = frozenset({"SPX"})
 
 TAIL_KEYS = (
     "record_type",
     "observed_at",
+    "structure_key",
+    "timeframe",
+    "pattern",
+    "direction",
+    "capture_late",
+    "gap_through",
+    "data_delayed",
+    "prospective_catch",
+    "persisted_at",
+    "first_seen_at",
+    "status_reason",
     "setup_id",
     "ticker",
     "collector_version",
@@ -294,40 +329,108 @@ def journal_status(
     }
 
 
-def heartbeat_status(root: Path, name: str, *, now: datetime | None = None) -> dict[str, Any]:
-    if name not in HEARTBEAT_ALLOWLIST:
-        raise ValueError(f"heartbeat not allowlisted: {name}")
-    path = _safe_path(root, HEARTBEAT_ALLOWLIST[name])
-    result: dict[str, Any] = {"heartbeat": name, "file": HEARTBEAT_ALLOWLIST[name]}
+def _age_seconds(value: Any, now: datetime) -> float | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return round((now - parsed).total_seconds(), 1)
+
+
+def capture_summary(root: Path, *, now: datetime | None = None) -> dict[str, Any]:
+    """#1145 setup-capture state from its journal, read-only.
+
+    Replays exactly the state rules of ``SetupCaptureJournal._build_state``:
+    WATCHING / RESOLUTION / RECONCILIATION / SOURCE_DRIFT rows drive state; a
+    terminal status removes the key from WATCHING; diagnostic rows never do.
+    The heartbeat is the latest ``_clock`` collector row.
+    """
+    now = now or datetime.now(timezone.utc)
+    path = _safe_path(root, JOURNAL_ALLOWLIST[CAPTURE_JOURNAL])
+    result: dict[str, Any] = {"journal": CAPTURE_JOURNAL}
     if path is None:
         return {**result, "health": "DEGRADED", "error": "path_outside_root"}
     if not path.is_file():
-        # The trigger monitor is being built in a separate workstream; absence
-        # is reported, not treated as proof of liveness or death.
         return {**result, "exists": False, "health": "NOT_PRESENT"}
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {**result, "exists": True, "health": "DEGRADED", "error": "unreadable"}
-    if not isinstance(payload, dict):
-        return {**result, "exists": True, "health": "DEGRADED", "error": "not_object"}
-    beat = _last_timestamp(payload)
-    now = now or datetime.now(timezone.utc)
-    age = None
-    if beat:
-        try:
-            parsed = datetime.fromisoformat(str(beat).replace("Z", "+00:00"))
-            if parsed.tzinfo is not None:
-                age = round((now - parsed).total_seconds(), 1)
-        except ValueError:
-            pass
+    watching: dict[str, dict[str, Any]] = {}
+    terminal: dict[str, dict[str, Any]] = {}
+    latest_transition: dict[str, Any] | None = None
+    heartbeat: dict[str, Any] | None = None
+    spx_latest: dict[str, Any] | None = None
+    unreadable = 0
+    with path.open("rb") as handle:
+        for raw in handle:
+            try:
+                row = json.loads(raw)
+            except (ValueError, UnicodeDecodeError):
+                unreadable += 1  # includes a torn trailing line; never repaired here
+                continue
+            if not isinstance(row, dict) or not row.get("structure_key"):
+                unreadable += 1
+                continue
+            key = str(row["structure_key"])
+            record_type = str(row.get("record_type") or "")
+            if key == CAPTURE_HEARTBEAT_KEY and record_type in {"COLLECTOR_STATUS", "COLLECTOR_ERROR"}:
+                heartbeat = row
+                continue
+            if record_type not in CAPTURE_STATE_RECORD_TYPES:
+                continue
+            status = str(row.get("status") or "WATCHING")
+            if status == "WATCHING" and key not in terminal:
+                watching[key] = row
+            if status in CAPTURE_TERMINAL_STATUSES:
+                terminal[key] = row
+                watching.pop(key, None)
+            if record_type != "SOURCE_DRIFT":
+                latest_transition = row
+            if str(row.get("ticker") or "").upper() in CAPTURE_INDEX_TICKERS:
+                spx_latest = row
+    current = {**terminal, **watching}
+    by_status: dict[str, int] = {}
+    for row in current.values():
+        st = str(row.get("status") or "WATCHING")
+        by_status[st] = by_status.get(st, 0) + 1
+
+    def project(row: dict[str, Any] | None) -> dict[str, Any] | None:
+        if row is None:
+            return None
+        return {k: redact(row[k]) for k in TAIL_KEYS if k in row}
+
+    beat = None
+    if heartbeat is not None:
+        beat = {
+            "observed_at": redact(heartbeat.get("observed_at")),
+            "age_seconds": _age_seconds(heartbeat.get("observed_at"), now),
+            "status_reason": redact(heartbeat.get("status_reason")),
+            "clock_offset_s": heartbeat.get("clock_offset_s")
+            if isinstance(heartbeat.get("clock_offset_s"), (int, float))
+            else None,
+        }
+    spx = None
+    if spx_latest is not None:
+        spx = {
+            "status": redact(spx_latest.get("status")),
+            "status_reason": redact(spx_latest.get("status_reason")),
+            "data_delayed": bool(spx_latest.get("data_delayed")),
+            "observed_at": redact(spx_latest.get("observed_at")),
+        }
+    clock_ok = beat is not None and beat["status_reason"] == "clock_ok"
+    healthy = unreadable == 0 and clock_ok and not (spx and spx["data_delayed"])
     return {
         **result,
         "exists": True,
-        "last_beat_at": redact(beat),
-        "age_seconds": age,
-        "state": redact(payload.get("state") or payload.get("status")),
-        "health": "OK" if age is not None else "DEGRADED",
+        "watching_count": len(watching),
+        "structure_count": len(current),
+        "by_status": dict(sorted(by_status.items())),
+        "latest_transition": project(latest_transition),
+        "heartbeat": beat,
+        "spx": spx,
+        "unreadable_lines": unreadable,
+        "health": "OK" if healthy else "DEGRADED",
     }
 
 
@@ -342,14 +445,14 @@ def snapshot(
     now = now or datetime.now(timezone.utc)
     unit_rows = [unit_status(u, run) for u in units]
     journals = [journal_status(root, n, tail=tail, now=now) for n in JOURNAL_ALLOWLIST]
-    beats = [heartbeat_status(root, n, now=now) for n in HEARTBEAT_ALLOWLIST]
+    capture = capture_summary(root, now=now)
     live_tree_units = [
         u["unit"] for u in unit_rows
         if u.get("runtime_tree", {}).get("classification") == "LIVE_TREE"
     ]
     degraded = [
-        row.get("unit") or row.get("journal") or row.get("heartbeat")
-        for row in (*unit_rows, *journals, *beats)
+        row.get("unit") or row.get("journal")
+        for row in (*unit_rows, *journals, capture)
         if row.get("health") not in {"OK", "NOT_PRESENT"}
     ]
     return {
@@ -359,7 +462,7 @@ def snapshot(
         "execution_authority": False,
         "units": unit_rows,
         "journals": journals,
-        "heartbeats": beats,
+        "setup_capture": capture,
         "runtime_integrity": {
             "units_running_from_live_tree": live_tree_units,
             "ok": not live_tree_units,

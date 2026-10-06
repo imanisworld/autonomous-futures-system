@@ -201,21 +201,6 @@ def test_redact_hides_urls_bearer_and_opaque_tokens_but_keeps_shas():
     assert RELEASE in out
 
 
-def test_heartbeat_absent_is_reported_not_faked(tmp_path):
-    out = status.heartbeat_status(tmp_path, "options_prospective_trigger_monitor", now=NOW)
-    assert out["exists"] is False
-    assert out["health"] == "NOT_PRESENT"
-
-
-def test_heartbeat_age(tmp_path):
-    (tmp_path / "options_prospective_trigger_monitor_heartbeat.json").write_text(
-        json.dumps({"ts": "2026-10-06T14:59:30+00:00", "state": "WATCHING"})
-    )
-    out = status.heartbeat_status(tmp_path, "options_prospective_trigger_monitor", now=NOW)
-    assert out["age_seconds"] == 30.0
-    assert out["state"] == "WATCHING"
-
-
 def test_snapshot_flags_live_tree_and_is_read_only(tmp_path):
     _write_journal(tmp_path, [{"record_type": "ARMED", "observed_at": "2026-10-06T14:00:00+00:00"}])
     before = sorted(p.name for p in tmp_path.iterdir())
@@ -259,11 +244,12 @@ def test_cli_rejects_relative_root_and_bad_tail(monkeypatch, capsys):
         status.main(["--tail", "21"])
 
 
-def test_release_pin_template_keeps_frozen_collector_arguments():
-    """The pin may change only the code tree, never the frozen 122-IEX-E1 argv."""
+@pytest.mark.parametrize("unit", ["options-122-prospective", "options-setup-capture"])
+def test_release_pin_template_keeps_frozen_collector_arguments(unit):
+    """The pin may change only the code tree, never the collector argv."""
     root = Path(__file__).resolve().parents[1] / "ops" / "systemd"
-    base = (root / "options-122-prospective.service").read_text()
-    template = (root / "options-122-prospective.service.d" / "10-release.conf.template").read_text()
+    base = (root / f"{unit}.service").read_text()
+    template = (root / f"{unit}.service.d" / "10-release.conf.template").read_text()
 
     def argv(text: str) -> list[str]:
         lines = [l for l in text.splitlines() if l.startswith("ExecStart=") and l != "ExecStart="]
@@ -277,3 +263,164 @@ def test_release_pin_template_keeps_frozen_collector_arguments():
     assert status.classify_runtime_tree(
         "/root/afs-releases/abc", "/root/afs-releases/abc/.venv/bin/python"
     )["classification"] == "PINNED_RELEASE"
+
+
+# ── #1145 setup-capture integration ─────────────────────────────────────────
+
+from datetime import timedelta
+
+from alert_ranker.setup_capture import CaptureRecord
+from alert_ranker.setup_capture_store import SetupCaptureJournal
+
+
+def _capture_journal(root: Path) -> Path:
+    path = root / "options_setup_capture.jsonl"
+    journal = SetupCaptureJournal(path)
+    t0 = datetime(2026, 10, 6, 13, 0, tzinfo=timezone.utc)
+    journal.append(
+        {
+            "record_type": "COLLECTOR_STATUS",
+            "structure_key": "_clock",
+            "status_reason": "clock_ok",
+            "clock_offset_s": 0.02,
+            "observed_at": (t0 + timedelta(minutes=58)).isoformat(),
+        }
+    )
+    spy = CaptureRecord(
+        structure_key="SPY|1H|2026-10-02T20:00:00Z|222:2U:2U",
+        ticker="SPY",
+        timeframe="1H",
+        pattern="222:2U:2U",
+        boundary_high=770.0768,
+        boundary_low=769.17,
+        persisted_at=t0.isoformat(),
+        first_seen_at=t0.isoformat(),
+    )
+    journal.append_record("WATCHING", spy, observed_at=t0.isoformat())
+    qqq = CaptureRecord(
+        structure_key="QQQ|30m|2026-10-06T13:00:00Z|212:2D:2U",
+        ticker="QQQ",
+        timeframe="30m",
+        pattern="212:2D:2U",
+        boundary_high=500.0,
+        boundary_low=498.0,
+        persisted_at=t0.isoformat(),
+    )
+    journal.append_record("WATCHING", qqq, observed_at=t0.isoformat())
+    from dataclasses import replace
+
+    journal.append_record(
+        "RESOLUTION",
+        replace(qqq, status="MISSED_LATE", direction="LONG", status_reason="first_sight_after_trigger"),
+        observed_at=(t0 + timedelta(minutes=40)).isoformat(),
+    )
+    spx = CaptureRecord(
+        structure_key="SPX|1D|2026-10-05T20:00:00Z|322:3:2U",
+        ticker="SPX",
+        timeframe="1D",
+        pattern="322:3:2U",
+        boundary_high=6800.0,
+        boundary_low=6750.0,
+        persisted_at=t0.isoformat(),
+    )
+    journal.append_record("WATCHING", spx, observed_at=t0.isoformat())
+    journal.append_record(
+        "RESOLUTION",
+        replace(spx, status="DATA_BLOCKED", status_reason="index_bar_stale", data_delayed=True),
+        observed_at=(t0 + timedelta(minutes=50)).isoformat(),
+    )
+    return path
+
+
+def test_capture_summary_matches_1145_peek_state(tmp_path):
+    path = _capture_journal(tmp_path)
+    out = status.capture_summary(tmp_path, now=NOW)
+    official = SetupCaptureJournal(path, create=False).peek_state()
+    counts = SetupCaptureJournal._counts_from_state(official)
+    assert out["watching_count"] == counts["watching"] == 1
+    assert out["structure_count"] == counts["structure_count"] == 3
+    assert out["by_status"] == dict(sorted(counts["by_status"].items()))
+
+
+def test_capture_heartbeat_latest_transition_and_spx_health(tmp_path):
+    _capture_journal(tmp_path)
+    out = status.capture_summary(tmp_path, now=NOW)
+    assert out["heartbeat"]["status_reason"] == "clock_ok"
+    assert out["heartbeat"]["age_seconds"] == 3720.0  # 13:58 beat vs 15:00 now
+    assert out["latest_transition"]["status"] == "DATA_BLOCKED"
+    assert out["latest_transition"]["structure_key"].startswith("SPX|1D|")
+    assert out["spx"] == {
+        "status": "DATA_BLOCKED",
+        "status_reason": "index_bar_stale",
+        "data_delayed": True,
+        "observed_at": "2026-10-06T13:50:00+00:00",
+    }
+    # SPX delayed data is surfaced as degraded, never hidden.
+    assert out["health"] == "DEGRADED"
+
+
+def test_capture_summary_is_read_only_on_torn_journal(tmp_path):
+    path = _capture_journal(tmp_path)
+    with path.open("a") as handle:
+        handle.write('{"record_type":"WATCHING","structure_key":"X|1H|')  # torn
+    before = path.read_bytes()
+    out = status.capture_summary(tmp_path, now=NOW)
+    assert out["unreadable_lines"] == 1 and out["health"] == "DEGRADED"
+    assert path.read_bytes() == before
+
+
+def test_capture_clock_unsynced_is_degraded(tmp_path):
+    path = _capture_journal(tmp_path)
+    SetupCaptureJournal(path).append(
+        {
+            "record_type": "COLLECTOR_ERROR",
+            "structure_key": "_clock",
+            "status": "DATA_BLOCKED",
+            "status_reason": "clock_unsynced",
+            "observed_at": "2026-10-06T14:59:00+00:00",
+        }
+    )
+    out = status.capture_summary(tmp_path, now=NOW)
+    assert out["heartbeat"]["status_reason"] == "clock_unsynced"
+    assert out["health"] == "DEGRADED"
+
+
+def test_capture_absent_journal_is_not_present(tmp_path):
+    assert status.capture_summary(tmp_path, now=NOW)["health"] == "NOT_PRESENT"
+
+
+def test_setup_capture_status_script_never_mutates_journal(tmp_path, monkeypatch, capsys):
+    """#1145's status dump used repair=True paths; it must leave bytes identical."""
+    from scripts import options_setup_capture_status as script
+
+    path = _capture_journal(tmp_path)
+    with path.open("a") as handle:
+        handle.write('{"record_type":"WATCHING","structure_key":"Y|')  # torn tail
+    before = path.read_bytes()
+    monkeypatch.setenv("OPTIONS_SETUP_CAPTURE_JOURNAL", str(path))
+    assert script.main() == 0
+    assert path.read_bytes() == before
+    assert "JOURNAL_REPAIR" not in path.read_text()
+    out = json.loads(capsys.readouterr().out)
+    assert out["counts"]["watching"] == 1
+    assert out["execution_authority"] is False
+
+
+def test_setup_capture_status_script_does_not_create_dirs(tmp_path, monkeypatch, capsys):
+    from scripts import options_setup_capture_status as script
+
+    missing = tmp_path / "nope" / "options_setup_capture.jsonl"
+    monkeypatch.setenv("OPTIONS_SETUP_CAPTURE_JOURNAL", str(missing))
+    assert script.main() == 2
+    assert not (tmp_path / "nope").exists()
+
+
+def test_setup_capture_units_are_allowlisted_and_flagged_when_on_live_tree():
+    assert "options-setup-capture.service" in status.UNIT_ALLOWLIST
+    props = _pinned_service_props()
+    props["Id"] = "options-setup-capture.service"
+    props["WorkingDirectory"] = "/root/autonomous-futures-system"
+    props["ExecStart"] = "{ path=/root/autonomous-futures-system/.venv/bin/python ; argv[]=x ; }"
+    run, _ = _show(**props)
+    row = status.unit_status("options-setup-capture.service", run)
+    assert row["runtime_tree"]["classification"] == "LIVE_TREE"

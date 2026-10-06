@@ -1,5 +1,15 @@
 # Options prospective observer — operability and runtime-integrity (2026-10-06)
 
+> **Integration pass (post-#1145 `ae8c897` / #1146 `445393f`).** Reconciled with
+> the merged setup-capture observer. The earlier speculative
+> `options_prospective_trigger_monitor_heartbeat.json` file does not exist and
+> was removed: #1145 records its heartbeat as `_clock` rows inside
+> `options_setup_capture.jsonl`. `options-setup-capture.service/.timer` and
+> that journal are now allowlisted. `scripts/options_setup_capture_status.py`
+> (from #1145) previously called repairing reads (`counts()` / `list_all()` with
+> `repair=True`), so a "status" dump could rewrite a torn journal and append a
+> `JOURNAL_REPAIR` row; it now uses `peek_state()` and `create=False`.
+
 Status: **source only, NOT installed, NOT deployed.** No box access was used
 in this session (no `claude-audit` route from this environment), so every
 runtime statement below is either cited from the repo record or marked
@@ -18,7 +28,10 @@ prints one JSON document (`schema: options-observer-status-v1`).
 | journal existence / size / hash | `journals[].exists`, `size_bytes`, `sha256`, `lines`, `malformed_lines` |
 | capped/redacted tail | `journals[].tail` (≤ 20 rows, allowlisted keys only, strings redacted) |
 | last event timestamp | `journals[].last_event_at`, `last_event_age_seconds`, `record_type_counts` |
-| trigger-monitor heartbeat | `heartbeats[]` — reports `NOT_PRESENT` until the trigger monitor (Cursor's early-capture work) writes `options_prospective_trigger_monitor_heartbeat.json` |
+| collector heartbeat | `setup_capture.heartbeat` — latest `_clock` row in the #1145 journal (`COLLECTOR_STATUS clock_ok` / `COLLECTOR_ERROR clock_unsynced`), with age and clock offset |
+| current WATCHING count | `setup_capture.watching_count`, `structure_count`, `by_status` (same replay rules as #1145 `SetupCaptureJournal.peek_state`, parity-tested) |
+| latest transition | `setup_capture.latest_transition` (allowlisted keys only) |
+| SPX observation health | `setup_capture.spx` — latest SPX row status, reason, `data_delayed`; delayed or blocked SPX ⇒ `DEGRADED` |
 
 Safety properties (each has a test in `tests/test_options_observer_status.py`):
 
@@ -45,6 +58,13 @@ claude-audit ALL=(root) NOPASSWD: /usr/local/sbin/afs-options-observer-status, /
 Root is needed only because `/root/afs-shared/logs` is under `/root`. The
 wrapper takes no path arguments. Install the exact reviewed blob and record
 its sha256.
+
+## 1b. Access behaviour (#1146)
+
+This tool runs locally under a sudo-restricted wrapper; it is not an HTTP
+surface. The scanner's `/setup-capture` stays behind the #1146 gate (private);
+`/health` carries only counts and reasons, never the journal path (#1145
+regression). Nothing here changes either surface.
 
 ## 2. Runtime-integrity question: pinned release vs `/root/autonomous-futures-system`
 
@@ -94,3 +114,13 @@ template **only with operator GO**, since the epoch is frozen.
 
 Not changed: the base unit file, the collector code, the epoch, the box.
 Cursor owns the collector/trigger-timing code; this PR touches neither.
+
+### Setup-capture collector (#1145) — same question
+
+`ops/systemd/options-setup-capture.service` also runs from
+`/root/autonomous-futures-system` (documented by #1145 as an integrity flag, with
+state on the shared log volume). `ops/systemd/options-setup-capture.service.d/10-release.conf.template`
+offers the same code-only pin, argv-parity tested. Applying it is part of the
+separate timer-install GO. **Blocker:** the effective runtime tree of both
+collectors is UNVERIFIED until the status wrapper runs on the box.
+
