@@ -71,21 +71,23 @@ If the agent cannot persist this file, it must return this payload verbatim-read
 
 ### OPEN / NOT MERGE-CLEARED
 
-- Next merge candidate: **#1148** tip `fe88ade` — needs independent review + separate merge GO. Do not merge #1149+.
-- Remaining after #1148: #1149 → #1150 → (#1151+#1154) → (#1152+#1153).
+- **HOLD — no merge GO on #1148.** Independent Grok review of tip `fe88ade`: **CHANGES REQUIRED**.
+  - Blockers (reproduce): (1) `bid=True, ask=True` → PASS (bool→1.0); (2) `volume=10**400` → OverflowError (must BLOCK); (3) `bid=1e308, ask=1.7e308, spread_percent=1.0` → PASS.
+  - Tip moved to `27dc28e370dfe94cea5a57b4fb8f048d04596c67` claiming fixes; Grok re-reviewing that exact head. **Do not merge until Grok PASS on exact current head + operator GO.**
+- Remaining after #1148: #1149 → #1150 → (#1151+#1154) → (#1152+#1153). Do not merge #1149+.
 - Live A13 / Public INDEX entitlement UNVERIFIED.
-- Cited evidence path `/workspace/afs-shared/early_capture_redteam_2026-10-06/PR1147_beb389a_review.md` was **not found in this Cloud Agent workspace** (operator authorization + Grok PASS accepted).
+- No observer timer install.
 
 ### DO NOT REDO
 
-- Do not merge #1148+ without a new operator GO on the exact tip.
+- Do not merge #1148 on `fe88ade` (stale FAIL tip) or any tip without fresh Grok PASS + operator GO.
 - Do not install observer timer / status wrapper / release-pin drop-in without separate install GO.
 - Do not deploy, restart services, or change VPS config.
 - Do not re-merge #1145/#1146/#1147.
 
 ### NEXT
 
-1. Independent review of #1148 exact tip `fe88ade`; wait for operator merge GO.
+1. Wait for independent Grok PASS on exact #1148 tip (currently claimed `27dc28e`); then operator merge GO.
 2. Only after that GO: merge #1148, then reconcile #1149 for review and stop again.
 3. Separate operator GO later for observer timer install + live prove.
 
