@@ -28,6 +28,7 @@
   },
   "population": "EXAMPLE ONLY; MNQ; 2024-07-02..2026-06-26; demo fixture — not linked to the live ledger",
   "setup_type": "demo_setup",
+  "evidence_type": "coverage",
   "timeframe": "5m",
   "changed_variables": [
     {

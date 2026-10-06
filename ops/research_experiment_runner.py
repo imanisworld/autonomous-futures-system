@@ -22,7 +22,9 @@ from typing import Any, Callable, Mapping, Sequence
 
 from jsonschema import Draft202012Validator
 
-RUNNER_VERSION = "1.0.0"
+from ops import evidence_row as evidence_contract
+
+RUNNER_VERSION = "1.1.0"
 SCHEMA_REL = "docs/research-experiment-spec.schema.json"
 SPECS_DIR_REL = "docs/research-experiment-specs"
 LEDGER_REL = "docs/research-trial-ledger.jsonl"
@@ -680,6 +682,18 @@ def write_evidence_bundle(
         "runner_report.json",
         report.to_dict(),
     )
+    code_sha = report.candidate_sha or report.baseline_sha
+    if not code_sha or str(code_sha).strip().lower() == "unknown":
+        raise evidence_contract.EvidenceContractError(
+            "cannot write evidence bundle without a real code_sha"
+        )
+    envelope = evidence_contract.build_common_envelope(
+        spec=spec,
+        code_sha=str(code_sha),
+        runner_version=RUNNER_VERSION,
+        generated_at=utc_now(),
+    )
+    _write("evidence_envelope.json", envelope)
     _write(
         "reproduction.json",
         {
@@ -688,6 +702,8 @@ def write_evidence_bundle(
             "python": sys.version,
             "platform": platform.platform(),
             "recorded_at": utc_now(),
+            "evidence_type": envelope.get("evidence_type"),
+            "execution_model_id": envelope.get("execution_model_id"),
         },
     )
     if baseline_raw is not None:
@@ -1063,14 +1079,135 @@ def execute_experiment(
 
     baseline_arm, candidate_arm = _run_both_arms(adapter, ctx)
 
+    checks = list(validation.integrity_checks)
+    try:
+        evidence_type = evidence_contract.resolve_evidence_type(spec)
+        expected_model_id = None
+        expected_fingerprint = evidence_contract.data_identity_from_spec(spec)
+        if evidence_type == evidence_contract.EVIDENCE_TYPE_TRADE_EXECUTION:
+            assumptions = spec.get("execution_assumptions")
+            if not isinstance(assumptions, dict):
+                raise evidence_contract.EvidenceContractError(
+                    "trade_execution requires execution_assumptions"
+                )
+            expected_model_id = evidence_contract.execution_model_id(assumptions)
+        evidence_errors = evidence_contract.validate_arm_evidence(
+            baseline_arm.members,
+            evidence_type=evidence_type,
+            expected_execution_model_id=expected_model_id,
+            expected_data_fingerprint=expected_fingerprint,
+        ) + evidence_contract.validate_arm_evidence(
+            candidate_arm.members,
+            evidence_type=evidence_type,
+            expected_execution_model_id=expected_model_id,
+            expected_data_fingerprint=expected_fingerprint,
+        )
+    except evidence_contract.EvidenceContractError as exc:
+        evidence_errors = [str(exc)]
+        evidence_type = str(spec.get("evidence_type") or "unresolved")
+        expected_model_id = None
+
+    checks.append(
+        CheckResult(
+            "evidence_contract",
+            not evidence_errors,
+            (
+                f"evidence_type={evidence_type} members satisfy the typed contract"
+                if not evidence_errors
+                else "; ".join(evidence_errors)
+            ),
+        )
+    )
+    if evidence_errors:
+        return RunnerReport(
+            status="INVALID",
+            experiment_id=spec.get("experiment_id"),
+            trial_id=spec.get("trial_id"),
+            baseline_sha=baseline_arm.commit_sha,
+            candidate_sha=candidate_arm.commit_sha,
+            population=spec.get("population"),
+            changed_variables=list(spec.get("changed_variables") or []),
+            held_constant=list(spec.get("held_constant") or []),
+            integrity_checks=checks,
+            baseline_metrics=None,
+            candidate_metrics=None,
+            delta=None,
+            coverage_funnel={
+                "baseline": coverage_funnel(baseline_arm.members),
+                "candidate": coverage_funnel(candidate_arm.members),
+            },
+            concentration={
+                "baseline": concentration(baseline_arm.members),
+                "candidate": concentration(candidate_arm.members),
+            },
+            evidence_classification={
+                "VERIFIED": [],
+                "INFERENCE": [],
+                "UNKNOWN": ["typed evidence contract failed closed before metrics"],
+            },
+            result="INVALID EXPERIMENT",
+            artifacts=validation.artifacts,
+            qa_handoff=validation.qa_handoff,
+            errors=list(evidence_errors),
+            warnings=baseline_arm.warnings + candidate_arm.warnings,
+        )
+
     required = list(spec.get("required_metrics") or [])
-    baseline_metrics = compute_metrics(baseline_arm.members, required)
-    candidate_metrics = compute_metrics(candidate_arm.members, required)
+    try:
+        if evidence_type == evidence_contract.EVIDENCE_TYPE_TRADE_EXECUTION:
+            baseline_metrics = evidence_contract.compute_trade_execution_metrics(
+                baseline_arm.members, required
+            )
+            candidate_metrics = evidence_contract.compute_trade_execution_metrics(
+                candidate_arm.members, required
+            )
+        else:
+            baseline_metrics = compute_metrics(baseline_arm.members, required)
+            candidate_metrics = compute_metrics(candidate_arm.members, required)
+    except evidence_contract.EvidenceContractError as exc:
+        return RunnerReport(
+            status="INVALID",
+            experiment_id=spec.get("experiment_id"),
+            trial_id=spec.get("trial_id"),
+            baseline_sha=baseline_arm.commit_sha,
+            candidate_sha=candidate_arm.commit_sha,
+            population=spec.get("population"),
+            changed_variables=list(spec.get("changed_variables") or []),
+            held_constant=list(spec.get("held_constant") or []),
+            integrity_checks=checks
+            + [
+                CheckResult(
+                    "trade_scoring",
+                    False,
+                    str(exc),
+                )
+            ],
+            baseline_metrics=None,
+            candidate_metrics=None,
+            delta=None,
+            coverage_funnel={
+                "baseline": coverage_funnel(baseline_arm.members),
+                "candidate": coverage_funnel(candidate_arm.members),
+            },
+            concentration={
+                "baseline": concentration(baseline_arm.members),
+                "candidate": concentration(candidate_arm.members),
+            },
+            evidence_classification={
+                "VERIFIED": [],
+                "INFERENCE": [],
+                "UNKNOWN": ["trade_execution scoring failed closed"],
+            },
+            result="INVALID EXPERIMENT",
+            artifacts=validation.artifacts,
+            qa_handoff=validation.qa_handoff,
+            errors=[str(exc)],
+            warnings=baseline_arm.warnings + candidate_arm.warnings,
+        )
     missing = sorted(
         set(baseline_metrics.get("_missing_required") or [])
         | set(candidate_metrics.get("_missing_required") or [])
     )
-    checks = list(validation.integrity_checks)
     checks.append(
         CheckResult(
             "required_metrics",

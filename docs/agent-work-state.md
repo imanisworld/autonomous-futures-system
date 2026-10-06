@@ -58,20 +58,58 @@ Every substantial unit of work must leave:
 
 If the agent cannot persist this file, it must return this payload verbatim-ready for the next agent/operator to save.
 
-## Current checkpoint — 2026-10-06 (post-#1145/#1146 integration pass; stack review-ready; no merge/deploy/timer)
+## Current checkpoint — 2026-10-06 (U1: r_multiple / P&L direction consistency)
 
-`main` tip: `445393fe0b65c74be47a86e9fa14295a7af0c69a`. #1145 merged as `ae8c897`, #1146 merged as `445393f`. Options current-state authority remains `docs/options-current-state-handoff.md`. The futures runtime checkpoint (c44d32b) below is unchanged. **No observer timer install.**
+Task: Continue PR #1155 only. Prior three Claude HOLD blockers closed at `5325eb1`. Fix the narrow new U1 blocker: FILLED rows must not report contradictory `r_multiple` vs `net_pnl`, or favorable gross P&L on adverse price move. Research/evidence plumbing only. No U2/U3. No merge/deploy.
+
+### VERIFIED
+
+- Reviewed head before this patch: `5325eb126a5476fe9b0a885621f32a6297cf2a68`.
+- Claude APPROVED U1 logic at `dc9963548502415c12fb8356fb83348b106e6a87`; this branch is a rebase-only onto current `main`.
+- Branch remains `cursor/u1-trade-evidence-contract-f2da`.
+- U1 rebase base includes `#1145` (`ae8c897`) and `#1146` (`445393f`) on `origin/main`.
+- Prior three blockers remain closed; only Cases F/H consistency added.
+- Existing runner + options coverage adapter remain the single runner path; no second runner invented.
+
+### CHANGED
+
+- `validate_trade_execution_row`: enforce `r_multiple` sign vs `net_pnl` (eps=`PNL_TOLERANCE`); enforce directional `gross_pnl` vs signed fill→exit move (no dollar recomputation).
+- Cases F/H regression tests added.
+
+### TESTS
+
+- Focused + full suite + exact-head CI/handoff recorded in PR body after the new SHA.
+
+### RUNTIME MUTATIONS
+
+None. No deploy, no VPS, no broker, no strategy change.
+
+### DONE / DO NOT REDO for this lane
+
+- Do not start U2/U3 in this PR.
+- Do not address Claude minor findings unless required by this blocker.
+
+### NEXT
+
+Independent Claude final re-review of the new exact head. Do not merge or deploy.
+
+## Options lane checkpoint — 2026-10-06 (post-#1145/#1146 integration pass; #1147 + #1148 merged; no deploy/timer)
+
+`main` includes #1145 (`ae8c897`), #1146 (`445393f`), #1147 (`53dda44`) and #1148 (`e86c55c`). Options current-state authority remains `docs/options-current-state-handoff.md`. The futures runtime checkpoint (c44d32b) below is unchanged. **No observer timer install.** Kept below the U1 checkpoint, which is the active current checkpoint.
 
 ### DONE / DO NOT REDO
 
 - Oct. 5 SPY shadow 9925/9933 audit: late `H1_222_CONTINUATION` AHEAD after trigger 770.0768; not a prospective catch. Do not retune Strat from them.
-- #1145 MERGED (`ae8c897`): observation-only setup-capture collector. Timer units remain uninstalled.
-- #1146 MERGED (`445393f`): scanner in-app access gate. `/setup-capture` private; `/health` redacted.
-- Claude stack #1147–#1154 reconciled onto the real #1145 schema (see the handoff 2026-10-06 integration-pass table). Fixes found in this pass: #1145 status script mutated the journal on read (#1147); RH evaluator lacked the planned-risk cap and approved NaN risk (#1149); fitness and research took signal integrity from the outcome row (#1152/#1153); canonical events kept ISO-string times (#1151).
+- Observer scaffold + B1–B13 red-team fixes (see prior checkpoints; fix SHAs `d29b2cb` / `8a5eeed` / `00dbd59` / journal-path redaction on tip).
+- **#1145 MERGED** (`ae8c897`): observation-only setup-capture collector. Timer units remain uninstalled. `/health` setup_capture telemetry omits the journal path; `/setup-capture` is private.
+- **#1146 MERGED** (`445393f`): options scanner in-app access gate.
+- **#1147 MERGED** (`53dda44`): read-only observer status tool on the real #1145 journal; fixed the #1145 status script mutating the journal on read; release-pin drop-in template (not installed).
+- **#1148 MERGED** (`e86c55c`): contract-quality gate fails closed (non-finite, crossed, understated spread, overflow, boolean intake); exact-head Grok/independent review PASS on `8a6a642`.
+- Claude stack reconciled onto the real #1145 schema (handoff 2026-10-06 integration-pass table). Other fixes found in this pass: RH evaluator lacked the planned-risk cap and approved NaN risk (#1149); fitness and research took signal integrity from the outcome row (#1152/#1153); canonical events kept ISO-string times (#1151).
 
-### OPEN / NOT MERGE-CLEARED
+### OPEN / UNVERIFIED
 
-- Stack PRs #1147–#1154 need independent review and operator merge GO. Stacked PRs (#1151–#1154) do not run handoff-fields until rebased onto main by merge order.
+- Open stack PRs #1149, #1150, then #1151 → #1152 / #1153 and #1154 need exact-head independent review and operator merge GO. Stacked PRs (#1151–#1154) do not run CI until retargeted to `main`.
 - #1145 unit runs from the live tree; release-pin drop-in (#1147 template) not installed.
 - Live A13 sessions and Public INDEX real-time entitlement remain UNVERIFIED.
 
@@ -82,12 +120,12 @@ If the agent cannot persist this file, it must return this payload verbatim-read
 - Do not deploy without explicit operator GO.
 - Do not expose `/root/afs-shared/...` capture-journal paths on `/health`.
 - Do not install the observer timer without a separate install GO.
-- Do not re-merge or re-land #1145 or #1146.
+- Do not re-merge or re-land #1145, #1146, #1147 or #1148.
 - Do not register a tradable epoch or declare options Day 1 without the readiness gate returning READY.
 
-### NEXT
+### NEXT (options lane; not U1)
 
-1. Independent review of #1149, #1148 and #1147, then #1150 → #1151 → #1152 / #1153 / #1154. Operator merge GO per PR.
+1. Exact-head independent review of #1149, then #1150 → #1151 → #1152 / #1153 / #1154. Operator merge GO per PR.
 2. Separate operator GO: deploy release-pinned #1145 collector + install timer + observer status tool; prove capture/dedupe live.
 3. Only then preregister a tradable epoch (resolved stop/target, OOS R, cost model, `FitnessPolicy`) and run the readiness gate.
 
@@ -110,9 +148,9 @@ Task: remove overlapping agent responsibilities and make the research pipeline e
 - PR workflow note: independent review/merge state is transient GitHub metadata, not the durable runtime NEXT. After this PR is resolved, follow the current runtime checkpoint below.
 - DO NOT REDO: do not recreate a second role matrix, experiment selector, or parallel research queue elsewhere.
 
-## Previous lane checkpoint — 2026-10-06 (PR #1143: PAPER posture + advisory Discord off alert lock; merged via #1143)
+## Superseded / provenance — 2026-10-06 (PR #1143: PAPER posture + advisory Discord off alert lock)
 
-Task: close the two remaining independent-QA blockers on existing branch `cursor/futures-advisory-visibility-f2da`, plus local presentation corrections. No scope expansion. Do not merge or deploy.
+Task: close the two remaining independent-QA blockers on existing branch `cursor/futures-advisory-visibility-f2da`, plus local presentation corrections. No scope expansion. **Superseded** after `#1143` merged to `main` as `55b9d4d`; kept as provenance.
 
 ### VERIFIED
 

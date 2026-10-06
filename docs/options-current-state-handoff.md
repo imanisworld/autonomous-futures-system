@@ -22,13 +22,13 @@ Historical dated notes and old/closed PRs are provenance only. They do not overr
 - The #1145 unit runs from the live tree, which is flagged. #1147 carries a release-pin drop-in template.
 - Deployment of #1146 is unverified.
 
-The Claude evidence stack (#1147–#1154) has been reconciled onto the real #1145 schema. It is review-ready, not merged.
+The Claude evidence stack (#1147–#1154) has been reconciled onto the real #1145 schema. #1147 and #1148 are merged; the rest are review-ready, not merged.
 
 | PR | Scope | Status |
 |---|---|---|
 | #1149 | canonical planned-risk cap | Also enforced in the RH evaluator: `(entry − premium_stop) × 100 × contracts ≤ $300`. NaN risk is refused. |
-| #1148 | contract quality gate | Fails closed on missing, zero, non-finite and unsupported fields. Coverage only. |
-| #1147 | read-only observer status | Reads #1145 directly: heartbeat (latest `_clock` row), WATCHING count, latest transition, SPX health. Also fixes a #1145 regression: `options_setup_capture_status.py` repaired, and so mutated, the journal on read. It now uses `peek_state()`. |
+| #1148 | contract quality gate | **MERGED** as `e86c55c`. Fails closed on missing, zero, non-finite, oversized, boolean and unsupported fields, crossed quotes and understated spreads. |
+| #1147 | read-only observer status (**MERGED** as `53dda44`) | Reads #1145 directly: heartbeat (latest `_clock` row), WATCHING count, latest transition, SPX health. Also fixes a #1145 regression: `options_setup_capture_status.py` repaired, and so mutated, the journal on read. It now uses `peek_state()`. |
 | #1150 | strategy-epoch registry | `options_122` / `122-IEX-E1` only, FROZEN, non-tradable. No tradable epoch exists. |
 | #1151 | canonical prospective signal | `structure_id` is exactly the #1145 `structure_key`. `capture_adapter` folds the #1145 journal read-only. One key maps to one signal. Late, gap and expired classifications are preserved. Authority is refused. Missing evidence becomes `DATA_BLOCKED`. |
 | #1152 | fitness | Revoke-only. Signal integrity comes from the canonical signal record, so late and gap captures never judge fitness. |
