@@ -164,3 +164,55 @@ def test_canonical_service_does_not_use_legacy_risk_gate():
 @pytest.mark.parametrize("module", sorted(LEGACY_FULL_DEBIT_MODULES))
 def test_no_new_production_importer_of_legacy_full_debit_risk(module):
     assert _production_importers(module) == LEGACY_FULL_DEBIT_MODULES[module]
+
+
+# ── manual Robinhood evaluator (/rh-options/evaluate) ───────────────────────
+
+def _rh_inputs(**overrides):
+    from dataclasses import fields
+
+    from alert_ranker.rh_options import RHOptionsInput
+
+    values = dict(
+        ticker="SPY",
+        direction="LONG",
+        contract_type="CALL",
+        signa_score=80.0,
+        signa_grade="A",
+        signa_daily_direction="BULLISH",
+        signa_weekly_direction="BULLISH",
+        gex_regime="POS_GAMMA",
+        gex_support_wall=None,
+        gex_resistance_wall=None,
+        current_price=500.0,
+        premium=2.40,
+        expiry_date="2026-12-18",
+        dte=60,
+        strike=505.0,
+        max_premium_per_contract=500.0,
+        quantity=1,
+        max_contracts=10,
+    )
+    values.update(overrides)
+    names = {f.name for f in fields(RHOptionsInput)}
+    return RHOptionsInput(**{k: v for k, v in values.items() if k in names})
+
+
+def test_rh_evaluator_caps_planned_risk_not_full_debit():
+    from alert_ranker.rh_options import _risk_check
+
+    # Swing: stop = 0.5 x premium. 2 contracts at $2.40 -> debit $480,
+    # planned risk (2.40 - 1.20) x 100 x 2 = $240 -> within the $300 cap.
+    ok = _risk_check(_rh_inputs(quantity=2))
+    assert ok["approved"] is True, ok
+    # 3 contracts -> planned risk $360 > $300, though debit cap ($5,000) allows it.
+    refused = _risk_check(_rh_inputs(quantity=3))
+    assert refused["approved"] is False
+    assert refused["failed_rule"] == "planned_risk_cap"
+
+
+def test_rh_evaluator_refuses_non_finite_premium():
+    from alert_ranker.rh_options import _risk_check
+
+    out = _risk_check(_rh_inputs(premium=float("nan")))
+    assert out["approved"] is False

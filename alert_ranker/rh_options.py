@@ -7,6 +7,7 @@ shadow-journal the idea. It never connects to Robinhood or any broker API.
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import asdict, dataclass
 from datetime import date, datetime, timezone
@@ -15,6 +16,7 @@ from typing import Any
 import httpx
 
 from . import plain_text as pt
+from .paper_v1 import CONTRACT_MULTIPLIER, MAX_TRADE_RISK_DOLLARS
 from .scorer import ScoreResult
 from .storage import ScanStorage
 
@@ -830,8 +832,20 @@ def _risk_check(inputs: RHOptionsInput) -> dict[str, Any]:
     target = round(inputs.premium * target_mult, 2)
     risk = entry - stop
     reward = target - entry
-    if risk <= 0:
+    if not math.isfinite(risk) or risk <= 0:
         return {"approved": False, "failed_rule": "risk_invalid", "reason": "Premium risk must be positive."}
+    # Planned risk is the premium-stop loss, never the full debit:
+    # (entry - premium_stop) x 100 x contracts, capped like every other lane.
+    planned_risk = round(risk * CONTRACT_MULTIPLIER * inputs.quantity, 2)
+    if not math.isfinite(planned_risk) or planned_risk > MAX_TRADE_RISK_DOLLARS:
+        return {
+            "approved": False,
+            "failed_rule": "planned_risk_cap",
+            "reason": (
+                f"Planned premium-stop risk ${planned_risk:.2f} exceeds "
+                f"${MAX_TRADE_RISK_DOLLARS:.2f}."
+            ),
+        }
     rr = reward / risk
     min_rr = {"SCALP_INTRADAY": 0.75, "SCALP": 1.0, "SWING": 2.0}.get(trade_style, 1.0)
     if rr < min_rr:

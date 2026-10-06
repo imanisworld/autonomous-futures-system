@@ -18,6 +18,7 @@ closed.
 | `options_manager/validation/portfolio_risk_gate.py` | `planned_risk_from_premium_stop`; aggregate budget has no default (None blocks); capital deployed, position count, correlation reported separately | correct | **canonical authority for the options_manager advisory / plan lane** (`options_manager/app.py` → `advisory_decision`) |
 | `options_manager/validation/contract_quality_gate.py` | (premium − premium_stop) × 100 × contracts ≤ stated max ≤ $300 | correct; NaN gap fixed in PR #1148 | contract facts |
 | `options_manager/risk_gate.py` `evaluate_packet` | **full debit** `max_premium × 100 × contracts` + contract-count cap | legacy | **not wired into any service.** Its `RiskGateResult` still gates the legacy library chain `paper_sim` / `fill_stress` / `dry_run_review` → `human_confirm` → `order_ticket` → `broker_boundary` |
+| `alert_ranker/rh_options.py` `_risk_check` (manual RH evaluator, `/rh-options/evaluate`, gated by #1146) | per-contract + **full-debit** caps and stop-based R:R; **no planned-risk cap; NaN premium approved** | **fixed here (integration pass)**: premium-stop planned risk × contracts ≤ $300, non-finite refused | advisory/manual only; RH `submit_order` is a stub |
 | `risk/options_risk_engine.py` | per-contract and total **debit** caps; stop-based R:R only | legacy | futures options companion only; `OPTIONS_COMPANION_ENABLED=false` by default |
 
 ## Findings
@@ -40,10 +41,18 @@ closed.
    change and is deliberately **not** done here (no second authority is
    created and none is removed unsafely).
 
+4. **Integration pass (post-#1145/#1146):** the manual RH evaluator approved on
+   debit caps and R:R alone, with no planned-risk cap, and a NaN premium
+   passed every comparison and was approved. It now applies the same
+   `(entry − premium_stop) × 100 × contracts ≤ $300` rule (stop from its own
+   DTE-tier multiplier) and refuses non-finite risk. Both tests fail on the
+   prior code.
+
 ## Changed
 
 - `alert_ranker/contract_marks.py`: non-finite stored risk ⇒ ∞.
 - `alert_ranker/paper_v1.py`: refuse non-finite / negative / missing open risk.
+- `alert_ranker/rh_options.py`: planned-risk cap + non-finite refusal in `_risk_check`.
 - `tests/test_options_risk_single_authority.py`: NaN regressions (8 fail on
   base), V1 ↔ canonical parity, cap agreement, canonical service does not
   import the legacy gate, legacy importer allowlist.
