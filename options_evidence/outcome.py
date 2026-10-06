@@ -116,6 +116,8 @@ class PathStatus(str, Enum):
 
 def underlying_r(signal: ProspectiveSignal, price: float) -> float:
     """Signed R of an underlying price relative to the signal's own risk unit."""
+    if signal.direction is None or signal.trigger is None or signal.invalidation is None:
+        raise OutcomeError("R requires a resolved signal (direction, trigger, invalidation)")
     unit = abs(signal.trigger - signal.invalidation)
     if signal.direction == "LONG":
         return (price - signal.trigger) / unit
@@ -208,6 +210,8 @@ class OutcomeEvidence:
 def validate_outcome(outcome: OutcomeEvidence, signal: ProspectiveSignal) -> list[str]:
     """Consistency problems; an empty list means the record is honest and complete enough to store."""
     problems: list[str] = []
+    if signal.direction is None or signal.invalidation is None:
+        return ["outcome requires a resolved signal; a two-sided WATCHING structure has no risk unit"]
     if outcome.signal_id != signal.signal_id:
         problems.append("outcome signal_id does not match the signal")
     if outcome.strategy_epoch != signal.strategy_epoch:

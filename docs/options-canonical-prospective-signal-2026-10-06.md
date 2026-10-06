@@ -1,111 +1,119 @@
 # Canonical prospective signal + outcome evidence (2026-10-06)
 
-Code: `options_evidence/signal.py`, `options_evidence/outcome.py`. Builds on
-the strategy epoch registry (`options_evidence/strategy_epochs.py`).
-Pure schema and validation: no provider, no file writer, no runtime wiring, no
-authority.
+Code:
+- `options_evidence/signal.py`
+- `options_evidence/capture_adapter.py`
+- `options_evidence/outcome.py`
 
-## One structure, one identity
+Builds on `options_evidence/strategy_epochs.py`.
 
-| Id | Derived from | Meaning |
+This is a schema, validation and read-only adapter. It has no provider, no file writer, no runtime wiring and no authority.
+
+> **Integration pass (post-#1145 `ae8c897` / #1146 `445393f`).** The first draft
+> of this module was written while #1145 was not on GitHub. It assumed levels
+> and direction were part of the identity. That assumption is gone. The model now follows the merged
+> setup-capture observer exactly, and the adapter consumes the #1145 journal instead of a
+> speculative format.
+
+## Source of truth
+
+#1145 (`alert_ranker/setup_capture*.py`, journal
+`/root/afs-shared/logs/options_setup_capture.jsonl`) owns:
+- detection
+- WATCHING persistence across sessions
+- dedupe
+- late and gap classification
+- SPX observation
+
+The canonical layer **links** to those records. It does not re-detect or reclassify anything, and it does not copy the journal.
+
+## Identity
+
+| Id | Value | Meaning |
 |---|---|---|
-| `structure_id` (`st_…`) | ticker, timeframe, pattern, direction, structure close time (UTC), trigger, invalidation (4 dp) | the market structure. Scanner, watcher and journal compute the same id independently. |
-| `signal_id` (`sg_…`) | `structure_id` + `strategy` + `strategy_epoch` | that structure judged under one strategy epoch. Two strategies give two signals with the same structure. They are never merged. |
+| `structure_id` | **exactly** the #1145 `structure_key`: `TICKER|timeframe|structure_close(UTC Z)|pattern` (parity test against `alert_ranker.setup_capture.structure_key`) | one market structure, shared by the watcher, scanner sightings and the canonical record |
+| `signal_id` | `[structure_id, strategy, strategy_epoch]` | that structure judged under one strategy epoch; two strategies make two signals, never a merge |
 
-`verify_record` recomputes both ids from a stored row, so an edited trigger or
-relabelled epoch is detected.
+Levels (`boundary_high` / `boundary_low` / `revision`) are attributes, as in #1145. A
+`SOURCE_DRIFT` revision updates the same signal.
 
-## Lifecycle (event-sourced, append-only)
+WATCHING is two-sided. Direction, trigger and invalidation exist only after the first break:
+- LONG: trigger is `boundary_high`, invalidation is `boundary_low`
+- SHORT: the reverse
+
+## Lifecycle
 
 ```
-WATCHING ─┬─> TRIGGERED ──> OUTCOME_CLOSED
-          ├─> MISSED_LATE ─> OUTCOME_CLOSED   (counterfactual, executed=false)
-          ├─> MISSED_GAP ──> OUTCOME_CLOSED   (counterfactual, executed=false)
-          ├─> INVALIDATED  (terminal)
-          └─> EXPIRED      (terminal)
+WATCHING ─┬─> TRIGGERED ───┬─> OUTCOME_CLOSED
+          │                └─> DATA_BLOCKED    (#1145 SIP reconciliation failed)
+          ├─> MISSED_LATE ─┬─> OUTCOME_CLOSED  (counterfactual)
+          │                └─> DATA_BLOCKED
+          ├─> MISSED_GAP ──┬─> OUTCOME_CLOSED  (counterfactual; #1145 GAP_THROUGH_OPEN)
+          │                └─> DATA_BLOCKED
+          └─> INVALIDATED | EXPIRED | DATA_BLOCKED | AMBIGUOUS   (terminal)
 ```
 
-`SignalJournal` refuses the following:
-- illegal transitions, and any event after a terminal state
-- a duplicate OPENED (structure-level dedupe)
+Event types:
+- `OPENED`
+- `STATE`
+- `LEVELS` (WATCHING only, revision must increase)
+- `OBSERVATION` (capture evidence only, such as `capture_late`, `prospective_catch` or `sip_crossed_at`; never identity, state or authority)
+- `LINK` (timeless metadata, allowed after terminal)
+- `INTEGRITY` (allowed after terminal, never with authority)
+
+The journal refuses all of the following:
+- illegal transitions
+- duplicate opens
 - sequence gaps
-- out-of-order detection times
-- a trigger detected before it traded
-- a trigger before the structure closed
-- `TRIGGERED` for a structure first seen after its trigger traded. That case must be `MISSED_LATE`.
-- `MISSED_GAP` without the gap open price
+- clock inversions
+- resolution without direction or trigger time
+- a `TRIGGERED` for a structure first seen after its trigger (that must be `MISSED_LATE`)
+- `MISSED_GAP` without gap evidence
 - `OUTCOME_CLOSED` without `outcome_ref`
 
-`prearmed` and `detection_lag_seconds` are derived values. They are never
-stored as separate facts.
+## Watcher → canonical mapping (`capture_adapter.fold_capture_rows`)
 
-## Required fields
+| #1145 row | canonical | preserved |
+|---|---|---|
+| first `WATCHING` | `OPENED` (two-sided `Levels`) | `structure_key`, timeframe, structure close, `knowable_at` → setup-ready, `first_seen_at`, `level_source`/`capture_id` → data source |
+| re-persisted `WATCHING` | nothing, or `LEVELS` if the revision increased | dedupe |
+| `SOURCE_DRIFT` | `LEVELS` | same signal |
+| `RESOLUTION TRIGGERED` | `STATE TRIGGERED` + `OBSERVATION` + `INTEGRITY` | direction; market time = SIP cross, else first cross (the #1145 "true cross"); `detected_at`; feed/source/resolution; lags; `capture_late`; `prospective_catch` |
+| `RESOLUTION MISSED_LATE` | `STATE MISSED_LATE` | reason (e.g. `iex_no_cross_sip_cross`), unchanged |
+| `RESOLUTION GAP_THROUGH_OPEN` | `STATE MISSED_GAP` | `gap_through`, `first_print_price` |
+| `EXPIRED` / `NO_TRIGGER` | `STATE EXPIRED` | `NO_TRIGGER` kept in the reason |
+| `INVALIDATED` / `DATA_BLOCKED` / `AMBIGUOUS` | same-named state | — |
+| `RECONCILIATION` | `OBSERVATION` + `INTEGRITY`, or `STATE DATA_BLOCKED` when #1145 demoted the row | SIP lag, `capture_late`, `prospective_catch` |
+| `COLLECTOR_*`, `SOURCE_BLOCKED`, `JOURNAL_REPAIR` | ignored (also diagnostic-only in #1145) | — |
 
-Every field in `REQUIRED_RECORD_FIELDS` appears in `to_record`:
-- `signal_id`, `structure_id`, `ticker`, `strategy`, `strategy_epoch`
-- `direction`, `timeframe`, `pattern`
-- `structure_close_time`, `setup_ready_time`, `first_seen_time`
-- `trigger`, `invalidation`, `trigger_market_time`, `trigger_detection_time`
-- `data_source`, `context_snapshot_ids`
-- `observation_only`, `execution_authority`
-- `data_integrity`, `signal_integrity`, `execution_integrity`
-- `lifecycle_state`
+Integrity derivation:
+- `signal_integrity` is VALID **iff** #1145 `is_prospective_catch` holds for a TRIGGERED row. A test checks equality with `catch_count`.
+- It is UNKNOWN while a TRIGGERED row is pending SIP.
+- It is DEGRADED for late, gap or missed captures.
+- It is INVALID for DATA_BLOCKED and AMBIGUOUS.
+- `data_integrity` is DEGRADED when `data_delayed` (SPX), and INVALID when the row is blocked or ambiguous.
 
-The record also carries these links:
-- scanner sightings
-- watcher refs
-- context snapshots
-- contract plan refs
-- one `outcome_ref`
+These guarantees are tested against real #1145 engine output (#1145's own Oct 5 fixtures):
+- one #1145 key maps to exactly one canonical signal
+- repeated scanner sightings (`shadow:9925` / `9933`) only extend `scanner_sighting_ids`, and an unmatched sighting never creates a signal
+- late, gap and expired classifications survive the mapping unchanged
+- a row that claims authority, or is not observation-only, is refused
+- missing trigger evidence becomes `DATA_BLOCKED` with no synthesized time
+- the #1145 journal is never written, and a torn tail is skipped, not repaired
+
+The adapter's default `strategy_epoch` is the collector version (`capture-v0.2`). That is not a registered strategy epoch, so research and fitness exclude these signals until an operator registers a real one.
 
 ## Authority
 
-- A signal always opens with `execution_authority=false`.
-- Setting it true requires all three of these:
-  - a non-observation-only signal
-  - a registered strategy epoch, so not `LEGACY_UNVERSIONED` or `UNREGISTERED_EPOCH`
-  - an explicit `authority_ref` to a separate human-approved authority record
-- The signal records authority. It never grants it.
+- Signals open with `execution_authority=false`.
+- Authority can be recorded only on a non-observation, non-terminal signal that has a non-reserved epoch label and an explicit `authority_ref`.
+- The adapter only produces observation-only signals.
 
 ## Outcome evidence (Workstream 8)
 
-`OutcomeEvidence` carries the following:
-- T1/T2
-- invalidation (must equal the signal's frozen value)
-- premium entry/stop
-- MAE/MFE price
-- T1/T2/invalidation hit times
-- trim, runner, result R, gross/net P&L (`pnl_basis` = `executed` | `paper_equivalent`)
-- the observed premium path
-- the three integrity statuses
+There is no change in intent. `OutcomeEvidence` now requires a resolved signal, because a two-sided WATCHING structure has no risk unit. R and MAE/MFE come from the resolved trigger and invalidation. Every value is OBSERVED, DERIVED, UNAVAILABLE or NOT_APPLICABLE, and UNAVAILABLE and NOT_APPLICABLE need a reason. Premium paths are observed quotes only.
 
-Derived values are computed only from the signal:
-- MAE_R/MFE_R, using the signal's own risk unit
-- time to trigger, T1, T2, and invalidation
-- entry half-spread
-- mid-to-mid premium change
+## Not done here
 
-The mid-to-mid change is reported as observed change, not as "decay", because a sparse path cannot separate theta from delta and vega.
-
-These rules keep the evidence honest:
-- Each value is `OBSERVED` (needs a source), `DERIVED`, `UNAVAILABLE`, or `NOT_APPLICABLE`. The last two need a reason and cannot carry a value.
-- `result_r_value` returns `None` for unknown results. It never returns 0.
-- Premium marks are observed quotes with a source, strictly time-ordered, and not before the trigger. A path marked `UNAVAILABLE` cannot hold marks. Interpolation does not exist.
-
-## Dependency on Cursor's early-capture work
-
-The runtime watcher work belongs to Cursor and is not yet on GitHub:
-- WATCHING / TRIGGERED / INVALIDATED / EXPIRED
-- cross-session persistence
-- dedupe
-- MISSED_LATE and gap-through
-- 30m / anchored-1H / Daily timing
-
-This PR does **not** touch that work. Wiring it is a follow-up:
-1. Cursor's collector emits `open_signal` / `state_event` / `link_event`, or its rows are mapped onto them.
-2. Its journal persists `to_record` snapshots plus the events.
-
-Field names should be reconciled against Cursor's final schema before wiring. If they differ, map them in an adapter rather than renaming either side.
-
-Existing 1-2-2 journal rows are **not migrated**. A reader labels them
-`LEGACY_UNVERSIONED` unless they carry a registered `strategy_epoch`.
+- No persistence of canonical events. A runtime consumer would replay `fold_capture_rows` over the #1145 journal, which is cheap and deterministic.
+- No wiring of scanner sighting rows. Scanner rows carry setup types such as `H1_222_CONTINUATION`, not #1145 pattern tokens, so the caller must supply the pattern key, as #1145's `link_scanner_first_sight` does.
