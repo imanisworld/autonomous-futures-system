@@ -1,9 +1,11 @@
 # /futures-full-audit
 
 Purpose:
-Full current-state audit of the futures system — a comprehensive, point-in-time snapshot of config, code, execution paths, and test health. Broader than `/futures-execution-safety-audit`; use this for a general system health check, not a focused pre-commit review (see `/futures-diff-review` for that).
+Escalation-only full current-state audit of the futures system — a comprehensive, point-in-time snapshot of config, code, execution paths, and test health. Do not use this as routine startup. Start from `docs/agent-work-state.md` and the smallest relevant diff/evidence surface; use this command only when the checkpoint is missing, contradictory, materially stale, the user explicitly requests a full audit, or narrower evidence cannot resolve a safety-critical question.
 
 Core rule: No proof, no run. Any area not directly inspected in this run must be reported as unverified, not assumed clean from memory or a prior audit.
+
+Before running the full checklist, state the escalation reason. If no escalation condition exists, stop and use the narrower command instead; do not duplicate the weekly runtime-drift or repo-hygiene work.
 
 Required files/checks:
 - Current mode: `trading_mode.paper_mode` / `trading_mode.live_trading_enabled` from risk_rules.yaml and the runtime env
