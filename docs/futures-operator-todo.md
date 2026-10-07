@@ -2,29 +2,30 @@
 
 > **Purpose:** durable operator action tracker for futures infrastructure/safety work. This file is **not** strategy-status authority and must not override `docs/strategy-rules/Strategy_Inventory.md`, the research trial ledger, or verified VPS/runtime evidence.
 >
-> **Repo reconciliation base:** `main` `d970b40` (2026-10-04, after PR #1131). The MNQ account-admission study is CLOSED / `INSUFFICIENT_EVIDENCE` / DO NOT REDO. Futures box release since the last verified runtime checkpoint is `c44d32bc4961e56fae5c5f88a976eb6783341638` (promoted 2026-10-04 21:29:09Z; rollback target `489b55b91b6303c195c8e84bfcbf05ef32d1ab04`). Fetch current `main` rather than treating this stored SHA as perpetual current state. The freshest runtime facts are checkpointed in `docs/agent-work-state.md`; older reconciliation notes remain dated provenance and require fresh read-only proof before any runtime/broker/access mutation.
+> **Repo reconciliation base:** `main` `f35b976` (2026-10-07, U7 / PR #1162 merged). U7 is repo-side only and its merge record says **DO NOT DEPLOY — U8 contract-identity routing remains pending**. Draft safety stack is U8 #1163 → U9 #1164 → U10 #1165 → U11 #1166. Last documented futures release is `c44d32bc4961e56fae5c5f88a976eb6783341638` from 2026-10-04; current runtime is **UNVERIFIED** until fresh authorized proof is obtained. Fetch current `main`; do not treat this stored SHA or older runtime evidence as perpetual current state.
 >
 > Core rule: **No proof, no run.**
 
 
-## CURRENT — 4HR natural-1m canonical epoch running; collect only
+## CURRENT — U7 merged; U8–U11 safety stack pending; DO NOT DEPLOY
 
-**2026-10-04 21:30:05Z: canonical epoch started on exact release `c44d32b`.** Details and the full proof table are in `docs/agent-work-state.md` (2026-10-04 ~21:30Z checkpoint) and `docs/4hr-natural-1m-observation-epoch-2026-10-01.md`.
+Repository safety state as of 2026-10-07:
 
-- Deployed via `scripts/atomic_release.sh` build → verify → promote (operator GO), tooling at `main` `94136a5` (unchanged since the `489b55b` deploy). Box posture was the reset baseline (`always_on_shadow` / `HTF off` / `static`), so the promote gate took its sanctioned Path 1.
-- Post-deploy: symlink + cwd `c44d32b`; integrity OK 1633 files; 0 release-tree `__pycache__`; `LIVE_TRADING_ENABLED=false`; `TRADOVATE_ENV=demo`; `MAX_CONTRACTS_HARD_CAP=1`; both observer pins `true` and matching `EXPECTED_PROOF_`; `strat_4hr_retrigger` not in `enabled_concepts`; broker position null; in-process preflight 0 positions / 0 working orders; futures-bot PID `1851835`, `NRestarts=0`; deploy lock released; live disarmed (`preflight_passed_not_armed`).
-- Heartbeat: the `heartbeat_fresh` failure seen 2026-10-02 20:55Z → 2026-10-04 cleared on the promote restart (fresh at 21:29:03Z). If it goes stale again without a restart, that is a new observation, not the known one.
-- Drift gate: #1129 fix installed to `/root/bin/afs-drift-gate.sh` at 21:10:57Z (sha256 `3cf086a3…c86f9a`; backup `/root/bin/afs-drift-gate.sh.bak-20261004T211057Z`); one manual run on `489b55b` exited 0 with `OK release-integrity`. It has not yet run from cron against `c44d32b`.
-- Access note: there is **no `afs-ro` user or tool on the box** (only `grok-audit` with a sudo-restricted `afs-grok-audit`, and `claude-audit`). The 2026-10-04 read-only preflights were root read-only over `ssh hetzner`. Earlier "Cursor's `afs-ro` lane" wording in checkpoints is inaccurate.
+- `main` = `f35b976efe523dbbc2090809ce72e91f0e9d3e95`.
+- U7 / #1162 merged fail-closed broker contract metadata. Exact merge record: `8172 passed, 8 skipped`.
+- U7 is **not deploy-cleared**. Its merge message explicitly requires U8 contract-identity routing first.
+- Draft dependency order: U8 #1163 → U9 #1164 → U10 #1165 → U11 #1166.
+- Last documented deployed futures release remains `c44d32bc4961e56fae5c5f88a976eb6783341638` from 2026-10-04. Fresh deployed SHA, release integrity, effective env/account gates, broker flatness/orders, journal progression, and persistent-state integrity are currently **UNVERIFIED** from authorized runtime sources.
 
-### NEXT — read-only, in order
+### NEXT — smallest safe actions only
 
-1. **2026-10-05 after 11:05Z:** confirm `/root/afs-drift-gate.log` shows `OK release-integrity: c44d32bc4961 …` from the cron run and the live tree still has 0 `__pycache__`. If it alarms, read the reason before touching anything.
-2. **After the first full session on `c44d32b`:** run `/futures-deployment-safety-audit`; confirm journals advance, `LOG_DIR` observation status lands in `/root/afs-shared/logs/` (not inside the release tree, #1095), RSS plateau, no new errors.
-3. **On the first 4HR natural-1m touch:** record `contract_check` MATCH / MISMATCH / UNKNOWN and whether `needs_manual_review` fired. This is the open `contract_hint` question; do not alter TradingView alerts to force an answer.
-4. Keep collecting. No parameter tuning, strategy change, Polygon work, or 3-2-2 work while the sample runs. A natural-1m 4HR loss is evidence, not a trigger.
+1. Continue independent review/CI of the U8→U11 stack in dependency order. Do not skip layers because later drafts exist.
+2. Do not build/promote/restart from U7 or any draft in the stack.
+3. Before any deployment/restart, run the narrow deployment-safety reconciliation and freshly verify exact deployed SHA, release integrity, DEMO/live gate, account/routing pins, one-contract cap, broker position/orders, and journal/state integrity.
+4. If runtime access is unavailable, stop at **UNVERIFIED**. No proof, no run.
+5. Keep strategy/research work separate; this TODO is execution-safety/operator work only.
 
-**HOLD on everything else: no deploy, restart, env mutation, broker mutation, strategy enablement, or research rerun without a new operator GO.**
+**HOLD on deploy, restart, env/config mutation, broker mutation, strategy enablement, or execution posture changes without a new operator GO backed by fresh proof.**
 
 ## Last verified runtime checkpoint — no automatic action
 
