@@ -103,7 +103,11 @@ _BROKER_ECONOMICS_ROOTS = frozenset({"MES", "ES", "MNQ", "NQ", "MGC", "MCL"})
 
 
 def _broker_root(instrument: str) -> str:
-    return str(instrument or "").replace("1!", "").upper()
+    """Exact broker root: canonical root or that root with one trailing `1!` only."""
+    symbol = str(instrument or "").upper()
+    if symbol.endswith("1!"):
+        symbol = symbol[:-2]
+    return symbol
 
 
 def _broker_economics(instrument: str) -> tuple[float, float]:

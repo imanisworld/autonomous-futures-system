@@ -29,7 +29,10 @@ def test_broker_economics_equal_canonical_metadata(root):
     assert tb._broker_economics(f"{root}1!") == contract_economics(root)
 
 
-@pytest.mark.parametrize("instrument", ["M2K", "MBT", "ZZZ", "", "MNQX", "CL", "GC"])
+@pytest.mark.parametrize(
+    "instrument",
+    ["M2K", "MBT", "ZZZ", "", "MNQX", "CL", "GC", "M1!NQ", "MNQ1!1!", "1!MNQ"],
+)
 def test_unknown_root_never_inherits_other_units(instrument):
     with pytest.raises(UnsupportedContractError):
         tb._broker_economics(instrument)
@@ -52,7 +55,8 @@ def test_supported_tick_rounding_unchanged(instrument, price, expected):
     assert tb._round_to_tick(price, instrument) == pytest.approx(expected)
 
 
-def test_unknown_contract_order_is_refused_before_any_broker_contact(monkeypatch):
+@pytest.mark.parametrize("instrument", ["M2K", "M1!NQ"])
+def test_unknown_contract_order_is_refused_before_any_broker_contact(monkeypatch, instrument):
     monkeypatch.setenv("MAX_CONTRACTS_HARD_CAP", "6")
     broker = tb.TradovateBroker(config=tb.TradovateConfig(expected_account_id=555))
 
@@ -62,7 +66,7 @@ def test_unknown_contract_order_is_refused_before_any_broker_contact(monkeypatch
     for name in ("_authenticate", "_get", "_post", "_find_contract_id", "_verify_account_for_order"):
         monkeypatch.setattr(broker, name, boom)
     order = BracketOrder(
-        instrument="M2K", direction="LONG", entry=2000.0, stop=1990.0, target=2030.0,
+        instrument=instrument, direction="LONG", entry=2000.0, stop=1990.0, target=2030.0,
         rr_ratio=3.0, strategy="t",
     )
     fill = broker.execute_bracket(order)
