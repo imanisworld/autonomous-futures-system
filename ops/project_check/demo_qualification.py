@@ -42,6 +42,7 @@ from pathlib import Path
 from typing import Any
 
 from ops.project_check import gitutil
+from ops.project_check.canonical_promotion_evidence import contradictions
 from ops.project_check.promotion import build_promotion_report, load_evidence_facts
 
 MIN_RESOLVED_FILLS_PER_CELL = 30
@@ -978,6 +979,72 @@ def _check_execution_claims(evidence: dict[str, Any], blockers: list[str]) -> di
     return claimed
 
 
+def _apply_canonical_demo_facts(
+    evidence: dict[str, Any],
+    derived: dict[str, Any] | None,
+    blockers: list[str],
+) -> dict[str, Any]:
+    """U5: replace supplied demo facts with canonical-evidence facts where the
+    canonical bundles prove them; supplied contradictions are blockers."""
+    merged = dict(evidence)
+    if derived is None:
+        return merged
+
+    # Contradictions with supplied counts are already promotion blockers.
+    execution = dict(evidence.get("execution") or {})
+    execution.update(derived["execution"])
+    merged["execution"] = execution
+
+    if derived.get("futures_replay_path"):
+        replay = dict(evidence.get("canonical_replay") or {})
+        proven = {
+            "real_replay_engine": True,
+            "real_decision_engine": True,
+            "real_risk_engine": True,
+            "real_paper_broker": True,
+        }
+        blockers.extend(contradictions(replay, proven, prefix="canonical_replay"))
+        replay.update(proven)
+        merged["canonical_replay"] = replay
+
+    model = derived.get("execution_model")
+    if model is not None:
+        realism = dict(evidence.get("execution_realism") or {})
+        commission = model["commission_round_turn_dollars_per_contract"]
+        proven_realism = {
+            "pessimistic_same_bar": bool(model["pessimistic_same_bar"]),
+            "slippage_included": model["adverse_slippage_ticks"] > 0,
+            "baseline_adverse_slippage_ticks": model["adverse_slippage_ticks"],
+            "commission_included": commission > 0,
+            "commission_round_turn_dollars": commission,
+        }
+        blockers.extend(
+            contradictions(realism, proven_realism, prefix="execution_realism", tolerance=0.005)
+        )
+        realism.update(proven_realism)
+        merged["execution_realism"] = realism
+
+    validation = dict(evidence.get("validation") or {})
+    untouched = bool(derived.get("untouched_oos_proven"))
+    if validation.get("untouched_validation_window") is True and not untouched:
+        blockers.append(
+            "validation.untouched_validation_window is claimed but no PROMOTION_QUALITY "
+            "untouched_oos canonical bundle proves it"
+        )
+    validation["untouched_validation_window"] = untouched
+    merged["validation"] = validation
+
+    provenance = dict(evidence.get("replay_provenance") or {})
+    canonical_sha = derived.get("code_sha")
+    if canonical_sha:
+        blockers.extend(
+            contradictions(provenance, {"code_sha": canonical_sha}, prefix="replay_provenance")
+        )
+        provenance["code_sha"] = canonical_sha
+    merged["replay_provenance"] = provenance
+    return merged
+
+
 def build_demo_qualification_report(
     *,
     strategy: str,
@@ -1020,6 +1087,9 @@ def build_demo_qualification_report(
             "effective classification must be VALIDATED or PROMISING BUT UNPROVEN for direct-to-demo"
         )
 
+    derived = (promotion.get("canonical_evidence") or {}).get("derived")
+    evidence = _apply_canonical_demo_facts(evidence, derived, blockers)
+
     scope = _check_change_scope(root, evidence, blockers)
     canonical = _check_canonical_replay(evidence, blockers)
     identity = _check_identity_parity(evidence, blockers)
@@ -1053,6 +1123,7 @@ def build_demo_qualification_report(
         "execution_context_claimed": execution_claims,
         "execution_context_live_check": promotion.get("execution_context"),
         "accounting_identities": promotion.get("accounting_identities"),
+        "canonical_evidence": promotion.get("canonical_evidence"),
         "long_internal_paper_phase_waived": gate_pass,
         "fallback_to_existing_validation_path": not gate_pass,
         "runtime_release_reconciliation_required": True,

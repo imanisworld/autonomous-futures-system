@@ -25,6 +25,27 @@ Older research results were sometimes optimistic because they used one or more o
 
 The gate fails closed on those uncertainties.
 
+## Canonical evidence (U5)
+
+Both this gate and the base promotion gate require
+`canonical_evidence.bundles`: one or more runner bundle directories
+(`docs/research-evidence/<trial_id>`) that classify `PROMOTION_QUALITY` under
+`ops/evidence_identity.py`. Without them the gate is blocked.
+
+From the bundles' candidate-arm `trade_execution` rows the gates derive, and
+use instead of packet values: execution accounting counts, per-fill contract
+quantities, the traded instrument, net P&L / win rate / profit factor /
+sample, the entry fill model, the code SHA, whether an `untouched_oos`
+partition was consumed, and — for `futures_replay` bundles — the real
+replay/decision/risk/paper-broker path, pessimistic same-bar resolution,
+baseline adverse slippage and round-turn commission. A packet value that
+contradicts a derived value is a blocker. Facts the bundles cannot prove
+(live/replay identity parity, lookahead freedom, IOC/gap modelling, stress
+tests, change scope, golden fixtures) remain attested and are still required.
+
+Any blocker makes the effective classification `BLOCKED_BY_HARD_CAP`; a
+stated `VALIDATED` or `PROMISING BUT UNPROVEN` never survives a blocker.
+
 ## Direct-to-DEMO eligibility
 
 All sections must pass.
@@ -196,6 +217,9 @@ The JSON below is a **non-passing shape/template**, not an example that should c
 ```json
 {
   "strategy": "example",
+  "canonical_evidence": {
+    "bundles": ["docs/research-evidence/<trial_id>"]
+  },
   "identity_parity": {
     "raw_candidate_count": 0,
     "candidate_identity_parity": true,
