@@ -348,6 +348,51 @@ def test_approved_spec_drift_after_run_is_invalid(tmp_path):
     assert "bundled spec differs from the repository's approved spec" in result.reasons
 
 
+def test_code_sha_is_bound_to_exact_candidate_arm(tmp_path):
+    spec_path = _seed(tmp_path / "repo")
+    root, _ = _run(spec_path)
+    bundle = _bundle(root)
+
+    # Redraw candidate.commit_sha to another declared value in BOTH the bundled
+    # and approved spec, then repair the bundle manifest hash. The envelope and
+    # runner report still identify the actually executed candidate SHA. The old
+    # gate accepted this because envelope.code_sha was merely "one of" the two
+    # declared SHAs.
+    other_sha = "d" * 40
+    bundled_spec_path = bundle / "experiment_spec.json"
+    bundled_spec = json.loads(bundled_spec_path.read_text())
+    bundled_spec["candidate"]["commit_sha"] = other_sha
+    bundled_spec_path.write_text(json.dumps(bundled_spec, indent=2, sort_keys=True) + "\n")
+    spec_path.write_text(json.dumps(bundled_spec, indent=2, sort_keys=True) + "\n")
+
+    manifest_path = bundle / "bundle_manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["files"]["experiment_spec.json"] = gate._sha256(bundled_spec_path)
+    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+
+    result = gate.classify_evidence_bundle(root, bundle)
+    assert result.status == gate.INVALID
+    assert any("candidate.commit_sha" in reason for reason in result.reasons)
+
+
+def test_runner_report_arm_shas_are_bound_to_approved_spec(tmp_path):
+    root, _ = _run(_seed(tmp_path / "repo"))
+    bundle = _bundle(root)
+    report_path = bundle / "runner_report.json"
+    report = json.loads(report_path.read_text())
+    report["candidate_sha"] = "d" * 40
+    report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+
+    manifest_path = bundle / "bundle_manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["files"]["runner_report.json"] = gate._sha256(report_path)
+    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+
+    result = gate.classify_evidence_bundle(root, bundle)
+    assert result.status == gate.INVALID
+    assert any("runner_report candidate_sha contradicts" in reason for reason in result.reasons)
+
+
 def test_unpinned_dataset_identity_is_invalid(tmp_path):
     spec_path = _seed(tmp_path / "repo", dataset_hash=None)
     root = spec_path.parents[2]

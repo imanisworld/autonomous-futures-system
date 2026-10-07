@@ -256,12 +256,11 @@ def classify_evidence_bundle(
             fail(f"bundled spec status is {spec.get('status')!r}, not APPROVED")
         if spec.get("prereg_path") != envelope.get("preregistration_identity"):
             fail("preregistration_identity contradicts the bundled spec prereg_path")
-        declared = {
-            str((spec.get(arm) or {}).get("commit_sha") or "").lower()
-            for arm in ("baseline", "candidate")
-        }
-        if str(envelope.get("code_sha") or "").lower() not in declared:
-            fail("code_sha is not a commit declared by the bundled spec")
+        declared_candidate_sha = str(
+            (spec.get("candidate") or {}).get("commit_sha") or ""
+        ).lower()
+        if str(envelope.get("code_sha") or "").lower() != declared_candidate_sha:
+            fail("code_sha contradicts the bundled spec candidate.commit_sha")
         try:
             if evidence_contract.data_identity_from_spec(spec) != envelope.get("data_identity"):
                 fail("data_identity contradicts the bundled spec dataset identity")
@@ -302,6 +301,20 @@ def classify_evidence_bundle(
         for key in ("experiment_id", "trial_id"):
             if report.get(key) != envelope.get(key):
                 fail(f"runner_report {key} contradicts the envelope")
+        expected_baseline_sha = str(
+            (spec.get("baseline") or {}).get("commit_sha") or ""
+        ).lower()
+        expected_candidate_sha = str(
+            (spec.get("candidate") or {}).get("commit_sha") or ""
+        ).lower()
+        if str(report.get("baseline_sha") or "").lower() != expected_baseline_sha:
+            fail("runner_report baseline_sha contradicts the bundled spec baseline.commit_sha")
+        if str(report.get("candidate_sha") or "").lower() != expected_candidate_sha:
+            fail("runner_report candidate_sha contradicts the bundled spec candidate.commit_sha")
+        if str(envelope.get("code_sha") or "").lower() != str(
+            report.get("candidate_sha") or ""
+        ).lower():
+            fail("envelope code_sha contradicts runner_report candidate_sha")
 
     # 5. Registration (register-before-count) and prior exposure.
     rows = first_rows if first_rows is not None else ledger_first_rows(root)
