@@ -92,6 +92,23 @@ def test_sibling_script_module_is_local_but_unrelated_nested_stem_is_not(tmp_pat
     assert "helper" not in imports
 
 
+def test_normal_package_sibling_does_not_hide_third_party_import(tmp_path):
+    package = tmp_path / "package"
+    package.mkdir()
+    (package / "helper.py").write_text("VALUE = 1\n", encoding="utf-8")
+    (package / "job.py").write_text("import helper\n", encoding="utf-8")
+    imports = dl.production_third_party_imports(tmp_path)
+    assert "helper" in imports
+
+
+def test_frozen_round4_sibling_import_remains_explicitly_local(tmp_path):
+    frozen = tmp_path / "research/sd_zone_round4/frozen_round4_code"
+    frozen.mkdir(parents=True)
+    (frozen / "common.py").write_text("VALUE = 1\n", encoding="utf-8")
+    (frozen / "descriptive4.py").write_text("import common\n", encoding="utf-8")
+    assert "common" not in dl.production_third_party_imports(tmp_path)
+
+
 def test_real_top_level_local_module_is_not_treated_as_third_party(tmp_path):
     (tmp_path / "helper.py").write_text("VALUE = 1\n", encoding="utf-8")
     (tmp_path / "app.py").write_text("import helper\n", encoding="utf-8")

@@ -38,6 +38,14 @@ SEPARATE_COMPONENTS = {
     ),
 }
 
+# A few historical/operator files are executed directly and intentionally use
+# sibling absolute imports. Keep that exception explicit and narrow so ordinary
+# package code cannot hide a third-party import behind a same-named sibling.
+SCRIPT_STYLE_LOCAL_PREFIXES = (
+    "scripts/",
+    "research/sd_zone_round4/frozen_round4_code/",
+)
+
 _PIN = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)==([A-Za-z0-9][A-Za-z0-9.+!_-]*)$")
 
 
@@ -170,6 +178,13 @@ def _module_exists_at(base: Path, name: str) -> bool:
     package = base / name
     return package.is_dir() and any(path.suffix == ".py" for path in package.rglob("*.py"))
 
+
+def _script_style_local_import(root: Path, path: Path, name: str) -> bool:
+    rel = path.relative_to(root).as_posix()
+    if not any(rel.startswith(prefix) for prefix in SCRIPT_STYLE_LOCAL_PREFIXES):
+        return False
+    return _module_exists_at(path.parent, name)
+
 def production_third_party_imports(root: Path) -> dict[str, set[str]]:
     """Top-level third-party module -> files importing it (production code)."""
     root = Path(root)
@@ -198,7 +213,7 @@ def production_third_party_imports(root: Path) -> dict[str, set[str]]:
                     top == "__future__"
                     or top in sys.stdlib_module_names
                     or top in local
-                    or _module_exists_at(path.parent, top)
+                    or _script_style_local_import(root, path, top)
                 ):
                     continue
                 found.setdefault(top, set()).add(rel.as_posix())
