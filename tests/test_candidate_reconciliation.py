@@ -205,6 +205,65 @@ def test_unknown_contract_cannot_pass():
     assert "no contract metadata for ZZZ" in report["candidates"][0]["incomplete_reasons"]
 
 
+def test_replay_bundle_must_pass_u4_identity_gate(tmp_path):
+    from tests import test_evidence_identity_gate as u4
+
+    root, report = u4._run(u4._seed(tmp_path / "repo"))
+    assert report.status == "VALID"
+    bundle = u4._bundle(root)
+    assert rec.read_bundle_members(bundle, repo_root=root)
+
+    raw = bundle / "candidate_raw.json"
+    payload = json.loads(raw.read_text())
+    payload["members"][0]["net_pnl"] = 999.0
+    raw.write_text(json.dumps(payload))
+    with pytest.raises(rec.ReconciliationError, match="INVALID, not PROMOTION_QUALITY"):
+        rec.read_bundle_members(bundle, repo_root=root)
+
+
+def test_malformed_relevant_journal_row_fails_closed():
+    rows = [{
+        "decision": "TRADE",
+        "instrument": "MNQ",
+        "bar_ts": "2026-05-18T14:30:00+00:00",
+        "paper_order_id": "P1",
+        "setup": {"strategy": "", "direction": "LONG", "entry": 100.0, "stop": 99.0, "target": 103.0},
+    }]
+    with pytest.raises(rec.ReconciliationError, match="missing canonical"):
+        rec.records_from_journal_rows("demo", rows)
+
+
+def test_unmatched_filled_outcome_cannot_disappear_into_pass():
+    rows = [{"type": "OUTCOME", "instrument": "MNQ", "outcome": {
+        "result": "WIN", "paper_order_id": "P1", "strategy": "orb_reclaim",
+        "signal_timestamp": "2026-05-18T14:30:00+00:00",
+        "entry_price": 19498.5, "exit_price": 19548.5, "exit_reason": "TARGET_HIT",
+    }}]
+    records = rec.records_from_journal_rows("demo", rows)
+    assert len(records) == 1
+    report = rec.reconcile({"replay": copy.deepcopy(records), "demo": records})
+    assert report["status"] == "INCOMPLETE"
+    assert any("direction missing" in reason for reason in report["candidates"][0]["incomplete_reasons"])
+
+
+def test_void_outcome_is_no_fill_not_filled():
+    rows = [
+        {
+            "decision": "TRADE", "instrument": "MNQ",
+            "bar_ts": "2026-05-18T14:30:00+00:00", "paper_order_id": "P1",
+            "setup": {"strategy": "orb_reclaim", "direction": "LONG", "entry": 19498.5,
+                      "stop": 19478.5, "target": 19548.5},
+        },
+        {"type": "OUTCOME", "instrument": "MNQ", "outcome": {
+            "result": "VOID", "paper_order_id": "P1", "strategy": "orb_reclaim",
+            "signal_timestamp": "2026-05-18T14:30:00+00:00",
+            "entry_price": 19498.5, "exit_reason": "VOID_GAP_DAY",
+        }},
+    ]
+    (record,) = rec.records_from_journal_rows("demo", rows)
+    assert record.fields["fill_state"] == "NO_FILL"
+
+
 def test_cancelled_outcome_without_trade_row_is_a_no_fill_record():
     rows = [{"type": "OUTCOME", "instrument": "MNQ", "outcome": {
         "result": "CANCELLED", "paper_order_id": "P1", "strategy": "orb_reclaim",

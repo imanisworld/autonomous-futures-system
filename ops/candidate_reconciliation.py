@@ -50,6 +50,7 @@ PASS, DIVERGED, INCOMPLETE = "PASS", "DIVERGED", "INCOMPLETE"
 _RANK = {PASS: 0, INCOMPLETE: 1, DIVERGED: 2}
 MODES = ("replay", "paper", "demo")
 FILLED, NO_FILL, REJECTED = "FILLED", "NO_FILL", "RISK_REJECTED"
+NO_FILL_RESULTS = frozenset({"CANCELLED", "VOID"})
 CORE_FIELDS = ("direction", "intended_entry", "stop", "target", "fill_state")
 OPTIONAL_FIELDS = (
     "fill_price", "exit_price", "exit_reason", "earliest_legal_order_ts",
@@ -108,13 +109,19 @@ def records_from_journal_rows(mode: str, rows: Iterable[Mapping[str, Any]]) -> l
         if not isinstance(row, Mapping):
             continue
         if row.get("type") == "OUTCOME":
-            outcome = row.get("outcome") or {}
+            outcome = row.get("outcome")
+            if not isinstance(outcome, Mapping):
+                raise ReconciliationError(f"{mode}: OUTCOME row has no object outcome")
             order_id = outcome.get("paper_order_id")
-            if order_id:
-                if order_id in outcomes:
-                    raise ReconciliationError(f"{mode}: duplicate OUTCOME for {order_id}")
-                outcomes[str(order_id)] = {**outcome, "instrument": row.get("instrument")}
-        elif row.get("decision") in ("TRADE", "RISK_REJECTED") and isinstance(row.get("setup"), Mapping):
+            if not order_id:
+                raise ReconciliationError(f"{mode}: OUTCOME row missing paper_order_id")
+            order_id = str(order_id)
+            if order_id in outcomes:
+                raise ReconciliationError(f"{mode}: duplicate OUTCOME for {order_id}")
+            outcomes[order_id] = {**outcome, "instrument": row.get("instrument")}
+        elif row.get("decision") in ("TRADE", "RISK_REJECTED"):
+            if not isinstance(row.get("setup"), Mapping):
+                raise ReconciliationError(f"{mode}: {row.get('decision')} row missing setup object")
             decisions.append(row)
 
     records: list[CandidateRecord] = []
@@ -125,7 +132,9 @@ def records_from_journal_rows(mode: str, rows: Iterable[Mapping[str, Any]]) -> l
         strategy = str(setup.get("strategy") or "")
         signal_ts = _utc(row.get("bar_ts") or row.get("ts"))
         if not instrument or not strategy or signal_ts is None:
-            continue
+            raise ReconciliationError(
+                f"{mode}: decision row missing canonical instrument/strategy/signal timestamp"
+            )
         fields: dict[str, Any] = {
             "direction": str(setup.get("direction") or "").upper() or None,
             "intended_entry": _num(row.get("requested_entry", setup.get("entry"))),
@@ -138,6 +147,8 @@ def records_from_journal_rows(mode: str, rows: Iterable[Mapping[str, Any]]) -> l
             fields["risk_rejection"] = risk.get("failed_rule") or risk.get("reason") or "RISK_REJECTED"
         else:
             order_id = str(row.get("paper_order_id") or "")
+            if not order_id:
+                raise ReconciliationError(f"{mode}: TRADE row missing paper_order_id")
             outcome = outcomes.get(order_id)
             if outcome is not None:
                 used.add(order_id)
@@ -145,7 +156,7 @@ def records_from_journal_rows(mode: str, rows: Iterable[Mapping[str, Any]]) -> l
             if outcome is None:
                 fields["fill_state"] = FILLED
                 fields["outcome"] = None  # still open / not yet resolved
-            elif result == "CANCELLED":
+            elif result in NO_FILL_RESULTS:
                 fields["fill_state"] = NO_FILL
                 fields["no_fill_reason"] = outcome.get("exit_reason")
             else:
@@ -158,20 +169,36 @@ def records_from_journal_rows(mode: str, rows: Iterable[Mapping[str, Any]]) -> l
             CandidateRecord(mode, identity_key(instrument, strategy, signal_ts), instrument, strategy,
                             signal_ts, fields)
         )
-    # Cancelled entries the runner booked without a TRADE row.
+    # Any OUTCOME without a matching decision remains visible. It cannot PASS
+    # because the decision-side bracket fields are unavailable, but silently
+    # dropping it could make a partial/corrupt journal look reconciled.
     for order_id, outcome in outcomes.items():
-        if order_id in used or str(outcome.get("result") or "").upper() != "CANCELLED":
+        if order_id in used:
             continue
         instrument = str(outcome.get("instrument") or "").upper()
         strategy = str(outcome.get("strategy") or "")
         signal_ts = _utc(outcome.get("signal_timestamp"))
         if not instrument or not strategy or signal_ts is None:
-            continue
+            raise ReconciliationError(
+                f"{mode}: unmatched OUTCOME {order_id} missing canonical identity"
+            )
+        result = str(outcome.get("result") or "").upper()
+        fields: dict[str, Any] = {
+            "intended_entry": _num(outcome.get("requested_entry") or outcome.get("entry_price")),
+        }
+        if result in NO_FILL_RESULTS:
+            fields.update(fill_state=NO_FILL, no_fill_reason=outcome.get("exit_reason"))
+        else:
+            fields.update(
+                fill_state=FILLED,
+                outcome=result or None,
+                fill_price=_num(outcome.get("entry_price")),
+                exit_price=_num(outcome.get("exit_price")),
+                exit_reason=outcome.get("exit_reason"),
+            )
         records.append(
             CandidateRecord(
-                mode, identity_key(instrument, strategy, signal_ts), instrument, strategy, signal_ts,
-                {"fill_state": NO_FILL, "intended_entry": _num(outcome.get("requested_entry") or outcome.get("entry_price")),
-                 "no_fill_reason": outcome.get("exit_reason")},
+                mode, identity_key(instrument, strategy, signal_ts), instrument, strategy, signal_ts, fields
             )
         )
     return records
@@ -341,7 +368,16 @@ def read_journal_dir(path: Path, *, since: Optional[date], until: Optional[date]
     return rows
 
 
-def read_bundle_members(bundle: Path) -> list[dict]:
+def read_bundle_members(bundle: Path, *, repo_root: Path = ROOT) -> list[dict]:
+    """Read candidate rows only after the existing U4 identity gate approves them."""
+    from ops import evidence_identity as identity_gate
+
+    verdict = identity_gate.classify_evidence_bundle(repo_root, bundle)
+    if not verdict.promotion_quality:
+        detail = "; ".join(verdict.reasons) or "no promotion-quality identity"
+        raise ReconciliationError(
+            f"canonical bundle is {verdict.status}, not PROMOTION_QUALITY: {detail}"
+        )
     path = bundle / "candidate_raw.json"
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
