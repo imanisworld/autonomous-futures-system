@@ -25,8 +25,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Iterable, Mapping
 
-from .outcome import result_r_value
-from .signal import IntegrityStatus, ProspectiveSignal
+from .outcome import PNL_BASES, SCHEMA as OUTCOME_SCHEMA, result_r_value
+from .signal import IntegrityStatus, ProspectiveSignal, verify_record
 from .strategy_epochs import EpochRegistry, epoch_label_for_record, LEGACY_UNVERSIONED, UNREGISTERED_EPOCH
 
 SCHEMA = "options-setup-research-row-v1"
@@ -121,6 +121,96 @@ def build_feature_row(
     }
 
 
+def _parse_time(value: Any, label: str) -> datetime:
+    if not isinstance(value, str) or not value:
+        raise ResearchError(f"{label} must be an ISO-8601 string")
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except (ValueError, OverflowError) as exc:
+        raise ResearchError(f"{label} is not valid ISO-8601") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ResearchError(f"{label} must be timezone-aware")
+    return parsed
+
+
+def _validate_feature_row(feature_row: Mapping[str, Any], signal_record: Mapping[str, Any]) -> str | None:
+    if not isinstance(feature_row, Mapping):
+        return "feature_row_invalid"
+    if feature_row.get("schema") != SCHEMA:
+        return "feature_row_schema"
+    for key in ("signal_id", "structure_id", "strategy", "strategy_epoch"):
+        if feature_row.get(key) != signal_record.get(key):
+            return "feature_row_identity"
+    if feature_row.get("trade_authority") is not False:
+        return "feature_row_authority"
+    try:
+        cutoff = _parse_time(feature_row.get("decision_cutoff"), "decision_cutoff")
+        expected = _parse_time(
+            signal_record.get("trigger_detection_time") or signal_record.get("first_seen_time"),
+            "signal decision cutoff",
+        )
+    except ResearchError:
+        return "feature_row_cutoff"
+    if cutoff != expected:
+        return "feature_row_cutoff"
+
+    factors = feature_row.get("factors")
+    if not isinstance(factors, Mapping) or set(factors) != set(CANDIDATE_FACTORS):
+        return "feature_row_factors"
+    for name in CANDIDATE_FACTORS:
+        item = factors.get(name)
+        if not isinstance(item, Mapping):
+            return "feature_row_factors"
+        status = item.get("status")
+        if status == FactorStatus.OBSERVED.value:
+            if item.get("value") is None:
+                return "feature_row_factors"
+            if not isinstance(item.get("source"), str) or not item.get("source", "").strip():
+                return "feature_row_factors"
+            try:
+                at = _parse_time(item.get("as_of"), f"{name}.as_of")
+            except ResearchError:
+                return "feature_row_factors"
+            if at > cutoff:
+                return "feature_row_lookahead"
+            value = item.get("value")
+            if isinstance(value, float) and not math.isfinite(value):
+                return "feature_row_factors"
+        elif status == FactorStatus.UNAVAILABLE.value:
+            if item.get("value") is not None or item.get("as_of") is not None:
+                return "feature_row_factors"
+            if not isinstance(item.get("reason"), str) or not item.get("reason", "").strip():
+                return "feature_row_factors"
+        else:
+            return "feature_row_factors"
+    return None
+
+
+def _validate_outcome_record(outcome_record: Mapping[str, Any], signal_record: Mapping[str, Any]) -> str | None:
+    if not isinstance(outcome_record, Mapping):
+        return "outcome_invalid"
+    if outcome_record.get("schema") != OUTCOME_SCHEMA:
+        return "outcome_schema"
+    for key in ("signal_id", "structure_id", "strategy_epoch", "resolution_state", "prospective_catch"):
+        if outcome_record.get(key) != signal_record.get(key):
+            return "outcome_identity"
+    if signal_record.get("prospective_catch") is not True:
+        return "not_prospective_catch"
+    executed = outcome_record.get("executed")
+    if not isinstance(executed, bool):
+        return "outcome_executed_type"
+    basis = outcome_record.get("pnl_basis")
+    if basis not in PNL_BASES:
+        return "outcome_basis"
+    if executed and basis != "executed":
+        return "outcome_basis"
+    if not executed and basis != "paper_equivalent":
+        return "outcome_basis"
+    if executed and outcome_record.get("execution_integrity") != IntegrityStatus.VALID.value:
+        return "execution_integrity"
+    return None
+
+
 @dataclass(frozen=True)
 class ResearchPopulation:
     rows: tuple[dict[str, Any], ...]
@@ -131,7 +221,16 @@ def research_population(
     registry: EpochRegistry,
     joined: Iterable[tuple[Mapping[str, Any], Mapping[str, Any], Mapping[str, Any]]],
 ) -> ResearchPopulation:
-    """Filter (signal_record, outcome_record, feature_row) triples to the clean population."""
+    """Filter canonical (signal, outcome, feature) triples to the clean population.
+
+    Admission is fail-closed: the signal must pass #1151 record verification
+    against the supplied registry, the outcome must agree with the canonical
+    signal/prospective-catch/trade-basis fields, and the persisted feature row
+    must independently satisfy the same no-look-ahead schema that
+    build_feature_row produces.
+    """
+    if not isinstance(registry, EpochRegistry):
+        raise ResearchError("registry must be an EpochRegistry")
     rows: list[dict[str, Any]] = []
     excluded: dict[str, int] = {}
 
@@ -139,10 +238,14 @@ def research_population(
         excluded[reason] = excluded.get(reason, 0) + 1
 
     for signal_record, outcome_record, feature_row in joined:
+        if not all(isinstance(record, Mapping) for record in (signal_record, outcome_record, feature_row)):
+            drop("malformed_record")
+            continue
         ids = {signal_record.get("signal_id"), outcome_record.get("signal_id"), feature_row.get("signal_id")}
         if len(ids) != 1:
             drop("mismatched_ids")
             continue
+
         label = epoch_label_for_record(registry, signal_record)
         if label == LEGACY_UNVERSIONED:
             drop("legacy_unversioned")
@@ -150,9 +253,17 @@ def research_population(
         if label == UNREGISTERED_EPOCH:
             drop("unregistered_epoch")
             continue
-        # Integrity must be VALID on the canonical signal record (authoritative:
-        # a late / gap capture stays out whatever the outcome row claims) and
-        # on the outcome record.
+
+        signal_problems = verify_record(signal_record, registry=registry)
+        if signal_problems:
+            drop("signal_record_invalid")
+            continue
+
+        outcome_problem = _validate_outcome_record(outcome_record, signal_record)
+        if outcome_problem is not None:
+            drop(outcome_problem)
+            continue
+
         if any(
             record.get(k) != IntegrityStatus.VALID.value
             for record in (signal_record, outcome_record)
@@ -160,6 +271,12 @@ def research_population(
         ):
             drop("integrity")
             continue
+
+        feature_problem = _validate_feature_row(feature_row, signal_record)
+        if feature_problem is not None:
+            drop(feature_problem)
+            continue
+
         result = result_r_value(outcome_record)
         if result is None:
             drop("result_unavailable")
