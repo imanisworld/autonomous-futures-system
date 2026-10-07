@@ -41,6 +41,7 @@ def test_previously_unlocked_runtime_dependencies_are_locked(lock):
 
 def test_separate_components_are_declared_not_silently_skipped():
     assert "ops/push_relay" in dl.SEPARATE_COMPONENTS
+    assert "ops/afs_watcher" in dl.SEPARATE_COMPONENTS
     assert (ROOT / "ops/push_relay/requirements.txt").is_file()
 
 
@@ -80,6 +81,15 @@ def test_nested_file_stem_does_not_hide_third_party_import(tmp_path):
     assert "helper" in imports
     problems = dl.import_problems(imports, {}, {"helper": ["third-party-helper"]})
     assert any("third-party-helper" in problem and "not in the lock" in problem for problem in problems)
+
+
+def test_sibling_script_module_is_local_but_unrelated_nested_stem_is_not(tmp_path):
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    (scripts / "helper.py").write_text("VALUE = 1\n", encoding="utf-8")
+    (scripts / "job.py").write_text("import helper\n", encoding="utf-8")
+    imports = dl.production_third_party_imports(tmp_path)
+    assert "helper" not in imports
 
 
 def test_real_top_level_local_module_is_not_treated_as_third_party(tmp_path):

@@ -32,6 +32,10 @@ NON_PRODUCTION_DIRS = frozenset(
 # Components with their own, separate dependency manifest and service unit.
 SEPARATE_COMPONENTS = {
     "ops/push_relay": "own requirements.txt + afs-push-relay.service; not installed into the release venv",
+    "ops/afs_watcher": (
+        "persistent read-only watcher service; synchronized separately from the release "
+        "and runs outside the release venv"
+    ),
 }
 
 _PIN = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)==([A-Za-z0-9][A-Za-z0-9.+!_-]*)$")
@@ -160,6 +164,12 @@ def _local_module_names(root: Path) -> set[str]:
             names.add(child.name)
     return names
 
+def _module_exists_at(base: Path, name: str) -> bool:
+    if (base / f"{name}.py").is_file():
+        return True
+    package = base / name
+    return package.is_dir() and any(path.suffix == ".py" for path in package.rglob("*.py"))
+
 def production_third_party_imports(root: Path) -> dict[str, set[str]]:
     """Top-level third-party module -> files importing it (production code)."""
     root = Path(root)
@@ -184,7 +194,12 @@ def production_third_party_imports(root: Path) -> dict[str, set[str]]:
                 continue
             for name in names:
                 top = name.split(".", 1)[0]
-                if top == "__future__" or top in sys.stdlib_module_names or top in local:
+                if (
+                    top == "__future__"
+                    or top in sys.stdlib_module_names
+                    or top in local
+                    or _module_exists_at(path.parent, top)
+                ):
                     continue
                 found.setdefault(top, set()).add(rel.as_posix())
     return found
