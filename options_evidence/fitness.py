@@ -32,9 +32,9 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Iterable, Mapping, Sequence
 
-from .outcome import result_r_value
-from .signal import IntegrityStatus
-from .strategy_epochs import StrategyEpoch
+from .outcome import PNL_BASES, SCHEMA as OUTCOME_SCHEMA, result_r_value
+from .signal import SCHEMA as SIGNAL_SCHEMA, IntegrityStatus, default_registry, verify_record
+from .strategy_epochs import EpochRegistry, EpochStatus, StrategyEpoch, assert_observation_only
 
 
 class FitnessState(str, Enum):
@@ -76,7 +76,13 @@ class FitnessPolicy:
 
 @dataclass(frozen=True)
 class Observation:
-    """One prospective signal outcome, reduced to what fitness needs."""
+    """One canonical signal outcome reduced to what fitness needs.
+
+    canonical_provenance is intentionally init=False. Direct construction is
+    useful for diagnostics/tests but cannot create evidence that judges
+    fitness; only from_records may mark a row verified after the canonical
+    signal record passes #1151 verification.
+    """
 
     signal_id: str
     strategy: str
@@ -90,28 +96,98 @@ class Observation:
     mfe_r: float | None = None
     gross_pnl: float | None = None
     net_pnl: float | None = None
+    prospective_catch: bool = False
+    pnl_basis: str | None = None
+    canonical_provenance: bool = field(default=False, init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        for name in ("signal_id", "strategy", "strategy_epoch"):
+            value = getattr(self, name)
+            if not isinstance(value, str) or not value:
+                raise ValueError(f"{name} must be a non-empty string")
+        if not isinstance(self.executed, bool):
+            raise ValueError("executed must be an exact bool")
+        if not isinstance(self.prospective_catch, bool):
+            raise ValueError("prospective_catch must be an exact bool")
+        if self.pnl_basis is not None and self.pnl_basis not in PNL_BASES:
+            raise ValueError(f"pnl_basis must be one of {PNL_BASES}")
+        for name in ("data_integrity", "signal_integrity", "execution_integrity"):
+            if not isinstance(getattr(self, name), IntegrityStatus):
+                raise ValueError(f"{name} must be an IntegrityStatus")
+        for name in ("result_r", "mae_r", "mfe_r", "gross_pnl", "net_pnl"):
+            value = getattr(self, name)
+            if value is None:
+                continue
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ValueError(f"{name} must be a finite number or None")
+            try:
+                number = float(value)
+            except OverflowError as exc:
+                raise ValueError(f"{name} is out of range") from exc
+            if not math.isfinite(number):
+                raise ValueError(f"{name} must be finite")
 
     @staticmethod
-    def from_records(signal_record: Mapping[str, Any], outcome_record: Mapping[str, Any]) -> "Observation":
+    def from_records(
+        signal_record: Mapping[str, Any],
+        outcome_record: Mapping[str, Any],
+        *,
+        registry: EpochRegistry | None = None,
+    ) -> "Observation":
+        if not isinstance(signal_record, Mapping) or not isinstance(outcome_record, Mapping):
+            raise ValueError("signal_record and outcome_record must be mappings")
+        if signal_record.get("schema") != SIGNAL_SCHEMA:
+            raise ValueError(f"signal record schema must be {SIGNAL_SCHEMA}")
+        active_registry = registry if registry is not None else default_registry()
+        problems = verify_record(signal_record, registry=active_registry)
+        if problems:
+            raise ValueError("invalid canonical signal record: " + "; ".join(problems))
         if signal_record.get("signal_id") != outcome_record.get("signal_id"):
             raise ValueError("signal/outcome records do not belong together")
+        if outcome_record.get("schema") != OUTCOME_SCHEMA:
+            raise ValueError(f"outcome record schema must be {OUTCOME_SCHEMA}")
+        if outcome_record.get("strategy_epoch") != signal_record.get("strategy_epoch"):
+            raise ValueError("outcome strategy_epoch does not match signal")
+        if outcome_record.get("structure_id") != signal_record.get("structure_id"):
+            raise ValueError("outcome structure_id does not match signal")
+        if outcome_record.get("resolution_state") != signal_record.get("resolution_state"):
+            raise ValueError("outcome resolution_state does not match signal")
+        if outcome_record.get("prospective_catch") is not signal_record.get("prospective_catch"):
+            raise ValueError("outcome prospective_catch does not match signal")
+        executed = outcome_record.get("executed")
+        if not isinstance(executed, bool):
+            raise ValueError("outcome executed must be an exact bool")
+        pnl_basis = outcome_record.get("pnl_basis")
+        if pnl_basis not in PNL_BASES:
+            raise ValueError(f"outcome pnl_basis must be one of {PNL_BASES}")
+        if executed and pnl_basis != "executed":
+            raise ValueError("executed outcome must use pnl_basis=executed")
+        if not executed and pnl_basis == "executed":
+            raise ValueError("non-executed outcome cannot use pnl_basis=executed")
 
         def known(name: str) -> float | None:
-            item = outcome_record.get(name) or {}
-            if item.get("status") in ("OBSERVED", "DERIVED") and isinstance(item.get("value"), (int, float)):
-                value = float(item["value"])
-                return value if math.isfinite(value) else None
-            return None
+            item = outcome_record.get(name)
+            if not isinstance(item, Mapping):
+                raise ValueError(f"outcome {name} must be an evidence mapping")
+            if item.get("status") not in ("OBSERVED", "DERIVED"):
+                return None
+            value = item.get("value")
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ValueError(f"outcome {name}.value must be a finite number")
+            try:
+                number = float(value)
+            except OverflowError as exc:
+                raise ValueError(f"outcome {name}.value is out of range") from exc
+            if not math.isfinite(number):
+                raise ValueError(f"outcome {name}.value must be finite")
+            return number
 
-        return Observation(
-            signal_id=str(signal_record["signal_id"]),
-            strategy=str(signal_record["strategy"]),
-            strategy_epoch=str(signal_record["strategy_epoch"]),
+        observation = Observation(
+            signal_id=signal_record["signal_id"],
+            strategy=signal_record["strategy"],
+            strategy_epoch=signal_record["strategy_epoch"],
             result_r=result_r_value(outcome_record),
-            executed=bool(outcome_record.get("executed")),
-            # The canonical signal is authoritative for signal integrity (a late
-            # or gap capture stays excluded whatever the outcome row says);
-            # data integrity is the worse of the two records.
+            executed=executed,
             data_integrity=_worst(
                 signal_record.get("data_integrity", "UNKNOWN"),
                 outcome_record.get("data_integrity", "UNKNOWN"),
@@ -122,8 +198,11 @@ class Observation:
             mfe_r=known("mfe_r"),
             gross_pnl=known("gross_pnl"),
             net_pnl=known("net_pnl"),
+            prospective_catch=signal_record.get("prospective_catch") is True,
+            pnl_basis=pnl_basis,
         )
-
+        object.__setattr__(observation, "canonical_provenance", True)
+        return observation
 
 _INTEGRITY_RANK = {
     IntegrityStatus.VALID: 0,
@@ -140,20 +219,24 @@ def _worst(*values: Any) -> IntegrityStatus:
 
 
 def classify(obs: Observation, epoch: StrategyEpoch) -> str:
-    """'valid' or the exclusion reason. Only valid observations judge the strategy."""
+    """'valid' or the exclusion reason. Only verified prospective catches judge fitness."""
     if obs.strategy != epoch.strategy or obs.strategy_epoch != epoch.epoch:
         return "other_epoch"
+    if not obs.canonical_provenance:
+        return "provenance_unverified"
+    if not obs.prospective_catch:
+        return "not_prospective_catch"
+    if obs.pnl_basis not in ("executed", "paper_equivalent"):
+        return "non_trade_basis"
     if obs.data_integrity is not IntegrityStatus.VALID:
         return "data_integrity"
     if obs.signal_integrity is not IntegrityStatus.VALID:
         return "signal_integrity"
     if obs.executed and obs.execution_integrity is not IntegrityStatus.VALID:
-        # A bad fill is an execution problem, not evidence about the edge.
         return "execution_integrity"
     if obs.result_r is None or not math.isfinite(obs.result_r):
         return "result_unavailable"
     return "valid"
-
 
 def max_drawdown_r(outcomes: Sequence[float]) -> float:
     peak = 0.0
@@ -224,8 +307,22 @@ def evaluate_fitness(
     epoch: StrategyEpoch,
     observations: Iterable[Observation],
     policy: FitnessPolicy = FitnessPolicy(),
+    *,
+    registry: EpochRegistry | None = None,
 ) -> FitnessVerdict:
-    """Pure verdict for one epoch. Never returns SUSPENDED/RETIRED; those are authority states."""
+    """Pure verdict for one registered epoch.
+
+    The evaluator fails closed unless epoch is the exact object held by the
+    supplied registry (default: committed registry). This prevents a hand-built
+    epoch/OOS distribution from silently judging production evidence.
+    """
+    assert_observation_only(epoch)
+    active_registry = registry if registry is not None else default_registry()
+    registered = active_registry.get(epoch.strategy, epoch.epoch)
+    if registered is not epoch:
+        raise ValueError("fitness epoch must be the exact registered epoch object")
+    if epoch.status not in (EpochStatus.FROZEN, EpochStatus.RETIRED):
+        raise ValueError("fitness requires a FROZEN or RETIRED epoch")
     excluded: dict[str, int] = {}
     valid: list[Observation] = []
     in_epoch = 0
