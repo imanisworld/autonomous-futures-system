@@ -32,6 +32,7 @@ from context import wide_stop_execution as execution
 from context import wide_stop_forward_collector as collector
 from context import wide_stop_ledger_paper as contract
 from context.bar_history import _parse_dt
+from config.futures_contracts import tick_size as _tick_size
 from execution.broker_interface import BracketOrder, Fill, Position
 from execution.day_only_exit import (
     BROKER_FLAT_FILL_PRICE_MISSING,
@@ -53,6 +54,8 @@ from journal.journal_logger import journal_write_failed
 from risk.risk_engine import RiskEngine
 
 logger = logging.getLogger(__name__)
+# Tick size from canonical metadata only (U7); raises for an unknown root.
+_TICK = _tick_size(contract.INSTRUMENT)
 
 _AMBIGUOUS_REASONS = {
     "TRADOVATE_ORDER_ERROR",
@@ -227,7 +230,7 @@ def _record_outcome(
     audit = contract.evaluate(cfg).audit(
         instrument=contract.INSTRUMENT,
         strategy=str(position.get("strategy") or ""),
-        stop_ticks=abs(float(position["planned_entry"]) - float(position["stop"])) / 0.25,
+        stop_ticks=abs(float(position["planned_entry"]) - float(position["stop"])) / _TICK,
         rr_ratio=float(position.get("rr_ratio") or 0.0),
     )
     audit.update(
@@ -297,7 +300,7 @@ def _pending_reconcile(
     audit = contract.evaluate(cfg).audit(
         instrument=contract.INSTRUMENT,
         strategy=str(pending["strategy"]),
-        stop_ticks=abs(float(pending["planned_entry"]) - float(pending["stop"])) / 0.25,
+        stop_ticks=abs(float(pending["planned_entry"]) - float(pending["stop"])) / _TICK,
         rr_ratio=float(pending.get("rr_ratio") or 0.0),
     )
     audit.update(
@@ -412,7 +415,7 @@ def _resolve_position(
             audit = contract.evaluate(cfg).audit(
                 instrument=contract.INSTRUMENT,
                 strategy=str(position.get("strategy") or ""),
-                stop_ticks=abs(float(position["planned_entry"]) - float(position["stop"])) / 0.25,
+                stop_ticks=abs(float(position["planned_entry"]) - float(position["stop"])) / _TICK,
                 rr_ratio=float(position.get("rr_ratio") or 0.0),
             )
             audit.update(
@@ -431,7 +434,7 @@ def _resolve_position(
             audit = contract.evaluate(cfg).audit(
                 instrument=contract.INSTRUMENT,
                 strategy=str(position.get("strategy") or ""),
-                stop_ticks=abs(float(position["planned_entry"]) - float(position["stop"])) / 0.25,
+                stop_ticks=abs(float(position["planned_entry"]) - float(position["stop"])) / _TICK,
                 rr_ratio=float(position.get("rr_ratio") or 0.0),
             )
             audit.update(
@@ -451,7 +454,7 @@ def _resolve_position(
             audit = contract.evaluate(cfg).audit(
                 instrument=contract.INSTRUMENT,
                 strategy=str(position.get("strategy") or ""),
-                stop_ticks=abs(float(position["planned_entry"]) - float(position["stop"])) / 0.25,
+                stop_ticks=abs(float(position["planned_entry"]) - float(position["stop"])) / _TICK,
                 rr_ratio=float(position.get("rr_ratio") or 0.0),
             )
             audit.update(
