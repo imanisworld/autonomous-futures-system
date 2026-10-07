@@ -7,10 +7,41 @@ import pytest
 
 from alert_ranker.setup_capture import structure_key as capture_key
 from options_evidence import signal as sg
+from options_evidence import strategy_epochs as se
 from options_evidence.strategy_epochs import LEGACY_UNVERSIONED
 
 T0 = datetime(2026, 10, 6, 14, 0, tzinfo=timezone.utc)  # structure close
 HIGH, LOW = 501.25, 498.10
+
+# A test-only registered epoch whose context (1H, 222 family, window from
+# 2026-09-01) matches the default ``identity()`` below. The committed registry's
+# only epoch (options_122 / 122-IEX-E1: 30m, 122 family) does not, so signals
+# opened with the defaults are UNREGISTERED_EPOCH and can never be VALID.
+CATCH_STRATEGY, CATCH_EPOCH = "options_222_test", "222-1H-TEST"
+
+
+def registered_epoch(
+    *, strategy=CATCH_STRATEGY, epoch=CATCH_EPOCH, timeframe="1H", family="STRAT_2_2_2",
+    effective_from=datetime(2026, 9, 1, tzinfo=timezone.utc), effective_until=None, status=se.EpochStatus.FROZEN,
+) -> se.StrategyEpoch:
+    definition = {
+        "setup": {"family": family, "timeframe": timeframe},
+        "trigger": {"rule": "first strict break"},
+        "target": {"t1": "1R"},
+        "filters": {},
+        "authority": {
+            "observation_only": True, "execution_authority": False, "risk_reservation": False, "trade_alerts": False,
+        },
+    }
+    return se.StrategyEpoch(
+        strategy=strategy, epoch=epoch, status=status, definition=definition, thresholds={},
+        definition_sha256=se.definition_hash(definition, {}), effective_from=effective_from,
+        effective_until=effective_until, source_commit="a" * 40, preregistration_doc="docs/test.md",
+        oos_reference=None, supersedes=None, observation_only=True,
+    )
+
+
+REGISTRY = se.EpochRegistry((registered_epoch(),))
 
 
 def identity(**overrides) -> sg.StructureIdentity:
@@ -29,8 +60,21 @@ def opened(journal: sg.SignalJournal, **overrides) -> sg.ProspectiveSignal:
         levels=sg.Levels(HIGH, LOW),
     )
     ident = overrides.pop("identity", identity())
+    kwargs["registry"] = journal.registry
     kwargs.update(overrides)
     return journal.append(sg.open_signal(ident, **kwargs))
+
+
+def caught(journal: sg.SignalJournal | None = None, *, at=None) -> sg.ProspectiveSignal:
+    """A clean prospective catch under the registered test epoch (VALID signal integrity)."""
+    journal = journal if journal is not None else sg.SignalJournal(REGISTRY)
+    at = at or T0 + timedelta(minutes=10)
+    s = opened(journal, strategy=CATCH_STRATEGY, strategy_epoch=CATCH_EPOCH)
+    s = trigger(journal, s, at=at)
+    s = journal.append(sg.observation_event(journal, s.signal_id, detected_at=at + timedelta(seconds=4),
+                                            prospective_catch=True, capture_late=False, gap_through=False))
+    return journal.append(sg.integrity_event(journal, s.signal_id, detected_at=at + timedelta(seconds=4),
+                                             signal_integrity="VALID", data_integrity="VALID"))
 
 
 def trigger(journal, s, *, at, direction="LONG", state=sg.LifecycleState.TRIGGERED, detected=None, **payload):
@@ -171,7 +215,7 @@ def test_structure_first_seen_after_trigger_cannot_be_a_clean_trigger():
 def test_clock_inversions_are_refused():
     journal = sg.SignalJournal()
     s = opened(journal)
-    with pytest.raises(sg.LifecycleError, match="detection cannot precede"):
+    with pytest.raises(sg.LifecycleError, match="detection cannot precede|recorded before it happened"):
         trigger(journal, s, at=T0 + timedelta(minutes=10), detected=T0 + timedelta(minutes=9))
     with pytest.raises(sg.LifecycleError, match="precede structure close"):
         trigger(journal, s, at=T0 - timedelta(minutes=1), detected=T0 + timedelta(minutes=1))
@@ -216,34 +260,22 @@ def test_observation_carries_only_capture_evidence():
         s.capture["prospective_catch"] = False  # read-only mapping
 
 
-def test_signal_never_opens_with_execution_authority():
+def test_signal_cannot_be_opened_without_observation_only():
     journal = sg.SignalJournal()
-    assert opened(journal, observation_only=False).execution_authority is False
+    for value in (False, None, 1, "true"):
+        with pytest.raises(sg.LifecycleError, match="observation-only"):
+            opened(journal, observation_only=value)
+    assert opened(journal).execution_authority is False
 
 
-def test_observation_only_signal_cannot_be_granted_authority():
-    journal = sg.SignalJournal()
-    s = opened(journal)
-    with pytest.raises(sg.LifecycleError, match="observation-only"):
-        journal.append(sg.integrity_event(journal, s.signal_id, detected_at=T0 + timedelta(minutes=1),
-                                          execution_authority=True, authority_ref="op-1"))
-
-
-def test_authority_requires_registered_epoch_reference_and_non_terminal():
-    journal = sg.SignalJournal()
-    legacy = opened(journal, strategy_epoch=LEGACY_UNVERSIONED, observation_only=False)
-    with pytest.raises(sg.LifecycleError, match="registered strategy epoch"):
-        journal.append(sg.integrity_event(journal, legacy.signal_id, detected_at=T0 + timedelta(minutes=1),
-                                          execution_authority=True, authority_ref="x"))
-    s = opened(journal, observation_only=False)
-    with pytest.raises(sg.LifecycleError, match="authority_ref"):
-        journal.append(sg.integrity_event(journal, s.signal_id, detected_at=T0 + timedelta(minutes=1),
-                                          execution_authority=True))
-    s = journal.append(sg.state_event(journal, s.signal_id, sg.LifecycleState.EXPIRED,
-                                      detected_at=T0 + timedelta(hours=1), reason="window"))
-    with pytest.raises(sg.LifecycleError, match="terminal signal cannot gain"):
-        journal.append(sg.integrity_event(journal, s.signal_id, detected_at=T0 + timedelta(hours=2),
-                                          execution_authority=True, authority_ref="x"))
+@pytest.mark.parametrize("value", [True, False, "true", "false", 1, 0, None])
+def test_integrity_events_never_carry_authority(value):
+    journal = sg.SignalJournal(REGISTRY)
+    s = caught(journal)
+    with pytest.raises(sg.LifecycleError, match="only carry integrity statuses"):
+        journal.append(sg.integrity_event(journal, s.signal_id, detected_at=T0 + timedelta(hours=1),
+                                          execution_authority=value, authority_ref="op-1"))
+    assert journal.get(s.signal_id).execution_authority is False
 
 
 def test_links_accumulate_and_late_links_are_allowed():

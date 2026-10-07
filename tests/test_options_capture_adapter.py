@@ -17,6 +17,7 @@ from alert_ranker.setup_capture_engine import BarAvailabilityOracle
 from alert_ranker.setup_capture_store import SetupCaptureJournal
 from options_evidence import capture_adapter as ca
 from options_evidence import signal as sg
+from tests.test_options_prospective_signal import CATCH_EPOCH, CATCH_STRATEGY, REGISTRY
 from tests.test_options_setup_capture import (
     OCT5_HIGH,
     OCT5_LOW,
@@ -37,6 +38,11 @@ def _engine(tmp_path, **kw):
 
 def _rows(engine):
     return list(ca.read_capture_journal(engine.journal.path))
+
+
+def _registered_fold(rows):
+    """Fold under a registered, context-matching epoch (1H / 222 family)."""
+    return ca.fold_capture_rows(rows, strategy=CATCH_STRATEGY, strategy_epoch=CATCH_EPOCH, registry=REGISTRY)
 
 
 def _spy_1h(fold):
@@ -70,7 +76,7 @@ def test_triggered_then_reconciled_prospective_catch(tmp_path):
     )
     engine.run(now=et(2026, 10, 2, 16, 16))
     engine.run(now=et(2026, 10, 5, 9, 31, 0))
-    provisional = _spy_1h(ca.fold_capture_rows(_rows(engine)))
+    provisional = _spy_1h(_registered_fold(_rows(engine)))
     assert provisional.state is sg.LifecycleState.TRIGGERED
     assert (provisional.direction, provisional.trigger, provisional.invalidation) == ("LONG", OCT5_HIGH, OCT5_LOW)
     assert provisional.signal_integrity is sg.IntegrityStatus.UNKNOWN  # pending SIP
@@ -78,13 +84,19 @@ def test_triggered_then_reconciled_prospective_catch(tmp_path):
     assert "sip_crossed_at" not in provisional.capture  # missing stays missing
 
     engine.run(now=et(2026, 10, 5, 10, 46, 0))
-    final = _spy_1h(ca.fold_capture_rows(_rows(engine)))
+    final = _spy_1h(_registered_fold(_rows(engine)))
     assert final.state is sg.LifecycleState.TRIGGERED
     assert final.capture["prospective_catch"] is True
     assert final.capture["sip_crossed_at"]
     assert final.signal_integrity is sg.IntegrityStatus.VALID
     assert final.data_integrity is sg.IntegrityStatus.VALID
-    assert final.prearmed is True
+    assert final.prearmed is True and final.is_prospective_catch
+    assert final.strategy_epoch == CATCH_EPOCH and final.epoch_registered
+
+    # The same catch under the default (unregistered) epoch is never VALID.
+    default = _spy_1h(ca.fold_capture_rows(_rows(engine)))
+    assert default.strategy_epoch == sg.UNREGISTERED_EPOCH and default.requested_epoch == ca.DEFAULT_EPOCH
+    assert default.signal_integrity is sg.IntegrityStatus.DEGRADED and not default.is_prospective_catch
 
 
 def test_cold_start_missed_late_survives_mapping(tmp_path):
@@ -143,13 +155,21 @@ def test_catch_classification_is_unchanged_by_adaptation(tmp_path):
     engine.run(now=et(2026, 10, 5, 9, 31, 0))
     engine.run(now=et(2026, 10, 5, 10, 46, 0))
     official = SetupCaptureJournal(engine.journal.path, create=False).peek_state()["current"]
-    fold = ca.fold_capture_rows(_rows(engine))
+    fold = _registered_fold(_rows(engine))
     valid = {
         key for key, sid in fold.signal_by_key.items()
         if fold.journal.get(sid).signal_integrity is sg.IntegrityStatus.VALID
         and fold.journal.get(sid).state is sg.LifecycleState.TRIGGERED
     }
-    assert len(valid) == catch_count(official.values()) >= 1
+    # VALID ⇔ #1145 catch AND the structure matches the registered epoch's
+    # context (1H). The 30m catch on the same bar is a context mismatch (B6).
+    in_context = [r for r in official.values() if r.timeframe == "1H"]
+    assert len(valid) == catch_count(in_context) >= 1
+    for key, record in official.items():
+        if record.timeframe != "1H":
+            s = fold.signal_for(key)
+            assert s.strategy_epoch == sg.UNREGISTERED_EPOCH and "timeframe" in s.epoch_reason
+            assert s.signal_integrity is not sg.IntegrityStatus.VALID
 
 
 def test_adapted_signals_round_trip_through_canonical_records(tmp_path):
@@ -162,11 +182,11 @@ def test_adapted_signals_round_trip_through_canonical_records(tmp_path):
     engine.run(now=et(2026, 10, 2, 16, 16))
     engine.run(now=et(2026, 10, 5, 9, 31, 0))
     engine.run(now=et(2026, 10, 5, 10, 46, 0))
-    fold = ca.fold_capture_rows(_rows(engine))
-    records = [sg.to_record(s) for s in fold.journal.signals()]
-    assert records
-    for record in records:
-        assert sg.verify_record(json.loads(json.dumps(record))) == []
+    for fold in (_registered_fold(_rows(engine)), ca.fold_capture_rows(_rows(engine))):
+        records = [sg.to_record(s) for s in fold.journal.signals()]
+        assert records
+        for record in records:
+            assert sg.verify_record(json.loads(json.dumps(record)), registry=fold.journal.registry) == []
     assert all(c.detected_at.tzinfo is not None for s in fold.journal.signals() for c in s.history)
 
 
@@ -227,7 +247,7 @@ def test_observation_rows_cannot_gain_authority(tmp_path):
 
     registry = load_registry()
     for s in fold.journal.signals():
-        assert s.strategy_epoch == ca.DEFAULT_EPOCH
+        assert s.strategy_epoch == UNREGISTERED_EPOCH and s.requested_epoch == ca.DEFAULT_EPOCH
         assert epoch_label_for_record(registry, sg.to_record(s)) == UNREGISTERED_EPOCH
 
 

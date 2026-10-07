@@ -58,7 +58,7 @@ Event types:
 - `LEVELS` (WATCHING only, revision must increase)
 - `OBSERVATION` (capture evidence only, such as `capture_late`, `prospective_catch` or `sip_crossed_at`; never identity, state or authority)
 - `LINK` (timeless metadata, allowed after terminal)
-- `INTEGRITY` (allowed after terminal, never with authority)
+- `INTEGRITY` (integrity statuses only; any other key, including `execution_authority` / `authority_ref`, is refused)
 
 The journal refuses all of the following:
 - illegal transitions
@@ -66,9 +66,26 @@ The journal refuses all of the following:
 - sequence gaps
 - clock inversions
 - resolution without direction or trigger time
-- a `TRIGGERED` for a structure first seen after its trigger (that must be `MISSED_LATE`)
+- a `TRIGGERED` for a structure first seen, or only knowable (`setup_ready_time`), after its trigger (that must be `MISSED_LATE`)
 - `MISSED_GAP` without gap evidence
 - `OUTCOME_CLOSED` without `outcome_ref`
+- chronology violations: structure close ≤ setup ready ≤ first seen; market events no later than the event that records them; trigger detection between the market trigger and its recording
+- wrongly typed values: levels, lags and prices must be finite non-bool numbers, capture flags exact bools, cross times timezone-aware ISO strings, integrity values exact `IntegrityStatus` names (no coercion of `"yes"`, `"false"`, `1`, `NaN`)
+- provenance overwrites (see below)
+
+### Provenance is append-only (review B4)
+
+- `capture_late` and `gap_through`, once true, never become false.
+- A `prospective_catch` that was true and is revoked never comes back. It can be set true only on a pre-armed `TRIGGERED` signal whose capture is neither late nor gapped.
+- `sip_crossed_at` / `trigger_crossed_at` are write-once.
+- `signal_integrity` can only be demoted once known (`VALID → DEGRADED → INVALID`); it cannot be promoted or reset to `UNKNOWN`. `data_integrity` `INVALID` is final.
+- `MISSED_LATE` / `MISSED_GAP` set `signal_integrity` to `DEGRADED`; `DATA_BLOCKED` / `AMBIGUOUS` set both integrities to `INVALID`; late or revoked capture evidence demotes a `VALID` signal.
+- `resolution` (TRIGGERED / MISSED_LATE / MISSED_GAP) is read from history, so it survives `OUTCOME_CLOSED`; records carry `resolution_state`.
+- `signal_integrity == VALID` requires a registered epoch, a non-blocked state, and, after a TRIGGERED resolution, pre-arming plus `prospective_catch` evidence that is not late or gapped. This is checked on every construction, including direct `ProspectiveSignal(...)` and `dataclasses.replace`.
+
+### Epochs (review B6)
+
+`open_signal` validates `strategy_epoch` against the #1150 registry (default: the committed registry; `SignalJournal(registry)` and `fold_capture_rows(..., registry=...)` take another). The epoch must exist, be FROZEN or RETIRED, declare `definition.setup.timeframe` and `definition.setup.family` (`STRAT_a_b_c`), match the structure's timeframe and pattern family (`abc:…`), and cover both the structure close and the first-seen time. Otherwise the signal opens as `UNREGISTERED_EPOCH`, keeping `requested_epoch` and `epoch_reason`, and can never be VALID. For example, a 1H `222` structure on 2026-09-01 is not `122-IEX-E1` (30m, `122` family, from 2026-09-21). A journal refuses an `OPENED` event whose claimed epoch is not its registry entry. Records carry `epoch_definition_sha256`, and `verify_record(record, registry=...)` checks it.
 
 ## Watcher → canonical mapping (`capture_adapter.fold_capture_rows`)
 
@@ -86,7 +103,8 @@ The journal refuses all of the following:
 | `COLLECTOR_*`, `SOURCE_BLOCKED`, `JOURNAL_REPAIR` | ignored (also diagnostic-only in #1145) | — |
 
 Integrity derivation:
-- `signal_integrity` is VALID **iff** #1145 `is_prospective_catch` holds for a TRIGGERED row. A test checks equality with `catch_count`.
+- `signal_integrity` is VALID **iff** #1145 `is_prospective_catch` holds for a TRIGGERED row **and** the fold's epoch is registered and matches the structure's context. A test checks equality with `catch_count` over the in-context structures.
+- Under the default (unregistered) epoch it is capped at DEGRADED.
 - It is UNKNOWN while a TRIGGERED row is pending SIP.
 - It is DEGRADED for late, gap or missed captures.
 - It is INVALID for DATA_BLOCKED and AMBIGUOUS.
@@ -96,21 +114,28 @@ These guarantees are tested against real #1145 engine output (#1145's own Oct 5 
 - one #1145 key maps to exactly one canonical signal
 - repeated scanner sightings (`shadow:9925` / `9933`) only extend `scanner_sighting_ids`, and an unmatched sighting never creates a signal
 - late, gap and expired classifications survive the mapping unchanged
-- a row that claims authority, or is not observation-only, is refused
+- a row that claims authority, or is not observation-only, is refused (exact booleans: `"false"` is a claim)
 - missing trigger evidence becomes `DATA_BLOCKED` with no synthesized time
 - the #1145 journal is never written, and a torn tail is skipped, not repaired
 
-The adapter's default `strategy_epoch` is the collector version (`capture-v0.2`). That is not a registered strategy epoch, so research and fitness exclude these signals until an operator registers a real one.
+The adapter's default `strategy_epoch` is the collector version (`capture-v0.2`). That is not a registered strategy epoch, so these signals open as `UNREGISTERED_EPOCH` (with `requested_epoch="capture-v0.2"`) and research and fitness exclude them until an operator registers a real one.
 
-## Authority
+## Authority (review B1)
 
-- Signals open with `execution_authority=false`.
-- Authority can be recorded only on a non-observation, non-terminal signal that has a non-reserved epoch label and an explicit `authority_ref`.
+- A canonical signal is structurally observation-only: `observation_only is True` and `execution_authority is False` on every construction, including direct constructors and `dataclasses.replace`. `execution_integrity` is always `NOT_APPLICABLE`.
+- No event can grant authority. `open_signal` refuses anything but `observation_only=True`; `INTEGRITY` refuses authority keys whatever their value.
+- Execution authority is a separate, human-approved record outside this layer.
 - The adapter only produces observation-only signals.
 
 ## Outcome evidence (Workstream 8)
 
 There is no change in intent. `OutcomeEvidence` now requires a resolved signal, because a two-sided WATCHING structure has no risk unit. R and MAE/MFE come from the resolved trigger and invalidation. Every value is OBSERVED, DERIVED, UNAVAILABLE or NOT_APPLICABLE, and UNAVAILABLE and NOT_APPLICABLE need a reason. Premium paths are observed quotes only.
+
+Review hardening:
+- **B3:** every field is type-checked on construction. Prices, R and P&L must be finite non-bool numbers, hit times timezone-aware datetimes, and `executed` an exact bool.
+- **B2:** only a prospective catch (`ProspectiveSignal.is_prospective_catch`) can be `executed=True`.
+- **B2:** a miss (`MISSED_LATE` / `MISSED_GAP`, including after `OUTCOME_CLOSED`) must use `pnl_basis="counterfactual"`, with no P&L and no OBSERVED R. `result_r_value` never reads a counterfactual record as a trade result.
+- An outcome cannot report VALID signal integrity for a non-VALID signal, nor launder INVALID data integrity.
 
 ## Not done here
 
