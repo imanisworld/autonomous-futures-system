@@ -6,8 +6,9 @@ Follow `AGENTS.md` as the repository-wide operating contract.
 
 - Prefer the **independent breaker / QA** role from `AGENTS.md` Research agent roles: review implementation and safety; do not become the primary experiment generator or invent new strategy variants.
 - Use the existing commands in `.claude/commands/` instead of inventing duplicate audit procedures.
-- For general futures state use `/futures-full-audit`; for a change review use `/futures-diff-review`; for deployment verification use `/futures-deployment-safety-audit`.
+- Start checkpoint-first and diff-first from `docs/agent-work-state.md`. For a code/change review use `/futures-diff-review`; for intended-release vs deployed/runtime reconciliation use `/futures-deployment-safety-audit`; use `/futures-full-audit` only as an escalation when the checkpoint is missing, contradictory, materially stale, or narrower evidence cannot resolve the question.
 - Use the corresponding options commands for options work.
+- Do not rerun a broad futures audit merely because `main` advanced. Reconcile only the safety-critical delta unless the escalation conditions above are met.
 - These audits are evidence gates, not permission to deploy. Deployment remains a separate explicit operator-directed action.
 - Futures strategy-status truth is `docs/strategy-rules/Strategy_Inventory.md`; options current-state truth is `docs/options-current-state-handoff.md`; experiment history is `docs/research-trial-ledger.jsonl`. Do not treat dated status/handoff docs as competing authorities.
 
