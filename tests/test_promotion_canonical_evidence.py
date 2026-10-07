@@ -291,3 +291,42 @@ def test_demo_without_canonical_evidence_is_unchanged_and_blocked_upstream():
 
 def test_attested_only_facts_are_listed():
     assert "identity_parity.lookahead_or_partial_bar_dependency" in cpe.ATTESTED_ONLY_FACTS
+
+
+# ─── Cross-bundle strategy identity (U4 integration) ────────────────────────
+
+
+def _second_bundle_with_strategy(tmp_path, bundle, monkeypatch, strategy_identity):
+    import shutil
+    from dataclasses import replace
+
+    from ops import evidence_identity
+
+    second = bundle + "-copy"
+    shutil.copytree(tmp_path / bundle, tmp_path / second)
+    original = evidence_identity.classify_evidence_bundle
+
+    def classify(root, bundle_dir, **kwargs):
+        if Path(bundle_dir).name.endswith("-copy"):
+            result = original(root, root / bundle, **kwargs)
+            return replace(
+                result, identity={**result.identity, "strategy_identity": strategy_identity}
+            )
+        return original(root, bundle_dir, **kwargs)
+
+    monkeypatch.setattr(evidence_identity, "classify_evidence_bundle", classify)
+    return second
+
+
+def test_bundles_with_different_strategy_identities_block(tmp_path, bundle, monkeypatch):
+    second = _second_bundle_with_strategy(tmp_path, bundle, monkeypatch, "other_strategy")
+    facts = cpe.derive_canonical_facts(tmp_path, {"bundles": [bundle, second]})
+    assert any("disagree on strategy_identity" in b for b in facts["blockers"])
+    assert facts["derived"]["strategy_identity"] is None
+
+
+def test_bundles_sharing_strategy_identity_do_not_block_on_it(tmp_path, bundle, monkeypatch):
+    second = _second_bundle_with_strategy(tmp_path, bundle, monkeypatch, "example")
+    facts = cpe.derive_canonical_facts(tmp_path, {"bundles": [bundle, second]})
+    assert not any("strategy_identity" in b for b in facts["blockers"])
+    assert facts["derived"]["strategy_identity"] == "example"

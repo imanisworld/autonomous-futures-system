@@ -97,6 +97,7 @@ def derive_canonical_facts(root: Path, canonical: Any) -> dict[str, Any]:
     rows: list[dict[str, Any]] = []
     partitions: set[str] = set()
     code_shas: set[str] = set()
+    strategy_identities: set[str] = set()
     setup_types: set[str] = set()
     models: list[dict[str, Any] | None] = []
     execution_model_ids: set[str] = set()
@@ -129,6 +130,7 @@ def derive_canonical_facts(root: Path, canonical: Any) -> dict[str, Any]:
         rows.extend(members)
         partitions.add(str(identity.identity.get("evaluation_partition")))
         code_shas.add(str(identity.identity.get("code_sha")))
+        strategy_identities.add(str(identity.identity.get("strategy_identity")))
         execution_model_ids.add(str(identity.identity.get("execution_model_id")))
         setup_types.add(str(spec.get("setup_type")))
         assumptions = spec.get("execution_assumptions") or {}
@@ -170,6 +172,11 @@ def derive_canonical_facts(root: Path, canonical: Any) -> dict[str, Any]:
         blockers.append("canonical bundles disagree on execution_model_id")
     if len(code_shas) != 1:
         blockers.append("canonical bundles disagree on code_sha")
+    if len(strategy_identities) != 1:
+        blockers.append(
+            "canonical bundles disagree on strategy_identity "
+            f"{sorted(strategy_identities)}; promotion evidence must be one strategy"
+        )
 
     result["derived"] = {
         "execution": {
@@ -193,6 +200,7 @@ def derive_canonical_facts(root: Path, canonical: Any) -> dict[str, Any]:
         "evaluation_partitions": sorted(partitions),
         "untouched_oos_proven": "untouched_oos" in partitions,
         "code_sha": next(iter(code_shas)) if len(code_shas) == 1 else None,
+        "strategy_identity": next(iter(strategy_identities)) if len(strategy_identities) == 1 else None,
         "execution_model_id": next(iter(execution_model_ids)) if len(execution_model_ids) == 1 else None,
         "entry_fill_model": next(iter(entry_models)) if len(entry_models) == 1 else None,
         "futures_replay_path": setup_types == {FUTURES_REPLAY_SETUP_TYPE},
