@@ -451,7 +451,18 @@ def read_journal_rows(journal_dir: Path, *, since: date, until: date) -> list[di
     return rows
 
 
-def ledger_ids(ledger: Path) -> set[str]:
+def ledger_ids(
+    ledger: Path,
+    *,
+    expected_model_id: str,
+    expected_horizon_bars: int,
+) -> set[str]:
+    """Load terminal IDs only from a ledger with one frozen evidence identity.
+
+    A counterfactual terminal result is meaningful only under the execution
+    model and follow-through horizon that produced it. Reusing the same ledger
+    under different assumptions would silently relabel stale outcomes.
+    """
     if not ledger.is_file():
         return set()
     ids: set[str] = set()
@@ -459,9 +470,31 @@ def ledger_ids(ledger: Path) -> set[str]:
         if not line.strip():
             continue
         try:
-            ids.add(str(json.loads(line)["candidate_id"]))
+            row = json.loads(line)
+            candidate_id = str(row["candidate_id"])
         except (ValueError, KeyError, TypeError) as exc:
             raise FollowThroughError(f"{ledger.name}:{lineno} corrupt ledger row") from exc
+        if not isinstance(row, Mapping):
+            raise FollowThroughError(f"{ledger.name}:{lineno} corrupt ledger row")
+        if row.get("schema_version") != SCHEMA_VERSION:
+            raise FollowThroughError(
+                f"{ledger.name}:{lineno} schema_version {row.get('schema_version')!r} "
+                f"!= current {SCHEMA_VERSION!r}"
+            )
+        if row.get("execution_model_id") != expected_model_id:
+            raise FollowThroughError(
+                f"{ledger.name}:{lineno} execution_model_id does not match this run"
+            )
+        if row.get("horizon_bars") != expected_horizon_bars:
+            raise FollowThroughError(
+                f"{ledger.name}:{lineno} horizon_bars {row.get('horizon_bars')!r} "
+                f"!= this run {expected_horizon_bars!r}"
+            )
+        if candidate_id in ids:
+            raise FollowThroughError(
+                f"{ledger.name}:{lineno} duplicate candidate_id {candidate_id!r}"
+            )
+        ids.add(candidate_id)
     return ids
 
 
@@ -490,7 +523,11 @@ def run_follow_through(
         raise FollowThroughError(f"execution assumptions: {exc}") from exc
     model_id = evidence_contract.execution_model_id(assumptions)
 
-    already = ledger_ids(ledger)
+    already = ledger_ids(
+        ledger,
+        expected_model_id=model_id,
+        expected_horizon_bars=horizon_bars,
+    )
     candidates = extract_rejected_candidates(journal_rows)
     written: list[dict] = []
     pending: list[dict] = []

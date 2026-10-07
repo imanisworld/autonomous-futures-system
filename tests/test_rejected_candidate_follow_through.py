@@ -278,6 +278,35 @@ def test_run_fails_closed_on_undeclared_model_or_horizon(tmp_path, kwargs, match
         rft.run_follow_through(**params)
 
 
+@pytest.mark.parametrize("change", ["model", "horizon"])
+def test_existing_ledger_is_bound_to_model_and_horizon(tmp_path, change):
+    ledger = tmp_path / "ledger.jsonl"
+    bars = [
+        _bar(SIGNAL, 99.5, 100.25, 99.5, 100.0),
+        _bar(_ts(SIGNAL, 5), 100, 103.5, 99.8, 103.0),
+    ]
+    base = {
+        "journal_rows": [_blocked_row()],
+        "bar_provider": lambda *_: bars,
+        "assumptions": ASSUMPTIONS,
+        "horizon_bars": 5,
+        "ledger": ledger,
+    }
+    first = rft.run_follow_through(**base)
+    assert first["written"] == 1
+
+    changed = dict(base)
+    if change == "model":
+        changed["assumptions"] = dict(ASSUMPTIONS, stop_handling="breakeven_at_1r")
+        expected = "execution_model_id"
+    else:
+        changed["horizon_bars"] = 6
+        expected = "horizon_bars"
+
+    with pytest.raises(rft.FollowThroughError, match=expected):
+        rft.run_follow_through(**changed)
+
+
 def test_run_refuses_when_broker_mirror_enabled(tmp_path, monkeypatch):
     monkeypatch.setenv("WEBULL_FUTURES_MIRROR_ENABLED", "true")
     with pytest.raises(rft.FollowThroughError, match="mirror"):
