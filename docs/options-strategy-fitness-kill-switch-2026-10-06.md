@@ -34,7 +34,9 @@ A bad fill counts as an execution problem, not evidence about the edge. Exclusio
 
 The observations are compared against the epoch's preregistered, untouched OOS R outcomes as recorded in the epoch registry. The evaluator requires the exact `StrategyEpoch` object held by the supplied registry (default: committed registry), and re-checks that epoch at use time, because a caller-built `EpochRegistry` skips the registry file's validation:
 - `definition_sha256` must equal `definition_hash(definition, thresholds)`;
-- the OOS reference, if present, must be a non-empty tuple of finite non-bool R outcomes.
+- FROZEN/RETIRED fitness epochs must still carry timezone-aware `effective_from`, a full 40-hex `source_commit`, and a non-blank preregistration document;
+- the definition must contain exactly the material strategy sections and thresholds must remain finite non-bool numerics;
+- the OOS reference, if present, must retain non-blank source/artifact/cost-model metadata, a valid sha256-shaped artifact digest, and a non-empty tuple of finite non-bool R outcomes.
 
 `definition_sha256` does **not** cover `oos_reference`, and the OOS `artifact_sha256` is not re-verified against `r_outcomes` here; the OOS values are trusted as recorded in the registry. The verdict records the `epoch_definition_sha256` it was computed against. A seeded bootstrap estimates two probabilities from that OOS distribution:
 - `p_cumulative_r`: the chance of a cumulative R this bad over n trades
