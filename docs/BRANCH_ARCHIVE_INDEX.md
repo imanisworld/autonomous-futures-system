@@ -9,6 +9,23 @@ the same PR + review process as new work.
 
 ---
 
+## 2026-10-05 cleanup (post-PR #1089 + #1137)
+
+This cleanup was performed before the later U-series safety work. It is retained as branch/worktree provenance only; it is not current execution or deployment authority.
+
+Deleted/removed after merge or after proving the local artifact was disposable:
+
+| Original branch/worktree | Tip / association | Disposition |
+|---|---|---|
+| `options/observation-rating-schema` | `8642fa6971332a136c0e7d649f2bedd585e0610d` / PR #1089 | MERGED; remote already absent; local branch and temporary worktrees removed |
+| `ops/post-cap-eligibility-shadow-20261005` | `deb23464882c5f58c01fa95d246650efdc8556d6` / PR #1137 | MERGED; remote already absent; local review trackers removed |
+| `cursor/review-1137-ffce` and `review-1137-deb2346` | local review trackers for #1137 | SAFE DELETE LOCAL after merge |
+| `/tmp/wt-1140` | worktree for open PR #1140 | Worktree removed; remote PR branch intentionally preserved |
+
+Open PR heads and release/hold/archive/candidate/audit branches were not deleted in that pass. Historical details remain in superseded docs PR #1142.
+
+---
+
 ## 2026-10-04 cleanup (post-PR #1130)
 
 Main at audit: `94136a5e8f5baa3414d327329e5f3aa329c578fa` (#1130 merged as
