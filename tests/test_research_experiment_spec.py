@@ -37,6 +37,8 @@ FROZEN_AFTER_APPROVED = {
     "setup_type",
     "evidence_type",
     "execution_assumptions",
+    "chronological_partitions",
+    "evaluation_partition",
     "timeframe",
     "changed_variables",
     "held_constant",

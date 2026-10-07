@@ -58,9 +58,50 @@ Every substantial unit of work must leave:
 
 If the agent cannot persist this file, it must return this payload verbatim-ready for the next agent/operator to save.
 
-## Current checkpoint — 2026-10-06 (U1: r_multiple / P&L direction consistency)
+## Current checkpoint — 2026-10-06 (U2 HOLD fix: B1–B3 + durable OOS ledger)
 
-Task: Continue PR #1155 only. Prior three Claude HOLD blockers closed at `5325eb1`. Fix the narrow new U1 blocker: FILLED rows must not report contradictory `r_multiple` vs `net_pnl`, or favorable gross P&L on adverse price move. Research/evidence plumbing only. No U2/U3. No merge/deploy.
+Task: Continue PR #1157 only. Claude breaker-QA HOLD on `cea37f5` with three U2 blockers (B1 active partition not tied to scored data; B2 weak OOS receipt identity; B3 crash/race fail-open) plus receipt durability. Fix only these. No U3. No merge. No deploy.
+
+### VERIFIED
+
+- Prior HOLD head: `cea37f51dc5795c654dec299d7145e3e59c697ff`.
+- Base/current main: `e86c55c7c78de56dfff0ca9adf1237ea29caa8d3` (unchanged; no rebase required for this fix).
+- Branch `cursor/u2-chronological-partitions-f2da` / PR #1157.
+- Exact head: `62b22a7e91a29b337d7195b479f25641ded8b238`.
+- Focused partition + OOS ledger tests: 36 passed.
+- U1 `tests/test_evidence_row.py`: 36 passed.
+- Full `python3 -m pytest -q`: 7718 passed, 8 skipped.
+- Exact-head CI `tests` → success (run 37517964518).
+- Exact-head Agent Handoff → success (run 37518006760).
+
+### CHANGED
+
+- B1: mandatory active partition when declared; CLI/spec contradiction fail-closed; half-open UTC `[start,end)`; `ExperimentContext` carries partition+window; trade/coverage membership gates; coverage cannot claim `untouched_oos` without timestamp proof.
+- B2: once-only keyed by `trial:{trial_id}` only; window fingerprint is evidence, not reuse key; rename/reformat/window-change/dataset-hash-change cannot second-look.
+- B3: VALID in memory → `fcntl` exclusive lock → receipt append/fsync → then evidence bundle; receipt failure writes no VALID OOS bundle; crash after receipt leaves trial consumed.
+- Durability: repo-governed `docs/research-oos-consumption-ledger.jsonl` + `tests/test_research_oos_consumption_ledger.py` register-before-count.
+
+### TESTS
+
+- Recorded in PR body after focused + full suite + exact-head CI/handoff.
+
+### RUNTIME MUTATIONS
+
+None. No deploy, no VPS, no broker, no strategy change.
+
+### DONE / DO NOT REDO for this lane
+
+- Do not start U3 in this PR.
+- Do not invent a family-wide OOS lock.
+- Do not merge or deploy from this session.
+
+### NEXT
+
+Independent Claude breaker re-review of the new exact head for B1–B3 + durability + P1–P14. Do not merge or deploy.
+
+## Superseded / provenance — 2026-10-06 (U1: r_multiple / P&L direction consistency; merged via #1155)
+
+Task: Continue PR #1155 only. Prior three Claude HOLD blockers closed at `5325eb1`. Fix the narrow new U1 blocker: FILLED rows must not report contradictory `r_multiple` vs `net_pnl`, or favorable gross P&L on adverse price move. Research/evidence plumbing only. No U2/U3. No merge/deploy. **Superseded** after `#1155` squash-merged to `main` as `de4486d`.
 
 ### VERIFIED
 
