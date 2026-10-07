@@ -7,7 +7,7 @@ import pytest
 
 from options_evidence import outcome as oc
 from options_evidence import signal as sg
-from tests.test_options_prospective_signal import T0, opened, trigger
+from tests.test_options_prospective_signal import T0, caught, opened, trigger
 
 TRIG = T0 + timedelta(minutes=10)
 M = oc.Measured
@@ -45,7 +45,7 @@ def outcome(signal: sg.ProspectiveSignal, **overrides) -> oc.OutcomeEvidence:
 
 
 def test_valid_outcome_derives_r_and_times_from_the_signal():
-    s = triggered_signal()
+    s = caught(at=TRIG)  # a verified prospective catch: the only kind with a trade basis
     o = outcome(s)
     assert oc.validate_outcome(o, s) == []
     # risk unit = 501.25 - 498.10 = 3.15
