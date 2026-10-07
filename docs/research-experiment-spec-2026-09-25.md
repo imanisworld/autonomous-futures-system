@@ -327,6 +327,72 @@ register-before-count consistency against the trial ledger.
 Development and validation partitions may be re-run when governance allows;
 U2 does not change lifecycle semantics beyond the OOS once-only gate.
 
+### 8.5 Futures replay adapter (U3)
+
+`setup_type: futures_replay` registers
+`ops/research_experiment_adapters/futures_replay.py`. It runs the existing
+offline replay path (`ReplayEngine` → decision → risk → `PaperBroker` →
+journal) and translates journaled `TRADE` / `RISK_REJECTED` decisions and
+their `OUTCOME` rows into canonical `trade_execution` rows. It contains no
+strategy, risk, or fill logic of its own.
+
+Fail-closed requirements:
+
+- `evidence_type: trade_execution`.
+- `baseline.commit_sha` and `candidate.commit_sha` must both equal the
+  exact SHA of the checkout executing the adapter, with no tracked
+  modifications. Arms may differ only through `changed_variables`, applied
+  as `SystemConfig` overrides; fields owned by the execution model
+  (slippage, same-bar rule, breakeven, runner, entry model, entry
+  tolerance, live/paper flags, log dir) cannot be changed variables.
+- `data.dataset_id` is a repo-relative replay manifest whose SHA-256 equals
+  `data.dataset_hash`; every `days[]` entry (and optional `htf[]` entry)
+  carries a `sha256` of its file.
+- The paper-to-broker mirror hook must be disabled.
+- The 2-1-2 / 1-2-2 intrabar restore path is not supported.
+
+`execution_assumptions` use a closed vocabulary (anything else fails):
+
+| key | allowed values |
+|---|---|
+| `entry_fill_model` | `market` \| `stop_market` |
+| `same_bar_ambiguity_rule` | `stop_first` (pessimistic only) |
+| `stop_handling` | `fixed_stop` \| `breakeven_at_1r` |
+| `target_handling` | `fixed_limit` |
+| `slippage_assumption` | `adverse_ticks=<n>` (market entry and stop exits) |
+| `commission` | `usd_per_contract_per_side=<x>` |
+| `exchange_broker_fees` | `usd_per_contract_per_side=<x>` |
+| `sizing_assumptions` | `replay_risk_engine` |
+
+Row derivation (mechanical only):
+
+- `signal_ts` = signal bar start label; `decision_ts` =
+  `earliest_legal_order_ts` = signal bar close.
+- `fill_ts` = signal bar close (`market`) or the triggering bar's start
+  (`stop_market`); `exit_ts` = resolution bar close.
+- `fill_price`, `exit_price`, `exit_reason`, `gross_pnl` come from the
+  journal; `gross_pnl` must agree with the price move within $0.01.
+- `costs_fees` = (commission + fees) × 2 sides × contracts;
+  `net_pnl` = gross − costs; `r_multiple` = net ÷ initial risk dollars
+  (|fill − stop| in ticks × tick value × contracts).
+- `mae` / `mfe` are bar-granular price points over the bars from fill
+  through the resolution bar.
+- `candidate_signal_id` is a deterministic hash of instrument, strategy,
+  signal time, direction, entry, stop, and target.
+- `CANCELLED` entries become `NO_FILL` with `no_fill_reason`;
+  `RISK_REJECTED` decisions become `NO_FILL` with `reject_reason`.
+
+With an active U2 partition, no candle at or after the window end is
+replayed, and only candidates whose `signal_ts` falls in `[start, end)`
+become members. A candidate whose position the replayed data leaves
+unresolved fails the run instead of being dropped.
+
+Known limit: strategy configuration outside `changed_variables` and the
+execution model resolves from `risk_rules.yaml` at the executing SHA plus
+the process environment. Each arm records `base_config_sha256` and
+`arm_config_sha256`; binding that snapshot into required evidence identity
+belongs to U4.
+
 ---
 
 ## 9. Authority boundary
