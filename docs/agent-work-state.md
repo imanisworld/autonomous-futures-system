@@ -64,8 +64,8 @@ Task: finish the canonical options evidence stack without repeating completed wo
 
 ### VERIFIED
 
-- Current repository `main` at the #1151 reconciliation: `67b7cbf4dc825f2554f3d75cb16ac218c4e28e11`.
-- #1151 branch `options/canonical-prospective-signal-20261006` reconciled cleanly with that main via merge commit `9d4cd8bd0cb70a333a76b82282347b5c1a7d6117`.
+- Current repository `main` at the latest #1151 reconciliation: `f35b976efe523dbbc2090809ce72e91f0e9d3e95`.
+- #1151 branch `options/canonical-prospective-signal-20261006` reconciled cleanly with that main via merge commit `3a69fd369723cb8a9b84511018bc7d0e2b16e97c`.
 - The main delta and #1151 files were disjoint; no semantic conflict resolution was required.
 - #1145–#1150 are merged. Exact merge commits are recorded in `docs/options-current-state-handoff.md`.
 - Grok's pre-sync exact-head review of `88d6b82` passed B1–B6. Fresh post-sync CI/CodeQL plus final exact-head reconciliation remain the merge gate.
