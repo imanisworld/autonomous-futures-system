@@ -25,12 +25,17 @@ OOS = tuple([2.0, -1.0] * 30)
 
 
 EPOCH_DEFINITION = {
+    # Every material section, as the registry loader and the fitness boundary require.
+    "setup": {"family": "STRAT_3_2_2", "timeframe": "1H"},
+    "trigger": {"rule": "first strict break"},
+    "target": {"t1": "1R"},
+    "filters": {},
     "authority": {
         "observation_only": True,
         "execution_authority": False,
         "risk_reservation": False,
         "trade_alerts": False,
-    }
+    },
 }
 EPOCH_SHA = definition_hash(EPOCH_DEFINITION, {})
 
