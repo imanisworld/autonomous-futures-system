@@ -253,15 +253,53 @@ def default_registry() -> EpochRegistry:
     return _DEFAULT_REGISTRY
 
 
+# Named universes an epoch's ``definition.setup.universe`` may declare. A name
+# not listed here is unknown scope and fails closed. PRIMARY_20 is the
+# universe of the options 122/212R prospective collectors (drift-tested
+# against scripts/options_*_collect.py).
+EPOCH_UNIVERSES: Mapping[str, frozenset[str]] = MappingProxyType({
+    "PRIMARY_20": frozenset({
+        "AAPL", "MSFT", "NVDA", "TSLA", "SPY", "QQQ", "AMZN", "GOOGL", "PLTR", "INTC",
+        "IWM", "TLT", "JPM", "BAC", "COIN", "XOM", "MRK", "WMT", "NFLX", "GE",
+    }),
+})
+
+
+def _declared(definition: Mapping[str, Any], section: str, key: str) -> Any:
+    block = definition.get(section)
+    return block.get(key) if isinstance(block, Mapping) else None
+
+
+def level_source_of(data_source: str) -> str:
+    """The level-source component of a signal ``data_source`` (``capture_id:level_source``)."""
+    return data_source.rsplit(":", 1)[-1]
+
+
+def epoch_trigger_sources(epoch: StrategyEpoch) -> frozenset[str]:
+    """Trigger sources an epoch declares (provisional and authoritative), exactly as written."""
+    return frozenset(
+        value
+        for value in (
+            _declared(epoch.definition, "trigger", "provisional_source"),
+            _declared(epoch.definition, "trigger", "authoritative_reconciliation"),
+        )
+        if isinstance(value, str) and value
+    )
+
+
 def epoch_context_problem(
-    epoch: StrategyEpoch, identity: "StructureIdentity", first_seen_time: datetime
+    epoch: StrategyEpoch, identity: "StructureIdentity", first_seen_time: datetime, data_source: str
 ) -> str | None:
     """Why ``identity`` cannot be an observation of ``epoch`` (None if it can).
 
-    The epoch must be FROZEN/RETIRED, declare ``definition.setup.timeframe`` and
-    ``definition.setup.family`` (``STRAT_a_b_c``), match the structure's
-    timeframe and pattern family (``abc:...``), and cover both the structure
-    close and the first-seen time.
+    The epoch must be FROZEN/RETIRED and declare its scope in
+    ``definition.setup`` (``timeframe``, ``family`` ``STRAT_a_b_c``, a known
+    named ``universe``) and ``definition.trigger.arm_source``. The structure
+    must match each exactly: timeframe string (no case or alias
+    normalization), pattern family (``abc:...``), ticker in the universe, the
+    signal's level source equal to ``arm_source``; and the epoch must cover
+    both the structure close and the first-seen time. Undeclared or unknown
+    scope fails closed.
     """
     try:
         assert_observation_only(epoch)
@@ -269,13 +307,22 @@ def epoch_context_problem(
         return f"epoch fails registry invariants: {exc}"
     if epoch.status is EpochStatus.DRAFT:
         return f"epoch {epoch.epoch} is DRAFT"
-    setup = epoch.definition.get("setup")
-    timeframe = setup.get("timeframe") if isinstance(setup, Mapping) else None
-    family = setup.get("family") if isinstance(setup, Mapping) else None
+    timeframe = _declared(epoch.definition, "setup", "timeframe")
+    family = _declared(epoch.definition, "setup", "family")
+    universe = _declared(epoch.definition, "setup", "universe")
+    arm_source = _declared(epoch.definition, "trigger", "arm_source")
     if not isinstance(timeframe, str) or not isinstance(family, str):
         return f"epoch {epoch.epoch} does not declare setup timeframe and family"
-    if timeframe.lower() != identity.timeframe.lower():
-        return f"structure timeframe {identity.timeframe} is not epoch timeframe {timeframe}"
+    if timeframe != identity.timeframe:
+        return f"structure timeframe {identity.timeframe!r} is not epoch timeframe {timeframe!r}"
+    if not isinstance(universe, str) or universe not in EPOCH_UNIVERSES:
+        return f"epoch {epoch.epoch} does not declare a known universe ({universe!r})"
+    if identity.ticker not in EPOCH_UNIVERSES[universe]:
+        return f"ticker {identity.ticker} is not in epoch universe {universe}"
+    if not isinstance(arm_source, str) or not arm_source:
+        return f"epoch {epoch.epoch} does not declare trigger.arm_source"
+    if not isinstance(data_source, str) or level_source_of(data_source) != arm_source:
+        return f"data source {data_source!r} is not epoch arm_source {arm_source!r}"
     match = _FAMILY.fullmatch(family)
     if match is None:
         return f"epoch family {family!r} is not STRAT_a_b_c"
@@ -294,6 +341,7 @@ def resolve_signal_epoch(
     strategy_epoch: Any,
     identity: "StructureIdentity",
     first_seen_time: datetime,
+    data_source: str,
 ) -> tuple[StrategyEpoch | None, str]:
     """(registered epoch, reason). None means the label must not be trusted."""
     if not isinstance(strategy, str) or not isinstance(strategy_epoch, str):
@@ -305,7 +353,7 @@ def resolve_signal_epoch(
     epoch = registry.get(strategy, strategy_epoch)
     if epoch is None:
         return None, f"{strategy}/{strategy_epoch} is not in the epoch registry"
-    problem = epoch_context_problem(epoch, identity, first_seen_time)
+    problem = epoch_context_problem(epoch, identity, first_seen_time, data_source)
     if problem is not None:
         return None, problem
     return epoch, "registered"
@@ -485,7 +533,9 @@ class ProspectiveSignal:
                 raise LifecycleError("registered_epoch must be a StrategyEpoch")
             if self.registered_epoch.key != (self.strategy, self.strategy_epoch):
                 raise LifecycleError("registered_epoch does not match strategy/strategy_epoch")
-            problem = epoch_context_problem(self.registered_epoch, self.identity, self.first_seen_time)
+            problem = epoch_context_problem(
+                self.registered_epoch, self.identity, self.first_seen_time, self.data_source
+            )
             if problem is not None:
                 raise LifecycleError(f"registered epoch mismatch: {problem}")
         # B5: chronology of the observation itself.
@@ -525,6 +575,9 @@ class ProspectiveSignal:
             return "no prospective_catch evidence"
         if self.capture.get("capture_late") is True or self.capture.get("gap_through") is True:
             return "capture was late or gapped"
+        source = self.capture.get("trigger_source")
+        if source not in epoch_trigger_sources(self.registered_epoch):
+            return f"trigger source {source!r} is not a source the epoch declares"
         return None
 
     @property
@@ -665,6 +718,7 @@ def open_signal(
         strategy_epoch=strategy_epoch,
         identity=identity,
         first_seen_time=seen,
+        data_source=data_source,
     )
     stamped = strategy_epoch if epoch is not None or strategy_epoch in RESERVED_EPOCHS else UNREGISTERED_EPOCH
     return SignalEvent(
@@ -1170,6 +1224,12 @@ def verify_record(record: Mapping[str, Any], registry: EpochRegistry | None = No
             epoch = registry.get(str(record["strategy"]), str(record["strategy_epoch"]))
             if epoch is None or epoch.definition_sha256 != record.get("epoch_definition_sha256"):
                 problems.append("record epoch is not the registered epoch definition")
+            elif seen is not None:
+                scope = epoch_context_problem(epoch, identity, seen, record["data_source"])
+                if scope is not None:
+                    problems.append(f"record is outside its epoch's scope: {scope}")
+                if resolution is LifecycleState.TRIGGERED and capture.get("trigger_source") not in epoch_trigger_sources(epoch):
+                    problems.append("record trigger source is not a source the epoch declares")
     if record.get("prospective_catch") is True and statuses["signal_integrity"] is not IntegrityStatus.VALID:
         problems.append("prospective_catch without VALID signal integrity")
     return problems

@@ -87,7 +87,18 @@ The journal refuses all of the following:
 
 ### Epochs (review B6)
 
-`open_signal` validates `strategy_epoch` against the #1150 registry (default: the committed registry; `SignalJournal(registry)` and `fold_capture_rows(..., registry=...)` take another). The epoch must exist, be FROZEN or RETIRED, declare `definition.setup.timeframe` and `definition.setup.family` (`STRAT_a_b_c`), match the structure's timeframe and pattern family (`abc:…`), and cover both the structure close and the first-seen time. Otherwise the signal opens as `UNREGISTERED_EPOCH`, keeping `requested_epoch` and `epoch_reason`, and can never be VALID. For example, a 1H `222` structure on 2026-09-01 is not `122-IEX-E1` (30m, `122` family, from 2026-09-21). A journal refuses an `OPENED` event whose claimed epoch is not its registry entry. Records carry `epoch_definition_sha256`, and `verify_record(record, registry=...)` checks it.
+`open_signal` validates `strategy_epoch` against the #1150 registry (default: the committed registry; `SignalJournal(registry)` and `fold_capture_rows(..., registry=...)` take another). The epoch must exist and be FROZEN or RETIRED, and the signal must fall inside the epoch's **declared scope**, matched exactly:
+
+| Scope | Epoch declares | Signal must |
+|---|---|---|
+| timeframe | `definition.setup.timeframe` | equal it as written (`30M` ≠ `30m`, `1h` ≠ `1H`; no normalization) |
+| setup family | `definition.setup.family` (`STRAT_a_b_c`) | have pattern family `abc:…` |
+| universe | `definition.setup.universe`, a known name in `signal.EPOCH_UNIVERSES` (`PRIMARY_20`, drift-tested against the collectors) | have its ticker in that universe |
+| data source | `definition.trigger.arm_source` | have `data_source` level component (`capture_id:level_source`) equal to it |
+| effective dates | `effective_from` / `effective_until` | have structure close and first-seen inside the window |
+| trigger feed (for VALID) | `definition.trigger.provisional_source` / `authoritative_reconciliation` | have capture `trigger_source` equal to one of them |
+
+Undeclared or unknown scope fails closed. Otherwise the signal opens as `UNREGISTERED_EPOCH`, keeping `requested_epoch` and `epoch_reason`, and can never be VALID. For example, a 1H `222` structure on 2026-09-01 is not `122-IEX-E1` (30m, `122` family, from 2026-09-21). Nor is a #1145 signal: its levels come from `public_regular_30m` and its triggers from `alpaca_iex` / `alpaca_sip`, while `122-IEX-E1` declares `public_regular_session_chart` and `alpaca_iex_trades` / `alpaca_sip_trades_delayed`. Mapping one vocabulary to the other would need an explicit registry entry; none is inferred. A journal refuses an `OPENED` event whose claimed epoch is not its registry entry. Records carry `epoch_definition_sha256`, and `verify_record(record, registry=...)` checks it.
 
 ## Watcher → canonical mapping (`capture_adapter.fold_capture_rows`)
 
@@ -136,7 +147,7 @@ There is no change in intent. `OutcomeEvidence` now requires a resolved signal, 
 Review hardening:
 - **B3:** every field is type-checked on construction. Prices, R and P&L must be finite non-bool numbers, hit times timezone-aware datetimes, and `executed` an exact bool.
 - **B2:** only a prospective catch (`ProspectiveSignal.is_prospective_catch`) can be `executed=True`.
-- **B2:** a miss (`MISSED_LATE` / `MISSED_GAP`, including after `OUTCOME_CLOSED`) must use `pnl_basis="counterfactual"`, with no P&L and no OBSERVED R. `result_r_value` never reads a counterfactual record as a trade result.
+- **B2:** anything that is not a verified prospective catch (a miss, including after `OUTCOME_CLOSED`; a late, gapped or SIP-pending `TRIGGERED` capture; an unregistered or out-of-scope epoch) must use `pnl_basis="counterfactual"`, with no P&L and no OBSERVED R. Hypothetical DERIVED analytics may stay on the record. `result_r_value` returns a value only for `prospective_catch is True` with an `executed` / `paper_equivalent` basis, so fitness and research never score a non-catch as a trade result.
 - An outcome cannot report VALID signal integrity for a non-VALID signal, nor launder INVALID data integrity.
 - `validate_outcome(..., registry=...)` also requires the signal's epoch to be that registry's entry, so a hand-built `StrategyEpoch` cannot certify a catch.
 - The adapter takes level revisions as exact non-negative ints (no `int()` coercion of `"3"`, `2.9` or `True`).

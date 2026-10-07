@@ -92,7 +92,8 @@ def test_b1_fabricated_epoch_cannot_unlock_authority_or_validity():
 def test_b1_forged_opened_event_cannot_claim_an_unregistered_epoch():
     journal = sg.SignalJournal()  # committed registry: no 222-1H-TEST epoch
     event = sg.open_signal(identity(), strategy=CATCH_STRATEGY, strategy_epoch=CATCH_EPOCH, setup_ready_time=T0,
-                           first_seen_time=T0 + timedelta(seconds=5), data_source="x", levels=sg.Levels(HIGH, LOW),
+                           first_seen_time=T0 + timedelta(seconds=5),
+                           data_source="OPTIONS_SETUP_CAPTURE:public_regular_30m", levels=sg.Levels(HIGH, LOW),
                            registry=REGISTRY)
     with pytest.raises(sg.LifecycleError, match="not this journal's registry entry"):
         journal.append(event)
@@ -382,17 +383,21 @@ def test_b6_grok_example_sep1_1h_structure_is_not_122_iex_e1():
     assert "timeframe" in s.epoch_reason
 
 
+E1_SOURCE = "OPTIONS_122:public_regular_session_chart"  # 122-IEX-E1 trigger.arm_source
+
+
 def test_b6_context_window_and_family_are_all_required():
     journal = sg.SignalJournal()
     sep1 = datetime(2026, 9, 1, 14, tzinfo=timezone.utc)
     early = opened(journal, identity=identity(timeframe="30m", pattern="122:1:2U", structure_close_time=sep1),
-                   setup_ready_time=sep1, first_seen_time=sep1, strategy="options_122", strategy_epoch="122-IEX-E1")
+                   setup_ready_time=sep1, first_seen_time=sep1, strategy="options_122", strategy_epoch="122-IEX-E1",
+                   data_source=E1_SOURCE)
     assert early.strategy_epoch == sg.UNREGISTERED_EPOCH and "effective window" in early.epoch_reason
     family = opened(journal, identity=identity(timeframe="30m", pattern="222:2U:2U"),
-                    strategy="options_122", strategy_epoch="122-IEX-E1")
+                    strategy="options_122", strategy_epoch="122-IEX-E1", data_source=E1_SOURCE)
     assert family.strategy_epoch == sg.UNREGISTERED_EPOCH and "family" in family.epoch_reason
     good = opened(journal, identity=identity(timeframe="30m", pattern="122:1:2U"),
-                  strategy="options_122", strategy_epoch="122-IEX-E1")
+                  strategy="options_122", strategy_epoch="122-IEX-E1", data_source=E1_SOURCE)
     assert good.strategy_epoch == "122-IEX-E1" and good.epoch_registered
 
 
@@ -478,10 +483,11 @@ def _capture_rows(sip_crossed_at="2026-10-06T14:00:05+00:00"):
         "structure_close": "2026-10-06T14:00:00+00:00", "knowable_at": "2026-10-06T14:00:00+00:00",
         "first_seen_at": "2026-10-06T14:00:20+00:00", "observed_at": "2026-10-06T14:00:20+00:00",
         "revision": 0, "observation_only": True, "execution_authority": False,
+        "capture_id": "OPTIONS_SETUP_CAPTURE", "level_source": "public_regular_30m",
     }
     resolution = {**watching, "record_type": "RESOLUTION", "status": "TRIGGERED", "direction": "LONG",
                   "trigger_crossed_at": "2026-10-06T14:10:00+00:00", "detected_at": "2026-10-06T14:10:03+00:00",
-                  "trigger_feed": "iex", "observed_at": "2026-10-06T14:10:05+00:00"}
+                  "trigger_feed": "iex", "trigger_source": "alpaca_iex", "observed_at": "2026-10-06T14:10:05+00:00"}
     reconciliation = {**resolution, "record_type": "RECONCILIATION", "sip_crossed_at": sip_crossed_at,
                       "prospective_catch": True, "capture_late": False, "observed_at": "2026-10-06T14:30:00+00:00"}
     return [watching, resolution, reconciliation]
@@ -631,3 +637,134 @@ def test_b3_adapter_level_revision_is_exact(revision):
     rows[0] = {**rows[0], "revision": revision}
     with pytest.raises(ca.AdapterError):
         _fold_one(rows[:1])
+
+
+# ── final pass: non-catches are counterfactual only ─────────────────────────
+
+
+def _late_trigger() -> sg.ProspectiveSignal:
+    """Registered, pre-armed TRIGGERED capture that #1145 classified late: not a catch."""
+    journal = _reg_journal()
+    s = trigger(journal, _reg_opened(journal), at=AT)
+    return journal.append(sg.observation_event(journal, s.signal_id, detected_at=AT + timedelta(minutes=5),
+                                               capture_late=True, prospective_catch=False,
+                                               trigger_source="alpaca_iex"))
+
+
+def _pending_trigger() -> sg.ProspectiveSignal:
+    """TRIGGERED, still pending SIP reconciliation (signal integrity UNKNOWN)."""
+    journal = _reg_journal()
+    return trigger(journal, _reg_opened(journal), at=AT)
+
+
+@pytest.mark.parametrize("build", [_late_trigger, _pending_trigger])
+def test_non_catch_trigger_outcome_is_counterfactual_only(build):
+    s = build()
+    assert s.resolution is sg.LifecycleState.TRIGGERED and not s.is_prospective_catch
+    assert "a non-catch outcome must use pnl_basis=counterfactual" in oc.validate_outcome(outcome(s), s)
+    assert any("requires a prospective catch" in p
+               for p in oc.validate_outcome(outcome(s, executed=True, pnl_basis="executed"), s))
+    realised = outcome(s, pnl_basis="counterfactual", net_pnl=M.observed(80.0, "fills"),
+                       result_r=M.observed(1.0, "fills"))
+    problems = oc.validate_outcome(realised, s)
+    assert "a non-catch outcome has no P&L" in problems
+    assert "a non-catch outcome has no observed (realised) R" in problems
+    # Hypothetical analytics survive, labelled counterfactual, and never read as a trade result.
+    honest = outcome(s, pnl_basis="counterfactual", result_r=M.derived(1.0, "t1 reached (hypothetical)"))
+    assert oc.validate_outcome(honest, s) == []
+    record = oc.to_record(honest, s)
+    assert record["result_r"]["value"] == 1.0 and record["prospective_catch"] is False
+    assert oc.result_r_value(record) is None
+
+
+def test_result_r_value_reads_only_verified_catches():
+    s = caught()
+    record = oc.to_record(outcome(s), s)
+    assert record["prospective_catch"] is True and oc.result_r_value(record) == 1.0
+    assert oc.result_r_value({**record, "prospective_catch": False}) is None
+    assert oc.result_r_value({**record, "prospective_catch": "true"}) is None
+    assert oc.result_r_value({k: v for k, v in record.items() if k != "prospective_catch"}) is None
+    assert oc.result_r_value({**record, "pnl_basis": "counterfactual"}) is None
+    assert oc.result_r_value({**record, "pnl_basis": "whatever"}) is None
+
+
+# ── final pass: epoch membership is the epoch's declared scope, exactly ─────
+
+
+def _scoped(**epoch_kw):
+    return se.EpochRegistry((registered_epoch(**epoch_kw),))
+
+
+@pytest.mark.parametrize("ident_kw, opened_kw, epoch_kw, reason", [
+    ({"ticker": "ZZZZ"}, {}, {}, "not in epoch universe PRIMARY_20"),
+    ({}, {}, {"universe": None}, "does not declare a known universe"),
+    ({}, {}, {"universe": "PRIMARY_21"}, "does not declare a known universe"),
+    ({"timeframe": "1h", "pattern": "222:2U:2U"}, {}, {}, "timeframe"),
+    ({}, {}, {"timeframe": "60m"}, "timeframe"),
+    ({}, {"data_source": "OPTIONS_SETUP_CAPTURE:public_index_30m"}, {}, "arm_source"),
+    ({}, {"data_source": "OPTIONS_SETUP_CAPTURE:PUBLIC_REGULAR_30M"}, {}, "arm_source"),
+    ({}, {}, {"arm_source": None}, "does not declare trigger.arm_source"),
+])
+def test_epoch_scope_mismatch_is_unregistered(ident_kw, opened_kw, epoch_kw, reason):
+    journal = sg.SignalJournal(_scoped(**epoch_kw))
+    s = _reg_opened(journal, identity=identity(**ident_kw), **opened_kw)
+    assert s.strategy_epoch == sg.UNREGISTERED_EPOCH and not s.epoch_registered
+    assert reason in s.epoch_reason and s.requested_epoch == CATCH_EPOCH
+
+
+def test_committed_122_epoch_requires_its_own_universe_source_and_timeframe():
+    journal = sg.SignalJournal()
+    e1 = dict(strategy="options_122", strategy_epoch="122-IEX-E1")
+    ident = dict(timeframe="30m", pattern="122:1:2U")
+    assert opened(journal, identity=identity(**ident), data_source="OPTIONS_122:public_regular_session_chart",
+                  **e1).epoch_registered
+    for ident_kw, source, why in (
+        (ident, "OPTIONS_SETUP_CAPTURE:public_regular_30m", "arm_source"),  # #1145 level source
+        ({**ident, "timeframe": "30M"}, "OPTIONS_122:public_regular_session_chart", "timeframe"),
+        ({**ident, "ticker": "AMD"}, "OPTIONS_122:public_regular_session_chart", "universe"),
+    ):
+        s = opened(sg.SignalJournal(), identity=identity(**ident_kw), data_source=source, **e1)
+        assert s.strategy_epoch == sg.UNREGISTERED_EPOCH and why in s.epoch_reason
+
+
+@pytest.mark.parametrize("source", [None, "alpaca_iex_trades", "ALPACA_IEX", "public_index_1m_bar"])
+def test_valid_requires_a_declared_trigger_source(source):
+    journal = _reg_journal()
+    s = trigger(journal, _reg_opened(journal), at=AT)
+    evidence = {"prospective_catch": True, "capture_late": False, "gap_through": False}
+    if source is not None:
+        evidence["trigger_source"] = source
+    s = journal.append(sg.observation_event(journal, s.signal_id, detected_at=AT + timedelta(seconds=4), **evidence))
+    assert "trigger source" in s.valid_integrity_problem()
+    with pytest.raises(sg.LifecycleError, match="trigger source"):
+        journal.append(sg.integrity_event(journal, s.signal_id, detected_at=AT + timedelta(seconds=5),
+                                          signal_integrity="VALID"))
+
+
+def test_adapter_caps_an_undeclared_trigger_source_below_valid():
+    rows = _capture_rows(sip_crossed_at="2026-10-06T14:09:58+00:00")
+    rows[1] = {**rows[1], "trigger_source": "alpaca_iex_unknown"}
+    rows[2] = {**rows[2], "trigger_source": "alpaca_iex_unknown"}
+    s = _fold_one(rows)
+    assert s.prearmed is True and s.signal_integrity is sg.IntegrityStatus.DEGRADED and not s.is_prospective_catch
+
+
+def test_record_outside_epoch_scope_is_detected():
+    record = sg.to_record(caught())
+    assert sg.verify_record(record, registry=REGISTRY) == []
+    moved = {**record, "data_source": "OPTIONS_SETUP_CAPTURE:public_index_30m"}
+    assert any("outside its epoch's scope" in p for p in sg.verify_record(moved, registry=REGISTRY))
+    resourced = {**record, "capture": {**record["capture"], "trigger_source": "alpaca_iex_trades"}}
+    assert "record trigger source is not a source the epoch declares" in sg.verify_record(
+        resourced, registry=REGISTRY)
+
+
+@pytest.mark.parametrize("script", ["options_122_prospective_collect.py", "options_212r_prospective_collect.py"])
+def test_primary_20_universe_matches_the_collectors(script):
+    import ast
+    from pathlib import Path
+
+    tree = ast.parse((Path(__file__).resolve().parents[1] / "scripts" / script).read_text())
+    declared = next(ast.literal_eval(node.value) for node in tree.body
+                    if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", "") == "PRIMARY_20")
+    assert sg.EPOCH_UNIVERSES["PRIMARY_20"] == frozenset(declared) and len(declared) == 20

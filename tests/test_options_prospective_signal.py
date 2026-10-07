@@ -13,8 +13,9 @@ from options_evidence.strategy_epochs import LEGACY_UNVERSIONED
 T0 = datetime(2026, 10, 6, 14, 0, tzinfo=timezone.utc)  # structure close
 HIGH, LOW = 501.25, 498.10
 
-# A test-only registered epoch whose context (1H, 222 family, window from
-# 2026-09-01) matches the default ``identity()`` below. The committed registry's
+# A test-only registered epoch whose scope (1H, 222 family, PRIMARY_20,
+# #1145 public_regular_30m levels, alpaca_iex/alpaca_sip triggers, window from
+# 2026-09-01) matches the default ``identity()`` / ``opened()`` below. The committed registry's
 # only epoch (options_122 / 122-IEX-E1: 30m, 122 family) does not, so signals
 # opened with the defaults are UNREGISTERED_EPOCH and can never be VALID.
 CATCH_STRATEGY, CATCH_EPOCH = "options_222_test", "222-1H-TEST"
@@ -23,10 +24,15 @@ CATCH_STRATEGY, CATCH_EPOCH = "options_222_test", "222-1H-TEST"
 def registered_epoch(
     *, strategy=CATCH_STRATEGY, epoch=CATCH_EPOCH, timeframe="1H", family="STRAT_2_2_2",
     effective_from=datetime(2026, 9, 1, tzinfo=timezone.utc), effective_until=None, status=se.EpochStatus.FROZEN,
+    universe="PRIMARY_20", arm_source="public_regular_30m", provisional_source="alpaca_iex",
+    authoritative_reconciliation="alpaca_sip",
 ) -> se.StrategyEpoch:
+    setup = {"family": family, "timeframe": timeframe, "universe": universe}
+    trigger_block = {"rule": "first strict break", "arm_source": arm_source, "provisional_source": provisional_source,
+                     "authoritative_reconciliation": authoritative_reconciliation}
     definition = {
-        "setup": {"family": family, "timeframe": timeframe},
-        "trigger": {"rule": "first strict break"},
+        "setup": {k: v for k, v in setup.items() if v is not None},
+        "trigger": {k: v for k, v in trigger_block.items() if v is not None},
         "target": {"t1": "1R"},
         "filters": {},
         "authority": {
@@ -72,7 +78,8 @@ def caught(journal: sg.SignalJournal | None = None, *, at=None) -> sg.Prospectiv
     s = opened(journal, strategy=CATCH_STRATEGY, strategy_epoch=CATCH_EPOCH)
     s = trigger(journal, s, at=at)
     s = journal.append(sg.observation_event(journal, s.signal_id, detected_at=at + timedelta(seconds=4),
-                                            prospective_catch=True, capture_late=False, gap_through=False))
+                                            prospective_catch=True, capture_late=False, gap_through=False,
+                                            trigger_source="alpaca_iex"))
     return journal.append(sg.integrity_event(journal, s.signal_id, detected_at=at + timedelta(seconds=4),
                                              signal_integrity="VALID", data_integrity="VALID"))
 

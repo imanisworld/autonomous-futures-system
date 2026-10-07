@@ -323,13 +323,20 @@ def validate_outcome(
             f"an executed outcome requires a prospective catch; {resolution.value if resolution else 'unresolved'} "
             "signal is never a trade"
         )
-    if resolution in MISSED_STATES:
+    # Anything that is not a verified prospective catch (a miss, a late or
+    # gapped TRIGGERED capture, one pending SIP, an unregistered epoch, ...)
+    # is counterfactual only: hypothetical DERIVED analytics may be kept, but
+    # never a trade basis, P&L or a realised R.
+    if not signal.is_prospective_catch:
+        missed = resolution in MISSED_STATES
+        label = resolution.value if missed else "non-catch"  # type: ignore[union-attr]
+        noun = "a missed signal" if missed else "a non-catch outcome"
         if outcome.pnl_basis != "counterfactual":
-            problems.append(f"a {resolution.value} outcome must use pnl_basis=counterfactual")  # type: ignore[union-attr]
+            problems.append(f"a {label} outcome must use pnl_basis=counterfactual")
         if outcome.gross_pnl.known or outcome.net_pnl.known:
-            problems.append("a missed signal has no P&L")
+            problems.append(f"{noun} has no P&L")
         if outcome.result_r.status is EvidenceStatus.OBSERVED:
-            problems.append("a missed signal has no observed (realised) R")
+            problems.append(f"{noun} has no observed (realised) R")
     if outcome.signal_integrity is IntegrityStatus.VALID and signal.signal_integrity is not IntegrityStatus.VALID:
         problems.append("outcome cannot report VALID signal integrity for a signal that is not VALID")
     if outcome.data_integrity is not IntegrityStatus.INVALID and signal.data_integrity is IntegrityStatus.INVALID:
@@ -420,9 +427,13 @@ def to_record(outcome: OutcomeEvidence, signal: ProspectiveSignal) -> dict[str, 
 def result_r_value(record: Mapping[str, Any]) -> float | None:
     """Stored result_r if it is known trade evidence; None otherwise (never 0).
 
-    A counterfactual (missed-signal) outcome is never read as a trade result.
+    Only a verified prospective catch (``prospective_catch is True``) with a
+    non-counterfactual basis is a trade result. A counterfactual, late, missed
+    or otherwise non-catch outcome is never read as one.
     """
-    if not isinstance(record, Mapping) or record.get("pnl_basis") == "counterfactual":
+    if not isinstance(record, Mapping) or record.get("pnl_basis") not in ("executed", "paper_equivalent"):
+        return None
+    if record.get("prospective_catch") is not True:
         return None
     result = record.get("result_r") or {}
     if not isinstance(result, Mapping):
