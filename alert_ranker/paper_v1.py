@@ -274,13 +274,18 @@ def build_v1_contract_fields(
 
     # Conservative paper entry: cross the spread at the ask.  This makes entry
     # friction explicit and avoids optimistic midpoint fills.
+    open_risk = _num(aggregate_open_risk)
+    if open_risk is None or open_risk < 0:
+        # Unknown open risk must never look like spare budget.
+        return None, "open_risk_state_invalid"
+
     entry = contract.ask
     premium_stop = round(entry * PREMIUM_STOP_MULTIPLIER, 4)
     planned_risk = round((entry - premium_stop) * CONTRACT_MULTIPLIER, 2)
     if planned_risk <= 0 or planned_risk > MAX_TRADE_RISK_DOLLARS:
         return None, f"planned_risk_outside_v1_cap:{planned_risk:.2f}"
 
-    projected = round(float(aggregate_open_risk) + planned_risk, 2)
+    projected = round(open_risk + planned_risk, 2)
     if projected > MAX_AGGREGATE_OPEN_RISK_DOLLARS:
         return None, f"aggregate_risk_cap_exceeded:{projected:.2f}"
 
@@ -314,7 +319,7 @@ def build_v1_contract_fields(
             "planned_risk_dollars": planned_risk,
             "risk_cap": planned_risk,
             "contracts": 1,
-            "aggregate_open_planned_risk_before": round(float(aggregate_open_risk), 2),
+            "aggregate_open_planned_risk_before": round(open_risk, 2),
             "projected_aggregate_open_planned_risk": projected,
             "max_trade_planned_risk": MAX_TRADE_RISK_DOLLARS,
             "max_aggregate_open_planned_risk": MAX_AGGREGATE_OPEN_RISK_DOLLARS,

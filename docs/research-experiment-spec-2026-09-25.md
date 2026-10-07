@@ -191,6 +191,8 @@ runtime modules.
 ## 8. Relation to the Experiment Runner
 
 Implemented on `main` by #1047 (`df58d556fb1c1a462b2e968f3a6e7f47e6a7117a`).
+Canonical typed evidence contract (U1) lives in `ops/evidence_row.py` and is
+enforced by `ops/research_experiment_runner.py`.
 
 CLI:
 
@@ -208,8 +210,122 @@ The runner must:
 - never promote, merge, deploy, or submit broker orders.
 
 Result labels are mechanical against preregistered criteria. Integrity failures
-(`population_size_differs`, `required_metric_missing`, unresolved SHAs, etc.)
-are `INVALID EXPERIMENT`, not evidence against the candidate.
+(`population_size_differs`, `required_metric_missing`, unresolved SHAs, typed
+evidence-contract failures, etc.) are `INVALID EXPERIMENT`, not evidence
+against the candidate.
+
+### 8.1 Common evidence envelope
+
+Every runner-written evidence bundle includes `evidence_envelope.json` with a
+common identity layer:
+
+- `schema_version` (evidence-row schema, currently `1.0.0`)
+- `experiment_id`, `trial_id`, `setup_type`
+- `evidence_type` (`coverage` or `trade_execution`; **required** on new specs)
+- `promotion_eligible` (`false` for coverage; trade_execution may be `true`)
+- `strategy_identity` when applicable
+- `code_sha` (real 40-hex commit SHA; `unknown` is rejected), `data_identity`,
+  `runner_version`, `generated_at`
+- `execution_model_id` when the evidence type requires frozen execution assumptions
+- `preregistration_identity` when present; `prior_exposure_identity` only from an
+  explicit prior-exposure field (never from `population`)
+
+This envelope is identity/provenance only. It does not invent trade fields.
+
+Frozen pre-U1 options experiment IDs may omit `evidence_type` and are treated as
+`coverage`. New specs that omit `evidence_type` fail closed.
+
+### 8.2 Typed evidence rows
+
+Evidence types are explicit. Do **not** force trade fields onto every experiment.
+Coverage evidence cannot carry trade-lookalike fields to bypass trade validation.
+
+| `evidence_type` | Meaning | Trade fill / stop / target / MAE / MFE / P&L required? |
+|---|---|---|
+| `coverage` | Non-trade measurement (for example options coverage/geometry); not promotion-eligible | **no** |
+| `trade_execution` | Promotion-quality futures trade execution evidence | **yes**, via the typed row contract |
+
+`trade_execution` rows must carry causal timing fields that remain distinct:
+
+1. `signal_ts` — signal formation time  
+2. `decision_ts` — decision availability time (`>= signal_ts`)  
+3. `earliest_legal_order_ts` — earliest legal submission time (`>= decision_ts`)  
+4. `fill_ts` — actual/simulated fill time (`>= earliest_legal_order_ts` when filled)
+
+Filled rows with `fill_ts < earliest_legal_order_ts` fail closed as
+`INVALID EXPERIMENT`. Exact equality is allowed when the frozen execution model
+permits it. `NO_FILL` rows must not carry exit / P&L / MAE / MFE / R outcome
+fields. `FILLED` rows require `direction` (`LONG`/`SHORT`) with consistent
+brackets, `costs_fees >= 0`, `net_pnl = gross_pnl - costs_fees` within $0.01,
+`mfe >= 0`, and `mae <= 0`. Row `data_fingerprint` must match the experiment
+dataset identity.
+
+Trade scoring uses canonical `r_multiple` on `FILLED` rows only. Legacy funnel
+keys (`entered` / `completed` / `result`) are rejected on `trade_execution`.
+A `NO_FILL` never scores as a win.
+
+### 8.3 Execution-model identity
+
+Trade experiments pin a frozen `execution_assumptions` bundle on the spec
+(entry/fill model, same-bar ambiguity rule, stop/target handling, slippage,
+commission, exchange/broker fees, sizing). The runner derives a stable
+`execution_model_id` from that bundle. Historical studies keep their pinned
+assumptions; later brokerage-fee changes must not silently rewrite them.
+
+Missing execution-model identity, missing data identity, evidence-type mismatch,
+or non-finite economic fields fail closed.
+
+### 8.4 Chronological partitions (U2)
+
+Specs may declare `chronological_partitions` with three non-overlapping
+half-open windows `[start, end)` in UTC:
+
+1. `development` — fitting / iteration window  
+2. `validation` — held-out confirmation window after development  
+3. `untouched_oos` — once-only out-of-sample window after validation  
+
+Ordering is fail-closed:
+
+- each window requires `start` / `end` with `end > start`
+- `development.end <= validation.start`
+- `validation.end <= untouched_oos.start`
+- all boundaries normalize to UTC before comparison / fingerprinting
+
+When `chronological_partitions` are declared, an active
+`evaluation_partition` is **mandatory** (on the spec or via CLI
+`--partition`). Declared partitions with no active partition are INVALID.
+CLI `--partition` must not contradict a partition declared on the spec.
+No declared partitions + no active partition remains valid for legacy specs.
+
+The resolved active partition and its normalized window are passed into
+`ExperimentContext`. For `trade_execution`, every scored row's `signal_ts`
+must satisfy `start <= signal_ts < end`. Coverage evidence must not invent
+timestamps; if it cannot prove membership in an untouched OOS window, it
+must not claim `untouched_oos`. Development runs must not score OOS-dated
+rows and OOS runs must not score development-dated rows.
+
+`untouched_oos` is once-only for the **exact** approved `trial_id`.
+Renaming `experiment_id`, reformatting an equivalent window string, or
+changing the OOS window under the same trial cannot grant a second look.
+The normalized OOS window fingerprint is preserved on the receipt as
+recorded evidence only — it is not the reuse key. There is no silent
+family-wide OOS lock.
+
+Write ordering is fail-closed: validity is determined in memory first;
+an exclusive lock covers OOS receipt check + append; the receipt is
+appended to `docs/research-oos-consumption-ledger.jsonl` **before** any
+VALID OOS evidence bundle is written. If receipt append fails, no VALID
+OOS bundle is written. If bundle writing crashes after receipt append,
+the trial remains consumed. Invalid/blocked/incomplete runs do not
+consume the window. Concurrent duplicate consumption is prevented with
+`fcntl` exclusive locking.
+
+The ledger is a repo-governed append-only artifact. Fresh checkouts and
+independent agents must see prior OOS consumption; CI enforces
+register-before-count consistency against the trial ledger.
+
+Development and validation partitions may be re-run when governance allows;
+U2 does not change lifecycle semantics beyond the OOS once-only gate.
 
 ---
 
