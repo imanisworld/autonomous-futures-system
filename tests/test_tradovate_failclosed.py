@@ -12,6 +12,7 @@ from types import SimpleNamespace
 
 from execution.tradovate_broker import TradovateBroker, TradovateConfig
 from execution.broker_interface import BracketOrder
+from tests.contract_stub import bind_exact_contract
 
 
 def _broker(monkeypatch):
@@ -40,7 +41,7 @@ def _order():
 def test_flatten_fails_closed_when_liquidate_rejected(monkeypatch):
     b = _broker(monkeypatch)
     monkeypatch.setattr(b, "get_position", _open_pos)
-    monkeypatch.setattr(b, "_find_contract_id", lambda inst: 123)
+    monkeypatch.setattr(b, "_find_contract_id", bind_exact_contract(b, 123))
     monkeypatch.setattr(b, "_cancel_working_orders", lambda: 0)
     # Tradovate 200-with-failure body → must NOT be reported as a close.
     monkeypatch.setattr(b, "_post", lambda p, body, **k: {"failureReason": "NotAllowed"})
@@ -52,7 +53,7 @@ def test_flatten_fails_closed_when_liquidate_rejected(monkeypatch):
 def test_flatten_reports_success_on_clean_liquidate(monkeypatch):
     b = _broker(monkeypatch)
     monkeypatch.setattr(b, "get_position", _open_pos)
-    monkeypatch.setattr(b, "_find_contract_id", lambda inst: 123)
+    monkeypatch.setattr(b, "_find_contract_id", bind_exact_contract(b, 123))
     monkeypatch.setattr(b, "_cancel_working_orders", lambda: 1)
     monkeypatch.setattr(
         b,
@@ -69,7 +70,7 @@ def test_flatten_accepted_but_position_still_open_is_not_confirmed(monkeypatch):
     b = _broker(monkeypatch)
     pos = _open_pos()
     monkeypatch.setattr(b, "get_position", lambda: pos)
-    monkeypatch.setattr(b, "_find_contract_id", lambda inst: 123)
+    monkeypatch.setattr(b, "_find_contract_id", bind_exact_contract(b, 123))
     monkeypatch.setattr(b, "_cancel_working_orders", lambda: 1)
     monkeypatch.setattr(
         b,

@@ -44,6 +44,7 @@ from execution.tradovate_broker import TradovateBroker, TradovateConfig
 import execution.tradovate_supervisor as supervisor
 from tests.test_e2e_scenarios import _base_config, _base_payload
 from webhook.runner import process_alert
+from tests.contract_stub import bind_exact_contract
 
 
 # ─── Pure module: mode resolution ────────────────────────────────────────────
@@ -463,7 +464,7 @@ def _tradovate_broker(monkeypatch, response):
     monkeypatch.setattr(broker, "get_account_balance", lambda: 50_000.0)
     broker._contract_symbol_cache["MNQ"] = "MNQU6"
     monkeypatch.setattr(broker, "_authenticate", lambda: True)
-    monkeypatch.setattr(broker, "_find_contract_id", lambda _: 99)
+    monkeypatch.setattr(broker, "_find_contract_id", bind_exact_contract(broker, 99))
     monkeypatch.setattr(supervisor, "tradovate_order_ready", lambda: True)
     monkeypatch.setattr(broker, "_verify_bracket_children", lambda **kwargs: (True, True))
     captured = {}

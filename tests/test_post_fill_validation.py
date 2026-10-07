@@ -5,6 +5,7 @@ from execution.paper_broker import PaperBroker
 from execution.post_fill_validation import strategy_execution_model, validate_post_fill
 from execution.tradovate_broker import TradovateBroker, TradovateConfig
 import execution.tradovate_supervisor as supervisor
+from tests.contract_stub import bind_exact_contract
 
 
 def _order(**overrides):
@@ -98,7 +99,7 @@ def _tradovate(monkeypatch, actual_fill, flatten):
     monkeypatch.setattr(broker, "get_account_balance", lambda: 50_000.0)
     broker._contract_symbol_cache["MNQ"] = "MNQU6"
     monkeypatch.setattr(broker, "_authenticate", lambda: True)
-    monkeypatch.setattr(broker, "_find_contract_id", lambda _: 99)
+    monkeypatch.setattr(broker, "_find_contract_id", bind_exact_contract(broker, 99))
     monkeypatch.setattr(supervisor, "tradovate_order_ready", lambda: True)
     monkeypatch.setattr(
         broker, "_post",

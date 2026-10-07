@@ -14,6 +14,7 @@ from execution.broker_interface import Position
 from execution.paper_broker import PaperBroker
 from execution.tradovate_broker import TradovateBroker, TradovateConfig
 from journal.journal_logger import JournalLogger
+from tests.contract_stub import bind_exact_contract
 
 OUR_CID = 12345
 
@@ -100,7 +101,7 @@ def _broker(monkeypatch):
     b._account_id = 1
     b._resolve_fail_count = 0
     monkeypatch.setattr(b, "_authenticate", lambda: True)
-    monkeypatch.setattr(b, "_find_contract_id", lambda inst: OUR_CID)
+    monkeypatch.setattr(b, "_find_contract_id", bind_exact_contract(b, OUR_CID))
     b._last_position = Position(instrument="MNQ", direction="LONG", entry_price=30000.0,
                                 stop=29994.0, target=30015.0, quantity=1, open=True)
     return b

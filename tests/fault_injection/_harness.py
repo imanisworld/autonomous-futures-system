@@ -15,6 +15,7 @@ from typing import Any, Optional
 import execution.tradovate_broker as tb
 import execution.tradovate_supervisor as supervisor
 from execution.tradovate_broker import TradovateBroker, TradovateConfig
+from tests.contract_stub import bind_exact_contract, exact_contract_stub
 
 ACCOUNT_ID = 999
 CONTRACT_ID = 4242
@@ -199,7 +200,7 @@ def make_broker(
     b._account_id = ACCOUNT_ID
     b._resolve_fail_count = 0
     monkeypatch.setattr(b, "_authenticate", lambda: True)
-    monkeypatch.setattr(b, "_find_contract_id", lambda inst: CONTRACT_ID)
+    monkeypatch.setattr(b, "_find_contract_id", bind_exact_contract(b, CONTRACT_ID))
     monkeypatch.setattr(b, "_get", book.get)
     monkeypatch.setattr(b, "_post", book.post)
     monkeypatch.setattr(supervisor, "tradovate_order_ready", lambda: True)
@@ -254,6 +255,6 @@ def patch_broker_class(monkeypatch, book: FakeBook) -> None:
     """Route TradovateBroker instances the runner builds itself (e.g. the
     per-bar resolver at webhook/runner.py ~1370) to ``book`` as well."""
     monkeypatch.setattr(TradovateBroker, "_authenticate", lambda self: True)
-    monkeypatch.setattr(TradovateBroker, "_find_contract_id", lambda self, inst: CONTRACT_ID)
+    monkeypatch.setattr(TradovateBroker, "_find_contract_id", exact_contract_stub(CONTRACT_ID))
     monkeypatch.setattr(TradovateBroker, "_get", lambda self, path, **k: book.get(path))
     monkeypatch.setattr(TradovateBroker, "_post", lambda self, path, body, **k: book.post(path, body))
