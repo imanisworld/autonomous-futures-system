@@ -25,8 +25,8 @@ ROOT = Path(__file__).resolve().parents[1]
 def _discovered_scenarios() -> set[str]:
     found: set[str] = set()
     for path in (ROOT / fi.SUITE_DIR).glob("test_*.py"):
-        for node in ast.parse(path.read_text(encoding="utf-8")).body:
-            if isinstance(node, ast.FunctionDef):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 scenario = fi.scenario_for_test(node.name)
                 if scenario:
                     found.add(scenario)
@@ -84,6 +84,20 @@ def _repo(tmp_path: Path, *, extra: str = "") -> Path:
     runner._git(repo, "commit", "-m", "seed")
     return repo
 
+
+def test_inventory_discovery_sees_class_based_scenarios(tmp_path):
+    repo = _repo(tmp_path)
+    extra = repo / "tests/fault_injection/test_class_scenario.py"
+    extra.write_text(
+        "class TestNewScenario:\n    def test_fi12_nested(self):\n        assert True\n",
+        encoding="utf-8",
+    )
+    runner._git(repo, "add", ".")
+    runner._git(repo, "commit", "-m", "add class-based FI-12")
+    head = runner._git(repo, "rev-parse", "HEAD").stdout.strip()
+    assert "FI-12" in fi.discovered_scenarios_at(repo, head)
+    with pytest.raises(fi.FaultInjectionGateError, match="scenario inventory drift"):
+        fi.generate_manifest(repo, python=sys.executable)
 
 def test_generated_manifest_binds_sha_and_suite(tmp_path):
     repo = _repo(tmp_path)
