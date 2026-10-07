@@ -4,7 +4,7 @@
 >
 > This file is **not** strategy-status authority, deployment authority, or experiment authority. Authoritative records named in `AGENTS.md` always win.
 >
-> **Checkpoint base:** repository `main` `d970b40` (PR #1131 merged, 2026-10-04); MNQ account-admission study is CLOSED / `INSUFFICIENT_EVIDENCE` / DO NOT REDO; shadow daily P&L report on the box = #1102 since 2026-10-02 14:53Z; futures box is on release `c44d32bc4961e56fae5c5f88a976eb6783341638` since 2026-10-04 21:29:09Z (rollback `489b55b`); **canonical 4HR natural-1m epoch start = 2026-10-04T21:30:05Z**. Always fetch current `main`; this stored SHA is a comparison base, not proof of current runtime state.
+> **Checkpoint base:** repository `main` `f35b976` (U7 / PR #1162 merged, 2026-10-07). U7 broker contract metadata is merged fail-closed; its merge commit explicitly says **DO NOT DEPLOY — U8 contract-identity routing remains pending**. Draft safety stack: U8 #1163 → U9 #1164 → U10 #1165 → U11 #1166. Last documented futures release remains `c44d32bc4961e56fae5c5f88a976eb6783341638` from 2026-10-04; current deployed/runtime state is **UNVERIFIED** until fresh authorized runtime proof is available. Always fetch current `main`; this stored SHA is a comparison base, not proof of runtime state.
 >
 > Core rule: **checkpoint first; diff first; do not redo proven work.**
 
@@ -58,7 +58,40 @@ Every substantial unit of work must leave:
 
 If the agent cannot persist this file, it must return this payload verbatim-ready for the next agent/operator to save.
 
-## Current checkpoint — 2026-10-06 (U2 HOLD fix: B1–B3 + durable OOS ledger)
+## Current checkpoint — 2026-10-07 (U7 merged; U8–U11 pending; runtime not freshly proven)
+
+### VERIFIED REPOSITORY STATE
+
+- `main`: `f35b976efe523dbbc2090809ce72e91f0e9d3e95`.
+- U7 / PR #1162 is merged: broker contract metadata now fails closed for unsupported roots and removes fallback tick assumptions. Merge record reports exact-head CI `8172 passed, 8 skipped`.
+- The U7 merge message explicitly states: **DO NOT DEPLOY; U8 contract-identity routing remains pending.**
+- Open draft safety stack:
+  - U8 #1163 — contract identity / routing enforcement.
+  - U9 #1164 — replay/paper/demo same-candidate reconciliation.
+  - U10 #1165 — fault-injection gate integration.
+  - U11 #1166 — reproducible release install + exact-SHA CI proof.
+- No repo evidence authorizes skipping the dependency order or deploying U7 alone.
+
+### RUNTIME / DEPLOYMENT STATE
+
+- Last documented futures release: `c44d32bc4961e56fae5c5f88a976eb6783341638`, promoted 2026-10-04.
+- Fresh deployed SHA, release integrity, effective env/account gates, broker flatness/orders, journal progression, and persisted-state integrity are **UNVERIFIED in this checkpoint** because no current authorized runtime proof was available.
+- Do not infer current runtime posture from repository state or older documentation.
+
+### DONE / DO NOT REDO
+
+- Do not rerun broad repo/runtime audits just because `main` advanced. Start from this checkpoint and inspect only the safety-critical delta.
+- Do not deploy/restart from U7 or any U8–U11 draft.
+- Do not create new Grok/Cursor/Claude role documents. `AGENTS.md` remains the role authority; `GROK.md` and `CLAUDE.md` are narrow tool-specific overlays.
+- Historical checkpoints below remain provenance only and must not override this section.
+
+### NEXT
+
+1. Continue the U8→U11 safety stack in dependency order with exact-head independent review/CI.
+2. Before any deployment or restart, run the narrow deployment/runtime reconciliation path and obtain fresh authorized runtime proof.
+3. Preserve **no proof, no run**. If runtime proof is unavailable, remain UNVERIFIED and blocked from deployment/restart/execution changes.
+
+## Superseded checkpoint — 2026-10-06 (U2 HOLD fix: B1–B3 + durable OOS ledger)
 
 Task: Continue PR #1157 only. Claude breaker-QA HOLD on `cea37f5` with three U2 blockers (B1 active partition not tied to scored data; B2 weak OOS receipt identity; B3 crash/race fail-open) plus receipt durability. Fix only these. No U3. No merge. No deploy.
 
