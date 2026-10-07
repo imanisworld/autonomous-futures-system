@@ -58,6 +58,40 @@ Every substantial unit of work must leave:
 
 If the agent cannot persist this file, it must return this payload verbatim-ready for the next agent/operator to save.
 
+## Current options-lane checkpoint — 2026-10-07 (#1151 synced; docs refreshed; no runtime mutation)
+
+Task: finish the canonical options evidence stack without repeating completed work. #1151 is the active gate; #1152/#1153/#1154 are downstream. No deploy, timer install, VPS mutation, broker action, or proof-window start.
+
+### VERIFIED
+
+- Current repository `main` at the latest #1151 reconciliation: `f35b976efe523dbbc2090809ce72e91f0e9d3e95`.
+- #1151 branch `options/canonical-prospective-signal-20261006` reconciled cleanly with that main via merge commit `3a69fd369723cb8a9b84511018bc7d0e2b16e97c`.
+- The main delta and #1151 files were disjoint; no semantic conflict resolution was required.
+- #1145–#1150 are merged. Exact merge commits are recorded in `docs/options-current-state-handoff.md`.
+- Grok's pre-sync exact-head review of `88d6b82` passed B1–B6. Fresh post-sync CI/CodeQL plus final exact-head reconciliation remain the merge gate.
+- #1152/#1153/#1154 already carry pre-review handoff notes with known fixture work, findings, and DO-NOT-REDO boundaries.
+
+### DONE / DO NOT REDO
+
+- Do not re-audit the Oct. 5 late SPY observations as prospective wins.
+- Do not reimplement canonical signal identity, late/gap handling, counterfactual-only misses, chronology, or epoch-scope validation downstream.
+- Do not weaken #1151 to satisfy stale #1152/#1153 fixtures; use the saved fixture-only compatibility changes.
+- Do not treat a FROZEN epoch as proof or trading readiness.
+- Do not install or enable the setup-capture timer during the PR conveyor.
+
+### OPEN / NEXT
+
+1. Let fresh CI + dynamic CodeQL finish on the post-sync #1151 head. Classify any failure as code vs infrastructure before changing the tip.
+2. Reconcile the exact-head independent-review requirement after the sync/docs-only movement; merge #1151 only with green checks and a stable head.
+3. #1152: sync once after #1151 merge, reuse saved fixtures, fix only still-reproducing pre-review findings, test/CI/review/merge.
+4. #1153: same conveyor after #1151, preserving canonical population and no-look-ahead rules.
+5. #1154: final readiness and docs reconciliation; preserve completed checkpoints and update only current truth.
+6. Runtime install/proof remains a separate operator-approved phase after code-stack completion.
+
+### RUNTIME MUTATIONS
+
+None.
+
 ## Current checkpoint — 2026-10-06 (U2 HOLD fix: B1–B3 + durable OOS ledger)
 
 Task: Continue PR #1157 only. Claude breaker-QA HOLD on `cea37f5` with three U2 blockers (B1 active partition not tied to scored data; B2 weak OOS receipt identity; B3 crash/race fail-open) plus receipt durability. Fix only these. No U3. No merge. No deploy.
