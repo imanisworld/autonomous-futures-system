@@ -69,7 +69,7 @@ build_release() {
   fi
   short="${sha:0:12}"
   work="$(mktemp -d "/tmp/afs-release-${short}.XXXX")"
-  archive="/tmp/afs-release-${short}.tgz"
+  archive="$(mktemp "/tmp/afs-release-${short}.XXXX.tgz")"
   manifest="$work/release_manifest.json"
   trap "git worktree remove -f '$work' >/dev/null 2>&1 || true; rm -f '$archive'" EXIT
 
