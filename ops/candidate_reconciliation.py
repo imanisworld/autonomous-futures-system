@@ -158,7 +158,7 @@ def records_from_journal_rows(mode: str, rows: Iterable[Mapping[str, Any]]) -> l
                 fields["outcome"] = None  # still open / not yet resolved
             elif result in NO_FILL_RESULTS:
                 fields["fill_state"] = NO_FILL
-                fields["no_fill_reason"] = outcome.get("exit_reason")
+                fields["no_fill_reason"] = outcome.get("no_fill_reason") or outcome.get("exit_reason")
             else:
                 fields["fill_state"] = FILLED
                 fields["outcome"] = result or None
@@ -187,7 +187,10 @@ def records_from_journal_rows(mode: str, rows: Iterable[Mapping[str, Any]]) -> l
             "intended_entry": _num(outcome.get("requested_entry") or outcome.get("entry_price")),
         }
         if result in NO_FILL_RESULTS:
-            fields.update(fill_state=NO_FILL, no_fill_reason=outcome.get("exit_reason"))
+            fields.update(
+                fill_state=NO_FILL,
+                no_fill_reason=outcome.get("no_fill_reason") or outcome.get("exit_reason"),
+            )
         else:
             fields.update(
                 fill_state=FILLED,
@@ -262,8 +265,13 @@ def reconcile(
 ) -> dict[str, Any]:
     from config.futures_contracts import UnsupportedContractError, contract_economics
 
-    if not isinstance(tolerance_ticks, (int, float)) or isinstance(tolerance_ticks, bool) or tolerance_ticks < 0:
-        raise ReconciliationError("tolerance_ticks must be a non-negative number")
+    if (
+        not isinstance(tolerance_ticks, (int, float))
+        or isinstance(tolerance_ticks, bool)
+        or not math.isfinite(float(tolerance_ticks))
+        or tolerance_ticks < 0
+    ):
+        raise ReconciliationError("tolerance_ticks must be a finite non-negative number")
     modes = [m for m in MODES if m in by_mode]
     if len(modes) < 2:
         raise ReconciliationError("reconciliation needs at least two modes")
@@ -297,7 +305,12 @@ def reconcile(
 
         if len(present) >= 2:
             filled_somewhere = any(r.fields.get("fill_state") == FILLED for r in present.values())
-            core = list(CORE_FIELDS) + (["outcome"] if filled_somewhere else [])
+            no_fill_somewhere = any(r.fields.get("fill_state") == NO_FILL for r in present.values())
+            core = list(CORE_FIELDS)
+            if filled_somewhere:
+                core.append("outcome")
+            if no_fill_somewhere:
+                core.append("no_fill_reason")
             for name in core + list(OPTIONAL_FIELDS):
                 supplied = {m: r.fields.get(name) for m, r in present.items() if r.fields.get(name) is not None}
                 if name in core:
@@ -362,9 +375,12 @@ def read_journal_dir(path: Path, *, since: Optional[date], until: Optional[date]
             if not line.strip():
                 continue
             try:
-                rows.append(json.loads(line))
+                row = json.loads(line)
             except ValueError as exc:
                 raise ReconciliationError(f"{file.name}:{lineno} unreadable journal row") from exc
+            if not isinstance(row, dict):
+                raise ReconciliationError(f"{file.name}:{lineno} journal row must be an object")
+            rows.append(row)
     return rows
 
 

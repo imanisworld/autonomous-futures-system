@@ -98,6 +98,27 @@ def _is_outcome(r):
     return r.get("type") == "OUTCOME"
 
 
+def test_no_fill_reason_mismatch_is_diverged(week):
+    replay_rows = _demo(week)
+    demo_rows = _demo(week)
+    replay_out = _first(replay_rows, _is_outcome)["outcome"]
+    demo_out = _first(demo_rows, _is_outcome)["outcome"]
+    replay_out.update(result="CANCELLED", no_fill_reason="ENTRY_NOT_FILLED", exit_reason="ENTRY_NOT_FILLED")
+    demo_out.update(result="CANCELLED", no_fill_reason="SESSION_OR_RISK_CANCEL", exit_reason="CONTRACT_METADATA_UNSUPPORTED")
+
+    report = rec.reconcile({
+        "replay": rec.records_from_journal_rows("replay", replay_rows),
+        "demo": rec.records_from_journal_rows("demo", demo_rows),
+    })
+    assert report["status"] == "DIVERGED"
+    assert any(d["field"] == "no_fill_reason" for c in report["candidates"] for d in c["divergences"])
+
+
+def test_infinite_tolerance_is_refused():
+    with pytest.raises(rec.ReconciliationError, match="finite non-negative"):
+        rec.reconcile({"replay": [], "demo": []}, tolerance_ticks=float("inf"))
+
+
 def test_fill_slippage_is_diverged_unless_tolerated(week):
     def slip(rows):
         _first(rows, _is_outcome)["outcome"]["entry_price"] += 0.25
@@ -305,6 +326,12 @@ def test_cli_is_read_only_and_exit_codes_encode_status(config, tmp_path):
         "--out", str(victim),
     ]) == 2
     assert victim.read_bytes() == victim_before
+
+    # A syntactically valid but non-object JSONL row is also corrupt evidence.
+    non_object = tmp_path / "non-object"
+    non_object.mkdir()
+    (non_object / "journal_2026-05-18.jsonl").write_text('"silently-droppable"\n')
+    assert rec.main(["--replay-journal", str(a), "--demo-journal", str(non_object)]) == 2
 
     # Corrupt one demo journal row: fail closed with an error exit.
     bad = tmp_path / "bad"
