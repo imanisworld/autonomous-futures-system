@@ -280,15 +280,42 @@ def _pin_runtime_head_and_diff(monkeypatch, changed_files: str = "strategy/examp
     )
 
 
+def _canonical_complete_evidence(tmp_path: Path, monkeypatch) -> Path:
+    """Complete packet whose execution/realism/window/provenance facts come
+    from a real PROMOTION_QUALITY canonical bundle (U5)."""
+    from tests.canonical_bundle_helpers import make_promotion_bundle
+
+    bundle, code_sha = make_promotion_bundle(tmp_path)
+    payload = _complete_evidence(tmp_path)
+    windows = tmp_path / "dependency_windows.json"
+    old_windows_sha = _sha256(windows)
+    windows.write_text(windows.read_text().replace('"abc123"', f'"{code_sha}"'), encoding="utf-8")
+    gap = tmp_path / "gap_proof.json"
+    gap.write_text(
+        gap.read_text()
+        .replace('"abc123"', f'"{code_sha}"')
+        .replace(old_windows_sha, _sha256(windows)),
+        encoding="utf-8",
+    )
+    payload["data_integrity"]["gap_proof_sha256"] = _sha256(tmp_path / "gap_proof.json")
+    payload["replay_provenance"]["code_sha"] = code_sha
+    payload.pop("execution")
+    payload["canonical_evidence"] = {"bundles": [bundle]}
+    monkeypatch.setattr(
+        "ops.project_check.demo_qualification.gitutil.head_sha", lambda _root: code_sha
+    )
+    return _write_evidence(tmp_path, payload)
+
+
 def test_complete_strategy_only_evidence_qualifies_for_demo(tmp_path: Path, monkeypatch) -> None:
     _pin_runtime_head_and_diff(monkeypatch)
-    evidence = _write_evidence(tmp_path, _complete_evidence(tmp_path))
+    evidence = _canonical_complete_evidence(tmp_path, monkeypatch)
 
     report = build_demo_qualification_report(
         strategy="example", repo_root=tmp_path, evidence_path=evidence
     )
 
-    assert report["gate_pass"] is True
+    assert report["gate_pass"] is True, report["blockers"]
     assert report["demo_evidence_eligible"] is True
     assert report["long_internal_paper_phase_waived"] is True
     assert report["runtime_release_reconciliation_required"] is True
@@ -649,3 +676,18 @@ def test_fractional_slippage_stress_ticks_cannot_satisfy_required_stress(
         "must include both 2-tick and 3-tick adverse stress" in blocker
         for blocker in report["blockers"]
     )
+
+
+def test_demo_rejects_canonical_evidence_for_a_different_strategy(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _pin_runtime_head_and_diff(monkeypatch)
+    evidence = _canonical_complete_evidence(tmp_path, monkeypatch)
+
+    report = build_demo_qualification_report(
+        strategy="orb_breakout", repo_root=tmp_path, evidence_path=evidence
+    )
+
+    assert report["gate_pass"] is False
+    assert report["demo_evidence_eligible"] is False
+    assert any("canonical evidence strategy_identity" in b for b in report["blockers"])
