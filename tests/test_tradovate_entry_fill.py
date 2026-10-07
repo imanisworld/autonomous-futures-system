@@ -11,6 +11,7 @@ from __future__ import annotations
 from execution.tradovate_broker import TradovateBroker, TradovateConfig
 from execution.broker_interface import BracketOrder
 import execution.tradovate_supervisor as supervisor
+from tests.contract_stub import bind_exact_contract
 
 
 def _broker(monkeypatch):
@@ -23,7 +24,7 @@ def _broker(monkeypatch):
     b = TradovateBroker(config=TradovateConfig.from_env())
     monkeypatch.setattr(b, "get_account_balance", lambda: 50_000.0)
     monkeypatch.setattr(b, "_authenticate", lambda: True)
-    monkeypatch.setattr(b, "_find_contract_id", lambda inst: 123)
+    monkeypatch.setattr(b, "_find_contract_id", bind_exact_contract(b, 123))
     monkeypatch.setattr(supervisor, "tradovate_order_ready", lambda: True)
     b._account_id = 999
     return b

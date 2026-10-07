@@ -14,6 +14,7 @@ from execution.broker_interface import Fill
 from journal.journal_logger import JournalLogger
 from notifications.system_notifier import SystemNotificationResult
 from webhook.reconciler import reconcile_open_position
+from tests.contract_stub import bind_exact_contract
 
 _NOW = datetime(2026, 6, 5, 16, 0, tzinfo=timezone.utc)
 
@@ -445,8 +446,17 @@ def _real_broker_e2e(monkeypatch, get_router):
     broker = TradovateBroker(config=TradovateConfig())
     broker._account_id = 999
     monkeypatch.setattr(broker, "_authenticate", lambda: True)
-    monkeypatch.setattr(broker, "_get", get_router)
-    monkeypatch.setattr(broker, "_find_contract_id", lambda inst: 4399631)
+
+    def routed_get(path, **kw):
+        # Production position reads resolve contractId through /contract/item.
+        # Keep the e2e fixture faithful to that identity proof instead of relying
+        # on the removed "assume MES" fallback.
+        if path.startswith("/contract/item?id=4399631"):
+            return {"name": "MNQM6", "root": "MNQ"}
+        return get_router(path, **kw)
+
+    monkeypatch.setattr(broker, "_get", routed_get)
+    monkeypatch.setattr(broker, "_find_contract_id", bind_exact_contract(broker, 4399631))
     monkeypatch.setattr("execution.tradovate_broker.time.sleep", lambda *a, **k: None)
     return broker
 
