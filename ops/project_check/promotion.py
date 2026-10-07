@@ -36,7 +36,9 @@ U5: the packet must list canonical evidence bundles
 that classify PROMOTION_QUALITY under ops/evidence_identity.py. Execution
 accounting, per-fill quantities, instrument, research result, entry fill
 model and causal timing are then derived from those bundles and replace the
-packet values; a contradicting packet value is a blocker. Facts the bundles
+packet values. Quantity proof must cover every canonical entry attempt; a
+cancellation/no-fill without canonical quantity evidence blocks promotion.
+A contradicting packet value is also a blocker. Facts the bundles
 cannot prove (identity parity, lookahead, runtime parity) remain attested. Any
 blocker sets the effective classification to BLOCKED_BY_HARD_CAP.
 
@@ -467,10 +469,12 @@ def _safety_caps(
 
 
 def resolve_strategy_identity(name: Any) -> str | None:
-    """Resolve a promotion target to a risk_rules.yaml strategy-concept key.
+    """Resolve a promotion target to a canonical strategy identity.
 
-    Only an exact key or a confirmed repo-owned alias (``STRATEGY_NAME_ALIASES``)
-    resolves; nothing is guessed from free text.
+    Confirmed repo-owned aliases (``STRATEGY_NAME_ALIASES``) normalize to their
+    canonical key. Any other non-empty string is treated literally and can pass
+    only if it exactly equals the canonical evidence strategy_identity. Nothing
+    is fuzzily matched or inferred from packet text.
     """
     if not isinstance(name, str) or not name.strip():
         return None
@@ -595,9 +599,18 @@ def _check_canonical_quantity(
     if claimed is None:
         problems.append("execution_context_claimed.contract_qty must be a positive integer")
     quantities = derived["filled_contract_quantities"]
+    attempts = (derived.get("execution") or {}).get("entry_attempts")
+    if not isinstance(attempts, int) or isinstance(attempts, bool) or attempts <= 0:
+        problems.append("canonical execution.entry_attempts must be a positive integer")
     if not quantities:
         problems.append("canonical evidence has no FILLED rows to prove contract quantity")
-    elif claimed is not None and any(q != claimed for q in quantities):
+    elif isinstance(attempts, int) and not isinstance(attempts, bool) and len(quantities) != attempts:
+        problems.append(
+            "canonical quantity coverage is incomplete: "
+            f"{len(quantities)} observed quantities for {attempts} entry attempts; "
+            "every entry attempt, including cancellations/no-fills, requires quantity proof"
+        )
+    if claimed is not None and quantities and any(q != claimed for q in quantities):
         problems.append(
             f"canonical filled contract quantities {sorted(set(quantities))} do not all "
             f"match claimed contract_qty {claimed}"

@@ -82,6 +82,28 @@ def test_canonical_bundle_drives_a_passing_report(tmp_path, bundle):
     assert derived["untouched_oos_proven"] is True
 
 
+def test_cancelled_entry_attempt_without_quantity_proof_blocks(tmp_path):
+    bundle, _ = make_promotion_bundle(
+        tmp_path,
+        trial_id="T-2026-10-07-canonical-promotion-cancel-01",
+        fills=39,
+        cancellations=1,
+    )
+    report = _report(tmp_path, _packet([bundle]))
+    derived = report["canonical_evidence"]["derived"]
+
+    assert derived["execution"]["entry_attempts"] == 40
+    assert derived["execution"]["fills"] == 39
+    assert derived["execution"]["cancellations"] == 1
+    assert len(derived["filled_contract_quantities"]) == 39
+    assert report["gate_pass"] is False
+    assert report["quantity_evidence"]["verified"] is False
+    assert any(
+        "canonical quantity coverage is incomplete" in problem
+        for problem in report["quantity_evidence"]["problems"]
+    )
+
+
 def test_author_booleans_alone_cannot_pass_without_canonical_evidence(tmp_path):
     payload = _packet(
         None,
@@ -371,7 +393,7 @@ def test_packet_strategy_contradicting_target_blocks(tmp_path, bundle):
         (None, None),
     ],
 )
-def test_strategy_resolution_uses_only_exact_keys_or_confirmed_aliases(name, expected):
+def test_strategy_resolution_uses_confirmed_alias_or_literal_canonical_identity(name, expected):
     from ops.project_check.promotion import resolve_strategy_identity
 
     assert resolve_strategy_identity(name) == expected

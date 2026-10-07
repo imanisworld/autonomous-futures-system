@@ -33,7 +33,7 @@ Both this gate and the base promotion gate require
 `ops/evidence_identity.py`. Without them the gate is blocked.
 
 From the bundles' candidate-arm `trade_execution` rows the gates derive, and
-use instead of packet values: execution accounting counts, per-fill contract
+use instead of packet values: execution accounting counts, canonical contract
 quantities, the traded instrument, net P&L / win rate / profit factor /
 sample, the entry fill model, the code SHA, whether an `untouched_oos`
 partition was consumed, and — for `futures_replay` bundles — the real
@@ -43,9 +43,11 @@ contradicts a derived value is a blocker. All listed bundles must agree on
 one `code_sha`, `execution_model_id` and `strategy_identity` (the row-bound
 identity from the U4 gate); disagreement is a blocker. The promotion target
 (`--strategy`, and the packet's `strategy` if present) must resolve to that
-canonical `strategy_identity`: an exact `risk_rules.yaml` strategy-concept key,
-or a confirmed alias in `STRATEGY_NAME_ALIASES` (`ops/project_check/daily.py`);
-nothing else is aliased. A mismatch blocks promotion and, through it, DEMO
+canonical `strategy_identity`: confirmed names in `STRATEGY_NAME_ALIASES`
+(`ops/project_check/daily.py`) normalize to their canonical keys; any other
+non-empty name is treated literally and must exactly equal the row-bound
+`strategy_identity`. There is no fuzzy matching or packet-defined aliasing.
+A mismatch blocks promotion and, through it, DEMO
 qualification. Facts the bundles cannot prove
 (live/replay identity parity, lookahead freedom, IOC/gap modelling, stress
 tests, change scope, golden fixtures) remain attested and are still required.
@@ -126,6 +128,7 @@ The generic gate deliberately does **not** guess a strategy lookback or a holida
 Required:
 
 - one observed contract quantity for every recorded entry attempt; the observed list length must equal `execution.entry_attempts`, every value must be positive, and every observed value must equal `execution_context_claimed.contract_qty`;
+- current canonical trade rows carry contract quantity on FILLED rows only; therefore any cancellation/no-fill counted as an entry attempt blocks U5 promotion until that attempt has canonical quantity proof. U5 does not guess the missing quantity from the configured cap or packet claim;
 - the claimed quantity must also remain within the current configured instrument/hard caps — these are separate checks;
 - IOC/no-fill behavior modeled;
 - pessimistic stop-first treatment when stop and target are both inside one unresolved bar;

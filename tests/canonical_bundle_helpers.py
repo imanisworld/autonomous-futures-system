@@ -32,7 +32,14 @@ def assumptions(entry_fill_model: str = "ioc_limit") -> dict:
 
 
 def _rows(
-    *, count: int, instrument: str, contracts: int, start: str, model_id: str, dataset_hash: str
+    *,
+    count: int,
+    cancellations: int,
+    instrument: str,
+    contracts: int,
+    start: str,
+    model_id: str,
+    dataset_hash: str,
 ) -> list[dict]:
     base = datetime.fromisoformat(start.replace("Z", "+00:00")) + timedelta(days=1)
     rows = []
@@ -72,6 +79,28 @@ def _rows(
                 "execution_model_id": model_id,
             }
         )
+    for offset in range(cancellations):
+        index = count + offset
+        ts = (base + timedelta(hours=index)).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        rows.append(
+            {
+                "evidence_type": "trade_execution",
+                "instrument": instrument,
+                "strategy_identity": "example",
+                "candidate_signal_id": f"cand-{index}",
+                "signal_ts": ts,
+                "decision_ts": ts,
+                "earliest_legal_order_ts": ts,
+                "intended_entry": 100.0,
+                "direction": "LONG",
+                "fill_state": "NO_FILL",
+                "stop": 99.0,
+                "target": 103.0,
+                "no_fill_reason": "CANCELLED",
+                "data_fingerprint": f"dataset_hash:{dataset_hash}",
+                "execution_model_id": model_id,
+            }
+        )
     return rows
 
 
@@ -82,6 +111,7 @@ def make_promotion_bundle(
     instrument: str = "MNQ",
     contracts: int = 1,
     fills: int = 40,
+    cancellations: int = 0,
     entry_fill_model: str = "ioc_limit",
     evaluation_partition: str = "untouched_oos",
 ) -> tuple[str, str]:
@@ -179,6 +209,7 @@ def make_promotion_bundle(
 
     rows = _rows(
         count=fills,
+        cancellations=cancellations,
         instrument=instrument,
         contracts=contracts,
         start=PARTITIONS[evaluation_partition]["start"],
