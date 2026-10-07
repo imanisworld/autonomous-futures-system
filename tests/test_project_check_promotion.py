@@ -339,12 +339,13 @@ def test_complete_required_proof_can_pass(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MES", "16")
     monkeypatch.setenv("ENTRY_FILL_MODEL", "ioc_limit")
     monkeypatch.setenv("MAX_CONTRACTS_HARD_CAP", "1")
-    from tests.canonical_bundle_helpers import make_promotion_bundle
+    from tests.canonical_bundle_helpers import make_fi_manifest, make_promotion_bundle
 
-    bundle, _ = make_promotion_bundle(tmp_path)
+    bundle, code_sha = make_promotion_bundle(tmp_path)
     payload = _complete_promotion_evidence()
     payload.pop("execution")  # derived from the canonical bundle (U5)
     payload["canonical_evidence"] = {"bundles": [bundle]}
+    payload["fault_injection"] = {"manifest": make_fi_manifest(tmp_path, code_sha)}
     evidence = _write_evidence(tmp_path, payload)
     report = build_promotion_report(strategy="example", repo_root=tmp_path, evidence_path=evidence)
     assert report["gate_pass"] is True, report["classification"]["blockers"]
