@@ -110,7 +110,7 @@ def discovered_scenarios_at(root: Path, sha: str) -> set[str]:
             tree = ast.parse(shown.stdout)
         except SyntaxError as exc:
             raise FaultInjectionGateError(f"cannot parse {rel} at {sha}: {exc}") from exc
-        for node in tree.body:
+        for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 scenario = scenario_for_test(node.name)
                 if scenario:
