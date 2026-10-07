@@ -385,7 +385,26 @@ OBSERVATION_TEXT_KEYS = frozenset(
 )
 OBSERVATION_KEYS = OBSERVATION_BOOL_KEYS | OBSERVATION_NUMBER_KEYS | OBSERVATION_TIME_KEYS | OBSERVATION_TEXT_KEYS
 # Once true, never false again.
-STICKY_TRUE_KEYS = frozenset({"capture_late", "gap_through"})
+STICKY_TRUE_KEYS = frozenset({"capture_late", "gap_through", "data_delayed"})
+
+
+def _capture_crosses(capture: Mapping[str, Any]) -> list[datetime]:
+    return [_utc(capture[key], key) for key in sorted(OBSERVATION_TIME_KEYS) if capture.get(key) is not None]
+
+
+def prearmed_at(
+    first_seen: datetime, setup_ready: datetime, trigger: datetime | None, capture: Mapping[str, Any]
+) -> bool | None:
+    """Knowable and seen at or before the earliest recorded cross (B5).
+
+    The earliest of the resolved trigger and any captured cross time
+    (``sip_crossed_at`` / ``trigger_crossed_at``) counts, so a later SIP
+    reconciliation that moves the true cross before first sight un-arms it.
+    """
+    if trigger is None:
+        return None
+    earliest = min([trigger, *_capture_crosses(capture)])
+    return first_seen <= earliest and setup_ready <= earliest
 
 
 @dataclass(frozen=True)
@@ -436,6 +455,11 @@ class ProspectiveSignal:
                 raise LifecycleError(f"{name} must be a timezone-aware datetime")
         if not isinstance(self.links, SignalLinks) or not isinstance(self.capture, Mapping):
             raise LifecycleError("links and capture must be SignalLinks and a mapping")
+        unknown = set(self.capture) - OBSERVATION_KEYS
+        if unknown:
+            raise LifecycleError(f"capture may only carry capture evidence, not {sorted(unknown)}")
+        for key, value in self.capture.items():
+            _observation_value(key, value)  # B3: exact types on every construction
         if not isinstance(self.history, tuple) or not all(isinstance(c, StateChange) for c in self.history):
             raise LifecycleError("history must be a tuple of StateChange")
         if not isinstance(self.state, LifecycleState):
@@ -469,6 +493,8 @@ class ProspectiveSignal:
             raise LifecycleError("setup_ready_time cannot precede structure_close_time")
         if self.first_seen_time < self.setup_ready_time:
             raise LifecycleError("first_seen_time cannot precede setup_ready_time")
+        if any(t < self.structure_close_time for t in _capture_crosses(self.capture)):
+            raise LifecycleError("a captured cross time cannot precede structure_close_time")
         # Blocked observations are invalid, misses are never clean.
         if self.state in BLOCKED_STATES and (
             self.signal_integrity is not IntegrityStatus.INVALID
@@ -476,11 +502,12 @@ class ProspectiveSignal:
         ):
             raise LifecycleError(f"{self.state.value} requires INVALID data and signal integrity")
         if self.signal_integrity is IntegrityStatus.VALID:
-            problem = self._valid_integrity_problem()
+            problem = self.valid_integrity_problem()
             if problem is not None:
                 raise LifecycleError(f"signal_integrity cannot be VALID: {problem}")
 
-    def _valid_integrity_problem(self) -> str | None:
+    def valid_integrity_problem(self) -> str | None:
+        """Why this signal could not carry VALID signal integrity (None: it could)."""
         if self.registered_epoch is None:
             return f"epoch is not registered ({self.epoch_reason or self.strategy_epoch})"
         if self.state in BLOCKED_STATES:
@@ -526,9 +553,7 @@ class ProspectiveSignal:
 
     @property
     def prearmed(self) -> bool | None:
-        if self.trigger_market_time is None:
-            return None
-        return self.first_seen_time <= self.trigger_market_time and self.setup_ready_time <= self.trigger_market_time
+        return prearmed_at(self.first_seen_time, self.setup_ready_time, self.trigger_market_time, self.capture)
 
     @property
     def resolution(self) -> LifecycleState | None:
@@ -547,7 +572,7 @@ class ProspectiveSignal:
         return (
             self.resolution is LifecycleState.TRIGGERED
             and self.signal_integrity is IntegrityStatus.VALID
-            and self._valid_integrity_problem() is None
+            and self.valid_integrity_problem() is None
         )
 
     @property
@@ -746,6 +771,12 @@ def _apply_observation(signal: ProspectiveSignal, event: SignalEvent) -> Prospec
     if unknown:
         raise LifecycleError(f"OBSERVATION may only carry capture evidence, not {sorted(unknown)}")
     incoming = {k: _observation_value(k, v) for k, v in event.payload.items()}
+    for key in OBSERVATION_TIME_KEYS & set(incoming):
+        crossed = _utc(incoming[key], key)
+        if crossed < signal.structure_close_time:
+            raise LifecycleError(f"{key} cannot precede structure_close_time")
+        if crossed > event.detected_at:
+            raise LifecycleError(f"{key} cannot be later than the event that records it")
     current = signal.capture
     for key in STICKY_TRUE_KEYS:
         if current.get(key) is True and incoming.get(key) is False:
@@ -754,16 +785,22 @@ def _apply_observation(signal: ProspectiveSignal, event: SignalEvent) -> Prospec
         if current.get(key) is not None and key in incoming and incoming[key] != current[key]:
             raise LifecycleError(f"{key} is write-once; it was already recorded as {current[key]}")
     merged = {**current, **incoming}
-    revoked = signal.catch_revoked or (current.get("prospective_catch") is True and merged["prospective_catch"] is False)
+    prearmed = prearmed_at(signal.first_seen_time, signal.setup_ready_time, signal.trigger_market_time, merged)
+    # A catch is revoked when withdrawn, or when a later cross time shows the
+    # structure was not knowable/seen before the true cross (B5).
+    revoked = signal.catch_revoked or (
+        current.get("prospective_catch") is True
+        and (merged["prospective_catch"] is False or prearmed is False)
+    )
     if incoming.get("prospective_catch") is True:
         if revoked:
             raise LifecycleError("a revoked prospective_catch cannot be restored")
-        if signal.state is not LifecycleState.TRIGGERED or signal.prearmed is not True:
+        if signal.state is not LifecycleState.TRIGGERED or prearmed is not True:
             raise LifecycleError(f"prospective_catch requires a pre-armed TRIGGERED signal, not {signal.state.value}")
         if merged.get("capture_late") is True or merged.get("gap_through") is True:
             raise LifecycleError("a late or gapped capture cannot be a prospective catch")
     updates: dict[str, Any] = {"capture": MappingProxyType(merged), "catch_revoked": revoked}
-    demoted = revoked or merged.get("capture_late") is True or merged.get("gap_through") is True
+    demoted = revoked or prearmed is False or merged.get("capture_late") is True or merged.get("gap_through") is True
     if demoted and signal.signal_integrity is IntegrityStatus.VALID:
         updates["signal_integrity"] = IntegrityStatus.DEGRADED  # evidence demotes; it never promotes
     return replace(signal, **updates)
@@ -792,10 +829,12 @@ def _apply_integrity(signal: ProspectiveSignal, event: SignalEvent) -> Prospecti
                 )
     if "data_integrity" in updates:
         old, new = signal.data_integrity, updates["data_integrity"]
-        if old is IntegrityStatus.INVALID and new is not IntegrityStatus.INVALID:
-            raise LifecycleError("data_integrity INVALID is final")
-        if old is not IntegrityStatus.UNKNOWN and new is IntegrityStatus.UNKNOWN:
-            raise LifecycleError("data_integrity cannot be reset to UNKNOWN")
+        if old is not IntegrityStatus.UNKNOWN and old is not new:
+            if new not in _SIGNAL_RANK or _SIGNAL_RANK[new] < _SIGNAL_RANK.get(old, -1):
+                raise LifecycleError(
+                    f"data_integrity {old.value} -> {new.value} would promote or erase provenance; "
+                    "only demotion is allowed (INVALID is final)"
+                )
     return replace(signal, **updates)
 
 
@@ -1075,9 +1114,21 @@ def verify_record(record: Mapping[str, Any], registry: EpochRegistry | None = No
         state = LifecycleState(record["lifecycle_state"])
         statuses = {key: _status(record[key], key) for key in ("data_integrity", "signal_integrity", "execution_integrity")}
         resolution = LifecycleState(record["resolution_state"]) if record.get("resolution_state") else None
-    except (ValueError, TypeError) as exc:
+        history_states = [LifecycleState(change["state"]) for change in record.get("history") or ()]
+        capture = record.get("capture") or {}
+        if not isinstance(capture, Mapping):
+            raise TypeError("capture must be a mapping")
+        crosses = _capture_crosses(capture)
+    except (ValueError, TypeError, KeyError, LifecycleError) as exc:
         problems.append(str(exc))
         return problems
+    # The resolution is derived from history, never trusted from the summary field.
+    derived = next((st for st in reversed(history_states) if st in RESOLVED_WITH_DIRECTION), None)
+    if derived is not resolution:
+        problems.append("resolution_state does not match the record's history")
+    resolution = derived
+    if history_states and history_states[-1] is not state:
+        problems.append("lifecycle_state does not match the record's history")
     if statuses["execution_integrity"] is not IntegrityStatus.NOT_APPLICABLE:
         problems.append("execution_integrity must be NOT_APPLICABLE on a signal")
     # Chronology (B5).
@@ -1096,6 +1147,9 @@ def verify_record(record: Mapping[str, Any], registry: EpochRegistry | None = No
         problems.append("trigger detection precedes the market trigger")
     if resolution is LifecycleState.TRIGGERED and trig and ((seen and seen > trig) or (ready and ready > trig)):
         problems.append("TRIGGERED resolution for a structure not knowable/seen before the trigger")
+    if close and any(t < close for t in crosses):
+        problems.append("a captured cross time precedes structure_close_time")
+    prearmed = prearmed_at(seen, ready, trig, capture) if seen and ready else None
     # Integrity provenance (B2/B4/B6).
     if statuses["signal_integrity"] is IntegrityStatus.VALID:
         if record["strategy_epoch"] in RESERVED_EPOCHS:
@@ -1104,6 +1158,14 @@ def verify_record(record: Mapping[str, Any], registry: EpochRegistry | None = No
             problems.append("VALID signal integrity on a miss or blocked observation")
         if resolution is LifecycleState.TRIGGERED and record.get("prospective_catch") is not True:
             problems.append("VALID signal integrity without a prospective catch")
+        if resolution is LifecycleState.TRIGGERED and (
+            capture.get("prospective_catch") is not True or prearmed is not True
+        ):
+            problems.append("VALID signal integrity without pre-armed prospective_catch evidence")
+        if resolution is None and state not in (LifecycleState.EXPIRED, LifecycleState.INVALIDATED):
+            problems.append("VALID signal integrity on an unresolved structure")
+        if capture.get("capture_late") is True or capture.get("gap_through") is True:
+            problems.append("VALID signal integrity on a late or gapped capture")
         if registry is not None:
             epoch = registry.get(str(record["strategy"]), str(record["strategy_epoch"]))
             if epoch is None or epoch.definition_sha256 != record.get("epoch_definition_sha256"):

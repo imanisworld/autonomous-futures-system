@@ -69,19 +69,21 @@ The journal refuses all of the following:
 - a `TRIGGERED` for a structure first seen, or only knowable (`setup_ready_time`), after its trigger (that must be `MISSED_LATE`)
 - `MISSED_GAP` without gap evidence
 - `OUTCOME_CLOSED` without `outcome_ref`
-- chronology violations: structure close ≤ setup ready ≤ first seen; market events no later than the event that records them; trigger detection between the market trigger and its recording
+- chronology violations: structure close ≤ setup ready ≤ first seen; market events no later than the event that records them; trigger detection between the market trigger and its recording; captured cross times (`sip_crossed_at` / `trigger_crossed_at`) between the structure close and the event that records them
 - wrongly typed values: levels, lags and prices must be finite non-bool numbers, capture flags exact bools, cross times timezone-aware ISO strings, integrity values exact `IntegrityStatus` names (no coercion of `"yes"`, `"false"`, `1`, `NaN`)
 - provenance overwrites (see below)
 
 ### Provenance is append-only (review B4)
 
-- `capture_late` and `gap_through`, once true, never become false.
+- `capture_late`, `gap_through` and `data_delayed`, once true, never become false.
 - A `prospective_catch` that was true and is revoked never comes back. It can be set true only on a pre-armed `TRIGGERED` signal whose capture is neither late nor gapped.
 - `sip_crossed_at` / `trigger_crossed_at` are write-once.
-- `signal_integrity` can only be demoted once known (`VALID → DEGRADED → INVALID`); it cannot be promoted or reset to `UNKNOWN`. `data_integrity` `INVALID` is final.
+- Pre-arming is measured against the **earliest** recorded cross: the resolved trigger and any captured cross time. A later SIP reconciliation whose cross precedes first sight or setup-ready un-arms the signal, revokes an existing catch and demotes VALID; a catch claimed together with such a cross is refused. (#1145 reconciliation does not re-check pre-arming, so the adapter passes that catch on as `False`.)
+- `signal_integrity` and `data_integrity` can only be demoted once known (`VALID → DEGRADED → INVALID`); they cannot be promoted or reset to `UNKNOWN`. `INVALID` is final.
 - `MISSED_LATE` / `MISSED_GAP` set `signal_integrity` to `DEGRADED`; `DATA_BLOCKED` / `AMBIGUOUS` set both integrities to `INVALID`; late or revoked capture evidence demotes a `VALID` signal.
 - `resolution` (TRIGGERED / MISSED_LATE / MISSED_GAP) is read from history, so it survives `OUTCOME_CLOSED`; records carry `resolution_state`.
-- `signal_integrity == VALID` requires a registered epoch, a non-blocked state, and, after a TRIGGERED resolution, pre-arming plus `prospective_catch` evidence that is not late or gapped. This is checked on every construction, including direct `ProspectiveSignal(...)` and `dataclasses.replace`.
+- `signal_integrity == VALID` requires a registered epoch, a non-blocked state, and, after a TRIGGERED resolution, pre-arming plus `prospective_catch` evidence that is not late or gapped. This is checked on every construction, including direct `ProspectiveSignal(...)` and `dataclasses.replace`, as are the exact types of every capture-evidence value.
+- `verify_record` derives the resolution and lifecycle state from the record's `history` and refuses a summary that disagrees, and refuses VALID with late/gapped or un-armed capture evidence.
 
 ### Epochs (review B6)
 
@@ -136,6 +138,8 @@ Review hardening:
 - **B2:** only a prospective catch (`ProspectiveSignal.is_prospective_catch`) can be `executed=True`.
 - **B2:** a miss (`MISSED_LATE` / `MISSED_GAP`, including after `OUTCOME_CLOSED`) must use `pnl_basis="counterfactual"`, with no P&L and no OBSERVED R. `result_r_value` never reads a counterfactual record as a trade result.
 - An outcome cannot report VALID signal integrity for a non-VALID signal, nor launder INVALID data integrity.
+- `validate_outcome(..., registry=...)` also requires the signal's epoch to be that registry's entry, so a hand-built `StrategyEpoch` cannot certify a catch.
+- The adapter takes level revisions as exact non-negative ints (no `int()` coercion of `"3"`, `2.9` or `True`).
 
 ## Not done here
 

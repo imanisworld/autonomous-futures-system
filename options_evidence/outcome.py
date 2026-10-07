@@ -34,6 +34,7 @@ from enum import Enum
 from typing import Any, Mapping
 
 from .signal import MISSED_STATES, IntegrityStatus, ProspectiveSignal
+from .strategy_epochs import EpochRegistry
 
 SCHEMA = "options-outcome-evidence-v1"
 
@@ -284,9 +285,18 @@ _NUMBER_FIELDS = ("result_r", "gross_pnl", "net_pnl")
 _TEXT_FIELDS = ("trim_event", "runner_outcome")
 
 
-def validate_outcome(outcome: OutcomeEvidence, signal: ProspectiveSignal) -> list[str]:
-    """Consistency problems; an empty list means the record is honest and complete enough to store."""
+def validate_outcome(
+    outcome: OutcomeEvidence, signal: ProspectiveSignal, registry: EpochRegistry | None = None
+) -> list[str]:
+    """Consistency problems; an empty list means the record is honest and complete enough to store.
+
+    With ``registry``, a signal's validated epoch must be that registry's
+    entry (a hand-built ``StrategyEpoch`` cannot certify a catch).
+    """
     problems: list[str] = []
+    if registry is not None and signal.registered_epoch is not None:
+        if registry.get(signal.strategy, signal.strategy_epoch) != signal.registered_epoch:
+            problems.append("signal epoch is not the registry's epoch definition")
     if signal.direction is None or signal.invalidation is None:
         return ["outcome requires a resolved signal; a two-sided WATCHING structure has no risk unit"]
     if outcome.signal_id != signal.signal_id:

@@ -463,3 +463,171 @@ def test_confirmed_adapter_refuses_resolution_without_prior_watching():
     }
     with pytest.raises(ca.AdapterError, match="before any WATCHING row"):
         ca.fold_capture_rows([resolution])
+
+
+# ── follow-up review of f2aa508 ─────────────────────────────────────────────
+# B5: a SIP cross time carried by later evidence is part of the chronology.
+
+_KEY = "SPY|1H|2026-10-06T14:00:00Z|222:2U:2U"
+
+
+def _capture_rows(sip_crossed_at="2026-10-06T14:00:05+00:00"):
+    watching = {
+        "record_type": "WATCHING", "structure_key": _KEY, "ticker": "SPY", "timeframe": "1H",
+        "pattern": "222:2U:2U", "status": "WATCHING", "boundary_high": HIGH, "boundary_low": LOW,
+        "structure_close": "2026-10-06T14:00:00+00:00", "knowable_at": "2026-10-06T14:00:00+00:00",
+        "first_seen_at": "2026-10-06T14:00:20+00:00", "observed_at": "2026-10-06T14:00:20+00:00",
+        "revision": 0, "observation_only": True, "execution_authority": False,
+    }
+    resolution = {**watching, "record_type": "RESOLUTION", "status": "TRIGGERED", "direction": "LONG",
+                  "trigger_crossed_at": "2026-10-06T14:10:00+00:00", "detected_at": "2026-10-06T14:10:03+00:00",
+                  "trigger_feed": "iex", "observed_at": "2026-10-06T14:10:05+00:00"}
+    reconciliation = {**resolution, "record_type": "RECONCILIATION", "sip_crossed_at": sip_crossed_at,
+                      "prospective_catch": True, "capture_late": False, "observed_at": "2026-10-06T14:30:00+00:00"}
+    return [watching, resolution, reconciliation]
+
+
+def _fold_one(rows):
+    fold = ca.fold_capture_rows(rows, strategy=CATCH_STRATEGY, strategy_epoch=CATCH_EPOCH, registry=REGISTRY)
+    return fold.signal_for(_KEY)
+
+
+def test_b5_adapter_sip_cross_before_first_seen_is_not_a_catch():
+    s = _fold_one(_capture_rows())
+    assert s.state is sg.LifecycleState.TRIGGERED
+    assert s.prearmed is False
+    assert s.capture["prospective_catch"] is False
+    assert s.signal_integrity is not sg.IntegrityStatus.VALID
+    assert not s.is_prospective_catch
+    assert sg.verify_record(sg.to_record(s), registry=REGISTRY) == []
+
+
+def test_b5_adapter_sip_cross_after_first_seen_stays_a_catch():
+    s = _fold_one(_capture_rows(sip_crossed_at="2026-10-06T14:09:58+00:00"))
+    assert s.prearmed is True and s.is_prospective_catch
+    assert s.signal_integrity is sg.IntegrityStatus.VALID
+
+
+def test_b5_early_sip_cross_revokes_an_existing_catch():
+    journal = _reg_journal()
+    s = caught(journal)
+    early = sg.observation_event(journal, s.signal_id, detected_at=AT + timedelta(minutes=20),
+                                 sip_crossed_at=(s.first_seen_time - timedelta(seconds=5)).isoformat())
+    s = journal.append(early)
+    assert s.prearmed is False and s.catch_revoked
+    assert s.signal_integrity is sg.IntegrityStatus.DEGRADED and not s.is_prospective_catch
+
+
+def test_b5_catch_claim_with_early_sip_cross_is_refused():
+    journal = _reg_journal()
+    s = trigger(journal, _reg_opened(journal), at=AT)
+    with pytest.raises(sg.LifecycleError, match="pre-armed"):
+        journal.append(sg.observation_event(
+            journal, s.signal_id, detected_at=AT + timedelta(minutes=1), prospective_catch=True,
+            sip_crossed_at=(s.first_seen_time - timedelta(seconds=5)).isoformat()))
+
+
+@pytest.mark.parametrize("crossed, recorded, message", [
+    (T0 - timedelta(days=1), AT + timedelta(minutes=1), "precede structure_close_time"),
+    (AT + timedelta(hours=3), AT + timedelta(minutes=1), "later than the event that records it"),
+])
+def test_b5_cross_times_must_lie_between_close_and_recording(crossed, recorded, message):
+    journal = _reg_journal()
+    s = trigger(journal, _reg_opened(journal), at=AT)
+    for key in ("sip_crossed_at", "trigger_crossed_at"):
+        with pytest.raises(sg.LifecycleError, match=message):
+            journal.append(sg.observation_event(journal, s.signal_id, detected_at=recorded,
+                                                **{key: crossed.isoformat()}))
+
+
+def test_b5_direct_construction_with_early_cross_cannot_be_valid():
+    s = caught()
+    with pytest.raises(sg.LifecycleError, match="pre-armed"):
+        replace(s, capture={**s.capture, "sip_crossed_at": (s.first_seen_time - timedelta(seconds=1)).isoformat()})
+    with pytest.raises(sg.LifecycleError, match="precede structure_close_time"):
+        replace(s, capture={**s.capture, "sip_crossed_at": (T0 - timedelta(days=1)).isoformat()})
+
+
+# B2/B4: a stored record cannot claim a catch its own history contradicts.
+
+
+def test_b2_forged_record_resolution_is_derived_from_history():
+    record = sg.to_record(_missed_late())
+    forged = {**record, "signal_integrity": "VALID", "prospective_catch": True, "resolution_state": None}
+    problems = sg.verify_record(forged, registry=REGISTRY)
+    assert "resolution_state does not match the record's history" in problems
+    assert "VALID signal integrity on a miss or blocked observation" in problems
+
+
+def test_b4_forged_valid_record_with_late_or_unarmed_capture_is_detected():
+    record = sg.to_record(caught())
+    assert sg.verify_record(record, registry=REGISTRY) == []
+    late = {**record, "capture": {**record["capture"], "capture_late": True}}
+    assert "VALID signal integrity on a late or gapped capture" in sg.verify_record(late, registry=REGISTRY)
+    unarmed = {**record, "capture": {**record["capture"],
+                                     "sip_crossed_at": record["setup_ready_time"]}}
+    assert "VALID signal integrity without pre-armed prospective_catch evidence" in sg.verify_record(
+        unarmed, registry=REGISTRY)
+    state = {**record, "lifecycle_state": "EXPIRED"}
+    assert "lifecycle_state does not match the record's history" in sg.verify_record(state, registry=REGISTRY)
+
+
+# B3: capture evidence is exact on every construction, not only through events.
+
+
+@pytest.mark.parametrize("evidence", [
+    {"capture_late": "yes"}, {"prospective_catch": 1}, {"true_lag_seconds": float("nan")},
+    {"sip_crossed_at": "2026-10-06T14:00:05"}, {"execution_authority": False},
+])
+def test_b3_replace_cannot_smuggle_untyped_capture(evidence):
+    s = caught()
+    with pytest.raises(sg.LifecycleError):
+        replace(s, capture={**s.capture, **evidence})
+
+
+def test_b3_hand_built_epoch_cannot_certify_an_executed_outcome():
+    fake = registered_epoch(strategy="fake", epoch="FAKE-1")
+    s = caught()
+    forged = replace(s, strategy="fake", strategy_epoch="FAKE-1", registered_epoch=fake,
+                     signal_id=sg.make_signal_id(s.structure_id, "fake", "FAKE-1"))
+    o = outcome(forged, executed=True, pnl_basis="executed")
+    assert "signal epoch is not the registry's epoch definition" in oc.validate_outcome(o, forged, registry=REGISTRY)
+    assert "signal epoch is not the registry's epoch definition" not in oc.validate_outcome(
+        outcome(s, executed=True, pnl_basis="executed"), s, registry=REGISTRY)
+
+
+# B4: data integrity and data_delayed are append-only too.
+
+
+def test_b4_data_integrity_can_only_be_demoted_and_delay_is_sticky():
+    journal = _reg_journal()
+    s = caught(journal)
+    s = journal.append(sg.integrity_event(journal, s.signal_id, detected_at=AT + timedelta(minutes=1),
+                                          data_integrity="DEGRADED"))
+    with pytest.raises(sg.LifecycleError, match="only demotion"):
+        journal.append(sg.integrity_event(journal, s.signal_id, detected_at=AT + timedelta(minutes=2),
+                                          data_integrity="VALID"))
+    s = journal.append(sg.observation_event(journal, s.signal_id, detected_at=AT + timedelta(minutes=3),
+                                            data_delayed=True))
+    with pytest.raises(sg.LifecycleError, match="cannot be cleared"):
+        journal.append(sg.observation_event(journal, s.signal_id, detected_at=AT + timedelta(minutes=4),
+                                            data_delayed=False))
+
+
+def test_b4_adapter_never_repromotes_data_integrity():
+    rows = _capture_rows(sip_crossed_at="2026-10-06T14:09:58+00:00")
+    rows[1] = {**rows[1], "data_delayed": True}
+    rows[2] = {k: v for k, v in rows[2].items() if k != "data_delayed"}
+    s = _fold_one(rows)
+    assert s.data_integrity is sg.IntegrityStatus.DEGRADED and s.capture["data_delayed"] is True
+
+
+# B3: the adapter does not coerce level revisions.
+
+
+@pytest.mark.parametrize("revision", ["3", 2.9, True, -1])
+def test_b3_adapter_level_revision_is_exact(revision):
+    rows = _capture_rows()
+    rows[0] = {**rows[0], "revision": revision}
+    with pytest.raises(ca.AdapterError):
+        _fold_one(rows[:1])
