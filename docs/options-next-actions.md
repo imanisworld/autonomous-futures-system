@@ -89,7 +89,9 @@ _As of 2026-10-02. Operational checklist only. The authoritative options status 
 - [x] `#1133` `E-2026-10-04-options-212c-preentry-factors-01` is **SUPERSEDED / NOT_RUN** (activation-only).
 - [x] Successor DRAFT prereg `docs/prereg-options-212c-floor-outcome-2026-10-04.md` and spec `E-2026-10-04-options-212c-floor-outcome-02` (`status=DRAFT`). Ledger event `PLANNED`. Eligible start UNSET.
 - [x] Companion DRAFT `E-2026-10-04-options-212c-floor-factor-01` over the floor-eligible population (`MARKET_ALIGNMENT_REJECTED` + `WOULD_OTHERWISE_QUALIFY`). Descriptive / hypothesis-generating only.
-- [ ] Do not approve `-02` or the companion, do not write a real seal, and do not collect/score until the capture path is on `main` and deployed.
+- [ ] Capture integration is prepared on `research/options-212c-path-v02-capture-integration-20261005`, but is **UNREVIEWED / NOT MERGED / NOT RUN**. It must remain dormant while `ELIGIBLE_START` is UNSET and must pass exact-head CI plus independent review before merge.
+- [ ] After a clean capture-integration merge, run a fresh coverage-box pin/timer/data/deploy-readiness check before any deployment decision. Merge is not deploy authority.
+- [ ] Do not approve `-02` or the companion, do not write a real seal, and do not collect/score until the capture path is on `main`, successfully deployed, and the eligible start is separately amended to the first NYSE session strictly after that deployment.
 - [ ] Stage B stays **NOT EVALUATED** until a causal historical chain source exists. Do not backfill current quotes.
 
 ## Cleanup / non-blocking

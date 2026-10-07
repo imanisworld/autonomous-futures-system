@@ -18,7 +18,8 @@ EnvironmentFile=/root/afs-shared/.env
 ExecStart=/root/afs-shared/coverage/current/.venv/bin/python /root/afs-shared/coverage/current/scripts/options_coverage_collect.py \
     --require-pinned \
     --sqlite /root/afs-shared/coverage/options_coverage_observer.sqlite \
-    --data-dir /root/afs-shared/coverage
+    --data-dir /root/afs-shared/coverage \
+    --capture-root /root/afs-shared/coverage
 TimeoutStartSec=45min
 Nice=10
 NoNewPrivileges=true

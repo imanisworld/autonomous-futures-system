@@ -23,6 +23,7 @@ import asyncio
 import csv
 import json
 import os
+import re
 import sqlite3
 import sys
 from collections import defaultdict
@@ -57,11 +58,19 @@ from alert_ranker.coverage_quarantine import (  # noqa: E402
     write_quarantine,
 )
 from alert_ranker.session_calendar import nyse_session_for  # noqa: E402
+from ops.options_212c_floor_outcome_capture import (  # noqa: E402
+    CaptureIntegrationError,
+    capture_decision,
+    write_artifact_once,
+)
+from ops.options_212c_floor_outcome_monitor import FAMILY, V1_UNIVERSE  # noqa: E402
+from ops.options_212c_floor_outcome_study import StudyContractError, build_session_artifact  # noqa: E402
 from scripts.options_coverage_observer import fetch_all  # noqa: E402
 
 DEFAULT_SQLITE = ROOT / "logs" / "options_coverage_observer.sqlite"
 DEFAULT_OUT = ROOT / "logs" / "coverage_outcomes"
 DEFAULT_BLIND_WINDOWS = ROOT / DEFAULT_POLICY_RELPATH
+_SHA40 = re.compile(r"^[0-9a-f]{40}$")
 
 
 def load_events(path: Path, date_from: str, date_to: str) -> list[dict[str, Any]]:
@@ -76,12 +85,150 @@ def load_events(path: Path, date_from: str, date_to: str) -> list[dict[str, Any]
     return [json.loads(r[0]) for r in rows]
 
 
-async def measure_all(episodes: Sequence[Episode], provider: AlpacaBarProvider, pause_seconds: float) -> tuple[list[EpisodeOutcome], dict[str, str]]:
+def load_observer_run(path: Path, session_date: str) -> tuple[int, str, int]:
+    """Return the exact latest cov-v0.1 run identity for a session."""
+
+    conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    try:
+        row = conn.execute(
+            "SELECT id, ran_at, events FROM coverage_runs "
+            "WHERE observer_version=? AND session_date=? ORDER BY id DESC LIMIT 1",
+            (OBSERVER_VERSION, session_date),
+        ).fetchone()
+    finally:
+        conn.close()
+    if row is None:
+        raise CaptureIntegrationError("observer_run_missing", session_date)
+    return int(row[0]), str(row[1]), int(row[2] or 0)
+
+
+def _capture_request(args: argparse.Namespace, sqlite_path: Path, events: Sequence[dict[str, Any]]) -> dict[str, Any] | None:
+    supplied = [
+        args.capture_root,
+        args.capture_source_sha,
+        args.capture_observer_run_id,
+        args.capture_observer_ran_at,
+    ]
+    if not any(value is not None for value in supplied):
+        return None
+    if any(value is None for value in supplied):
+        raise CaptureIntegrationError("capture_args_incomplete")
+    if args.date_from != args.date_to:
+        raise CaptureIntegrationError("capture_range_refused", f"{args.date_from}->{args.date_to}")
+    if not _SHA40.fullmatch(str(args.capture_source_sha)):
+        raise CaptureIntegrationError("capture_source_sha_invalid", str(args.capture_source_sha))
+
+    capture_root = Path(args.capture_root)
+    if args.out is None:
+        raise CaptureIntegrationError("capture_out_dir_missing")
+    out_dir = Path(args.out)
+    if out_dir.resolve() != (capture_root / "daily").resolve():
+        raise CaptureIntegrationError(
+            "capture_out_dir_mismatch",
+            f"{out_dir} != {capture_root / 'daily'}",
+        )
+    stem_name = f"outcomes_{args.date_from}_{args.date_to}"
+    if out_dir.exists() and any(out_dir.glob(f"{stem_name}*")):
+        raise CaptureIntegrationError(
+            "capture_prior_outcome_artifact", args.date_from
+        )
+
+    decision = capture_decision(capture_root, args.date_from)
+    if decision.reason == "already_sealed":
+        return {
+            "session_date": args.date_from,
+            "already_sealed": True,
+            "existing": decision.existing.to_public_dict() if decision.existing else None,
+        }
+    if not decision.required:
+        raise CaptureIntegrationError(
+            "capture_not_allowed", f"{args.date_from}:{decision.reason}"
+        )
+
+    run_id, ran_at, run_events = load_observer_run(sqlite_path, args.date_from)
+    if run_id != int(args.capture_observer_run_id):
+        raise CaptureIntegrationError(
+            "observer_run_id_mismatch",
+            f"expected={args.capture_observer_run_id} actual={run_id}",
+        )
+    if ran_at != str(args.capture_observer_ran_at):
+        raise CaptureIntegrationError("observer_ran_at_mismatch")
+    if run_events != len(events):
+        raise CaptureIntegrationError(
+            "observer_event_count_mismatch",
+            f"run={run_events} stored={len(events)}",
+        )
+    return {
+        "session_date": args.date_from,
+        "root": capture_root,
+        "source_sha": str(args.capture_source_sha),
+        "observer_run_id": run_id,
+        "observer_ran_at": ran_at,
+        "already_sealed": False,
+    }
+
+
+def _seal_from_fetch(
+    request: dict[str, Any],
+    session,
+    session_episodes: Sequence[Episode],
+    coverage_events: Sequence[dict[str, Any]],
+    bars: dict[str, list[Any]],
+    errors: dict[str, str],
+    *,
+    captured_at: datetime | None = None,
+) -> dict[str, Any]:
+    if request.get("already_sealed"):
+        existing = request.get("existing")
+        return existing if isinstance(existing, dict) else {"state": "valid", "session_date": session.date.isoformat()}
+
+    selected_symbols = {
+        ep.symbol
+        for ep in session_episodes
+        if ep.family == FAMILY and ep.symbol in V1_UNIVERSE
+    }
+    # Freeze the first fetch exactly as observed. A provider error for a
+    # selected symbol is represented by whatever bars were actually returned
+    # (often none); the frozen grid is then DATA_INVALID at the one look.
+    # Refetching later to "repair" that path would violate the capture contract.
+    selected_bars = {
+        symbol: bars.get(symbol, [])
+        for symbol in sorted(selected_symbols)
+    }
+    source = {
+        "provider": f"alpaca_{CONSOLIDATED_FEED}",
+        "request_start": session.open.astimezone(timezone.utc).isoformat(),
+        "request_end": session.close.astimezone(timezone.utc).isoformat(),
+        "observer_run_id": request["observer_run_id"],
+        "observer_ran_at": request["observer_ran_at"],
+        "source_sha": request["source_sha"],
+    }
+    artifact = build_session_artifact(
+        session,
+        session_episodes,
+        coverage_events,
+        selected_bars,
+        source=source,
+        captured_at=captured_at or datetime.now(timezone.utc),
+    )
+    check = write_artifact_once(request["root"], artifact)
+    return check.to_public_dict()
+
+
+async def measure_all(
+    episodes: Sequence[Episode],
+    provider: AlpacaBarProvider,
+    pause_seconds: float,
+    *,
+    capture_request: dict[str, Any] | None = None,
+    coverage_events: Sequence[dict[str, Any]] = (),
+) -> tuple[list[EpisodeOutcome], dict[str, str], dict[str, Any] | None]:
     by_session: dict[str, list[Episode]] = defaultdict(list)
     for ep in episodes:
         by_session[ep.session_date].append(ep)
     outcomes: list[EpisodeOutcome] = []
     errors: dict[str, str] = {}
+    capture_result: dict[str, Any] | None = None
     for session_date in sorted(by_session):
         session = nyse_session_for(date.fromisoformat(session_date))
         if session is None:
@@ -90,10 +237,33 @@ async def measure_all(episodes: Sequence[Episode], provider: AlpacaBarProvider, 
         bars, errs = await fetch_all(provider, symbols, MINUTE_5, session.open, session.close)
         for symbol, reason in errs.items():
             errors[f"{session_date}:{symbol}"] = reason
+
+        if capture_request is not None and capture_request["session_date"] == session_date:
+            local_errors = {
+                key.split(":", 1)[1]: value
+                for key, value in errors.items()
+                if key.startswith(f"{session_date}:")
+            }
+            capture_result = _seal_from_fetch(
+                capture_request,
+                session,
+                by_session[session_date],
+                coverage_events,
+                bars,
+                local_errors,
+            )
+
         for ep in by_session[session_date]:
-            outcomes.append(measure_episode(ep, session.open, session.close, bars.get(ep.symbol, [])))
+            outcomes.append(
+                measure_episode(
+                    ep,
+                    session.open,
+                    session.close,
+                    bars.get(ep.symbol, []),
+                )
+            )
         await asyncio.sleep(pause_seconds)
-    return outcomes, errors
+    return outcomes, errors, capture_result
 
 
 CSV_COLUMNS = [
@@ -258,6 +428,12 @@ async def run(args: argparse.Namespace) -> int:
         print("no episodes in range", file=sys.stderr)
         return 2
 
+    try:
+        capture_request = _capture_request(args, sqlite_path, events)
+    except CaptureIntegrationError as exc:
+        print(f"capture refused: {exc}", file=sys.stderr)
+        return 2
+
     api_key, secret_key = resolve_alpaca_credentials()
     if not api_key or not secret_key:
         print("Alpaca credentials not configured", file=sys.stderr)
@@ -268,7 +444,17 @@ async def run(args: argparse.Namespace) -> int:
         secret_key=secret_key,
         feed=CONSOLIDATED_FEED,
     )
-    outcomes, errors = await measure_all(episodes, provider, args.pause_seconds)
+    try:
+        outcomes, errors, capture_result = await measure_all(
+            episodes,
+            provider,
+            args.pause_seconds,
+            capture_request=capture_request,
+            coverage_events=events,
+        )
+    except (CaptureIntegrationError, StudyContractError) as exc:
+        print(f"capture refused: {exc}", file=sys.stderr)
+        return 2
     out = Path(args.out or DEFAULT_OUT)
     summary, public = write_products(
         out, args.date_from, args.date_to, outcomes, errors, windows,
@@ -281,6 +467,13 @@ async def run(args: argparse.Namespace) -> int:
         f"({len(public)} public, {held} quarantined); clean {summary['total']['clean_episodes']}; errors {len(errors)}"
     )
     print(f"wrote {stem}.json / .csv / .md")
+    if capture_result is not None:
+        print(
+            "path-v0.2 seal: "
+            f"{capture_result.get('session_date')} "
+            f"{capture_result.get('state')} "
+            f"sha256={capture_result.get('sha256')}"
+        )
     return 0
 
 
@@ -348,6 +541,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--out")
     parser.add_argument("--pause-seconds", type=float, default=3.0, help="pause between sessions to respect the provider rate limit")
     parser.add_argument("--blind-windows", help=f"Blind-window quarantine policy JSON (default: {DEFAULT_POLICY_RELPATH} or OPTIONS_COVERAGE_BLIND_WINDOWS)")
+    # Internal collector-only path-v0.2 capture wiring. These are deliberately
+    # hidden from ordinary manual usage; the capture module independently
+    # refuses while ELIGIBLE_START is unset or the session is out of sequence.
+    parser.add_argument("--capture-root", help=argparse.SUPPRESS)
+    parser.add_argument("--capture-source-sha", help=argparse.SUPPRESS)
+    parser.add_argument("--capture-observer-run-id", type=int, help=argparse.SUPPRESS)
+    parser.add_argument("--capture-observer-ran-at", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     return asyncio.run(run(args))
 

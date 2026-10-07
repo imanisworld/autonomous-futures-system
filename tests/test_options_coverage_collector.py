@@ -44,6 +44,20 @@ from alert_ranker.coverage_episodes import REDUCER_VERSION, Episode
 from alert_ranker.coverage_observer import OBSERVED_TIMEFRAME, OBSERVER_VERSION
 from alert_ranker.coverage_outcomes import OUTCOME_VERSION, measure_episode, summarize_outcomes
 from alert_ranker.session_calendar import nyse_session_for
+import ops.options_212c_floor_outcome_capture as capture_module
+from ops.options_212c_floor_outcome_capture import (
+    capture_decision,
+    manifest_path as capture_manifest_path,
+    seal_path as capture_seal_path,
+    write_artifact_once,
+)
+from ops.options_212c_floor_outcome_monitor import (
+    PATH_RECORD_VERSION,
+    TRIAL_ID as CAPTURE_TRIAL_ID,
+    canonical_seal_bytes,
+    seal_sha256,
+)
+from ops.options_212c_floor_outcome_study import SealedSessionArtifact
 from scripts import options_coverage_collect as cli
 from scripts.options_coverage_observer import SCHEMA
 
@@ -752,6 +766,7 @@ def test_systemd_units_run_a_pinned_isolated_oneshot():
     assert "/root/afs-shared/coverage/current/.venv/bin/python /root/afs-shared/coverage/current/scripts/options_coverage_collect.py" in service
     assert "--require-pinned" in service
     assert "--sqlite /root/afs-shared/coverage/options_coverage_observer.sqlite" in service
+    assert "--capture-root /root/afs-shared/coverage" in service
     for line in service.splitlines():
         if line.startswith(("ExecStart", "WorkingDirectory", "Environment")):
             assert "/root/autonomous-futures-system" not in line, line  # never the production tree
@@ -769,6 +784,7 @@ def test_install_script_touches_only_the_coverage_release():
     script = (ROOT / "deploy" / "coverage" / "install_coverage_release.sh").read_text()
     assert "set -euo pipefail" in script
     assert "release_manifest.json" in script and "--require-pinned" in script and "chmod -R a-w" in script
+    assert "--capture-root '$COVERAGE'" in script
     assert "ln -sfn '$RELEASES/$REF' '$CURRENT'" in script
     body = "\n".join(line for line in script.splitlines() if not line.lstrip().startswith("#"))
     for forbidden in ("autonomous-futures-system", "afs-releases", "futures-bot", "afs-watcher", "scanner", "git pull", "git push"):
@@ -854,3 +870,176 @@ def test_provider_error_leaves_session_incomplete_for_the_next_run(tmp_path, cre
     assert failed["reason"] == "observer_provider_errors"
     assert not observer_completion(kw["sqlite_path"], DAY, UNIVERSE, ("SQ",)).ok  # NOT already_complete next time
     assert not list(daily.glob("*.json")) if daily.exists() else True
+
+
+# --------------------------------------------------------------------------- #
+# path-v0.2 capture orchestration (synthetic only)
+# --------------------------------------------------------------------------- #
+
+CAPTURE_DAY = date(2026, 10, 6)
+CAPTURE_SESSION = nyse_session_for(CAPTURE_DAY)
+assert CAPTURE_SESSION is not None
+CAPTURE_SETTLED = CAPTURE_SESSION.close + SETTLE_AFTER_CLOSE + timedelta(minutes=1)
+
+
+def _empty_capture_artifact(
+    day: date,
+    *,
+    source_sha: str = SHA,
+    observer_run_id: int = 1,
+    observer_ran_at: str | None = None,
+) -> SealedSessionArtifact:
+    session = nyse_session_for(day)
+    assert session is not None
+    ran_at = observer_ran_at or (session.close + timedelta(minutes=30)).astimezone(UTC).isoformat()
+    record = {
+        "path_record_version": PATH_RECORD_VERSION,
+        "trial_id": CAPTURE_TRIAL_ID,
+        "session_date": day.isoformat(),
+        "session_open": session.open.astimezone(UTC).isoformat(),
+        "session_close": session.close.astimezone(UTC).isoformat(),
+        "source": {
+            "provider": "synthetic-collector-runner",
+            "request_start": session.open.astimezone(UTC).isoformat(),
+            "request_end": session.close.astimezone(UTC).isoformat(),
+            "observer_run_id": observer_run_id,
+            "observer_ran_at": ran_at,
+            "source_sha": source_sha,
+        },
+        "captured_at": (session.close + timedelta(minutes=31)).astimezone(UTC).isoformat(),
+        "episodes": [],
+    }
+    body = canonical_seal_bytes(record)
+    digest = seal_sha256(record)
+    return SealedSessionArtifact(
+        record=record,
+        body=body,
+        sha256=digest,
+        manifest={
+            "session_date": day.isoformat(),
+            "byte_length": len(body),
+            "sha256": digest,
+        },
+    )
+
+
+class CaptureRunner(FakeRunner):
+    """Fake ordinary scripts and materialize the seal the real outcomes hook would write."""
+
+    def __call__(self, cmd, log_path: Path) -> int:
+        code = super().__call__(cmd, log_path)
+        if code:
+            return code
+        if Path(cmd[1]).name != "options_coverage_outcomes.py":
+            return code
+        if "--capture-root" not in cmd:
+            return code
+        day = date.fromisoformat(cmd[cmd.index("--to") + 1])
+        root = Path(cmd[cmd.index("--capture-root") + 1])
+        source_sha = cmd[cmd.index("--capture-source-sha") + 1]
+        run_id = int(cmd[cmd.index("--capture-observer-run-id") + 1])
+        ran_at = cmd[cmd.index("--capture-observer-ran-at") + 1]
+        write_artifact_once(
+            root,
+            _empty_capture_artifact(
+                day,
+                source_sha=source_sha,
+                observer_run_id=run_id,
+                observer_ran_at=ran_at,
+            ),
+        )
+        return code
+
+
+def make_capture_cli_args(tmp_path: Path, **extra):
+    return make_cli_args(
+        tmp_path,
+        collection_start=CAPTURE_DAY,
+        now=CAPTURE_SETTLED,
+        capture_root=tmp_path / "capture",
+        **extra,
+    )
+
+
+def test_unset_capture_start_leaves_ordinary_command_unchanged(tmp_path):
+    kw = make_cli_args(tmp_path, capture_root=tmp_path / "capture")
+    collector = cli.Collector(**kw)
+    decision = collector._capture_decision(SESSION)
+    assert decision.required is False and decision.reason == "eligible_start_unset"
+    command = collector.outcomes_cmd(SESSION)
+    assert not any(part.startswith("--capture-") for part in command)
+
+
+def test_next_eligible_session_is_candidate_even_when_ordinary_products_exist(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(capture_module, "ELIGIBLE_START", CAPTURE_DAY.isoformat())
+    kw = make_capture_cli_args(tmp_path)
+    seed_complete(kw["sqlite_path"], kw["data_dir"] / "daily", CAPTURE_DAY)
+    collector = cli.Collector(**kw)
+    settled, pending = collector.candidates(UNIVERSE)
+    assert [s.date for s in settled] == [CAPTURE_DAY]
+    assert [s.date for s in pending] == [CAPTURE_DAY]
+    decision = capture_decision(
+        kw["capture_root"],
+        CAPTURE_DAY.isoformat(),
+    )
+    assert decision.required is True
+
+
+def test_existing_ordinary_products_with_missing_required_seal_refuse_backfill(
+    tmp_path, creds, monkeypatch
+):
+    monkeypatch.setattr(capture_module, "ELIGIBLE_START", CAPTURE_DAY.isoformat())
+    kw = make_capture_cli_args(tmp_path)
+    seed_complete(kw["sqlite_path"], kw["data_dir"] / "daily", CAPTURE_DAY)
+    runner = CaptureRunner(kw["sqlite_path"], kw["data_dir"] / "daily")
+    assert cli.main([], runner=runner, **kw) == 1
+    assert runner.calls == []
+    last = read_ledger(kw["data_dir"] / "ledger.jsonl")[-1]
+    assert last["status"] == STATUS_FAILED
+    assert last["reason"] == "capture_missing_after_outcomes"
+    assert not capture_seal_path(kw["capture_root"], CAPTURE_DAY.isoformat()).exists()
+
+
+def test_first_eligible_session_seals_once_and_rerun_does_not_duplicate(
+    tmp_path, creds, monkeypatch
+):
+    monkeypatch.setattr(capture_module, "ELIGIBLE_START", CAPTURE_DAY.isoformat())
+    kw = make_capture_cli_args(tmp_path)
+    runner = CaptureRunner(kw["sqlite_path"], kw["data_dir"] / "daily")
+    assert cli.main([], runner=runner, **kw) == 0
+
+    outcomes_calls = [
+        cmd
+        for cmd in runner.calls
+        if Path(cmd[1]).name == "options_coverage_outcomes.py"
+    ]
+    assert len(outcomes_calls) == 1
+    command = outcomes_calls[0]
+    assert command[command.index("--capture-root") + 1] == str(kw["capture_root"])
+    assert command[command.index("--capture-source-sha") + 1] == SHA
+
+    seal = capture_seal_path(kw["capture_root"], CAPTURE_DAY.isoformat())
+    manifest = capture_manifest_path(kw["capture_root"])
+    assert seal.exists() and manifest.exists()
+    assert len(manifest.read_text().splitlines()) == 1
+
+    done = [
+        row
+        for row in read_ledger(kw["data_dir"] / "ledger.jsonl")
+        if row["status"] == STATUS_DONE
+    ][-1]
+    assert done["steps"]["capture"] == "sealed"
+    assert done["capture"]["reason"] == "already_sealed"
+    rendered = json.dumps(done["capture"])
+    assert "activation_count" not in rendered
+    assert "episodes" not in rendered
+
+    seal_before = seal.read_bytes()
+    manifest_before = manifest.read_bytes()
+    rerun = CaptureRunner(kw["sqlite_path"], kw["data_dir"] / "daily")
+    assert cli.main([], runner=rerun, **kw) == 0
+    assert rerun.calls == []
+    assert seal.read_bytes() == seal_before
+    assert manifest.read_bytes() == manifest_before
