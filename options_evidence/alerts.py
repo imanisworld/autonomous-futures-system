@@ -111,7 +111,7 @@ class SignalAlert:
         }
 
 
-def _finite_number(value: Any, label: str, *, positive: bool = false) -> float:
+def _finite_number(value: Any, label: str, *, positive: bool = False) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError(f"{label} must be a finite number")
     try:
