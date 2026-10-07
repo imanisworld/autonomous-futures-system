@@ -42,20 +42,29 @@ def test_watching_near_trigger_is_two_sided_and_never_implies_direction():
     assert (record["boundary_high"], record["boundary_low"]) == (HIGH, LOW)
 
 
-def test_resolved_alert_carries_direction_from_canonical_state():
+def test_resolved_alert_carries_direction_and_evidence_state_from_canonical_signal():
     journal, s = watching()
     s = trigger(journal, s, at=NOW, direction="SHORT")
     alert = al.alert_for(s, as_of=NOW + timedelta(seconds=6), last_price=400.0, near_trigger_r=0.25)
     assert alert.kind is al.AlertKind.TRIGGERED
     assert (alert.direction, alert.trigger, alert.invalidation, alert.near_side) == ("SHORT", LOW, HIGH, None)
+    assert alert.prospective_catch is False
+    record = alert.to_record()
+    assert record["prospective_catch"] is False
+    assert record["signal_integrity"] != "VALID"
+    assert record["trade_authority"] is False
 
 
-def test_near_trigger_distance_is_a_required_policy_input():
+def test_near_trigger_distance_is_a_required_exact_numeric_policy_input():
     _, s = watching()
     with pytest.raises(ValueError, match="explicit positive policy"):
         al.alert_for(s, as_of=NOW, last_price=500.9)
     with pytest.raises(ValueError):
         al.alert_for(s, as_of=NOW, last_price=float("nan"), near_trigger_r=0.25)
+    with pytest.raises(ValueError, match="finite number"):
+        al.alert_for(s, as_of=NOW, last_price=True, near_trigger_r=0.25)
+    with pytest.raises(ValueError, match="finite number"):
+        al.alert_for(s, as_of=NOW, last_price=500.9, near_trigger_r=True)
 
 
 @pytest.mark.parametrize(
@@ -114,12 +123,14 @@ def test_ledger_suppresses_repeat_notices_per_signal_and_kind():
     assert ledger.admit(near) is None
 
 
-def test_delivery_is_off_by_default():
+def test_delivery_is_off_by_default_and_requires_exact_types():
     _, s = watching()
     alert = al.alert_for(s, as_of=NOW)
     assert al.DeliveryPolicy().deliverable(alert) is False
     assert al.DeliveryPolicy(enabled=True, kinds=frozenset({al.AlertKind.WATCHING})).deliverable(alert) is False
     assert al.DeliveryPolicy(enabled=True, kinds=frozenset({al.AlertKind.WATCHING}), channel="research").deliverable(alert)
+    with pytest.raises(ValueError, match="exact bool"):
+        al.DeliveryPolicy(enabled="false")  # type: ignore[arg-type]
 
 
 def test_alert_module_does_not_import_scanner_or_discord():
