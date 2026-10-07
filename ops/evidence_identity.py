@@ -206,6 +206,7 @@ def classify_evidence_bundle(
     # 3b. Strategy identity must be anchored to the canonical trade rows.
     strategy_identities: set[str] = set()
     strategy_rows_valid = True
+    canonical_members: dict[str, list[dict[str, Any]]] = {}
     for raw_name in ("baseline_raw.json", "candidate_raw.json"):
         try:
             raw_payload = _load_json(bundle_dir / raw_name)
@@ -218,6 +219,7 @@ def classify_evidence_bundle(
             strategy_rows_valid = False
             fail(f"{raw_name} must contain members[] for strategy identity")
             continue
+        canonical_members[raw_name] = members
         for index, row in enumerate(members):
             if not isinstance(row, dict):
                 strategy_rows_valid = False
@@ -293,6 +295,24 @@ def classify_evidence_bundle(
             "evaluation_partition"
         ):
             fail("evaluation_partition contradicts the bundled spec")
+        try:
+            active_partition, active_window, _ = partition_contract.resolve_active_partition(
+                spec,
+                cli_partition=str(envelope.get("evaluation_partition") or ""),
+            )
+        except partition_contract.PartitionContractError as exc:
+            active_partition, active_window = None, None
+            fail(f"evaluation_partition identity: {exc}")
+        if active_partition is not None and active_window is not None:
+            for raw_name, members in canonical_members.items():
+                membership_errors = partition_contract.assert_members_match_active_partition(
+                    members,
+                    evidence_type=evidence_contract.EVIDENCE_TYPE_TRADE_EXECUTION,
+                    active_partition=active_partition,
+                    active_window=active_window,
+                )
+                for error in membership_errors:
+                    fail(f"{raw_name} partition membership: {error}")
         approved_path = root / SPECS_DIR_REL / f"{envelope.get('experiment_id')}.json"
         if not approved_path.is_file():
             fail("no approved spec file for this experiment_id in the repository")

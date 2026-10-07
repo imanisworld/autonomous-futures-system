@@ -420,6 +420,8 @@ Promotion-quality requires, from the runner bundle itself:
 - `data_identity` pinned as `dataset_hash:<sha256>`;
 - every canonical baseline/candidate trade row is revalidated against the
   envelope's dataset fingerprint and execution-model identity;
+- every canonical trade row must also remain inside the envelope's active
+  chronological partition under the approved spec;
 - the bundle at `docs/research-evidence/<trial_id>/`, with a
   `bundle_manifest.json` (written last by the runner) whose per-file
   SHA-256 values still match and which lists every required bundle file;

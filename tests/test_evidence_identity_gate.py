@@ -257,6 +257,27 @@ def test_edited_bundle_file_is_invalid(tmp_path):
     assert "bundle file edited after writing: candidate_raw.json" in result.reasons
 
 
+def test_rehashed_partition_membership_divergence_is_invalid(tmp_path):
+    root, _ = _run(_seed(tmp_path / "repo"))
+    bundle = _bundle(root)
+    raw_path = bundle / "candidate_raw.json"
+    raw = json.loads(raw_path.read_text())
+    outside = SIGNAL_BY_PARTITION["validation"]
+    row = raw["members"][0]
+    for key in ("signal_ts", "decision_ts", "earliest_legal_order_ts", "fill_ts", "exit_ts"):
+        row[key] = outside
+    raw_path.write_text(json.dumps(raw, indent=2, sort_keys=True) + "\n")
+
+    manifest_path = bundle / "bundle_manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["files"]["candidate_raw.json"] = gate._sha256(raw_path)
+    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+
+    result = gate.classify_evidence_bundle(root, bundle)
+    assert result.status == gate.INVALID
+    assert any("partition membership" in reason for reason in result.reasons)
+
+
 def test_rehashed_row_identity_divergence_is_invalid(tmp_path):
     root, _ = _run(_seed(tmp_path / "repo"))
     bundle = _bundle(root)
