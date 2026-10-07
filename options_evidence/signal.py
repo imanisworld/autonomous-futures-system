@@ -270,9 +270,16 @@ def _declared(definition: Mapping[str, Any], section: str, key: str) -> Any:
     return block.get(key) if isinstance(block, Mapping) else None
 
 
-def level_source_of(data_source: str) -> str:
-    """The level-source component of a signal ``data_source`` (``capture_id:level_source``)."""
-    return data_source.rsplit(":", 1)[-1]
+def level_source_of(data_source: Any) -> str | None:
+    """The level source of a ``capture_id:level_source`` data source; None unless exactly that form.
+
+    Exactly one ``:`` with both parts non-empty, so ``CAP:x:public_regular_30m``
+    or a bare ``public_regular_30m`` never matches an epoch's ``arm_source``.
+    """
+    if not isinstance(data_source, str) or data_source.count(":") != 1:
+        return None
+    capture_id, level_source = data_source.split(":")
+    return level_source if capture_id and level_source else None
 
 
 def epoch_trigger_sources(epoch: StrategyEpoch) -> frozenset[str]:
@@ -321,8 +328,8 @@ def epoch_context_problem(
         return f"ticker {identity.ticker} is not in epoch universe {universe}"
     if not isinstance(arm_source, str) or not arm_source:
         return f"epoch {epoch.epoch} does not declare trigger.arm_source"
-    if not isinstance(data_source, str) or level_source_of(data_source) != arm_source:
-        return f"data source {data_source!r} is not epoch arm_source {arm_source!r}"
+    if level_source_of(data_source) != arm_source:
+        return f"data source {data_source!r} is not capture_id:<epoch arm_source {arm_source!r}>"
     match = _FAMILY.fullmatch(family)
     if match is None:
         return f"epoch family {family!r} is not STRAT_a_b_c"
@@ -1220,16 +1227,22 @@ def verify_record(record: Mapping[str, Any], registry: EpochRegistry | None = No
             problems.append("VALID signal integrity on an unresolved structure")
         if capture.get("capture_late") is True or capture.get("gap_through") is True:
             problems.append("VALID signal integrity on a late or gapped capture")
-        if registry is not None:
-            epoch = registry.get(str(record["strategy"]), str(record["strategy_epoch"]))
-            if epoch is None or epoch.definition_sha256 != record.get("epoch_definition_sha256"):
-                problems.append("record epoch is not the registered epoch definition")
-            elif seen is not None:
-                scope = epoch_context_problem(epoch, identity, seen, record["data_source"])
-                if scope is not None:
-                    problems.append(f"record is outside its epoch's scope: {scope}")
-                if resolution is LifecycleState.TRIGGERED and capture.get("trigger_source") not in epoch_trigger_sources(epoch):
-                    problems.append("record trigger source is not a source the epoch declares")
+    # Epoch membership (B6): any record carrying a registered label, VALID or
+    # not, must be that registry entry's definition and inside its scope.
+    if registry is not None and record["strategy_epoch"] not in RESERVED_EPOCHS:
+        epoch = registry.get(str(record["strategy"]), str(record["strategy_epoch"]))
+        if epoch is None or epoch.definition_sha256 != record.get("epoch_definition_sha256"):
+            problems.append("record epoch is not the registered epoch definition")
+        elif seen is not None:
+            scope = epoch_context_problem(epoch, identity, seen, record["data_source"])
+            if scope is not None:
+                problems.append(f"record is outside its epoch's scope: {scope}")
+            if (
+                statuses["signal_integrity"] is IntegrityStatus.VALID
+                and resolution is LifecycleState.TRIGGERED
+                and capture.get("trigger_source") not in epoch_trigger_sources(epoch)
+            ):
+                problems.append("record trigger source is not a source the epoch declares")
     if record.get("prospective_catch") is True and statuses["signal_integrity"] is not IntegrityStatus.VALID:
         problems.append("prospective_catch without VALID signal integrity")
     return problems

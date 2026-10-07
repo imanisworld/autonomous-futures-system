@@ -768,3 +768,33 @@ def test_primary_20_universe_matches_the_collectors(script):
     declared = next(ast.literal_eval(node.value) for node in tree.body
                     if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", "") == "PRIMARY_20")
     assert sg.EPOCH_UNIVERSES["PRIMARY_20"] == frozenset(declared) and len(declared) == 20
+
+
+@pytest.mark.parametrize("source", [
+    "OPTIONS_SETUP_CAPTURE:evil:public_regular_30m",  # extra ':' must not be stripped away
+    "public_regular_30m",                             # bare level source, no capture_id
+    ":public_regular_30m",
+    "OPTIONS_SETUP_CAPTURE:",
+    "OPTIONS_SETUP_CAPTURE:public_regular_30m ",
+])
+def test_data_source_must_be_exactly_capture_id_colon_arm_source(source):
+    assert sg.level_source_of(source) != "public_regular_30m"
+    s = _reg_opened(_reg_journal(), data_source=source)
+    assert s.strategy_epoch == sg.UNREGISTERED_EPOCH and "arm_source" in s.epoch_reason
+
+
+def test_adapter_level_source_with_separator_is_unregistered():
+    rows = _capture_rows(sip_crossed_at="2026-10-06T14:09:58+00:00")
+    rows = [{**r, "level_source": "evil:public_regular_30m"} for r in rows]
+    s = _fold_one(rows)
+    assert s.strategy_epoch == sg.UNREGISTERED_EPOCH and not s.is_prospective_catch
+    assert s.signal_integrity is not sg.IntegrityStatus.VALID
+
+
+def test_non_valid_record_with_registered_label_is_scope_checked():
+    record = sg.to_record(_reg_opened(_reg_journal()))  # WATCHING, signal integrity UNKNOWN
+    assert record["strategy_epoch"] == CATCH_EPOCH and sg.verify_record(record, registry=REGISTRY) == []
+    moved = {**record, "data_source": "C:other"}
+    assert any("outside its epoch's scope" in p for p in sg.verify_record(moved, registry=REGISTRY))
+    unhashed = {**record, "epoch_definition_sha256": None}
+    assert "record epoch is not the registered epoch definition" in sg.verify_record(unhashed, registry=REGISTRY)

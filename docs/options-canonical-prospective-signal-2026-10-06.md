@@ -94,11 +94,11 @@ The journal refuses all of the following:
 | timeframe | `definition.setup.timeframe` | equal it as written (`30M` ≠ `30m`, `1h` ≠ `1H`; no normalization) |
 | setup family | `definition.setup.family` (`STRAT_a_b_c`) | have pattern family `abc:…` |
 | universe | `definition.setup.universe`, a known name in `signal.EPOCH_UNIVERSES` (`PRIMARY_20`, drift-tested against the collectors) | have its ticker in that universe |
-| data source | `definition.trigger.arm_source` | have `data_source` level component (`capture_id:level_source`) equal to it |
+| data source | `definition.trigger.arm_source` | have `data_source` exactly `capture_id:level_source` (one `:`, both parts non-empty) with `level_source` equal to it |
 | effective dates | `effective_from` / `effective_until` | have structure close and first-seen inside the window |
 | trigger feed (for VALID) | `definition.trigger.provisional_source` / `authoritative_reconciliation` | have capture `trigger_source` equal to one of them |
 
-Undeclared or unknown scope fails closed. Otherwise the signal opens as `UNREGISTERED_EPOCH`, keeping `requested_epoch` and `epoch_reason`, and can never be VALID. For example, a 1H `222` structure on 2026-09-01 is not `122-IEX-E1` (30m, `122` family, from 2026-09-21). Nor is a #1145 signal: its levels come from `public_regular_30m` and its triggers from `alpaca_iex` / `alpaca_sip`, while `122-IEX-E1` declares `public_regular_session_chart` and `alpaca_iex_trades` / `alpaca_sip_trades_delayed`. Mapping one vocabulary to the other would need an explicit registry entry; none is inferred. A journal refuses an `OPENED` event whose claimed epoch is not its registry entry. Records carry `epoch_definition_sha256`, and `verify_record(record, registry=...)` checks it.
+Undeclared or unknown scope fails closed. Otherwise the signal opens as `UNREGISTERED_EPOCH`, keeping `requested_epoch` and `epoch_reason`, and can never be VALID. For example, a 1H `222` structure on 2026-09-01 is not `122-IEX-E1` (30m, `122` family, from 2026-09-21). Nor is a #1145 signal: its levels come from `public_regular_30m` and its triggers from `alpaca_iex` / `alpaca_sip`, while `122-IEX-E1` declares `public_regular_session_chart` and `alpaca_iex_trades` / `alpaca_sip_trades_delayed`. Mapping one vocabulary to the other would need an explicit registry entry; none is inferred. A journal refuses an `OPENED` event whose claimed epoch is not its registry entry. Records carry `epoch_definition_sha256`, and `verify_record(record, registry=...)` checks it and the scope for every record with a registered label, VALID or not.
 
 ## Watcher → canonical mapping (`capture_adapter.fold_capture_rows`)
 
