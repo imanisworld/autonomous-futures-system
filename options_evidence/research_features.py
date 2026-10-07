@@ -259,17 +259,17 @@ def research_population(
             drop("signal_record_invalid")
             continue
 
-        outcome_problem = _validate_outcome_record(outcome_record, signal_record)
-        if outcome_problem is not None:
-            drop(outcome_problem)
-            continue
-
         if any(
             record.get(k) != IntegrityStatus.VALID.value
             for record in (signal_record, outcome_record)
             for k in ("data_integrity", "signal_integrity")
         ):
             drop("integrity")
+            continue
+
+        outcome_problem = _validate_outcome_record(outcome_record, signal_record)
+        if outcome_problem is not None:
+            drop(outcome_problem)
             continue
 
         feature_problem = _validate_feature_row(feature_row, signal_record)
