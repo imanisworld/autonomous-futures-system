@@ -26,8 +26,15 @@ Neither one is wired to production. Neither one can grant authority.
     watcher's canonical state.
 - **Authority.** Every alert record carries `trade_authority: false`. No alert
   carries an execution-authority field.
+- **Evidence state is explicit.** Alerts also carry `data_integrity`,
+  `signal_integrity`, and `prospective_catch`. A canonical TRIGGERED
+  lifecycle notice is not presented as a validated trade merely because its
+  state says TRIGGERED; degraded/pending/non-catch state stays visible.
+- **Exact alert inputs.** `last_price` and `near_trigger_r` reject bool,
+  malformed, non-finite, and non-positive values rather than coercing them.
 - **Noise control.** `AlertLedger` lets each (signal, kind) pair through once.
-- **Delivery.** `DeliveryPolicy` is **off by default**. Delivery also needs an
+- **Delivery.** `DeliveryPolicy` is **off by default**. `enabled` must be an
+  exact boolean; strings such as `"false"` are refused. Delivery also needs an
   explicit channel and an explicit set of kinds. This PR does not wire Discord
   or any other sender.
 
@@ -63,19 +70,27 @@ signal that has not triggered yet, the cutoff is its first-seen time.
 
 ### Research population
 
-The population contains only signals that meet all of these conditions:
-- in a **registered** strategy epoch
+The population contains only rows that meet all of these conditions:
+- the canonical signal record passes #1151 `verify_record(..., registry=...)`,
+  including exact epoch definition/scope/source/provenance checks
+- the signal is a canonical `prospective_catch`
+- the outcome identity/resolution/catch fields agree with the signal
+- the outcome uses an `executed` or `paper_equivalent` trade basis with an
+  exact boolean `executed` field; counterfactual outcomes are excluded
 - VALID data integrity and VALID signal integrity on **both** the canonical
   signal record and the outcome record
-  - The signal record is authoritative, so a #1145 late or gap capture stays
-    out even when its outcome row claims VALID.
-- a known `result_R`
+- executed outcomes also require VALID execution integrity
+- the persisted feature row independently passes its schema, identity,
+  decision-cutoff, factor-completeness, and no-look-ahead checks
+- a known finite `result_R`
 
 The result never selects rows: winners, losers and scratches all stay in, and
 a test pins this.
 
 Legacy and unregistered rows are excluded and counted, as are rows with
-degraded integrity or an unknown result.
+degraded integrity, forged/mismatched scope, malformed outcome provenance,
+invalid persisted feature rows, or an unknown result. Persisting a feature row
+does not bypass the original `build_feature_row` look-ahead boundary.
 
 ### The #1089 rating
 
