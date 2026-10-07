@@ -25,7 +25,7 @@ from jsonschema import Draft202012Validator
 from ops import evidence_row as evidence_contract
 from ops import experiment_partitions as partition_contract
 
-RUNNER_VERSION = "1.2.0"
+RUNNER_VERSION = "1.3.0"
 SCHEMA_REL = "docs/research-experiment-spec.schema.json"
 SPECS_DIR_REL = "docs/research-experiment-specs"
 LEDGER_REL = "docs/research-trial-ledger.jsonl"
@@ -659,6 +659,41 @@ def metric_delta(baseline: Mapping[str, Any], candidate: Mapping[str, Any]) -> d
     return delta
 
 
+def _single_trade_strategy_identity(
+    baseline_raw: dict[str, Any] | None,
+    candidate_raw: dict[str, Any] | None,
+) -> str:
+    """Return the one strategy identity represented by both canonical arms.
+
+    Promotion-quality trade evidence is strategy-specific. The identity comes
+    from validated trade_execution rows, never from setup_type (which names the
+    adapter, e.g. futures_replay) or from an unbound prose/spec field.
+    """
+    identities: set[str] = set()
+    for label, raw in (("baseline", baseline_raw), ("candidate", candidate_raw)):
+        if not isinstance(raw, dict) or not isinstance(raw.get("members"), list):
+            raise evidence_contract.EvidenceContractError(
+                f"{label}_raw must contain members[] to bind strategy identity"
+            )
+        for index, row in enumerate(raw["members"]):
+            if not isinstance(row, Mapping):
+                raise evidence_contract.EvidenceContractError(
+                    f"{label}_raw.members[{index}] must be an object"
+                )
+            value = row.get("strategy_identity")
+            if not isinstance(value, str) or not value.strip():
+                raise evidence_contract.EvidenceContractError(
+                    f"{label}_raw.members[{index}] missing strategy_identity"
+                )
+            identities.add(value.strip())
+    if len(identities) != 1:
+        raise evidence_contract.EvidenceContractError(
+            "trade_execution evidence must contain exactly one strategy_identity "
+            f"across baseline/candidate rows; found {sorted(identities)}"
+        )
+    return next(iter(identities))
+
+
 def write_evidence_bundle(
     evidence_dir: Path,
     *,
@@ -668,6 +703,7 @@ def write_evidence_bundle(
     candidate_raw: dict[str, Any] | None,
     reproduction_command: str,
     evaluation_partition: str | None = None,
+    trial_prior_exposed: Any = None,
 ) -> dict[str, str]:
     evidence_dir.mkdir(parents=True, exist_ok=True)
     paths: dict[str, str] = {}
@@ -702,8 +738,16 @@ def write_evidence_bundle(
         runner_version=RUNNER_VERSION,
         generated_at=utc_now(),
     )
+    if envelope.get("evidence_type") == evidence_contract.EVIDENCE_TYPE_TRADE_EXECUTION:
+        envelope["strategy_identity"] = _single_trade_strategy_identity(
+            baseline_raw, candidate_raw
+        )
     if evaluation_partition is not None:
         envelope["evaluation_partition"] = evaluation_partition
+    if trial_prior_exposed is not None:
+        # U4: the governing trial's recorded prior-exposure status, copied
+        # verbatim from the trial ledger's first row (never inferred).
+        envelope["trial_prior_exposed"] = trial_prior_exposed
     _write("evidence_envelope.json", envelope)
     _write(
         "reproduction.json",
@@ -723,6 +767,38 @@ def write_evidence_bundle(
     if candidate_raw is not None:
         _write("candidate_raw.json", candidate_raw)
     return paths
+
+
+BUNDLE_MANIFEST_FILENAME = "bundle_manifest.json"
+BUNDLE_MANIFEST_SCHEMA_VERSION = "1.0.0"
+
+
+def write_bundle_manifest(
+    evidence_dir: Path,
+    *,
+    spec: Mapping[str, Any],
+    names: Sequence[str],
+) -> Path:
+    """U4: write the bundle's file identity last (name -> sha256).
+
+    Lists exactly the files this run wrote, so an evidence consumer can prove
+    the bundle was not edited afterwards and ignore stale files from older runs.
+    """
+    files: dict[str, str] = {}
+    for name in sorted(set(names)):
+        if name == BUNDLE_MANIFEST_FILENAME:
+            continue
+        files[name] = sha256_bytes((evidence_dir / name).read_bytes())
+    payload = {
+        "schema_version": BUNDLE_MANIFEST_SCHEMA_VERSION,
+        "experiment_id": spec.get("experiment_id"),
+        "trial_id": spec.get("trial_id"),
+        "runner_version": RUNNER_VERSION,
+        "files": files,
+    }
+    path = evidence_dir / BUNDLE_MANIFEST_FILENAME
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return path
 
 
 def run_validation(
@@ -1130,6 +1206,38 @@ def execute_experiment(
         )
 
     trial_id = str(spec.get("trial_id") or "").strip()
+    try:
+        partition_contract.assert_consumed_trial_partitions_unchanged(
+            root, trial_id=trial_id, frozen_partitions=frozen_partitions
+        )
+    except partition_contract.PartitionContractError as exc:
+        return RunnerReport(
+            status="INVALID",
+            experiment_id=spec.get("experiment_id"),
+            trial_id=spec.get("trial_id"),
+            baseline_sha=validation.baseline_sha,
+            candidate_sha=validation.candidate_sha,
+            population=spec.get("population"),
+            changed_variables=list(spec.get("changed_variables") or []),
+            held_constant=list(spec.get("held_constant") or []),
+            integrity_checks=list(validation.integrity_checks)
+            + [CheckResult("consumed_trial_partitions", False, str(exc))],
+            baseline_metrics=None,
+            candidate_metrics=None,
+            delta=None,
+            coverage_funnel=None,
+            concentration=None,
+            evidence_classification={
+                "VERIFIED": [],
+                "INFERENCE": [],
+                "UNKNOWN": ["consumed-trial partition lock failed closed before metrics"],
+            },
+            result="INVALID EXPERIMENT",
+            artifacts=validation.artifacts,
+            qa_handoff=validation.qa_handoff,
+            errors=[str(exc)],
+            warnings=[],
+        )
     if active_partition == partition_contract.PARTITION_UNTOUCHED_OOS:
         try:
             if not trial_id:
@@ -1561,6 +1669,11 @@ def execute_experiment(
                 },
                 reproduction_command=repro,
                 evaluation_partition=active_partition,
+                trial_prior_exposed=(
+                    (first_rows if first_rows is not None else ledger_first_rows(root))
+                    .get(trial_id, {})
+                    .get("prior_exposed")
+                ),
             )
             report.artifacts["evidence_dir"] = str(out_dir)
             report.artifacts["files"] = artifact_paths
@@ -1576,6 +1689,13 @@ def execute_experiment(
                     files[
                         f"{partition_contract.OOS_RECEIPT_FILENAME}.sha256"
                     ] = sha256_bytes(receipt_path.read_bytes())
+            written = [name for name in artifact_paths if not name.endswith(".sha256")]
+            if oos_receipt is not None:
+                written.append(partition_contract.OOS_RECEIPT_FILENAME)
+            manifest_path = write_bundle_manifest(out_dir, spec=spec, names=written)
+            files = report.artifacts.setdefault("files", {})
+            if isinstance(files, dict):
+                files[BUNDLE_MANIFEST_FILENAME] = manifest_path.as_posix()
         except Exception as exc:  # noqa: BLE001 — fail-closed after OOS consume
             if oos_receipt is not None:
                 # Receipt already committed: trial remains consumed (intentional).
