@@ -13,6 +13,7 @@ from config.futures_contracts import (
     contract_economics,
 )
 from execution.broker_interface import BracketOrder, Position
+from execution.no_fill_taxonomy import NO_FILL_SESSION_OR_RISK_CANCEL
 
 ROOT = Path(__file__).resolve().parents[1]
 PRE_U7_BROKER_ROOTS = {"MES", "ES", "MNQ", "NQ", "MGC", "MCL"}
@@ -72,6 +73,7 @@ def test_unknown_contract_order_is_refused_before_any_broker_contact(monkeypatch
     fill = broker.execute_bracket(order)
     assert fill.result == "CANCELLED"
     assert fill.exit_reason == "CONTRACT_METADATA_UNSUPPORTED"
+    assert fill.no_fill_reason == NO_FILL_SESSION_OR_RISK_CANCEL
 
 
 def test_replace_stop_rejects_malformed_position_symbol_before_broker_contact(monkeypatch):
