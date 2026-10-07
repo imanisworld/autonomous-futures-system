@@ -34,7 +34,17 @@ from typing import Any, Iterable, Mapping, Sequence
 
 from .outcome import PNL_BASES, SCHEMA as OUTCOME_SCHEMA, result_r_value
 from .signal import SCHEMA as SIGNAL_SCHEMA, IntegrityStatus, default_registry, verify_record
-from .strategy_epochs import EpochRegistry, EpochStatus, StrategyEpoch, assert_observation_only
+from .strategy_epochs import (
+    EpochRegistry,
+    EpochStatus,
+    OOSReference,
+    StrategyEpoch,
+    assert_observation_only,
+    definition_hash,
+)
+
+# Verdict states the evaluator may emit; SUSPENDED/RETIRED are authority states.
+EVALUATOR_STATES = frozenset({"COLLECTING", "WARNING", "FAIL_CANDIDATE"})
 
 
 class FitnessState(str, Enum):
@@ -99,6 +109,9 @@ class Observation:
     prospective_catch: bool = False
     pnl_basis: str | None = None
     canonical_provenance: bool = field(default=False, init=False, repr=False)
+    # Definition hash of the epoch the signal record was verified under
+    # (set only by from_records); fitness judges only against that definition.
+    epoch_definition_sha256: str | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
         for name in ("signal_id", "strategy", "strategy_epoch"):
@@ -206,6 +219,7 @@ class Observation:
             pnl_basis=pnl_basis,
         )
         object.__setattr__(observation, "canonical_provenance", True)
+        object.__setattr__(observation, "epoch_definition_sha256", signal_record.get("epoch_definition_sha256"))
         return observation
 
 _INTEGRITY_RANK = {
@@ -228,6 +242,9 @@ def classify(obs: Observation, epoch: StrategyEpoch) -> str:
         return "other_epoch"
     if not obs.canonical_provenance:
         return "provenance_unverified"
+    if obs.epoch_definition_sha256 != epoch.definition_sha256:
+        # Verified under a different definition (another registry): not this epoch's evidence.
+        return "epoch_definition_mismatch"
     if not obs.prospective_catch:
         return "not_prospective_catch"
     if obs.pnl_basis not in ("executed", "paper_equivalent"):
@@ -296,6 +313,8 @@ class FitnessVerdict:
     mean_mfe_r: float | None = None
     executed_n: int = 0
     net_pnl_total: float | None = None
+    # The epoch definition the verdict was computed against (audit trail).
+    epoch_definition_sha256: str | None = None
 
     @property
     def failed(self) -> bool:
@@ -305,6 +324,24 @@ class FitnessVerdict:
     def authority_unsupported(self) -> bool:
         """No preregistered OOS reference: nothing can justify holding authority."""
         return "no_oos_reference" in self.reasons
+
+
+def _validate_oos(oos: Any) -> None:
+    if oos is None:
+        return
+    if not isinstance(oos, OOSReference):
+        raise ValueError("oos_reference must be an OOSReference")
+    if not isinstance(oos.r_outcomes, tuple) or not oos.r_outcomes:
+        raise ValueError("oos_reference.r_outcomes must be a non-empty tuple")
+    for value in oos.r_outcomes:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError("oos_reference.r_outcomes must be finite numbers")
+        try:
+            number = float(value)
+        except OverflowError as exc:
+            raise ValueError("oos_reference.r_outcomes value is out of range") from exc
+        if not math.isfinite(number):
+            raise ValueError("oos_reference.r_outcomes must be finite numbers")
 
 
 def evaluate_fitness(
@@ -327,10 +364,23 @@ def evaluate_fitness(
         raise ValueError("fitness epoch must be the exact registered epoch object")
     if epoch.status not in (EpochStatus.FROZEN, EpochStatus.RETIRED):
         raise ValueError("fitness requires a FROZEN or RETIRED epoch")
+    # A caller-built registry skips the registry file's validation, so the
+    # epoch's own integrity is re-checked here at use time.
+    if epoch.definition_sha256 != definition_hash(epoch.definition, epoch.thresholds):
+        raise ValueError("fitness epoch definition_sha256 does not match its definition and thresholds")
+    _validate_oos(epoch.oos_reference)
     excluded: dict[str, int] = {}
     valid: list[Observation] = []
     in_epoch = 0
+    seen: set[str] = set()
     for obs in observations:
+        if not isinstance(obs, Observation):
+            raise ValueError(f"observations must be Observation, not {type(obs).__name__}")
+        # One prospective signal is one observation: a replayed or duplicated
+        # row must never count as independent evidence.
+        if obs.signal_id in seen:
+            raise ValueError(f"duplicate observation for signal {obs.signal_id!r}")
+        seen.add(obs.signal_id)
         reason = classify(obs, epoch)
         if reason == "other_epoch":
             continue
@@ -363,6 +413,7 @@ def evaluate_fitness(
         mean_mfe_r=mean(mfes),  # type: ignore[arg-type]
         executed_n=len(executed),
         net_pnl_total=sum(nets) if nets else None,  # type: ignore[arg-type]
+        epoch_definition_sha256=epoch.definition_sha256,
     )
 
     if epoch.oos_reference is None:
@@ -438,6 +489,15 @@ class AuthorityState:
     approval_ref: str | None = None
     history: tuple[AuthorityChange, ...] = field(default_factory=tuple)
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.status, FitnessState):
+            raise ValueError("status must be a FitnessState")
+        for name in ("execution_authority", "observer_enabled"):
+            if not isinstance(getattr(self, name), bool):
+                raise ValueError(f"{name} must be an exact bool")
+        if self.execution_authority and self.status in (FitnessState.SUSPENDED, FitnessState.RETIRED):
+            raise ValueError(f"a {self.status.value} strategy cannot hold execution authority")
+
 
 EVALUATOR_ACTOR = "fitness_evaluator"
 
@@ -456,8 +516,18 @@ def apply_verdict(state: AuthorityState, verdict: FitnessVerdict, *, at: datetim
         raise ValueError("verdict is for a different strategy epoch")
     if at.tzinfo is None:
         raise ValueError("at must be timezone-aware")
+    if not isinstance(verdict, FitnessVerdict) or not isinstance(verdict.state, FitnessState):
+        raise ValueError("verdict must be a FitnessVerdict")
+    if verdict.state.value not in EVALUATOR_STATES:
+        # SUSPENDED/RETIRED are authority states, never evaluator verdicts.
+        raise ValueError(f"the evaluator cannot emit {verdict.state.value}")
     if state.status in (FitnessState.SUSPENDED, FitnessState.RETIRED):
-        # Sticky: only a human can move a suspended/retired strategy.
+        # Sticky: only a human can move a suspended/retired strategy, and it
+        # never holds authority while there.
+        if state.execution_authority:
+            change = AuthorityChange(at, EVALUATOR_ACTOR, state.status, state.status, False,
+                                     "authority held while suspended/retired")
+            return replace(state, execution_authority=False, history=(*state.history, change))
         return state
     if verdict.failed or (verdict.authority_unsupported and state.execution_authority):
         change = AuthorityChange(

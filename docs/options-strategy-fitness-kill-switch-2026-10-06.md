@@ -25,12 +25,18 @@ Only **verified canonical prospective catches** judge the epoch. A valid fitness
 - `signal_integrity = VALID`
 - if the trade was executed, `execution_integrity = VALID`
 - `result_R` is a finite non-boolean number
+- verified under **this** epoch definition: the signal record's `epoch_definition_sha256` equals the judged epoch's `definition_sha256` (otherwise `epoch_definition_mismatch`)
+- one observation per `signal_id`: a duplicated or replayed row raises instead of counting twice
 
 Direct `Observation(...)` construction is non-authoritative by design: it cannot set the internal canonical-provenance flag used by classification. This prevents hand-built rows from becoming fitness evidence.
 
 A bad fill counts as an execution problem, not evidence about the edge. Exclusions are counted by reason. If the invalid share is too high, the result is a WARNING about evidence quality.
 
-The observations are compared against the epoch's preregistered, untouched OOS R outcomes, pinned by hash in the epoch registry. The evaluator requires the exact `StrategyEpoch` object held by the supplied registry (default: committed registry), so a hand-built epoch/OOS distribution cannot silently judge production evidence. A seeded bootstrap estimates two probabilities from that OOS distribution:
+The observations are compared against the epoch's preregistered, untouched OOS R outcomes as recorded in the epoch registry. The evaluator requires the exact `StrategyEpoch` object held by the supplied registry (default: committed registry), and re-checks that epoch at use time, because a caller-built `EpochRegistry` skips the registry file's validation:
+- `definition_sha256` must equal `definition_hash(definition, thresholds)`;
+- the OOS reference, if present, must be a non-empty tuple of finite non-bool R outcomes.
+
+`definition_sha256` does **not** cover `oos_reference`, and the OOS `artifact_sha256` is not re-verified against `r_outcomes` here; the OOS values are trusted as recorded in the registry. The verdict records the `epoch_definition_sha256` it was computed against. A seeded bootstrap estimates two probabilities from that OOS distribution:
 - `p_cumulative_r`: the chance of a cumulative R this bad over n trades
 - `p_drawdown`: the chance of a max R drawdown this deep over n trades
 
@@ -51,7 +57,8 @@ The verdict also reports:
 - `apply_verdict` can only revoke authority. It suspends when either of these holds:
   - the verdict is FAIL_CANDIDATE
   - the strategy holds authority but has no OOS reference
-- Once a strategy is SUSPENDED or RETIRED, that status is sticky against the evaluator.
+- Once a strategy is SUSPENDED or RETIRED, that status is sticky against the evaluator, and it never holds authority there: `AuthorityState` refuses that combination, and `apply_verdict` revokes it if it is ever met.
+- `apply_verdict` accepts only evaluator verdict states (COLLECTING, WARNING, FAIL_CANDIDATE); a hand-built SUSPENDED/RETIRED verdict is refused, so RETIRED stays human-only.
 - `apply_verdict` never sets `execution_authority` to true and never touches `observer_enabled`.
 - `human_grant` is the only way to grant or restore authority. It requires all of these:
   - a named approver who is not the evaluator

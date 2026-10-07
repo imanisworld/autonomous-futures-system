@@ -17,11 +17,22 @@ import pytest
 
 from options_evidence import fitness as fx
 from options_evidence.signal import IntegrityStatus as IS
-from options_evidence.strategy_epochs import EpochRegistry, EpochStatus, OOSReference, StrategyEpoch
+from options_evidence.strategy_epochs import EpochRegistry, EpochStatus, OOSReference, StrategyEpoch, definition_hash
 
 AT = datetime(2026, 10, 6, 20, tzinfo=timezone.utc)
 # Untouched OOS: 50% win at +2R, 50% loss at -1R  -> mean +0.5R.
 OOS = tuple([2.0, -1.0] * 30)
+
+
+EPOCH_DEFINITION = {
+    "authority": {
+        "observation_only": True,
+        "execution_authority": False,
+        "risk_reservation": False,
+        "trade_alerts": False,
+    }
+}
+EPOCH_SHA = definition_hash(EPOCH_DEFINITION, {})
 
 
 def epoch(oos=OOS) -> StrategyEpoch:
@@ -29,16 +40,9 @@ def epoch(oos=OOS) -> StrategyEpoch:
         strategy="322",
         epoch="2026Q4_v1",
         status=EpochStatus.FROZEN,
-        definition={
-            "authority": {
-                "observation_only": True,
-                "execution_authority": False,
-                "risk_reservation": False,
-                "trade_alerts": False,
-            }
-        },
+        definition=EPOCH_DEFINITION,
         thresholds={},
-        definition_sha256="f" * 64,
+        definition_sha256=EPOCH_SHA,
         effective_from=AT,
         effective_until=None,
         source_commit="a" * 40,
@@ -73,6 +77,7 @@ def obs(r, i=0, **kw) -> fx.Observation:
     data.update(kw)
     row = fx.Observation(**data)
     object.__setattr__(row, "canonical_provenance", True)
+    object.__setattr__(row, "epoch_definition_sha256", EPOCH_SHA)
     return row
 
 
@@ -152,6 +157,11 @@ def test_apply_verdict_never_sets_authority_true_for_any_verdict_state():
     base = fit(epoch(), series(HEALTHY))
     for st in fx.FitnessState:
         verdict = fx.FitnessVerdict(**{**base.__dict__, "state": st})
+        if st.value not in fx.EVALUATOR_STATES:
+            # SUSPENDED/RETIRED are authority states, never evaluator verdicts.
+            with pytest.raises(ValueError, match="evaluator cannot emit"):
+                fx.apply_verdict(granted(), verdict, at=AT)
+            continue
         out = fx.apply_verdict(fx.AuthorityState("322", "2026Q4_v1"), verdict, at=AT)
         assert out.execution_authority is False
 
@@ -379,3 +389,83 @@ def test_forged_signal_record_cannot_enter_fitness():
     outcome = _canonical_outcome_record(signal_record, 1.0)
     with pytest.raises(ValueError, match="invalid canonical signal record"):
         fx.Observation.from_records(forged, outcome, registry=registry)
+
+
+# ── independent-review blockers on 4676024 ──────────────────────────────────
+
+
+def test_duplicate_or_replayed_signal_is_never_independent_evidence():
+    ep, registry, signal_record = _canonical_catch_with_oos()
+    row = fx.Observation.from_records(signal_record, _canonical_outcome_record(signal_record, -1.0), registry=registry)
+    with pytest.raises(ValueError, match="duplicate observation"):
+        fx.evaluate_fitness(ep, [row] * 10, registry=registry)
+    other = fx.Observation.from_records(signal_record, _canonical_outcome_record(signal_record, 2.0), registry=registry)
+    with pytest.raises(ValueError, match="duplicate observation"):
+        fx.evaluate_fitness(ep, [row, other], registry=registry)
+    assert fx.evaluate_fitness(ep, [row], registry=registry).valid_n == 1
+
+
+def test_evidence_verified_under_another_definition_never_judges():
+    from dataclasses import replace as dc_replace
+
+    from tests.test_options_prospective_signal import registered_epoch
+
+    ep_a, registry_a, signal_record = _canonical_catch_with_oos()
+    row = fx.Observation.from_records(signal_record, _canonical_outcome_record(signal_record, -1.0), registry=registry_a)
+    assert row.epoch_definition_sha256 == ep_a.definition_sha256
+    # Same names, different definition (another universe), its own registry.
+    base_b = registered_epoch(universe="PRIMARY_20", arm_source="public_regular_30m", provisional_source="alpaca_sip")
+    ep_b = dc_replace(base_b, oos_reference=ep_a.oos_reference)
+    assert ep_b.key == ep_a.key and ep_b.definition_sha256 != ep_a.definition_sha256
+    verdict = fx.evaluate_fitness(ep_b, [row], registry=EpochRegistry((ep_b,)))
+    assert verdict.valid_n == 0 and verdict.excluded == {"epoch_definition_mismatch": 1}
+    assert verdict.epoch_definition_sha256 == ep_b.definition_sha256
+
+
+def _bad_epoch(**kw):
+    from dataclasses import replace as dc_replace
+
+    return dc_replace(epoch(), **kw)
+
+
+@pytest.mark.parametrize("kw, match", [
+    ({"definition_sha256": "f" * 64}, "definition_sha256 does not match"),
+    ({"thresholds": {"max_capture_lag_seconds": 999}}, "definition_sha256 does not match"),
+    ({"oos_reference": OOSReference("oos", "r.json", "b" * 64, (), "fees")}, "non-empty tuple"),
+    ({"oos_reference": OOSReference("oos", "r.json", "b" * 64, [2.0, -1.0], "fees")}, "non-empty tuple"),
+    ({"oos_reference": OOSReference("oos", "r.json", "b" * 64, (float("nan"),) * 4, "fees")}, "finite"),
+    ({"oos_reference": OOSReference("oos", "r.json", "b" * 64, (float("inf"), 1.0), "fees")}, "finite"),
+    ({"oos_reference": OOSReference("oos", "r.json", "b" * 64, (True, -1.0), "fees")}, "finite"),
+    ({"oos_reference": OOSReference("oos", "r.json", "b" * 64, ("2.0", -1.0), "fees")}, "finite"),
+])
+def test_caller_built_registry_cannot_skip_epoch_integrity(kw, match):
+    bad = _bad_epoch(**kw)
+    with pytest.raises(ValueError, match=match):
+        fx.evaluate_fitness(bad, series(FAILING), registry=EpochRegistry((bad,)))
+
+
+def test_incoherent_authority_state_is_refused_and_sticky_states_never_hold_authority():
+    for status in (fx.FitnessState.SUSPENDED, fx.FitnessState.RETIRED):
+        with pytest.raises(ValueError, match="cannot hold execution authority"):
+            fx.AuthorityState("322", "2026Q4_v1", status=status, execution_authority=True)
+    for field_name, value in (("execution_authority", "false"), ("observer_enabled", 0), ("status", "COLLECTING")):
+        with pytest.raises(ValueError):
+            fx.AuthorityState("322", "2026Q4_v1", **{field_name: value})
+    # Even a state smuggled past __post_init__ is revoked by the sticky branch.
+    from dataclasses import replace as dc_replace
+
+    smuggled = dc_replace(fx.AuthorityState("322", "2026Q4_v1"), status=fx.FitnessState.SUSPENDED)
+    object.__setattr__(smuggled, "execution_authority", True)
+    after = fx.apply_verdict(smuggled, fit(epoch(), series(FAILING)), at=AT)
+    assert after.execution_authority is False and after.status is fx.FitnessState.SUSPENDED
+
+
+@pytest.mark.parametrize("state", [fx.FitnessState.SUSPENDED, fx.FitnessState.RETIRED])
+def test_hand_built_authority_state_verdict_is_refused(state):
+    verdict = fx.FitnessVerdict(**{**fit(epoch(), series(HEALTHY)).__dict__, "state": state, "reasons": ()})
+    holder = granted()
+    with pytest.raises(ValueError, match="evaluator cannot emit"):
+        fx.apply_verdict(holder, verdict, at=AT)
+    # A later real failure still revokes.
+    after = fx.apply_verdict(holder, fit(epoch(), series(FAILING)), at=AT)
+    assert after.execution_authority is False and after.status is fx.FitnessState.SUSPENDED
