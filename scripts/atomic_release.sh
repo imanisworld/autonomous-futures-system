@@ -47,17 +47,31 @@ _require_exact_sha() {
 }
 
 build_release() {
-  deploy_lock_acquire "$LOCK_DIR" "build $REF" "$0" "$FORCE_LOCK" || exit 1
-  trap "deploy_lock_release '$LOCK_DIR' '$DEPLOY_LOCK_OWNER'" EXIT
+  # U11: a release is built only for an exact, merged SHA with current live
+  # GitHub CI proof. Obtain the audit artifact first (public API, no token):
+  #   python3 -m ops.release_ci_proof fetch --sha <sha> --out <proof.json>
+  if [[ -z "${RELEASE_CI_PROOF:-}" || ! -f "${RELEASE_CI_PROOF}" ]]; then
+    echo "build refused: set RELEASE_CI_PROOF to the exact-SHA CI proof file (ops.release_ci_proof fetch)" >&2
+    exit 65
+  fi
+  local ci_proof
+  ci_proof="$(cd "$(dirname "$RELEASE_CI_PROOF")" && pwd)/$(basename "$RELEASE_CI_PROOF")"
 
-  git fetch -q origin
+  # Refresh canonical main and prove the exact release commit is merged into it.
+  # It need not be the current tip: sanctioned releases intentionally allow an
+  # older reviewed SHA after it is reachable from main, avoiding ride-alongs.
+  git fetch -q origin '+refs/heads/main:refs/remotes/origin/main'
   local sha short work archive manifest
   sha="$(git rev-parse "$REF^{commit}")"
+  if ! git merge-base --is-ancestor "$sha" origin/main; then
+    echo "build refused: release SHA $sha is not merged into origin/main" >&2
+    exit 66
+  fi
   short="${sha:0:12}"
   work="$(mktemp -d "/tmp/afs-release-${short}.XXXX")"
   archive="/tmp/afs-release-${short}.tgz"
   manifest="$work/release_manifest.json"
-  trap "git worktree remove -f '$work' >/dev/null 2>&1 || true; rm -f '$archive'; deploy_lock_release '$LOCK_DIR' '$DEPLOY_LOCK_OWNER'" EXIT
+  trap "git worktree remove -f '$work' >/dev/null 2>&1 || true; rm -f '$archive'" EXIT
 
   git worktree add --detach "$work" "$sha" >/dev/null
   (
@@ -66,6 +80,12 @@ build_release() {
     # Running the release's own ops modules must not create one, here or in
     # the tarball built from this worktree.
     export PYTHONDONTWRITEBYTECODE=1
+    # Use the candidate release's own verifier. Saved JSON is not authority:
+    # verify-live re-queries GitHub and requires the newest required run IDs
+    # to match this exact SHA before any connection to the futures box.
+    python3 -m ops.release_ci_proof verify-live --sha "$sha" --proof "$ci_proof"
+    python3 -m ops.dependency_lock check-requirements \
+      --lock requirements.lock --requirements requirements.txt
     RELEASE_BRANCH=main python3 -m ops.release_manifest \
       --repo-root . --output release_manifest.json
     # The check reports UNPINNED (exit 1) without a fingerprint pin (#1056).
@@ -75,6 +95,10 @@ build_release() {
     tar czf "$archive" --exclude=.git .
   )
 
+  # Local source/CI/dependency proof passed. Only now touch the box-side lock.
+  deploy_lock_acquire "$LOCK_DIR" "build $REF" "$0" "$FORCE_LOCK" || exit 1
+  trap "deploy_lock_release '$LOCK_DIR' '$DEPLOY_LOCK_OWNER'" EXIT
+  trap "git worktree remove -f '$work' >/dev/null 2>&1 || true; rm -f '$archive'; deploy_lock_release '$LOCK_DIR' '$DEPLOY_LOCK_OWNER'" EXIT
   remote "mkdir -p '$RELEASES' '$SHARED/logs' '$SHARED/data' '$SHARED/backups' '$SHARED/candidate-logs'"
   scp -q "$archive" "$BOX:/tmp/afs-release-${short}.tgz"
   remote "
@@ -83,8 +107,14 @@ build_release() {
     mkdir '$RELEASES/$sha'
     tar xzf '/tmp/afs-release-${short}.tgz' -C '$RELEASES/$sha'
     python3 -m venv '$RELEASES/$sha/.venv'
-    '$RELEASES/$sha/.venv/bin/pip' install -q --requirement '$RELEASES/$sha/requirements.txt'
+    # U11: install ONLY the exact production lock, no dependency resolution;
+    # then prove the venv is complete and identical to the lock.
+    '$RELEASES/$sha/.venv/bin/pip' install -q --no-deps --requirement '$RELEASES/$sha/requirements.lock'
+    '$RELEASES/$sha/.venv/bin/pip' check
     '$RELEASES/$sha/.venv/bin/pip' freeze > '$SHARED/release-${sha}-dependencies.txt'
+    PYTHONDONTWRITEBYTECODE=1 PYTHONPATH='$RELEASES/$sha' '$RELEASES/$sha/.venv/bin/python' \
+      -m ops.dependency_lock check-freeze --lock '$RELEASES/$sha/requirements.lock' \
+      --freeze '$SHARED/release-${sha}-dependencies.txt'
     # Root ignores the a-w below; without this, the check writes the
     # __pycache__ it refuses into the release.
     built_fp=\$(PYTHONDONTWRITEBYTECODE=1 '$RELEASES/$sha/.venv/bin/python' -c \"import json;print(json.load(open('$RELEASES/$sha/release_manifest.json'))['fingerprint_sha256'])\")
