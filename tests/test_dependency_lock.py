@@ -130,3 +130,12 @@ def test_check_freeze_cli_exit_codes(tmp_path):
     assert dl.main(["check-freeze", "--lock", str(lock), "--freeze", str(bad)]) == 1
     lock.write_text("a>=1\n")
     assert dl.main(["check-freeze", "--lock", str(lock), "--freeze", str(good)]) == 2
+
+def test_ci_proves_runtime_lock_before_installing_dev_dependencies():
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    lock_install = workflow.index("pip install --no-deps -r requirements.lock")
+    pip_check = workflow.index("python -m pip check")
+    freeze_check = workflow.index("ops.dependency_lock check-freeze")
+    dev_install = workflow.index("pip install -r requirements-dev.txt -c requirements.lock")
+    assert lock_install < pip_check < freeze_check < dev_install
+
