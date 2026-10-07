@@ -181,6 +181,17 @@ def test_build_refuses_without_ci_proof_before_touching_anything():
     assert "RELEASE_CI_PROOF" in proc.stderr
 
 
+def test_promote_refuses_without_ci_proof_before_touching_anything():
+    env = {k: v for k, v in os.environ.items() if k != "RELEASE_CI_PROOF"}
+    env["AFS_BOX"] = "unused"
+    proc = subprocess.run(
+        ["bash", "scripts/atomic_release.sh", "promote", SHA],
+        cwd=ROOT, env=env, capture_output=True, text=True,
+    )
+    assert proc.returncode == 65
+    assert "RELEASE_CI_PROOF" in proc.stderr
+
+
 def test_build_refuses_a_missing_proof_file(tmp_path):
     env = dict(os.environ, AFS_BOX="unused", RELEASE_CI_PROOF=str(tmp_path / "nope.json"))
     proc = subprocess.run(
@@ -204,3 +215,7 @@ def test_release_installs_only_the_lock_and_verifies_it():
     assert 'archive="$(mktemp "/tmp/afs-release-${short}.XXXX")"' in text
     build = text.split("build_release() {", 1)[1].split("verify_release() {", 1)[0]
     assert build.index("verify-live") < build.index("deploy_lock_acquire")
+    promote = text.split("promote_release() {", 1)[1].split("rollback_release() {", 1)[0]
+    assert 'ops.release_ci_proof verify-live' in promote
+    assert 'git merge-base --is-ancestor "$sha" origin/main' in promote
+    assert promote.index("verify-live") < promote.index("deploy_lock_acquire")

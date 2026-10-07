@@ -247,10 +247,26 @@ _promote_gate_check() {
 }
 
 promote_release() {
+  # A build can sit on disk after CI changes. Re-prove the exact SHA immediately
+  # before promotion; stale saved JSON, a newer failing/running required check,
+  # or a SHA no longer reachable from canonical main all block before box lock.
+  if [[ -z "${RELEASE_CI_PROOF:-}" || ! -f "${RELEASE_CI_PROOF}" ]]; then
+    echo "promotion refused: set RELEASE_CI_PROOF to the exact-SHA CI proof file" >&2
+    exit 65
+  fi
+  local sha="$REF" ci_proof
+  ci_proof="$(cd "$(dirname "$RELEASE_CI_PROOF")" && pwd)/$(basename "$RELEASE_CI_PROOF")"
+  git fetch -q origin '+refs/heads/main:refs/remotes/origin/main'
+  if ! git merge-base --is-ancestor "$sha" origin/main; then
+    echo "promotion refused: release SHA $sha is not merged into origin/main" >&2
+    exit 66
+  fi
+  PYTHONDONTWRITEBYTECODE=1 python3 -m ops.release_ci_proof verify-live \
+    --sha "$sha" --proof "$ci_proof"
+
   deploy_lock_acquire "$LOCK_DIR" "promote $REF" "$0" "$FORCE_LOCK" || exit 1
   trap "deploy_lock_release '$LOCK_DIR' '$DEPLOY_LOCK_OWNER'" EXIT
 
-  local sha="$REF"
   _promote_gate_check "$sha" || exit 1
 
   remote "
