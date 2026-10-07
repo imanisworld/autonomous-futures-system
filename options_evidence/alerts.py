@@ -25,7 +25,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Iterable
 
-from .signal import LifecycleState, ProspectiveSignal
+from .signal import IntegrityStatus, LifecycleState, ProspectiveSignal
 
 SCHEMA = "options-signal-alert-v2"
 
@@ -71,6 +71,9 @@ class SignalAlert:
     trigger: float | None  # None while WATCHING
     invalidation: float | None
     as_of: datetime
+    data_integrity: IntegrityStatus
+    signal_integrity: IntegrityStatus
+    prospective_catch: bool
     distance_to_trigger_r: float | None = None
     near_side: str | None = None  # WATCHING only: "HIGH" / "LOW"
 
@@ -95,11 +98,31 @@ class SignalAlert:
             "trigger": self.trigger,
             "invalidation": self.invalidation,
             "as_of": self.as_of.isoformat(),
+            "data_integrity": self.data_integrity.value,
+            "signal_integrity": self.signal_integrity.value,
+            "prospective_catch": self.prospective_catch,
             "distance_to_trigger_r": self.distance_to_trigger_r,
             "near_side": self.near_side,
             "trade_authority": False,
-            "advisory_note": "Lifecycle notice only. Trade authority is decided elsewhere.",
+            "advisory_note": (
+                "Lifecycle notice only. A TRIGGERED state is not a validated trade unless "
+                "prospective_catch is true and integrity is VALID. Trade authority is decided elsewhere."
+            ),
         }
+
+
+def _finite_number(value: Any, label: str, *, positive: bool = false) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{label} must be a finite number")
+    try:
+        number = float(value)
+    except OverflowError as exc:
+        raise ValueError(f"{label} is out of range") from exc
+    if not math.isfinite(number):
+        raise ValueError(f"{label} must be finite")
+    if positive and number <= 0:
+        raise ValueError(f"{label} must be > 0")
+    return number
 
 
 def distance_to_trigger_r(signal: ProspectiveSignal, last_price: float) -> tuple[float, str | None]:
@@ -109,16 +132,17 @@ def distance_to_trigger_r(signal: ProspectiveSignal, last_price: float) -> tuple
     <= 0 means price is through it but the watcher has not resolved yet.
     Resolved: distance to the resolved trigger (side None).
     """
+    price = _finite_number(last_price, "last_price", positive=True)
     unit = signal.levels.boundary_high - signal.levels.boundary_low
     if not (math.isfinite(unit) and unit > 0):
         raise ValueError("setup range must be finite and > 0")
     if signal.direction is None:
-        to_high = (signal.levels.boundary_high - last_price) / unit
-        to_low = (last_price - signal.levels.boundary_low) / unit
+        to_high = (signal.levels.boundary_high - price) / unit
+        to_low = (price - signal.levels.boundary_low) / unit
         return (to_high, "HIGH") if to_high <= to_low else (to_low, "LOW")
     if signal.direction == "LONG":
-        return (signal.trigger - last_price) / unit, None  # type: ignore[operator]
-    return (last_price - signal.trigger) / unit, None  # type: ignore[operator]
+        return (signal.trigger - price) / unit, None  # type: ignore[operator]
+    return (price - signal.trigger) / unit, None  # type: ignore[operator]
 
 
 def alert_for(
@@ -129,21 +153,21 @@ def alert_for(
     near_trigger_r: float | None = None,
 ) -> SignalAlert | None:
     """The single alert the canonical state supports right now, or None."""
-    if as_of.tzinfo is None:
+    if not isinstance(as_of, datetime) or as_of.tzinfo is None or as_of.utcoffset() is None:
         raise ValueError("as_of must be timezone-aware")
     kind = _STATE_TO_KIND.get(signal.state)
     if kind is None:
         return None
     distance = side = None
     if signal.state is LifecycleState.WATCHING and last_price is not None:
-        if near_trigger_r is None or not (math.isfinite(near_trigger_r) and near_trigger_r > 0):
+        if near_trigger_r is None:
             raise ValueError("near_trigger_r must be an explicit positive policy value")
-        if not math.isfinite(float(last_price)) or float(last_price) <= 0:
-            raise ValueError("last_price must be finite and > 0")
-        distance, side = distance_to_trigger_r(signal, float(last_price))
+        threshold = _finite_number(near_trigger_r, "near_trigger_r", positive=True)
+        price = _finite_number(last_price, "last_price", positive=True)
+        distance, side = distance_to_trigger_r(signal, price)
         # Past the trigger while still WATCHING means the watcher has not
         # resolved it yet; surface NEAR_TRIGGER, never a synthetic TRIGGERED.
-        if distance <= near_trigger_r:
+        if distance <= threshold:
             kind = AlertKind.NEAR_TRIGGER
     return SignalAlert(
         signal_id=signal.signal_id,
@@ -160,6 +184,9 @@ def alert_for(
         trigger=signal.trigger,
         invalidation=signal.invalidation,
         as_of=as_of,
+        data_integrity=signal.data_integrity,
+        signal_integrity=signal.signal_integrity,
+        prospective_catch=signal.is_prospective_catch,
         distance_to_trigger_r=distance,
         near_side=side,
     )
@@ -192,5 +219,15 @@ class DeliveryPolicy:
     kinds: frozenset[AlertKind] = frozenset()
     channel: str = ""
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.enabled, bool):
+            raise ValueError("DeliveryPolicy.enabled must be an exact bool")
+        if not isinstance(self.kinds, frozenset) or not all(isinstance(kind, AlertKind) for kind in self.kinds):
+            raise ValueError("DeliveryPolicy.kinds must be a frozenset of AlertKind")
+        if not isinstance(self.channel, str):
+            raise ValueError("DeliveryPolicy.channel must be a string")
+
     def deliverable(self, alert: SignalAlert) -> bool:
-        return bool(self.enabled and self.channel.strip() and alert.kind in self.kinds)
+        if not isinstance(alert, SignalAlert):
+            raise ValueError("deliverable requires a SignalAlert")
+        return self.enabled and bool(self.channel.strip()) and alert.kind in self.kinds
