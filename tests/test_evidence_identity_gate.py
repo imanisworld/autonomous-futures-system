@@ -216,7 +216,7 @@ def test_canonical_runner_bundle_is_promotion_quality(tmp_path):
     assert result.identity["execution_model_id"] == er.execution_model_id(ASSUMPTIONS)
     assert result.identity["trial_prior_exposed"] == "none"
     assert result.identity["data_identity"] == f"dataset_hash:{DATASET_HASH}"
-    assert result.identity["strategy_identity"] == "orb@v1"
+    assert result.identity["strategy_identity"] == "orb_reclaim"
     manifest = json.loads((_bundle(root) / "bundle_manifest.json").read_text())
     assert set(gate.REQUIRED_BUNDLE_FILES) <= set(manifest["files"])
 
@@ -281,7 +281,7 @@ def test_strategy_identity_is_bound_to_canonical_trade_rows(tmp_path):
     bundle = _bundle(root)
     envelope_path = bundle / "evidence_envelope.json"
     envelope = json.loads(envelope_path.read_text())
-    assert envelope["strategy_identity"] == "orb@v1"
+    assert envelope["strategy_identity"] == "orb_reclaim"
 
     # Re-label the strategy and repair the envelope digest in the manifest.
     # Byte identity alone must not make the false strategy attribution valid.
