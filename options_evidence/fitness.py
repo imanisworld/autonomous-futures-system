@@ -27,6 +27,7 @@ from __future__ import annotations
 import hashlib
 import math
 import random
+import re
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from enum import Enum
@@ -39,6 +40,7 @@ from .strategy_epochs import (
     EpochStatus,
     OOSReference,
     StrategyEpoch,
+    MATERIAL_SECTIONS,
     assert_observation_only,
     definition_hash,
 )
@@ -326,11 +328,21 @@ class FitnessVerdict:
         return "no_oos_reference" in self.reasons
 
 
+def _nonblank_text(value: Any, label: str) -> None:
+    if not isinstance(value, str) or not value or value != value.strip():
+        raise ValueError(f"{label} must be a non-blank string without surrounding whitespace")
+
+
 def _validate_oos(oos: Any) -> None:
     if oos is None:
         return
     if not isinstance(oos, OOSReference):
         raise ValueError("oos_reference must be an OOSReference")
+    _nonblank_text(oos.source, "oos_reference.source")
+    _nonblank_text(oos.artifact_path, "oos_reference.artifact_path")
+    _nonblank_text(oos.cost_model, "oos_reference.cost_model")
+    if not isinstance(oos.artifact_sha256, str) or re.fullmatch(r"[0-9a-f]{64}", oos.artifact_sha256) is None:
+        raise ValueError("oos_reference.artifact_sha256 must be a sha256 hex digest")
     if not isinstance(oos.r_outcomes, tuple) or not oos.r_outcomes:
         raise ValueError("oos_reference.r_outcomes must be a non-empty tuple")
     for value in oos.r_outcomes:
@@ -342,6 +354,48 @@ def _validate_oos(oos: Any) -> None:
             raise ValueError("oos_reference.r_outcomes value is out of range") from exc
         if not math.isfinite(number):
             raise ValueError("oos_reference.r_outcomes must be finite numbers")
+
+
+def _validate_epoch_for_fitness(epoch: StrategyEpoch) -> None:
+    """Re-check file-loader invariants needed by fitness at the use boundary.
+
+    EpochRegistry can be constructed directly in Python, so identity in a
+    caller-built registry is not proof that the epoch was preregistered with
+    the same invariants enforced by load_registry().
+    """
+    assert_observation_only(epoch)
+    if epoch.status not in (EpochStatus.FROZEN, EpochStatus.RETIRED):
+        raise ValueError("fitness requires a FROZEN or RETIRED epoch")
+    _nonblank_text(epoch.strategy, "epoch.strategy")
+    _nonblank_text(epoch.epoch, "epoch.epoch")
+    if not isinstance(epoch.effective_from, datetime) or epoch.effective_from.tzinfo is None or epoch.effective_from.utcoffset() is None:
+        raise ValueError("fitness epoch requires a timezone-aware effective_from")
+    if epoch.effective_until is not None:
+        if not isinstance(epoch.effective_until, datetime) or epoch.effective_until.tzinfo is None or epoch.effective_until.utcoffset() is None:
+            raise ValueError("fitness epoch effective_until must be timezone-aware")
+        if epoch.effective_until <= epoch.effective_from:
+            raise ValueError("fitness epoch effective_until must be after effective_from")
+    if not isinstance(epoch.source_commit, str) or re.fullmatch(r"[0-9a-f]{40}", epoch.source_commit) is None:
+        raise ValueError("fitness epoch requires a full 40-hex source_commit")
+    _nonblank_text(epoch.preregistration_doc, "epoch.preregistration_doc")
+    if set(epoch.definition) != set(MATERIAL_SECTIONS):
+        raise ValueError("fitness epoch definition must contain exactly the material sections")
+    if not isinstance(epoch.thresholds, Mapping):
+        raise ValueError("fitness epoch thresholds must be a mapping")
+    for key, value in epoch.thresholds.items():
+        if not isinstance(key, str) or not key:
+            raise ValueError("fitness epoch threshold keys must be non-empty strings")
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"fitness epoch threshold {key!r} must be a finite number")
+        try:
+            number = float(value)
+        except OverflowError as exc:
+            raise ValueError(f"fitness epoch threshold {key!r} is out of range") from exc
+        if not math.isfinite(number):
+            raise ValueError(f"fitness epoch threshold {key!r} must be finite")
+    if epoch.definition_sha256 != definition_hash(epoch.definition, epoch.thresholds):
+        raise ValueError("fitness epoch definition_sha256 does not match its definition and thresholds")
+    _validate_oos(epoch.oos_reference)
 
 
 def evaluate_fitness(
@@ -357,18 +411,11 @@ def evaluate_fitness(
     supplied registry (default: committed registry). This prevents a hand-built
     epoch/OOS distribution from silently judging production evidence.
     """
-    assert_observation_only(epoch)
+    _validate_epoch_for_fitness(epoch)
     active_registry = registry if registry is not None else default_registry()
     registered = active_registry.get(epoch.strategy, epoch.epoch)
     if registered is not epoch:
         raise ValueError("fitness epoch must be the exact registered epoch object")
-    if epoch.status not in (EpochStatus.FROZEN, EpochStatus.RETIRED):
-        raise ValueError("fitness requires a FROZEN or RETIRED epoch")
-    # A caller-built registry skips the registry file's validation, so the
-    # epoch's own integrity is re-checked here at use time.
-    if epoch.definition_sha256 != definition_hash(epoch.definition, epoch.thresholds):
-        raise ValueError("fitness epoch definition_sha256 does not match its definition and thresholds")
-    _validate_oos(epoch.oos_reference)
     excluded: dict[str, int] = {}
     valid: list[Observation] = []
     in_epoch = 0
