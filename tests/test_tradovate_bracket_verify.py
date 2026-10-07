@@ -9,6 +9,7 @@ immediate flatten, returning a CANCELLED fill so no naked position is held.
 from execution.broker_interface import BracketOrder
 from execution.broker_interface import Position
 from execution.tradovate_broker import TradovateBroker, TradovateConfig, _round_to_tick
+from tests.contract_stub import bind_exact_contract
 
 
 def test_config_from_env_accepts_numeric_api_key_id(monkeypatch):
@@ -93,7 +94,7 @@ def test_execute_bracket_sends_tick_rounded_children(monkeypatch):
     captured = {}
 
     monkeypatch.setattr(broker, "_authenticate", lambda: True)
-    monkeypatch.setattr(broker, "_find_contract_id", lambda instrument: 123)
+    monkeypatch.setattr(broker, "_find_contract_id", bind_exact_contract(broker, 123))
     monkeypatch.setattr("execution.tradovate_supervisor.tradovate_order_ready", lambda: True)
     monkeypatch.setattr(broker, "_verify_bracket_children", lambda **kw: (True, True))
 
@@ -273,7 +274,7 @@ def test_flatten_liquidates_before_cancel(monkeypatch):
 
     monkeypatch.setattr(broker, "_authenticate", lambda: True)
     monkeypatch.setattr(broker, "get_position", lambda: calls.append("get_position") or pos)
-    monkeypatch.setattr(broker, "_find_contract_id", lambda instrument: 123)
+    monkeypatch.setattr(broker, "_find_contract_id", bind_exact_contract(broker, 123))
     monkeypatch.setattr(
         broker,
         "_post",
@@ -345,7 +346,7 @@ def test_handle_naked_position_survives_flatten_failure(monkeypatch):
 def _capture_oso(monkeypatch, broker):
     captured = {}
     monkeypatch.setattr(broker, "_authenticate", lambda: True)
-    monkeypatch.setattr(broker, "_find_contract_id", lambda instrument: 123)
+    monkeypatch.setattr(broker, "_find_contract_id", bind_exact_contract(broker, 123))
     monkeypatch.setattr("execution.tradovate_supervisor.tradovate_order_ready", lambda: True)
     monkeypatch.setattr(broker, "_verify_bracket_children", lambda **kw: (True, True))
 

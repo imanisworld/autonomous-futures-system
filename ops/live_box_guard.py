@@ -88,6 +88,9 @@ PROOF_CRITICAL_RUNTIME_OVERRIDES = (
     "STOP_LIMIT_ALLOWANCE_TICKS_MES",
     "STOP_LIMIT_ALLOWANCE_TICKS_MNQ",
     "STOP_ENTRY_CONFIRM_SECONDS",
+    # U8 contract-identity guard (#966 §6). Proof-critical: when set it blocks
+    # orders whose alert contract does not match the routed dated contract.
+    "CONTRACT_IDENTITY_GUARD_ENFORCED",
     "SIGNA_GATE_ENFORCED",
     "STRICT_DIRECTIONAL_ALIGNMENT",
     "HTF_DIRECTION_MODE",

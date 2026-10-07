@@ -11,8 +11,10 @@ converts prices, and never synthesizes a hint from the root, the ticker or
 ``_ROLL_DAYS``.
 
 Design: docs/contract-identity-guard-design-2026-09-24.md (#966). This module
-only reports a verdict; nothing here blocks an order. Enforcement is a later,
-separately reviewed change.
+only reports a verdict. ``execution/tradovate_broker.py`` acts on it: observe
+and log by default, and block UNKNOWN / UNNORMALIZABLE / MISMATCH before any
+order request only when ``CONTRACT_IDENTITY_GUARD_ENFORCED=true`` (U8). Turning
+enforcement on is an operator decision after alert-payload and roll-seam proof.
 """
 from __future__ import annotations
 

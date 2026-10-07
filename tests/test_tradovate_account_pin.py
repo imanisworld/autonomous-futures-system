@@ -38,6 +38,7 @@ import pytest
 import execution.tradovate_supervisor as supervisor
 from execution.broker_interface import BracketOrder
 from execution.tradovate_broker import TradovateBroker, TradovateConfig, _parse_expected_account_id
+from tests.contract_stub import bind_exact_contract
 
 
 @pytest.fixture(autouse=True)
@@ -58,7 +59,7 @@ def _broker(monkeypatch, *, expected_account_id: str | None = None, resolved_acc
         monkeypatch.setenv("TRADOVATE_EXPECTED_ACCOUNT_ID", expected_account_id)
     b = TradovateBroker(config=TradovateConfig.from_env())
     monkeypatch.setattr(b, "_authenticate", lambda: True)
-    monkeypatch.setattr(b, "_find_contract_id", lambda inst: 123)
+    monkeypatch.setattr(b, "_find_contract_id", bind_exact_contract(b, 123))
     monkeypatch.setattr(supervisor, "tradovate_order_ready", lambda: True)
     b._account_id = resolved_account_id
     return b
