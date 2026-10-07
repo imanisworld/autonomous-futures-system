@@ -15,16 +15,22 @@ safety. It is not wired to any runtime.
 
 ## What is compared
 
-Only **valid** observations judge the epoch. A valid observation meets all of these:
+Only **verified canonical prospective catches** judge the epoch. A valid fitness observation meets all of these:
 - same strategy and epoch
+- constructed through `Observation.from_records` from a canonical #1151 signal record that passes `verify_record(..., registry=...)`
+- `prospective_catch = true`
+- trade basis is `executed` or `paper_equivalent` (never `counterfactual`)
+- `executed` is an exact boolean and agrees with the P&L basis
 - `data_integrity = VALID`
 - `signal_integrity = VALID`
 - if the trade was executed, `execution_integrity = VALID`
-- `result_R` is known
+- `result_R` is a finite non-boolean number
+
+Direct `Observation(...)` construction is non-authoritative by design: it cannot set the internal canonical-provenance flag used by classification. This prevents hand-built rows from becoming fitness evidence.
 
 A bad fill counts as an execution problem, not evidence about the edge. Exclusions are counted by reason. If the invalid share is too high, the result is a WARNING about evidence quality.
 
-The observations are compared against the epoch's preregistered, untouched OOS R outcomes, pinned by hash in the epoch registry. A seeded bootstrap estimates two probabilities from that OOS distribution:
+The observations are compared against the epoch's preregistered, untouched OOS R outcomes, pinned by hash in the epoch registry. The evaluator requires the exact `StrategyEpoch` object held by the supplied registry (default: committed registry), so a hand-built epoch/OOS distribution cannot silently judge production evidence. A seeded bootstrap estimates two probabilities from that OOS distribution:
 - `p_cumulative_r`: the chance of a cumulative R this bad over n trades
 - `p_drawdown`: the chance of a max R drawdown this deep over n trades
 
@@ -68,4 +74,4 @@ The verdict also reports:
 
 `122-IEX-E1` has no OOS reference, and its stop and target are UNRESOLVED. Its verdict is
 therefore always `COLLECTING` / `no_oos_reference`. If any authority were ever attached to it, that authority would be revoked.
-No currently registered epoch can reach a fitness verdict that means anything.
+No currently registered epoch can reach a fitness verdict that means anything. This module is still source-only and is not wired into runtime execution or alert authority.
