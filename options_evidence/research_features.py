@@ -133,11 +133,20 @@ def _parse_time(value: Any, label: str) -> datetime:
     return parsed
 
 
+# Exactly the keys build_feature_row writes; anything else (e.g. a "score")
+# never rides into the research population.
+FEATURE_ROW_KEYS = frozenset(
+    {"schema", "signal_id", "structure_id", "strategy", "strategy_epoch", "decision_cutoff", "factors", "trade_authority"}
+)
+
+
 def _validate_feature_row(feature_row: Mapping[str, Any], signal_record: Mapping[str, Any]) -> str | None:
     if not isinstance(feature_row, Mapping):
         return "feature_row_invalid"
     if feature_row.get("schema") != SCHEMA:
         return "feature_row_schema"
+    if set(feature_row) != FEATURE_ROW_KEYS:
+        return "feature_row_keys"
     for key in ("signal_id", "structure_id", "strategy", "strategy_epoch"):
         if feature_row.get(key) != signal_record.get(key):
             return "feature_row_identity"
@@ -194,7 +203,9 @@ def _validate_outcome_record(outcome_record: Mapping[str, Any], signal_record: M
     for key in ("signal_id", "structure_id", "strategy_epoch", "resolution_state", "prospective_catch"):
         if outcome_record.get(key) != signal_record.get(key):
             return "outcome_identity"
-    if signal_record.get("prospective_catch") is not True:
+    # A catch is a TRIGGERED resolution (verify_record ties resolution_state to
+    # history); a forged prospective_catch flag on a non-triggered signal is not.
+    if signal_record.get("prospective_catch") is not True or signal_record.get("resolution_state") != "TRIGGERED":
         return "not_prospective_catch"
     executed = outcome_record.get("executed")
     if not isinstance(executed, bool):
@@ -237,9 +248,27 @@ def research_population(
     def drop(reason: str) -> None:
         excluded[reason] = excluded.get(reason, 0) + 1
 
-    for signal_record, outcome_record, feature_row in joined:
+    triples = list(joined)
+    # One prospective signal is one research row: every triple of a signal_id
+    # that appears more than once (replay, or conflicting outcomes) is excluded.
+    seen_counts: dict[Any, int] = {}
+    for triple in triples:
+        signal_record = triple[0] if isinstance(triple, tuple) and len(triple) == 3 else None
+        if isinstance(signal_record, Mapping):
+            key = signal_record.get("signal_id")
+            if isinstance(key, str):
+                seen_counts[key] = seen_counts.get(key, 0) + 1
+
+    for triple in triples:
+        if not isinstance(triple, tuple) or len(triple) != 3:
+            drop("malformed_record")
+            continue
+        signal_record, outcome_record, feature_row = triple
         if not all(isinstance(record, Mapping) for record in (signal_record, outcome_record, feature_row)):
             drop("malformed_record")
+            continue
+        if seen_counts.get(signal_record.get("signal_id"), 0) > 1:
+            drop("duplicate_signal")
             continue
         ids = {signal_record.get("signal_id"), outcome_record.get("signal_id"), feature_row.get("signal_id")}
         if len(ids) != 1:

@@ -7,14 +7,32 @@ import pytest
 
 from options_evidence import research_features as rf
 from options_evidence import signal as sg
-from tests.test_options_prospective_signal import REGISTRY, T0, caught
+from tests.test_options_prospective_signal import (
+    CATCH_EPOCH,
+    CATCH_STRATEGY,
+    REGISTRY,
+    T0,
+    caught,
+    identity,
+    opened,
+    trigger,
+)
 
 TRIG = T0 + timedelta(minutes=10)
 
 
-def triggered():
+def triggered(ticker: str | None = None):
+    """A verified prospective catch; distinct tickers give distinct signals."""
     journal = sg.SignalJournal(REGISTRY)
-    return caught(journal, at=TRIG)
+    if ticker is None:
+        return caught(journal, at=TRIG)
+    s = opened(journal, strategy=CATCH_STRATEGY, strategy_epoch=CATCH_EPOCH, identity=identity(ticker=ticker))
+    s = trigger(journal, s, at=TRIG)
+    s = journal.append(sg.observation_event(journal, s.signal_id, detected_at=TRIG + timedelta(seconds=4),
+                                            prospective_catch=True, capture_late=False, gap_through=False,
+                                            trigger_source="alpaca_iex"))
+    return journal.append(sg.integrity_event(journal, s.signal_id, detected_at=TRIG + timedelta(seconds=4),
+                                             signal_integrity="VALID", data_integrity="VALID"))
 
 
 def all_factors(**observed):
@@ -93,13 +111,13 @@ def _records(s, *, epoch=None, data="VALID", result=1.0):
 
 def test_population_is_clean_registered_prospective_only():
     registry = REGISTRY
-    s = triggered()  # options_122 / 122-IEX-E1 (registered)
+    # One distinct registered catch per case (a repeated signal is a duplicate).
     joined = [
-        _records(s),
-        _records(s, epoch=""),
-        _records(s, epoch="122-IEX-E9"),
-        _records(s, data="DEGRADED"),
-        _records(s, result=None),
+        _records(triggered("SPY")),
+        _records(triggered("QQQ"), epoch=""),
+        _records(triggered("AAPL"), epoch="122-IEX-E9"),
+        _records(triggered("MSFT"), data="DEGRADED"),
+        _records(triggered("NVDA"), result=None),
     ]
     joined[1] = ({k: v for k, v in joined[1][0].items() if k != "strategy_epoch"}, *joined[1][1:])
     pop = rf.research_population(registry, joined)
@@ -116,9 +134,14 @@ def test_population_is_clean_registered_prospective_only():
 
 def test_population_never_selects_on_result_and_signal_integrity_is_authoritative():
     registry = REGISTRY
-    s = triggered()
-    late = s.__class__(**{**s.__dict__, "signal_integrity": sg.IntegrityStatus.DEGRADED})
-    joined = [_records(s, result=1.5), _records(s, result=-1.0), _records(s, result=0.0), _records(late)]
+    late_source = triggered("TSLA")
+    late = late_source.__class__(**{**late_source.__dict__, "signal_integrity": sg.IntegrityStatus.DEGRADED})
+    joined = [
+        _records(triggered("SPY"), result=1.5),
+        _records(triggered("QQQ"), result=-1.0),
+        _records(triggered("AAPL"), result=0.0),
+        _records(late),
+    ]
     pop = rf.research_population(registry, joined)
     assert sorted(r["result_r"] for r in pop.rows) == [-1.0, 0.0, 1.5]
     assert pop.excluded == {"integrity": 1}
@@ -177,3 +200,45 @@ def test_population_rejects_malformed_outcome_types_and_counterfactual_basis():
     pop = rf.research_population(REGISTRY, [(sig, counterfactual, row)])
     assert pop.excluded == {"outcome_basis": 1}
 
+
+
+# ── independent-review blockers on a0569e7 ─────────────────────────────────
+
+
+def test_duplicate_or_replayed_signal_never_counts_twice():
+    base = _records(triggered("SPY"))
+    other = _records(triggered("QQQ"))
+    pop = rf.research_population(REGISTRY, [base, base, base, other])
+    assert [r["signal_id"] for r in pop.rows] == [other[0]["signal_id"]]
+    assert pop.excluded == {"duplicate_signal": 3}
+    # Conflicting outcomes for one signal: neither is chosen.
+    s = triggered("AAPL")
+    pop = rf.research_population(REGISTRY, [_records(s, result=1.5), _records(s, result=-1.0)])
+    assert pop.rows == () and pop.excluded == {"duplicate_signal": 2}
+
+
+def test_forged_catch_on_a_signal_that_never_triggered_is_excluded():
+    journal = sg.SignalJournal(REGISTRY)
+    s = opened(journal, strategy=CATCH_STRATEGY, strategy_epoch=CATCH_EPOCH)
+    s = journal.append(sg.state_event(journal, s.signal_id, sg.LifecycleState.EXPIRED,
+                                      detected_at=TRIG, reason="no_trigger"))
+    s = journal.append(sg.integrity_event(journal, s.signal_id, detected_at=TRIG,
+                                          signal_integrity="VALID", data_integrity="VALID"))
+    record = {**sg.to_record(s), "prospective_catch": True}
+    assert sg.verify_record(record, registry=REGISTRY) == []  # the #1151 record check alone admits it
+    outcome = {
+        "schema": "options-outcome-evidence-v1", "signal_id": s.signal_id, "structure_id": s.structure_id,
+        "strategy_epoch": s.strategy_epoch, "executed": False, "pnl_basis": "paper_equivalent",
+        "resolution_state": None, "prospective_catch": True, "data_integrity": "VALID",
+        "signal_integrity": "VALID", "execution_integrity": "NOT_APPLICABLE",
+        "result_r": _measured(2.0, "DERIVED"),
+    }
+    row = {**rf.build_feature_row(s, all_factors())}
+    pop = rf.research_population(REGISTRY, [(record, outcome, row)])
+    assert pop.rows == () and pop.excluded == {"not_prospective_catch": 1}
+
+
+def test_persisted_feature_row_cannot_carry_extra_keys():
+    signal_record, outcome, row = _records(triggered("SPY"))
+    pop = rf.research_population(REGISTRY, [(signal_record, outcome, {**row, "score": 5})])
+    assert pop.rows == () and pop.excluded == {"feature_row_keys": 1}

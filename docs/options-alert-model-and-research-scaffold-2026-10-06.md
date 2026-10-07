@@ -73,15 +73,21 @@ signal that has not triggered yet, the cutoff is its first-seen time.
 The population contains only rows that meet all of these conditions:
 - the canonical signal record passes #1151 `verify_record(..., registry=...)`,
   including exact epoch definition/scope/source/provenance checks
-- the signal is a canonical `prospective_catch`
+- the signal is a canonical `prospective_catch` **with a TRIGGERED resolution**
+  (`resolution_state`, which `verify_record` ties to history); a catch flag on a
+  signal that never triggered is excluded as `not_prospective_catch`
+- the signal appears exactly once in the input: every triple of a `signal_id`
+  that repeats (a replay, or conflicting outcomes) is excluded as
+  `duplicate_signal`, so one catch never counts twice
 - the outcome identity/resolution/catch fields agree with the signal
 - the outcome uses an `executed` or `paper_equivalent` trade basis with an
   exact boolean `executed` field; counterfactual outcomes are excluded
 - VALID data integrity and VALID signal integrity on **both** the canonical
   signal record and the outcome record
 - executed outcomes also require VALID execution integrity
-- the persisted feature row independently passes its schema, identity,
-  decision-cutoff, factor-completeness, and no-look-ahead checks
+- the persisted feature row independently passes its schema, exact key set
+  (no extra keys such as a score), identity, decision-cutoff,
+  factor-completeness, and no-look-ahead checks
 - a known finite `result_R`
 
 The result never selects rows: winners, losers and scratches all stay in, and
