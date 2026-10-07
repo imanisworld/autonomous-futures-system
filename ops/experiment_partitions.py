@@ -335,6 +335,48 @@ def assert_oos_available(root: Path, *, trial_id: str) -> None:
         )
 
 
+def assert_consumed_trial_partitions_unchanged(
+    root: Path,
+    *,
+    trial_id: str,
+    frozen_partitions: Optional[Mapping[str, Mapping[str, str]]],
+) -> None:
+    """Fail closed when a trial that consumed its OOS look is re-scored on
+    redrawn or removed partitions (U4).
+
+    Once a receipt exists, every later run of that exact trial must declare
+    chronological partitions whose normalized untouched_oos window equals the
+    window recorded on the receipt. Removing partitions (legacy path) or moving
+    the OOS window — and with it the validation/development windows, which must
+    end at or before the OOS start — cannot re-score the consumed dates.
+    """
+    if not str(trial_id or "").strip():
+        return
+    receipt = find_oos_consumption(root, trial_id=trial_id)
+    if receipt is None:
+        return
+    if frozen_partitions is None:
+        raise PartitionContractError(
+            "trial already consumed its untouched_oos look; it cannot be re-scored "
+            "without its recorded chronological_partitions "
+            f"(receipt_identity={receipt_reuse_key(trial_id=trial_id)})"
+        )
+    recorded = receipt.get("untouched_oos_window")
+    try:
+        recorded_window = _normalize_window(recorded, partition=PARTITION_UNTOUCHED_OOS)
+    except PartitionContractError as exc:
+        raise PartitionContractError(
+            f"OOS receipt for trial_id={trial_id!r} has no usable untouched_oos_window: {exc}"
+        ) from exc
+    current = dict(frozen_partitions[PARTITION_UNTOUCHED_OOS])
+    if current != recorded_window:
+        raise PartitionContractError(
+            "trial already consumed its untouched_oos look on window "
+            f"[{recorded_window['start']}, {recorded_window['end']}); "
+            f"redrawn window [{current['start']}, {current['end']}) is refused"
+        )
+
+
 def _coverage_membership_ts(row: Mapping[str, Any]) -> Optional[datetime]:
     for key in COVERAGE_MEMBERSHIP_TS_KEYS:
         if _present(row.get(key)):
