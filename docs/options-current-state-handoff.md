@@ -17,7 +17,7 @@ This section is the active source-state checkpoint for the canonical options evi
 - #1149 merged as `ee815535`: canonical planned-risk authority.
 - #1150 merged as `f556751d`: hash-pinned, observation-only strategy-epoch registry.
 - #1151 fixed authority injection, missed-signal trade laundering, malformed inputs, provenance relabelling, impossible chronology, and forged/mismatched epoch labels. Non-catches are counterfactual-only and cannot contribute realised/scorable trade results.
-- #1151 was reconciled with current `main` `67b7cbf` via merge commit `9d4cd8b`; the main delta was disjoint from #1151 files.
+- #1151 was reconciled again with current `main` `f35b976` via merge commit `3a69fd3`; the new main delta was disjoint from #1151 files.
 - Do not reimplement #1151 provenance, chronology, counterfactual, or epoch-scope rules in #1152/#1153.
 
 ### OPEN / NEXT
