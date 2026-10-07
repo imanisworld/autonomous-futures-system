@@ -16,6 +16,14 @@ def lock():
     return dl.parse_lock((ROOT / dl.LOCK_REL).read_text(encoding="utf-8"))
 
 
+def test_lock_python_minor_is_explicit():
+    assert dl.LOCK_PYTHON == (3, 13)
+    assert dl.python_version_problem((3, 13, 9)) is None
+    problem = dl.python_version_problem((3, 12, 10))
+    assert problem and "requires Python 3.13" in problem
+
+
+
 def test_lock_satisfies_every_direct_requirement(lock):
     assert dl.requirement_problems(ROOT / dl.REQUIREMENTS_REL, lock) == []
 

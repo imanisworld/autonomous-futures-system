@@ -198,7 +198,9 @@ def test_release_installs_only_the_lock_and_verifies_it():
     assert "-m ops.dependency_lock check-freeze" in text
     assert 'python3 -m ops.release_ci_proof verify-live --sha "$sha"' in text
     assert "python3 -m ops.dependency_lock check-requirements" in text
+    assert "python3 -m ops.dependency_lock check-python" in text
+    assert "PYTHONPATH=\'$RELEASES/$sha\' python3 -m ops.dependency_lock check-python" in text
     assert "git merge-base --is-ancestor \"$sha\" origin/main" in text
-    assert 'archive="$(mktemp "/tmp/afs-release-${short}.XXXX.tgz")"' in text
+    assert 'archive="$(mktemp "/tmp/afs-release-${short}.XXXX")"' in text
     build = text.split("build_release() {", 1)[1].split("verify_release() {", 1)[0]
     assert build.index("verify-live") < build.index("deploy_lock_acquire")

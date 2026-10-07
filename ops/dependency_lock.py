@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 LOCK_REL = "requirements.lock"
 REQUIREMENTS_REL = "requirements.txt"
 INSTALLER_DISTS = frozenset({"pip", "setuptools", "wheel"})
+LOCK_PYTHON = (3, 13)
 
 # Directories that are not part of the futures release's Python runtime.
 NON_PRODUCTION_DIRS = frozenset(
@@ -39,6 +40,15 @@ _PIN = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)==([A-Za-z0-9][A-Za-z0-9.+!_-]*
 class LockError(ValueError):
     """The lock or an install does not match the lock contract."""
 
+
+def python_version_problem(version_info=None) -> Optional[str]:
+    observed = tuple((version_info or sys.version_info)[:2])
+    if observed != LOCK_PYTHON:
+        return (
+            f"dependency lock requires Python {LOCK_PYTHON[0]}.{LOCK_PYTHON[1]}, "
+            f"observed {observed[0]}.{observed[1]}"
+        )
+    return None
 
 def canonical(name: str) -> str:
     return re.sub(r"[-_.]+", "-", name).lower()
@@ -210,7 +220,16 @@ def main(argv: Optional[list[str]] = None) -> int:
     req = sub.add_parser("check-requirements", help="Fail unless the lock satisfies requirements")
     req.add_argument("--lock", type=Path, default=ROOT / LOCK_REL)
     req.add_argument("--requirements", type=Path, default=ROOT / REQUIREMENTS_REL)
+    sub.add_parser("check-python", help="Fail unless the interpreter matches the lock's Python minor")
     args = parser.parse_args(argv)
+
+    if args.command == "check-python":
+        problem = python_version_problem()
+        if problem:
+            print(f"DEPENDENCY LOCK BLOCKED: {problem}", file=sys.stderr)
+            return 1
+        return 0
+
     try:
         lock = parse_lock(args.lock.read_text(encoding="utf-8"))
         if args.command == "check-freeze":

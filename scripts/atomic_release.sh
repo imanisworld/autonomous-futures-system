@@ -69,7 +69,7 @@ build_release() {
   fi
   short="${sha:0:12}"
   work="$(mktemp -d "/tmp/afs-release-${short}.XXXX")"
-  archive="$(mktemp "/tmp/afs-release-${short}.XXXX.tgz")"
+  archive="$(mktemp "/tmp/afs-release-${short}.XXXX")"
   manifest="$work/release_manifest.json"
   trap "git worktree remove -f '$work' >/dev/null 2>&1 || true; rm -f '$archive'" EXIT
 
@@ -84,6 +84,7 @@ build_release() {
     # verify-live re-queries GitHub and requires the newest required run IDs
     # to match this exact SHA before any connection to the futures box.
     python3 -m ops.release_ci_proof verify-live --sha "$sha" --proof "$ci_proof"
+    python3 -m ops.dependency_lock check-python
     python3 -m ops.dependency_lock check-requirements \
       --lock requirements.lock --requirements requirements.txt
     RELEASE_BRANCH=main python3 -m ops.release_manifest \
@@ -106,6 +107,7 @@ build_release() {
     test ! -e '$RELEASES/$sha' || { echo 'release already exists: $sha'; exit 2; }
     mkdir '$RELEASES/$sha'
     tar xzf '/tmp/afs-release-${short}.tgz' -C '$RELEASES/$sha'
+    PYTHONDONTWRITEBYTECODE=1 PYTHONPATH='$RELEASES/$sha' python3 -m ops.dependency_lock check-python
     python3 -m venv '$RELEASES/$sha/.venv'
     # U11: install ONLY the exact production lock, no dependency resolution;
     # then prove the venv is complete and identical to the lock.
