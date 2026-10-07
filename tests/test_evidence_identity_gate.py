@@ -257,6 +257,25 @@ def test_edited_bundle_file_is_invalid(tmp_path):
     assert "bundle file edited after writing: candidate_raw.json" in result.reasons
 
 
+def test_rehashed_row_identity_divergence_is_invalid(tmp_path):
+    root, _ = _run(_seed(tmp_path / "repo"))
+    bundle = _bundle(root)
+    raw_path = bundle / "candidate_raw.json"
+    raw = json.loads(raw_path.read_text())
+    raw["members"][0]["data_fingerprint"] = "dataset_hash:" + ("0" * 64)
+    raw_path.write_text(json.dumps(raw, indent=2, sort_keys=True) + "\n")
+
+    # Repair the byte manifest so this tests semantic identity, not stale bytes.
+    manifest_path = bundle / "bundle_manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["files"]["candidate_raw.json"] = gate._sha256(raw_path)
+    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+
+    result = gate.classify_evidence_bundle(root, bundle)
+    assert result.status == gate.INVALID
+    assert any("data_fingerprint" in reason for reason in result.reasons)
+
+
 def test_strategy_identity_is_bound_to_canonical_trade_rows(tmp_path):
     root, _ = _run(_seed(tmp_path / "repo"))
     bundle = _bundle(root)

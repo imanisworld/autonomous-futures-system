@@ -223,6 +223,18 @@ def classify_evidence_bundle(
                 strategy_rows_valid = False
                 fail(f"{raw_name}.members[{index}] must be an object")
                 continue
+            try:
+                evidence_contract.validate_trade_execution_row(
+                    row,
+                    expected_execution_model_id=str(
+                        envelope.get("execution_model_id") or ""
+                    ),
+                    expected_data_fingerprint=str(envelope.get("data_identity") or ""),
+                )
+            except evidence_contract.EvidenceContractError as exc:
+                strategy_rows_valid = False
+                fail(f"{raw_name}.members[{index}] canonical row contract: {exc}")
+                continue
             value = row.get("strategy_identity")
             if not isinstance(value, str) or not value.strip():
                 strategy_rows_valid = False

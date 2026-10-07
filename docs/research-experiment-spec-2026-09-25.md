@@ -418,6 +418,8 @@ Promotion-quality requires, from the runner bundle itself:
   SHAs must equal their corresponding approved-spec arm SHAs;
   `data_identity`, `evaluation_partition`, `execution_model_id`;
 - `data_identity` pinned as `dataset_hash:<sha256>`;
+- every canonical baseline/candidate trade row is revalidated against the
+  envelope's dataset fingerprint and execution-model identity;
 - the bundle at `docs/research-evidence/<trial_id>/`, with a
   `bundle_manifest.json` (written last by the runner) whose per-file
   SHA-256 values still match and which lists every required bundle file;
