@@ -404,6 +404,8 @@ def bind_dataset(root: Path, spec: Mapping[str, Any]) -> BoundDataset:
             )
         bound_days.append({**raw, "resolved_path": resolved, "sha256": digest})
 
+    verify_manifest_chronology(bound_days)
+
     bound_htf: list[dict[str, Any]] = []
     for index, raw in enumerate(payload.get("htf") or []):
         if not isinstance(raw, dict) or not {"timeframe", "path", "sha256"} <= set(raw):
@@ -436,6 +438,57 @@ def _parse_utc(value: Any, *, field_name: str) -> datetime:
 
 def _iso(dt: datetime) -> str:
     return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _file_time_span(day: Mapping[str, Any]) -> Optional[tuple[datetime, datetime]]:
+    first: Optional[datetime] = None
+    last: Optional[datetime] = None
+    for line_no, line in enumerate(
+        day["resolved_path"].read_text(encoding="utf-8").splitlines(), start=1
+    ):
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except ValueError as exc:
+            raise FuturesReplayAdapterError(f"{day['path']}:{line_no} is not valid JSON") from exc
+        if not isinstance(row, dict):
+            raise FuturesReplayAdapterError(f"{day['path']}:{line_no} must be a JSON object")
+        ts = _parse_utc(row.get("timestamp"), field_name=f"{day['path']}:{line_no} timestamp")
+        if last is not None and ts < last:
+            raise FuturesReplayAdapterError(
+                f"{day['path']}:{line_no} timestamp {_iso(ts)} precedes prior candle {_iso(last)}"
+            )
+        first = ts if first is None else first
+        last = ts
+    if first is None or last is None:
+        return None
+    return first, last
+
+
+def verify_manifest_chronology(days: list[Mapping[str, Any]]) -> None:
+    """Fail closed unless manifest day files are globally chronological.
+
+    ReplayEngine.run_manifest() executes files in manifest order and carries
+    rolling balance and open positions across files. Each file must therefore
+    start strictly after every earlier file has finished, regardless of
+    instrument, or later-dated state could leak into earlier-dated replay.
+    """
+    prior_end: Optional[datetime] = None
+    prior_path: Optional[str] = None
+    for index, day in enumerate(days):
+        span = _file_time_span(day)
+        if span is None:
+            raise FuturesReplayAdapterError(f"manifest days[{index}] {day['path']} has no candles")
+        start, end = span
+        if prior_end is not None and start <= prior_end:
+            raise FuturesReplayAdapterError(
+                f"manifest days[{index}] {day['path']} starts {_iso(start)} at/before "
+                f"{prior_path} ends {_iso(prior_end)}; manifest days must be globally "
+                "chronological and non-overlapping"
+            )
+        prior_end = end
+        prior_path = str(day["path"])
 
 
 def stage_candles(

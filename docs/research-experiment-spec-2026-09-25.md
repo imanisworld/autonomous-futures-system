@@ -348,6 +348,10 @@ Fail-closed requirements:
 - `data.dataset_id` is a repo-relative replay manifest whose SHA-256 equals
   `data.dataset_hash`; every `days[]` entry (and optional `htf[]` entry)
   carries a `sha256` of its file.
+- `days[]` must be globally chronological across all instruments: each file
+  is internally ordered and starts strictly after every earlier file ends.
+  ReplayEngine carries rolling balance and open positions across files, so a
+  swapped or overlapping manifest fails closed before replay.
 - The paper-to-broker mirror hook must be disabled.
 - The 2-1-2 / 1-2-2 intrabar restore path is not supported.
 

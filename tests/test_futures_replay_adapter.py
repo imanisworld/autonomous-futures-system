@@ -709,3 +709,92 @@ def test_risk_rejected_becomes_no_fill_with_reject_reason(week_index):
             {"PAPER-1": _outcome()},
             week_index,
         )
+
+
+# ─── Global manifest chronology (breaker-QA #1158) ──────────────────────────
+
+
+def _rehash(manifest, data_dir):
+    for day in manifest["days"]:
+        day["sha256"] = _sha(data_dir / day["path"])
+
+
+def test_swapped_day_files_fail_closed_before_replay(tmp_path, wired, monkeypatch):
+    def swap(manifest, data_dir):
+        # day_3 (2026-05-20) ahead of day_1 (2026-05-18): hash-valid, non-causal.
+        days = manifest["days"]
+        days[0], days[2] = days[2], days[0]
+
+    spec_path = _seed(tmp_path / "repo", manifest_mutator=swap)
+    wired(spec_path)
+
+    def _must_not_run(*_a, **_k):
+        raise AssertionError("ReplayEngine executed a non-chronological manifest")
+
+    monkeypatch.setattr(ReplayEngine, "run_manifest", _must_not_run)
+    with pytest.raises(fr.FuturesReplayAdapterError, match="globally chronological"):
+        fr.run_futures_replay(_ctx(spec_path))
+
+
+def test_overlapping_day_files_fail_closed(tmp_path, wired):
+    def overlap(manifest, data_dir):
+        first = manifest["days"][0]["path"]
+        second = data_dir / manifest["days"][1]["path"]
+        first_rows = [
+            json.loads(line)
+            for line in (data_dir / first).read_text().splitlines()
+            if line.strip()
+        ]
+        rows = [json.loads(line) for line in second.read_text().splitlines() if line.strip()]
+        intruder = dict(rows[0], timestamp=first_rows[-1]["timestamp"])
+        second.write_text(
+            "\n".join(json.dumps(r) for r in [intruder, *rows]) + "\n", encoding="utf-8"
+        )
+        _rehash(manifest, data_dir)
+
+    spec_path = _seed(tmp_path / "repo", manifest_mutator=overlap)
+    wired(spec_path)
+    with pytest.raises(fr.FuturesReplayAdapterError, match="non-overlapping"):
+        fr.run_futures_replay(_ctx(spec_path))
+
+
+def test_out_of_order_partition_beyond_window_still_fails_closed(tmp_path, wired):
+    # Ordering is checked on full files before partition truncation.
+    def swap_tail(manifest, data_dir):
+        days = manifest["days"]
+        days[-1], days[-2] = days[-2], days[-1]
+
+    spec_path = _seed(tmp_path / "repo", manifest_mutator=swap_tail)
+    wired(spec_path)
+    with pytest.raises(fr.FuturesReplayAdapterError, match="globally chronological"):
+        fr.run_futures_replay(_ctx(spec_path))
+
+
+def _day(tmp_path, name, stamps):
+    path = tmp_path / name
+    path.write_text(
+        "".join(json.dumps({"timestamp": ts}) + "\n" for ts in stamps), encoding="utf-8"
+    )
+    return {"path": name, "resolved_path": path}
+
+
+def test_chronology_rejects_shared_boundary_timestamp(tmp_path):
+    a = _day(tmp_path, "a.jsonl", ["2026-05-18T14:30:00Z", "2026-05-18T14:35:00Z"])
+    b = _day(tmp_path, "b.jsonl", ["2026-05-18T14:35:00Z", "2026-05-18T14:40:00Z"])
+    with pytest.raises(fr.FuturesReplayAdapterError, match="non-overlapping"):
+        fr.verify_manifest_chronology([a, b])
+
+
+def test_chronology_rejects_in_file_disorder_and_empty_file(tmp_path):
+    bad = _day(tmp_path, "bad.jsonl", ["2026-05-18T14:35:00Z", "2026-05-18T14:30:00Z"])
+    with pytest.raises(fr.FuturesReplayAdapterError, match="precedes prior candle"):
+        fr.verify_manifest_chronology([bad])
+    empty = _day(tmp_path, "empty.jsonl", [])
+    with pytest.raises(fr.FuturesReplayAdapterError, match="has no candles"):
+        fr.verify_manifest_chronology([empty])
+
+
+def test_chronology_accepts_strictly_ordered_files_across_instruments(tmp_path):
+    a = _day(tmp_path, "a.jsonl", ["2026-05-18T14:30:00Z", "2026-05-18T14:35:00Z"])
+    b = _day(tmp_path, "b.jsonl", ["2026-05-19T14:30:00Z"])
+    fr.verify_manifest_chronology([a, b])
