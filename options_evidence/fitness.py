@@ -111,6 +111,10 @@ class Observation:
             raise ValueError("prospective_catch must be an exact bool")
         if self.pnl_basis is not None and self.pnl_basis not in PNL_BASES:
             raise ValueError(f"pnl_basis must be one of {PNL_BASES}")
+        if self.executed and self.pnl_basis != "executed":
+            raise ValueError("executed observation must use pnl_basis=executed")
+        if not self.executed and self.pnl_basis == "executed":
+            raise ValueError("non-executed observation cannot use pnl_basis=executed")
         for name in ("data_integrity", "signal_integrity", "execution_integrity"):
             if not isinstance(getattr(self, name), IntegrityStatus):
                 raise ValueError(f"{name} must be an IntegrityStatus")
