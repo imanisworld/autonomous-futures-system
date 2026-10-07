@@ -12,7 +12,7 @@ from config.futures_contracts import (
     UnsupportedContractError,
     contract_economics,
 )
-from execution.broker_interface import BracketOrder
+from execution.broker_interface import BracketOrder, Position
 
 ROOT = Path(__file__).resolve().parents[1]
 PRE_U7_BROKER_ROOTS = {"MES", "ES", "MNQ", "NQ", "MGC", "MCL"}
@@ -72,6 +72,27 @@ def test_unknown_contract_order_is_refused_before_any_broker_contact(monkeypatch
     fill = broker.execute_bracket(order)
     assert fill.result == "CANCELLED"
     assert fill.exit_reason == "CONTRACT_METADATA_UNSUPPORTED"
+
+
+def test_replace_stop_rejects_malformed_position_symbol_before_broker_contact(monkeypatch):
+    broker = tb.TradovateBroker(config=tb.TradovateConfig(expected_account_id=555))
+    broker._last_position = Position(
+        instrument="M1!NQ",
+        direction="LONG",
+        entry_price=2000.0,
+        stop=1990.0,
+        target=2030.0,
+        quantity=1,
+        open=True,
+    )
+    broker._last_order_ids = {"stop": 123}
+
+    def boom(*_a, **_k):
+        raise AssertionError("broker contacted for malformed position metadata")
+
+    monkeypatch.setattr(broker, "_authenticate", boom)
+    monkeypatch.setattr(broker, "_post", boom)
+    assert broker.replace_stop(1995.0) is False
 
 
 def test_broker_source_has_no_private_tick_tables_or_defaults():

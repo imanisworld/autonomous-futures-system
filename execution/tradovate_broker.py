@@ -2187,11 +2187,13 @@ class TradovateBroker(BrokerInterface):
             logger.warning("replace_stop: no resting stop order id — cannot trail safely")
             return False
 
-        root = (pos.instrument or "").replace("1!", "").upper()
         try:
-            new_stop = _round_to_tick(float(new_stop_price), root)
+            new_stop = _round_to_tick(float(new_stop_price), pos.instrument)
         except UnsupportedContractError:
-            logger.error("replace_stop: no contract metadata for %s — not trailing", root)
+            logger.error(
+                "replace_stop: no contract metadata for %s — not trailing",
+                pos.instrument,
+            )
             return False
         cur = float(pos.stop)
         # Never loosen — the whole point of a runner trail is a monotonic stop.
