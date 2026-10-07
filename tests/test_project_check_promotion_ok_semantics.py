@@ -46,13 +46,14 @@ def test_report_ok_is_false_when_hard_promotion_blocker_exists(tmp_path: Path, m
 
 def test_report_ok_is_true_only_when_promotion_gate_passes(tmp_path: Path, monkeypatch) -> None:
     _pin_runtime(monkeypatch)
-    from tests.canonical_bundle_helpers import make_promotion_bundle
+    from tests.canonical_bundle_helpers import make_fi_manifest, make_promotion_bundle
 
-    bundle, _ = make_promotion_bundle(tmp_path, fills=1)
+    bundle, code_sha = make_promotion_bundle(tmp_path, fills=1)
     evidence = _write_evidence(
         tmp_path,
         {
             "canonical_evidence": {"bundles": [bundle]},
+            "fault_injection": {"manifest": make_fi_manifest(tmp_path, code_sha)},
             "identity_parity": {
                 "candidate_identity_parity": True,
                 "direction_parity": True,

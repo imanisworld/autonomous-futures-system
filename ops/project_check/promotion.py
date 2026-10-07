@@ -624,6 +624,38 @@ def _check_canonical_quantity(
     }
 
 
+def _check_fault_injection(root: Path, supplied: Any, derived: dict[str, Any] | None) -> dict[str, Any]:
+    """Exact-SHA FI proof for the code SHA derived from canonical evidence."""
+    from ops.fault_injection_gate import load_manifest, verify_manifest
+
+    manifest_ref = supplied.get("manifest") if isinstance(supplied, dict) else None
+    manifest = None
+    path_blocker = None
+    if isinstance(manifest_ref, str) and manifest_ref.strip():
+        candidate = Path(manifest_ref)
+        candidate = candidate if candidate.is_absolute() else root / candidate
+        try:
+            resolved = candidate.resolve()
+            resolved.relative_to(root.resolve())
+        except (OSError, ValueError):
+            path_blocker = "fault-injection manifest must resolve inside the repository root"
+        else:
+            manifest = load_manifest(resolved)
+    code_sha = (derived or {}).get("code_sha")
+    blockers: list[str] = []
+    if path_blocker:
+        blockers.append(f"fault-injection proof: {path_blocker}")
+    blockers.extend(
+        f"fault-injection proof: {problem}"
+        for problem in verify_manifest(root, manifest, code_sha=code_sha)
+    )
+    return {
+        "manifest": manifest_ref,
+        "code_sha": code_sha,
+        "verified": not blockers,
+        "blockers": blockers,
+    }
+
 def build_promotion_report(
     *,
     strategy: str,
@@ -650,6 +682,8 @@ def build_promotion_report(
     canonical = derive_canonical_facts(root, evidence.get("canonical_evidence"))
     canonical_blockers = list(canonical["blockers"])
     derived = canonical.get("derived")
+    fault_injection = _check_fault_injection(root, evidence.get("fault_injection"), derived)
+    canonical_blockers.extend(fault_injection["blockers"])
     if derived is not None:
         execution, identity_parity, research_result, extra = _apply_canonical_facts(
             derived,
@@ -729,6 +763,7 @@ def build_promotion_report(
         "execution_context": execution_context,
         "quantity_evidence": quantity_evidence,
         "canonical_evidence": canonical,
+        "fault_injection": fault_injection,
         "classification": caps,
         "notes": evidence.get("notes"),
         "forbidden_actions_reminder": (
