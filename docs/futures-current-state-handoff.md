@@ -4,6 +4,16 @@
 
 _As of 2026-09-24 (runtime and current decisions: see the 2026-09-24 blocks in `docs/futures-current-status-2026-09-22.md`, then the reconciliation note below). This is the long futures handoff. Historical audit docs remain evidence records._
 
+## Repository safety refresh — 2026-10-07
+
+- Repository `main`: `f35b976efe523dbbc2090809ce72e91f0e9d3e95` after U7 / PR #1162.
+- U7 hardens broker contract metadata fail-closed; merge record reports `8172 passed, 8 skipped`.
+- **DO NOT DEPLOY U7.** The merge record explicitly says U8 contract-identity routing remains pending.
+- Current draft safety dependency stack: U8 #1163 → U9 #1164 → U10 #1165 → U11 #1166. Draft existence is not review/merge/deploy clearance.
+- Last documented deployed futures release remains `c44d32bc4961e56fae5c5f88a976eb6783341638` from 2026-10-04.
+- Fresh runtime identity, integrity, effective env/account safety gates, broker state, and journal/state integrity are **UNVERIFIED** until an authorized runtime source is reachable. Repository state must not be used as a substitute.
+- Current operator actions live in `docs/futures-operator-todo.md`; agent resume state lives in `docs/agent-work-state.md`. Older sections below are dated provenance.
+
 ## Release `c44d32b` deployed; 4HR natural-1m canonical epoch started — 2026-10-04
 
 - Deployed futures release: `c44d32bc4961e56fae5c5f88a976eb6783341638`, promoted 2026-10-04 21:29:09Z via `scripts/atomic_release.sh` build → verify → promote under explicit operator GO. Rollback target `489b55b91b6303c195c8e84bfcbf05ef32d1ab04` (`current.previous`).
