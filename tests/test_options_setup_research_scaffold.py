@@ -7,18 +7,14 @@ import pytest
 
 from options_evidence import research_features as rf
 from options_evidence import signal as sg
-from options_evidence.strategy_epochs import load_registry
-from tests.test_options_prospective_signal import T0, opened, trigger
+from tests.test_options_prospective_signal import REGISTRY, T0, caught
 
 TRIG = T0 + timedelta(minutes=10)
 
 
 def triggered():
-    journal = sg.SignalJournal()
-    s = opened(journal)
-    s = trigger(journal, s, at=TRIG)
-    return journal.append(sg.integrity_event(journal, s.signal_id, detected_at=TRIG + timedelta(seconds=4),
-                                             signal_integrity="VALID", data_integrity="VALID"))
+    journal = sg.SignalJournal(REGISTRY)
+    return caught(journal, at=TRIG)
 
 
 def all_factors(**observed):
@@ -65,23 +61,38 @@ def test_scaffold_offers_no_score():
     assert not {n for n in public if any(w in n.lower() for w in ("score", "weight", "rank", "grade"))}
 
 
+def _measured(value=None, status="UNAVAILABLE"):
+    return {
+        "value": value if status in ("OBSERVED", "DERIVED") else None,
+        "status": status,
+        "reason": "" if status in ("OBSERVED", "DERIVED") else "not measured",
+        "source": "test" if status == "OBSERVED" else "",
+    }
+
+
 def _records(s, *, epoch=None, data="VALID", result=1.0):
     signal_record = sg.to_record(s)
     if epoch is not None:
         signal_record = {**signal_record, "strategy_epoch": epoch}
     outcome = {
+        "schema": "options-outcome-evidence-v1",
         "signal_id": s.signal_id,
+        "structure_id": s.structure_id,
+        "strategy_epoch": s.strategy_epoch,
+        "executed": False,
+        "pnl_basis": "paper_equivalent",
+        "resolution_state": s.resolution.value if s.resolution else None,
+        "prospective_catch": s.is_prospective_catch,
         "data_integrity": data,
         "signal_integrity": "VALID",
-        "result_r": {"value": result, "status": "DERIVED" if result is not None else "UNAVAILABLE",
-                     "reason": "" if result is not None else "gap"},
+        "execution_integrity": "NOT_APPLICABLE",
+        "result_r": _measured(result, "DERIVED") if result is not None else _measured(),
     }
     row = rf.build_feature_row(s, all_factors())
     return signal_record, outcome, row
 
-
 def test_population_is_clean_registered_prospective_only():
-    registry = load_registry()
+    registry = REGISTRY
     s = triggered()  # options_122 / 122-IEX-E1 (registered)
     joined = [
         _records(s),
@@ -104,13 +115,12 @@ def test_population_is_clean_registered_prospective_only():
 
 
 def test_population_never_selects_on_result_and_signal_integrity_is_authoritative():
-    registry = load_registry()
+    registry = REGISTRY
     s = triggered()
     late = s.__class__(**{**s.__dict__, "signal_integrity": sg.IntegrityStatus.DEGRADED})
     joined = [_records(s, result=1.5), _records(s, result=-1.0), _records(s, result=0.0), _records(late)]
     pop = rf.research_population(registry, joined)
-    assert sorted(r["result_r"] for r in pop.rows) == [-1.0, 0.0, 1.5]  # losers stay in
-    # a DEGRADED (late/gap) canonical signal is excluded even though its outcome row says VALID
+    assert sorted(r["result_r"] for r in pop.rows) == [-1.0, 0.0, 1.5]
     assert pop.excluded == {"integrity": 1}
 
 
@@ -131,3 +141,39 @@ def test_lookahead_cutoff_is_trigger_detection_for_adapted_1145_capture(tmp_path
     rf.build_feature_row(s, all_factors(gex_regime=("NEG_GAMMA", cutoff)))
     with pytest.raises(rf.ResearchError, match="look-ahead"):
         rf.build_feature_row(s, all_factors(gex_regime=("NEG_GAMMA", cutoff + timedelta(seconds=1))))
+
+def test_population_rejects_forged_scope_and_persisted_feature_lookahead():
+    s = triggered()
+
+    sig, out, row = _records(s, result=1.0)
+    forged_sig = {**sig, "data_source": "forged:source"}
+    pop = rf.research_population(REGISTRY, [(forged_sig, out, row)])
+    assert pop.rows == ()
+    assert pop.excluded == {"signal_record_invalid": 1}
+
+    sig, out, row = _records(s, result=1.0)
+    bad_row = json.loads(json.dumps(row))
+    bad_row["factors"]["gex_regime"] = {
+        "status": "OBSERVED",
+        "value": "NEG_GAMMA",
+        "as_of": (s.trigger_detection_time + timedelta(seconds=1)).isoformat(),
+        "source": "forged",
+        "reason": "",
+    }
+    pop = rf.research_population(REGISTRY, [(sig, out, bad_row)])
+    assert pop.rows == ()
+    assert pop.excluded == {"feature_row_lookahead": 1}
+
+
+def test_population_rejects_malformed_outcome_types_and_counterfactual_basis():
+    s = triggered()
+    sig, out, row = _records(s, result=1.0)
+
+    bad_exec = {**out, "executed": "false"}
+    pop = rf.research_population(REGISTRY, [(sig, bad_exec, row)])
+    assert pop.excluded == {"outcome_executed_type": 1}
+
+    counterfactual = {**out, "pnl_basis": "counterfactual"}
+    pop = rf.research_population(REGISTRY, [(sig, counterfactual, row)])
+    assert pop.excluded == {"outcome_basis": 1}
+
