@@ -41,7 +41,12 @@ replay/decision/risk/paper-broker path, pessimistic same-bar resolution,
 baseline adverse slippage and round-turn commission. A packet value that
 contradicts a derived value is a blocker. All listed bundles must agree on
 one `code_sha`, `execution_model_id` and `strategy_identity` (the row-bound
-identity from the U4 gate); disagreement is a blocker. Facts the bundles cannot prove
+identity from the U4 gate); disagreement is a blocker. The promotion target
+(`--strategy`, and the packet's `strategy` if present) must resolve to that
+canonical `strategy_identity`: an exact `risk_rules.yaml` strategy-concept key,
+or a confirmed alias in `STRATEGY_NAME_ALIASES` (`ops/project_check/daily.py`);
+nothing else is aliased. A mismatch blocks promotion and, through it, DEMO
+qualification. Facts the bundles cannot prove
 (live/replay identity parity, lookahead freedom, IOC/gap modelling, stress
 tests, change scope, golden fixtures) remain attested and are still required.
 

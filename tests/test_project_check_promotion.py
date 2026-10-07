@@ -346,7 +346,7 @@ def test_complete_required_proof_can_pass(tmp_path: Path, monkeypatch) -> None:
     payload.pop("execution")  # derived from the canonical bundle (U5)
     payload["canonical_evidence"] = {"bundles": [bundle]}
     evidence = _write_evidence(tmp_path, payload)
-    report = build_promotion_report(strategy="x", repo_root=tmp_path, evidence_path=evidence)
+    report = build_promotion_report(strategy="example", repo_root=tmp_path, evidence_path=evidence)
     assert report["gate_pass"] is True, report["classification"]["blockers"]
     assert report["promotion_eligible"] is True
     assert report["execution"]["fills"] == 40

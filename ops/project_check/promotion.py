@@ -94,6 +94,7 @@ from ops.project_check.canonical_promotion_evidence import (
     derive_canonical_facts,
 )
 from ops.project_check.runtime import runtime_snapshot
+from ops.project_check.daily import STRATEGY_NAME_ALIASES, _normalize as _normalize_strategy_name
 
 VALID_CLASSIFICATIONS = {
     "VALIDATED",
@@ -465,6 +466,53 @@ def _safety_caps(
     }
 
 
+def resolve_strategy_identity(name: Any) -> str | None:
+    """Resolve a promotion target to a risk_rules.yaml strategy-concept key.
+
+    Only an exact key or a confirmed repo-owned alias (``STRATEGY_NAME_ALIASES``)
+    resolves; nothing is guessed from free text.
+    """
+    if not isinstance(name, str) or not name.strip():
+        return None
+    return STRATEGY_NAME_ALIASES.get(_normalize_strategy_name(name), name.strip())
+
+
+def _bind_strategy_identity(
+    strategy: str,
+    *,
+    packet_strategy: Any,
+    derived: dict[str, Any],
+) -> tuple[dict[str, Any], list[str]]:
+    """The promotion target must be the strategy the canonical rows prove."""
+    blockers: list[str] = []
+    target = resolve_strategy_identity(strategy)
+    canonical = derived.get("strategy_identity")
+    if target is None:
+        blockers.append("promotion target strategy is empty")
+    elif canonical is None:
+        blockers.append("canonical evidence has no single strategy_identity to bind")
+    elif target != canonical:
+        blockers.append(
+            f"promotion target strategy {strategy!r} (resolved {target!r}) does not match "
+            f"canonical evidence strategy_identity {canonical!r}"
+        )
+    if packet_strategy not in (None, ""):
+        packet_target = resolve_strategy_identity(packet_strategy)
+        if packet_target != target:
+            blockers.append(
+                f"evidence packet strategy {packet_strategy!r} contradicts promotion target "
+                f"{strategy!r}"
+            )
+    binding = {
+        "requested": strategy,
+        "resolved": target,
+        "canonical_strategy_identity": canonical,
+        "packet_strategy": packet_strategy,
+        "bound": not blockers,
+    }
+    return binding, blockers
+
+
 def _apply_canonical_facts(
     derived: dict[str, Any],
     *,
@@ -598,6 +646,12 @@ def build_promotion_report(
             execution_context_claimed=execution_context_claimed,
         )
         canonical_blockers.extend(extra)
+        strategy_binding, binding_blockers = _bind_strategy_identity(
+            strategy, packet_strategy=evidence.get("strategy"), derived=derived
+        )
+        canonical_blockers.extend(binding_blockers)
+    else:
+        strategy_binding = {"requested": strategy, "bound": False}
 
     accounting = _check_accounting_identities(execution)
     execution_context = _execution_context_check(repo_root=root, claimed=execution_context_claimed)
@@ -637,6 +691,7 @@ def build_promotion_report(
         "routine": "promotion-proof-gate",
         "generated_at": _now_iso(),
         "strategy": strategy,
+        "strategy_identity_binding": strategy_binding,
         "evidence_path": str(evidence_path) if evidence_path else None,
         "evidence_load_error": evidence_error,
         "evidence_supplied": evidence_supplied,

@@ -676,3 +676,18 @@ def test_fractional_slippage_stress_ticks_cannot_satisfy_required_stress(
         "must include both 2-tick and 3-tick adverse stress" in blocker
         for blocker in report["blockers"]
     )
+
+
+def test_demo_rejects_canonical_evidence_for_a_different_strategy(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _pin_runtime_head_and_diff(monkeypatch)
+    evidence = _canonical_complete_evidence(tmp_path, monkeypatch)
+
+    report = build_demo_qualification_report(
+        strategy="orb_breakout", repo_root=tmp_path, evidence_path=evidence
+    )
+
+    assert report["gate_pass"] is False
+    assert report["demo_evidence_eligible"] is False
+    assert any("canonical evidence strategy_identity" in b for b in report["blockers"])

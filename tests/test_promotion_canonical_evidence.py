@@ -330,3 +330,61 @@ def test_bundles_sharing_strategy_identity_do_not_block_on_it(tmp_path, bundle, 
     facts = cpe.derive_canonical_facts(tmp_path, {"bundles": [bundle, second]})
     assert not any("strategy_identity" in b for b in facts["blockers"])
     assert facts["derived"]["strategy_identity"] == "example"
+
+
+# ─── Promotion target bound to canonical strategy identity (breaker #1160) ──
+
+
+def test_promotion_target_must_match_canonical_strategy_identity(tmp_path, bundle):
+    path = tmp_path / "facts.json"
+    path.write_text(json.dumps(_packet([bundle])), encoding="utf-8")
+    report = build_promotion_report(strategy="orb_breakout", repo_root=tmp_path, evidence_path=path)
+    assert report["gate_pass"] is False
+    assert report["strategy_identity_binding"]["bound"] is False
+    assert any(
+        "does not match canonical evidence strategy_identity 'example'" in b
+        for b in report["classification"]["blockers"]
+    )
+
+
+def test_matching_promotion_target_is_bound(tmp_path, bundle):
+    report = _report(tmp_path, _packet([bundle]))
+    binding = report["strategy_identity_binding"]
+    assert binding["bound"] is True
+    assert binding["resolved"] == binding["canonical_strategy_identity"] == "example"
+
+
+def test_packet_strategy_contradicting_target_blocks(tmp_path, bundle):
+    report = _report(tmp_path, _packet([bundle], strategy="orb_breakout"))
+    assert report["gate_pass"] is False
+    assert any("evidence packet strategy" in b for b in report["classification"]["blockers"])
+
+
+@pytest.mark.parametrize(
+    "name, expected",
+    [
+        ("orb_reclaim", "orb_reclaim"),
+        ("ORB Reclaim", "orb_reclaim"),
+        ("ORB Reclaim (MNQ)", "orb_reclaim"),
+        ("orb reclaimer", "orb reclaimer"),
+        ("", None),
+        (None, None),
+    ],
+)
+def test_strategy_resolution_uses_only_exact_keys_or_confirmed_aliases(name, expected):
+    from ops.project_check.promotion import resolve_strategy_identity
+
+    assert resolve_strategy_identity(name) == expected
+
+
+def test_alias_resolved_target_binds_to_concept_key():
+    from ops.project_check.promotion import _bind_strategy_identity
+
+    binding, blockers = _bind_strategy_identity(
+        "ORB Reclaim", packet_strategy=None, derived={"strategy_identity": "orb_reclaim"}
+    )
+    assert blockers == [] and binding["bound"] is True
+    _, blockers = _bind_strategy_identity(
+        "ORB Breakout", packet_strategy=None, derived={"strategy_identity": "orb_reclaim"}
+    )
+    assert blockers

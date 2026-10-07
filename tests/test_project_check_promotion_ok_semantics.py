@@ -83,7 +83,7 @@ def test_report_ok_is_true_only_when_promotion_gate_passes(tmp_path: Path, monke
         },
     )
 
-    report = build_promotion_report(strategy="x", repo_root=tmp_path, evidence_path=evidence)
+    report = build_promotion_report(strategy="example", repo_root=tmp_path, evidence_path=evidence)
 
     assert report["classification"]["blockers"] == []
     assert report["gate_pass"] is True
