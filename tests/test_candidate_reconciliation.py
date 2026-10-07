@@ -164,14 +164,44 @@ def test_outcome_and_exit_mismatch_is_diverged(week):
 def test_risk_rejection_in_one_mode_is_diverged(week):
     def reject(rows):
         trade = _first(rows, _is_trade)
+        order_id = trade["paper_order_id"]
         trade["decision"] = "RISK_REJECTED"
         trade["risk_check"] = {"failed_rule": "MAX_TRADES"}
+        # A genuine rejection has no fill/outcome. Remove the original fill so
+        # this fixture models one semantic mode change rather than corrupt data.
+        rows[:] = [
+            row for row in rows
+            if not (
+                _is_outcome(row)
+                and row["outcome"].get("paper_order_id") == order_id
+            )
+        ]
 
     report = rec.reconcile({
         "replay": rec.records_from_journal_rows("replay", week),
         "demo": rec.records_from_journal_rows("demo", _demo(week, reject)),
     })
     assert any(d["field"] == "fill_state" for c in report["candidates"] for d in c["divergences"])
+
+
+def test_rejected_decision_with_terminal_outcome_cannot_pass(week):
+    def corrupt(rows):
+        trade = _first(rows, _is_trade)
+        trade["decision"] = "RISK_REJECTED"
+        trade["risk_check"] = {"failed_rule": "MAX_TRADES"}
+        # Deliberately retain the original OUTCOME: this is internally
+        # contradictory evidence and must not disappear into a PASS.
+
+    report = rec.reconcile({
+        "replay": rec.records_from_journal_rows("replay", week),
+        "demo": rec.records_from_journal_rows("demo", _demo(week, corrupt)),
+    })
+    assert report["status"] == "INCOMPLETE"
+    assert any(
+        "duplicate identity in demo" in reason
+        for candidate in report["candidates"]
+        for reason in candidate["incomplete_reasons"]
+    )
 
 
 def test_missing_candidate_in_a_mode_is_incomplete_not_pass(week):
