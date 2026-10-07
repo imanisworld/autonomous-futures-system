@@ -295,6 +295,17 @@ def test_cli_is_read_only_and_exit_codes_encode_status(config, tmp_path):
     assert rec.main(["--replay-journal", str(a), "--paper-journal", str(b), "--out", str(out)]) == 0
     assert json.loads(out.read_text())["status"] == "PASS"
     assert all(p.read_bytes() == data for p, data in before.items())
+
+    # A report path may not overwrite or live inside any supplied evidence input.
+    victim = next(a.glob("journal_*.jsonl"))
+    victim_before = victim.read_bytes()
+    assert rec.main([
+        "--replay-journal", str(a),
+        "--paper-journal", str(b),
+        "--out", str(victim),
+    ]) == 2
+    assert victim.read_bytes() == victim_before
+
     # Corrupt one demo journal row: fail closed with an error exit.
     bad = tmp_path / "bad"
     bad.mkdir()

@@ -389,6 +389,24 @@ def read_bundle_members(bundle: Path, *, repo_root: Path = ROOT) -> list[dict]:
     return members
 
 
+def _assert_safe_report_path(out: Optional[Path], inputs: Iterable[Optional[Path]]) -> None:
+    """A report may never overwrite or be created inside supplied evidence inputs."""
+    if out is None:
+        return
+    target = out.resolve()
+    for source in inputs:
+        if source is None:
+            continue
+        root = source.resolve()
+        try:
+            target.relative_to(root)
+        except ValueError:
+            continue
+        raise ReconciliationError(
+            f"report output {out} is inside supplied evidence input {source}; refusing mutation"
+        )
+
+
 def _filter(records: list[CandidateRecord], *, instrument: Optional[str], strategy: Optional[str],
             since: Optional[date], until: Optional[date]) -> list[CandidateRecord]:
     out = []
@@ -420,6 +438,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     try:
         if args.replay_journal and args.replay_bundle:
             raise ReconciliationError("give --replay-journal or --replay-bundle, not both")
+        _assert_safe_report_path(
+            args.out,
+            (args.replay_journal, args.replay_bundle, args.paper_journal, args.demo_journal),
+        )
         by_mode: dict[str, list[CandidateRecord]] = {}
         if args.replay_bundle:
             by_mode["replay"] = records_from_bundle_members("replay", read_bundle_members(args.replay_bundle))
