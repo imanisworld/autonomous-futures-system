@@ -214,7 +214,7 @@ def test_only_valid_same_epoch_observations_judge_the_strategy():
     rows = series(HEALTHY) + [
         obs(-5.0, 100, data_integrity=IS.DEGRADED),
         obs(-5.0, 101, signal_integrity=IS.INVALID),
-        obs(-5.0, 102, executed=True, execution_integrity=IS.INVALID),
+        obs(-5.0, 102, executed=True, pnl_basis="executed", execution_integrity=IS.INVALID),
         obs(None, 103),
         obs(-5.0, 104, strategy_epoch="2026Q3_v9"),
     ]
