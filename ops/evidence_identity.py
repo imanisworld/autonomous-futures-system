@@ -203,6 +203,44 @@ def classify_evidence_bundle(
             if manifest.get(key) != envelope.get(key):
                 fail(f"bundle_manifest.json {key} contradicts the envelope")
 
+    # 3b. Strategy identity must be anchored to the canonical trade rows.
+    strategy_identities: set[str] = set()
+    strategy_rows_valid = True
+    for raw_name in ("baseline_raw.json", "candidate_raw.json"):
+        try:
+            raw_payload = _load_json(bundle_dir / raw_name)
+        except (OSError, ValueError) as exc:
+            strategy_rows_valid = False
+            fail(f"{raw_name} unreadable for strategy identity: {exc}")
+            continue
+        members = raw_payload.get("members") if isinstance(raw_payload, dict) else None
+        if not isinstance(members, list):
+            strategy_rows_valid = False
+            fail(f"{raw_name} must contain members[] for strategy identity")
+            continue
+        for index, row in enumerate(members):
+            if not isinstance(row, dict):
+                strategy_rows_valid = False
+                fail(f"{raw_name}.members[{index}] must be an object")
+                continue
+            value = row.get("strategy_identity")
+            if not isinstance(value, str) or not value.strip():
+                strategy_rows_valid = False
+                fail(f"{raw_name}.members[{index}] missing strategy_identity")
+                continue
+            strategy_identities.add(value.strip())
+    if strategy_rows_valid:
+        if len(strategy_identities) != 1:
+            fail(
+                "promotion-quality trade evidence requires exactly one canonical "
+                f"strategy_identity across both arms; found {sorted(strategy_identities)}"
+            )
+        elif envelope.get("strategy_identity") != next(iter(strategy_identities)):
+            fail(
+                "strategy_identity contradicts the canonical baseline/candidate "
+                "trade_execution rows"
+            )
+
     # 4. Consistency with the bundled spec, runner report, and approved spec.
     spec: dict[str, Any] = {}
     try:

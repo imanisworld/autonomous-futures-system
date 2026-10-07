@@ -412,7 +412,8 @@ Promotion-quality requires, from the runner bundle itself:
 
 - U1 envelope contract with `evidence_type: trade_execution`;
   `experiment_id`, `trial_id`, `preregistration_identity`,
-  `strategy_identity` (versioned by `code_sha`), `code_sha`,
+  `strategy_identity` (versioned by `code_sha`), bound to the single
+  canonical strategy identity present across baseline/candidate trade rows; `code_sha`,
   `data_identity`, `evaluation_partition`, `execution_model_id`;
 - `data_identity` pinned as `dataset_hash:<sha256>`;
 - the bundle at `docs/research-evidence/<trial_id>/`, with a

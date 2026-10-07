@@ -216,6 +216,7 @@ def test_canonical_runner_bundle_is_promotion_quality(tmp_path):
     assert result.identity["execution_model_id"] == er.execution_model_id(ASSUMPTIONS)
     assert result.identity["trial_prior_exposed"] == "none"
     assert result.identity["data_identity"] == f"dataset_hash:{DATASET_HASH}"
+    assert result.identity["strategy_identity"] == "orb@v1"
     manifest = json.loads((_bundle(root) / "bundle_manifest.json").read_text())
     assert set(gate.REQUIRED_BUNDLE_FILES) <= set(manifest["files"])
 
@@ -254,6 +255,27 @@ def test_edited_bundle_file_is_invalid(tmp_path):
     result = gate.classify_evidence_bundle(root, _bundle(root))
     assert result.status == gate.INVALID
     assert "bundle file edited after writing: candidate_raw.json" in result.reasons
+
+
+def test_strategy_identity_is_bound_to_canonical_trade_rows(tmp_path):
+    root, _ = _run(_seed(tmp_path / "repo"))
+    bundle = _bundle(root)
+    envelope_path = bundle / "evidence_envelope.json"
+    envelope = json.loads(envelope_path.read_text())
+    assert envelope["strategy_identity"] == "orb@v1"
+
+    # Re-label the strategy and repair the envelope digest in the manifest.
+    # Byte identity alone must not make the false strategy attribution valid.
+    envelope["strategy_identity"] = "made-up-strategy"
+    envelope_path.write_text(json.dumps(envelope, indent=2, sort_keys=True) + "\n")
+    manifest_path = bundle / "bundle_manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["files"]["evidence_envelope.json"] = gate._sha256(envelope_path)
+    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+
+    result = gate.classify_evidence_bundle(root, bundle)
+    assert result.status == gate.INVALID
+    assert any("strategy_identity contradicts" in reason for reason in result.reasons)
 
 
 def test_missing_bundle_manifest_is_invalid(tmp_path):

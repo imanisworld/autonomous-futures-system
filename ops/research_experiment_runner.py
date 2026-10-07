@@ -659,6 +659,41 @@ def metric_delta(baseline: Mapping[str, Any], candidate: Mapping[str, Any]) -> d
     return delta
 
 
+def _single_trade_strategy_identity(
+    baseline_raw: dict[str, Any] | None,
+    candidate_raw: dict[str, Any] | None,
+) -> str:
+    """Return the one strategy identity represented by both canonical arms.
+
+    Promotion-quality trade evidence is strategy-specific. The identity comes
+    from validated trade_execution rows, never from setup_type (which names the
+    adapter, e.g. futures_replay) or from an unbound prose/spec field.
+    """
+    identities: set[str] = set()
+    for label, raw in (("baseline", baseline_raw), ("candidate", candidate_raw)):
+        if not isinstance(raw, dict) or not isinstance(raw.get("members"), list):
+            raise evidence_contract.EvidenceContractError(
+                f"{label}_raw must contain members[] to bind strategy identity"
+            )
+        for index, row in enumerate(raw["members"]):
+            if not isinstance(row, Mapping):
+                raise evidence_contract.EvidenceContractError(
+                    f"{label}_raw.members[{index}] must be an object"
+                )
+            value = row.get("strategy_identity")
+            if not isinstance(value, str) or not value.strip():
+                raise evidence_contract.EvidenceContractError(
+                    f"{label}_raw.members[{index}] missing strategy_identity"
+                )
+            identities.add(value.strip())
+    if len(identities) != 1:
+        raise evidence_contract.EvidenceContractError(
+            "trade_execution evidence must contain exactly one strategy_identity "
+            f"across baseline/candidate rows; found {sorted(identities)}"
+        )
+    return next(iter(identities))
+
+
 def write_evidence_bundle(
     evidence_dir: Path,
     *,
@@ -703,6 +738,10 @@ def write_evidence_bundle(
         runner_version=RUNNER_VERSION,
         generated_at=utc_now(),
     )
+    if envelope.get("evidence_type") == evidence_contract.EVIDENCE_TYPE_TRADE_EXECUTION:
+        envelope["strategy_identity"] = _single_trade_strategy_identity(
+            baseline_raw, candidate_raw
+        )
     if evaluation_partition is not None:
         envelope["evaluation_partition"] = evaluation_partition
     if trial_prior_exposed is not None:
