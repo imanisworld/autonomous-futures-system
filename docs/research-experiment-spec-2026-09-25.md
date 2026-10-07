@@ -397,6 +397,65 @@ the process environment. Each arm records `base_config_sha256` and
 `arm_config_sha256`; binding that snapshot into required evidence identity
 belongs to U4.
 
+### 8.6 Mandatory evidence identity gate (U4)
+
+`ops/evidence_identity.py` classifies one evidence bundle directory
+(`python -m ops.evidence_identity <bundle>`):
+
+- `PROMOTION_QUALITY` — the only class promotion may count;
+- `REFERENCE_ONLY` — no canonical envelope (legacy/historical evidence),
+  coverage evidence, or an envelope that does not claim promotion
+  eligibility. Readable as reference, never counted;
+- `INVALID` — claims promotion eligibility but fails any check below.
+
+Promotion-quality requires, from the runner bundle itself:
+
+- U1 envelope contract with `evidence_type: trade_execution`;
+  `experiment_id`, `trial_id`, `preregistration_identity`,
+  `strategy_identity` (versioned by `code_sha`), bound to the single
+  canonical strategy identity present across baseline/candidate trade rows; `code_sha`
+  must equal the exact candidate-arm SHA, while runner-report baseline/candidate
+  SHAs must equal their corresponding approved-spec arm SHAs;
+  `data_identity`, `evaluation_partition`, `execution_model_id`;
+- `data_identity` pinned as `dataset_hash:<sha256>`;
+- every canonical baseline/candidate trade row is revalidated against the
+  envelope's dataset fingerprint and execution-model identity;
+- every canonical trade row must also remain inside the envelope's active
+  chronological partition under the approved spec;
+- the bundle at `docs/research-evidence/<trial_id>/`, with a
+  `bundle_manifest.json` (written last by the runner) whose per-file
+  SHA-256 values still match and which lists every required bundle file;
+- the bundled spec APPROVED, equal to the repository's
+  `docs/research-experiment-specs/<experiment_id>.json`, declaring
+  chronological partitions, and agreeing with the envelope on prereg path,
+  commit SHA, dataset identity, execution model, and evaluation partition;
+- `runner_report.json` status `VALID`;
+- the trial registered in `docs/research-trial-ledger.jsonl` with a
+  `PLANNED`/`ADOPTED` first event and the same prereg path; when that first
+  row records `prior_exposed`, the envelope's `trial_prior_exposed` must
+  equal it (the runner copies it verbatim; it is never inferred);
+- `untouched_oos` evidence carries its `oos_consumption_receipt.json`,
+  identical to the ledger receipt and agreeing on `code_sha` and
+  `dataset_hash`; non-OOS evidence carries no receipt.
+
+Historical evidence is never re-labelled or given fabricated identity. CI
+fails if any tracked `evidence_envelope.json` or `bundle_manifest.json` sits
+outside `docs/research-evidence/<trial_id>/` or classifies `INVALID`.
+
+Consumed-trial partition lock: once a trial has an OOS receipt, every
+later run of that trial must declare chronological partitions whose
+normalized `untouched_oos` window equals the receipt's window. Removing
+partitions (legacy path) or redrawing windows over the consumed dates is
+`INVALID`; re-running development/validation on the recorded partitions
+remains allowed. There is still no family-wide lock.
+
+Append-only ledgers: CI fails if any existing line of
+`docs/research-trial-ledger.jsonl` or
+`docs/research-oos-consumption-ledger.jsonl` is changed, reordered, or
+removed in any commit after anchor `cedeab8` or in the working tree.
+
+Runner version 1.3.0.
+
 ---
 
 ## 9. Authority boundary
