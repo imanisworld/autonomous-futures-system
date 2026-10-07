@@ -36,8 +36,22 @@ Integrity derivation:
   DEGRADED for late/gap/missed captures; VALID for a clean EXPIRED/INVALIDATED;
   INVALID for DATA_BLOCKED/AMBIGUOUS.
 
+Epochs: ``strategy_epoch`` is validated against the #1150 registry passed as
+``registry`` (default: the committed registry). The default
+``DEFAULT_EPOCH`` (the capture version) is not a registered epoch, so default
+folds open every signal under ``UNREGISTERED_EPOCH`` and never emit VALID
+signal integrity (capped to DEGRADED). VALID is emitted only for a registered,
+context-matching epoch and an #1145 prospective catch; the canonical signal
+re-checks that itself.
+
+Integrity (signal and data) is only ever demoted by later rows, never
+promoted or reset. #1145 reconciliation does not re-check pre-arming, so a
+``prospective_catch`` whose SIP cross precedes first sight or setup-ready is
+passed on as ``False`` (the canonical journal would refuse it).
+
 A row claiming execution or trade authority is refused: observation data can
-never gain authority through adaptation.
+never gain authority through adaptation. Authority fields must be exact
+booleans (``"false"`` is a claim, not a denial).
 """
 
 from __future__ import annotations
@@ -50,11 +64,13 @@ from typing import Any, Iterable, Iterator, Mapping
 
 from alert_ranker.setup_capture import CAPTURE_VERSION, is_prospective_catch
 
+from .strategy_epochs import EpochRegistry
 from .signal import (
     IntegrityStatus,
     LifecycleError,
     LifecycleState,
     Levels,
+    OBSERVATION_TIME_KEYS,
     ProspectiveSignal,
     SignalJournal,
     SignalLinks,
@@ -65,6 +81,7 @@ from .signal import (
     link_event,
     observation_event,
     open_signal,
+    prearmed_at,
     state_event,
 )
 
@@ -144,6 +161,50 @@ def _evidence(row: Mapping[str, Any]) -> dict[str, Any]:
     return {k: row[k] for k in _EVIDENCE_KEYS if k in row and row[k] is not None}
 
 
+_RANK = {"VALID": 0, "DEGRADED": 1, "INVALID": 2}
+
+
+def _demotion(now: str, wanted: str) -> str | None:
+    """``wanted`` if it is a first value or a demotion of ``now``; never a promotion or reset."""
+    if wanted == now:
+        return None
+    if now == "UNKNOWN" or (wanted in _RANK and _RANK[wanted] > _RANK.get(now, -1)):
+        return wanted
+    return None
+
+
+def _integrity_update(current: ProspectiveSignal, row: Mapping[str, Any]) -> dict[str, str]:
+    """Integrity statuses to append: never a promotion, reset or unearned VALID."""
+    wanted = _integrity(row, current.state)
+    if wanted["signal_integrity"] == "VALID" and current.valid_integrity_problem() is not None:
+        # Unregistered epoch, not pre-armed against the true cross, revoked, late...: never VALID.
+        wanted["signal_integrity"] = "DEGRADED"
+    out: dict[str, str] = {}
+    for name in ("signal_integrity", "data_integrity"):
+        status = _demotion(getattr(current, name).value, wanted[name])
+        if status is not None:
+            out[name] = status
+    return out
+
+
+def _levels(key: str, row: Mapping[str, Any]) -> Levels:
+    revision = row.get("revision")
+    try:
+        # Exact types: no int() coercion of "3", 2.9 or True.
+        return Levels(row["boundary_high"], row["boundary_low"], 0 if revision is None else revision)
+    except LifecycleError as exc:
+        raise AdapterError(f"{key}: {exc}") from exc
+
+
+def _catch_evidence(current: ProspectiveSignal, evidence: dict[str, Any]) -> dict[str, Any]:
+    """#1145 does not re-check pre-arming on reconciliation; a cross before first sight is no catch."""
+    if evidence.get("prospective_catch") is True:
+        merged = {**current.capture, **{k: v for k, v in evidence.items() if k in OBSERVATION_TIME_KEYS}}
+        if prearmed_at(current.first_seen_time, current.setup_ready_time, current.trigger_market_time, merged) is False:
+            evidence = {**evidence, "prospective_catch": False}
+    return evidence
+
+
 def _integrity(row: Mapping[str, Any], state: LifecycleState) -> dict[str, str]:
     if state in (LifecycleState.DATA_BLOCKED, LifecycleState.AMBIGUOUS):
         return {"data_integrity": "INVALID", "signal_integrity": "INVALID"}
@@ -163,11 +224,14 @@ def _integrity(row: Mapping[str, Any], state: LifecycleState) -> dict[str, str]:
 
 
 def _refuse_authority(row: Mapping[str, Any]) -> None:
-    if row.get("execution_authority") or row.get("trade_authority"):
-        raise AdapterError(
-            f"capture row {row.get('structure_key')!r} claims authority; observation data cannot"
-        )
-    if row.get("observation_only") is False:
+    for name in ("execution_authority", "trade_authority", "risk_reservation"):
+        value = row.get(name)
+        if value is not None and value is not False:
+            raise AdapterError(
+                f"capture row {row.get('structure_key')!r} claims authority; observation data cannot"
+            )
+    value = row.get("observation_only")
+    if value is not None and value is not True:
         raise AdapterError(f"capture row {row.get('structure_key')!r} is not observation-only")
 
 
@@ -176,8 +240,9 @@ def fold_capture_rows(
     *,
     strategy: str = DEFAULT_STRATEGY,
     strategy_epoch: str = DEFAULT_EPOCH,
+    registry: EpochRegistry | None = None,
 ) -> CaptureFold:
-    fold = CaptureFold(SignalJournal(), strategy, strategy_epoch)
+    fold = CaptureFold(SignalJournal(registry), strategy, strategy_epoch)
     j = fold.journal
     for row in rows:
         record_type = str(row.get("record_type") or "")
@@ -192,7 +257,7 @@ def fold_capture_rows(
         sid = fold.signal_by_key.get(key)
 
         if record_type == "WATCHING":
-            levels = Levels(row["boundary_high"], row["boundary_low"], int(row.get("revision") or 0))
+            levels = _levels(key, row)
             if sid is None:
                 identity = StructureIdentity(
                     ticker=row["ticker"],
@@ -211,6 +276,7 @@ def fold_capture_rows(
                     data_source=f"{row.get('capture_id', 'OPTIONS_SETUP_CAPTURE')}:{row.get('level_source', 'unknown')}",
                     levels=levels,
                     observation_only=True,
+                    registry=j.registry,
                 )
                 j.append(event)
                 fold.signal_by_key[key] = event.signal_id
@@ -227,7 +293,7 @@ def fold_capture_rows(
         assert current is not None
 
         if record_type == "SOURCE_DRIFT":
-            levels = Levels(row["boundary_high"], row["boundary_low"], int(row.get("revision") or 0))
+            levels = _levels(key, row)
             if current.state is LifecycleState.WATCHING and levels.revision > current.levels.revision:
                 j.append(levels_event(j, sid, levels, detected_at=observed))  # type: ignore[arg-type]
             continue
@@ -240,8 +306,7 @@ def fold_capture_rows(
             if target is LifecycleState.DATA_BLOCKED and not current.terminal:
                 j.append(state_event(j, sid, target, detected_at=observed,  # type: ignore[arg-type]
                                      reason=str(row.get("status_reason") or "reconciliation_blocked")))
-                j.append(integrity_event(j, sid, detected_at=observed, **_integrity(row, target)))  # type: ignore[arg-type]
-                continue
+                continue  # DATA_BLOCKED itself sets INVALID integrity
             raise AdapterError(f"{key}: unsupported reconciliation {current.state.value} -> {status}")
 
         if record_type == "RESOLUTION":
@@ -276,10 +341,16 @@ def fold_capture_rows(
             current = j.get(sid)
             assert current is not None
 
-        if evidence and not current.terminal:
-            j.append(observation_event(j, sid, detected_at=observed, **evidence))  # type: ignore[arg-type]
-        if not current.terminal or record_type == "RESOLUTION":
-            j.append(integrity_event(j, sid, detected_at=observed, **_integrity(row, current.state)))  # type: ignore[arg-type]
+        try:
+            if evidence and not current.terminal:
+                evidence = _catch_evidence(current, evidence)
+                current = j.append(observation_event(j, sid, detected_at=observed, **evidence))  # type: ignore[arg-type]
+            if not current.terminal or record_type == "RESOLUTION":
+                update = _integrity_update(current, row)
+                if update:
+                    j.append(integrity_event(j, sid, detected_at=observed, **update))  # type: ignore[arg-type]
+        except LifecycleError as exc:
+            raise AdapterError(f"{key}: {exc}") from exc
     return fold
 
 

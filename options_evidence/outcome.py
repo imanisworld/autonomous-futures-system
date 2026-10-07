@@ -11,7 +11,16 @@ manufacturing evidence:
 * R multiples are derived from the signal's own trigger/invalidation, so the
   outcome cannot redefine its risk unit after the fact;
 * spread and decay effects are derived only when the observed path contains
-  the marks they need; otherwise they are ``UNAVAILABLE``.
+  the marks they need; otherwise they are ``UNAVAILABLE``;
+* every field is type-checked on construction: prices, R and P&L are finite
+  non-bool numbers, hit times are timezone-aware datetimes, ``executed`` is an
+  exact bool -- nothing is coerced;
+* only a prospective catch (``ProspectiveSignal.is_prospective_catch``) can be
+  an executed outcome. A miss (MISSED_LATE / MISSED_GAP, including after
+  OUTCOME_CLOSED) is recorded with ``pnl_basis="counterfactual"``: no executed
+  flag, no P&L, no OBSERVED R, and ``result_r_value`` never reads it as a
+  trade result. An outcome can never report better signal integrity than its
+  signal.
 
 Pure: no I/O, no provider calls.
 """
@@ -24,7 +33,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Mapping
 
-from .signal import IntegrityStatus, ProspectiveSignal
+from .signal import MISSED_STATES, IntegrityStatus, ProspectiveSignal
+from .strategy_epochs import EpochRegistry
 
 SCHEMA = "options-outcome-evidence-v1"
 
@@ -40,6 +50,25 @@ class OutcomeError(ValueError):
     pass
 
 
+PNL_BASES = ("executed", "paper_equivalent", "counterfactual")
+
+
+def _is_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _finite(value: Any, label: str) -> float:
+    if not _is_number(value):
+        raise OutcomeError(f"{label} must be a number, not {type(value).__name__}")
+    try:
+        number = float(value)
+    except OverflowError as exc:
+        raise OutcomeError(f"{label} is out of range") from exc
+    if not math.isfinite(number):
+        raise OutcomeError(f"{label} must be finite")
+    return number
+
+
 @dataclass(frozen=True)
 class Measured:
     value: Any
@@ -48,6 +77,10 @@ class Measured:
     source: str = ""
 
     def __post_init__(self) -> None:
+        if not isinstance(self.status, EvidenceStatus):
+            raise OutcomeError("Measured.status must be an EvidenceStatus")
+        if not isinstance(self.reason, str) or not isinstance(self.source, str):
+            raise OutcomeError("Measured reason/source must be strings")
         if self.status in (EvidenceStatus.UNAVAILABLE, EvidenceStatus.NOT_APPLICABLE):
             if self.value is not None:
                 raise OutcomeError(f"{self.status.value} evidence must not carry a value")
@@ -56,8 +89,8 @@ class Measured:
         else:
             if self.value is None:
                 raise OutcomeError(f"{self.status.value} evidence requires a value")
-            if isinstance(self.value, float) and not math.isfinite(self.value):
-                raise OutcomeError("measured value must be finite")
+            if _is_number(self.value):
+                _finite(self.value, "measured value")
             if self.status is EvidenceStatus.OBSERVED and not self.source.strip():
                 raise OutcomeError("OBSERVED evidence requires a source")
 
@@ -92,13 +125,12 @@ class PremiumMark:
     source: str
 
     def __post_init__(self) -> None:
-        if self.at.tzinfo is None:
+        if not isinstance(self.at, datetime) or self.at.tzinfo is None or self.at.utcoffset() is None:
             raise OutcomeError("premium mark time must be timezone-aware")
-        if not self.source.strip():
+        if not isinstance(self.source, str) or not self.source.strip():
             raise OutcomeError("premium mark requires a quote source")
         for name in ("bid", "ask"):
-            value = getattr(self, name)
-            if isinstance(value, bool) or not math.isfinite(float(value)) or float(value) < 0:
+            if _finite(getattr(self, name), f"premium mark {name}") < 0:
                 raise OutcomeError(f"premium mark {name} must be finite and >= 0")
         if self.ask < self.bid:
             raise OutcomeError("premium mark is crossed (ask < bid)")
@@ -161,6 +193,45 @@ class OutcomeEvidence:
     execution_integrity: IntegrityStatus = IntegrityStatus.NOT_APPLICABLE
     notes: tuple[str, ...] = field(default_factory=tuple)
 
+    def __post_init__(self) -> None:
+        # B3: exact types; anything that could manufacture a nonsensical R fails here.
+        for name in ("signal_id", "strategy_epoch", "pnl_basis", "premium_path_reason"):
+            if not isinstance(getattr(self, name), str):
+                raise OutcomeError(f"{name} must be a string")
+        if not isinstance(self.executed, bool):
+            raise OutcomeError(f"executed must be a bool, not {self.executed!r}")
+        if self.pnl_basis not in PNL_BASES:
+            raise OutcomeError(f"pnl_basis must be one of {PNL_BASES}")
+        if _finite(self.invalidation, "invalidation") <= 0:
+            raise OutcomeError("invalidation must be > 0")
+        for name in _PRICE_FIELDS + _TIME_FIELDS + _NUMBER_FIELDS + _TEXT_FIELDS:
+            measured = getattr(self, name)
+            if not isinstance(measured, Measured):
+                raise OutcomeError(f"{name} must be Measured")
+            if not measured.known:
+                continue
+            value = measured.value
+            if name in _PRICE_FIELDS:
+                floor_ok = _finite(value, name) > 0 if name not in _PREMIUM_FIELDS else _finite(value, name) >= 0
+                if not floor_ok:
+                    raise OutcomeError(f"{name} is out of range")
+            elif name in _NUMBER_FIELDS:
+                _finite(value, name)
+            elif name in _TIME_FIELDS:
+                if not isinstance(value, datetime) or value.tzinfo is None or value.utcoffset() is None:
+                    raise OutcomeError(f"{name} must be a timezone-aware datetime")
+            elif not isinstance(value, str) or not value.strip():
+                raise OutcomeError(f"{name} must be a non-empty string")
+        if not isinstance(self.premium_path, tuple) or not all(isinstance(m, PremiumMark) for m in self.premium_path):
+            raise OutcomeError("premium_path must be a tuple of PremiumMark")
+        if not isinstance(self.premium_path_status, PathStatus):
+            raise OutcomeError("premium_path_status must be a PathStatus")
+        for name in ("data_integrity", "signal_integrity", "execution_integrity"):
+            if not isinstance(getattr(self, name), IntegrityStatus):
+                raise OutcomeError(f"{name} must be an IntegrityStatus")
+        if not isinstance(self.notes, tuple) or not all(isinstance(n, str) for n in self.notes):
+            raise OutcomeError("notes must be a tuple of strings")
+
     # ── derived views (never stored as independent truth) ──────────────────
 
     def time_to_trigger(self, signal: ProspectiveSignal) -> Measured:
@@ -207,9 +278,25 @@ class OutcomeEvidence:
         return Measured.derived(self.premium_path[-1].mid - self.premium_path[0].mid)
 
 
-def validate_outcome(outcome: OutcomeEvidence, signal: ProspectiveSignal) -> list[str]:
-    """Consistency problems; an empty list means the record is honest and complete enough to store."""
+_PREMIUM_FIELDS = ("premium_entry", "premium_stop")
+_PRICE_FIELDS = ("target_1", "target_2", "mae_price", "mfe_price", *_PREMIUM_FIELDS)
+_TIME_FIELDS = ("t1_hit_at", "t2_hit_at", "invalidation_hit_at")
+_NUMBER_FIELDS = ("result_r", "gross_pnl", "net_pnl")
+_TEXT_FIELDS = ("trim_event", "runner_outcome")
+
+
+def validate_outcome(
+    outcome: OutcomeEvidence, signal: ProspectiveSignal, registry: EpochRegistry | None = None
+) -> list[str]:
+    """Consistency problems; an empty list means the record is honest and complete enough to store.
+
+    With ``registry``, a signal's validated epoch must be that registry's
+    entry (a hand-built ``StrategyEpoch`` cannot certify a catch).
+    """
     problems: list[str] = []
+    if registry is not None and signal.registered_epoch is not None:
+        if registry.get(signal.strategy, signal.strategy_epoch) != signal.registered_epoch:
+            problems.append("signal epoch is not the registry's epoch definition")
     if signal.direction is None or signal.invalidation is None:
         return ["outcome requires a resolved signal; a two-sided WATCHING structure has no risk unit"]
     if outcome.signal_id != signal.signal_id:
@@ -218,8 +305,8 @@ def validate_outcome(outcome: OutcomeEvidence, signal: ProspectiveSignal) -> lis
         problems.append("outcome strategy_epoch does not match the signal")
     if abs(outcome.invalidation - signal.invalidation) > 1e-9:
         problems.append("outcome invalidation differs from the signal's frozen invalidation")
-    if outcome.pnl_basis not in ("executed", "paper_equivalent"):
-        problems.append("pnl_basis must be executed or paper_equivalent")
+    if outcome.pnl_basis not in PNL_BASES:
+        problems.append(f"pnl_basis must be one of {PNL_BASES}")
     if outcome.executed and outcome.pnl_basis != "executed":
         problems.append("an executed outcome must use pnl_basis=executed")
     if not outcome.executed and outcome.pnl_basis == "executed":
@@ -229,6 +316,31 @@ def validate_outcome(outcome: OutcomeEvidence, signal: ProspectiveSignal) -> lis
         IntegrityStatus.UNKNOWN,
     ):
         problems.append("execution_integrity applies only to executed outcomes")
+    # B2: only a prospective catch can be a trade; a miss stays a miss.
+    resolution = signal.resolution
+    if outcome.executed and not signal.is_prospective_catch:
+        problems.append(
+            f"an executed outcome requires a prospective catch; {resolution.value if resolution else 'unresolved'} "
+            "signal is never a trade"
+        )
+    # Anything that is not a verified prospective catch (a miss, a late or
+    # gapped TRIGGERED capture, one pending SIP, an unregistered epoch, ...)
+    # is counterfactual only: hypothetical DERIVED analytics may be kept, but
+    # never a trade basis, P&L or a realised R.
+    if not signal.is_prospective_catch:
+        missed = resolution in MISSED_STATES
+        label = resolution.value if missed else "non-catch"  # type: ignore[union-attr]
+        noun = "a missed signal" if missed else "a non-catch outcome"
+        if outcome.pnl_basis != "counterfactual":
+            problems.append(f"a {label} outcome must use pnl_basis=counterfactual")
+        if outcome.gross_pnl.known or outcome.net_pnl.known:
+            problems.append(f"{noun} has no P&L")
+        if outcome.result_r.status is EvidenceStatus.OBSERVED:
+            problems.append(f"{noun} has no observed (realised) R")
+    if outcome.signal_integrity is IntegrityStatus.VALID and signal.signal_integrity is not IntegrityStatus.VALID:
+        problems.append("outcome cannot report VALID signal integrity for a signal that is not VALID")
+    if outcome.data_integrity is not IntegrityStatus.INVALID and signal.data_integrity is IntegrityStatus.INVALID:
+        problems.append("outcome cannot launder INVALID signal data integrity")
     if outcome.premium_stop.known and outcome.premium_entry.known:
         if not 0 <= outcome.premium_stop.value < outcome.premium_entry.value:
             problems.append("premium_stop must be below premium_entry")
@@ -278,6 +390,8 @@ def to_record(outcome: OutcomeEvidence, signal: ProspectiveSignal) -> dict[str, 
         "strategy_epoch": outcome.strategy_epoch,
         "executed": outcome.executed,
         "pnl_basis": outcome.pnl_basis,
+        "resolution_state": signal.resolution.value if signal.resolution else None,
+        "prospective_catch": signal.is_prospective_catch,
         "target_1": m(outcome.target_1),
         "target_2": m(outcome.target_2),
         "invalidation": outcome.invalidation,
@@ -311,8 +425,19 @@ def to_record(outcome: OutcomeEvidence, signal: ProspectiveSignal) -> dict[str, 
 
 
 def result_r_value(record: Mapping[str, Any]) -> float | None:
-    """Stored result_r if it is known evidence; None otherwise (never 0)."""
+    """Stored result_r if it is known trade evidence; None otherwise (never 0).
+
+    Only a verified prospective catch (``prospective_catch is True``) with a
+    non-counterfactual basis is a trade result. A counterfactual, late, missed
+    or otherwise non-catch outcome is never read as one.
+    """
+    if not isinstance(record, Mapping) or record.get("pnl_basis") not in ("executed", "paper_equivalent"):
+        return None
+    if record.get("prospective_catch") is not True:
+        return None
     result = record.get("result_r") or {}
+    if not isinstance(result, Mapping):
+        return None
     if result.get("status") in (EvidenceStatus.OBSERVED.value, EvidenceStatus.DERIVED.value):
         value = result.get("value")
         if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value):

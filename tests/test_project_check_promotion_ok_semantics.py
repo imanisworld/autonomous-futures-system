@@ -46,9 +46,13 @@ def test_report_ok_is_false_when_hard_promotion_blocker_exists(tmp_path: Path, m
 
 def test_report_ok_is_true_only_when_promotion_gate_passes(tmp_path: Path, monkeypatch) -> None:
     _pin_runtime(monkeypatch)
+    from tests.canonical_bundle_helpers import make_promotion_bundle
+
+    bundle, _ = make_promotion_bundle(tmp_path, fills=1)
     evidence = _write_evidence(
         tmp_path,
         {
+            "canonical_evidence": {"bundles": [bundle]},
             "identity_parity": {
                 "candidate_identity_parity": True,
                 "direction_parity": True,
@@ -59,7 +63,6 @@ def test_report_ok_is_true_only_when_promotion_gate_passes(tmp_path: Path, monke
             },
             "execution": {
                 "entry_attempts": 1,
-                "entry_attempt_contract_quantities": [1],
                 "fills": 1,
                 "cancellations": 0,
                 "rejects_or_known_no_fills": 0,
@@ -80,7 +83,7 @@ def test_report_ok_is_true_only_when_promotion_gate_passes(tmp_path: Path, monke
         },
     )
 
-    report = build_promotion_report(strategy="x", repo_root=tmp_path, evidence_path=evidence)
+    report = build_promotion_report(strategy="example", repo_root=tmp_path, evidence_path=evidence)
 
     assert report["classification"]["blockers"] == []
     assert report["gate_pass"] is True

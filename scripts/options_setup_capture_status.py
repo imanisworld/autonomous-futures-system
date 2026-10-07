@@ -21,9 +21,13 @@ def main() -> int:
     if not path.exists():
         print(json.dumps({"ok": False, "reason": "journal_missing", "path": str(path)}))
         return 2
-    store = SetupCaptureJournal(path)
-    counts = store.counts()
-    recent = [row.to_dict() for row in store.list_all(limit=10)]
+    # Status is read-only: no mkdir, no torn-tail repair, no JOURNAL_REPAIR
+    # append. Repair belongs to the collector, which holds the journal lock.
+    store = SetupCaptureJournal(path, create=False)
+    state = store.peek_state()
+    counts = SetupCaptureJournal._counts_from_state(state)
+    current = sorted(state["current"].values(), key=lambda row: row.persisted_at, reverse=True)
+    recent = [row.to_dict() for row in current[:10]]
     print(
         json.dumps(
             {

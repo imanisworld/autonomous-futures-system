@@ -58,9 +58,119 @@ Every substantial unit of work must leave:
 
 If the agent cannot persist this file, it must return this payload verbatim-ready for the next agent/operator to save.
 
-## Current checkpoint — 2026-10-06 (#1145 merged; #1146 updating from new main; no timer install)
+## Current options-lane checkpoint — 2026-10-07 (#1151 synced; docs refreshed; no runtime mutation)
 
-`main` tip after #1145 squash-merge: `ae8c8970966e4ed09d6679fe8d873f4b7de27cd9`. Active PR: #1146 `security/options-scanner-access-gate-20261006` (merging `origin/main` into gate branch; keep both access_gate + setup_capture; loopback TestClient for `/setup-capture`). Options current-state authority remains `docs/options-current-state-handoff.md`. Futures runtime checkpoint (c44d32b) below is unchanged. **No observer timer install.**
+Task: finish the canonical options evidence stack without repeating completed work. #1151 is the active gate; #1152/#1153/#1154 are downstream. No deploy, timer install, VPS mutation, broker action, or proof-window start.
+
+### VERIFIED
+
+- Current repository `main` at the latest #1151 reconciliation: `f35b976efe523dbbc2090809ce72e91f0e9d3e95`.
+- #1151 branch `options/canonical-prospective-signal-20261006` reconciled cleanly with that main via merge commit `3a69fd369723cb8a9b84511018bc7d0e2b16e97c`.
+- The main delta and #1151 files were disjoint; no semantic conflict resolution was required.
+- #1145–#1150 are merged. Exact merge commits are recorded in `docs/options-current-state-handoff.md`.
+- Grok's pre-sync exact-head review of `88d6b82` passed B1–B6. Fresh post-sync CI/CodeQL plus final exact-head reconciliation remain the merge gate.
+- #1152/#1153/#1154 already carry pre-review handoff notes with known fixture work, findings, and DO-NOT-REDO boundaries.
+
+### DONE / DO NOT REDO
+
+- Do not re-audit the Oct. 5 late SPY observations as prospective wins.
+- Do not reimplement canonical signal identity, late/gap handling, counterfactual-only misses, chronology, or epoch-scope validation downstream.
+- Do not weaken #1151 to satisfy stale #1152/#1153 fixtures; use the saved fixture-only compatibility changes.
+- Do not treat a FROZEN epoch as proof or trading readiness.
+- Do not install or enable the setup-capture timer during the PR conveyor.
+
+### OPEN / NEXT
+
+1. Let fresh CI + dynamic CodeQL finish on the post-sync #1151 head. Classify any failure as code vs infrastructure before changing the tip.
+2. Reconcile the exact-head independent-review requirement after the sync/docs-only movement; merge #1151 only with green checks and a stable head.
+3. #1152: sync once after #1151 merge, reuse saved fixtures, fix only still-reproducing pre-review findings, test/CI/review/merge.
+4. #1153: same conveyor after #1151, preserving canonical population and no-look-ahead rules.
+5. #1154: final readiness and docs reconciliation; preserve completed checkpoints and update only current truth.
+6. Runtime install/proof remains a separate operator-approved phase after code-stack completion.
+
+### RUNTIME MUTATIONS
+
+None.
+
+## Current checkpoint — 2026-10-06 (U2 HOLD fix: B1–B3 + durable OOS ledger)
+
+Task: Continue PR #1157 only. Claude breaker-QA HOLD on `cea37f5` with three U2 blockers (B1 active partition not tied to scored data; B2 weak OOS receipt identity; B3 crash/race fail-open) plus receipt durability. Fix only these. No U3. No merge. No deploy.
+
+### VERIFIED
+
+- Prior HOLD head: `cea37f51dc5795c654dec299d7145e3e59c697ff`.
+- Base/current main: `e86c55c7c78de56dfff0ca9adf1237ea29caa8d3` (unchanged; no rebase required for this fix).
+- Branch `cursor/u2-chronological-partitions-f2da` / PR #1157.
+- Exact head: `62b22a7e91a29b337d7195b479f25641ded8b238`.
+- Focused partition + OOS ledger tests: 36 passed.
+- U1 `tests/test_evidence_row.py`: 36 passed.
+- Full `python3 -m pytest -q`: 7718 passed, 8 skipped.
+- Exact-head CI `tests` → success (run 37517964518).
+- Exact-head Agent Handoff → success (run 37518006760).
+
+### CHANGED
+
+- B1: mandatory active partition when declared; CLI/spec contradiction fail-closed; half-open UTC `[start,end)`; `ExperimentContext` carries partition+window; trade/coverage membership gates; coverage cannot claim `untouched_oos` without timestamp proof.
+- B2: once-only keyed by `trial:{trial_id}` only; window fingerprint is evidence, not reuse key; rename/reformat/window-change/dataset-hash-change cannot second-look.
+- B3: VALID in memory → `fcntl` exclusive lock → receipt append/fsync → then evidence bundle; receipt failure writes no VALID OOS bundle; crash after receipt leaves trial consumed.
+- Durability: repo-governed `docs/research-oos-consumption-ledger.jsonl` + `tests/test_research_oos_consumption_ledger.py` register-before-count.
+
+### TESTS
+
+- Recorded in PR body after focused + full suite + exact-head CI/handoff.
+
+### RUNTIME MUTATIONS
+
+None. No deploy, no VPS, no broker, no strategy change.
+
+### DONE / DO NOT REDO for this lane
+
+- Do not start U3 in this PR.
+- Do not invent a family-wide OOS lock.
+- Do not merge or deploy from this session.
+
+### NEXT
+
+Independent Claude breaker re-review of the new exact head for B1–B3 + durability + P1–P14. Do not merge or deploy.
+
+## Superseded / provenance — 2026-10-06 (U1: r_multiple / P&L direction consistency; merged via #1155)
+
+Task: Continue PR #1155 only. Prior three Claude HOLD blockers closed at `5325eb1`. Fix the narrow new U1 blocker: FILLED rows must not report contradictory `r_multiple` vs `net_pnl`, or favorable gross P&L on adverse price move. Research/evidence plumbing only. No U2/U3. No merge/deploy. **Superseded** after `#1155` squash-merged to `main` as `de4486d`.
+
+### VERIFIED
+
+- Reviewed head before this patch: `5325eb126a5476fe9b0a885621f32a6297cf2a68`.
+- Claude APPROVED U1 logic at `dc9963548502415c12fb8356fb83348b106e6a87`; this branch is a rebase-only onto current `main`.
+- Branch remains `cursor/u1-trade-evidence-contract-f2da`.
+- U1 rebase base includes `#1145` (`ae8c897`) and `#1146` (`445393f`) on `origin/main`.
+- Prior three blockers remain closed; only Cases F/H consistency added.
+- Existing runner + options coverage adapter remain the single runner path; no second runner invented.
+
+### CHANGED
+
+- `validate_trade_execution_row`: enforce `r_multiple` sign vs `net_pnl` (eps=`PNL_TOLERANCE`); enforce directional `gross_pnl` vs signed fill→exit move (no dollar recomputation).
+- Cases F/H regression tests added.
+
+### TESTS
+
+- Focused + full suite + exact-head CI/handoff recorded in PR body after the new SHA.
+
+### RUNTIME MUTATIONS
+
+None. No deploy, no VPS, no broker, no strategy change.
+
+### DONE / DO NOT REDO for this lane
+
+- Do not start U2/U3 in this PR.
+- Do not address Claude minor findings unless required by this blocker.
+
+### NEXT
+
+Independent Claude final re-review of the new exact head. Do not merge or deploy.
+
+## Previous lane checkpoint — 2026-10-06 (#1145 merged; #1146 on main as `445393f`; no timer install)
+
+`#1145` squash-merge: `ae8c8970966e4ed09d6679fe8d873f4b7de27cd9`. `#1146` security gate landed on `main` as `445393fe0b65c74be47a86e9fa14295a7af0c69a`. Options current-state authority remains `docs/options-current-state-handoff.md`. Futures runtime checkpoint (c44d32b) below is unchanged. **No observer timer install.** Kept as provenance while U1 is the active current checkpoint above.
 
 ### DONE / DO NOT REDO
 
@@ -68,13 +178,10 @@ If the agent cannot persist this file, it must return this payload verbatim-read
 - Observer scaffold + B1–B13 red-team fixes (see prior checkpoints; fix SHAs `d29b2cb` / `8a5eeed` / `00dbd59` / journal-path redaction on tip).
 - `/health` setup_capture telemetry omits absolute journal filesystem path; `/setup-capture` retains path for operators.
 - **#1145 MERGED** into `main` as `ae8c897` (2026-10-06). Observation-only setup-capture collector landed. Timer units remain uninstalled.
-- Merge order (operator): #1145 done → #1146 security gate from new main → Claude stack. No timer install yet.
+- **#1146 MERGED** into `main` as `445393f` (2026-10-06). Options scanner in-app access gate landed.
 
-### OPEN / NOT MERGE-CLEARED
+### OPEN / UNVERIFIED
 
-- #1146 merge conflict resolution (keep both `/health` keys + config fields) + loopback `/setup-capture` TestClient.
-- Exact-head CI green + independent security review on #1146 tip after push.
-- Operator merge GO for #1146 if CI/security clean; then Claude PR stack in dependency order.
 - Live A13 sessions and Public INDEX real-time entitlement remain UNVERIFIED.
 - CodeQL medium alerts on `/health`/`/setup-capture` may need operator dismissal (do not claim CodeQL green).
 
@@ -85,14 +192,11 @@ If the agent cannot persist this file, it must return this payload verbatim-read
 - Do not deploy without explicit operator GO.
 - Do not expose `/root/afs-shared/...` capture-journal paths on `/health`.
 - Do not install the observer timer without a separate install GO.
-- Do not re-merge or re-land #1145 (already on main as `ae8c897`).
+- Do not re-merge or re-land #1145/#1146.
 
-### NEXT
+### NEXT (options observer lane; not U1)
 
-1. Finish #1146 merge from `ae8c897` main: resolve overlap (both sides), loopback tests, push.
-2. Re-run #1146 CI + independent security review; merge if clean.
-3. Then reconcile remaining Claude PR stack in dependency order.
-4. Separate operator GO later for observer timer install + live prove.
+Separate operator GO later for observer timer install + live prove. U1 rebase/delta review is the active NEXT above.
 
 ## Governance PR provenance — 2026-10-06 (docs-only; does not override runtime NEXT)
 
@@ -113,9 +217,9 @@ Task: remove overlapping agent responsibilities and make the research pipeline e
 - PR workflow note: independent review/merge state is transient GitHub metadata, not the durable runtime NEXT. After this PR is resolved, follow the current runtime checkpoint below.
 - DO NOT REDO: do not recreate a second role matrix, experiment selector, or parallel research queue elsewhere.
 
-## Previous lane checkpoint — 2026-10-06 (PR #1143: PAPER posture + advisory Discord off alert lock; merged via #1143)
+## Superseded / provenance — 2026-10-06 (PR #1143: PAPER posture + advisory Discord off alert lock)
 
-Task: close the two remaining independent-QA blockers on existing branch `cursor/futures-advisory-visibility-f2da`, plus local presentation corrections. No scope expansion. Do not merge or deploy.
+Task: close the two remaining independent-QA blockers on existing branch `cursor/futures-advisory-visibility-f2da`, plus local presentation corrections. No scope expansion. **Superseded** after `#1143` merged to `main` as `55b9d4d`; kept as provenance.
 
 ### VERIFIED
 

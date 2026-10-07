@@ -56,6 +56,10 @@ class ContractQualityInput:
     premium_risk_accepted: bool = False
     premium_stop: Optional[float] = None
     trade_style: _TradeStyle = "swing"
+    # Optional caller-supplied expected underlying move (percent) over the
+    # holding horizon. Used only to warn that a target is beyond it; no
+    # expected-move model lives here.
+    expected_move_percent: Optional[float] = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -66,9 +70,60 @@ class ContractQualityResult:
     contract: Optional[ContractQualityInput] = None
 
 
+_NUMERIC_FIELDS = (
+    "strike",
+    "premium",
+    "bid",
+    "ask",
+    "spread_percent",
+    "volume",
+    "open_interest",
+    "dte",
+    "max_contracts",
+    "max_dollar_risk",
+    "distance_to_target",
+    "premium_stop",
+    "expected_move_percent",
+)
+
+
+def _non_finite_fields(contract: ContractQualityInput) -> list[str]:
+    """Numeric fields holding NaN/inf (or a non-number).
+
+    NaN compares False against every threshold, so without this check a NaN
+    spread, premium, bid, or target distance would pass the gate quietly.
+    """
+    bad: list[str] = []
+    for name in _NUMERIC_FIELDS:
+        value = getattr(contract, name)
+        if value is None and name in ("premium_stop", "expected_move_percent"):
+            continue
+        if isinstance(value, bool):
+            bad.append(name)
+            continue
+        try:
+            number = float(value)
+        except (TypeError, ValueError, OverflowError):
+            bad.append(name)
+            continue
+        # Finite check without importing math (module import allowlist).
+        if number != number or number in (float("inf"), float("-inf")):
+            bad.append(name)
+    return bad
+
+
 def evaluate_contract_quality(contract: ContractQualityInput) -> ContractQualityResult:
     blocking: list[str] = []
     warnings: list[str] = []
+
+    non_finite = _non_finite_fields(contract)
+    if non_finite:
+        # Fail closed before any threshold comparison can be fooled.
+        return ContractQualityResult(
+            verdict=GateVerdict.BLOCK,
+            blocking_reasons=tuple(f"missing/invalid {name}: not a finite number" for name in non_finite),
+            contract=contract,
+        )
 
     if not contract.ticker.strip():
         blocking.append("missing ticker")
@@ -98,13 +153,28 @@ def evaluate_contract_quality(contract: ContractQualityInput) -> ContractQuality
         blocking.append("missing bid")
     if contract.ask <= 0:
         blocking.append("missing ask")
+    if contract.bid > 0 and contract.ask > 0 and contract.ask < contract.bid:
+        blocking.append(f"crossed market (ask {contract.ask} < bid {contract.bid})")
+    # Judge width on the wider of the supplied spread and the spread implied
+    # by the quote itself, so an understated spread_percent cannot pass.
+    quoted_spread = None
+    if contract.bid > 0 and contract.ask >= contract.bid:
+        # Halve before adding so huge quotes cannot overflow the mid to inf;
+        # round so an exactly-10% quote is not pushed over by float error.
+        mid = contract.bid / 2.0 + contract.ask / 2.0
+        quoted_spread = round((contract.ask - contract.bid) / mid * 100.0, 6)
+        if quoted_spread != quoted_spread or quoted_spread in (float("inf"), float("-inf")):
+            blocking.append("quote-implied spread is not a finite number")
+            quoted_spread = None
     if contract.spread_percent < 0:
         blocking.append("missing/invalid spread_percent")
-    elif contract.spread_percent > DEFAULT_MAX_SPREAD_PERCENT:
-        blocking.append(
-            f"spread too wide ({contract.spread_percent:.1f}% > "
-            f"{DEFAULT_MAX_SPREAD_PERCENT:.1f}%)"
-        )
+    else:
+        effective_spread = max(contract.spread_percent, quoted_spread or 0.0)
+        if effective_spread > DEFAULT_MAX_SPREAD_PERCENT:
+            blocking.append(
+                f"spread too wide ({effective_spread:.1f}% > "
+                f"{DEFAULT_MAX_SPREAD_PERCENT:.1f}%)"
+            )
 
     if contract.volume <= 0:
         blocking.append("missing/invalid volume")
@@ -167,6 +237,16 @@ def evaluate_contract_quality(contract: ContractQualityInput) -> ContractQuality
         blocking.append(
             f"distance_to_target {contract.distance_to_target:.1f}% is below the "
             f"{DEFAULT_MIN_DISTANCE_TO_TARGET_PERCENT:.1f}% minimum relative to the risk taken"
+        )
+
+    if (
+        contract.expected_move_percent is not None
+        and contract.expected_move_percent > 0
+        and contract.distance_to_target > contract.expected_move_percent
+    ):
+        warnings.append(
+            f"target feasibility: distance_to_target {contract.distance_to_target:.1f}% is "
+            f"beyond the supplied expected move {contract.expected_move_percent:.1f}%"
         )
 
     if contract.iv_event_risk == "high":
@@ -272,6 +352,8 @@ def check_contract_quality_intake(payload: Any) -> ContractQualityResult:
     for name in _REQUIRED_FIELD_NAMES:
         raw_value = payload[name]
         try:
+            if isinstance(raw_value, bool) and (name in _FLOAT_FIELDS or name in _INT_FIELDS):
+                raise TypeError("boolean is not a number")
             if name in _STR_FIELDS:
                 normalized[name] = str(raw_value)
             elif name in _FLOAT_FIELDS:
@@ -284,7 +366,7 @@ def check_contract_quality_intake(payload: Any) -> ContractQualityResult:
                 normalized[name] = _coerce_severity(raw_value)
             else:
                 normalized[name] = raw_value
-        except (TypeError, ValueError) as exc:
+        except (TypeError, ValueError, OverflowError) as exc:
             coercion_errors.append(f"invalid value for {name}: {exc}")
 
     for name in _BOOL_FIELDS:
@@ -294,11 +376,14 @@ def check_contract_quality_intake(payload: Any) -> ContractQualityResult:
             except ValueError as exc:
                 coercion_errors.append(f"invalid value for {name}: {exc}")
 
-    if "premium_stop" in payload and payload["premium_stop"] is not None:
-        try:
-            normalized["premium_stop"] = float(payload["premium_stop"])
-        except (TypeError, ValueError) as exc:
-            coercion_errors.append(f"invalid value for premium_stop: {exc}")
+    for name in ("premium_stop", "expected_move_percent"):
+        if name in payload and payload[name] is not None:
+            try:
+                if isinstance(payload[name], bool):
+                    raise TypeError("boolean is not a number")
+                normalized[name] = float(payload[name])
+            except (TypeError, ValueError, OverflowError) as exc:
+                coercion_errors.append(f"invalid value for {name}: {exc}")
 
     if "trade_style" in payload and payload["trade_style"] is not None:
         try:

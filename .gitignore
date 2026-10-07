@@ -75,3 +75,5 @@ journal/*.jsonl
 release_manifest.json
 # Local research evidence / one-look receipts — never commit outcome-bearing artifacts
 .evidence/
+# Runtime exclusive lock for OOS receipt append (ledger itself is repo-governed)
+docs/research-oos-consumption-ledger.jsonl.lock

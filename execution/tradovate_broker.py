@@ -37,6 +37,7 @@ from execution.broker_interface import (
     Position,
 )
 from execution.no_fill_taxonomy import classify_no_fill_reason, classify_provider_failure
+from config.futures_contracts import UnsupportedContractError, contract_economics
 from execution.post_fill_validation import validate_post_fill
 from notifications import plain_english as _pe
 
@@ -95,13 +96,26 @@ class AuthResult:
     def ok(self) -> bool:
         return self.status == AUTH_HEALTHY
 
-# Per-instrument tick specs
-_TICK_SIZE: dict[str, float] = {
-    "MES": 0.25, "ES": 0.25, "MNQ": 0.25, "NQ": 0.25, "MGC": 0.10, "MCL": 0.01,
-}
-_TICK_VALUE: dict[str, float] = {
-    "MES": 1.25, "ES": 12.50, "MNQ": 0.50, "NQ": 5.00, "MGC": 1.00, "MCL": 1.00,
-}
+# Roots this broker module carried tick metadata for before U7. The VALUES come
+# only from config/futures_contracts.py; this set adds no instrument. An unknown
+# root never inherits another contract's units: it raises (fail closed).
+_BROKER_ECONOMICS_ROOTS = frozenset({"MES", "ES", "MNQ", "NQ", "MGC", "MCL"})
+
+
+def _broker_root(instrument: str) -> str:
+    """Exact broker root: canonical root or that root with one trailing `1!` only."""
+    symbol = str(instrument or "").upper()
+    if symbol.endswith("1!"):
+        symbol = symbol[:-2]
+    return symbol
+
+
+def _broker_economics(instrument: str) -> tuple[float, float]:
+    """(tick size, tick value) from canonical metadata; raises on unknown roots."""
+    root = _broker_root(instrument)
+    if root not in _BROKER_ECONOMICS_ROOTS:
+        raise UnsupportedContractError(f"no broker contract metadata for {instrument!r}")
+    return contract_economics(root)
 
 
 def _round_to_tick(price: float, instrument: str) -> float:
@@ -116,10 +130,7 @@ def _round_to_tick(price: float, instrument: str) -> float:
     safety net has to flatten — the repeated "NAKED POSITION … STOP" alerts.
     Round to the nearest tick so the bracket children are accepted.
     """
-    root = instrument.replace("1!", "").upper()
-    tick = _TICK_SIZE.get(root, 0.25)
-    if tick <= 0:
-        return float(price)
+    tick, _ = _broker_economics(instrument)
     return round(round(float(price) / tick) * tick, 4)
 
 
@@ -136,10 +147,7 @@ def _rr_preserving_entry_cap(order: BracketOrder, instrument: str) -> float:
     stop = float(order.stop)
     target = float(order.target)
     boundary = (target + minimum_rr * stop) / (1.0 + minimum_rr)
-    root = instrument.replace("1!", "").upper()
-    tick = _TICK_SIZE.get(root, 0.25)
-    if tick <= 0:
-        return boundary
+    tick, _ = _broker_economics(instrument)
     ticks = boundary / tick
     snapped = math.floor(ticks + 1e-9) if order.direction == "LONG" else math.ceil(ticks - 1e-9)
     return round(snapped * tick, 4)
@@ -1108,6 +1116,12 @@ class TradovateBroker(BrokerInterface):
                 no_fill_reason="MAX_CONTRACTS_HARD_CAP",
             )
         try:
+            _broker_economics(order.instrument)
+        except UnsupportedContractError as exc:
+            # U7: refuse before auth, contract lookup or any broker request.
+            logger.error("BLOCKED Tradovate order: %s", exc)
+            return self._cancelled_fill(order, "CONTRACT_METADATA_UNSUPPORTED")
+        try:
             # ── Safety: TRADOVATE_ENV=live requires explicit LIVE_TRADING_ENABLED=true ──
             if self.config.env == "live":
                 live_enabled = os.getenv("LIVE_TRADING_ENABLED", "false").strip().lower()
@@ -1202,7 +1216,7 @@ class TradovateBroker(BrokerInterface):
             # unfilled, sidestepping the IOC-limit no-fill bottleneck this proof
             # mode exists to test.
             runner_live = _runner_live_enabled() or getattr(order, "force_runner_exit", False)
-            tick = _TICK_SIZE.get(root, 0.25)
+            tick, _ = _broker_economics(root)
             entry_leg = {"orderType": "Market"}
             limit_px = None
 
@@ -2173,8 +2187,14 @@ class TradovateBroker(BrokerInterface):
             logger.warning("replace_stop: no resting stop order id — cannot trail safely")
             return False
 
-        root = (pos.instrument or "").replace("1!", "").upper()
-        new_stop = _round_to_tick(float(new_stop_price), root)
+        try:
+            new_stop = _round_to_tick(float(new_stop_price), pos.instrument)
+        except UnsupportedContractError:
+            logger.error(
+                "replace_stop: no contract metadata for %s — not trailing",
+                pos.instrument,
+            )
+            return False
         cur = float(pos.stop)
         # Never loosen — the whole point of a runner trail is a monotonic stop.
         if pos.direction == "LONG" and new_stop <= cur:
@@ -2450,16 +2470,19 @@ class TradovateBroker(BrokerInterface):
         exit_price = flat.get("close_fill_price")
         pnl_ticks = pnl_dollars = None
         if confirmed and exit_price is not None:
-            root = order.instrument.replace("1!", "").upper()
-            tick = _TICK_SIZE.get(root, 0.25)
-            value = _TICK_VALUE.get(root, 1.25)
-            signed = (
-                float(exit_price) - actual_entry
-                if order.direction == "LONG"
-                else actual_entry - float(exit_price)
-            )
-            pnl_ticks = signed / tick
-            pnl_dollars = round(pnl_ticks * value * qty, 2)
+            try:
+                tick, value = _broker_economics(order.instrument)
+            except UnsupportedContractError:
+                # Unknown units: leave P&L unknown rather than fabricate it.
+                logger.error("auto-flatten P&L unknown: no contract metadata for %s", order.instrument)
+            else:
+                signed = (
+                    float(exit_price) - actual_entry
+                    if order.direction == "LONG"
+                    else actual_entry - float(exit_price)
+                )
+                pnl_ticks = signed / tick
+                pnl_dollars = round(pnl_ticks * value * qty, 2)
         return Fill(
             instrument=order.instrument,
             direction=order.direction,
@@ -2609,8 +2632,7 @@ class TradovateBroker(BrokerInterface):
             # overlapping orders that grabs an unrelated entry and fabricates wins
             # (the 30208.75-on-two-trades bug).
             instrument = last.instrument
-            tick_size = _TICK_SIZE.get(instrument, 0.25)
-            tick_value = _TICK_VALUE.get(instrument, 1.25)
+            tick_size, tick_value = _broker_economics(instrument)
             tol = tick_size * 2
             # Use /fill/list (reliably carries `price`; /order/list often omits the
             # limit price). Match the EXIT fill to our journaled target/stop — never

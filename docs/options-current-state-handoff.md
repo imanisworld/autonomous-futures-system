@@ -1,8 +1,41 @@
 # Options — Current State Handoff
 
-_As of 2026-10-05. The newest dated repository refresh below governs source state; the latest verified box-specific sections govern runtime state until a fresh local/provider or VPS check is performed. This is the single current-state authority for the options lane._
+_As of 2026-10-07. The newest dated repository refresh below governs source state; the latest verified box-specific sections govern runtime state until a fresh local/provider or VPS check is performed. This is the single current-state authority for the options lane._
 
 Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`; the read-only coverage evidence lane (observer, reducer, outcome study, after-close collector) is described in `docs/options-coverage-observer.md`. The observation-only **setup-capture** lifecycle (`WATCHING` → `TRIGGERED` / `MISSED_LATE`) is described in `docs/options-setup-capture-observer.md`.
+
+## Current options-system checkpoint — 2026-10-07
+
+This section is the active source-state checkpoint for the canonical options evidence stack. Older sections below remain provenance and must not be replayed over this state.
+
+### DONE / DO NOT REDO
+
+- #1145 merged as `ae8c897`: observation-only setup capture. Historical Oct. 5 late SPY observations remain misses; do not backfill them as catches.
+- #1146 merged as `445393f`: scanner access gate. `/setup-capture` remains private and public health/status output redacted.
+- #1147 merged as `53dda44`: read-only observer status and release-pin template. Status reads remain non-mutating.
+- #1148 merged as `e86c55c`: contract-quality fail-closed gate.
+- #1149 merged as `ee815535`: canonical planned-risk authority.
+- #1150 merged as `f556751d`: hash-pinned, observation-only strategy-epoch registry.
+- #1151 fixed authority injection, missed-signal trade laundering, malformed inputs, provenance relabelling, impossible chronology, and forged/mismatched epoch labels. Non-catches are counterfactual-only and cannot contribute realised/scorable trade results.
+- #1151 was reconciled again with current `main` `f35b976` via merge commit `3a69fd3`; the new main delta was disjoint from #1151 files.
+- Do not reimplement #1151 provenance, chronology, counterfactual, or epoch-scope rules in #1152/#1153.
+
+### OPEN / NEXT
+
+1. #1151 is the active merge gate. Fresh CI and CodeQL must pass on the post-sync exact head, then the exact-head review requirement must be reconciled before merge.
+2. #1152 remains downstream until #1151 merges. Sync once, reuse the saved fixture-only compatibility patch, address only still-reproducing fitness findings, then test/CI/review/merge.
+3. #1153 follows the same pattern, preserving no-look-ahead/no-result-selection and canonical scope/provenance.
+4. #1154 is the final readiness + documentation reconciliation point. Preserve this checkpoint; refresh current GitHub facts rather than replaying stale text.
+5. Runtime observer/timer install and forward proof remain separate operator-approved phases after the code stack is complete.
+
+### Runtime / proof boundary
+
+- No setup-capture timer install or new options deployment is authorized by this checkpoint.
+- The release-pin template exists, but effective runtime remains unverified until a separate approved box action.
+- Public INDEX/SPX real-time-vs-delayed entitlement remains unverified.
+- `122-IEX-E1` is not proof/trading ready; FROZEN is not equivalent to READY or execution authority.
+- Final #1151 source matching intentionally does not infer a mapping between current #1145 source labels and the registry source labels.
+
 
 
 ## Repository refresh — 2026-10-06 (setup-capture observer v0.2; not deployed)
