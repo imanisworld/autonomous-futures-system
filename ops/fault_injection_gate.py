@@ -21,12 +21,14 @@ from __future__ import annotations
 import argparse
 import ast
 import hashlib
+import io
 import json
 import platform
 import re
 import subprocess
 import sys
 import tempfile
+import tarfile
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
@@ -145,6 +147,51 @@ def _junit_cases(path: Path) -> list[tuple[str, str]]:
     return cases
 
 
+def run_suite_at(root: Path, sha: str, *, python: str = sys.executable) -> tuple[int, list[tuple[str, str]]]:
+    """Run the committed FI suite from an exact-SHA archive, never the worktree."""
+    archived = subprocess.run(
+        ["git", "-C", str(root), "archive", "--format=tar", sha],
+        capture_output=True, check=False,
+    )
+    if archived.returncode != 0:
+        raise FaultInjectionGateError(f"cannot archive qualified SHA {sha}")
+    with tempfile.TemporaryDirectory(prefix="afs-fi-exact-") as tmp:
+        checkout = Path(tmp) / "checkout"
+        checkout.mkdir()
+        try:
+            with tarfile.open(fileobj=io.BytesIO(archived.stdout), mode="r:") as archive:
+                archive.extractall(checkout, filter="data")
+        except (tarfile.TarError, OSError) as exc:
+            raise FaultInjectionGateError(f"cannot materialize qualified SHA {sha}: {exc}") from exc
+        junit = Path(tmp) / "fi.xml"
+        proc = subprocess.run(
+            [python, "-m", "pytest", "-q", "-p", "no:cacheprovider", SUITE_DIR,
+             f"--junitxml={junit}"],
+            cwd=checkout, capture_output=True, text=True, check=False,
+        )
+        if not junit.is_file():
+            raise FaultInjectionGateError(
+                f"exact-SHA FI suite produced no results: {proc.stderr[-500:]}"
+            )
+        cases = _junit_cases(junit)
+    return proc.returncode, cases
+
+
+def _safe_output_path(root: Path, out: Path) -> Path:
+    """Require generated proof to stay in-repo without overwriting tracked files."""
+    root = root.resolve()
+    target = out.resolve()
+    try:
+        rel = target.relative_to(root)
+    except ValueError as exc:
+        raise FaultInjectionGateError("FI proof output must resolve inside the repository root") from exc
+    if rel.parts and rel.parts[0] == ".git":
+        raise FaultInjectionGateError("FI proof output may not be written inside .git")
+    tracked = _git(root, "ls-files", "--error-unmatch", "--", rel.as_posix())
+    if tracked.returncode == 0:
+        raise FaultInjectionGateError("FI proof output may not overwrite a tracked repository file")
+    return target
+
 def generate_manifest(root: Path, *, python: str = sys.executable) -> dict[str, Any]:
     """Run only the FI suite on a clean checkout; return the bound manifest."""
     root = Path(root)
@@ -163,16 +210,7 @@ def generate_manifest(root: Path, *, python: str = sys.executable) -> dict[str, 
             "FI scenario inventory drift: "
             f"committed suite={sorted(discovered)}, required={sorted(REQUIRED_SCENARIOS)}"
         )
-    with tempfile.TemporaryDirectory(prefix="afs-fi-") as tmp:
-        junit = Path(tmp) / "fi.xml"
-        proc = subprocess.run(
-            [python, "-m", "pytest", "-q", "-p", "no:cacheprovider", SUITE_DIR,
-             f"--junitxml={junit}"],
-            cwd=root, capture_output=True, text=True, check=False,
-        )
-        if not junit.is_file():
-            raise FaultInjectionGateError(f"FI suite produced no results: {proc.stderr[-500:]}")
-        cases = _junit_cases(junit)
+    exit_code, cases = run_suite_at(root, sha, python=python)
     results = scenario_results(cases)
     return {
         "schema_version": SCHEMA_VERSION,
@@ -183,13 +221,13 @@ def generate_manifest(root: Path, *, python: str = sys.executable) -> dict[str, 
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "python": sys.version.split()[0],
         "platform": platform.platform(),
-        "pytest_exit_code": proc.returncode,
+        "pytest_exit_code": exit_code,
         "required_scenarios": list(REQUIRED_SCENARIOS),
         "discovered_scenarios": sorted(discovered),
         "undefined_scenarios": dict(UNDEFINED_SCENARIOS),
         "scenarios": results,
         "overall": "PASS"
-        if proc.returncode == 0 and all(results.get(s, {}).get("result") == "PASS" for s in REQUIRED_SCENARIOS)
+        if exit_code == 0 and all(results.get(s, {}).get("result") == "PASS" for s in REQUIRED_SCENARIOS)
         else "FAIL",
     }
 
@@ -246,6 +284,21 @@ def verify_manifest(
             blockers.append(f"fault-injection scenario {scenario} is {entry.get('result')!r}, not PASS")
     if manifest.get("pytest_exit_code") != 0:
         blockers.append("fault-injection suite run did not exit cleanly")
+    if not blockers and len(sha) == 40:
+        try:
+            exact_exit, exact_cases = run_suite_at(Path(root), sha)
+        except FaultInjectionGateError as exc:
+            blockers.append(f"cannot mechanically rerun FI suite at {sha}: {exc}")
+        else:
+            exact_results = scenario_results(exact_cases)
+            if exact_exit != 0:
+                blockers.append("mechanical exact-SHA FI suite rerun did not exit cleanly")
+            for scenario in required:
+                if exact_results.get(scenario, {}).get("result") != "PASS":
+                    blockers.append(
+                        f"mechanical exact-SHA fault-injection scenario {scenario} is "
+                        f"{exact_results.get(scenario, {}).get('result')!r}, not PASS"
+                    )
     return blockers
 
 
@@ -269,12 +322,13 @@ def main(argv: Optional[list[str]] = None) -> int:
     args = parser.parse_args(argv)
     if args.command == "generate":
         try:
+            target = _safe_output_path(args.repo_root, args.out)
             manifest = generate_manifest(args.repo_root)
         except FaultInjectionGateError as exc:
             print(f"FI PROOF BLOCKED: {exc}", file=sys.stderr)
             return 2
-        args.out.parent.mkdir(parents=True, exist_ok=True)
-        args.out.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         print(json.dumps({"overall": manifest["overall"], "code_sha": manifest["code_sha"]}))
         return 0 if manifest["overall"] == "PASS" else 1
     blockers = verify_manifest(args.repo_root, load_manifest(args.manifest), code_sha=args.code_sha)

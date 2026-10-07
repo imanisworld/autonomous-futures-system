@@ -202,6 +202,30 @@ def test_any_required_scenario_not_passing_blocks(good, mutate, needle):
     assert any(needle in b for b in fi.verify_manifest(repo, manifest, code_sha=head))
 
 
+def test_forged_pass_manifest_cannot_hide_a_failing_exact_sha_suite(tmp_path):
+    repo = _repo(tmp_path, extra="def test_fi3_regression():\n    assert False\n")
+    head = runner._git(repo, "rev-parse", "HEAD").stdout.strip()
+    make_fi_manifest(repo, head)
+    manifest = json.loads((repo / "fi_manifest.json").read_text())
+    blockers = fi.verify_manifest(repo, manifest, code_sha=head)
+    assert any("mechanical exact-SHA FI suite rerun did not exit cleanly" in b for b in blockers)
+    assert any("mechanical exact-SHA fault-injection scenario FI-3" in b for b in blockers)
+
+
+def test_generate_cli_refuses_overwriting_tracked_file(tmp_path):
+    repo = _repo(tmp_path)
+    victim = repo / "tests/fault_injection/test_synthetic_fi.py"
+    before = victim.read_bytes()
+    assert fi.main(["generate", "--repo-root", str(repo), "--out", str(victim)]) == 2
+    assert victim.read_bytes() == before
+
+
+def test_generate_cli_refuses_output_outside_repo(tmp_path):
+    repo = _repo(tmp_path)
+    outside = tmp_path / "outside.json"
+    assert fi.main(["generate", "--repo-root", str(repo), "--out", str(outside)]) == 2
+    assert not outside.exists()
+
 def test_unknown_code_sha_blocks(good):
     repo, _, manifest = good
     assert any("exact code SHA" in b for b in fi.verify_manifest(repo, manifest, code_sha=None))

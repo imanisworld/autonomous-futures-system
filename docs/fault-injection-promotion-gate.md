@@ -17,6 +17,8 @@ manifest:
   SHA;
 - reports every required scenario `PASS` (at least one passing test, no
   failure, no skip/xfail) with a clean pytest exit;
+- is mechanically re-run by the verifier from a temporary `git archive` of
+  the exact qualified SHA, so manifest PASS claims are not trusted by themselves;
 - matches the scenario inventory mechanically rediscovered from the committed
   FI suite at the exact qualified SHA. New/removed scenarios block until the
   required inventory is deliberately reconciled.
@@ -27,6 +29,9 @@ FI proof.
 
 Verify a manifest by hand:
 `python -m ops.fault_injection_gate verify --manifest <path> --code-sha <sha>`.
+Verification re-executes the committed FI suite at that SHA in a temporary
+archive. Generation refuses output outside the repository or over a tracked
+repository file.
 
 ## Defined scenarios (required)
 
