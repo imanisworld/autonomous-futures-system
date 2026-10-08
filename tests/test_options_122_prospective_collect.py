@@ -12,6 +12,7 @@ from scripts.options_122_prospective_collect import (
     CANONICAL_UNIVERSE,
     COLLECTOR_ID,
     COLLECTOR_VERSION,
+    LEGACY_COLLECTOR_VERSIONS,
     DEFAULT_CADENCE_SECONDS,
     DEFAULT_MAX_CAPTURE_LAG_SECONDS,
     POLICY_EPOCH,
@@ -115,10 +116,11 @@ def test_journal_is_version_locked_and_append_only_state(tmp_path: Path):
         '{"record_type":"RECONCILIATION","collector_id":"%s","collector_version":"%s","policy_epoch":"%s","setup_id":"s1","observation":{"setup_fingerprint":"f1"}}\n'
         % (COLLECTOR_ID,COLLECTOR_VERSION,POLICY_EPOCH,COLLECTOR_ID,COLLECTOR_VERSION,POLICY_EPOCH,COLLECTOR_ID,COLLECTOR_VERSION,POLICY_EPOCH)
     )
-    armed, terminal, fp, reconciled, drifted = _load_state(p)
+    armed, terminal, fp, reconciled, drifted, bound = _load_state(p)
     assert armed["s1"] == datetime(2026,9,18,15,0,10,tzinfo=UTC)
     assert "s1" in terminal and fp["s1"] == "f1" and "s1" in reconciled
     assert drifted == set()
+    assert bound == set()
 
 
 def test_collector_has_no_broker_order_or_risk_imports():
@@ -199,11 +201,12 @@ def test_own_source_drift_row_reloads_and_blocks_setup(tmp_path: Path):
         + _row("ARMED", "pending", "fpp")
         + _row("SOURCE_DRIFT", "drift", "fp2", reason_code="public_completed_bar_revision")
     )
-    armed, terminal, fp, reconciled, drifted = _load_state(p)
+    armed, terminal, fp, reconciled, drifted, bound = _load_state(p)
     assert drifted == {"drift"}
     assert fp["drift"] == "fp1"
     assert "drift" not in terminal and "drift" not in reconciled
     assert set(armed) == {"drift", "pending"} and fp["pending"] == "fpp"
+    assert bound == set()
 
 
 def test_fingerprint_drift_outside_source_drift_rows_still_fails_closed(tmp_path: Path):
@@ -227,6 +230,49 @@ def test_source_drift_row_stays_version_locked(tmp_path: Path):
     p = tmp_path / "j.jsonl"
     p.write_text(_row("ARMED", "s1", "fp1") + _row("SOURCE_DRIFT", "s1", "fp2").replace(COLLECTOR_VERSION, "old"))
     with pytest.raises(RuntimeError, match="journal_collector_version_mismatch_2"):
+        _load_state(p)
+
+
+def test_legacy_collector_rows_load_but_never_become_canonically_bound(tmp_path: Path):
+    import json
+
+    legacy = next(iter(LEGACY_COLLECTOR_VERSIONS))
+    row = json.loads(_row("ARMED", "legacy", "fp1"))
+    row["collector_version"] = legacy
+    p = tmp_path / "legacy-state.jsonl"
+    p.write_text(json.dumps(row) + "\n")
+    armed, terminal, fp, reconciled, drifted, bound = _load_state(p)
+    assert set(armed) == {"legacy"}
+    assert terminal == {}
+    assert fp == {"legacy": "fp1"}
+    assert reconciled == set() and drifted == set()
+    assert bound == set()
+
+
+def test_bound_row_is_recomputed_and_tamper_checked_on_reload(tmp_path: Path):
+    import json
+    import pytest
+
+    obs = _obs().to_dict()
+    base = {
+        "record_type": "ARMED",
+        "collector_id": COLLECTOR_ID,
+        "collector_version": COLLECTOR_VERSION,
+        "policy_epoch": POLICY_EPOCH,
+        "setup_id": "bound",
+        "observed_at": "2026-09-18T15:00:10+00:00",
+        "observation": obs,
+        "canonical_binding": _canonical_binding(_obs()),
+    }
+    p = tmp_path / "bound.jsonl"
+    p.write_text(json.dumps(base) + "\n")
+    *_, bound = _load_state(p)
+    assert bound == {"bound"}
+
+    tampered = dict(base)
+    tampered["canonical_binding"] = {**base["canonical_binding"], "arm_source": "public_regular_30m"}
+    p.write_text(json.dumps(tampered) + "\n")
+    with pytest.raises(RuntimeError, match="journal_canonical_binding_invalid_1"):
         _load_state(p)
 
 
