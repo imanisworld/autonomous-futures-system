@@ -4,6 +4,26 @@ _As of 2026-10-08. The newest dated repository refresh below governs source stat
 
 Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`; the read-only coverage evidence lane (observer, reducer, outcome study, after-close collector) is described in `docs/options-coverage-observer.md`. The observation-only **setup-capture** lifecycle (`WATCHING` → `TRIGGERED` / `MISSED_LATE`) is described in `docs/options-setup-capture-observer.md`.
 
+## Active source and edge-research update — 2026-10-08 (latest checkpoint)
+
+**Decision: RESEARCH ONLY / NO NEW TRADE. Trading edge NOT PROVEN.** This is a dated source-and-priority reconciliation. It supersedes older **open-work status** lines in the Oct. 8 checkpoint below, without altering historical evidence, strategy/epoch definitions, trial registrations, or runtime state. Current `main` inspected at `307fe56771031b44eeb8d0235224cf010616ce4a`; this is a source SHA, **not** the installed VPS release.
+
+- **#1177 part 2 / #1198 — MERGED SOURCE ONLY:** dedicated read-only `options_122/122-IEX-E1` canonical adapter and adversarial tests merged as `307fe567` on Oct. 8. #1186 producer stamp (part 1) was already merged. Canonical admission requires exact stamped history, raw first-break tape replay, mandatory delayed SIP confirmation and explicit trusted quote freshness; legacy/#1145 evidence is never silently relabeled. **No collector pin, raw-file/journal census, real evidence admission, fitness promotion, option trading or Day 1 is proven by this merge.**
+- **#1184 — ISSUE CLOSED / FURTHER WORK DEFERRED:** standalone defensive verifier is still **DRAFT / UNMERGED PR #1199** (reported exact-head CI and handoff successful; independent review/merge still separate). It must not be treated as independent proof of durable approval storage, authenticated human principals, or an ability to grant trading authority. No preapproved human principal, runtime integration or executable authority. Reopen security integration only before storing/reloading/acting upon approval history, with explicit operator authorization.
+- **#1154 OPEN / PARKED; #1167 AUDIT ONLY:** source completion of #1198 resolves the missing adapter *implementation* dependency, **not** producer/deployed release provenance, raw journals, trusted quote-policy inputs, rollback rehearsal, forward proof decisions or OOS/stop-target readiness. Do not remove compatibility code or simplify live collectors prematurely.
+- **#1071 OPEN / UNMERGED:** an older read-only epoch P&L auditor exists in PR #1071, behind the current repository and **not on main**; it has a Sept. 29 cohort result, not a fresh Oct. 7/8 reconciliation. Reuse/reconcile it rather than creating another P&L analytics system. Its existing checks do not replace new exact-head CI/review/merge approval.
+- **Current paper data is NOT independently reconciled:** the Oct. 7 daily numbers directly below are operator-supplied and do not establish current-epoch expectancy. All-time results mix cohorts. Existing daily report can substitute zero for missing P&L; a structural WIN may have negative option P&L when ASK entry / BID exit and spreads are considered. Commissions are excluded from recorded paper dollars.
+
+**Ordered research work (do not tune first):**
+
+1. **BLOCKED ON AUTHORIZED READ-ONLY DATA:** obtain a consistent, source-identified `options_scanner.sqlite` snapshot plus the actual Oct. 7 EOD report/marks/diagnostics. Confirm provenance, effective scanner release, epoch boundary (both time and shadow ID), ACTIVE entries, closes, option `pnl_dollars`, and unresolved/invalid records. No Mac/root access or real ledger was verified in this update.
+2. **THEN:** reconcile closed financial P&L vs structural WIN/LOSS and daily paper report; exclude OPEN, unpriced, entry-consumed, rejected and COUNTERFACTUAL from priced ACTIVE totals. Keep cross-epoch data separate. Make missing prices, commissions and quote coverage explicit, not zero or simulated fills.
+3. **THEN:** apply existing `alert_ranker/v1_diagnostics.py` and contract-mark/context records only to available *pre-entry* features: setup/timeframe, first sight, remaining reward/stop, spread and contract liquidity, DTE/theta, market SPY/QQQ/GEX. Compare losses descriptively without hindsight-selected thresholds or unsupported causation.
+4. **NEXT RESEARCH DESIGN:** only after accounting, preregister the exact future setup/factor question and an untouched forward population. Do not reopen/rerun the closed 59-episode one-look (coverage gain only) or approve/backfill `-02` before its explicit gates.
+5. **DEFERRED:** modernization/unused tooling review after the proof/readiness blockers are understood; #1184 approval infrastructure only when real use is proposed.
+
+**Boundaries:** futures release-candidate/VPS root checks remain separate. No code/PR merge, deploy, build, service restart, collector repin, journaling mutation, strategy change, paper/live order, forward-evidence start, or trading-approval activation is authorized by this document. **FUTURES HOLD · OPTIONS HOLD.**
+
 ## Options paper-collection readout — 2026-10-07 UTC (operator-supplied, not independently reconciled)
 
 **Engineering verdict: collection PASS; trading-edge verdict: NOT PROVEN / HOLD.** This is a read-only daily reporting snapshot, not a new strategy trial, a broker statement, or authority to change rules, promote code, or deploy. Validate against `paper_collection_eod_2026-10-07.json` and canonical DB/journal before any formal statistical inference.
@@ -17,7 +37,7 @@ Historical dated notes and old/closed PRs are provenance only. They do not overr
 
 **Cleanup gate:** #1167 remains audit-only until #1154 is merged and stable. Map callers, authority, live services, historical replay and rollback before removing compatibility paths, duplicate validators, collectors or dated docs. Keep all original journal/JSON evidence unchanged; simplify only after tests and independent review.
 
-## Work-queue verification — 2026-10-08 (documentation only)
+## Earlier work-queue verification — 2026-10-08 (superseded source status)
 
 This check updates workflow status without changing the frozen evidence, the current checkpoint's strategy definitions, or operational state. #1188 was merged as `f8e4257e2b9481f4b670b24e7602634e9cf47649`; the 2026-10-08 checkpoint immediately below is now on main.
 
@@ -39,7 +59,7 @@ The read-only source audit and twelve-case regression matrix are recorded in [#1
 - **Regression coverage:** valid confirmed catch; false provisional; SIP-only reversal missed by IEX; continuation-first; pending/no break; blocked/disagreeing SIP; late or unusable capture; legacy exclusion; exact producer/source/family/timeframe/universe/hash/close rejection; duplicate/illegal history/drift rejection; and no strategy/runtime mutation.
 - **Gate:** #1183/#1176 is merged. #1154 remains parked until #1177 parts 1 and 2 have the exact producer contract, exact-head CI, independent Grok review and operator approval. No collector deployment, timer activation, proof window or trading authority.
 
-## Current options-system checkpoint — 2026-10-08
+## Earlier options-system checkpoint — 2026-10-08 (superseded open-work status)
 
 This section is the active source-state checkpoint for the canonical options evidence stack. It supersedes the 2026-10-07 checkpoint below, which remains provenance and must not be replayed over this state. Merge gate for every options PR: exact-head CI green **and** a Grok PASS on that exact head; Claude reviews are QA only and do not satisfy the gate.
 
