@@ -266,52 +266,26 @@ def test_promote_and_rollback_rearm_readonly_watcher_after_release_verification(
 
 
 
-def test_watcher_remote_directory_guard_fails_before_file_mutation(tmp_path):
-    """Test the *rendered* SSH command, not merely the source shell string."""
-    shared = tmp_path / "shared"
-    shared.mkdir()
-    approved = shared / "watcher"
-    approved.mkdir()
-    outside = tmp_path / "outside"
-    outside.mkdir()
-    (shared / "escape").symlink_to(outside, target_is_directory=True)
-    preamble = _REMOTE_RENDER_PREAMBLE.replace("SHARED=/s", f"SHARED={shared}")
+def test_watcher_rearm_reuses_same_preflight_resolved_destination():
+    """Both paths use the early canonical path, not a late raw path check."""
     for func, _, block in _remote_blocks():
         if func not in ("promote_release", "rollback_release"):
             continue
         rendered = subprocess.run(
-            ["bash", "-c", preamble + "\n".join(block)],
+            ["bash", "-c", _REMOTE_RENDER_PREAMBLE + "\n".join(block)],
             capture_output=True, text=True, check=True,
         ).stdout
-        assert 'test -z "$watcher_dest"' in rendered
-        assert 'watcher_dest=$(realpath -e -- "$watcher_dest")' in rendered
+        pre = rendered.index("watcher_pre_dest=$(systemctl show")
+        activated = rendered.index("sed -i '/^EXPECTED_RELEASE_FINGERPRINT")
+        post = rendered.index('watcher_dest="$watcher_pre_dest"')
+        assert pre < activated < post
+        assert 'watcher_shared_root=$(realpath -e --' in rendered[pre:activated]
+        assert 'watcher_pre_dest=$(realpath -e -- "$watcher_pre_dest")' in rendered[pre:activated]
+        assert 'if test "$watcher_preflight_enabled" = 1; then' in rendered[activated:post]
+        assert 'watcher_dest=$(systemctl show' not in rendered[activated:]
+        assert "case \"$watcher_dest\" in" not in rendered[activated:]
         assert 'chmod 700 "$watcher_dest/$watcher_file"' in rendered
         assert 'chmod 700 "$watcher_dest"/*.sh' not in rendered
-
-        begin = rendered.index("watcher_dest=$(systemctl show")
-        end = rendered.index("for watcher_file in", begin)
-        guard = rendered[begin:end]
-        for malicious in ("", "/", "/tmp", "relative", str(shared / "escape")):
-            proc = subprocess.run(
-                ["bash", "-c",
-                 "set -e\nsystemctl() { printf '%s\\n' \"$WATCHER_DIRECTORY\"; }\n"
-                 + guard + "\nprintf 'GUARD_BYPASSED\\n'"],
-                capture_output=True, text=True,
-                env={**os.environ, "WATCHER_DIRECTORY": malicious},
-            )
-            assert proc.returncode != 0, (func, malicious, proc.stdout)
-            assert "GUARD_BYPASSED" not in proc.stdout, (func, malicious)
-        safe = subprocess.run(
-            ["bash", "-c",
-             "set -e\nsystemctl() { printf '%s\\n' \"$WATCHER_DIRECTORY\"; }\n"
-             + guard + "\nprintf 'GUARD_BYPASSED\\n'"],
-            capture_output=True, text=True,
-            env={**os.environ, "WATCHER_DIRECTORY": str(approved)},
-        )
-        assert safe.returncode == 0, (func, safe.stderr)
-        assert "GUARD_BYPASSED" in safe.stdout
-
-
 
 
 def test_watcher_preflight_blocks_release_mutation_for_untrusted_paths(tmp_path):
@@ -323,6 +297,10 @@ def test_watcher_preflight_blocks_release_mutation_for_untrusted_paths(tmp_path)
     outside = tmp_path / "outside"
     outside.mkdir()
     (shared / "escaped").symlink_to(outside, target_is_directory=True)
+    shared_alias = tmp_path / "shared-alias"
+    shared_alias.symlink_to(shared, target_is_directory=True)
+    watcher_alias = tmp_path / "watcher-alias"
+    watcher_alias.symlink_to(approved, target_is_directory=True)
     releases = tmp_path / "releases"
     release = releases / ("7c930274179f7c76749f75b35adb14fbb9255e54")
     prior = tmp_path / "prior-release"
@@ -378,9 +356,33 @@ def test_watcher_preflight_blocks_release_mutation_for_untrusted_paths(tmp_path)
             res = try_path(bad)
             assert res.returncode != 0, (func, bad, res.stdout, res.stderr)
             assert not marker.exists(), (func, bad)
-        good = try_path(str(approved))
-        assert good.returncode == 0, (func, good.stdout, good.stderr)
-        assert marker.read_text() == "MUTATED\n"
+        for good_path in (str(approved), str(approved) + "/",
+                          str(watcher_alias), str(watcher_alias) + "/"):
+            good = try_path(good_path)
+            assert good.returncode == 0, (func, good_path, good.stdout, good.stderr)
+            assert marker.read_text() == "MUTATED\n"
+        # $SHARED may itself be a symlink or carry a trailing slash.
+        for root_form in (str(shared_alias), str(shared_alias) + "/",
+                          str(shared) + "/"):
+            marker.unlink(missing_ok=True)
+            alt_guard = guard.replace(str(shared), root_form)
+            prog = (
+                'set -e\nprevious="$PREVIOUS_RELEASE"\n'
+                'systemctl() {\n'
+                '  if [ "$1" = cat ]; then return 0; fi\n'
+                '  if [ "$1" = show ]; then printf "%s\\n" "$WATCHER_DIRECTORY"; return 0; fi\n'
+                '  return 99\n}\n'
+                + alt_guard
+                + '\nprintf "MUTATED\\n" > "$MUTATION_CANARY"\n'
+            )
+            check = subprocess.run(
+                ["bash", "-c", prog], capture_output=True, text=True,
+                env={**os.environ, "PREVIOUS_RELEASE": str(prior),
+                     "WATCHER_DIRECTORY": str(watcher_alias) + "/",
+                     "MUTATION_CANARY": str(marker)},
+            )
+            assert check.returncode == 0, (func, root_form, check.stdout, check.stderr)
+            assert marker.read_text() == "MUTATED\n"
 
 
 def test_rollback_restores_previous_release_proof_pins_and_verifies_integrity():

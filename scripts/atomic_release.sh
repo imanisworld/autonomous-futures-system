@@ -303,6 +303,7 @@ promote_release() {
     test -f '$SHARED/.env'
     risk_sha=\$('$RELEASES/$sha/.venv/bin/python' -c \"import json;print(json.load(open('$RELEASES/$sha/release_manifest.json'))['risk_rules_sha256'])\")
     # Read-only watcher destination/source preflight BEFORE .env, symlink or service mutation.
+    watcher_preflight_enabled=0
     if systemctl cat afs-watcher.service >/dev/null 2>&1; then
       watcher_pre_src='$RELEASES/$sha/ops/afs_watcher'
       watcher_pre_dest=\$(systemctl show afs-watcher.service -p WorkingDirectory --value)
@@ -328,6 +329,7 @@ promote_release() {
       for watcher_file in bounded_log_pipe.py watcher_triage.py discord_card.py plain_english.py; do
         test ! -L \"\$watcher_pre_dest/\$watcher_file\" || exit 1
       done
+      watcher_preflight_enabled=1
     fi
     sed -i '/^EXPECTED_RELEASE_FINGERPRINT=/d;/^EXPECTED_LIVE_BRANCH=/d;/^EXPECTED_LIVE_COMMIT=/d;/^EXPECTED_RISK_RULES_SHA256=/d' '$SHARED/.env'
     printf 'EXPECTED_RELEASE_FINGERPRINT=%s\nEXPECTED_LIVE_BRANCH=main\nEXPECTED_LIVE_COMMIT=%s\nEXPECTED_RISK_RULES_SHA256=%s\n' \
@@ -386,21 +388,13 @@ promote_release() {
     # continues running its /tmp copy until restart, so these copies cannot
     # mutate the currently executing watcher mid-tick. Secrets/backups in the
     # shared directory are untouched.
-    if systemctl cat afs-watcher.service >/dev/null 2>&1; then
+    if test \"\$watcher_preflight_enabled\" = 1; then
       watcher_src='$CURRENT/ops/afs_watcher'
-      watcher_dest=\$(systemctl show afs-watcher.service -p WorkingDirectory --value)
-      # A blank systemd WorkingDirectory must never expand chmod into /*.sh.
-      # Resolve symlinks and refuse anything outside the trusted shared tree.
-      if test -z \"\$watcher_dest\"; then
-        echo 'watcher re-arm refused: empty WorkingDirectory' >&2
-        exit 1
-      fi
-      watcher_dest=\$(realpath -e -- \"\$watcher_dest\") || exit 1
-      case \"\$watcher_dest\" in
-        '$SHARED'/*) ;;
-        *) echo 'watcher re-arm refused: directory outside shared root' >&2; exit 1 ;;
-      esac
-      test -d \"\$watcher_dest\"
+      # Use the exact resolved destination approved before the release changed.
+      # Never reinterpret the raw $SHARED spelling or systemd WorkingDirectory
+      # after .env, symlink and futures service mutations.
+      watcher_dest=\"\$watcher_pre_dest\"
+      test -d \"\$watcher_dest\" || exit 1
       for watcher_file in watcher.py watcher_memory_guard.py run_ro.sh supervisor.sh bootstrap_tmp_state.sh; do
         test -f \"\$watcher_src/\$watcher_file\"
         cp -f \"\$watcher_src/\$watcher_file\" \"\$watcher_dest/\$watcher_file\"
@@ -447,6 +441,7 @@ rollback_release() {
     prev_commit=\$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[\"repo\"][\"commit\"])' \"\$manifest\")
     prev_risk=\$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[\"risk_rules_sha256\"])' \"\$manifest\")
     # Read-only watcher destination/source preflight BEFORE .env, symlink or service mutation.
+    watcher_preflight_enabled=0
     if systemctl cat afs-watcher.service >/dev/null 2>&1; then
       watcher_pre_src=\"\$previous/ops/afs_watcher\"
       watcher_pre_dest=\$(systemctl show afs-watcher.service -p WorkingDirectory --value)
@@ -472,6 +467,7 @@ rollback_release() {
       for watcher_file in bounded_log_pipe.py watcher_triage.py discord_card.py plain_english.py; do
         test ! -L \"\$watcher_pre_dest/\$watcher_file\" || exit 1
       done
+      watcher_preflight_enabled=1
     fi
     sed -i '/^EXPECTED_RELEASE_FINGERPRINT=/d;/^EXPECTED_LIVE_BRANCH=/d;/^EXPECTED_LIVE_COMMIT=/d;/^EXPECTED_RISK_RULES_SHA256=/d' '$SHARED/.env'
     printf 'EXPECTED_RELEASE_FINGERPRINT=%s\nEXPECTED_LIVE_BRANCH=main\nEXPECTED_LIVE_COMMIT=%s\nEXPECTED_RISK_RULES_SHA256=%s\n' \
@@ -496,21 +492,13 @@ rollback_release() {
       -m ops.release_integrity --repo-root '$CURRENT'
     # Rollback changes the same release pins/link as promotion. Restore the
     # persistent watcher source from that verified release before re-arming it.
-    if systemctl cat afs-watcher.service >/dev/null 2>&1; then
+    if test \"\$watcher_preflight_enabled\" = 1; then
       watcher_src='$CURRENT/ops/afs_watcher'
-      watcher_dest=\$(systemctl show afs-watcher.service -p WorkingDirectory --value)
-      # A blank systemd WorkingDirectory must never expand chmod into /*.sh.
-      # Resolve symlinks and refuse anything outside the trusted shared tree.
-      if test -z \"\$watcher_dest\"; then
-        echo 'watcher re-arm refused: empty WorkingDirectory' >&2
-        exit 1
-      fi
-      watcher_dest=\$(realpath -e -- \"\$watcher_dest\") || exit 1
-      case \"\$watcher_dest\" in
-        '$SHARED'/*) ;;
-        *) echo 'watcher re-arm refused: directory outside shared root' >&2; exit 1 ;;
-      esac
-      test -d \"\$watcher_dest\"
+      # Use the exact resolved destination approved before the release changed.
+      # Never reinterpret the raw $SHARED spelling or systemd WorkingDirectory
+      # after .env, symlink and futures service mutations.
+      watcher_dest=\"\$watcher_pre_dest\"
+      test -d \"\$watcher_dest\" || exit 1
       for watcher_file in watcher.py watcher_memory_guard.py run_ro.sh supervisor.sh bootstrap_tmp_state.sh; do
         test -f \"\$watcher_src/\$watcher_file\"
         cp -f \"\$watcher_src/\$watcher_file\" \"\$watcher_dest/\$watcher_file\"
