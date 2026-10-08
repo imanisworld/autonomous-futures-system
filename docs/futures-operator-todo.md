@@ -10,19 +10,19 @@
 - [ ] Confirm current `main` SHA, CI, and exact deployment candidate.
 
 ### 2. Options system
-- [ ] Complete independent review of #1186/#1177 part-1's latest source-only fixes (prior/duplicate ARMED, unchanged ARMED stamp through lifecycle, SOURCE_DRIFT); CI green is not Grok PASS. B2 fresh-journal design is accepted but an actual rollback and live journal census are still unverified. Keep adapter separate.
+- [x] #1186/#1177 part 1 reviewed (Grok PASS reported at `51d6427`) and source-merged as `0d02a8bd`. [ ] Ops root read-only journal/pin verification and separate approved B2 rollback rehearsal remain open. [ ] Implement/review #1177 read-only adapter separately.
 - [ ] Advance #1184 authority-history security; no authority persistence/runtime use before verification.
 - [ ] Keep #1154 parked until #1177 prerequisites pass.
 
 ### 3. Futures deployment
-- [ ] Confirm #1189 merge (`064ee674` source-only); review #1194 watcher-path preflight **before mutation** (both promote/rollback) and #1190's corrected plan. Next release candidate SHA stays UNSET until source changes merge with exact-head approval.
+- [x] #1190 plan MERGED as `e3c84a78` (Grok AFS-0174 PASS reported); #1194 watcher source guard MERGED as `168e7420` (AFS-0168 PASS reported). [ ] #1196 release-history preflight exact-head CI, Grok review and separate source merge decision. Next buildable candidate SHA remains UNSET.
 - [ ] Resolve B1, B5, B6, B8 and B10 (watcher preflight) plus evidence-window decisions using fresh authorized VPS proof and reviewed source/tests; never assume missing evidence.
 - [ ] Confirm options collector isolation, fresh-journal rollback boundaries, and futures watcher rollback can fail safely **before** any release mutation.
 - [ ] Decide whether the exact release is eligible for *separate* operator deployment approval. No automatic merge/build/promote/restart.
 
 ### 4. Documentation and cleanup
-- [ ] Review #1191 corrected options handoff (current #1186 B1 review status; #1184 recommendation vs operator decision); obtain exact-head CI and Grok verdict before any merge.
-- [ ] Reconcile current handoffs with actual `main`; #1191 owns options handoff, #1192 coordination/futures TODO. #1187 (superseded) and #1193 (unrequested shadow report draft) are CLOSED without merge. #1190's added agent-work-state checkpoint overlaps #1192 and requires scope reconciliation by its sole builder before merge.
+- [ ] #1191 options handoff corrected to distinguish #1184 reviewer recommendation from operator decision and record #1186 source merge. Await independent exact-head Grok re-review and green CI before merging.
+- [ ] #1192 coordination/futures TODO reconciled to merged #1190/#1194/#1186 facts. #1187 and #1193 CLOSED without merge. Keep #1190's deployment plan authoritative for release gates; don't reintroduce a duplicate agent-work-state checkpoint.
 - [ ] Keep #1167 cleanup audit-only; no code or evidence deletion.
 
 ### 5. Trading evidence
@@ -33,11 +33,11 @@
 
 ## Latest operator queue — 2026-10-08
 
-- GitHub `main`: `064ee674b788c144fc8d3ca65082ed060927e2f1` (#1189 merge) at this check. Latest audited deployed futures release remains `c44d32bc4961e56fae5c5f88a976eb6783341638` until a fresh box check.
+- GitHub `main`: `0d02a8bd019b6a164e14ec2965b7e7ce95eee25e` at this check (source merges #1190, #1194, #1186). Last audited futures VPS release is reported `c44d32bc4961e56fae5c5f88a976eb6783341638`, not reconfirmed with root read-only evidence.
 - **#1189 (MERGED)** — reviewed remote-build quote repair at `f60ec6ff3268e1b193ff8e21aefa3cd5d8420319`, merged as `064ee674b788c144fc8d3ca65082ed060927e2f1`; GitHub exact-head CI and post-merge checks reported green. Merging a fix does not authorize build/verify or promote.
-- **#1190 (OPEN DRAFT / CHANGES REQUIRED)** — deployment plan **only**, superseded old review head `c370ef5` (AFS-0165) and subsequent builder revisions; the head was moving and one builder was asked to freeze it. **Do not pin a moving draft SHA in this TODO.** Wait for stable exact head, green CI + handoff and independent Grok review. The next release candidate remains UNSET; no build/verify/promote GO.
+- **#1190 (MERGED / PLAN ONLY):** AFS-0174 Grok PASS on `aa96563e`; merged as `e3c84a78`. Candidate remains UNSET, root-runtime and rollback gates remain HOLD. #1194 watcher source fix separately Grok-PASS-reported at `1b7b996` and source-merged as `168e7420`. Neither source merge authorizes a release.
 - Prior `afs-deploy` CI-proof wrapper **51/51 tests and real U11 fetch/`verify-live` PASS are operator-reported, not independently verified here**. They apply only to the reported code and evidence; do not transfer them to changed #1189/#1194 paths or call them verified proof. New exact-head regression checks and independent review are required for relevant changes.
-- **#1190 CHANGES REQUIRED:** superseded `7c930274179f7c76749f75b35adb14fbb9255e54` is historical; source main `064ee674b788c144fc8d3ca65082ed060927e2f1` is NOT yet a buildable candidate. #1194 (watcher working-directory preflight) must pass exact-head tests and independent review, then merge before selecting a new exact candidate. In both promote and rollback, validate all watcher paths **before editing env/symlink or restarting futures-bot**; validation after release activation is insufficient and can leave partial state. Root read-only B1/B5/B6 and B8 collector pin/rollback, evidence windows and all recovery gates remain unverified. No automatic journal partition reset or collector pin approved.
+- **Remaining futures gate:** #1196 release-history-file preflight source PR OPEN; new source/test head `a7a38c2` corrects an outdated assertion, awaiting exact-head full CI and independent Grok review. After separate merge approval, nominate exact candidate for source/trading-path delta and new Grok review. Root read-only B1/B5/B6, B8 collector isolation, watcher paths, release history, broker/orders, evidence windows and rollback remain UNVERIFIED. Do not reset journals or repin collector automatically.
 - Just before any separately authorized release action re-prove deploy lock, current source/box identity, integrity, demo + live-off + cap-one pins, broker flatness/orders, recovery/rollback and watcher state.
 - **HOLD**: no build, promote, restart, deployment or live execution authorized by completed source tests or any docs PR.
 
