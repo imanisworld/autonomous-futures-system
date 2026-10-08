@@ -92,6 +92,10 @@ _As of 2026-10-02. Operational checklist only. The authoritative options status 
 - [ ] Do not approve `-02` or the companion, do not write a real seal, and do not collect/score until the capture path is on `main` and deployed.
 - [ ] Stage B stays **NOT EVALUATED** until a causal historical chain source exists. Do not backfill current quotes.
 
+## Deferred — approval security (not today's priority)
+
+- [ ] **#1184 / draft #1199 — finish source-only tests and independent review, then PARK.** This protects against someone faking, changing, or reusing permission to trade. Revisit further work **only before** storing/reloading trade approvals or letting software act on them. Real use requires a separately protected approval record, verified authorized people, and explicit operator approval. **No trading permissions, runtime wiring, or deployment now.** Focus current effort on proving the options evidence and trading edge.
+
 ## Cleanup / non-blocking
 
 - [ ] Decide whether/when to deploy #1077's display-only Signa-v2 surfaces. Separate operator GO; do not combine it with #1067 universe expansion or SPXW enablement.
