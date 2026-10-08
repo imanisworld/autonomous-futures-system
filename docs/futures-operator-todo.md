@@ -1,5 +1,15 @@
 # Futures Operator TODO
 
+## Next operator window — 2026-10-08 (priority order)
+
+1. **Review Grok's unified audit output**, if completed; verify each cited PR/head, CI, reviewer verdict and current `main` against GitHub before accepting PASS. No claim that the audit has completed yet.
+2. **Futures release decision:** reconcile #1189 review/CI and #1190 candidate plan; check B1 (fresh box posture), B5 (Python/dependency lock), B6 (guard setting remains off pending contract proof), B8 (options collector isolation), rollback and evidence-window effects. Choose an exact candidate only after the required gates; otherwise HOLD.
+3. **Options lanes (separate):** check #1186/#1177 dedicated 1-2-2 producer/adaptor review and CI, #1184 authority-history hard prerequisite before persistence/runtime use, and #1154 parked until prerequisites pass. #1167 cleanup stays audit-only. Avoid overlapping another agent's implementation.
+4. **Evidence/monitoring:** review the dead/stale companion collector report (last seen Sep 23 21:15 UTC) with actual collector census/logs if authorized. Oct 5–7 shadow P&L and trending/sideways screenshots are operator-provided observations, not a strategy promotion or deployment requirement; if reconciling them, use dated handoff in draft #1193 and original journal evidence rather than launching a fresh study.
+5. **Documentation hygiene:** reconcile overlapping open drafts #1187/#1191/#1192/#1193 without merging conflicting status claims or discarding unique evidence. Make no deletion or broad refactor solely for tidiness.
+
+**Stop condition:** only operator-approved exact-SHA merge/deploy actions after independent review and a fresh runtime safety check; no overnight deployment, automatic merge, broker execution or strategy rule change.
+
 ## Latest operator queue — 2026-10-08
 
 - GitHub `main`: `f8e4257e2b9481f4b670b24e7602634e9cf47649` at this check. Latest audited deployed futures release remains `c44d32bc4961e56fae5c5f88a976eb6783341638` until a fresh box check.
