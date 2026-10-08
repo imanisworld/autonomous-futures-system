@@ -2,23 +2,37 @@
 
 **PLAN ONLY / HOLD.** This revision supersedes the former `c44d32b → 7c93027` release proposal below. The previous version remains as a historical review baseline, **not as a live deployment plan**.
 
+## Latest source/evidence checkpoint — 2026-10-08 (takes precedence over stale historical statements below)
+
+**GitHub source:** `main=307fe56771031b44eeb8d0235224cf010616ce4a`, confirmed after squash-merge of #1198. Grok AFS-0181 **source-only PASS** was operator-reported on exact `393ad72bc1caaa736e1958beb35124908a2054a2`; required CI checks on that baseline passed. GitHub comparison from `393ad72b` to `307fe567` is forward-only, one commit and **two added files only**: `options_evidence/options_122_adapter.py` and `tests/test_options_122_canonical_adapter.py`. #1198 received operator-reported Grok AFS-0183 PASS on exact PR head `25dec22371fa686acb5a794c901cf2fc7c028aed`, and five PR-head CI checks passed before the merge. The new main merge SHA is **not itself a fresh futures trading-path approval or on-box release proof**.
+
+**Release source status:** #1194 watcher pre-mutation safety and #1196 release-history preflight were **already source-merged before AFS-0181**. Any older text below calling them open, proposed or unmerged is **historical and superseded**; their *installation on the VPS* remains **UNVERIFIED**. Candidate remains **UNSET**; last *reported*, not freshly root-rechecked deployed release is `c44d32bc4961e56fae5c5f88a976eb6783341638`. #1197 is an **open draft dated VPS evidence PR** (not runtime proof, not yet merged). Do not conflate source PASS, CI, PR merge, box audit, release nomination, build, or promote.
+
+**Required authorized VPS evidence envelope:** For **every** B1–B10 gate and options collector/journal gate, preserve the **exact read-only command**, its complete **stdout and stderr**, **exit code**, **UTC timestamp** (before/after when useful), target **host/identity/service/release SHA**, and any limitations. **Summaries are not evidence.** Never share secret values or account credentials; redact only sensitive values and explicitly label what was redacted. A redaction that obscures a proof-critical field leaves that field **UNVERIFIED**. If current restricted access cannot read the required evidence, mark it UNVERIFIED rather than trying a different principal or escalating permissions. The denied Cloud Agent-key `root@host` attempt reported by Cursor did **not** authorize further root login attempts. Any new read-only access method and identity require a separate explicit Operator approval.
+
+**Volatile B7/B9 rule:** DEMO/live-off/cap, broker **flat positions**, **zero working orders**, deploy lock, in-flight lane state and collection time must all be captured **in the same authenticated read-only session, within a maximum five-minute UTC window** (first to last check). Record both timestamps and complete outputs. Treat a mixed-session or older collection as historical, **not a go-time PASS**; re-collect immediately before a future distinct build/promote decision and whenever the state may have changed. No assumed flatness, guessed lock status, or inferred session safety.
+
+**Still outstanding:** B1 durable posture, B2 fingerprint and effective release identity, B3 previous-release integrity/rollback, B4 actual box Python 3.13, B5 exact candidate lock vs installed dependencies, B6 contract identity guard **unset/OFF**, fresh B7 and B9, B8 effective options collector unit/immutable pin `db9bc7e2` and journal version isolation, B10 watcher resolved directory and existing `release_history.txt`, disk, and options ARMED duplicate/out-of-order scan. Root-gated checks are assigned only to an **explicitly authorized operator/access mechanism**, not an unspecified role called “Ops.” Preserve cross-service isolation; do not repin, migrate a journal, reset an evidence window, or perform a rollback rehearsal without separate GO.
+
+**Decision:** **AUDIT ONLY / FUTURES HOLD / OPTIONS HOLD.** Grok source PASS on `393ad72b` and #1198 source PASS do not nominate `307fe567` as a release. No build, verify, promote, restart, deployment, live-trading enablement, broker action or state-changing access is authorized by this documentation.
+
 ## Active decision record (governs all older sections below)
 
 | Item | Verified or required state |
 |---|---|
 | Previously deployed release | `c44d32bc4961e56fae5c5f88a976eb6783341638`, reported in the read-only VPS audit; reconfirm on box before GO |
-| Post-#1189 main | `064ee674b788c144fc8d3ca65082ed060927e2f1` (PR #1189 merged; Grok PASS on original head `f60ec6f` is operator-reported) |
+| Current source main (verified for this doc) | `307fe56771031b44eeb8d0235224cf010616ce4a` after #1198 (options adapter, source only); futures audit AFS-0181 covered exact prior main `393ad72b` |
 | Previous candidate | `7c930274179f7c76749f75b35adb14fbb9255e54` is HISTORICAL ONLY; do not build/promote it under this plan |
-| **Next candidate** | **UNSET** until #1194 watcher safety is independently reviewed, green on the exact head and merged. Select exact merged SHA and rerun source/trading-path delta and CI against that SHA |
-| Plan status | **CHANGES REQUIRED / HOLD** pending B1/B2/B5/B6/B7/B8/B9/B10, the AFS-0165 gates below, validated rollback, an independent Grok review of the nominated SHA, and an exact-SHA operator GO |
+| **Next candidate** | **UNSET**. #1194/#1196 source fixes are merged but not proven installed. Reconcile approved source baseline, exact proposed candidate and fresh VPS/root evidence before any nomination. |
+| Plan status | **HOLD** pending fresh read-only B1–B10 proof, actual Python/dependency/release/rollback/collector/watchers, same-session B7/B9, options journal, a separately nominated exact SHA and independent review/Operator GOs |
 | Cross-service boundary | Futures promotion must not silently change `options-122-prospective` collector code, Python, venv, journal schema or evidence cohort; independently pin or explicitly approve a proven migration under separate GO |
 | Previous 51/51 release-wrapper tests | **Operator-reported, not independently reproduced.** Reuse only for unchanged code paths. Post-#1189 and #1194 quote/working-directory changes require their own fresh exact-head tests and reviewed render evidence |
 
 ### B10 — Watcher WorkingDirectory and chmod safety (new mandatory gate)
 
-Early #1190/#1194 comments posted via the ChatGPT/Codex account (not Grok) documented the unsafe remote-shell quote expansion in promote and rollback watcher re-arm. **Grok subsequently returned CHANGES REQUIRED on #1194 at `adc09f8` and independent PASS at exact `1b7b996e4d02b269f5ee1b680ca67ee232a866f0` (AFS-0168).** #1194 remains unmerged. Under the old code an empty systemd WorkingDirectory could expand `chmod 700 $watcher_dest/*.sh` into `chmod 700 /*.sh`; source parsing alone is insufficient.
+Early #1190/#1194 comments posted via the ChatGPT/Codex account (not Grok) documented the unsafe remote-shell quote expansion in promote and rollback watcher re-arm. **Grok subsequently returned CHANGES REQUIRED on #1194 at `adc09f8` and independent PASS at exact `1b7b996e4d02b269f5ee1b680ca67ee232a866f0` (AFS-0168).** #1194 was source-merged as `168e7420`; VPS installation remains unverified. Under the old code an empty systemd WorkingDirectory could expand `chmod 700 $watcher_dest/*.sh` into `chmod 700 /*.sh`; source parsing alone is insufficient.
 
-**Source fix:** [draft PR #1194](https://github.com/imanisworld/autonomous-futures-system/pull/1194) at `1b7b996e4d02b269f5ee1b680ca67ee232a866f0` passed independent Grok source review (AFS-0168) and exact-head CI. It validates and stores the canonical watcher directory **before** release mutations and reuses it for watcher re-arm. **It is not merged and has no operator GO to merge, build, promote or roll back.**
+**Source fix:** [merged PR #1194](https://github.com/imanisworld/autonomous-futures-system/pull/1194) at reviewed `1b7b996e4d02b269f5ee1b680ca67ee232a866f0` passed Grok AFS-0168 and exact-head CI, merging as `168e7420`. It prevalidates the canonical watcher directory and reuses it for re-arm. **This does not prove the installed VPS script or authorize build, promotion or rollback.**
 
 **Required proof before any build or promote:**
 1. Verify exact SHA of #1194 merged to main with green exact-head CI and Grok PASS; do not transfer #1189's PASS.
@@ -39,13 +53,13 @@ test -f /root/afs-shared/release_history.txt
 
 Record the timestamp; canonical shared root; effective watcher WorkingDirectory and its resolved path; `NeedDaemonReload`, `DropInPaths` and `FragmentPath`; and the read-only listing of `afs_watcher_src/`. If the actual watcher source or effective directory differs, investigate and **HOLD**, rather than assuming the proposed path is correct.
 
-**STOP before promote if `test -f /root/afs-shared/release_history.txt` fails.** The current release script writes release history after the .env/symlink/service switch; a missing history file can cause a late failure. This document requires an independently reviewed pre-mutation `test -f` guard and a fake-box zero-mutation regression in the release source **before any future candidate is eligible**. Merely documenting or manually checking it does not repair the script. Never create or rewrite the history file simply to satisfy this gate.
+**STOP before promote if `test -f /root/afs-shared/release_history.txt` fails.** #1196 is source-merged and adds a pre-mutation history existence guard; actual VPS script, effective path and rollback still require fresh read-only verification before a future candidate is eligible. Never create or rewrite the history file simply to satisfy this gate.
 
 **Fail B10 = HOLD** even if every other CI/dependency/posture check passes. Do not use a manual `chmod`, bypass path guards, or deploy old `7c93027` to avoid this gate.
 
 ### AFS-0166 — canonical watcher directory and reviewed rollback break-glass
 
-**Source:** PR #1194 (unmerged), current proposed fix in its own source PR. The
+**Source:** PR #1194 (source merged as `168e7420`; VPS applicability unverified). The
 reviewer found that the early watcher check resolves the configured
 `$SHARED` with `realpath`, while the late check previously compared the
 resolved destination against an unnormalized literal. A symlinked shared
