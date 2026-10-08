@@ -9,6 +9,8 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
+import stat
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -20,7 +22,10 @@ from scripts.options_122_prospective_collect import (
     CANONICAL_BINDING_SCHEMA, COLLECTOR_ID, COLLECTOR_VERSION,
     POLICY_EPOCH, _canonical_binding,
 )
-from scripts.options_122_iex_provisional_audit import Arm, reconcile_pair
+from scripts.options_122_iex_provisional_audit import Arm, _first_boundary, reconcile_pair
+from scripts.options_trigger_trade_timestamp_audit import (
+    CanonicalTrade, TriggerTradeAuditError, canonical_trade_payload, timestamp_ns,
+)
 from .signal import (
     IntegrityStatus, LifecycleState, Levels, SignalJournal,
     StructureIdentity, default_registry, integrity_event, observation_event,
@@ -147,7 +152,8 @@ def _stamp(row: Mapping[str, Any], epoch: Any) -> Mapping[str, Any]:
     return binding
 
 
-def _proof(source: Mapping[str, Any], feed: str, *, raw_root: Path | None, setup_id: str) -> bool:
+def _proof(source: Mapping[str, Any], feed: str, *, raw_root: Path | None,
+           setup_id: str, arm: Arm) -> bool:
     if source.get("status") != "PROVEN" or source.get("source") != f"alpaca_{feed}":
         raise AdapterError(f"{feed}_not_proven")
     if source.get("break_side") not in {"HIGH", "LOW"} or source.get("direction") not in {"LONG", "SHORT"}:
@@ -170,20 +176,93 @@ def _proof(source: Mapping[str, Any], feed: str, *, raw_root: Path | None, setup
     # directory is required, without following paths outside that directory.
     if raw_root is None:
         return False
+    # Verify the file below the approved root using no-follow directory handles,
+    # not a vulnerable check-then-open of a symlink or its parent.
     try:
+        if not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_DIRECTORY"):
+            raise AdapterError(f"{feed}_secure_raw_open_unavailable")
         root = raw_root.resolve(strict=True)
         literal = Path(filename)
-        if literal.is_symlink():
-            raise AdapterError(f"{feed}_raw_symlink_forbidden")
-        artifact = literal.resolve(strict=True)
-        if not artifact.is_relative_to(root) or artifact.name != f"{setup_id}.{feed}.jsonl":
+        if not literal.is_absolute() or ".." in literal.parts:
             raise AdapterError(f"{feed}_raw_path_mismatch")
-        if not artifact.is_file() or artifact.is_symlink():
-            raise AdapterError(f"{feed}_raw_file_invalid")
-        if hashlib.sha256(artifact.read_bytes()).hexdigest() != digest:
+        try:
+            parts = literal.relative_to(root).parts
+        except ValueError as exc:
+            raise AdapterError(f"{feed}_raw_path_mismatch") from exc
+        if not parts or parts[-1] != f"{setup_id}.{feed}.jsonl":
+            raise AdapterError(f"{feed}_raw_path_mismatch")
+        directory = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            for part in parts[:-1]:
+                child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                                dir_fd=directory)
+                os.close(directory)
+                directory = child
+            fd = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW, dir_fd=directory)
+            with os.fdopen(fd, "rb") as handle:
+                if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+                    raise AdapterError(f"{feed}_raw_file_invalid")
+                payload = handle.read()
+        finally:
+            os.close(directory)
+        if hashlib.sha256(payload).hexdigest() != digest:
             raise AdapterError(f"{feed}_raw_hash_mismatch")
-    except (OSError, RuntimeError) as exc:
+    except OSError as exc:
         raise AdapterError(f"{feed}_raw_read_failed") from exc
+
+    # Hash equality proves byte consistency, not an actual earliest eligible
+    # IEX/SIP break. Reparse the exact canonical serialized trades and replay
+    # the producer's own first-boundary algorithm with the original geometry.
+    trades: list[CanonicalTrade] = []
+    try:
+        if not payload or not payload.endswith(b"\n"):
+            raise AdapterError(f"{feed}_raw_trades_invalid")
+        keys = {"symbol", "timestamp", "timestamp_ns", "price", "size",
+                "exchange", "conditions", "tape", "trade_id"}
+        for line in payload.splitlines(keepends=True):
+            if not line.endswith(b"\n"):
+                raise AdapterError(f"{feed}_raw_trades_invalid")
+            item = json.loads(line, object_pairs_hook=_unique_pairs)
+            if not isinstance(item, dict) or set(item) != keys:
+                raise AdapterError(f"{feed}_raw_trade_schema_invalid")
+            if (item["symbol"] != arm.symbol or type(item["timestamp_ns"]) is not int
+                    or type(item["size"]) is not int or item["size"] <= 0
+                    or type(item["price"]) not in (float, int)
+                    or not math.isfinite(item["price"]) or item["price"] <= 0
+                    or not isinstance(item["timestamp"], str)
+                    or not isinstance(item["conditions"], list)
+                    or not all(isinstance(v, str) for v in item["conditions"])
+                    or not all(isinstance(item[k], str)
+                               for k in ("exchange", "tape", "trade_id"))
+                    or timestamp_ns(item["timestamp"]) != item["timestamp_ns"]):
+                raise AdapterError(f"{feed}_raw_trade_schema_invalid")
+            trades.append(CanonicalTrade(
+                symbol=item["symbol"], timestamp=item["timestamp"],
+                timestamp_ns=item["timestamp_ns"], price=float(item["price"]),
+                size=item["size"], exchange=item["exchange"],
+                conditions=tuple(item["conditions"]), tape=item["tape"],
+                trade_id=item["trade_id"],
+            ))
+        if canonical_trade_payload(trades) != payload:
+            raise AdapterError(f"{feed}_raw_not_canonical")
+        start = _time(source.get("query_window_start"), f"{feed}_query_start")
+        end = _time(source.get("query_window_end_exclusive"), f"{feed}_query_end")
+        if start != arm.watch_start or not start < end <= arm.watch_end:
+            raise AdapterError(f"{feed}_raw_query_window_invalid")
+        if feed == "sip" and end != arm.watch_end:
+            raise AdapterError("sip_raw_window_incomplete")
+        replay = _first_boundary(trades, arm=arm, window_start=start, window_end=end)
+        fields = ("status", "break_side", "direction", "family_side", "timestamp",
+                  "timestamp_ns", "price", "trade_id", "raw_trade_rows",
+                  "eligible_trade_rows")
+        if replay.get("status") != "PROVEN" or any(
+                type(replay.get(k)) is not type(source.get(k))
+                or replay.get(k) != source.get(k) for k in fields):
+            raise AdapterError(f"{feed}_raw_first_break_mismatch")
+    except (ValueError, TypeError, KeyError, TriggerTradeAuditError) as exc:
+        if isinstance(exc, AdapterError):
+            raise
+        raise AdapterError(f"{feed}_raw_trade_replay_invalid") from exc
     return True
 
 
@@ -291,8 +370,15 @@ def fold_122_rows(rows: Iterable[Mapping[str, Any]], *, registry: EpochRegistry 
         iex = _field(resolution, "trigger_source")
         if resolution.get("prearmed_at") != arm.get("observed_at"):
             raise AdapterError("prearmed_time_mismatch")
+        shape = Arm(
+            session_date=str(arm_obs["session_date"]), symbol=arm_obs["ticker"],
+            watch_start=watch_start, watch_end=watch_end,
+            boundary_high=float(arm_obs["boundary_high"]),
+            boundary_low=float(arm_obs["boundary_low"]),
+            reference_direction=arm_obs["reference_direction"],
+        )
         if kind == "REVERSAL":
-            iex_raw_verified = _proof(iex, "iex", raw_root=raw_root, setup_id=sid)
+            iex_raw_verified = _proof(iex, "iex", raw_root=raw_root, setup_id=sid, arm=shape)
             trade_at = _time(iex["timestamp"], "iex_timestamp")
             expected_side = "LOW" if arm_obs["reference_direction"] == "two_up" else "HIGH"
             if (iex["break_side"] != expected_side or iex.get("family_side") != "REVERSAL"
@@ -306,7 +392,7 @@ def fold_122_rows(rows: Iterable[Mapping[str, Any]], *, registry: EpochRegistry 
                 reason="provisional_iex_reversal_pending_sip",
             ))
         elif kind == "CONTINUATION":
-            _proof(iex, "iex", raw_root=raw_root, setup_id=sid)
+            _proof(iex, "iex", raw_root=raw_root, setup_id=sid, arm=shape)
             if (iex.get("family_side") != "CONTINUATION"
                     or _field(resolution, "observation").get("status") != "CANCELLED"):
                 raise AdapterError("continuation_inconsistent")
@@ -333,16 +419,9 @@ def fold_122_rows(rows: Iterable[Mapping[str, Any]], *, registry: EpochRegistry 
         if final_iex != ({"status": "NO_BREAK"} if kind == "NO_BREAK" else iex):
             raise AdapterError("reconciliation_iex_changed")
         if sip.get("status") == "PROVEN":
-            sip_raw_verified = _proof(sip, "sip", raw_root=raw_root, setup_id=sid)
+            sip_raw_verified = _proof(sip, "sip", raw_root=raw_root, setup_id=sid, arm=shape)
         if sip.get("status") not in {"PROVEN", "NO_BREAK", "DATA_BLOCKED"}:
             raise AdapterError("unknown_sip_status")
-        shape = Arm(
-            session_date=str(arm_obs["session_date"]), symbol=arm_obs["ticker"],
-            watch_start=watch_start, watch_end=watch_end,
-            boundary_high=float(arm_obs["boundary_high"]),
-            boundary_low=float(arm_obs["boundary_low"]),
-            reference_direction=arm_obs["reference_direction"],
-        )
         computed = reconcile_pair(arm=shape, sip=sip, iex=final_iex)
         if policy != computed:
             raise AdapterError("reconciliation_policy_mismatch")
