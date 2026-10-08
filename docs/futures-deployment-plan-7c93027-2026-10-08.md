@@ -7,16 +7,16 @@
 | Item | Verified or required state |
 |---|---|
 | Previously deployed release | `c44d32bc4961e56fae5c5f88a976eb6783341638`, reported in the read-only VPS audit; reconfirm on box before GO |
-| Post-#1189 main | `064ee674b788c144fc8d3ca65082ed060927e2f1` (PR #1189 merged, Grok PASS on original head `f60ec6f`) |
+| Post-#1189 main | `064ee674b788c144fc8d3ca65082ed060927e2f1` (PR #1189 merged; Grok PASS on original head `f60ec6f` is operator-reported) |
 | Previous candidate | `7c930274179f7c76749f75b35adb14fbb9255e54` is HISTORICAL ONLY; do not build/promote it under this plan |
 | **Next candidate** | **UNSET** until #1194 watcher safety is independently reviewed, green on the exact head and merged. Select exact merged SHA and rerun source/trading-path delta and CI against that SHA |
-| Plan status | **CHANGES REQUIRED / HOLD** pending B1/B5/B6/B8/B9/B10, validated rollback, and an exact-SHA operator GO |
+| Plan status | **CHANGES REQUIRED / HOLD** pending B1/B2/B5/B6/B7/B8/B9/B10, the AFS-0165 gates below, validated rollback, an independent Grok review of the nominated SHA, and an exact-SHA operator GO |
 | Cross-service boundary | Futures promotion must not silently change `options-122-prospective` collector code, Python, venv, journal schema or evidence cohort; independently pin or explicitly approve a proven migration under separate GO |
-| Previous 51/51 release-wrapper tests | Reuse only for unchanged code paths. Post-#1189 and #1194 quote/working-directory changes require their own fresh exact-head tests and reviewed render evidence |
+| Previous 51/51 release-wrapper tests | **Operator-reported, not independently reproduced.** Reuse only for unchanged code paths. Post-#1189 and #1194 quote/working-directory changes require their own fresh exact-head tests and reviewed render evidence |
 
 ### B10 — Watcher WorkingDirectory and chmod safety (new mandatory gate)
 
-Grok identified a dangerous remote-shell quote expansion in **both** promote and rollback watcher re-arm. On an empty systemd WorkingDirectory, the effective unquoted `chmod 700 $watcher_dest/*.sh` could target `/*.sh`. Merely testing that a Bash source file parses is not enough.
+Review comments on #1190/#1194 (posted via the ChatGPT/Codex account, not Grok) identified a dangerous remote-shell quote expansion in **both** promote and rollback watcher re-arm. Grok has **not** independently reviewed #1194; no reviewer PASS is inferred. On an empty systemd WorkingDirectory, the effective unquoted `chmod 700 $watcher_dest/*.sh` could target `/*.sh`. Merely testing that a Bash source file parses is not enough.
 
 **Source fix:** [draft PR #1194](https://github.com/imanisworld/autonomous-futures-system/pull/1194), separate from this docs-only plan. It adds a fail-closed nonempty, realpath-resolved directory guard, restricts the canonical destination to the configured trusted shared-root subtree and preserves quoting through the nested remote command. #1194 is **not merged or approved** as of this revision.
 
@@ -34,21 +34,66 @@ Grok identified a dangerous remote-shell quote expansion in **both** promote and
 - **B1:** Read actual six posture pins and release-script promote policy. No automatic reset.
 - **B5:** Compare deployed effective venv with the exact candidate lock and confirm Python 3.13. List/approve every material delta.
 - **B6:** Verify effective `CONTRACT_IDENTITY_GUARD_ENFORCED` and its proof pin. Keep OFF until separately reviewed Pine/rollover proof.
-- **B8:** Futures promote changes options collector code, dependencies and journal behavior if the collector remains on the live symlink. Prefer a reviewed independent pin/partition boundary; do not repin automatically. For #1186's v0.2 journal rollback, preserved old rows and separate new partitions require distinct operator-approved procedures and proof of the pinned old collector's actual startup.
+- **B8:** See "B8 classification" below: the collector was historically **pinned** by drop-in to `db9bc7e2` (2026-09-22), so B8 is first a root read-only classification, not a repin. Futures promote changes options collector code, dependencies and journal behavior only if the collector is effectively on the live symlink. Prefer a reviewed independent pin/partition boundary; do not repin automatically. For #1186's v0.2 journal rollback, preserved old rows and separate new partitions require distinct operator-approved procedures and proof of the pinned old collector's actual startup.
 - **B9:** Fresh broker flatness, no working orders, no deploy lock, after-close window, and no in-flight lane actions. Restarts can lose webhook intake for at least several seconds; do not assume zero missed signals.
 
 **Evidence windows:** Preserve old journal bytes and report exact code/collector/source boundaries; do not merge cohorts with changed producer schemas or retroactively label non-catches. Whether to continue or reset each active epoch is an explicit operator decision supported by a recorded exact-SHA cutover.
 
+
+### Active gates added by Grok review AFS-0165 (comment 6058712793)
+
+Evidence class key: **BOX** = box observation with timestamp; **OPR** = operator report; **SRC** = source inference from the repo; **UNK** = unknown. Only BOX evidence from an authorized root read-only run (`FUTURES_LANE.md` §5/§3) closes a runtime gate. Builder source analysis never substitutes for it.
+
+| Gate | Class today | Requirement |
+|---|---|---|
+| Release-host Python | SRC / UNK | The operator host runs `python3 -m ops.dependency_lock check-python`, `ops.release_manifest` (imports `yaml`) and `ops.release_ci_proof`. Prove **Python 3.13 and PyYAML** on the release host, and `python3.13` on the box (B4), before build. |
+| CI-proof fetch | OPR | A prior GitHub **403 rate-limit** failure on the CI-proof fetch was reported. Verify access at build and again at promote; do not assume success. A 403 or any fetch failure = STOP; no bypass, no hand-written proof. |
+| Rollback chain | SRC / OPR / UNK | Read `current.previous` and the append-only `release_history.txt`. Repo history (`docs/4hr-natural-1m-observation-epoch-2026-10-01.md`) names **`489b55b`** as `current.previous` while `c44d32b` is live, so **before the first promote the rollback destination is `489b55b`, not `c44d32b`**. After a successful promote it becomes `c44d32b`. Both release dirs, manifests and venvs must be proven. |
+| B2 deployed identity / fingerprint pin | **UNVERIFIED** (not FAIL) | The restricted audit account cannot read `.env`, and its integrity check does not load the pin, so its "UNPINNED" is not a failed pin. Root read: pin present and equal to the manifest fingerprint; integrity run with the pin injected. **No `.env` write or pin "repair".** |
+| B7 broker / working orders | Stale | The cited preflight (~03:17Z) was ~2h40m old at review. A **fresh** position and working-order query is required at GO. |
+| B1 six posture pins, B5 deployed venv freeze, B6 effective guard, collector installed unit | **UNVERIFIED** | Pending root read-only commands in `FUTURES_LANE.md` §5/§3. Public status pages and restricted-account output are supporting evidence only. |
+| MES/MNQ refusal observability | SRC | Zero `CONTRACT_*` refusals after promote may simply mean no MES/MNQ signals arrived. Post-promote acceptance must report the signal count beside the refusal count; zero signals = **INCONCLUSIVE**, not PASS. |
+| Release-wrapper 51/51 | OPR | Operator-reported on 2026-10-08, not independently reproduced. Covers only unchanged paths; #1189/#1194 paths need their own exact-head tests. |
+| Installed drift gate | OPR / UNK | `/root/bin/afs-drift-gate.sh` was replaced by the #1129 fix on 2026-10-04 (OPR). The last recorded hash in the repo (`cc4d9f5a…`, 2026-09-18) predates that fix and is stale. Root read: installed sha256 vs `scripts/afs-server-drift-gate.sh` at the commit it was installed from. |
+| B10 watcher (#1194) | SRC; not Grok-reviewed | Prove pre-mutation checks on #1194's exact head for promote **and** rollback; independent Grok review; no preapproval or merge implied. Also prove: the pre-flight and post-activation path checks agree when the shared root itself resolves through a symlink, and a rejection leaves **no partial edit** (`.env`, symlink, drop-in, service state). |
+
+**Evidence independence and access.** Cursor's B1–B8 matrices (comments 6051491065, 6051610034) used the restricted **Grok audit** identity. Those observations are not independent Grok verification; Grok compares them with its own captures. That credential is not to be reused for builder workflows. A separate least-privilege read-only builder identity is its own operator access decision. This Claude session has no VPS access and used none. No credential is posted, injected, rotated or revoked through this PR.
+
+### B8 classification (corrects the base-unit assumption)
+
+**Historical observations (OPR, from `docs/options-current-state-handoff.md`):**
+
+- 2026-09-22: drop-in `options-122-prospective.service.d/10-release.conf` pinned the collector to **`db9bc7e2c00559fc969af7be0e2cb12b00a1454c`**;
+- a temporary `zz-rollback-protect-20260922.conf` drop-in was also present;
+- 2026-09-23: natural collection on `db9bc7e2` was reported successful.
+
+These do not prove today's effective unit.
+
+**Root read-only classification required:**
+
+- `systemctl cat options-122-prospective.service` and every drop-in;
+- effective `ExecStart`, `WorkingDirectory`, `PYTHONPATH`, venv and timer;
+- installed journal path and last-row collector version;
+- that the `db9bc7e2` release directory and venv still exist and survive release pruning.
+
+| Result | Meaning |
+|---|---|
+| **PINNED** (all effective paths under `/root/afs-releases/db9bc7e2…`) | B8 = **verify and preserve the existing pin** across the futures promote. **No automatic repin.** |
+| **LIVE-TREE** (effective paths follow `/root/autonomous-futures-system`) | **HOLD** for a separate reviewed migration or pin with its own GO. |
+| **MIXED** (any path disagreement, or `zz-rollback-protect` changes the effective result) | **HOLD** for a separate reviewed migration or pin with its own GO. |
+
+Before **any** v0.2 repin (#1186), scan the installed journal for duplicate `ARMED` rows per `setup_id`. No change is authorized by this plan.
+
 ### Required next action
 
 1. Obtain Grok exact-head review and fresh CI for #1194 and #1186; **do not merge as part of this plan**.
-2. Once #1194 is separately merged with operator approval, nominate the **new** exact deployment candidate, compare deployed → candidate end-to-end, and refresh all identities and risk-path checks below.
+2. Once #1194 is separately merged with operator approval, nominate the **new** exact deployment candidate, compare deployed → candidate end-to-end, and refresh all identities and risk-path checks below. The nominated SHA then needs its own **independent Grok exact-SHA review**. Candidate stays UNSET until then.
 3. Obtain read-only root-level box proof for B1/B5/B6/B8/B9/B10 and rollback readiness.
 4. Return a **GO FOR OPERATOR DECISION** or **HOLD** gate table with timestamps, artifacts and all decisions. Never build, promote, restart or submit orders from this document.
 
 ## Refreshed plan detail (2026-10-08; under the decision record above)
 
-Responds to Grok comments 6051298646 and 6051370612 on #1190. Where this section and the decision record differ, the decision record governs. Nothing here is approved for execution.
+Responds to review comments 6051298646 and 6051370612 on #1190 (posted via the ChatGPT/Codex account — **not Grok**) and to Grok review AFS-0165 (comment 6058712793). Where this section and the decision record differ, the decision record governs. Nothing here is approved for execution.
 
 ### Delta `7c93027` → `064ee67` (verified)
 
@@ -80,7 +125,7 @@ With an empty `WorkingDirectory`:
 
 A value of `/` passes as well.
 
-**Ordering.** The block runs only **after** the `.env` pin edit, the `current` symlink swap and the `futures-bot` restart. So a refused value still leaves a partially activated release, and the same block in rollback can stop a clean rollback. That is the finding Grok recorded on #1194 head `547738c06781ae0fe74307c8c71ed9b6953d501e`.
+**Ordering.** The block runs only **after** the `.env` pin edit, the `current` symlink swap and the `futures-bot` restart. So a refused value still leaves a partially activated release, and the same block in rollback can stop a clean rollback. That is the finding recorded on #1194 head `547738c06781ae0fe74307c8c71ed9b6953d501e` (comment 6051361758, not a Grok review). Grok has not independently reviewed #1194.
 
 **Additional B10 requirements:**
 
@@ -101,7 +146,7 @@ A value of `/` passes as well.
 
 ### B8 detail — collector boundaries (source on `main`; box state UNVERIFIED)
 
-**Current boundaries.** `ops/systemd/options-122-prospective.service` sets:
+**Base unit in the repo (not the effective box unit).** The historical box state is a drop-in pin; see "B8 classification" in the active section. `ops/systemd/options-122-prospective.service` alone sets:
 
 - `WorkingDirectory=/root/autonomous-futures-system` — the live symlink;
 - `EnvironmentFile=/root/afs-shared/.env`;
@@ -113,7 +158,7 @@ It is driven by `options-122-prospective.timer`. Code, venv and imports therefor
 
 **Pin mechanism.** The #1147 template `ops/systemd/options-122-prospective.service.d/10-release.conf.template` rewrites `WorkingDirectory`, `PYTHONPATH` and `ExecStart` to `/root/afs-releases/@RELEASE_SHA@` and its own `.venv`. Journal and raw paths are unchanged. Pinning is its own reviewed procedure with its own GO.
 
-**Required root reads** (the `FUTURES_LANE.md` §3 classification; that file is referenced by review but is not in this repository, so its location is unverified):
+**Required root reads** (see "B8 classification" in the active section; the `FUTURES_LANE.md` §3 classification; that file is referenced by review but is not in this repository, so its location is unverified):
 
 - the effective release identity the collector process loads;
 - the unit and any drop-ins;
@@ -155,7 +200,7 @@ Source analysis does not satisfy any of them.
 |---|---|---|
 | 1 | Merge this plan PR (#1190, docs only) | Exact-head CI green + Grok PASS + operator merge decision |
 | 2 | Merge the B10 fix (#1194 or successor) | Exact-head CI green + Grok PASS + operator merge decision |
-| 3 | Nominate the candidate: exact `main` SHA, plus delta review after `064ee67` | Operator, in writing |
+| 3 | Nominate the candidate: exact `main` SHA, plus delta review after `064ee67` | Operator, in writing; then **independent Grok exact-SHA review** of that SHA |
 | 4 | Root read-only box evidence: B1–B10, B8 reads, epoch readings | Ops, read-only; any gap means HOLD |
 | 5 | Policy decisions: B1 posture, B5 dependency changes, B6 pin, epoch treatment | Operator GO each |
 | 6 | Collector pin, and separately any v0.2 journal migration | Its own reviewed procedure + operator GO |
@@ -176,9 +221,9 @@ Source analysis does not satisfy any of them.
 | Item | Value |
 |---|---|
 | Deployed (per 2026-10-08 VPS audit, operator-supplied; **reconfirm on the box before any action**) | `c44d32bc4961e56fae5c5f88a976eb6783341638` |
-| Candidate (exact, reviewed, CI-verified) | `7c930274179f7c76749f75b35adb14fbb9255e54` (#1180) |
+| Candidate at the time (**HISTORICAL — withdrawn; not a live target**) | `7c930274179f7c76749f75b35adb14fbb9255e54` (#1180) |
 | Delta | 64 first-parent merges, 227 files, +60,933 / −500 |
-| `main` at writing | `58606b4` (#1152). It is **not** the candidate. Building `7c93027` is allowed because it is merged into `main`; do not substitute `main`. |
+| `main` at writing | `58606b4` (#1152). (Historical note; superseded by the active decision record. The live target is the future nominated SHA.) |
 | Rollback target | `c44d32b` (becomes `current.previous` at promote) |
 
 ## Reused, not redone
@@ -263,11 +308,11 @@ Each item needs fresh read-only evidence from the box. Any item unproven means *
 
 Pass only if all hold:
 
-1. `ops.release_ci_proof verify-live` passes for `7c93027` at build time **and again at promote**.
+1. `ops.release_ci_proof verify-live` passes for `<NOMINATED_SHA>` at build time **and again at promote** (historical draft named `7c93027`; withdrawn).
 2. Box `python3.13` passes the check.
 3. `pip install --no-deps -r requirements.lock`, `pip check` and `check-freeze` all exit 0.
 4. Release integrity is OK with the built fingerprint, and the completion marker matches it.
-5. `atomic_release.sh verify 7c93027` passes.
+5. `atomic_release.sh verify <NOMINATED_SHA>` passes.
 
 Any failure is an **abort**: the live service is untouched; release the lock and stop.
 
@@ -289,7 +334,7 @@ Run `/futures-deployment-safety-audit`, read-only. **Every** item must pass:
 
 | Check | Threshold |
 |---|---|
-| Identity | Symlink, cwd and `EXPECTED_LIVE_COMMIT` = `7c93027…`. Integrity OK with the pin. Zero `__pycache__` in the release. |
+| Identity | Symlink, cwd and `EXPECTED_LIVE_COMMIT` = `<NOMINATED_SHA>`. Integrity OK with the pin. Zero `__pycache__` in the release. |
 | Posture | `LIVE_TRADING_ENABLED=false`, `TRADOVATE_ENV=demo`, `MAX_CONTRACTS_HARD_CAP=1`, live preflight disarmed. B1/B6/B7 values equal their pre-deploy readings. |
 | Broker | Position flat, zero working orders, no auth-breaker trip. |
 | Stability | `NRestarts` unchanged for 15 minutes after promote. |
@@ -336,7 +381,7 @@ Run `/futures-deployment-safety-audit`, read-only. **Every** item must pass:
 ## 5. Execution order (only after review + GO)
 
 1. Re-run B1–B9. Any change means STOP.
-2. Fetch the CI proof for `7c93027`. Run `build`, then `verify`. No service change.
+2. Fetch the CI proof for `<NOMINATED_SHA>`. Run `build`, then `verify`. No service change.
 3. Record the preregistration boundary (§1) and the pre-deploy readings.
 4. Run `promote`.
 5. Run the post-promote acceptance (§3). Any failure means rollback (§4).
@@ -350,7 +395,7 @@ Leave out of this release:
 - installing `options-setup-capture` or any timer/unit;
 - systemd unit edits (#1101);
 - `push_relay` redeploy;
-- `58606b4` or any later commit;
+- any change outside the nominated SHA's reviewed delta, and any unrelated or unreviewed change;
 - strategy, risk, instrument or contract-size changes;
 - TradingView alert changes;
 - epoch resets;
