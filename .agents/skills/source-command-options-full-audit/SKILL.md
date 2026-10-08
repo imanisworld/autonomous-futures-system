@@ -97,3 +97,18 @@ If order prep modules exist, do not treat their existence alone as execution.
 Verify whether any object can actually be submitted to a broker.
 If executable is always False, broker is None, broker_order_id is None, and no submit/place/order API exists, classify as PREVIEW ONLY or ADVISORY/PREVIEW ONLY, not execution-capable.
 If any broker submission path exists, classify as EXECUTION CAPABLE and audit live-lock enforcement.
+
+## Canonical evidence architecture
+
+Also verify:
+
+- `docs/options-current-state-handoff.md` is used as the current options-state authority;
+- the active path is understandable as capture → canonical signal → plan/contract/risk validation → outcome → fitness/research;
+- prospective catches are distinguishable from late/missed/gap/data-blocked/unregistered/counterfactual rows;
+- registered epoch scope/source matching is exact and no silent source-label mapping exists;
+- realised/scorable results require canonical prospective provenance;
+- fitness automation is revoke-only unless a separately approved contract says otherwise; healthy evidence must not silently grant execution authority;
+- observer/runtime installation, release pin, data entitlement/freshness, and proof-window start are verified separately from source being merged;
+- a FROZEN epoch, alert pipeline, preview ticket, or retrospective study is not treated as forward-proof or paper readiness.
+
+If these cannot be proven, classify the relevant evidence/readiness state as INCONCLUSIVE/HOLD rather than inferring readiness.

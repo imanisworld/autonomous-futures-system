@@ -108,3 +108,20 @@ If no alert happened because provider data was missing or stale without a clear 
 If no alert happened because preview/order-ticket safety blocked escalation, classify as BLOCKED BY PREVIEW GATE or BLOCKED BY EXECUTION SAFETY.
 If any path can submit, place, route, or execute an options order, classify as EXECUTION CAPABLE and stop the no-alert audit until live-lock enforcement is separately audited.
 If evidence is missing at any stage, say exactly what evidence is missing instead of guessing.
+
+## Canonical capture/evidence diagnosis
+
+Before calling a missing alert a defect, classify the setup's lifecycle/evidence state when the canonical capture path is relevant:
+
+- WATCHING / pre-armed;
+- TRIGGERED with timely evidence;
+- MISSED_LATE;
+- GAP_THROUGH / opening gap miss;
+- DATA_BLOCKED / stale or missing source evidence;
+- UNREGISTERED_EPOCH / scope or source mismatch;
+- invalidated/expired/otherwise non-actionable.
+
+Then verify whether the record is a canonical prospective catch. A setup that later would have won but was late, gapped, data-blocked, unregistered, or otherwise counterfactual is **not** evidence that an alert should have been emitted.
+
+Do not repair a no-alert diagnosis by rewriting timestamps, source labels, epoch labels, or trigger provenance. If the evidence is insufficient, return INCONCLUSIVE/BLOCKED BY DATA with the exact missing proof.
+

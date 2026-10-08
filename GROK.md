@@ -68,3 +68,13 @@ Do not ask what to redo. Determine:
 5. What exact additional information is required, if any?
 
 If nothing changed and no authorized work is pending: stop. Do not manufacture work.
+
+## Options evidence discipline
+
+For options research, use `docs/options-current-state-handoff.md` for current state and the registered/canonical evidence contracts for claims about forward performance.
+
+- Do not infer edge from scanner labels, retrospective winners, late observations, or counterfactual outcomes.
+- A missed/late/gapped/data-blocked/unregistered setup remains non-prospective even if later price action would have won.
+- Proposals should name the exact unresolved question and preserve the current epoch/provenance boundaries; do not silently map data-source labels or rewrite history to create a cleaner sample.
+- Distinguish a hypothesis worth testing from evidence that has already passed forward proof.
+

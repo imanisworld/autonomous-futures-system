@@ -75,3 +75,17 @@ Safety gates:
 
 Safe next step:
 State the smallest safe action — usually "run the test suite and re-review," "safe to commit locally," or "needs a human decision on the flagged scoring/risk change." Never "push," "merge," or "enable execution" from this command.
+
+## Canonical evidence checks
+
+When the diff touches setup capture, canonical signal/outcome evidence, strategy epochs, readiness, fitness, or research population:
+
+- verify structure/signal identity remains deterministic and cannot be rewritten to improve an outcome;
+- verify epoch scope is exact for setup family, timeframe, universe/ticker, data source, and effective dates;
+- verify late/missed/gap/data-blocked/unregistered/counterfactual rows cannot become executed trades, realised P&L, or scorable realised R;
+- verify chronology/provenance is append-only or demote-only where required and malformed/non-finite/bool-as-number input fails closed;
+- verify source-label mismatches remain blocked unless an explicit reviewed mapping exists; never infer a mapping for convenience;
+- verify any outcome admitted to forward evidence has canonical prospective-catch provenance;
+- if a rebase/merge/docs-only update claims no semantic change, compare the relevant code blobs/diff and state whether they are byte-identical instead of automatically redoing the entire prior review.
+
+A change that weakens any of these evidence boundaries is a REJECT/HOLD even if ordinary tests pass.
