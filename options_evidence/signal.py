@@ -1184,6 +1184,7 @@ def verify_record(record: Mapping[str, Any], registry: EpochRegistry | None = No
             raise TypeError("history must be a non-empty list")
         history_states: list[LifecycleState] = []
         history_detected: list[datetime] = []
+        history_market: list[datetime | None] = []
         for index, change in enumerate(history_raw):
             if not isinstance(change, Mapping):
                 raise TypeError(f"history[{index}] must be a mapping")
@@ -1192,6 +1193,7 @@ def verify_record(record: Mapping[str, Any], registry: EpochRegistry | None = No
             if detected_at is None:
                 raise LifecycleError(f"history[{index}].detected_at is required")
             history_detected.append(detected_at)
+            history_market.append(_utc(change.get("market_time"), f"history[{index}].market_time"))
         capture = record["capture"]
         if not isinstance(capture, Mapping):
             raise TypeError("capture must be a mapping")
@@ -1226,6 +1228,18 @@ def verify_record(record: Mapping[str, Any], registry: EpochRegistry | None = No
     seen = _record_time(record, "first_seen_time", problems)
     trig = _record_time(record, "trigger_market_time", problems)
     detect = _record_time(record, "trigger_detection_time", problems)
+    # Cross-check summary times against immutable lifecycle event chronology.
+    # Summary-only first-seen rewrites must not turn a late find into a catch.
+    if seen and history_detected[0] != seen:
+        problems.append("first_seen_time does not match initial WATCHING history")
+    if resolution is not None:
+        resolution_indices = [i for i, st in enumerate(history_states) if st is resolution]
+        if resolution_indices:
+            i = resolution_indices[0]
+            if trig != history_market[i]:
+                problems.append("trigger_market_time does not match resolution history")
+            if detect is None or history_detected[i] < detect:
+                problems.append("resolution history detected_at precedes trigger_detection_time")
     if close and ready and ready < close:
         problems.append("setup_ready_time precedes structure_close_time")
     if ready and seen and seen < ready:
