@@ -110,21 +110,21 @@ build_release() {
   remote "
     set -e
     box_python='$box_python'
-    if ! command -v "\$box_python" >/dev/null 2>&1; then
-      echo "build refused: box python interpreter not found: \$box_python" >&2
+    if ! command -v \"\$box_python\" >/dev/null 2>&1; then
+      echo \"build refused: box python interpreter not found: \$box_python\" >&2
       exit 67
     fi
-    box_python_version=\$("\$box_python" -c 'import sys; print(sys.version_info.major, sys.version_info.minor, sep=chr(46))')
-    if [ "\$box_python_version" != "3.13" ]; then
-      echo "build refused: box python interpreter \$box_python is \$box_python_version; expected 3.13" >&2
+    box_python_version=\$(\"\$box_python\" -c 'import sys; print(sys.version_info.major, sys.version_info.minor, sep=chr(46))')
+    if [ \"\$box_python_version\" != \"3.13\" ]; then
+      echo \"build refused: box python interpreter \$box_python is \$box_python_version; expected 3.13\" >&2
       exit 67
     fi
     test ! -e '$RELEASES/$sha' || { echo 'release already exists: $sha'; exit 2; }
     rm -f '$SHARED/release-complete/$sha' '$SHARED/release-complete/$sha.tmp'
     mkdir '$RELEASES/$sha'
     tar xzf '/tmp/afs-release-${short}.tgz' -C '$RELEASES/$sha'
-    PYTHONDONTWRITEBYTECODE=1 PYTHONPATH='$RELEASES/$sha' "\$box_python" -m ops.dependency_lock check-python
-    "\$box_python" -m venv '$RELEASES/$sha/.venv'
+    PYTHONDONTWRITEBYTECODE=1 PYTHONPATH='$RELEASES/$sha' \"\$box_python\" -m ops.dependency_lock check-python
+    \"\$box_python\" -m venv '$RELEASES/$sha/.venv'
     # U11: install ONLY the exact production lock, no dependency resolution;
     # then prove the venv is complete and identical to the lock.
     '$RELEASES/$sha/.venv/bin/pip' install -q --no-deps --requirement '$RELEASES/$sha/requirements.lock'
@@ -142,7 +142,7 @@ build_release() {
     chmod -R a-w '$RELEASES/$sha'
     # A release directory can exist after a failed box-side install/check.
     # Publish completion only after every dependency/integrity check succeeds.
-    printf '%s\n' "\$built_fp" > '$SHARED/release-complete/$sha.tmp'
+    printf '%s\n' \"\$built_fp\" > '$SHARED/release-complete/$sha.tmp'
     mv -f '$SHARED/release-complete/$sha.tmp' '$SHARED/release-complete/$sha'
     rm -f '/tmp/afs-release-${short}.tgz'
   "
