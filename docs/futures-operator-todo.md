@@ -22,8 +22,8 @@
 - [ ] Decide whether the exact release is eligible for *separate* operator deployment approval. No automatic merge/build/promote/restart.
 
 ### 4. Documentation and cleanup
-- [ ] #1191 options handoff corrected to distinguish #1184 reviewer recommendation from operator decision and record #1186 source merge. Await independent exact-head Grok re-review and green CI before merging.
-- [ ] #1192 coordination/futures TODO reconciled to merged #1190/#1194/#1186 facts. #1187 and #1193 CLOSED without merge. Keep #1190's deployment plan authoritative for release gates; don't reintroduce a duplicate agent-work-state checkpoint.
+- [x] #1191 options handoff **MERGED** as `41c6888b` (exact-head CI/handoff passed); reflects #1186 source merge and leaves #1184 human-approval prerequisite intact. Independent Grok docs review not verified here; no inferred PASS.
+- [x] #1192 agent coordination/futures TODO **MERGED** as `393ad72b` (exact-head CI/handoff passed); #1187/#1193 closed unmerged. Continue using #1190 as the deployment-plan authority; no duplicate checkpoint.
 - [ ] Keep #1167 cleanup audit-only; no code or evidence deletion.
 
 ### 5. Trading evidence
@@ -34,7 +34,7 @@
 
 ## Latest operator queue — 2026-10-08
 
-- GitHub `main`: `a602501cb0e665952da2101e9c4f73a3e68aea90` at this check (source merges #1190, #1194, #1186 and #1196). Last audited futures VPS release is reported `c44d32bc4961e56fae5c5f88a976eb6783341638`, not reconfirmed with root read-only evidence.
+- GitHub `main` at audit: `307fe56771031b44eeb8d0235224cf010616ce4a` after #1191/#1192 documentation merges. Reported futures VPS release `c44d32bc4961e56fae5c5f88a976eb6783341638` requires fresh authorized root verification; main changes do not deploy the VPS.
 - **#1189 (MERGED)** — reviewed remote-build quote repair at `f60ec6ff3268e1b193ff8e21aefa3cd5d8420319`, merged as `064ee674b788c144fc8d3ca65082ed060927e2f1`; GitHub exact-head CI and post-merge checks reported green. Merging a fix does not authorize build/verify or promote.
 - **#1190 (MERGED / PLAN ONLY):** AFS-0174 Grok PASS on `aa96563e`; merged as `e3c84a78`. Candidate remains UNSET, root-runtime and rollback gates remain HOLD. #1194 watcher source fix separately Grok-PASS-reported at `1b7b996` and source-merged as `168e7420`. Neither source merge authorizes a release.
 - Prior `afs-deploy` CI-proof wrapper **51/51 tests and real U11 fetch/`verify-live` PASS are operator-reported, not independently verified here**. They apply only to the reported code and evidence; do not transfer them to changed #1189/#1194 paths or call them verified proof. New exact-head regression checks and independent review are required for relevant changes.
