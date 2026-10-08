@@ -15,9 +15,9 @@
 - [ ] Keep #1154 parked until #1177 prerequisites pass.
 
 ### 3. Futures deployment
-- [ ] Confirm merged #1189 (`064ee674`) and review corrected #1190 exact candidate, root/watcher path tests and exact-head CI.
-- [ ] Resolve B1, B5, B6, B8 and evidence-window decisions using fresh, authorized VPS proof; never assume missing evidence.
-- [ ] Confirm options collector isolation and rollback readiness.
+- [ ] Confirm #1189 merge (`064ee674` source-only); review #1194 watcher-path preflight **before mutation** (both promote/rollback) and #1190's corrected plan. Next release candidate SHA stays UNSET until source changes merge with exact-head approval.
+- [ ] Resolve B1, B5, B6, B8 and B10 (watcher preflight) plus evidence-window decisions using fresh authorized VPS proof and reviewed source/tests; never assume missing evidence.
+- [ ] Confirm options collector isolation, fresh-journal rollback boundaries, and futures watcher rollback can fail safely **before** any release mutation.
 - [ ] Decide whether the exact release is eligible for *separate* operator deployment approval. No automatic merge/build/promote/restart.
 
 ### 4. Documentation and cleanup
@@ -37,7 +37,7 @@
 - **#1189 (MERGED)** — reviewed remote-build quote repair at `f60ec6ff3268e1b193ff8e21aefa3cd5d8420319`, merged as `064ee674b788c144fc8d3ca65082ed060927e2f1`; GitHub exact-head CI and post-merge checks reported green. Merging a fix does not authorize build/verify or promote.
 - **#1190 (OPEN)** — deployment **plan only**, head `c90af59ec5edcafad4d8ebf9b6b30a4c7789baeb`. Review its preregistration, trading-path delta, acceptance/abort conditions, post-deploy read-only checks, rollback and watcher re-arm; do not duplicate the plan.
 - Prior `afs-deploy` CI-proof fix has operator-reported 51/51 fake-box passes and real U11 fetch/`verify-live` pass. Reuse verified proof, do not re-run unless inputs/code change.
-- **#1190 CHANGES REQUIRED:** retarget from superseded `7c930274179f7c76749f75b35adb14fbb9255e54` to candidate `064ee674b788c144fc8d3ca65082ed060927e2f1`; require safe, nonempty, non-root watcher cwd validation before any privileged re-arm/copy/chmod action. Root read-only evidence for B1/B5/B6, evidence epochs, rollback and B8 isolation is missing. Prefer separate reviewed collector pin/GO to prevent #1186 format from riding a futures release; no journal reset approved.
+- **#1190 CHANGES REQUIRED:** superseded `7c930274179f7c76749f75b35adb14fbb9255e54` is historical; source main `064ee674b788c144fc8d3ca65082ed060927e2f1` is NOT yet a buildable candidate. #1194 (watcher working-directory preflight) must pass exact-head tests and independent review, then merge before selecting a new exact candidate. In both promote and rollback, validate all watcher paths **before editing env/symlink or restarting futures-bot**; validation after release activation is insufficient and can leave partial state. Root read-only B1/B5/B6 and B8 collector pin/rollback, evidence windows and all recovery gates remain unverified. No automatic journal partition reset or collector pin approved.
 - Just before any separately authorized release action re-prove deploy lock, current source/box identity, integrity, demo + live-off + cap-one pins, broker flatness/orders, recovery/rollback and watcher state.
 - **HOLD**: no build, promote, restart, deployment or live execution authorized by completed source tests or any docs PR.
 
