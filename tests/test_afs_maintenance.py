@@ -66,6 +66,9 @@ class FakeHost(afs.Host):
         self.fail_health_on_reload = False
         self.change_futures_on_reload = False
         self.cgroup_write_error = False
+        self.reload_count = 0
+        self.fail_reload_on_call: int | None = None
+        self.fail_remove_runtime: set[str] = set()
         self.clock = datetime(2026, 10, 8, 20, 45, tzinfo=timezone.utc)
         self.environ = {"SUDO_USER": "grok-audit", "SSH_CONNECTION": "test-connection"}
         self.approvals: dict[str, dict[str, object]] = {}
@@ -79,7 +82,10 @@ class FakeHost(afs.Host):
         raise afs.Denied("unit is not available to maintenance")
 
     def daemon_reload(self) -> None:
+        self.reload_count += 1
         self.calls.append(("daemon-reload",))
+        if self.fail_reload_on_call == self.reload_count:
+            raise OSError("reload failed")
         text = self.etc.get(afs.DROPIN_NAME)
         if text:
             match = re.search(r"MemoryMax=(\d+)M", text)
@@ -144,6 +150,8 @@ class FakeHost(afs.Host):
         return self.runtime[name]
 
     def remove_runtime_dropin(self, name: str) -> None:
+        if name in self.fail_remove_runtime:
+            raise OSError(f"remove failed for {name}")
         self.runtime.pop(name, None)
 
     def write_runtime_dropin(self, name: str, text: str) -> None:
@@ -374,28 +382,31 @@ def test_runtime_property_is_used_only_when_reload_does_not_apply_the_limit():
     assert host.etc[afs.DROPIN_NAME] == "[Service]\nMemoryMax=500M\n"
 
 
-def test_pid_change_rolls_the_drop_in_back_and_does_not_restart():
+def test_pid_change_restores_the_limit_and_does_not_claim_rollback():
     host = FakeHost()
     host.change_pid_on_reload = True
     host.grant("options-scanner-memory set 600M")
     code, _out, err = _run(host, "options-scanner-memory", "set", "600M")
     assert code == 1
-    assert "PID changed" in err
+    assert "ROLLBACK UNVERIFIED / HOLD" in err
+    assert "scanner pid" in err
     assert afs.DROPIN_NAME not in host.etc
     assert host.scanner["MemoryMax"] == str(350 * afs.MIB)
     assert not any("restart" in call[0] for call in host.calls)
-    assert _log_rows(host)[-1]["result"] == "rolled_back"
+    assert _log_rows(host)[-1]["result"] == "rollback_unverified"
 
 
-def test_health_failure_rolls_back():
+def test_health_failure_does_not_claim_a_proved_rollback():
     host = FakeHost()
     host.fail_health_on_reload = True
     host.grant("options-scanner-memory set 600M")
     code, _out, err = _run(host, "options-scanner-memory", "set", "600M")
     assert code == 1
+    assert "ROLLBACK UNVERIFIED / HOLD" in err
     assert "health" in err
     assert afs.DROPIN_NAME not in host.etc
     assert host.cgroup["memory.max"] == str(350 * afs.MIB)
+    assert _log_rows(host)[-1]["result"] == "rollback_unverified"
 
 
 def test_futures_change_rolls_back_without_touching_futures_commands():
@@ -404,9 +415,44 @@ def test_futures_change_rolls_back_without_touching_futures_commands():
     host.grant("options-scanner-memory set 600M")
     code, _out, err = _run(host, "options-scanner-memory", "set", "600M")
     assert code == 1
-    assert "futures-bot" in err
+    assert "ROLLBACK UNVERIFIED / HOLD" in err
+    assert "futures memory" in err
     assert afs.DROPIN_NAME not in host.etc
     assert host.futures["MainPID"] == "1851835"
+    assert _log_rows(host)[-1]["result"] == "rollback_unverified"
+
+
+def test_partial_runtime_removal_restores_the_earlier_override():
+    host = FakeHost()
+    first = "[Service]\nMemoryMax=400M\n"
+    second = "[Service]\nMemoryMax=450M\n"
+    host.runtime["a.conf"] = first
+    host.runtime["b.conf"] = second
+    host.fail_remove_runtime.add("b.conf")
+    host.grant("options-scanner-memory set 600M")
+    code, _out, err = _run(host, "options-scanner-memory", "set", "600M")
+    assert code == 1
+    assert host.runtime["a.conf"] == first
+    assert host.runtime["b.conf"] == second
+    assert afs.DROPIN_NAME not in host.etc
+    assert host.scanner["MemoryMax"] == str(350 * afs.MIB)
+    assert host.cgroup["memory.max"] == str(350 * afs.MIB)
+    assert _log_rows(host)[-1]["result"] == "rolled_back"
+    assert "ROLLBACK UNVERIFIED" not in err
+
+
+def test_failed_restore_reload_is_unverified_hold():
+    host = FakeHost()
+    host.change_pid_on_reload = True
+    host.fail_reload_on_call = 2
+    host.grant("options-scanner-memory set 600M")
+    code, _out, err = _run(host, "options-scanner-memory", "set", "600M")
+    assert code == 1
+    assert "ROLLBACK UNVERIFIED / HOLD" in err
+    assert "reload failed" in err
+    assert host.scanner["MemoryMax"] == str(600 * afs.MIB)
+    assert _log_rows(host)[-1]["result"] == "rollback_unverified"
+    assert "rolled_back" not in err
 
 
 def test_lower_limit_is_not_persisted_when_the_kernel_rejects_it():

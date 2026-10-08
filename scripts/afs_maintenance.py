@@ -96,9 +96,10 @@ class UsageError(Exception):
 class MaintenanceFailure(Exception):
     """A permitted operation did not complete cleanly."""
 
-    def __init__(self, message: str, *, restored: bool = False) -> None:
+    def __init__(self, message: str, *, restored: bool = False, unverified: bool = False) -> None:
         super().__init__(message)
         self.restored = restored
+        self.unverified = unverified
 
 
 @dataclass(frozen=True)
@@ -526,14 +527,14 @@ def _persist(host: Host, target_mib: int) -> None:
     host.write_our_dropin(text)
 
 
-def _retire_mismatched_runtime(host: Host, target_mib: int) -> dict[str, str]:
-    """Remove memory-only runtime overrides that contradict the target.
+def _retire_mismatched_runtime(host: Host, target_mib: int, removed: dict[str, str]) -> None:
+    """Remove mismatched runtime overrides, journaling each one before removal.
 
-    Their text is returned so a failed attempt can put them back.
+    ``removed`` is updated before each removal so a later failure still tells
+    the caller which earlier files must be put back.
     """
 
-    removed: dict[str, str] = {}
-    for name in host.runtime_dropin_names():
+    for name in list(host.runtime_dropin_names()):
         text = host.read_runtime_dropin(name)
         if not _memory_assignment_only(text):
             continue
@@ -541,7 +542,6 @@ def _retire_mismatched_runtime(host: Host, target_mib: int) -> dict[str, str]:
             continue
         removed[name] = text
         host.remove_runtime_dropin(name)
-    return removed
 
 
 def _sync_live(host: Host, before: Snapshot, target_mib: int) -> None:
@@ -659,8 +659,83 @@ def _restore_cgroup(host: Host, before: Snapshot) -> None:
         return
     if before.scanner_cgroup != EXPECTED_CGROUP:
         return
-    with contextlib.suppress(OSError):
-        host.write_cgroup_max(before.scanner_cgroup, before.cgroup_max)
+    host.write_cgroup_max(before.scanner_cgroup, before.cgroup_max)
+
+
+def _restoration_mismatches(before: Snapshot, after: Snapshot) -> list[str]:
+    problems: list[str] = []
+    if after.scanner_memory_raw != before.scanner_memory_raw:
+        problems.append("MemoryMax")
+    if after.cgroup_max != before.cgroup_max:
+        problems.append("cgroup memory.max")
+    if after.scanner_pid != before.scanner_pid:
+        problems.append("scanner pid")
+    if after.scanner_restarts != before.scanner_restarts:
+        problems.append("scanner restarts")
+    if after.scanner_active != before.scanner_active:
+        problems.append("scanner state")
+    if (
+        after.futures_pid != before.futures_pid
+        or after.futures_restarts != before.futures_restarts
+        or after.futures_active != before.futures_active
+    ):
+        problems.append("futures identity")
+    if after.futures_memory_raw != before.futures_memory_raw:
+        problems.append("futures memory")
+    if after.health_http != before.health_http:
+        problems.append("health")
+    if after.base_sha256 != before.base_sha256 or after.base_floor_ok != before.base_floor_ok:
+        problems.append("base unit")
+    if after.our_dropin != before.our_dropin:
+        problems.append("etc drop-in")
+    for name, digest in before.etc_files.items():
+        if name == DROPIN_NAME:
+            continue
+        if after.etc_files.get(name) != digest:
+            problems.append(f"etc {name}")
+    for name in set(after.etc_files) - set(before.etc_files):
+        if name != DROPIN_NAME:
+            problems.append(f"unexpected etc {name}")
+    for name, text in before.runtime_files.items():
+        if after.runtime_files.get(name) != text:
+            problems.append(f"runtime {name}")
+    for name in set(after.runtime_files) - set(before.runtime_files):
+        problems.append(f"unexpected runtime {name}")
+    return problems
+
+
+def _prove_restored(
+    host: Host,
+    before: Snapshot,
+    removed_runtime: dict[str, str],
+    files_touched: bool,
+) -> tuple[bool, str]:
+    """Put files and the live limit back, then require a fresh snapshot to match."""
+
+    errors: list[str] = []
+    try:
+        _restore_files(host, before, removed_runtime)
+    except Exception as exc:
+        errors.append(f"file restore failed: {exc}")
+    if files_touched or removed_runtime:
+        try:
+            host.daemon_reload()
+        except Exception as exc:
+            errors.append(f"reload failed: {exc}")
+    try:
+        _restore_cgroup(host, before)
+    except Exception as exc:
+        errors.append(f"cgroup restore failed: {exc}")
+    try:
+        after = capture(host)
+    except Exception as exc:
+        errors.append(f"recapture failed: {exc}")
+        return False, "; ".join(errors)
+    mismatches = _restoration_mismatches(before, after)
+    if mismatches:
+        errors.append("mismatch: " + ", ".join(mismatches))
+        return False, "; ".join(errors)
+    return True, ""
 
 
 def apply_target(host: Host, before: Snapshot, target_mib: int) -> Snapshot:
@@ -668,25 +743,35 @@ def apply_target(host: Host, before: Snapshot, target_mib: int) -> Snapshot:
     if before.scanner_mib is None:
         raise MaintenanceFailure("options-scanner MemoryMax is not a finite mebibyte value")
     removed_runtime: dict[str, str] = {}
-    mutated = False
+    files_touched = False
     try:
         _lower_live_limit(host, before, target_mib)
-        removed_runtime = _retire_mismatched_runtime(host, target_mib)
-        mutated = bool(removed_runtime)
+        _retire_mismatched_runtime(host, target_mib, removed_runtime)
+        files_touched = bool(removed_runtime)
         _persist(host, target_mib)
-        mutated = True
+        files_touched = True
         host.daemon_reload()
         _sync_live(host, before, target_mib)
         after = capture(host)
         verify_target(host, before, after, target_mib)
         return after
     except Exception as exc:
-        if mutated:
-            with contextlib.suppress(Exception):
-                _restore_files(host, before, removed_runtime)
-                host.daemon_reload()
-        _restore_cgroup(host, before)
-        if isinstance(exc, MaintenanceFailure) and not exc.restored and "not changed" in str(exc):
+        files_touched = files_touched or bool(removed_runtime)
+        proved, detail = _prove_restored(host, before, removed_runtime, files_touched)
+        if not proved:
+            raise MaintenanceFailure(
+                f"ROLLBACK UNVERIFIED / HOLD: {detail}",
+                restored=False,
+                unverified=True,
+            ) from exc
+        if (
+            isinstance(exc, MaintenanceFailure)
+            and not exc.restored
+            and not exc.unverified
+            and "not changed" in str(exc)
+            and not files_touched
+            and not removed_runtime
+        ):
             raise
         message = str(exc) if str(exc) else "memory change failed"
         raise MaintenanceFailure(message, restored=True) from exc
@@ -874,6 +959,14 @@ def consume_matching_approval(host: Host, command: str) -> str:
     raise Denied("operator approval is required")
 
 
+def _failure_result(exc: MaintenanceFailure) -> str:
+    if exc.unverified:
+        return "rollback_unverified"
+    if exc.restored:
+        return "rolled_back"
+    return "rejected"
+
+
 def do_self_check() -> int:
     sys.stdout.write(
         "\n".join(
@@ -919,7 +1012,7 @@ def do_set(host: Host, mib: int) -> int:
                 {
                     "event": "finish",
                     "command": command,
-                    "result": "rolled_back" if exc.restored else "rejected",
+                    "result": _failure_result(exc),
                     "error": str(exc),
                     **_identity_log(before),
                 },
@@ -1010,7 +1103,7 @@ def do_rollback(host: Host, stamp: str | None) -> int:
                 {
                     "event": "finish",
                     "command": command,
-                    "result": "rolled_back" if exc.restored else "rejected",
+                    "result": _failure_result(exc),
                     "error": str(exc),
                 },
             )
