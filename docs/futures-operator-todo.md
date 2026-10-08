@@ -1,5 +1,10 @@
 # Futures Operator TODO
 
+### When home — cloud-to-VPS read-only audit access
+
+- [ ] Reuse the existing **working Cursor forced-command SSH audit route**; confirm current allowed verbs and exactly which B1–B10, collector-pin, watcher/history, rollback and journal reads remain blocked. Do not rebuild access or give the agents a general root shell.
+- [ ] From the existing authorized administrator path, separately review/approve the **smallest read-only** method for missing protected evidence; verify account/command permissions and full UTC outputs. Do not install a new wrapper, edit sudoers/keys/SSH, or broaden permissions before explicit approval and independent review.
+- [ ] Verify the route works **from the cloud without the Mac**; have Grok check captured evidence and preserve the current VPS/collector state. Keep FUTURES/OPTIONS HOLD until actual gate proof exists.
 ## Active handoff — 2026-10-08 (source-only; no release authorization)
 
 - **GitHub main:** `307fe56771031b44eeb8d0235224cf010616ce4a` (#1198 source-merged). **Last reported deployed futures:** `c44d32bc4961e56fae5c5f88a976eb6783341638`, not freshly verified. **Candidate UNSET; FUTURES HOLD / OPTIONS HOLD.**
