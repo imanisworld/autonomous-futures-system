@@ -301,6 +301,12 @@ promote_release() {
     fp=\$('$RELEASES/$sha/.venv/bin/python' -c \"import json;print(json.load(open('$RELEASES/$sha/release_manifest.json'))['fingerprint_sha256'])\")
     test "\$complete_fp" = "\$fp" || { echo 'release completion fingerprint mismatch: $sha'; exit 3; }
     test -f '$SHARED/.env'
+    # A missing history file must never fail after the active release switches.
+    # This is a mandatory read-only gate before .env, symlink or service writes.
+    test -f '$SHARED/release_history.txt' || {
+      echo 'promotion refused: release_history.txt missing before activation' >&2
+      exit 1
+    }
     risk_sha=\$('$RELEASES/$sha/.venv/bin/python' -c \"import json;print(json.load(open('$RELEASES/$sha/release_manifest.json'))['risk_rules_sha256'])\")
     # Read-only watcher destination/source preflight BEFORE .env, symlink or service mutation.
     watcher_preflight_enabled=0

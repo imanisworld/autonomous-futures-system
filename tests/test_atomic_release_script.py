@@ -122,6 +122,74 @@ def test_every_remote_block_renders_to_a_script_bash_can_parse():
     assert "printf '%s\\n' \"$built_fp\" > '/s/release-complete/" in build
 
 
+def test_missing_release_history_fails_before_any_promotion_mutation(tmp_path):
+    """Rendered remote promote must refuse absent history without touching state."""
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    environment = shared / ".env"
+    environment.write_text("INITIAL\n")
+    history = shared / "release_history.txt"
+    current_next = tmp_path / "current.next"
+    reboot_marker = tmp_path / "service-restarted"
+    sentinel = tmp_path / "proof-pin-mutated"
+    prefix = _REMOTE_RENDER_PREAMBLE.replace("SHARED=/s", f"SHARED={shared}")
+
+    promote_blocks = [
+        block for func, _, block in _remote_blocks()
+        if func == "promote_release"
+    ]
+    assert len(promote_blocks) == 1
+    rendered = subprocess.run(
+        ["bash", "-c", prefix + "\n".join(promote_blocks[0])],
+        capture_output=True, text=True, check=True,
+    ).stdout
+    gate = rendered.index("# A missing history file must never fail")
+    before = rendered.index("test -f '" + str(shared) + "/.env'")
+    mutation = rendered.index("sed -i '/^EXPECTED_RELEASE_FINGERPRINT")
+    link_change = rendered.index("mv -Tf")
+    service_change = rendered.index("systemctl restart")
+    assert before < gate < mutation < link_change < service_change
+    assert "test -f '" + str(history) + "'" in rendered[gate:mutation]
+
+    # Execute the *rendered* guard inside a scratch fake box with canary
+    # mutations only AFTER it. A refusal must leave all canaries untouched.
+    stop = rendered.index("risk_sha=", gate)
+    guard = rendered[gate:stop]
+    assert "exit 1" in guard
+
+    fake_mutations = (
+        f"printf 'CORRUPTED\\n' >> '{environment}'\n"
+        f"touch '{sentinel}'\n"
+        f"ln -s '{shared}' '{current_next}'\n"
+        f"touch '{reboot_marker}'\n"
+    )
+    def attempt():
+        return subprocess.run(
+            ["bash", "-c", "set -e\n" + guard + fake_mutations],
+            capture_output=True, text=True,
+        )
+
+    no_history = attempt()
+    assert no_history.returncode != 0
+    assert "release_history.txt missing" in no_history.stderr
+    assert environment.read_text() == "INITIAL\n"
+    assert not sentinel.exists() and not current_next.exists()
+    assert not reboot_marker.exists()
+    history.mkdir()  # a directory must not count as a regular history file
+    directory_history = attempt()
+    assert directory_history.returncode != 0
+    assert environment.read_text() == "INITIAL\n"
+    assert not sentinel.exists() and not current_next.exists()
+    assert not reboot_marker.exists()
+    history.rmdir()
+    history.write_text("prior known-good release\n")
+    good = attempt()
+    assert good.returncode == 0, good.stderr
+    assert environment.read_text() == "INITIAL\nCORRUPTED\n"
+    assert sentinel.exists() and current_next.is_symlink()
+    assert reboot_marker.exists()
+
+
 def test_half_built_release_cannot_verify_or_promote():
     text = SCRIPT.read_text()
     build = text.split("build_release() {", 1)[1].split("verify_release() {", 1)[0]
