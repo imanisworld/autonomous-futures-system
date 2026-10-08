@@ -18,7 +18,7 @@ APPROVAL_KEY = b"test-only-approval-key"
 
 
 def mac(key, value):
-    return hmac.new(key, value.encode("ascii"), hashlib.sha256).hexdigest()
+    return hmac.new(key, value.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 def approval_token(row):
