@@ -18,7 +18,7 @@
 
 ## Current repository checkpoint — 2026-10-07
 
-- **Verified `main`:** `1ec48a0ed76aea23c82882ff8c8ae258fda20c95` — U11 / PR #1166.
+- **Source-safety baseline:** `1ec48a0ed76aea23c82882ff8c8ae258fda20c95` — U11 / PR #1166. Fetch current `main` before acting; later docs/guidance-only merges may be ahead of this baseline.
 - **U3→U11 safety campaign: source-complete / merged.**
   - U3 #1158 → `ebef089fa379fe555136a4f8f492c201139d3a51`
   - U4 #1159 → `36b59aa3ef626c5200d4c070f0a91bcd41a22b9e`
