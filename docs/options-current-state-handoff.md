@@ -17,6 +17,15 @@ This check updates workflow status without changing the frozen evidence, the cur
 
 **Gates:** Exact-head CI and independent Grok PASS before a code merge, then separate operator approval. No new build, promotion, install, restart, timer activation, live execution, or forward-proof Day 1 is authorized by this documentation update.
 
+### #1177 implementation handoff — design only (2026-10-08)
+
+The read-only source audit and twelve-case regression matrix are recorded in [#1177 comment 6050751629](https://github.com/imanisworld/autonomous-futures-system/issues/1177#issuecomment-6050751629). This is a specification, **not implementation or admission of real evidence**.
+
+- **Part 1, after #1183 merges:** versioned, forward-only canonical binding on *new* dedicated 1-2-2 ARMED/RESOLUTION/RECONCILIATION rows, with exact strategy/epoch, 30m family/universe, explicit structure-close and pattern identity, registry hash, literal arm/IEX/SIP sources, collector identity and raw provenance. Incomplete identity fails closed; legacy rows are never stamped or rewritten.
+- **Part 2:** a separate, read-only adapter for those stamped rows; IEX reversal is only provisional. Verified prospective catches require history-backed pre-arming, timely usable option capture, matching delayed SIP confirmation and final canonical registry verification. No #1145-to-E1 aliases or inferred historical identity.
+- **Regression coverage:** valid confirmed catch; false provisional; SIP-only reversal missed by IEX; continuation-first; pending/no break; blocked/disagreeing SIP; late or unusable capture; legacy exclusion; exact producer/source/family/timeframe/universe/hash/close rejection; duplicate/illegal history/drift rejection; and no strategy/runtime mutation.
+- **Gate:** no #1177 merge or #1154 unpark until #1183/#1176 is merged and both #1177 parts have exact-head CI, independent Grok review and operator approval. No collector deployment, timer activation, proof window or trading authority.
+
 ## Current options-system checkpoint — 2026-10-08
 
 This section is the active source-state checkpoint for the canonical options evidence stack. It supersedes the 2026-10-07 checkpoint below, which remains provenance and must not be replayed over this state. Merge gate for every options PR: exact-head CI green **and** a Grok PASS on that exact head; Claude reviews are QA only and do not satisfy the gate.
