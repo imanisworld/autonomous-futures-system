@@ -285,8 +285,8 @@ def test_watcher_remote_directory_guard_fails_before_file_mutation(tmp_path):
         ).stdout
         assert 'test -z "$watcher_dest"' in rendered
         assert 'watcher_dest=$(realpath -e -- "$watcher_dest")' in rendered
-        assert 'chmod 700 "$watcher_dest"/*.sh' in rendered
-        assert 'chmod 700 $watcher_dest/*.sh' not in rendered
+        assert 'chmod 700 "$watcher_dest/$watcher_file"' in rendered
+        assert 'chmod 700 "$watcher_dest"/*.sh' not in rendered
 
         begin = rendered.index("watcher_dest=$(systemctl show")
         end = rendered.index("for watcher_file in", begin)
