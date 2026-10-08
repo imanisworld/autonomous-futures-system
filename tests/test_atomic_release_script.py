@@ -49,19 +49,77 @@ def test_box_build_uses_explicit_python313_interpreter():
     build = text.split("build_release() {", 1)[1].split("verify_release() {", 1)[0]
 
     assert 'box_python="${AFS_BOX_PYTHON:-python3.13}"' in build
-    assert 'command -v "\\$box_python"' in build
+    # Inside the double-quoted remote "..." string every inner quote must be
+    # escaped (\"), or the local shell ends the string early (2026-10-08 build).
+    assert 'command -v \\"\\$box_python\\"' in build
     assert "box_python_version=" in build
-    assert 'if [ "\\$box_python_version" != "3.13" ]; then' in build
+    assert 'if [ \\"\\$box_python_version\\" != \\"3.13\\" ]; then' in build
     assert "expected 3.13" in build
     remote_build = build.split('remote "', 1)[1]
-    assert remote_build.index('command -v "\\$box_python"') < remote_build.index("mkdir '$RELEASES/$sha'")
+    assert remote_build.index('command -v \\"\\$box_python\\"') < remote_build.index("mkdir '$RELEASES/$sha'")
     assert remote_build.index('box_python_version=') < remote_build.index("mkdir '$RELEASES/$sha'")
     assert (
         "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH='$RELEASES/$sha' "
-        '"\\$box_python" -m ops.dependency_lock check-python'
+        '\\"\\$box_python\\" -m ops.dependency_lock check-python'
     ) in build
-    assert '"\\$box_python" -m venv \'$RELEASES/$sha/.venv\'' in build
+    assert '\\"\\$box_python\\" -m venv \'$RELEASES/$sha/.venv\'' in build
     assert "python3 -m venv '$RELEASES/$sha/.venv'" not in build
+
+
+# Sample values for the locals the remote "..." blocks interpolate. Rendering
+# only expands variables (no block holds an unescaped command substitution),
+# so the stubbed remote() below never touches a box.
+_REMOTE_RENDER_PREAMBLE = """
+RELEASES=/r SHARED=/s CURRENT=/c SERVICE=futures-bot ROOT=/w LOCK_DIR=/s/deploy.lock
+REF=7c930274179f7c76749f75b35adb14fbb9255e54 sha=7c930274179f7c76749f75b35adb14fbb9255e54
+short=7c930274179f box_python=python3.13 unit=afs-candidate-7c930274179f port=12345
+fingerprint=f00d candidate_overrides='--setenv=EXIT_MODE=static' BOX=box
+remote() { printf '%s' "$1"; }
+"""
+
+
+def _remote_blocks():
+    """(function, first line, lines) for every multi-line remote "..." block."""
+    lines = SCRIPT.read_text().splitlines()
+    blocks, func, start = [], None, None
+    for i, line in enumerate(lines):
+        m = re.match(r"^(\w+)\(\) \{$", line)
+        if m:
+            func = m.group(1)
+        if line == '  remote "':
+            start = i
+        elif start is not None and line.startswith('  "'):
+            # Close the string bare; a trailing redirect/|| is local-only.
+            blocks.append((func, start + 1, lines[start:i] + ['  "']))
+            start = None
+    return blocks
+
+
+def test_every_remote_block_renders_to_a_script_bash_can_parse():
+    blocks = _remote_blocks()
+    funcs = {func for func, _, _ in blocks}
+    assert {"build_release", "verify_release", "promote_release", "rollback_release"} <= funcs
+    assert len(blocks) >= 6
+    rendered_by_func = {}
+    for func, lineno, block in blocks:
+        render = subprocess.run(
+            ["bash", "-c", _REMOTE_RENDER_PREAMBLE + "\n".join(block)],
+            capture_output=True,
+            text=True,
+        )
+        # A broken-out quote shows up locally as a stray command or error.
+        assert render.returncode == 0 and render.stderr == "", (func, lineno, render.stderr)
+        parsed = subprocess.run(["bash", "-n"], input=render.stdout, capture_output=True, text=True)
+        assert parsed.returncode == 0, (func, lineno, parsed.stderr)
+        rendered_by_func.setdefault(func, []).append(render.stdout)
+
+    build = "\n".join(rendered_by_func["build_release"])
+    assert 'if ! command -v "$box_python" >/dev/null 2>&1; then' in build
+    assert 'box_python_version=$("$box_python" -c \'import sys;' in build
+    assert 'if [ "$box_python_version" != "3.13" ]; then' in build
+    assert 'echo "build refused: box python interpreter $box_python is $box_python_version; expected 3.13" >&2' in build
+    assert '"$box_python" -m venv \'/r/7c930274179f7c76749f75b35adb14fbb9255e54/.venv\'' in build
+    assert "printf '%s\\n' \"$built_fp\" > '/s/release-complete/" in build
 
 
 def test_half_built_release_cannot_verify_or_promote():
