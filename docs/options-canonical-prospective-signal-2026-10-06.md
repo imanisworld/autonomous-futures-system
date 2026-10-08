@@ -83,7 +83,7 @@ The journal refuses all of the following:
 - `MISSED_LATE` / `MISSED_GAP` set `signal_integrity` to `DEGRADED`; `DATA_BLOCKED` / `AMBIGUOUS` set both integrities to `INVALID`; late or revoked capture evidence demotes a `VALID` signal.
 - `resolution` (TRIGGERED / MISSED_LATE / MISSED_GAP) is read from history, so it survives `OUTCOME_CLOSED`; records carry `resolution_state`.
 - `signal_integrity == VALID` requires a registered epoch, a non-blocked state, and, after a TRIGGERED resolution, pre-arming plus `prospective_catch` evidence that is not late or gapped. This is checked on every construction, including direct `ProspectiveSignal(...)` and `dataclasses.replace`, as are the exact types of every capture-evidence value.
-- `verify_record` derives the resolution and lifecycle state from the record's `history` and refuses a summary that disagrees, and refuses VALID with late/gapped or un-armed capture evidence.
+- `verify_record` derives resolution/lifecycle from append-only `history`, validates legal lifecycle ordering and monotonic detection times, and refuses a summary that disagrees. `prospective_catch=true` is valid only for a history-backed `TRIGGERED` resolution with pre-armed capture evidence, VALID signal integrity, and no late/gap provenance.
 
 ### Epochs (review B6)
 
