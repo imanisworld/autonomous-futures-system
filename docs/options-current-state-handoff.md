@@ -4,6 +4,19 @@ _As of 2026-10-08. The newest dated repository refresh below governs source stat
 
 Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`; the read-only coverage evidence lane (observer, reducer, outcome study, after-close collector) is described in `docs/options-coverage-observer.md`. The observation-only **setup-capture** lifecycle (`WATCHING` → `TRIGGERED` / `MISSED_LATE`) is described in `docs/options-setup-capture-observer.md`.
 
+## Options paper-collection readout — 2026-10-07 UTC (operator-supplied, not independently reconciled)
+
+**Engineering verdict: collection PASS; trading-edge verdict: NOT PROVEN / HOLD.** This is a read-only daily reporting snapshot, not a new strategy trial, a broker statement, or authority to change rules, promote code, or deploy. Validate against `paper_collection_eod_2026-10-07.json` and canonical DB/journal before any formal statistical inference.
+
+- **Paper outcomes:** 0 opened, 2 closed (1 win / 1 loss), net **-$231** that day; 1 position still open. Lifetime 25 closed, 9 wins / 16 losses, cumulative **-$1,716** (simple 36% close win rate; small, nonrandom sample; no expectancy conclusion).
+- **Filtered what-if cohort, not executable fills:** 28 hypothetical closes, 14 wins / 14 losses, cumulative **-$1,021**. Not comparable to actual paper P&L without matched populations, execution assumptions and cost modeling. 37 entries already had target consumed; 2 refused as late with insufficient remaining reward.
+- **Collection telemetry:** 3,162 scanner rows, 64 shadow-journal rows, 0 alerts, DB OK, no paper-collection data blockers reported, collector status 1 fresh / 1 off-session. Zero alerts alone does not prove an alert-delivery fault; inspect eligibility and routing before inferring one.
+- **Journal statuses, not option P&L:** 35 target consumed at entry; 11 Win; 9 Open; 7 Loss; 2 Stop consumed at entry (64 total). Do not add these to paper closes or represent them as filled-trade results.
+- **Execution assumptions:** paper only, one contract; simulated entry at ask / exit at bid; commissions excluded. No strategy rule change is justified by this card alone.
+- **Research queue (separate from operational deployment):** reconcile P&L and open-position status from canonical ledger; examine winners versus losers by pre-entry setup, timeliness/reward remaining, contract liquidity/spread, theta, and SPY/QQQ/GEX context; retain the exact cohort and avoid outcome-selected filters. This is investigation, not tuning or permission to trade.
+
+**Cleanup gate:** #1167 remains audit-only until #1154 is merged and stable. Map callers, authority, live services, historical replay and rollback before removing compatibility paths, duplicate validators, collectors or dated docs. Keep all original journal/JSON evidence unchanged; simplify only after tests and independent review.
+
 ## Work-queue verification — 2026-10-08 (documentation only)
 
 This check updates workflow status without changing the frozen evidence, the current checkpoint's strategy definitions, or operational state. #1188 was merged as `f8e4257e2b9481f4b670b24e7602634e9cf47649`; the 2026-10-08 checkpoint immediately below is now on main.
