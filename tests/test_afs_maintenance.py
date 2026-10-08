@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import re
 import stat
 import sys
@@ -69,21 +70,43 @@ class FakeHost(afs.Host):
         self.reload_count = 0
         self.fail_reload_on_call: int | None = None
         self.fail_remove_runtime: set[str] = set()
+        self.etc_control: dict[str, str] = {}
+        self.run_control: dict[str, str] = {}
+        self.futures_dropin_paths = ""
+        self.extra_scanner_paths: list[str] = []
+        self.crash_on_reload = False
+        self.cgroup_write_sticks = True
+        self.replace_dropin_on_reload: str | None = None
+        self.runtime_mutation: tuple[str, str] | None = None
+        self.futures_dropin_on_reload: str | None = None
+        self.fail_history = None
         self.clock = datetime(2026, 10, 8, 20, 45, tzinfo=timezone.utc)
         self.environ = {"SUDO_USER": "grok-audit", "SSH_CONNECTION": "test-connection"}
         self.approvals: dict[str, dict[str, object]] = {}
 
+    def _scanner_paths(self) -> str:
+        paths = [str(afs.ETC_DROPIN_DIR / name) for name in sorted(self.etc)]
+        return " ".join([*paths, *self.extra_scanner_paths])
+
     def systemctl_show(self, unit: str) -> dict[str, str]:
         self.calls.append(("show", unit))
         if unit == afs.SCANNER_UNIT:
-            return dict(self.scanner)
+            props = dict(self.scanner)
+            props.setdefault("NeedDaemonReload", "no")
+            props["DropInPaths"] = self._scanner_paths()
+            return props
         if unit == afs.FUTURES_UNIT:
-            return dict(self.futures)
+            props = dict(self.futures)
+            props.setdefault("NeedDaemonReload", "no")
+            props["DropInPaths"] = self.futures_dropin_paths
+            return props
         raise afs.Denied("unit is not available to maintenance")
 
     def daemon_reload(self) -> None:
         self.reload_count += 1
         self.calls.append(("daemon-reload",))
+        if self.crash_on_reload:
+            raise SystemExit("killed")
         if self.fail_reload_on_call == self.reload_count:
             raise OSError("reload failed")
         text = self.etc.get(afs.DROPIN_NAME)
@@ -106,12 +129,16 @@ class FakeHost(afs.Host):
         if self.change_futures_on_reload:
             self.futures["MemoryMax"] = "1"
             self.change_futures_on_reload = False
-
-    def set_property_runtime(self, mib: int) -> None:
-        self.calls.append(("set-property-runtime", str(mib)))
-        self.scanner["MemoryMax"] = str(mib * afs.MIB)
-        self.cgroup["memory.max"] = str(mib * afs.MIB)
-        self.runtime["50-MemoryMax.conf"] = f"[Service]\nMemoryMax={mib}M\n"
+        if self.replace_dropin_on_reload is not None and afs.DROPIN_NAME in self.etc:
+            self.etc[afs.DROPIN_NAME] = self.replace_dropin_on_reload
+            self.replace_dropin_on_reload = None
+        if self.runtime_mutation is not None:
+            name, text = self.runtime_mutation
+            self.runtime[name] = text
+            self.runtime_mutation = None
+        if self.futures_dropin_on_reload is not None:
+            self.futures_dropin_paths = self.futures_dropin_on_reload
+            self.futures_dropin_on_reload = None
 
     def read_cgroup(self, control_group: str, leaf: str) -> str | None:
         if control_group != afs.EXPECTED_CGROUP:
@@ -124,7 +151,8 @@ class FakeHost(afs.Host):
             raise afs.Denied("cgroup path is not available to maintenance")
         if self.cgroup_write_error:
             raise OSError("device busy")
-        self.cgroup["memory.max"] = value
+        if self.cgroup_write_sticks:
+            self.cgroup["memory.max"] = value
 
     def read_base_unit(self) -> str:
         return self.base
@@ -157,6 +185,20 @@ class FakeHost(afs.Host):
     def write_runtime_dropin(self, name: str, text: str) -> None:
         self.runtime[name] = text
 
+    def restore_runtime_dropin(self, name: str, text: str) -> None:
+        self.runtime[name] = text
+
+    def control_dropin_names(self, area: str) -> list[str]:
+        if area == "etc":
+            return sorted(self.etc_control)
+        if area == "run":
+            return sorted(self.run_control)
+        raise afs.Denied("control directory is not available to maintenance")
+
+    def read_control_dropin(self, area: str, name: str) -> str:
+        source = self.etc_control if area == "etc" else self.run_control
+        return source[name]
+
     def health_code(self) -> str:
         return self.health
 
@@ -164,6 +206,8 @@ class FakeHost(afs.Host):
         return self.records.get(path, "")
 
     def append_line(self, path: Path, line: str) -> None:
+        if self.fail_history is not None and self.fail_history(line):
+            raise OSError("history full")
         self.records[path] = self.records.get(path, "") + line + "\n"
 
     def ensure_state_dirs(self) -> None:
@@ -369,17 +413,18 @@ def test_edges_of_the_authorized_window_are_accepted():
     assert "after_mib=600" in out
 
 
-def test_runtime_property_is_used_only_when_reload_does_not_apply_the_limit():
+def test_reload_that_misses_memorymax_does_not_use_set_property():
     host = FakeHost()
     host.reload_updates_property = False
     host.reload_updates_live = False
     host.grant("options-scanner-memory set 500M")
     code, out, err = _run(host, "options-scanner-memory", "set", "500M")
-    assert code == 0, err
-    assert "after_mib=500" in out
-    assert ("set-property-runtime", "500") in host.calls
-    assert host.runtime["50-MemoryMax.conf"] == "[Service]\nMemoryMax=500M\n"
-    assert host.etc[afs.DROPIN_NAME] == "[Service]\nMemoryMax=500M\n"
+    assert code == 1
+    assert "result=ok" not in out
+    assert "set-property" not in err
+    assert not any(call[0] == "set-property-runtime" for call in host.calls)
+    assert host.scanner["MemoryMax"] == str(350 * afs.MIB)
+    assert afs.DROPIN_NAME not in host.etc
 
 
 def test_pid_change_restores_the_limit_and_does_not_claim_rollback():
@@ -480,6 +525,166 @@ def test_missing_base_floor_refuses_the_change():
     assert afs.DROPIN_NAME not in host.etc
 
 
+def test_persistent_system_control_blocks_set_before_any_reload():
+    host = FakeHost()
+    host.etc_control["50-MemoryMax.conf"] = "[Service]\nMemoryMax=600M\n"
+    code, out, err = _run(host, "options-scanner-memory", "set", "350M")
+    assert code == 1
+    assert "result=noop" not in out
+    assert "result=ok" not in out
+    assert "system.control" in err
+    assert not any(call[0] == "daemon-reload" for call in host.calls)
+    assert host.etc_control["50-MemoryMax.conf"].endswith("MemoryMax=600M\n")
+
+    host.etc_control.clear()
+    host.run_control["50-MemoryMax.conf"] = "[Service]\nMemoryMax=600M\n"
+    host.grant("options-scanner-memory set 350M")
+    code, out, err = _run(host, "options-scanner-memory", "set", "350M")
+    assert code == 1
+    assert "system.control" in err
+    assert "approval0001" in host.approvals
+    assert not any(call[0] == "daemon-reload" for call in host.calls)
+
+
+def test_pending_futures_reload_is_not_activated():
+    host = FakeHost()
+    host.futures["NeedDaemonReload"] = "yes"
+    host.grant("options-scanner-memory set 600M")
+    code, out, err = _run(host, "options-scanner-memory", "set", "600M")
+    assert code == 1
+    assert "result=ok" not in out
+    assert "daemon reload" in err
+    assert not any(call[0] == "daemon-reload" for call in host.calls)
+    assert afs.DROPIN_NAME not in host.etc
+    assert "approval0001" in host.approvals
+
+
+def test_futures_drop_in_activated_by_reload_is_not_ok():
+    host = FakeHost()
+    host.futures_dropin_on_reload = "/etc/systemd/system/futures-bot.service.d/half.conf"
+    host.grant("options-scanner-memory set 600M")
+    code, out, err = _run(host, "options-scanner-memory", "set", "600M")
+    assert code == 1
+    assert "result=ok" not in out
+    assert "ROLLBACK UNVERIFIED / HOLD" in err
+    assert "futures DropInPaths" in err
+    assert _log_rows(host)[-1]["result"] == "rollback_unverified"
+
+
+def test_cgroup_that_does_not_stick_is_not_reported_ok():
+    host = FakeHost()
+    host.reload_updates_live = False
+    host.cgroup_write_sticks = False
+    host.grant("options-scanner-memory set 600M")
+    code, out, err = _run(host, "options-scanner-memory", "set", "600M")
+    assert code == 1
+    assert "result=ok" not in out
+    assert host.cgroup["memory.max"] == str(350 * afs.MIB)
+    assert afs.DROPIN_NAME not in host.etc
+
+
+def test_changed_runtime_file_and_our_drop_in_are_not_ignored():
+    host = FakeHost()
+    original = "[Service]\nEnvironment=A=1\n"
+    host.runtime["other.conf"] = original
+    host.runtime_mutation = ("other.conf", "[Service]\nEnvironment=A=2\n")
+    host.grant("options-scanner-memory set 600M")
+    code, out, err = _run(host, "options-scanner-memory", "set", "600M")
+    assert code == 1
+    assert "result=ok" not in out
+    assert host.runtime["other.conf"] == original
+
+    host = FakeHost()
+    host.replace_dropin_on_reload = "[Service]\nMemoryMax=500M\n"
+    host.grant("options-scanner-memory set 600M")
+    code, out, err = _run(host, "options-scanner-memory", "set", "600M")
+    assert code == 1
+    assert "result=ok" not in out
+    assert host.etc.get(afs.DROPIN_NAME) != "[Service]\nMemoryMax=500M\n"
+
+
+def test_recheck_flags_each_hidden_drift_field():
+    host = FakeHost()
+    before = afs.capture(host)
+    memory = afs.capture(host)
+    memory.scanner_memory_raw = str(600 * afs.MIB)
+    assert "MemoryMax" in afs._restoration_mismatches(before, memory)
+
+    cgroup = afs.capture(host)
+    cgroup.cgroup_max = str(600 * afs.MIB)
+    assert "cgroup memory.max" in afs._restoration_mismatches(before, cgroup)
+
+    runtime = afs.capture(host)
+    runtime.runtime_files = {"other.conf": "[Service]\nEnvironment=A=2\n"}
+    assert any(item.startswith("unexpected runtime") for item in afs._restoration_mismatches(before, runtime))
+
+    changed = afs.capture(host)
+    changed.runtime_files = {"other.conf": "changed\n"}
+    before_runtime = afs.capture(host)
+    before_runtime.runtime_files = {"other.conf": "original\n"}
+    assert "runtime other.conf" in afs._restoration_mismatches(before_runtime, changed)
+
+    dropin = afs.capture(host)
+    dropin.our_dropin = "[Service]\nMemoryMax=600M\n"
+    assert "etc drop-in" in afs._restoration_mismatches(before, dropin)
+
+    control = afs.capture(host)
+    control.run_control = {"50-MemoryMax.conf": "[Service]\nMemoryMax=600M\n"}
+    assert "run system.control" in afs._restoration_mismatches(before, control)
+
+    with pytest.raises(afs.MaintenanceFailure, match="MemoryMax"):
+        afs.verify_target(host, before, memory, 350)
+    with pytest.raises(afs.MaintenanceFailure, match="cgroup"):
+        afs.verify_target(host, before, cgroup, 350)
+    with pytest.raises(afs.MaintenanceFailure, match="drop-in"):
+        afs.verify_target(host, before, dropin, 350)
+
+
+def test_restore_error_is_unverified_when_the_snapshot_matches():
+    host = FakeHost()
+    before = afs.capture(host)
+    host.cgroup_write_error = True
+    proved, detail = afs._prove_restored(host, before, {}, False)
+    assert proved is False
+    assert "cgroup restore failed" in detail
+
+
+def test_history_write_failure_reverses_the_change_instead_of_crashing():
+    host = FakeHost()
+    host.fail_history = lambda line: '"action": "set"' in line
+    host.grant("options-scanner-memory set 600M")
+    code, out, err = _run(host, "options-scanner-memory", "set", "600M")
+    assert code == 1
+    assert "result=ok" not in out
+    assert "history record failed" in err
+    assert afs.DROPIN_NAME not in host.etc
+    assert host.scanner["MemoryMax"] == str(350 * afs.MIB)
+    assert _log_rows(host)[-1]["result"] == "rolled_back"
+
+
+def test_killed_change_keeps_a_record_rollback_can_use():
+    host = FakeHost()
+    host.crash_on_reload = True
+    host.grant("options-scanner-memory set 600M")
+    with pytest.raises(SystemExit):
+        _run(host, "options-scanner-memory", "set", "600M")
+    assert host.etc[afs.DROPIN_NAME] == "[Service]\nMemoryMax=600M\n"
+    rows = [json.loads(line) for line in host.records[afs.HISTORY_PATH].splitlines()]
+    intent = [row for row in rows if row["action"] == "intent"][-1]
+    assert intent["our_dropin"] is None
+    assert intent["result"] == "open"
+    host.crash_on_reload = False
+    host.grant(f"options-scanner-memory rollback {intent['stamp']}", name="rollback0001")
+    code, out, err = _run(host, "options-scanner-memory", "rollback", intent["stamp"])
+    assert code == 0, err
+    assert "result=ok" in out
+    assert afs.DROPIN_NAME not in host.etc
+    assert host.scanner["MemoryMax"] == str(350 * afs.MIB)
+    code, _out, err = _run(host, "options-scanner-memory", "set", "500M")
+    assert code == 126
+    assert "operator approval is required" in err
+
+
 def test_history_is_append_only_and_noop_does_not_add_a_set():
     host = FakeHost()
     host.grant("options-scanner-memory set 600M")
@@ -492,14 +697,16 @@ def test_history_is_append_only_and_noop_does_not_add_a_set():
     assert '"after_mib": 600' in out
 
 
-def test_systemctl_builder_has_no_restart_path():
+def test_systemctl_builder_has_no_restart_or_set_property_path():
     with pytest.raises(afs.Denied):
         afs.build_systemctl("restart")
-    args = afs.build_systemctl("set-property-runtime", mib=600)
-    assert args[:4] == ["/usr/bin/systemctl", "set-property", "--runtime", "options-scanner.service"]
-    assert "restart" not in args
     with pytest.raises(afs.Denied):
-        afs.build_systemctl("set-property-runtime", mib=601)
+        afs.build_systemctl("set-property")
+    args = afs.build_systemctl("show", unit=afs.SCANNER_UNIT)
+    assert "NeedDaemonReload" in args
+    assert "DropInPaths" in args
+    assert "set-property" not in args
+    assert "restart" not in args
 
 
 def test_program_source_cannot_restart_deploy_or_read_env():
@@ -508,7 +715,7 @@ def test_program_source_cannot_restart_deploy_or_read_env():
         r"\bsystemctl\s+(restart|stop|start|kill|reboot|poweroff|isolate|disable|enable|mask)\b"
     )
     assert forbidden.search(text) is None
-    for needle in ("shell=True", "authorized_keys", "atomic_release", "ssh-keygen", "write_approval"):
+    for needle in ("shell=True", "authorized_keys", "atomic_release", "ssh-keygen", "write_approval", "set-property"):
         assert needle not in text
     assert re.search(r"(?<![\w])\.env\b", text) is None
 
@@ -563,6 +770,72 @@ def test_installer_changes_only_the_cursor_command_restriction(tmp_path: Path):
     assert stat.S_IMODE(program.stat().st_mode) == 0o755
     assert stat.S_IMODE(sudoers.stat().st_mode) == 0o440
     assert b"systemctl" not in sudoers.read_bytes()
+
+
+def test_installer_preserves_authorized_keys_owner(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    blob = "AAAACURSORblob"
+    original = _keys(f'{installer.AUDIT_OPTIONS} ssh-ed25519 {blob} cursor-cloud-agent')
+    root = tmp_path / "root"
+    keys = installer.authorized_keys_path(root)
+    keys.parent.mkdir(parents=True)
+    keys.write_text(original, encoding="utf-8")
+    os_chown = os.chown
+    os_fchown = os.fchown
+    seen: list[tuple[str, int, int]] = []
+
+    def spy_chown(path, uid, gid):
+        if Path(path).name == "authorized_keys":
+            seen.append(("chown", uid, gid))
+        return os_chown(path, uid, gid)
+
+    def spy_fchown(fd, uid, gid):
+        seen.append(("fchown", uid, gid))
+        return os_fchown(fd, uid, gid)
+
+    monkeypatch.setattr(installer.os, "chown", spy_chown)
+    monkeypatch.setattr(installer.os, "fchown", spy_fchown)
+    before = keys.stat()
+    installer.run_install(
+        root=root,
+        script_path=MAINTENANCE_PATH,
+        sudoers_path=SUDOERS_PATH,
+        apply=True,
+        sudoers_check=lambda _path: None,
+    )
+    after = keys.stat()
+    assert after.st_uid == before.st_uid
+    assert after.st_gid == before.st_gid
+    assert stat.S_IMODE(after.st_mode) == stat.S_IMODE(before.st_mode)
+    assert ("chown", before.st_uid, before.st_gid) in seen
+    assert ("fchown", before.st_uid, before.st_gid) in seen
+    assert "afs-maintenance run" in keys.read_text(encoding="utf-8")
+
+
+def test_installer_restores_keys_when_owner_cannot_be_kept(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    blob = "AAAACURSORblob"
+    original = _keys(f'{installer.AUDIT_OPTIONS} ssh-ed25519 {blob} cursor-cloud-agent')
+    root = tmp_path / "root"
+    keys = installer.authorized_keys_path(root)
+    keys.parent.mkdir(parents=True)
+    keys.write_text(original, encoding="utf-8")
+    before = keys.stat()
+
+    def fail_fchown(_fd, _uid, _gid):
+        raise OSError("chown failed")
+
+    monkeypatch.setattr(installer.os, "fchown", fail_fchown)
+    with pytest.raises(installer.InstallError, match="owner was not preserved"):
+        installer.run_install(
+            root=root,
+            script_path=MAINTENANCE_PATH,
+            sudoers_path=SUDOERS_PATH,
+            apply=True,
+            sudoers_check=lambda _path: None,
+        )
+    assert keys.read_text(encoding="utf-8") == original
+    assert keys.stat().st_uid == before.st_uid
+    assert keys.stat().st_gid == before.st_gid
+    assert not keys.with_name("authorized_keys.tmp").exists()
 
 
 def test_installer_refuses_an_unexpected_or_duplicate_cursor_key():

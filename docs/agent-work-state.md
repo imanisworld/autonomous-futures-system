@@ -13,12 +13,12 @@
 
 ## Prepared, not installed — Cursor Cloud maintenance (2026-10-08)
 
-- **Branch:** `ops/cursor-cloud-vps-maintenance`, draft PR #1206. Source is committed. Not installed. Independent review is outstanding.
+- **Branch:** `ops/cursor-cloud-vps-maintenance`, draft PR #1206. Source fixes for review blockers B1–B5 are committed on this branch. Not installed. Re-review the new head only.
 - **Verified read-only:** `grok-audit` `cursor-cloud-agent` key is `restrict` plus `sudo -n /usr/local/sbin/afs-grok-audit`. Other grok-audit keys stay on that audit command. `options-scanner` remained active, PID `1695873`, `NRestarts=0`, `MemoryMax=367001600` (350MiB). futures-bot PID `1851835` unchanged. `/usr/local/sbin/afs-maintenance` was absent.
 - **Prepared:** `scripts/afs_maintenance.py`, `scripts/afs-maintenance.sudoers`, `scripts/install_afs_maintenance.py`. The only mutation is `options-scanner` MemoryMax from 350M through 600M, with verification and rollback. `set` and `rollback` fail closed unless root has placed a matching one-time approval file. The program can consume that file and cannot create one. No restart, deploy, env read, or key-blob change is available.
-- **Tests:** `python3 -m pytest tests/test_afs_maintenance.py -q` — 33 passed after the rollback-proof fix. No VPS write. A partial runtime-drop-in removal restores the earlier file. An unproved restore logs `rollback_unverified` and says `ROLLBACK UNVERIFIED / HOLD`.
+- **Tests:** `python3 -m pytest tests/test_afs_maintenance.py -q` — 44 passed. No VPS write. `set-property` is not used. `system.control`, `NeedDaemonReload`, and `DropInPaths` are checked. An intent record is written before mutation. `authorized_keys` keeps its owner. An unproved restore still says `ROLLBACK UNVERIFIED / HOLD`.
 - **DONE / DO NOT REDO:** inspection of the current forced command and the local allowlist tests. Do not install from an agent session.
-- **NEXT:** Claude and Grok review the updated #1206 head. Do not install, daemon-reload, or change MemoryMax. A proved failure reports `rolled_back` only after the prior limits and drop-in bytes are recaptured. An unproved restore reports `ROLLBACK UNVERIFIED / HOLD`.
+- **NEXT:** Re-review only the new #1206 head against B1–B5. Do not install, daemon-reload, or change MemoryMax. `main` stays `bd5ea24`.
 
 > **Purpose:** compact resume checkpoint for agents. This file is coordination state only; it is **not** strategy-status, experiment, deployment, or runtime authority.
 >

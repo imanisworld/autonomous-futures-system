@@ -15,6 +15,7 @@ No service is reloaded or restarted, and MemoryMax is not changed.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import os
 import shutil
 import stat
@@ -136,6 +137,54 @@ def install_paths(root: Path) -> tuple[Path, Path]:
     )
 
 
+def _owned_file(path: Path, data: bytes, uid: int, gid: int, mode: int) -> None:
+    tmp = path.with_name(path.name + ".tmp")
+    if tmp.exists() or tmp.is_symlink():
+        raise InstallError("authorized_keys temporary file already exists")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode)
+    try:
+        os.write(fd, data)
+        os.fchmod(fd, mode)
+        os.fchown(fd, uid, gid)
+    except Exception:
+        os.close(fd)
+        tmp.unlink(missing_ok=True)
+        raise
+    os.close(fd)
+    os.replace(tmp, path)
+    os.chown(path, uid, gid)
+    os.chmod(path, mode)
+
+
+def _replace_preserving_owner(path: Path, data: bytes) -> None:
+    """Replace a file without changing the owner sshd will use to read it."""
+
+    info = os.lstat(path)
+    if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+        raise InstallError("authorized_keys is not a regular file")
+    mode = stat.S_IMODE(info.st_mode)
+    original = path.read_bytes()
+    try:
+        _owned_file(path, data, info.st_uid, info.st_gid, mode)
+    except Exception as exc:
+        with contextlib.suppress(Exception):
+            _owned_file(path, original, info.st_uid, info.st_gid, mode)
+        raise InstallError("authorized_keys owner was not preserved") from exc
+    after = os.lstat(path)
+    preserved = (
+        not stat.S_ISLNK(after.st_mode)
+        and stat.S_ISREG(after.st_mode)
+        and after.st_uid == info.st_uid
+        and after.st_gid == info.st_gid
+        and stat.S_IMODE(after.st_mode) == mode
+    )
+    if preserved:
+        return
+    with contextlib.suppress(Exception):
+        _owned_file(path, original, info.st_uid, info.st_gid, mode)
+    raise InstallError("authorized_keys owner was not preserved")
+
+
 def _write_file(path: Path, data: bytes, mode: int) -> None:
     if path.is_symlink():
         raise InstallError(f"refusing to replace symlink {path}")
@@ -203,7 +252,7 @@ def run_install(
         if backup.exists():
             raise InstallError("authorized_keys backup already exists")
         _write_file(backup, original.encode(), 0o600)
-        _write_file(keys, updated.encode(), 0o600)
+        _replace_preserving_owner(keys, updated.encode())
     return "\n".join(
         [
             "installed",

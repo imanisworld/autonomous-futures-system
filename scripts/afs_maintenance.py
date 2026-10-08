@@ -43,6 +43,9 @@ EXPECTED_CGROUP = "/system.slice/options-scanner.service"
 BASE_UNIT = Path("/etc/systemd/system/options-scanner.service")
 ETC_DROPIN_DIR = Path("/etc/systemd/system/options-scanner.service.d")
 RUNTIME_DROPIN_DIR = Path("/run/systemd/system/options-scanner.service.d")
+ETC_CONTROL_DIR = Path("/etc/systemd/system.control/options-scanner.service.d")
+RUN_CONTROL_DIR = Path("/run/systemd/system.control/options-scanner.service.d")
+OUR_DROPIN_PATH = str(ETC_DROPIN_DIR / DROPIN_NAME)
 CGROUP_ROOT = Path("/sys/fs/cgroup")
 SHARED_DIR = Path("/root/afs-shared")
 STATE_DIR = SHARED_DIR / "maintenance" / "options-scanner-memory"
@@ -169,6 +172,12 @@ class Snapshot:
     etc_files: dict[str, str]
     our_dropin: str | None
     runtime_files: dict[str, str]
+    scanner_need_reload: str
+    futures_need_reload: str
+    scanner_dropin_paths: str
+    futures_dropin_paths: str
+    etc_control: dict[str, str]
+    run_control: dict[str, str]
 
 
 class Host:
@@ -178,9 +187,6 @@ class Host:
         raise NotImplementedError
 
     def daemon_reload(self) -> None:
-        raise NotImplementedError
-
-    def set_property_runtime(self, mib: int) -> None:
         raise NotImplementedError
 
     def read_cgroup(self, control_group: str, leaf: str) -> str | None:
@@ -214,6 +220,15 @@ class Host:
         raise NotImplementedError
 
     def write_runtime_dropin(self, name: str, text: str) -> None:
+        raise NotImplementedError
+
+    def restore_runtime_dropin(self, name: str, text: str) -> None:
+        raise NotImplementedError
+
+    def control_dropin_names(self, area: str) -> list[str]:
+        raise NotImplementedError
+
+    def read_control_dropin(self, area: str, name: str) -> str:
         raise NotImplementedError
 
     def health_code(self) -> str:
@@ -255,7 +270,7 @@ class Host:
         raise NotImplementedError
 
 
-def build_systemctl(action: str, unit: str = "", mib: int | None = None) -> list[str]:
+def build_systemctl(action: str, unit: str = "") -> list[str]:
     """Return a fixed systemctl argument list. Unknown actions are rejected."""
 
     if action == "show":
@@ -275,20 +290,14 @@ def build_systemctl(action: str, unit: str = "", mib: int | None = None) -> list
             "MemoryMax",
             "-p",
             "ControlGroup",
+            "-p",
+            "NeedDaemonReload",
+            "-p",
+            "DropInPaths",
             "--no-pager",
         ]
     if action == "daemon-reload":
         return ["/usr/bin/systemctl", "daemon-reload"]
-    if action == "set-property-runtime":
-        if mib is None or not (MIN_MIB <= mib <= MAX_MIB):
-            raise Denied("MemoryMax is outside 350M..600M")
-        return [
-            "/usr/bin/systemctl",
-            "set-property",
-            "--runtime",
-            SCANNER_UNIT,
-            f"MemoryMax={mib}M",
-        ]
     raise Denied("systemctl action is not available to maintenance")
 
 
@@ -421,6 +430,17 @@ def _show_value(props: dict[str, str], key: str) -> str:
     return props.get(key, "").strip()
 
 
+def _need_reload(props: dict[str, str], unit: str) -> str:
+    value = _show_value(props, "NeedDaemonReload")
+    if value not in {"yes", "no"}:
+        raise MaintenanceFailure(f"{unit} did not report NeedDaemonReload")
+    return value
+
+
+def _control_files(host: Host, area: str) -> dict[str, str]:
+    return {name: host.read_control_dropin(area, name) for name in host.control_dropin_names(area)}
+
+
 def capture(host: Host) -> Snapshot:
     scanner = host.systemctl_show(SCANNER_UNIT)
     futures = host.systemctl_show(FUTURES_UNIT)
@@ -465,6 +485,12 @@ def capture(host: Host) -> Snapshot:
         etc_files=etc,
         our_dropin=our_dropin,
         runtime_files=runtime,
+        scanner_need_reload=_need_reload(scanner, SCANNER_UNIT),
+        futures_need_reload=_need_reload(futures, FUTURES_UNIT),
+        scanner_dropin_paths=_show_value(scanner, "DropInPaths"),
+        futures_dropin_paths=_show_value(futures, "DropInPaths"),
+        etc_control=_control_files(host, "etc"),
+        run_control=_control_files(host, "run"),
     )
 
 
@@ -556,7 +582,10 @@ def _sync_live(host: Host, before: Snapshot, target_mib: int) -> None:
     shown = host.systemctl_show(SCANNER_UNIT)
     shown_bytes = parse_memory_max(_show_value(shown, "MemoryMax"))
     if shown_bytes != target_mib * MIB:
-        host.set_property_runtime(target_mib)
+        raise MaintenanceFailure("daemon-reload did not apply MemoryMax")
+    current = host.read_cgroup(before.scanner_cgroup, "memory.max") if before.scanner_pid not in {"", "0"} else target
+    if before.scanner_pid not in {"", "0"} and (current is None or current.strip() != target):
+        raise MaintenanceFailure("live memory limit was not updated")
 
 
 def _same_identity(before: Snapshot, after: Snapshot) -> None:
@@ -611,6 +640,14 @@ def verify_target(_host: Host, before: Snapshot, after: Snapshot, target_mib: in
             raise MaintenanceFailure("a pre-existing runtime drop-in changed")
         if not _runtime_memory_only(text, target_mib):
             raise MaintenanceFailure("runtime drop-in is not a MemoryMax override")
+    if after.futures_dropin_paths != before.futures_dropin_paths:
+        raise MaintenanceFailure("futures-bot DropInPaths changed")
+    if not _scanner_paths_allowed(before.scanner_dropin_paths, after.scanner_dropin_paths):
+        raise MaintenanceFailure("options-scanner DropInPaths changed")
+    if after.etc_control != before.etc_control or after.run_control != before.run_control:
+        raise MaintenanceFailure("systemd system.control changed")
+    if after.scanner_need_reload != "no" or after.futures_need_reload != "no":
+        raise MaintenanceFailure("NeedDaemonReload remained set")
 
 
 def _runtime_memory_only(text: str, target_mib: int) -> bool:
@@ -627,18 +664,37 @@ def _runtime_memory_only(text: str, target_mib: int) -> bool:
     return len(assignments) == 1 and tuple(assignments[0]) in expected
 
 
+def _path_set(raw: str) -> set[str]:
+    return {part for part in raw.split() if part}
+
+
+def _scanner_paths_allowed(before_raw: str, after_raw: str) -> bool:
+    added = _path_set(after_raw) - _path_set(before_raw)
+    removed = _path_set(before_raw) - _path_set(after_raw)
+    return added <= {OUR_DROPIN_PATH} and removed <= {OUR_DROPIN_PATH}
+
+
+def _require_quiet_units(before: Snapshot) -> None:
+    if before.scanner_need_reload != "no" or before.futures_need_reload != "no":
+        raise MaintenanceFailure("a unit already needs a daemon reload; configuration was not changed")
+    if before.etc_control or before.run_control:
+        raise MaintenanceFailure("systemd system.control override is present; configuration was not changed")
+
+
 def _restore_files(host: Host, before: Snapshot, removed_runtime: dict[str, str]) -> None:
     if before.our_dropin is None:
         host.remove_our_dropin()
     else:
         host.write_our_dropin(before.our_dropin)
+    recorded = dict(before.runtime_files)
+    recorded.update(removed_runtime)
     current_runtime = set(host.runtime_dropin_names())
-    for name in current_runtime - set(before.runtime_files):
+    for name in current_runtime - set(recorded):
         text = host.read_runtime_dropin(name)
         if _memory_assignment_only(text):
             host.remove_runtime_dropin(name)
-    for name, text in removed_runtime.items():
-        host.write_runtime_dropin(name, text)
+    for name, text in recorded.items():
+        host.restore_runtime_dropin(name, text)
 
 
 def _memory_assignment_only(text: str) -> bool:
@@ -701,6 +757,18 @@ def _restoration_mismatches(before: Snapshot, after: Snapshot) -> list[str]:
             problems.append(f"runtime {name}")
     for name in set(after.runtime_files) - set(before.runtime_files):
         problems.append(f"unexpected runtime {name}")
+    if after.futures_dropin_paths != before.futures_dropin_paths:
+        problems.append("futures DropInPaths")
+    if after.scanner_dropin_paths != before.scanner_dropin_paths:
+        problems.append("scanner DropInPaths")
+    if after.etc_control != before.etc_control:
+        problems.append("etc system.control")
+    if after.run_control != before.run_control:
+        problems.append("run system.control")
+    if after.scanner_need_reload != before.scanner_need_reload:
+        problems.append("scanner NeedDaemonReload")
+    if after.futures_need_reload != before.futures_need_reload:
+        problems.append("futures NeedDaemonReload")
     return problems
 
 
@@ -734,6 +802,7 @@ def _prove_restored(
     mismatches = _restoration_mismatches(before, after)
     if mismatches:
         errors.append("mismatch: " + ", ".join(mismatches))
+    if errors:
         return False, "; ".join(errors)
     return True, ""
 
@@ -757,13 +826,6 @@ def apply_target(host: Host, before: Snapshot, target_mib: int) -> Snapshot:
         return after
     except Exception as exc:
         files_touched = files_touched or bool(removed_runtime)
-        proved, detail = _prove_restored(host, before, removed_runtime, files_touched)
-        if not proved:
-            raise MaintenanceFailure(
-                f"ROLLBACK UNVERIFIED / HOLD: {detail}",
-                restored=False,
-                unverified=True,
-            ) from exc
         if (
             isinstance(exc, MaintenanceFailure)
             and not exc.restored
@@ -773,6 +835,13 @@ def apply_target(host: Host, before: Snapshot, target_mib: int) -> Snapshot:
             and not removed_runtime
         ):
             raise
+        proved, detail = _prove_restored(host, before, removed_runtime, files_touched)
+        if not proved:
+            raise MaintenanceFailure(
+                f"ROLLBACK UNVERIFIED / HOLD: {detail}",
+                restored=False,
+                unverified=True,
+            ) from exc
         message = str(exc) if str(exc) else "memory change failed"
         raise MaintenanceFailure(message, restored=True) from exc
 
@@ -799,6 +868,68 @@ def _load_history(host: Host) -> list[dict[str, object]]:
 
 def _append_history(host: Host, row: dict[str, object]) -> None:
     host.append_line(HISTORY_PATH, json.dumps(row, sort_keys=True))
+
+
+def _intent_row(stamp: str, command: str, before: Snapshot, target_mib: int) -> dict[str, object]:
+    return {
+        "action": "intent",
+        "before_mib": before.scanner_mib,
+        "cgroup_max": before.cgroup_max,
+        "command": command,
+        "our_dropin": before.our_dropin,
+        "result": "open",
+        "runtime_files": before.runtime_files,
+        "stamp": stamp,
+        "target_mib": target_mib,
+    }
+
+
+def _closed_stamps(rows: list[dict[str, object]]) -> set[object]:
+    closed: set[object] = set()
+    for row in rows:
+        action = row.get("action")
+        result = row.get("result")
+        if action == "intent-close" and result in {"ok", "restored", "unchanged"}:
+            closed.add(row.get("closes"))
+        elif action == "set" and result == "ok":
+            closed.add(row.get("closes") or row.get("stamp"))
+        elif action == "rollback" and result == "ok":
+            closed.add(row.get("undoes"))
+            closed.add(row.get("closes"))
+    return closed
+
+
+def _open_intents(rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    closed = _closed_stamps(rows)
+    return [row for row in rows if row.get("action") == "intent" and row.get("stamp") not in closed]
+
+
+def _close_intent(host: Host, stamp: str, result: str) -> None:
+    _append_history(host, {"action": "intent-close", "closes": stamp, "result": result})
+
+
+def _record_intent(host: Host, rows: list[dict[str, object]], command: str, before: Snapshot, target_mib: int) -> str:
+    stamp = _unique_stamp(host, rows)
+    try:
+        _append_history(host, _intent_row(stamp, command, before, target_mib))
+    except Exception as exc:
+        raise MaintenanceFailure(
+            "could not record the maintenance intent; configuration was not changed"
+        ) from exc
+    return stamp
+
+
+def _revert_unrecorded(host: Host, before: Snapshot, stamp: str, exc: Exception) -> None:
+    proved, detail = _prove_restored(host, before, {}, True)
+    if proved:
+        with contextlib.suppress(Exception):
+            _close_intent(host, stamp, "restored")
+        raise MaintenanceFailure("history record failed; memory change was reversed", restored=True) from exc
+    raise MaintenanceFailure(
+        f"ROLLBACK UNVERIFIED / HOLD: history record failed; {detail}",
+        restored=False,
+        unverified=True,
+    ) from exc
 
 
 def _log(host: Host, row: dict[str, object]) -> None:
@@ -987,13 +1118,18 @@ def do_self_check() -> int:
 
 def do_set(host: Host, mib: int) -> int:
     with host.exclusive_lock():
+        rows = _load_history(host)
+        if _open_intents(rows):
+            raise MaintenanceFailure("incomplete maintenance record; HOLD")
         before = capture(host)
         command = f"options-scanner-memory set {mib}M"
+        _require_quiet_units(before)
         if _consistent(before, mib):
             _log(host, {"event": "finish", "command": command, "result": "noop", **_identity_log(before, before)})
             sys.stdout.write(f"result=noop\nalready_mib={mib}\nscanner_pid={before.scanner_pid}\n")
             return 0
         approval = consume_matching_approval(host, command)
+        stamp = _record_intent(host, rows, command, before, mib)
         _log(
             host,
             {
@@ -1001,12 +1137,17 @@ def do_set(host: Host, mib: int) -> int:
                 "command": command,
                 "result": "started",
                 "approval": approval,
+                "stamp": stamp,
                 **_identity_log(before),
             },
         )
         try:
             after = apply_target(host, before, mib)
         except MaintenanceFailure as exc:
+            if not exc.unverified:
+                result = "unchanged" if (not exc.restored and "not changed" in str(exc)) else "restored"
+                with contextlib.suppress(Exception):
+                    _close_intent(host, stamp, result)
             _log(
                 host,
                 {
@@ -1018,17 +1159,33 @@ def do_set(host: Host, mib: int) -> int:
                 },
             )
             raise
-        stamp = _unique_stamp(host, _load_history(host))
-        _append_history(
-            host,
-            {
-                "action": "set",
-                "after_mib": mib,
-                "before_mib": before.scanner_mib,
-                "result": "ok",
-                "stamp": stamp,
-            },
-        )
+        try:
+            _append_history(
+                host,
+                {
+                    "action": "set",
+                    "after_mib": mib,
+                    "before_mib": before.scanner_mib,
+                    "closes": stamp,
+                    "result": "ok",
+                    "stamp": stamp,
+                },
+            )
+        except Exception as exc:
+            try:
+                _revert_unrecorded(host, before, stamp, exc)
+            except MaintenanceFailure as failure:
+                _log(
+                    host,
+                    {
+                        "event": "finish",
+                        "command": command,
+                        "result": _failure_result(failure),
+                        "error": str(failure),
+                        **_identity_log(before),
+                    },
+                )
+                raise
         _log(
             host,
             {
@@ -1071,20 +1228,149 @@ def _select_rollback(rows: list[dict[str, object]], stamp: str | None) -> dict[s
     return matches[-1]
 
 
+def _restore_recorded_files(host: Host, our_dropin: str | None, runtime_files: dict[str, str]) -> None:
+    if our_dropin is None:
+        host.remove_our_dropin()
+    else:
+        host.write_our_dropin(our_dropin)
+    current = set(host.runtime_dropin_names())
+    for name in current - set(runtime_files):
+        text = host.read_runtime_dropin(name)
+        if _memory_assignment_only(text):
+            host.remove_runtime_dropin(name)
+    for name, text in runtime_files.items():
+        host.restore_runtime_dropin(name, text)
+
+
+def _runtime_record(value: object) -> dict[str, str]:
+    if not isinstance(value, dict):
+        raise MaintenanceFailure("ROLLBACK UNVERIFIED / HOLD: intent runtime record is unusable", unverified=True)
+    recorded: dict[str, str] = {}
+    for name, text in value.items():
+        if not isinstance(name, str) or not isinstance(text, str):
+            raise MaintenanceFailure("ROLLBACK UNVERIFIED / HOLD: intent runtime record is unusable", unverified=True)
+        recorded[name] = text
+    return recorded
+
+
+def _recover_open_intent(host: Host, intent: dict[str, object], requested: str | None) -> int:
+    command = canonical(RollbackAction(requested))
+    before = capture(host)
+    if before.futures_need_reload != "no" or before.etc_control or before.run_control:
+        raise MaintenanceFailure(
+            "ROLLBACK UNVERIFIED / HOLD: hidden unit state is present",
+            unverified=True,
+        )
+    approval = consume_matching_approval(host, command)
+    our_dropin = intent.get("our_dropin")
+    if our_dropin is not None and not isinstance(our_dropin, str):
+        raise MaintenanceFailure("ROLLBACK UNVERIFIED / HOLD: intent drop-in record is unusable", unverified=True)
+    runtime = _runtime_record(intent.get("runtime_files"))
+    try:
+        _restore_recorded_files(host, our_dropin if isinstance(our_dropin, str) else None, runtime)
+        host.daemon_reload()
+        cgroup = intent.get("cgroup_max")
+        if (
+            isinstance(cgroup, str)
+            and before.scanner_pid not in {"", "0"}
+            and before.scanner_cgroup == EXPECTED_CGROUP
+        ):
+            host.write_cgroup_max(before.scanner_cgroup, cgroup)
+        after = capture(host)
+    except MaintenanceFailure:
+        raise
+    except Exception as exc:
+        raise MaintenanceFailure(f"ROLLBACK UNVERIFIED / HOLD: {exc}", unverified=True) from exc
+    problems: list[str] = []
+    if after.scanner_mib != intent.get("before_mib"):
+        problems.append("MemoryMax")
+    if isinstance(intent.get("cgroup_max"), str) and after.cgroup_max != intent.get("cgroup_max"):
+        problems.append("cgroup memory.max")
+    if after.our_dropin != (our_dropin if isinstance(our_dropin, str) else None):
+        problems.append("etc drop-in")
+    for name, text in runtime.items():
+        if after.runtime_files.get(name) != text:
+            problems.append(f"runtime {name}")
+    if after.futures_pid != before.futures_pid or after.futures_memory_raw != before.futures_memory_raw:
+        problems.append("futures identity")
+    if problems:
+        raise MaintenanceFailure(
+            "ROLLBACK UNVERIFIED / HOLD: mismatch: " + ", ".join(problems),
+            unverified=True,
+        )
+    try:
+        _close_intent(host, str(intent.get("stamp")), "restored")
+        _append_history(
+            host,
+            {
+                "action": "rollback",
+                "after_mib": intent.get("before_mib"),
+                "before_mib": before.scanner_mib,
+                "closes": intent.get("stamp"),
+                "result": "ok",
+                "stamp": _unique_stamp(host, _load_history(host)),
+                "undoes": intent.get("stamp"),
+            },
+        )
+    except MaintenanceFailure:
+        raise
+    except Exception as exc:
+        raise MaintenanceFailure(
+            "ROLLBACK UNVERIFIED / HOLD: restored state could not be recorded",
+            unverified=True,
+        ) from exc
+    _log(
+        host,
+        {
+            "event": "finish",
+            "command": command,
+            "result": "ok",
+            "approval": approval,
+            "undoes": intent.get("stamp"),
+            **_identity_log(before, after),
+        },
+    )
+    sys.stdout.write(
+        "\n".join(
+            [
+                "result=ok",
+                f"undoes={intent.get('stamp')}",
+                f"restored_mib={intent.get('before_mib')}",
+                f"scanner_pid_unchanged={str(after.scanner_pid == before.scanner_pid).lower()}",
+                f"futures_pid_unchanged={str(after.futures_pid == before.futures_pid).lower()}",
+                "restarts_unchanged=true",
+            ]
+        )
+        + "\n"
+    )
+    return 0
+
+
 def do_rollback(host: Host, stamp: str | None) -> int:
     with host.exclusive_lock():
         rows = _load_history(host)
+        intents = _open_intents(rows)
+        if stamp is None and intents:
+            return _recover_open_intent(host, intents[-1], None)
+        if stamp is not None:
+            matched = [row for row in intents if row.get("stamp") == stamp]
+            if matched:
+                return _recover_open_intent(host, matched[-1], stamp)
+        if intents:
+            raise MaintenanceFailure("incomplete maintenance record; HOLD")
         selected = _select_rollback(rows, stamp)
         target = selected.get("before_mib")
         if not isinstance(target, int) or not MIN_MIB <= target <= MAX_MIB:
             raise MaintenanceFailure("recorded rollback target is outside 350M..600M")
         before = capture(host)
         command = canonical(RollbackAction(stamp))
+        _require_quiet_units(before)
         if before.scanner_mib != selected.get("after_mib"):
             raise MaintenanceFailure(
                 "current MemoryMax does not match the recorded change; rollback was not applied"
             )
         approval = consume_matching_approval(host, command)
+        intent_stamp = _record_intent(host, rows, command, before, target)
         _log(
             host,
             {
@@ -1092,12 +1378,17 @@ def do_rollback(host: Host, stamp: str | None) -> int:
                 "command": command,
                 "result": "started",
                 "approval": approval,
+                "stamp": intent_stamp,
                 "undoes": selected.get("stamp"),
             },
         )
         try:
             after = apply_target(host, before, target)
         except MaintenanceFailure as exc:
+            if not exc.unverified:
+                result = "unchanged" if (not exc.restored and "not changed" in str(exc)) else "restored"
+                with contextlib.suppress(Exception):
+                    _close_intent(host, intent_stamp, result)
             _log(
                 host,
                 {
@@ -1108,17 +1399,33 @@ def do_rollback(host: Host, stamp: str | None) -> int:
                 },
             )
             raise
-        _append_history(
-            host,
-            {
-                "action": "rollback",
-                "after_mib": target,
-                "before_mib": before.scanner_mib,
-                "result": "ok",
-                "stamp": _unique_stamp(host, rows),
-                "undoes": selected.get("stamp"),
-            },
-        )
+        try:
+            _append_history(
+                host,
+                {
+                    "action": "rollback",
+                    "after_mib": target,
+                    "before_mib": before.scanner_mib,
+                    "closes": intent_stamp,
+                    "result": "ok",
+                    "stamp": _unique_stamp(host, _load_history(host)),
+                    "undoes": selected.get("stamp"),
+                },
+            )
+        except Exception as exc:
+            try:
+                _revert_unrecorded(host, before, intent_stamp, exc)
+            except MaintenanceFailure as failure:
+                _log(
+                    host,
+                    {
+                        "event": "finish",
+                        "command": command,
+                        "result": _failure_result(failure),
+                        "error": str(failure),
+                    },
+                )
+                raise
         _log(
             host,
             {
@@ -1207,11 +1514,6 @@ class ProductionHost(Host):
         if result.returncode != 0:
             raise MaintenanceFailure("daemon-reload failed")
 
-    def set_property_runtime(self, mib: int) -> None:
-        result = self._run(build_systemctl("set-property-runtime", mib=mib))
-        if result.returncode != 0:
-            raise MaintenanceFailure("runtime MemoryMax update failed")
-
     def _cgroup_file(self, control_group: str, leaf: str) -> Path:
         if control_group != EXPECTED_CGROUP or leaf not in {
             "memory.max",
@@ -1297,6 +1599,27 @@ class ProductionHost(Host):
         if not _memory_assignment_only(text):
             raise Denied("runtime drop-in is not a MemoryMax override")
         self._write_exact(RUNTIME_DROPIN_DIR / name, text, 0o644)
+
+    def restore_runtime_dropin(self, name: str, text: str) -> None:
+        self._check_name(name)
+        self._write_exact(RUNTIME_DROPIN_DIR / name, text, 0o644)
+
+    def _control_dir(self, area: str) -> Path:
+        if area == "etc":
+            return ETC_CONTROL_DIR
+        if area == "run":
+            return RUN_CONTROL_DIR
+        raise Denied("control directory is not available to maintenance")
+
+    def control_dropin_names(self, area: str) -> list[str]:
+        return self._regular_names(self._control_dir(area))
+
+    def read_control_dropin(self, area: str, name: str) -> str:
+        self._check_name(name)
+        path = self._control_dir(area) / name
+        if path.is_symlink():
+            raise MaintenanceFailure("refusing to read a symlinked system.control file")
+        return path.read_text(encoding="utf-8")
 
     def health_code(self) -> str:
         result = self._run(
