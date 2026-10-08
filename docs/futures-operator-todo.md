@@ -15,7 +15,7 @@
 - [ ] Keep #1154 parked until #1177 prerequisites pass.
 
 ### 3. Futures deployment
-- [x] #1190 plan MERGED as `e3c84a78` (Grok AFS-0174 PASS reported); #1194 watcher source guard MERGED as `168e7420` (AFS-0168 PASS reported). [ ] #1196 release-history preflight exact-head CI, Grok review and separate source merge decision. Next buildable candidate SHA remains UNSET.
+- [x] #1190 plan MERGED as `e3c84a78` (Grok AFS-0174 PASS reported); #1194 watcher source guard MERGED as `168e7420` (AFS-0168 PASS reported). [ ] #1196 release-history preflight merged as `a602501c` after Grok PASS AFS-0178 at `a3535c7`; root VPS history-file presence remains unverified. Next buildable candidate SHA remains UNSET.
 - [ ] Resolve B1, B5, B6, B8 and B10 (watcher preflight) plus evidence-window decisions using fresh authorized VPS proof and reviewed source/tests; never assume missing evidence.
 - [ ] Confirm options collector isolation, fresh-journal rollback boundaries, and futures watcher rollback can fail safely **before** any release mutation.
 - [ ] Decide whether the exact release is eligible for *separate* operator deployment approval. No automatic merge/build/promote/restart.
@@ -33,11 +33,11 @@
 
 ## Latest operator queue — 2026-10-08
 
-- GitHub `main`: `0d02a8bd019b6a164e14ec2965b7e7ce95eee25e` at this check (source merges #1190, #1194, #1186). Last audited futures VPS release is reported `c44d32bc4961e56fae5c5f88a976eb6783341638`, not reconfirmed with root read-only evidence.
+- GitHub `main`: `a602501cb0e665952da2101e9c4f73a3e68aea90` at this check (source merges #1190, #1194, #1186 and #1196). Last audited futures VPS release is reported `c44d32bc4961e56fae5c5f88a976eb6783341638`, not reconfirmed with root read-only evidence.
 - **#1189 (MERGED)** — reviewed remote-build quote repair at `f60ec6ff3268e1b193ff8e21aefa3cd5d8420319`, merged as `064ee674b788c144fc8d3ca65082ed060927e2f1`; GitHub exact-head CI and post-merge checks reported green. Merging a fix does not authorize build/verify or promote.
 - **#1190 (MERGED / PLAN ONLY):** AFS-0174 Grok PASS on `aa96563e`; merged as `e3c84a78`. Candidate remains UNSET, root-runtime and rollback gates remain HOLD. #1194 watcher source fix separately Grok-PASS-reported at `1b7b996` and source-merged as `168e7420`. Neither source merge authorizes a release.
 - Prior `afs-deploy` CI-proof wrapper **51/51 tests and real U11 fetch/`verify-live` PASS are operator-reported, not independently verified here**. They apply only to the reported code and evidence; do not transfer them to changed #1189/#1194 paths or call them verified proof. New exact-head regression checks and independent review are required for relevant changes.
-- **Remaining futures gate:** #1196 release-history-file preflight source PR OPEN; new source/test head `a7a38c2` corrects an outdated assertion, awaiting exact-head full CI and independent Grok review. After separate merge approval, nominate exact candidate for source/trading-path delta and new Grok review. Root read-only B1/B5/B6, B8 collector isolation, watcher paths, release history, broker/orders, evidence windows and rollback remain UNVERIFIED. Do not reset journals or repin collector automatically.
+- **Remaining futures gate:** #1196 release-history-file preflight is source-MERGED as `a602501c` (Grok PASS AFS-0178 on `a3535c7`). Release candidate remains UNSET. Nominate an exact candidate and obtain new independent Grok trading-path review only after root evidence and other prerequisites are reconciled. Root read-only B1/B5/B6, B8 collector isolation, watcher paths, release history, broker/orders, evidence windows and rollback remain UNVERIFIED. Do not reset journals or repin collector automatically.
 - Just before any separately authorized release action re-prove deploy lock, current source/box identity, integrity, demo + live-off + cap-one pins, broker flatness/orders, recovery/rollback and watcher state.
 - **HOLD**: no build, promote, restart, deployment or live execution authorized by completed source tests or any docs PR.
 
