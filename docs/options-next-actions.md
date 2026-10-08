@@ -1,6 +1,21 @@
 # Options — Next Actions
 
-_As of 2026-10-02. Operational checklist only. The authoritative options status remains `docs/options-current-state-handoff.md`. This file must not be used to redefine strategy status, cohort boundaries, or deployment authority._
+_Priorities refreshed 2026-10-08; older checked items below are dated history, not fresh runtime proof. Operational checklist only. The authoritative options status remains `docs/options-current-state-handoff.md`. This file does not authorize strategy, cohort, collection, deployment or trading changes._
+
+## Current focus — prove or reject the trading edge (2026-10-08)
+
+**Main question:** Do current-cohort options setups have repeatable positive *option* P&L after executable entry/exit pricing and costs? **NOT PROVEN.** Do not equate successful code/CI, more signals or structural target hits with profitability.
+
+1. - [ ] **Reconcile real paper closes first — #1071.** Through an *already authorized read-only path*, obtain a consistent provenance/hash-checked snapshot of `options_scanner.sqlite`, the 2026-10-07 EOD artifact and matching diagnostic/option-mark data. Confirm the effective scanner release, `OPTIONS_PAPER_V1` epoch start AND first shadow id, timestamps, ACTIVE lane, OPEN count, closed option P&L, and missing/unpriced results. Compare the operator-supplied 25 closed / -$1,716 lifetime snapshot with the raw ledger; do **not** assert it is current-epoch expectancy. **BLOCKED on fresh authorized data; no root escalation or database writes.**
+2. - [ ] **Explain losses using tools already in the repo.** After accounting passes, use `alert_ranker/v1_diagnostics.py` and contract-mark records for row-level setup, first-sight/trigger lag, remaining target vs stop, bid/ask spread, DTE, quote freshness, theta and pre-entry SPY/QQQ/GEX context when actually recorded. Distinguish structural WIN from positive `pnl_dollars`; use ASK-in/BID-out and label missing commissions/marks. Compare pre-entry conditions only, with missing fields marked UNKNOWN. Do not invent backfilled prices or completed trades.
+3. - [ ] **Separate cohorts and define the next research question BEFORE scoring.** Keep ACTIVE actual paper results separate from COUNTERFACTUAL/filtered what-ifs and previous epochs. Preserve the already-closed 59-episode one-look (coverage gain only). Any new discriminating factor or floor-outcome test requires preregistration, a genuinely fresh untouched forward population, and an explicit operator approval; the `-02` floor trial remains DRAFT / NOT RUN with eligible start UNSET.
+4. - [x] **#1177 Part 2 / PR #1198 — SOURCE MERGED** into `main` as `307fe56771031b44eeb8d0235224cf010616ce4a` (2026-10-08). Dedicated E1 canonical adapter and tests are present **in source only**. This does NOT prove an installed collector, raw tape/journal integrity on VPS, approved quote-age provenance, fitness readiness or a new evidence Day 1. Do not redo the merged implementation. #1154 remains parked pending the remaining source-to-runtime/producer/reconciliation gates.
+5. - [ ] **Reuse #1071 carefully; do not rebuild it.** The epoch-P&L report and tests are in an old **OPEN / UNMERGED** PR #1071 (`0dca986`), not on current `main`; its Sept. 29 audit is a historical checkpoint, not proof of Oct. 8 data. Reconcile its diff against current source, get exact-head CI and independent review and separate operator merge GO before adopting. Never run historical scoring as a substitute for new forward evidence.
+6. - [ ] **Cleanup after research/readiness, not instead of it.** Classify redundant or unused options utilities and instructions using actual callers and evidence preservation; #1167 remains audit-only. No speculative deletions or system changes.
+
+**Parked safety work:** #1184 issue is CLOSED; source-only draft #1199 remains **UNMERGED**. It helps detect fake/replayed permission-to-trade records, but independently protected authority storage and verified human approvers do not exist in the proven runtime record. Do not add runtime approval wiring, order tickets or live execution. Further work waits until a real authority use case is explicitly approved.
+
+**No mutation:** no collector repin, installation, journal rewrite, VPS deploy/restart, broker action, trial unsealing or new entry. OPTIONS HOLD · FUTURES HOLD.
 
 ## Now — no production mutation
 
@@ -94,7 +109,7 @@ _As of 2026-10-02. Operational checklist only. The authoritative options status 
 
 ## Deferred — approval security (not today's priority)
 
-- [ ] **#1184 / draft #1199 — finish source-only tests and independent review, then PARK.** This protects against someone faking, changing, or reusing permission to trade. Revisit further work **only before** storing/reloading trade approvals or letting software act on them. Real use requires a separately protected approval record, verified authorized people, and explicit operator approval. **No trading permissions, runtime wiring, or deployment now.** Focus current effort on proving the options evidence and trading edge.
+- [ ] **#1184 CLOSED / draft #1199 OPEN — PARK further infrastructure.** Offline defensive tests/source exist in draft #1199; full CI previously passed, but source merge still requires independent Grok review and explicit operator GO. Revisit protected storage and approved human identities only when real trade-approval persistence or use is proposed. Nothing is deployed or authorized to trade.
 
 ## Cleanup / non-blocking
 
