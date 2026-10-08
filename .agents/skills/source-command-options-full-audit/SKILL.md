@@ -107,9 +107,8 @@ Also verify:
 - prospective catches are distinguishable from late/missed/gap/data-blocked/unregistered/counterfactual rows;
 - registered epoch scope/source matching is exact and no silent source-label mapping exists;
 - realised/scorable results require canonical prospective provenance;
-- fitness automation is revoke-only unless a separately approved contract says otherwise;
+- fitness automation is revoke-only unless a separately approved contract says otherwise; healthy evidence must not silently grant execution authority;
 - observer/runtime installation, release pin, data entitlement/freshness, and proof-window start are verified separately from source being merged;
 - a FROZEN epoch, alert pipeline, preview ticket, or retrospective study is not treated as forward-proof or paper readiness.
 
 If these cannot be proven, classify the relevant evidence/readiness state as INCONCLUSIVE/HOLD rather than inferring readiness.
-

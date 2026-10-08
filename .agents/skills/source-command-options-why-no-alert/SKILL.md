@@ -132,7 +132,6 @@ Before calling a missing alert a defect, classify the setup's lifecycle/evidence
 - UNREGISTERED_EPOCH / scope or source mismatch;
 - invalidated/expired/otherwise non-actionable.
 
-Then verify whether the record is a canonical prospective catch. A setup that later would have won but was late, gapped, data-blocked, unregistered, or otherwise counterfactual is not evidence that an alert should have been emitted.
+Then verify whether the record is a canonical prospective catch. A setup that later would have won but was late, gapped, data-blocked, unregistered, or otherwise counterfactual is **not** evidence that an alert should have been emitted.
 
-Do not repair a no-alert diagnosis by rewriting timestamps, source labels, epoch labels, or trigger provenance. If evidence is insufficient, return INCONCLUSIVE/BLOCKED BY DATA with the exact missing proof.
-
+Do not repair a no-alert diagnosis by rewriting timestamps, source labels, epoch labels, or trigger provenance. If the evidence is insufficient, return INCONCLUSIVE/BLOCKED BY DATA with the exact missing proof.
