@@ -535,9 +535,19 @@ def _lower_live_limit(host: Host, before: Snapshot, target_mib: int) -> None:
         ) from exc
     got = host.read_cgroup(before.scanner_cgroup, "memory.max")
     if got is None or got.strip() != str(target):
+        restored_prior = False
         if raw is not None:
-            with contextlib.suppress(OSError):
+            try:
                 host.write_cgroup_max(before.scanner_cgroup, raw)
+                checked = host.read_cgroup(before.scanner_cgroup, "memory.max")
+                restored_prior = checked is not None and checked.strip() == raw
+            except OSError:
+                restored_prior = False
+        if not restored_prior:
+            raise MaintenanceFailure(
+                "ROLLBACK UNVERIFIED / HOLD: lower memory limit did not stick and the prior limit was not restored",
+                unverified=True,
+            )
         raise MaintenanceFailure(
             "lower memory limit did not stick; configuration was not changed"
         )
@@ -860,7 +870,13 @@ def _load_history(host: Host) -> list[dict[str, object]]:
     for line in raw.splitlines():
         if not line.strip():
             continue
-        item = json.loads(line)
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise MaintenanceFailure(
+                "ROLLBACK UNVERIFIED / HOLD: maintenance history is unreadable",
+                unverified=True,
+            ) from exc
         if isinstance(item, dict):
             rows.append(item)
     return rows
@@ -890,6 +906,7 @@ def _intent_row(stamp: str, command: str, before: Snapshot, target_mib: int) -> 
         "before_mib": before.scanner_mib,
         "cgroup_max": before.cgroup_max,
         "command": command,
+        "etc_files": before.etc_files,
         "futures_active": before.futures_active,
         "futures_dropin_paths": before.futures_dropin_paths,
         "futures_memory_raw": before.futures_memory_raw,
@@ -961,6 +978,8 @@ def _record_intent(host: Host, rows: list[dict[str, object]], command: str, befo
     stamp = _unique_stamp(host, rows)
     try:
         _append_history(host, _intent_row(stamp, command, before, target_mib))
+    except MaintenanceFailure:
+        raise
     except Exception as exc:
         raise MaintenanceFailure(
             "could not record the maintenance intent; configuration was not changed"
@@ -1255,8 +1274,8 @@ def do_set(host: Host, mib: int) -> int:
                     f"after_mib={mib}",
                     f"scanner_pid_unchanged={str(after.scanner_pid == before.scanner_pid).lower()}",
                     f"futures_pid_unchanged={str(after.futures_pid == before.futures_pid).lower()}",
-                    "restarts_unchanged=true",
-                    f"health_http={after.health_http}",
+                f"restarts_unchanged={str(after.scanner_restarts == before.scanner_restarts and after.futures_restarts == before.futures_restarts).lower()}",
+                f"health_http={after.health_http}",
                     f"rollback=options-scanner-memory rollback {stamp}",
                 ]
             )
@@ -1302,11 +1321,96 @@ def _runtime_record(value: object) -> dict[str, str]:
     return recorded
 
 
+def _recorded_dropin(intent: dict[str, object]) -> str | None:
+    value = intent.get("our_dropin")
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise MaintenanceFailure(
+            "ROLLBACK UNVERIFIED / HOLD: intent drop-in record is unusable",
+            unverified=True,
+        )
+    return value
+
+
+def _foreign_etc_changes(intent: dict[str, object], before: Snapshot) -> list[str]:
+    """Names of scanner drop-ins, other than our memory file, that differ from the intent."""
+
+    recorded = intent.get("etc_files")
+    if not isinstance(recorded, dict):
+        raise MaintenanceFailure(
+            "ROLLBACK UNVERIFIED / HOLD: intent has no etc file baseline",
+            unverified=True,
+        )
+    changes: list[str] = []
+    for name, digest in recorded.items():
+        if not isinstance(name, str) or not isinstance(digest, str):
+            raise MaintenanceFailure(
+                "ROLLBACK UNVERIFIED / HOLD: intent etc file baseline is unusable",
+                unverified=True,
+            )
+        if name == DROPIN_NAME:
+            continue
+        if before.etc_files.get(name) != digest:
+            changes.append(name)
+    for name in before.etc_files:
+        if name != DROPIN_NAME and name not in recorded:
+            changes.append(name)
+    return changes
+
+
+def _log_recovery_failure(host: Host, command: str, exc: MaintenanceFailure) -> None:
+    with contextlib.suppress(Exception):
+        _log(
+            host,
+            {
+                "event": "finish",
+                "command": command,
+                "result": "rollback_unverified",
+                "error": str(exc),
+            },
+        )
+
+
 def _recover_open_intent(host: Host, intent: dict[str, object], requested: str | None) -> int:
     command = canonical(RollbackAction(requested))
+    try:
+        return _recover_recorded_intent(host, intent, command)
+    except MaintenanceFailure as exc:
+        labelled = exc
+        if "ROLLBACK UNVERIFIED" not in str(exc):
+            labelled = MaintenanceFailure(
+                f"ROLLBACK UNVERIFIED / HOLD: {exc}",
+                unverified=True,
+            )
+        _log_recovery_failure(host, command, labelled)
+        if labelled is not exc:
+            raise labelled from exc
+        raise
+    except Exception as exc:
+        labelled = MaintenanceFailure(
+            f"ROLLBACK UNVERIFIED / HOLD: {exc}",
+            unverified=True,
+        )
+        _log_recovery_failure(host, command, labelled)
+        raise labelled from exc
+
+
+def _recover_recorded_intent(host: Host, intent: dict[str, object], command: str) -> int:
     baseline = _continuity_baseline(intent)
     before = capture(host)
-    if before.futures_need_reload != "no" or before.scanner_need_reload != "no" or before.etc_control or before.run_control:
+    if before.futures_need_reload != "no" or before.etc_control or before.run_control:
+        raise MaintenanceFailure(
+            "ROLLBACK UNVERIFIED / HOLD: hidden unit state is present",
+            unverified=True,
+        )
+    foreign = _foreign_etc_changes(intent, before)
+    if foreign:
+        raise MaintenanceFailure(
+            "ROLLBACK UNVERIFIED / HOLD: unrelated drop-in changed: " + ", ".join(foreign),
+            unverified=True,
+        )
+    if before.scanner_need_reload != "no" and before.our_dropin == _recorded_dropin(intent):
         raise MaintenanceFailure(
             "ROLLBACK UNVERIFIED / HOLD: hidden unit state is present",
             unverified=True,
@@ -1515,7 +1619,7 @@ def do_rollback(host: Host, stamp: str | None) -> int:
                     f"restored_mib={target}",
                     f"scanner_pid_unchanged={str(after.scanner_pid == before.scanner_pid).lower()}",
                     f"futures_pid_unchanged={str(after.futures_pid == before.futures_pid).lower()}",
-                    "restarts_unchanged=true",
+                    f"restarts_unchanged={str(after.scanner_restarts == before.scanner_restarts and after.futures_restarts == before.futures_restarts).lower()}",
                 ]
             )
             + "\n"
@@ -1566,6 +1670,47 @@ def execute(argv: list[str], host: Host) -> int:
 
 
 def _fsync_directory(directory: Path) -> None:
+    fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def _rewrite_record(path: Path, previous: bytes) -> None:
+    tmp = path.with_name(path.name + ".partial-restore")
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+    fd = os.open(tmp, flags, 0o640)
+    try:
+        written = 0
+        while written < len(previous):
+            chunk = os.write(fd, previous[written:])
+            if chunk <= 0:
+                raise OSError("maintenance record restore was incomplete")
+            written += chunk
+        os.fsync(fd)
+    except Exception:
+        os.close(fd)
+        with contextlib.suppress(OSError):
+            tmp.unlink()
+        raise
+    os.close(fd)
+    os.replace(tmp, path)
+    _fsync_directory(path.parent)
+
+
+def _restore_record_bytes(fd: int, path: Path, prior: int, previous: bytes) -> bool:
+    try:
+        os.ftruncate(fd, prior)
+        os.fsync(fd)
+        return True
+    except OSError:
+        pass
+    try:
+        _rewrite_record(path, previous)
+    except OSError:
+        return False
+    return True
     fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
     try:
         os.fsync(fd)
@@ -1734,6 +1879,7 @@ class ProductionHost(Host):
         if path.is_symlink():
             raise MaintenanceFailure("refusing to append through a symlink")
         payload = (line + "\n").encode()
+        previous = path.read_bytes() if path.exists() else b""
         created = False
         try:
             fd = os.open(path, os.O_APPEND | os.O_WRONLY | os.O_NOFOLLOW)
@@ -1744,6 +1890,7 @@ class ProductionHost(Host):
                 0o640,
             )
             created = True
+            previous = b""
         try:
             prior = 0 if created else os.lseek(fd, 0, os.SEEK_END)
             written = 0
@@ -1754,17 +1901,23 @@ class ProductionHost(Host):
                         raise MaintenanceFailure("maintenance record write was incomplete")
                     written += chunk
                 os.fsync(fd)
-            except Exception:
-                try:
-                    os.ftruncate(fd, prior)
-                    os.fsync(fd)
-                except OSError:
-                    pass
+            except Exception as original:
+                if not _restore_record_bytes(fd, path, prior, previous):
+                    raise MaintenanceFailure(
+                        "ROLLBACK UNVERIFIED / HOLD: maintenance history may contain a partial record",
+                        unverified=True,
+                    ) from original
                 raise
         finally:
             os.close(fd)
         if created:
-            _fsync_directory(path.parent)
+            try:
+                _fsync_directory(path.parent)
+            except OSError as exc:
+                raise MaintenanceFailure(
+                    "ROLLBACK UNVERIFIED / HOLD: maintenance intent was written but its directory was not synced",
+                    unverified=True,
+                ) from exc
 
     def approval_names(self) -> list[str]:
         if not APPROVAL_DIR.exists():

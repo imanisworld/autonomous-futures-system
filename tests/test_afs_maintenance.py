@@ -81,6 +81,19 @@ class FakeHost(afs.Host):
         self.futures_dropin_on_reload: str | None = None
         self.fail_history = None
         self.recovery_drift: str | None = None
+        self.lie_reads = 0
+        self.cgroup_lie_value = ""
+        self.mismatch_after_next_write = False
+        self.fail_cgroup_write_after: int | None = None
+        self.cgroup_writes = 0
+        self.leave_scanner_need_reload = False
+        self.leave_futures_need_reload = False
+        self.leave_scanner_need_reload_on_call: int | None = None
+        self.futures_pid_on_reload_call: int | None = None
+        self.add_run_control_on_reload = False
+        self.add_scanner_path_on_reload = False
+        self.remove_run_control_on_next_reload = False
+        self.remove_scanner_path_on_next_reload = False
         self.clock = datetime(2026, 10, 8, 20, 45, tzinfo=timezone.utc)
         self.environ = {"SUDO_USER": "grok-audit", "SSH_CONNECTION": "test-connection"}
         self.approvals: dict[str, dict[str, object]] = {}
@@ -110,6 +123,14 @@ class FakeHost(afs.Host):
             raise SystemExit("killed")
         if self.fail_reload_on_call == self.reload_count:
             raise OSError("reload failed")
+        if self.reload_count > 1 and self.remove_run_control_on_next_reload:
+            self.run_control.pop("50-MemoryMax.conf", None)
+            self.remove_run_control_on_next_reload = False
+        if self.reload_count > 1 and self.remove_scanner_path_on_next_reload:
+            self.extra_scanner_paths = [
+                path for path in self.extra_scanner_paths if not path.endswith("unexpected.conf")
+            ]
+            self.remove_scanner_path_on_next_reload = False
         text = self.etc.get(afs.DROPIN_NAME)
         if text:
             match = re.search(r"MemoryMax=(\d+)M", text)
@@ -140,6 +161,24 @@ class FakeHost(afs.Host):
         if self.futures_dropin_on_reload is not None:
             self.futures_dropin_paths = self.futures_dropin_on_reload
             self.futures_dropin_on_reload = None
+        self.scanner["NeedDaemonReload"] = "no"
+        self.futures["NeedDaemonReload"] = "no"
+        if self.leave_scanner_need_reload or self.leave_scanner_need_reload_on_call == self.reload_count:
+            self.scanner["NeedDaemonReload"] = "yes"
+            self.leave_scanner_need_reload = False
+        if self.leave_futures_need_reload:
+            self.futures["NeedDaemonReload"] = "yes"
+            self.leave_futures_need_reload = False
+        if self.futures_pid_on_reload_call == self.reload_count:
+            self.futures["MainPID"] = str(int(self.futures["MainPID"]) + 1)
+        if self.add_run_control_on_reload:
+            self.run_control["50-MemoryMax.conf"] = "[Service]\nMemoryMax=700M\n"
+            self.add_run_control_on_reload = False
+            self.remove_run_control_on_next_reload = True
+        if self.add_scanner_path_on_reload:
+            self.extra_scanner_paths.append("/run/systemd/system/options-scanner.service.d/unexpected.conf")
+            self.add_scanner_path_on_reload = False
+            self.remove_scanner_path_on_next_reload = True
         self._apply_recovery_drift()
 
     def _apply_recovery_drift(self) -> None:
@@ -159,6 +198,8 @@ class FakeHost(afs.Host):
             self.health = "500"
         elif drift == "need-reload":
             self.scanner["NeedDaemonReload"] = "yes"
+        elif drift == "futures-need-reload":
+            self.futures["NeedDaemonReload"] = "yes"
         elif drift == "dropin-paths":
             self.extra_scanner_paths.append(
                 "/etc/systemd/system/options-scanner.service.d/unexpected.conf"
@@ -169,16 +210,27 @@ class FakeHost(afs.Host):
     def read_cgroup(self, control_group: str, leaf: str) -> str | None:
         if control_group != afs.EXPECTED_CGROUP:
             raise afs.Denied("cgroup path is not available to maintenance")
+        if leaf == "memory.max" and self.lie_reads > 0:
+            self.lie_reads -= 1
+            return self.cgroup_lie_value
         return self.cgroup.get(leaf)
 
     def write_cgroup_max(self, control_group: str, value: str) -> None:
         self.calls.append(("cgroup-write", value))
         if control_group != afs.EXPECTED_CGROUP or not value.isdigit():
             raise afs.Denied("cgroup path is not available to maintenance")
+        self.cgroup_writes += 1
         if self.cgroup_write_error:
             raise OSError("device busy")
+        if self.fail_cgroup_write_after is not None and self.cgroup_writes > self.fail_cgroup_write_after:
+            raise OSError("put-back failed")
+        previous = self.cgroup.get("memory.max", "")
         if self.cgroup_write_sticks:
             self.cgroup["memory.max"] = value
+        if self.mismatch_after_next_write:
+            self.mismatch_after_next_write = False
+            self.lie_reads = 1
+            self.cgroup_lie_value = previous
 
     def read_base_unit(self) -> str:
         return self.base
@@ -192,10 +244,12 @@ class FakeHost(afs.Host):
     def write_our_dropin(self, text: str) -> None:
         self.calls.append(("write-dropin", text))
         self.etc[afs.DROPIN_NAME] = text
+        self.scanner["NeedDaemonReload"] = "yes"
 
     def remove_our_dropin(self) -> None:
         self.calls.append(("remove-dropin",))
         self.etc.pop(afs.DROPIN_NAME, None)
+        self.scanner["NeedDaemonReload"] = "yes"
 
     def runtime_dropin_names(self) -> list[str]:
         return sorted(self.runtime)
@@ -205,6 +259,7 @@ class FakeHost(afs.Host):
 
     def remove_runtime_dropin(self, name: str) -> None:
         if name in self.fail_remove_runtime:
+            self.runtime.pop(name, None)
             raise OSError(f"remove failed for {name}")
         self.runtime.pop(name, None)
 
@@ -447,6 +502,7 @@ def test_reload_that_misses_memorymax_does_not_use_set_property():
     code, out, err = _run(host, "options-scanner-memory", "set", "500M")
     assert code == 1
     assert "result=ok" not in out
+    assert "daemon-reload did not apply MemoryMax" in err
     assert "set-property" not in err
     assert not any(call[0] == "set-property-runtime" for call in host.calls)
     assert host.scanner["MemoryMax"] == str(350 * afs.MIB)
@@ -757,6 +813,7 @@ def test_intent_record_keeps_the_service_baseline():
         "futures-restarts",
         "health",
         "need-reload",
+        "futures-need-reload",
         "dropin-paths",
     ],
 )
@@ -775,6 +832,7 @@ def test_recovery_drift_cannot_report_success(drift: str):
     assert "result=ok" not in out
     assert "restarts_unchanged=true" not in out
     assert "ROLLBACK UNVERIFIED / HOLD" in err
+    assert _log_rows(host)[-1]["result"] == "rollback_unverified"
 
 
 def test_recovery_without_a_continuity_baseline_does_not_mutate():
@@ -852,9 +910,321 @@ def test_history_fsync_failure_is_not_a_successful_record(tmp_path: Path, monkey
         raise OSError(5, "Input/output error")
 
     monkeypatch.setattr(afs.os, "fsync", boom)
+    with pytest.raises(afs.MaintenanceFailure) as caught:
+        afs.ProductionHost().append_line(history, '{"action": "intent"}')
+    assert "UNVERIFIED" in str(caught.value)
+    assert "not changed" not in str(caught.value)
+
+
+def _history(host: FakeHost) -> list[dict]:
+    return afs._load_history(host)
+
+
+def _raise_at_600() -> FakeHost:
+    host = FakeHost()
+    host.etc[afs.DROPIN_NAME] = "[Service]\nMemoryMax=600M\n"
+    host.scanner["MemoryMax"] = str(600 * afs.MIB)
+    host.cgroup["memory.max"] = str(600 * afs.MIB)
+    return host
+
+
+def test_open_intent_blocks_another_set_before_reload():
+    host = FakeHost()
+    host.records[afs.HISTORY_PATH] = (
+        json.dumps({"action": "intent", "result": "open", "stamp": "20261008T204500Z"}) + "\n"
+    )
+    host.grant("options-scanner-memory set 500M")
+    code, _out, err = _run(host, "options-scanner-memory", "set", "500M")
+    assert code == 1
+    assert "HOLD" in err
+    assert "approval0001" in host.approvals
+    assert host.reload_count == 0
+
+
+@pytest.mark.parametrize("unit", ["scanner", "futures"])
+def test_reload_that_leaves_need_daemon_reload_is_not_ok(unit: str):
+    host = FakeHost()
+    if unit == "scanner":
+        host.leave_scanner_need_reload = True
+    else:
+        host.leave_futures_need_reload = True
+    host.grant("options-scanner-memory set 600M")
+    code, out, err = _run(host, "options-scanner-memory", "set", "600M")
+    assert code == 1
+    assert "result=ok" not in out
+    assert "NeedDaemonReload" in err
+
+
+def test_reload_that_adds_system_control_is_not_ok():
+    host = FakeHost()
+    host.add_run_control_on_reload = True
+    host.grant("options-scanner-memory set 600M")
+    code, out, err = _run(host, "options-scanner-memory", "set", "600M")
+    assert code == 1
+    assert "result=ok" not in out
+    assert "systemd system.control changed" in err
+
+
+def test_reload_that_adds_a_scanner_drop_in_path_is_not_ok():
+    host = FakeHost()
+    host.add_scanner_path_on_reload = True
+    host.grant("options-scanner-memory set 600M")
+    code, out, err = _run(host, "options-scanner-memory", "set", "600M")
+    assert code == 1
+    assert "result=ok" not in out
+    assert "DropInPaths changed" in err
+
+
+def test_restore_reload_that_changes_futures_identity_stays_open():
+    host = FakeHost()
+    host.fail_reload_on_call = 1
+    host.futures_pid_on_reload_call = 2
+    host.grant("options-scanner-memory set 600M")
+    code, out, err = _run(host, "options-scanner-memory", "set", "600M")
+    assert code == 1
+    assert "result=ok" not in out
+    assert "ROLLBACK UNVERIFIED / HOLD" in err
+    assert "futures identity" in err
+    stamp = _open_intent(host)["stamp"]
+    assert afs._open_intents(_history(host))
+    assert stamp
+
+
+def test_restore_reload_that_leaves_need_daemon_reload_stays_open():
+    host = FakeHost()
+    host.fail_reload_on_call = 1
+    host.leave_scanner_need_reload_on_call = 2
+    host.grant("options-scanner-memory set 600M")
+    code, out, err = _run(host, "options-scanner-memory", "set", "600M")
+    assert code == 1
+    assert "result=ok" not in out
+    assert "ROLLBACK UNVERIFIED / HOLD" in err
+    assert "NeedDaemonReload" in err
+    assert afs._open_intents(_history(host))
+
+
+def test_unexplained_scanner_reload_flag_keeps_the_approval():
+    host = FakeHost()
+    host.crash_on_reload = True
+    host.grant("options-scanner-memory set 600M")
+    with pytest.raises(SystemExit):
+        _run(host, "options-scanner-memory", "set", "600M")
+    intent = _open_intent(host)
+    host.crash_on_reload = False
+    host.etc.pop(afs.DROPIN_NAME, None)
+    host.scanner["NeedDaemonReload"] = "yes"
+    host.grant(f"options-scanner-memory rollback {intent['stamp']}", name="rollback0001")
+    reloads = host.reload_count
+    code, out, err = _run(host, "options-scanner-memory", "rollback", intent["stamp"])
+    assert code == 1
+    assert "result=ok" not in out
+    assert "ROLLBACK UNVERIFIED / HOLD" in err
+    assert "rollback0001" in host.approvals
+    assert host.reload_count == reloads
+
+
+def test_crash_before_reload_can_be_recovered():
+    host = FakeHost()
+    host.crash_on_reload = True
+    host.grant("options-scanner-memory set 600M")
+    with pytest.raises(SystemExit):
+        _run(host, "options-scanner-memory", "set", "600M")
+    assert host.scanner["NeedDaemonReload"] == "yes"
+    intent = _open_intent(host)
+    host.crash_on_reload = False
+    host.grant(f"options-scanner-memory rollback {intent['stamp']}", name="rollback0001")
+    code, out, err = _run(host, "options-scanner-memory", "rollback", intent["stamp"])
+    assert code == 0, err
+    assert "result=ok" in out
+    assert afs.DROPIN_NAME not in host.etc
+    assert host.scanner["NeedDaemonReload"] == "no"
+
+
+def test_crash_plus_foreign_dropin_edit_keeps_the_approval():
+    host = FakeHost()
+    host.crash_on_reload = True
+    host.grant("options-scanner-memory set 600M")
+    with pytest.raises(SystemExit):
+        _run(host, "options-scanner-memory", "set", "600M")
+    intent = _open_intent(host)
+    host.crash_on_reload = False
+    host.etc["no-bytecode.conf"] = "Environment=PYTHONDONTWRITEBYTECODE=0\n"
+    host.grant(f"options-scanner-memory rollback {intent['stamp']}", name="rollback0001")
+    reloads = host.reload_count
+    code, out, err = _run(host, "options-scanner-memory", "rollback", intent["stamp"])
+    assert code == 1
+    assert "result=ok" not in out
+    assert "ROLLBACK UNVERIFIED / HOLD" in err
+    assert "no-bytecode.conf" in err
+    assert "rollback0001" in host.approvals
+    assert host.reload_count == reloads
+
+
+@pytest.mark.parametrize("hidden", ["futures-reload", "etc-control"])
+def test_hidden_state_at_recovery_is_not_consumed(hidden: str):
+    host = FakeHost()
+    host.crash_on_reload = True
+    host.grant("options-scanner-memory set 600M")
+    with pytest.raises(SystemExit):
+        _run(host, "options-scanner-memory", "set", "600M")
+    intent = _open_intent(host)
+    host.crash_on_reload = False
+    if hidden == "futures-reload":
+        host.futures["NeedDaemonReload"] = "yes"
+    else:
+        host.etc_control["50-MemoryMax.conf"] = "[Service]\nMemoryMax=600M\n"
+    host.grant(f"options-scanner-memory rollback {intent['stamp']}", name="rollback0001")
+    reloads = host.reload_count
+    code, out, err = _run(host, "options-scanner-memory", "rollback", intent["stamp"])
+    assert code == 1
+    assert "result=ok" not in out
+    assert "ROLLBACK UNVERIFIED / HOLD" in err
+    assert "rollback0001" in host.approvals
+    assert host.reload_count == reloads
+    assert _log_rows(host)[-1]["result"] == "rollback_unverified"
+
+
+def test_intent_with_pending_reload_baseline_keeps_the_approval():
+    host = FakeHost()
+    host.crash_on_reload = True
+    host.grant("options-scanner-memory set 600M")
+    with pytest.raises(SystemExit):
+        _run(host, "options-scanner-memory", "set", "600M")
+    intent = _open_intent(host)
+    intent["scanner_need_reload"] = "yes"
+    host.records[afs.HISTORY_PATH] = json.dumps(intent, sort_keys=True) + "\n"
+    host.crash_on_reload = False
+    host.grant(f"options-scanner-memory rollback {intent['stamp']}", name="rollback0001")
+    code, out, err = _run(host, "options-scanner-memory", "rollback", intent["stamp"])
+    assert code == 1
+    assert "result=ok" not in out
+    assert "ROLLBACK UNVERIFIED / HOLD" in err
+    assert "rollback0001" in host.approvals
+    assert host.reload_count == 1
+
+
+def test_recovery_rewrites_a_lowered_cgroup_the_reload_does_not_restore():
+    host = _raise_at_600()
+    host.crash_on_reload = True
+    host.grant("options-scanner-memory set 350M")
+    with pytest.raises(SystemExit):
+        _run(host, "options-scanner-memory", "set", "350M")
+    intent = _open_intent(host)
+    assert host.cgroup["memory.max"] == str(350 * afs.MIB)
+    host.crash_on_reload = False
+    host.reload_updates_live = False
+    host.grant(f"options-scanner-memory rollback {intent['stamp']}", name="rollback0001")
+    code, out, err = _run(host, "options-scanner-memory", "rollback", intent["stamp"])
+    assert code == 0, err
+    assert "result=ok" in out
+    assert host.cgroup["memory.max"] == intent["cgroup_max"]
+
+
+def test_readback_mismatch_puts_the_prior_limit_back():
+    host = _raise_at_600()
+    host.mismatch_after_next_write = True
+    host.grant("options-scanner-memory set 350M")
+    code, _out, err = _run(host, "options-scanner-memory", "set", "350M")
+    assert code == 1
+    assert "not changed" in err
+    assert ("cgroup-write", str(350 * afs.MIB)) in host.calls
+    assert ("cgroup-write", str(600 * afs.MIB)) in host.calls
+    assert host.cgroup["memory.max"] == str(600 * afs.MIB)
+    assert ("daemon-reload",) not in host.calls
+
+
+def test_failed_limit_putback_stays_unverified_and_open():
+    host = _raise_at_600()
+    host.mismatch_after_next_write = True
+    host.fail_cgroup_write_after = 1
+    host.grant("options-scanner-memory set 350M")
+    code, out, err = _run(host, "options-scanner-memory", "set", "350M")
+    assert code == 1
+    assert "result=ok" not in out
+    assert "not changed" not in err
+    assert "ROLLBACK UNVERIFIED / HOLD" in err
+    assert afs._open_intents(_history(host))
+    assert host.cgroup["memory.max"] == str(350 * afs.MIB)
+
+
+class _DirectorySyncHost(FakeHost):
+    def append_line(self, path: Path, line: str) -> None:
+        super().append_line(path, line)
+        if path == afs.HISTORY_PATH and '"action": "intent"' in line:
+            raise afs.MaintenanceFailure(
+                "ROLLBACK UNVERIFIED / HOLD: maintenance intent was written but its directory was not synced",
+                unverified=True,
+            )
+
+
+def test_directory_sync_failure_does_not_claim_the_memory_was_unchanged():
+    host = _DirectorySyncHost()
+    host.grant("options-scanner-memory set 600M")
+    code, out, err = _run(host, "options-scanner-memory", "set", "600M")
+    assert code == 1
+    assert "result=ok" not in out
+    assert "not changed" not in err
+    assert "UNVERIFIED" in err
+    assert ("daemon-reload",) not in host.calls
+    assert afs._open_intents(_history(host))
+
+
+def test_failed_truncate_does_not_crash_the_next_read(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    history = tmp_path / "history.jsonl"
+    history.write_text('{"action": "old"}\n', encoding="utf-8")
+    monkeypatch.setattr(afs, "HISTORY_PATH", history)
+
+    def fail_truncate(*_args: object) -> None:
+        raise OSError(5, "truncate")
+
+    def fail_rewrite(*_args: object) -> None:
+        raise OSError(5, "rewrite")
+
+    monkeypatch.setattr(afs.os, "ftruncate", fail_truncate)
+    monkeypatch.setattr(afs, "_rewrite_record", fail_rewrite)
+    real_write = os.write
+    calls = {"n": 0}
+
+    def short_then_fail(fd: int, data: bytes) -> int:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return real_write(fd, data[:2])
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(afs.os, "write", short_then_fail)
+    with pytest.raises(afs.MaintenanceFailure) as caught:
+        afs.ProductionHost().append_line(history, '{"action": "intent"}')
+    assert "partial record" in str(caught.value)
+    with pytest.raises(afs.MaintenanceFailure, match="unreadable"):
+        afs._load_history(afs.ProductionHost())
+
+
+def test_truncate_failure_restores_the_previous_record(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    history = tmp_path / "history.jsonl"
+    original = '{"action": "old"}\n'
+    history.write_text(original, encoding="utf-8")
+    monkeypatch.setattr(afs, "HISTORY_PATH", history)
+    monkeypatch.setattr(afs.os, "ftruncate", lambda *_args: (_ for _ in ()).throw(OSError(5, "truncate")))
+    real_write = os.write
+    calls = {"n": 0}
+
+    def short_then_fail(fd: int, data: bytes) -> int:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return real_write(fd, data[:2])
+        if calls["n"] == 2:
+            raise OSError(28, "No space left on device")
+        return real_write(fd, data)
+
+    monkeypatch.setattr(afs.os, "write", short_then_fail)
     with pytest.raises(OSError):
         afs.ProductionHost().append_line(history, '{"action": "intent"}')
-    assert history.read_text(encoding="utf-8") == ""
+    assert history.read_text(encoding="utf-8") == original
+
+
+def test_restart_continuity_is_computed_rather_than_hardcoded():
+    text = MAINTENANCE_PATH.read_text(encoding="utf-8")
+    assert "restarts_unchanged=true" not in text
 
 
 def test_history_is_append_only_and_noop_does_not_add_a_set():
