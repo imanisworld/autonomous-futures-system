@@ -48,8 +48,17 @@ PRIMARY_20 = (
     "IWM", "TLT", "JPM", "BAC", "COIN", "XOM", "MRK", "WMT", "NFLX", "GE",
 )
 COLLECTOR_ID = "OPTIONS_122_IEX_PROSPECTIVE_COLLECTOR"
-COLLECTOR_VERSION = "122-iex-collector-v0.1"
+LEGACY_COLLECTOR_VERSIONS = frozenset({"122-iex-collector-v0.1"})
+COLLECTOR_VERSION = "122-iex-collector-v0.2"
+ACCEPTED_COLLECTOR_VERSIONS = LEGACY_COLLECTOR_VERSIONS | {COLLECTOR_VERSION}
 POLICY_EPOCH = "122-IEX-E1"
+CANONICAL_BINDING_SCHEMA = "options-122-canonical-binding-v1"
+CANONICAL_STRATEGY = "options_122"
+CANONICAL_TIMEFRAME = "30m"
+CANONICAL_UNIVERSE = "PRIMARY_20"
+CANONICAL_ARM_SOURCE = "public_regular_session_chart"
+CANONICAL_PROVISIONAL_TRIGGER_SOURCE = "alpaca_iex_trades"
+CANONICAL_RECONCILIATION_SOURCE = "alpaca_sip_trades_delayed"
 DEFAULT_CADENCE_SECONDS = 60
 DEFAULT_MAX_CAPTURE_LAG_SECONDS = 120
 RECONCILE_DELAY_MINUTES = 16
@@ -74,6 +83,38 @@ def _append(path: Path, row: Mapping[str, Any]) -> None:
         handle.write(payload)
         handle.flush()
         os.fsync(handle.fileno())
+
+
+def _canonical_binding(obs: Any) -> dict[str, Any]:
+    """Forward-only canonical identity for newly written 122 collector rows.
+
+    Historical rows that predate this stamp remain legacy/unbound. Raw provider
+    source labels are retained separately; these canonical source names are the
+    exact policy vocabulary frozen in 122-IEX-E1.
+    """
+    close = _parse_ts(getattr(obs, "structure_close_time", None))
+    if close is None:
+        raise ValueError("canonical binding requires structure_close_time")
+    reference = getattr(obs, "reference_direction", None)
+    pattern = {"two_up": "122:2U", "two_down": "122:2D"}.get(reference)
+    if pattern is None:
+        raise ValueError("canonical binding requires 122 reference direction")
+    return {
+        "schema": CANONICAL_BINDING_SCHEMA,
+        "strategy": CANONICAL_STRATEGY,
+        "strategy_epoch": POLICY_EPOCH,
+        "timeframe": CANONICAL_TIMEFRAME,
+        "universe": CANONICAL_UNIVERSE,
+        "pattern": pattern,
+        "structure_close_time": close.isoformat(),
+        "data_source": f"{COLLECTOR_ID}:{CANONICAL_ARM_SOURCE}",
+        "arm_source": CANONICAL_ARM_SOURCE,
+        "raw_arm_source": PUBLIC_CHART_SOURCE,
+        "provisional_trigger_source": CANONICAL_PROVISIONAL_TRIGGER_SOURCE,
+        "authoritative_reconciliation_source": CANONICAL_RECONCILIATION_SOURCE,
+        "collector_id": COLLECTOR_ID,
+        "collector_version": COLLECTOR_VERSION,
+    }
 
 
 def _persist_raw(directory: Path, *, setup_id: str, feed: str, payload: bytes) -> tuple[str, str]:
@@ -111,8 +152,10 @@ def _load_state(path: Path):
     fingerprints: dict[str, str] = {}
     reconciled: set[str] = set()
     drifted: set[str] = set()
+    canonically_bound: dict[str, dict[str, Any]] = {}
+    seen_setups: set[str] = set()
     if not path.exists():
-        return armed, terminal, fingerprints, reconciled, drifted
+        return armed, terminal, fingerprints, reconciled, drifted, canonically_bound
     for number, raw in enumerate(path.read_text().splitlines(), start=1):
         if not raw.strip():
             continue
@@ -123,15 +166,56 @@ def _load_state(path: Path):
         if not isinstance(row, dict) or not row.get("setup_id"):
             raise RuntimeError(f"journal_invalid_row_{number}")
         if row.get("record_type") in {"ARMED", "RESOLUTION", "SOURCE_DRIFT", "RECONCILIATION"}:
-            if row.get("collector_id") != COLLECTOR_ID or row.get("collector_version") != COLLECTOR_VERSION:
+            if (
+                row.get("collector_id") != COLLECTOR_ID
+                or row.get("collector_version") not in ACCEPTED_COLLECTOR_VERSIONS
+                or row.get("policy_epoch") != POLICY_EPOCH
+            ):
                 raise RuntimeError(f"journal_collector_version_mismatch_{number}")
         setup_id = str(row["setup_id"])
-        if row.get("record_type") == "SOURCE_DRIFT":
-            # The row carries the revised fingerprint by design; keep the frozen
-            # one and block the setup (never re-armed, resolved or reconciled).
+        obs = row.get("observation") if isinstance(row.get("observation"), dict) else {}
+        binding = row.get("canonical_binding")
+        record_type = row.get("record_type")
+        # Any earlier row for the same setup, even RESOLUTION, SOURCE_DRIFT
+        # or another non-ARMED record, makes a later ARMED impossible.
+        # Otherwise a legacy unbound setup could be laundered into a v0.2 arm.
+        if record_type == "ARMED" and setup_id in seen_setups:
+            raise RuntimeError(f"journal_duplicate_armed_{number}")
+        seen_setups.add(setup_id)
+        if record_type == "ARMED" and row.get("collector_version") == COLLECTOR_VERSION and binding is None:
+            raise RuntimeError(f"journal_canonical_binding_missing_{number}")
+        # ARMED is the only authority for a setup's canonical stamp. Later
+        # lifecycle rows cannot independently restamp their identity.
+        if record_type in {"RESOLUTION", "RECONCILIATION", "SOURCE_DRIFT"} and setup_id in canonically_bound:
+            if row.get("collector_version") != COLLECTOR_VERSION:
+                raise RuntimeError(f"journal_canonical_binding_version_mismatch_{number}")
+            if binding is None:
+                raise RuntimeError(f"journal_canonical_binding_missing_{number}")
+        if binding is not None:
+            if row.get("collector_version") != COLLECTOR_VERSION or not isinstance(binding, Mapping):
+                raise RuntimeError(f"journal_canonical_binding_invalid_{number}")
+            if record_type != "ARMED" and setup_id not in canonically_bound:
+                raise RuntimeError(f"journal_canonical_binding_upgrade_{number}")
+            class _BoundObservation:
+                pass
+            bound_obs = _BoundObservation()
+            for key, value in obs.items():
+                setattr(bound_obs, key, value)
+            try:
+                expected_binding = _canonical_binding(bound_obs)
+            except (TypeError, ValueError) as exc:
+                raise RuntimeError(f"journal_canonical_binding_invalid_{number}") from exc
+            if dict(binding) != expected_binding:
+                raise RuntimeError(f"journal_canonical_binding_invalid_{number}")
+            if record_type == "ARMED":
+                canonically_bound[setup_id] = dict(binding)
+            elif record_type in {"RESOLUTION", "RECONCILIATION"} and dict(binding) != canonically_bound[setup_id]:
+                raise RuntimeError(f"journal_canonical_binding_changed_{number}")
+            # SOURCE_DRIFT may legitimately change 2U to 2D; validate its stamp
+            # against its own observation, but never admit it as a catch.
+        if record_type == "SOURCE_DRIFT":
             drifted.add(setup_id)
             continue
-        obs = row.get("observation") if isinstance(row.get("observation"), dict) else {}
         fp = obs.get("setup_fingerprint")
         if fp is not None:
             fp = str(fp)
@@ -147,7 +231,7 @@ def _load_state(path: Path):
             terminal[setup_id] = row
         elif row.get("record_type") == "RECONCILIATION":
             reconciled.add(setup_id)
-    return armed, terminal, fingerprints, reconciled, drifted
+    return armed, terminal, fingerprints, reconciled, drifted, canonically_bound
 
 
 async def _capture_selector_evidence(pub: PublicMarketDataClient, *, ticker: str, direction: str, cfg: Any) -> dict[str, Any]:
@@ -367,6 +451,11 @@ async def _reconcile_pending(*, journal: Path, terminal: Mapping[str, dict[str, 
             "policy_epoch": POLICY_EPOCH, "setup_id": setup_id,
             "observation": obs, "iex": iex, "sip": sip, "policy": policy,
         }
+        # Binding is setup-scoped and forward-only. A legacy ARMED/RESOLUTION
+        # stays legacy even if current code can reconstruct extra fields later.
+        # New bound resolutions carry the exact validated binding forward.
+        if row.get("canonical_binding") is not None:
+            rec["canonical_binding"] = dict(row["canonical_binding"])
         if not dry_run:
             _append(journal, rec)
         if policy.get("reconciliation") == "DATA_BLOCKED": counts["blocked"] += 1
@@ -385,7 +474,7 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
     sip_provider = HistoricalTradeProvider(cfg.alpaca_data_base_url, key, secret, "sip") if key and secret else None
     journal = Path(args.journal)
     raw_dir = Path(args.raw_trade_dir)
-    armed_seen, terminal_seen, fingerprints, reconciled, drifted = _load_state(journal)
+    armed_seen, terminal_seen, fingerprints, reconciled, drifted, canonically_bound = _load_state(journal)
     started = datetime.now(timezone.utc)
     session = nyse_session_for(started.date())
     tickers = tuple(dict.fromkeys(t.upper() for t in (args.ticker or PRIMARY_20)))
@@ -448,13 +537,16 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
                 if setup_id in fingerprints and fingerprints[setup_id] != obs.setup_fingerprint:
                     summary["data_blocked"] += 1
                     if not args.dry_run:
-                        _append(journal,{"record_type":"SOURCE_DRIFT","observed_at":observed_at.isoformat(),"collector_id":COLLECTOR_ID,"collector_version":COLLECTOR_VERSION,"policy_epoch":POLICY_EPOCH,"setup_id":setup_id,"observation":obs.to_dict(),"reason_code":"public_completed_bar_revision"})
+                        row={"record_type":"SOURCE_DRIFT","observed_at":observed_at.isoformat(),"collector_id":COLLECTOR_ID,"collector_version":COLLECTOR_VERSION,"policy_epoch":POLICY_EPOCH,"setup_id":setup_id,"observation":obs.to_dict(),"reason_code":"public_completed_bar_revision"}
+                        if setup_id in canonically_bound:
+                            row["canonical_binding"]=_canonical_binding(obs)
+                        _append(journal,row)
                     drifted.add(setup_id)
                     continue
                 if setup_id not in armed_seen:
-                    arm_record={"record_type":"ARMED","observed_at":observed_at.isoformat(),"collector_id":COLLECTOR_ID,"collector_version":COLLECTOR_VERSION,"policy_epoch":POLICY_EPOCH,"setup_id":setup_id,"observation":obs.to_dict()}
+                    arm_record={"record_type":"ARMED","observed_at":observed_at.isoformat(),"collector_id":COLLECTOR_ID,"collector_version":COLLECTOR_VERSION,"policy_epoch":POLICY_EPOCH,"setup_id":setup_id,"canonical_binding":_canonical_binding(obs),"observation":obs.to_dict()}
                     if not args.dry_run: _append(journal,arm_record)
-                    armed_seen[setup_id]=observed_at; fingerprints[setup_id]=obs.setup_fingerprint; summary["armed_written"] += 1
+                    armed_seen[setup_id]=observed_at; fingerprints[setup_id]=obs.setup_fingerprint; canonically_bound[setup_id]=dict(arm_record["canonical_binding"]); summary["armed_written"] += 1
 
                 source = await _source_first_boundary(iex_provider, obs=obs, end=observed_at, setup_id=setup_id, raw_dir=raw_dir, feed="iex", persist_raw=not args.dry_run)
                 if source.get("status") == "DATA_BLOCKED":
@@ -489,6 +581,8 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
                     summary["no_break"] += 1
 
                 row={"record_type":"RESOLUTION","observed_at":observed_at.isoformat(),"collector_id":COLLECTOR_ID,"collector_version":COLLECTOR_VERSION,"policy_epoch":POLICY_EPOCH,"setup_id":setup_id,"prearmed_at":armed_seen.get(setup_id).isoformat() if armed_seen.get(setup_id) else None,"source_outcome":source_outcome,"capture_gate_eligible":capture_gate_eligible,"option_evidence_usable":bool(option_evidence and option_evidence.get("status")=="CAPTURED"),"observation":live_obs.to_dict(),"trigger_source":source,"option_evidence":option_evidence,"reconciliation_status":"PENDING_DELAYED_SIP"}
+                if setup_id in canonically_bound:
+                    row["canonical_binding"]=_canonical_binding(live_obs)
                 if not args.dry_run: _append(journal,row)
                 terminal_seen[setup_id]=row; summary["resolutions_written"] += 1
 
