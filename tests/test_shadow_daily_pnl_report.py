@@ -471,3 +471,42 @@ def test_capped_header_is_its_own_line_and_first_pass_says_provisional(tmp_path)
     assert lines[0] == "**Your limits (what-if)**"
     assert "it does not change what the bot trades" in lines[1]
     assert "today's picks and dollars are provisional" in lines[2]
+
+
+def _post_close_loss(**extra):
+    return _cap_row("late", "MNQ", "LOSS", -40, "2026-09-23T19:00:00+00:00", 1, 8,
+                    entry=100.0, stop=90.0, target=120.0, resolved_at_bar_ts="2026-09-23T22:00:00+00:00", **extra)
+
+
+def test_post_close_exit_without_a_pre_close_price_is_unpriced_not_credited(tmp_path):
+    # Fill/exit bars exist, but none starts at/after the fill and ends by 17:00 ET: only a bar
+    # BEFORE the fill and bars after the close. The later stop must not be counted.
+    bars = [{"ts": "2026-09-23T19:00:00+00:00", "high": 101, "low": 99, "close": 150}]       # before the fill
+    bars += [{"ts": f"2026-09-23T{h:02d}:{m:02d}:00+00:00", "high": 106, "low": 99}           # no close field
+             for h, m in ((19, 15), (19, 30), (19, 45), (20, 0), (20, 15), (20, 30), (20, 45))]
+    bars.append({"ts": "2026-09-23T22:00:00+00:00", "high": 101, "low": 89, "close": 90})
+    _bar_file(tmp_path, "MNQ", "2026-09-23", bars)
+    (t,) = sdp.capped_trades([_post_close_loss()], tmp_path)
+    assert t["exit"] == datetime(2026, 9, 23, 21, 0, tzinfo=timezone.utc)
+    assert (t["how"], t["net_usd"], t["assumed_close"], t["won"]) == ("unpriced", None, True, False)
+    s = sdp._cap_summary([t])
+    assert (s["priced"], s["unpriced"], s["net_usd"]) == (0, 1, None)
+
+
+def test_post_close_exit_with_no_bars_at_all_is_unpriced(tmp_path):
+    row = _post_close_loss()
+    row["shadow_outcome"]["bars_to_exit"] = 9                      # fallback timing: 19:00Z + 9 x 15m = 17:15 ET
+    (t,) = sdp.capped_trades([row], tmp_path)
+    assert t["approx_timing"] and t["how"] == "unpriced" and t["net_usd"] is None
+
+
+def test_flatten_price_uses_a_bar_that_has_ended_by_the_close(tmp_path):
+    # An off-grid bar opening 16:50 ET ends after 17:00; its close is not known at the close.
+    bars = [{"ts": "2026-09-23T19:15:00+00:00", "high": 106, "low": 99, "close": 104},
+            {"ts": "2026-09-23T20:50:00+00:00", "high": 106, "low": 99, "close": 110},
+            {"ts": "2026-09-23T22:00:00+00:00", "high": 101, "low": 89, "close": 90}]
+    _bar_file(tmp_path, "MNQ", "2026-09-23", bars)
+    row = _post_close_loss()
+    row["shadow_outcome"]["bars_to_exit"] = 3
+    (t,) = sdp.capped_trades([row], tmp_path)
+    assert t["how"] == "close" and t["net_usd"] == round(16 * 0.5 - 1.98, 2)   # 104, not 110

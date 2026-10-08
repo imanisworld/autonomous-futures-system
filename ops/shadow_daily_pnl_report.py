@@ -250,7 +250,7 @@ def _settle_open(row: dict, trading_date: date, log_dir: str | Path | None, cach
         day_iso = (start + timedelta(days=offset)).isoformat()
         for bar in sorted(_load_bars(log_dir, str(row.get("instrument")), day_iso, cache), key=lambda b: str(b.get("ts"))):
             bar_dt = _parse_dt(str(bar.get("ts") or ""))
-            if bar_dt is None or bar_dt >= close_dt:
+            if bar_dt is None or _ends_after(bar_dt, close_dt):
                 continue
             try:
                 high, low, close = float(bar["high"]), float(bar["low"]), float(bar["close"])
@@ -269,14 +269,21 @@ def _settle_open(row: dict, trading_date: date, log_dir: str | Path | None, cach
     return close_dt, last_close, "close"
 
 
-def _last_close_before(row: dict, close_dt: datetime, log_dir: str | Path | None, cache: dict) -> float | None:
-    """Close of the last stored bar that opened before `close_dt` (from the candidate day on)."""
+def _ends_after(bar_dt: datetime, close_dt: datetime) -> bool:
+    """Stored bars are stamped at their OPEN; a bar's close is known only once it ends."""
+    return bar_dt + timedelta(minutes=FALLBACK_BAR_MINUTES) > close_dt
+
+
+def _last_close_before(row: dict, fill_dt: datetime, close_dt: datetime, log_dir: str | Path | None,
+                       cache: dict) -> float | None:
+    """Close of the last stored bar that starts at/after the fill bar and ends by `close_dt`."""
     start = date.fromisoformat(str(row.get("candidate_day")))
     best: tuple[datetime, float] | None = None
     for offset in range((close_dt.astimezone(ZoneInfo("UTC")).date() - start).days + 1):
         for bar in _load_bars(log_dir, str(row.get("instrument")), (start + timedelta(days=offset)).isoformat(), cache):
             bar_dt = _parse_dt(str(bar.get("ts") or ""))
-            if bar_dt is None or bar_dt >= close_dt or (best is not None and bar_dt <= best[0]):
+            if (bar_dt is None or bar_dt < fill_dt or _ends_after(bar_dt, close_dt)
+                    or (best is not None and bar_dt <= best[0])):
                 continue
             try:
                 best = (bar_dt, float(bar["close"]))
@@ -314,14 +321,20 @@ def capped_trades(rows: list[dict], log_dir: str | Path | None = None) -> list[d
                 ticks = sign * (price - float(row["entry"])) / tick_size
             assumed_close = how in ("close", "unpriced")
         close_dt = datetime.combine(trading_date, DAY_CLOSE, ET)
-        if result in ("WIN", "LOSS") and exit_dt > close_dt and tick_size and row.get("entry") is not None:
+        if result in ("WIN", "LOSS") and exit_dt > close_dt:
             # The resolver's window runs past the 17:00 ET close; an unresolved trade is closed
             # at 17:00, so a resolved one is too — the rule must not depend on how it ended.
-            price = _last_close_before(row, close_dt, log_dir, cache)
-            if price is not None:
+            # Without a usable pre-close price it is unpriced, never credited its later exit.
+            price = None
+            if tick_size and row.get("entry") is not None:
+                price = _last_close_before(row, times[0], close_dt, log_dir, cache)
+            exit_dt, assumed_close = close_dt, True
+            if price is None:
+                ticks, how = None, "unpriced"
+            else:
                 sign = 1 if row.get("direction") == "LONG" else -1
                 ticks = sign * (price - float(row["entry"])) / tick_size
-                exit_dt, how, assumed_close = close_dt, "close", True
+                how = "close"
         net = None
         if ticks is not None and tick_value is not None:
             net = net_dollars(inst, float(ticks) * tick_value, tick_value)
