@@ -4,6 +4,19 @@ _As of 2026-10-08. The newest dated repository refresh below governs source stat
 
 Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`; the read-only coverage evidence lane (observer, reducer, outcome study, after-close collector) is described in `docs/options-coverage-observer.md`. The observation-only **setup-capture** lifecycle (`WATCHING` → `TRIGGERED` / `MISSED_LATE`) is described in `docs/options-setup-capture-observer.md`.
 
+## Work-queue verification — 2026-10-08 (documentation only)
+
+This check updates workflow status without changing the frozen evidence, the current checkpoint's strategy definitions, or operational state. #1188 was merged as `f8e4257e2b9481f4b670b24e7602634e9cf47649`; the 2026-10-08 checkpoint immediately below is now on main.
+
+- **#1183 / #1176 — QA / awaiting independent Grok verdict.** Open at `09bf04542044cdc1a3106320adf1ba2313ee3b95`. GitHub CI and Agent Handoff Check both completed SUCCESS for that exact head. No Grok PASS or merge is asserted. Preserve the canonical history-backed TRIGGERED-catch invariant and fail-closed lifecycle checks.
+- **#1177 — OPEN / next source implementation.** Dedicated `OPTIONS_122_IEX_PROSPECTIVE_COLLECTOR` only; forward-only exact registry/producer/source binding. #1145 cannot be used as `122-IEX-E1` evidence. No historical rewrite or real-data admission before the canonical contract is proven.
+- **#1184 — OPEN / security prerequisite.** Tamper-evident authority grant history, ordered timestamps, Unicode evaluator-name lookalikes, and the smaller fitness validation residuals must be resolved **before** storage of authority state, use of its flag, or fitness runtime wiring.
+- **#1154 — OPEN / PARKED.** Final readiness reconciliation waits for #1183/#1176 merge and #1177 producer contract (parts 1 and 2). Preserve both 2026-10-07 and 2026-10-08 checkpoints. No proof-ready or paper-ready claim without exact provenance.
+- **#1167 — OPEN / deferred cleanup.** Modernization and dead-code audit follow readiness reconciliation; no speculative removal of active paths.
+- **#1190 — OPEN DRAFT / separate futures deployment plan, HOLD.** Pending fresh read-only VPS evidence and operator decisions on posture B1, dependency drift B5, guard setting B6, options ride-along B8, and evidence-window continuity. It does not authorize promotion.
+
+**Gates:** Exact-head CI and independent Grok PASS before a code merge, then separate operator approval. No new build, promotion, install, restart, timer activation, live execution, or forward-proof Day 1 is authorized by this documentation update.
+
 ## Current options-system checkpoint — 2026-10-08
 
 This section is the active source-state checkpoint for the canonical options evidence stack. It supersedes the 2026-10-07 checkpoint below, which remains provenance and must not be replayed over this state. Merge gate for every options PR: exact-head CI green **and** a Grok PASS on that exact head; Claude reviews are QA only and do not satisfy the gate.
