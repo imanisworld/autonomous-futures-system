@@ -16,6 +16,15 @@
 4. Runtime/deployment claims require fresh runtime evidence; repository state alone is never proof of what is deployed.
 5. Update this compact checkpoint after a meaningful work unit. Put dated historical detail in a lane-specific evidence file or archive, not here.
 
+## Update — 2026-10-08 (operator handoff; deployment planning only)
+
+- **Target candidate remains** `7c930274179f7c76749f75b35adb14fbb9255e54`, not newer `main` (`58606b43ac8f391f4b3ed861fbd6c3fdf807e303`). This deliberately excludes later options-only #1152 changes from the reviewed futures release.
+- **Last audited deployment:** `c44d32bc4961e56fae5c5f88a976eb6783341638`; recheck live identity immediately before any release command.
+- **Former `afs-deploy` CI-proof blocker:** operator reports wrapper installed and **51/51 fake-box checks passed**; the real U11 fetch + `verify-live` path later passed outside the sandbox. Do not repeat those tests absent changed inputs; do retain and independently inspect their evidence for release approval.
+- **Read-only readiness audit (handoff):** demo posture, live disabled, contract cap 1, broker flat, integrity and rollback target reported healthy. These are time-bounded observations, not authorization.
+- **Remaining gate:** draft and independently review an exact-SHA deployment plan covering changed trading paths, preregistered acceptance/abort thresholds, rollback/watcher recovery, and post-deploy validation. Roughly 64 merges separate deployed release and target. No build/promote/restart/deploy approved.
+- **Ownership:** the Futures agent is drafting that plan as a separate docs PR. Do not create a second competing plan; keep this checkpoint current after its review.
+
 ## Latest verified source checkpoint — 2026-10-07
 
 - **GitHub main:** `7c930274179f7c76749f75b35adb14fbb9255e54` — #1180 squash merge, independently matched to the reviewed tree (operator handoff).
