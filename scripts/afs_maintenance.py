@@ -1,0 +1,1359 @@
+#!/usr/bin/env python3
+"""Restricted, logged maintenance interface for one existing SSH account.
+
+The program permits only the operations named below. It does not open a
+shell, restart a service, deploy a release, read environment files, or
+change SSH keys.
+
+Authorized mutation:
+  options-scanner MemoryMax, whole mebibytes from 350 through 600 inclusive.
+  A set or rollback runs only when root has placed a matching one-time
+  approval file. This program can read and consume those files. It cannot
+  create one.
+
+The base unit file stays at MemoryMax=350M. A higher value is stored only in
+the drop-in zz-afs-memory-max.conf. Rollback restores the recorded previous
+value. A lower live cgroup limit is attempted before that drop-in is changed;
+if the kernel refuses the lower limit, the drop-in is left untouched.
+"""
+
+from __future__ import annotations
+
+import contextlib
+import fcntl
+import hashlib
+import json
+import os
+import re
+import stat
+import subprocess
+import sys
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Iterator
+
+SCANNER_UNIT = "options-scanner.service"
+FUTURES_UNIT = "futures-bot.service"
+MIN_MIB = 350
+MAX_MIB = 600
+BASE_MEMORY_LINE = "MemoryMax=350M"
+DROPIN_NAME = "zz-afs-memory-max.conf"
+EXPECTED_CGROUP = "/system.slice/options-scanner.service"
+BASE_UNIT = Path("/etc/systemd/system/options-scanner.service")
+ETC_DROPIN_DIR = Path("/etc/systemd/system/options-scanner.service.d")
+RUNTIME_DROPIN_DIR = Path("/run/systemd/system/options-scanner.service.d")
+CGROUP_ROOT = Path("/sys/fs/cgroup")
+SHARED_DIR = Path("/root/afs-shared")
+STATE_DIR = SHARED_DIR / "maintenance" / "options-scanner-memory"
+APPROVAL_DIR = SHARED_DIR / "maintenance" / "approvals"
+LOCK_PATH = SHARED_DIR / "maintenance" / "afs-maintenance.lock"
+HISTORY_PATH = STATE_DIR / "history.jsonl"
+LOG_PATH = SHARED_DIR / "logs" / "afs-maintenance.log"
+AUDIT_PROGRAM = Path("/usr/local/sbin/afs-grok-audit")
+HEALTH_URL = "http://127.0.0.1:8010/health"
+MIB = 1024 * 1024
+
+# Read-only commands accepted by the live afs-grok-audit program inspected
+# 2026-10-08 (sha256 179c11d69a222ae2851ae7913dfe707a6753b737078e3ba51f92982de12cb994).
+# help is answered here so the maintenance allowlist stays visible.
+AUDIT_COMMANDS = frozenset(
+    {
+        "identity",
+        "status",
+        "release",
+        "runtime-pins",
+        "health",
+        "broker",
+        "evidence",
+        "journal-today",
+        "demo-evidence",
+        "deploy-state",
+        "campaign",
+        "list-logs",
+        "service-logs",
+    }
+)
+
+_SAFE_TEXT = re.compile(r"^[A-Za-z0-9._:-]+$")
+_APPROVAL_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{7,79}$")
+_VALUE = re.compile(r"^([1-9][0-9]{2})M$")
+_STAMP = re.compile(r"^[0-9]{8}T[0-9]{6}Z$")
+_DROPIN = re.compile(r"\[Service\]\nMemoryMax=([1-9][0-9]{2})M\n\Z")
+_SECRET = re.compile(
+    r"(?i)((?:secret|token|password|api[_-]?key|authorization)[^\s:=]*\s*[:=]\s*)\S+"
+)
+
+
+class Denied(Exception):
+    """The command is not on the allowlist."""
+
+
+class UsageError(Exception):
+    """The command is recognized but its arguments are not valid."""
+
+
+class MaintenanceFailure(Exception):
+    """A permitted operation did not complete cleanly."""
+
+    def __init__(self, message: str, *, restored: bool = False) -> None:
+        super().__init__(message)
+        self.restored = restored
+
+
+@dataclass(frozen=True)
+class ShowAction:
+    pass
+
+
+@dataclass(frozen=True)
+class HistoryAction:
+    pass
+
+
+@dataclass(frozen=True)
+class SelfCheckAction:
+    pass
+
+
+@dataclass(frozen=True)
+class HelpAction:
+    pass
+
+
+@dataclass(frozen=True)
+class SetAction:
+    mib: int
+
+
+@dataclass(frozen=True)
+class RollbackAction:
+    stamp: str | None
+
+
+@dataclass(frozen=True)
+class AuditAction:
+    name: str
+
+
+Action = (
+    ShowAction
+    | HistoryAction
+    | SelfCheckAction
+    | HelpAction
+    | SetAction
+    | RollbackAction
+    | AuditAction
+)
+
+
+@dataclass
+class Snapshot:
+    scanner_active: str
+    scanner_pid: str
+    scanner_restarts: str
+    scanner_memory_raw: str
+    scanner_mib: int | None
+    scanner_cgroup: str
+    futures_active: str
+    futures_pid: str
+    futures_restarts: str
+    futures_memory_raw: str
+    cgroup_max: str | None
+    cgroup_current: str | None
+    cgroup_swap: str | None
+    health_http: str
+    base_sha256: str
+    base_floor_ok: bool
+    etc_files: dict[str, str]
+    our_dropin: str | None
+    runtime_files: dict[str, str]
+
+
+class Host:
+    """Narrow host operations. There is no method that restarts a unit."""
+
+    def systemctl_show(self, unit: str) -> dict[str, str]:
+        raise NotImplementedError
+
+    def daemon_reload(self) -> None:
+        raise NotImplementedError
+
+    def set_property_runtime(self, mib: int) -> None:
+        raise NotImplementedError
+
+    def read_cgroup(self, control_group: str, leaf: str) -> str | None:
+        raise NotImplementedError
+
+    def write_cgroup_max(self, control_group: str, value: str) -> None:
+        raise NotImplementedError
+
+    def read_base_unit(self) -> str:
+        raise NotImplementedError
+
+    def etc_dropin_names(self) -> list[str]:
+        raise NotImplementedError
+
+    def read_etc_dropin(self, name: str) -> str:
+        raise NotImplementedError
+
+    def write_our_dropin(self, text: str) -> None:
+        raise NotImplementedError
+
+    def remove_our_dropin(self) -> None:
+        raise NotImplementedError
+
+    def runtime_dropin_names(self) -> list[str]:
+        raise NotImplementedError
+
+    def read_runtime_dropin(self, name: str) -> str:
+        raise NotImplementedError
+
+    def remove_runtime_dropin(self, name: str) -> None:
+        raise NotImplementedError
+
+    def write_runtime_dropin(self, name: str, text: str) -> None:
+        raise NotImplementedError
+
+    def health_code(self) -> str:
+        raise NotImplementedError
+
+    def read_optional(self, path: Path) -> str:
+        raise NotImplementedError
+
+    def append_line(self, path: Path, line: str) -> None:
+        raise NotImplementedError
+
+    def ensure_state_dirs(self) -> None:
+        raise NotImplementedError
+
+    def approval_names(self) -> list[str]:
+        raise NotImplementedError
+
+    def read_approval(self, name: str) -> str:
+        raise NotImplementedError
+
+    def approval_is_restricted(self, name: str) -> bool:
+        raise NotImplementedError
+
+    def consume_approval(self, name: str) -> None:
+        raise NotImplementedError
+
+    @contextlib.contextmanager
+    def exclusive_lock(self) -> Iterator[None]:
+        raise NotImplementedError
+        yield  # pragma: no cover
+
+    def now(self) -> datetime:
+        raise NotImplementedError
+
+    def env(self, name: str) -> str:
+        raise NotImplementedError
+
+    def exec_audit(self, token: str) -> int:
+        raise NotImplementedError
+
+
+def build_systemctl(action: str, unit: str = "", mib: int | None = None) -> list[str]:
+    """Return a fixed systemctl argument list. Unknown actions are rejected."""
+
+    if action == "show":
+        if unit not in {SCANNER_UNIT, FUTURES_UNIT}:
+            raise Denied("unit is not available to maintenance")
+        return [
+            "/usr/bin/systemctl",
+            "show",
+            unit,
+            "-p",
+            "ActiveState",
+            "-p",
+            "MainPID",
+            "-p",
+            "NRestarts",
+            "-p",
+            "MemoryMax",
+            "-p",
+            "ControlGroup",
+            "--no-pager",
+        ]
+    if action == "daemon-reload":
+        return ["/usr/bin/systemctl", "daemon-reload"]
+    if action == "set-property-runtime":
+        if mib is None or not (MIN_MIB <= mib <= MAX_MIB):
+            raise Denied("MemoryMax is outside 350M..600M")
+        return [
+            "/usr/bin/systemctl",
+            "set-property",
+            "--runtime",
+            SCANNER_UNIT,
+            f"MemoryMax={mib}M",
+        ]
+    raise Denied("systemctl action is not available to maintenance")
+
+
+def redact(text: str) -> str:
+    return _SECRET.sub(r"\1[REDACTED]", text)
+
+
+def parse_memory_max(raw: str) -> int | None:
+    text = raw.strip()
+    if text in {"", "infinity"}:
+        return None
+    if text.isdigit():
+        return int(text)
+    match = re.fullmatch(r"([1-9][0-9]*)M", text)
+    if match:
+        return int(match.group(1)) * MIB
+    raise MaintenanceFailure(f"unrecognized MemoryMax value: {text}")
+
+
+def mib_of(num_bytes: int | None) -> int | None:
+    if num_bytes is None:
+        return None
+    if num_bytes % MIB != 0:
+        return None
+    return num_bytes // MIB
+
+
+def dropin_text(mib: int) -> str:
+    if not MIN_MIB <= mib <= MAX_MIB:
+        raise UsageError("MemoryMax must be a whole number of mebibytes from 350 through 600")
+    return f"[Service]\nMemoryMax={mib}M\n"
+
+
+def parse_command_text(text: str) -> Action:
+    if text != text.strip() or "\n" in text or "\r" in text or "\t" in text:
+        raise Denied("command is not in the maintenance allowlist")
+    if any(ch in text for ch in ";&|$`<>(){}'\"\\*?!~"):
+        raise Denied("command is not in the maintenance allowlist")
+    if "  " in text:
+        raise Denied("command is not in the maintenance allowlist")
+    parts = text.split(" ") if text else []
+    if any(not _SAFE_TEXT.fullmatch(part) for part in parts):
+        raise Denied("command is not in the maintenance allowlist")
+    if parts == ["help"]:
+        return HelpAction()
+    if parts == ["self-check"]:
+        return SelfCheckAction()
+    if len(parts) == 1 and parts[0] in AUDIT_COMMANDS:
+        return AuditAction(parts[0])
+    if len(parts) == 2 and parts == ["options-scanner-memory", "show"]:
+        return ShowAction()
+    if len(parts) == 2 and parts == ["options-scanner-memory", "history"]:
+        return HistoryAction()
+    if len(parts) == 3 and parts[:2] == ["options-scanner-memory", "set"]:
+        match = _VALUE.fullmatch(parts[2])
+        if not match:
+            raise UsageError("set requires a value such as 600M")
+        mib = int(match.group(1))
+        if not MIN_MIB <= mib <= MAX_MIB:
+            raise UsageError("MemoryMax must stay between 350M and 600M")
+        return SetAction(mib)
+    if len(parts) == 2 and parts == ["options-scanner-memory", "rollback"]:
+        return RollbackAction(None)
+    if len(parts) == 3 and parts[:2] == ["options-scanner-memory", "rollback"]:
+        if not _STAMP.fullmatch(parts[2]):
+            raise UsageError("rollback stamp must look like 20261008T204500Z")
+        return RollbackAction(parts[2])
+    raise Denied("command is not in the maintenance allowlist")
+
+
+def parse_argv(argv: list[str]) -> Action:
+    args = argv[1:]
+    if not args:
+        raise UsageError("missing command")
+    if args[0] == "run":
+        args = args[1:]
+        if not args:
+            raise UsageError("missing command")
+        if len(args) == 1:
+            return parse_command_text(args[0])
+        return parse_command_text(" ".join(args))
+    return parse_command_text(" ".join(args))
+
+
+def canonical(action: Action) -> str:
+    if isinstance(action, HelpAction):
+        return "help"
+    if isinstance(action, SelfCheckAction):
+        return "self-check"
+    if isinstance(action, ShowAction):
+        return "options-scanner-memory show"
+    if isinstance(action, HistoryAction):
+        return "options-scanner-memory history"
+    if isinstance(action, SetAction):
+        return f"options-scanner-memory set {action.mib}M"
+    if isinstance(action, RollbackAction):
+        if action.stamp:
+            return f"options-scanner-memory rollback {action.stamp}"
+        return "options-scanner-memory rollback"
+    if isinstance(action, AuditAction):
+        return action.name
+    raise Denied("command is not in the maintenance allowlist")
+
+
+def help_text() -> str:
+    names = " ".join(sorted(AUDIT_COMMANDS))
+    return "\n".join(
+        [
+            "Allowed maintenance commands:",
+            "  help",
+            "  self-check",
+            "  options-scanner-memory show",
+            "  options-scanner-memory history",
+            "  options-scanner-memory set <350-600>M",
+            "  options-scanner-memory rollback [YYYYMMDDTHHMMSSZ]",
+            "Read-only audit commands delegated unchanged:",
+            f"  {names}",
+            "set and rollback require a one-time root approval file.",
+            "This program cannot create an approval.",
+            "MemoryMax outside 350M..600M, other units, restarts, and deploys are rejected.",
+        ]
+    )
+
+
+def _sha256(text: str) -> str:
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def _show_value(props: dict[str, str], key: str) -> str:
+    return props.get(key, "").strip()
+
+
+def capture(host: Host) -> Snapshot:
+    scanner = host.systemctl_show(SCANNER_UNIT)
+    futures = host.systemctl_show(FUTURES_UNIT)
+    memory_raw = _show_value(scanner, "MemoryMax")
+    memory_bytes = parse_memory_max(memory_raw)
+    cgroup = _show_value(scanner, "ControlGroup")
+    pid = _show_value(scanner, "MainPID")
+    cgroup_max = cgroup_current = cgroup_swap = None
+    if pid not in {"", "0"}:
+        if cgroup != EXPECTED_CGROUP:
+            raise MaintenanceFailure("options-scanner cgroup is not the expected service cgroup")
+        cgroup_max = host.read_cgroup(cgroup, "memory.max")
+        cgroup_current = host.read_cgroup(cgroup, "memory.current")
+        cgroup_swap = host.read_cgroup(cgroup, "memory.swap.current")
+    base = host.read_base_unit()
+    floor_count = sum(1 for line in base.splitlines() if line.strip() == BASE_MEMORY_LINE)
+    etc: dict[str, str] = {}
+    our_dropin = None
+    for name in host.etc_dropin_names():
+        text = host.read_etc_dropin(name)
+        etc[name] = _sha256(text)
+        if name == DROPIN_NAME:
+            our_dropin = text
+    runtime = {name: host.read_runtime_dropin(name) for name in host.runtime_dropin_names()}
+    return Snapshot(
+        scanner_active=_show_value(scanner, "ActiveState"),
+        scanner_pid=pid,
+        scanner_restarts=_show_value(scanner, "NRestarts"),
+        scanner_memory_raw=memory_raw,
+        scanner_mib=mib_of(memory_bytes) if memory_bytes is not None else None,
+        scanner_cgroup=cgroup,
+        futures_active=_show_value(futures, "ActiveState"),
+        futures_pid=_show_value(futures, "MainPID"),
+        futures_restarts=_show_value(futures, "NRestarts"),
+        futures_memory_raw=_show_value(futures, "MemoryMax"),
+        cgroup_max=None if cgroup_max is None else cgroup_max.strip(),
+        cgroup_current=None if cgroup_current is None else cgroup_current.strip(),
+        cgroup_swap=None if cgroup_swap is None else cgroup_swap.strip(),
+        health_http=host.health_code(),
+        base_sha256=_sha256(base),
+        base_floor_ok=floor_count == 1,
+        etc_files=etc,
+        our_dropin=our_dropin,
+        runtime_files=runtime,
+    )
+
+
+def _require_floor(snapshot: Snapshot) -> None:
+    if not snapshot.base_floor_ok:
+        raise MaintenanceFailure("base options-scanner unit must still contain MemoryMax=350M")
+    if snapshot.our_dropin is not None and not _DROPIN.fullmatch(snapshot.our_dropin):
+        raise MaintenanceFailure("existing memory drop-in is not in the expected form")
+    if snapshot.our_dropin is not None:
+        found = int(_DROPIN.fullmatch(snapshot.our_dropin).group(1))
+        if not MIN_MIB <= found <= MAX_MIB:
+            raise MaintenanceFailure("existing memory drop-in is outside 350M..600M")
+
+
+def _expected_bytes(mib: int) -> str:
+    return str(mib * MIB)
+
+
+def _live_bytes(snapshot: Snapshot) -> int | None:
+    raw = snapshot.cgroup_max
+    if raw is None or raw == "max" or not raw.isdigit():
+        return None
+    return int(raw)
+
+
+def _lower_live_limit(host: Host, before: Snapshot, target_mib: int) -> None:
+    target = target_mib * MIB
+    raw = before.cgroup_max
+    if raw is None or before.scanner_pid in {"", "0"}:
+        return
+    unlimited = raw == "max"
+    current = None if unlimited or not raw.isdigit() else int(raw)
+    if not unlimited and (current is None or current <= target):
+        return
+    if before.scanner_cgroup != EXPECTED_CGROUP:
+        raise MaintenanceFailure("refusing to write an unexpected cgroup")
+    try:
+        host.write_cgroup_max(before.scanner_cgroup, str(target))
+    except OSError as exc:
+        raise MaintenanceFailure(
+            "kernel refused the lower memory limit; configuration was not changed"
+        ) from exc
+    got = host.read_cgroup(before.scanner_cgroup, "memory.max")
+    if got is None or got.strip() != str(target):
+        if raw is not None:
+            with contextlib.suppress(OSError):
+                host.write_cgroup_max(before.scanner_cgroup, raw)
+        raise MaintenanceFailure(
+            "lower memory limit did not stick; configuration was not changed"
+        )
+
+
+def _persist(host: Host, target_mib: int) -> None:
+    if target_mib == MIN_MIB:
+        host.remove_our_dropin()
+        return
+    text = dropin_text(target_mib)
+    if not _DROPIN.fullmatch(text):
+        raise MaintenanceFailure("refusing to write an unexpected drop-in")
+    host.write_our_dropin(text)
+
+
+def _retire_mismatched_runtime(host: Host, target_mib: int) -> dict[str, str]:
+    """Remove memory-only runtime overrides that contradict the target.
+
+    Their text is returned so a failed attempt can put them back.
+    """
+
+    removed: dict[str, str] = {}
+    for name in host.runtime_dropin_names():
+        text = host.read_runtime_dropin(name)
+        if not _memory_assignment_only(text):
+            continue
+        if _runtime_memory_only(text, target_mib):
+            continue
+        removed[name] = text
+        host.remove_runtime_dropin(name)
+    return removed
+
+
+def _sync_live(host: Host, before: Snapshot, target_mib: int) -> None:
+    target = _expected_bytes(target_mib)
+    if before.scanner_pid not in {"", "0"} and before.scanner_cgroup == EXPECTED_CGROUP:
+        current = host.read_cgroup(before.scanner_cgroup, "memory.max")
+        if current is None or current.strip() != target:
+            try:
+                host.write_cgroup_max(before.scanner_cgroup, target)
+            except OSError as exc:
+                raise MaintenanceFailure("live memory limit was not updated") from exc
+    shown = host.systemctl_show(SCANNER_UNIT)
+    shown_bytes = parse_memory_max(_show_value(shown, "MemoryMax"))
+    if shown_bytes != target_mib * MIB:
+        host.set_property_runtime(target_mib)
+
+
+def _same_identity(before: Snapshot, after: Snapshot) -> None:
+    if after.scanner_pid != before.scanner_pid:
+        raise MaintenanceFailure("options-scanner PID changed; memory change was reversed")
+    if after.scanner_restarts != before.scanner_restarts:
+        raise MaintenanceFailure("options-scanner restart count changed; memory change was reversed")
+    if after.scanner_active != before.scanner_active:
+        raise MaintenanceFailure("options-scanner state changed; memory change was reversed")
+    if after.futures_pid != before.futures_pid or after.futures_restarts != before.futures_restarts:
+        raise MaintenanceFailure("futures-bot identity changed; memory change was reversed")
+    if after.futures_active != before.futures_active or after.futures_memory_raw != before.futures_memory_raw:
+        raise MaintenanceFailure("futures-bot memory or state changed; memory change was reversed")
+    if after.base_sha256 != before.base_sha256 or not after.base_floor_ok:
+        raise MaintenanceFailure("base unit file changed; memory change was reversed")
+    if before.health_http == "200" and after.health_http != "200":
+        raise MaintenanceFailure("options-scanner health check failed; memory change was reversed")
+
+
+def _same_unrelated_files(before: Snapshot, after: Snapshot) -> None:
+    for name, digest in before.etc_files.items():
+        if name == DROPIN_NAME:
+            continue
+        if after.etc_files.get(name) != digest:
+            raise MaintenanceFailure("an unrelated scanner drop-in changed")
+    extra = set(after.etc_files) - set(before.etc_files) - {DROPIN_NAME}
+    if extra:
+        raise MaintenanceFailure("an unexpected scanner drop-in appeared")
+
+
+def verify_target(_host: Host, before: Snapshot, after: Snapshot, target_mib: int) -> None:
+    _same_identity(before, after)
+    _same_unrelated_files(before, after)
+    expected = target_mib * MIB
+    got = parse_memory_max(after.scanner_memory_raw)
+    if got != expected:
+        raise MaintenanceFailure("MemoryMax did not match the requested value")
+    if after.scanner_pid not in {"", "0"}:
+        if after.cgroup_max != str(expected):
+            raise MaintenanceFailure("live cgroup memory.max did not match the requested value")
+    if target_mib == MIN_MIB:
+        if after.our_dropin not in {None, ""}:
+            raise MaintenanceFailure("350M must come from the base unit, not a drop-in")
+    else:
+        if after.our_dropin != dropin_text(target_mib):
+            raise MaintenanceFailure("memory drop-in does not match the requested value")
+    for name, text in after.runtime_files.items():
+        previous = before.runtime_files.get(name)
+        if previous == text:
+            continue
+        if previous is not None:
+            raise MaintenanceFailure("a pre-existing runtime drop-in changed")
+        if not _runtime_memory_only(text, target_mib):
+            raise MaintenanceFailure("runtime drop-in is not a MemoryMax override")
+
+
+def _runtime_memory_only(text: str, target_mib: int) -> bool:
+    assignments: list[tuple[str, str]] = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or line.startswith(";") or line.startswith("["):
+            continue
+        if "=" not in line:
+            return False
+        key, value = line.split("=", 1)
+        assignments.append((key.strip(), value.strip()))
+    expected = {("MemoryMax", f"{target_mib}M"), ("MemoryMax", str(target_mib * MIB))}
+    return len(assignments) == 1 and tuple(assignments[0]) in expected
+
+
+def _restore_files(host: Host, before: Snapshot, removed_runtime: dict[str, str]) -> None:
+    if before.our_dropin is None:
+        host.remove_our_dropin()
+    else:
+        host.write_our_dropin(before.our_dropin)
+    current_runtime = set(host.runtime_dropin_names())
+    for name in current_runtime - set(before.runtime_files):
+        text = host.read_runtime_dropin(name)
+        if _memory_assignment_only(text):
+            host.remove_runtime_dropin(name)
+    for name, text in removed_runtime.items():
+        host.write_runtime_dropin(name, text)
+
+
+def _memory_assignment_only(text: str) -> bool:
+    assignments = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or line.startswith(";") or line.startswith("["):
+            continue
+        if "=" not in line:
+            return False
+        key, _value = line.split("=", 1)
+        assignments.append(key.strip())
+    return assignments == ["MemoryMax"]
+
+
+def _restore_cgroup(host: Host, before: Snapshot) -> None:
+    if before.cgroup_max is None or before.scanner_pid in {"", "0"}:
+        return
+    if before.scanner_cgroup != EXPECTED_CGROUP:
+        return
+    with contextlib.suppress(OSError):
+        host.write_cgroup_max(before.scanner_cgroup, before.cgroup_max)
+
+
+def apply_target(host: Host, before: Snapshot, target_mib: int) -> Snapshot:
+    _require_floor(before)
+    if before.scanner_mib is None:
+        raise MaintenanceFailure("options-scanner MemoryMax is not a finite mebibyte value")
+    removed_runtime: dict[str, str] = {}
+    mutated = False
+    try:
+        _lower_live_limit(host, before, target_mib)
+        removed_runtime = _retire_mismatched_runtime(host, target_mib)
+        mutated = bool(removed_runtime)
+        _persist(host, target_mib)
+        mutated = True
+        host.daemon_reload()
+        _sync_live(host, before, target_mib)
+        after = capture(host)
+        verify_target(host, before, after, target_mib)
+        return after
+    except Exception as exc:
+        if mutated:
+            with contextlib.suppress(Exception):
+                _restore_files(host, before, removed_runtime)
+                host.daemon_reload()
+        _restore_cgroup(host, before)
+        if isinstance(exc, MaintenanceFailure) and not exc.restored and "not changed" in str(exc):
+            raise
+        message = str(exc) if str(exc) else "memory change failed"
+        raise MaintenanceFailure(message, restored=True) from exc
+
+
+def _consistent(snapshot: Snapshot, mib: int) -> bool:
+    if snapshot.scanner_mib != mib:
+        return False
+    if mib == MIN_MIB:
+        return snapshot.our_dropin is None
+    return snapshot.our_dropin == dropin_text(mib)
+
+
+def _load_history(host: Host) -> list[dict[str, object]]:
+    raw = host.read_optional(HISTORY_PATH)
+    rows: list[dict[str, object]] = []
+    for line in raw.splitlines():
+        if not line.strip():
+            continue
+        item = json.loads(line)
+        if isinstance(item, dict):
+            rows.append(item)
+    return rows
+
+
+def _append_history(host: Host, row: dict[str, object]) -> None:
+    host.append_line(HISTORY_PATH, json.dumps(row, sort_keys=True))
+
+
+def _log(host: Host, row: dict[str, object]) -> None:
+    safe = {key: redact(value) if isinstance(value, str) else value for key, value in row.items()}
+    safe.setdefault("ts", host.now().strftime("%Y-%m-%dT%H:%M:%SZ"))
+    safe.setdefault("ssh_connection", host.env("SSH_CONNECTION") or "unknown")
+    safe.setdefault("sudo_user", host.env("SUDO_USER") or "unknown")
+    host.append_line(LOG_PATH, json.dumps(safe, sort_keys=True))
+
+
+def _identity_log(before: Snapshot, after: Snapshot | None = None) -> dict[str, object]:
+    row: dict[str, object] = {
+        "scanner_pid": before.scanner_pid,
+        "futures_pid": before.futures_pid,
+        "before_mib": before.scanner_mib,
+        "health_http_before": before.health_http,
+    }
+    if after is not None:
+        row.update(
+            {
+                "after_mib": after.scanner_mib,
+                "scanner_pid_unchanged": after.scanner_pid == before.scanner_pid,
+                "futures_pid_unchanged": after.futures_pid == before.futures_pid,
+                "restarts_unchanged": (
+                    after.scanner_restarts == before.scanner_restarts
+                    and after.futures_restarts == before.futures_restarts
+                ),
+                "health_http_after": after.health_http,
+            }
+        )
+    return row
+
+
+def _unique_stamp(host: Host, rows: list[dict[str, object]]) -> str:
+    used = {row.get("stamp") for row in rows}
+    base = host.now()
+    for offset in range(60):
+        stamp = (base + timedelta(seconds=offset)).strftime("%Y%m%dT%H%M%SZ")
+        if stamp not in used:
+            return stamp
+    raise MaintenanceFailure("could not allocate a unique maintenance stamp")
+
+
+def _open_sets(rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    undone = {
+        row.get("undoes")
+        for row in rows
+        if row.get("action") == "rollback" and row.get("result") == "ok"
+    }
+    return [
+        row
+        for row in rows
+        if row.get("action") == "set" and row.get("result") == "ok" and row.get("stamp") not in undone
+    ]
+
+
+def format_snapshot(snapshot: Snapshot) -> str:
+    lines = [
+        "operation=options-scanner-memory",
+        "action=show",
+        f"active_state={snapshot.scanner_active}",
+        f"main_pid={snapshot.scanner_pid}",
+        f"n_restarts={snapshot.scanner_restarts}",
+        f"memory_max_raw={snapshot.scanner_memory_raw}",
+        f"memory_max_mib={'' if snapshot.scanner_mib is None else snapshot.scanner_mib}",
+        f"cgroup_memory_max={snapshot.cgroup_max or ''}",
+        f"cgroup_memory_current={snapshot.cgroup_current or ''}",
+        f"cgroup_swap_current={snapshot.cgroup_swap or ''}",
+        f"authorized_min_mib={MIN_MIB}",
+        f"authorized_max_mib={MAX_MIB}",
+        "within_authorized_window="
+        + (
+            "true"
+            if snapshot.scanner_mib is not None and MIN_MIB <= snapshot.scanner_mib <= MAX_MIB
+            else "false"
+        ),
+        "drop_in=" + ("present" if snapshot.our_dropin else "absent"),
+        f"base_unit_floor={'350M' if snapshot.base_floor_ok else 'missing'}",
+        f"health_http={snapshot.health_http}",
+        f"futures_bot_main_pid={snapshot.futures_pid}",
+        f"futures_bot_active_state={snapshot.futures_active}",
+        f"futures_bot_memory_max={snapshot.futures_memory_raw}",
+    ]
+    return "\n".join(lines)
+
+
+def do_show(host: Host) -> int:
+    snapshot = capture(host)
+    sys.stdout.write(format_snapshot(snapshot) + "\n")
+    _log(host, {"event": "finish", "command": "options-scanner-memory show", "result": "ok"})
+    return 0
+
+
+def do_history(host: Host) -> int:
+    rows = _load_history(host)
+    if not rows:
+        sys.stdout.write("history=empty\n")
+    for row in rows:
+        sys.stdout.write(json.dumps(row, sort_keys=True) + "\n")
+    _log(host, {"event": "finish", "command": "options-scanner-memory history", "result": "ok"})
+    return 0
+
+
+def parse_approval_text(text: str) -> tuple[str, datetime]:
+    """Return the operation and expiry from an exact two-line approval."""
+
+    if text.count("\n") != 2 or not text.endswith("\n"):
+        raise ValueError("approval file shape is invalid")
+    operation_line, expires_line = text.splitlines()
+    if not operation_line.startswith("operation=") or not expires_line.startswith("expires="):
+        raise ValueError("approval file keys are invalid")
+    operation = operation_line.removeprefix("operation=")
+    expires_raw = expires_line.removeprefix("expires=")
+    if not _STAMP.fullmatch(expires_raw):
+        raise ValueError("approval expiry is invalid")
+    try:
+        action = parse_command_text(operation)
+    except (Denied, UsageError) as exc:
+        raise ValueError("approval operation is invalid") from exc
+    if not isinstance(action, (SetAction, RollbackAction)) or canonical(action) != operation:
+        raise ValueError("approval operation is invalid")
+    expires = datetime.strptime(expires_raw, "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
+    return operation, expires
+
+
+def consume_matching_approval(host: Host, command: str) -> str:
+    """Consume the single root approval for this exact command.
+
+    Missing, expired, writable, or ambiguous approvals are rejected and left
+    in place. There is no way for this function to create an approval.
+    """
+
+    valid: list[str] = []
+    problems: list[str] = []
+    for name in host.approval_names():
+        if name.endswith(".consumed") or not _APPROVAL_NAME.fullmatch(name):
+            continue
+        try:
+            operation, expires = parse_approval_text(host.read_approval(name))
+        except (OSError, UnicodeError, ValueError):
+            continue
+        if operation != command:
+            continue
+        if not host.approval_is_restricted(name):
+            problems.append(f"{name} is not a restricted root-owned file")
+            continue
+        if expires <= host.now():
+            problems.append(f"{name} is expired")
+            continue
+        valid.append(name)
+    if len(valid) > 1:
+        raise Denied("more than one approval matches this command")
+    if len(valid) == 1:
+        host.consume_approval(valid[0])
+        return valid[0]
+    if problems:
+        raise Denied(problems[0])
+    raise Denied("operator approval is required")
+
+
+def do_self_check() -> int:
+    sys.stdout.write(
+        "\n".join(
+            [
+                "program=afs-maintenance",
+                f"memory_window_mib={MIN_MIB}-{MAX_MIB}",
+                "unit=options-scanner.service",
+                "restarts=forbidden",
+                "deploys=forbidden",
+                "ssh_key_changes=forbidden",
+                "mutations=require-operator-approval",
+            ]
+        )
+        + "\n"
+    )
+    return 0
+
+
+def do_set(host: Host, mib: int) -> int:
+    with host.exclusive_lock():
+        before = capture(host)
+        command = f"options-scanner-memory set {mib}M"
+        if _consistent(before, mib):
+            _log(host, {"event": "finish", "command": command, "result": "noop", **_identity_log(before, before)})
+            sys.stdout.write(f"result=noop\nalready_mib={mib}\nscanner_pid={before.scanner_pid}\n")
+            return 0
+        approval = consume_matching_approval(host, command)
+        _log(
+            host,
+            {
+                "event": "start",
+                "command": command,
+                "result": "started",
+                "approval": approval,
+                **_identity_log(before),
+            },
+        )
+        try:
+            after = apply_target(host, before, mib)
+        except MaintenanceFailure as exc:
+            _log(
+                host,
+                {
+                    "event": "finish",
+                    "command": command,
+                    "result": "rolled_back" if exc.restored else "rejected",
+                    "error": str(exc),
+                    **_identity_log(before),
+                },
+            )
+            raise
+        stamp = _unique_stamp(host, _load_history(host))
+        _append_history(
+            host,
+            {
+                "action": "set",
+                "after_mib": mib,
+                "before_mib": before.scanner_mib,
+                "result": "ok",
+                "stamp": stamp,
+            },
+        )
+        _log(
+            host,
+            {
+                "event": "finish",
+                "command": command,
+                "result": "ok",
+                "stamp": stamp,
+                "approval": approval,
+                **_identity_log(before, after),
+            },
+        )
+        sys.stdout.write(
+            "\n".join(
+                [
+                    "result=ok",
+                    f"stamp={stamp}",
+                    f"before_mib={before.scanner_mib}",
+                    f"after_mib={mib}",
+                    f"scanner_pid_unchanged={str(after.scanner_pid == before.scanner_pid).lower()}",
+                    f"futures_pid_unchanged={str(after.futures_pid == before.futures_pid).lower()}",
+                    "restarts_unchanged=true",
+                    f"health_http={after.health_http}",
+                    f"rollback=options-scanner-memory rollback {stamp}",
+                ]
+            )
+            + "\n"
+        )
+        return 0
+
+
+def _select_rollback(rows: list[dict[str, object]], stamp: str | None) -> dict[str, object]:
+    open_sets = _open_sets(rows)
+    if stamp is None:
+        if not open_sets:
+            raise UsageError("there is no memory change to roll back")
+        return open_sets[-1]
+    matches = [row for row in open_sets if row.get("stamp") == stamp]
+    if not matches:
+        raise UsageError("that stamp is unknown or already rolled back")
+    return matches[-1]
+
+
+def do_rollback(host: Host, stamp: str | None) -> int:
+    with host.exclusive_lock():
+        rows = _load_history(host)
+        selected = _select_rollback(rows, stamp)
+        target = selected.get("before_mib")
+        if not isinstance(target, int) or not MIN_MIB <= target <= MAX_MIB:
+            raise MaintenanceFailure("recorded rollback target is outside 350M..600M")
+        before = capture(host)
+        command = canonical(RollbackAction(stamp))
+        if before.scanner_mib != selected.get("after_mib"):
+            raise MaintenanceFailure(
+                "current MemoryMax does not match the recorded change; rollback was not applied"
+            )
+        approval = consume_matching_approval(host, command)
+        _log(
+            host,
+            {
+                "event": "start",
+                "command": command,
+                "result": "started",
+                "approval": approval,
+                "undoes": selected.get("stamp"),
+            },
+        )
+        try:
+            after = apply_target(host, before, target)
+        except MaintenanceFailure as exc:
+            _log(
+                host,
+                {
+                    "event": "finish",
+                    "command": command,
+                    "result": "rolled_back" if exc.restored else "rejected",
+                    "error": str(exc),
+                },
+            )
+            raise
+        _append_history(
+            host,
+            {
+                "action": "rollback",
+                "after_mib": target,
+                "before_mib": before.scanner_mib,
+                "result": "ok",
+                "stamp": _unique_stamp(host, rows),
+                "undoes": selected.get("stamp"),
+            },
+        )
+        _log(
+            host,
+            {
+                "event": "finish",
+                "command": command,
+                "result": "ok",
+                "undoes": selected.get("stamp"),
+                **_identity_log(before, after),
+            },
+        )
+        sys.stdout.write(
+            "\n".join(
+                [
+                    "result=ok",
+                    f"undoes={selected.get('stamp')}",
+                    f"restored_mib={target}",
+                    f"scanner_pid_unchanged={str(after.scanner_pid == before.scanner_pid).lower()}",
+                    f"futures_pid_unchanged={str(after.futures_pid == before.futures_pid).lower()}",
+                    "restarts_unchanged=true",
+                ]
+            )
+            + "\n"
+        )
+        return 0
+
+
+def execute(argv: list[str], host: Host) -> int:
+    try:
+        action = parse_argv(argv)
+    except Denied as exc:
+        sys.stderr.write(f"DENIED: {exc}\n")
+        with contextlib.suppress(Exception):
+            host.ensure_state_dirs()
+            _log(host, {"event": "finish", "command": redact(" ".join(argv[1:])[:200]), "result": "denied"})
+        return 126
+    except UsageError as exc:
+        sys.stderr.write(f"USAGE: {exc}\n")
+        return 2
+    if isinstance(action, HelpAction):
+        sys.stdout.write(help_text() + "\n")
+        return 0
+    if isinstance(action, SelfCheckAction):
+        return do_self_check()
+    try:
+        host.ensure_state_dirs()
+        if isinstance(action, AuditAction):
+            _log(host, {"event": "delegate", "command": action.name, "result": "delegated"})
+            return host.exec_audit(action.name)
+        if isinstance(action, ShowAction):
+            return do_show(host)
+        if isinstance(action, HistoryAction):
+            return do_history(host)
+        if isinstance(action, SetAction):
+            return do_set(host, action.mib)
+        if isinstance(action, RollbackAction):
+            return do_rollback(host, action.stamp)
+    except Denied as exc:
+        sys.stderr.write(f"DENIED: {exc}\n")
+        return 126
+    except UsageError as exc:
+        sys.stderr.write(f"USAGE: {exc}\n")
+        return 2
+    except MaintenanceFailure as exc:
+        sys.stderr.write(f"FAILED: {exc}\n")
+        return 1
+    raise Denied("command is not in the maintenance allowlist")
+
+
+class ProductionHost(Host):
+    def _run(self, args: list[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(args, check=False, capture_output=True, text=True)
+
+    def systemctl_show(self, unit: str) -> dict[str, str]:
+        result = self._run(build_systemctl("show", unit=unit))
+        if result.returncode != 0:
+            raise MaintenanceFailure(f"systemctl show failed for {unit}")
+        props: dict[str, str] = {}
+        for line in result.stdout.splitlines():
+            if "=" in line:
+                key, value = line.split("=", 1)
+                props[key] = value
+        return props
+
+    def daemon_reload(self) -> None:
+        result = self._run(build_systemctl("daemon-reload"))
+        if result.returncode != 0:
+            raise MaintenanceFailure("daemon-reload failed")
+
+    def set_property_runtime(self, mib: int) -> None:
+        result = self._run(build_systemctl("set-property-runtime", mib=mib))
+        if result.returncode != 0:
+            raise MaintenanceFailure("runtime MemoryMax update failed")
+
+    def _cgroup_file(self, control_group: str, leaf: str) -> Path:
+        if control_group != EXPECTED_CGROUP or leaf not in {
+            "memory.max",
+            "memory.current",
+            "memory.swap.current",
+        }:
+            raise Denied("cgroup path is not available to maintenance")
+        return CGROUP_ROOT / control_group.lstrip("/") / leaf
+
+    def read_cgroup(self, control_group: str, leaf: str) -> str | None:
+        path = self._cgroup_file(control_group, leaf)
+        if not path.is_file() or path.is_symlink():
+            return None
+        return path.read_text(encoding="utf-8")
+
+    def write_cgroup_max(self, control_group: str, value: str) -> None:
+        if not value.isdigit():
+            raise Denied("cgroup memory value must be a byte count")
+        path = self._cgroup_file(control_group, "memory.max")
+        if path.is_symlink():
+            raise MaintenanceFailure("refusing to follow a cgroup symlink")
+        path.write_text(value + "\n", encoding="utf-8")
+
+    def read_base_unit(self) -> str:
+        if BASE_UNIT.is_symlink():
+            raise MaintenanceFailure("refusing to read a symlinked unit file")
+        return BASE_UNIT.read_text(encoding="utf-8")
+
+    def _regular_names(self, directory: Path) -> list[str]:
+        if not directory.exists():
+            return []
+        if directory.is_symlink():
+            raise MaintenanceFailure("refusing to list a symlinked drop-in directory")
+        names: list[str] = []
+        for entry in sorted(directory.iterdir()):
+            if entry.is_symlink():
+                raise MaintenanceFailure(f"refusing to touch symlink {entry.name}")
+            if entry.is_file():
+                names.append(entry.name)
+        return names
+
+    def etc_dropin_names(self) -> list[str]:
+        return self._regular_names(ETC_DROPIN_DIR)
+
+    def read_etc_dropin(self, name: str) -> str:
+        self._check_name(name)
+        return (ETC_DROPIN_DIR / name).read_text(encoding="utf-8")
+
+    def write_our_dropin(self, text: str) -> None:
+        if not _DROPIN.fullmatch(text):
+            raise Denied("drop-in content is not a MemoryMax override")
+        path = ETC_DROPIN_DIR / DROPIN_NAME
+        self._write_exact(path, text, 0o644)
+
+    def remove_our_dropin(self) -> None:
+        path = ETC_DROPIN_DIR / DROPIN_NAME
+        if path.is_symlink():
+            raise MaintenanceFailure("refusing to remove a symlinked drop-in")
+        if path.exists():
+            path.unlink()
+
+    def runtime_dropin_names(self) -> list[str]:
+        return self._regular_names(RUNTIME_DROPIN_DIR)
+
+    def read_runtime_dropin(self, name: str) -> str:
+        self._check_name(name)
+        return (RUNTIME_DROPIN_DIR / name).read_text(encoding="utf-8")
+
+    def remove_runtime_dropin(self, name: str) -> None:
+        self._check_name(name)
+        path = RUNTIME_DROPIN_DIR / name
+        if not path.exists():
+            return
+        text = path.read_text(encoding="utf-8")
+        if not _memory_assignment_only(text):
+            raise MaintenanceFailure("refusing to remove a runtime drop-in that is not MemoryMax")
+        if path.is_symlink():
+            raise MaintenanceFailure("refusing to remove a symlinked runtime drop-in")
+        path.unlink()
+
+    def write_runtime_dropin(self, name: str, text: str) -> None:
+        self._check_name(name)
+        if not _memory_assignment_only(text):
+            raise Denied("runtime drop-in is not a MemoryMax override")
+        self._write_exact(RUNTIME_DROPIN_DIR / name, text, 0o644)
+
+    def health_code(self) -> str:
+        result = self._run(
+            [
+                "/usr/bin/curl",
+                "-sS",
+                "-o",
+                "/dev/null",
+                "-w",
+                "%{http_code}",
+                "--max-time",
+                "5",
+                "--proto",
+                "=http",
+                HEALTH_URL,
+            ]
+        )
+        code = result.stdout.strip()
+        if result.returncode != 0 or not code.isdigit():
+            return "000"
+        return code
+
+    def read_optional(self, path: Path) -> str:
+        self._check_log_path(path)
+        if not path.exists():
+            return ""
+        if path.is_symlink():
+            raise MaintenanceFailure("refusing to read a symlinked maintenance record")
+        return path.read_text(encoding="utf-8")
+
+    def append_line(self, path: Path, line: str) -> None:
+        self._check_log_path(path)
+        if path.is_symlink():
+            raise MaintenanceFailure("refusing to append through a symlink")
+        flags = os.O_APPEND | os.O_CREAT | os.O_WRONLY | os.O_NOFOLLOW
+        fd = os.open(path, flags, 0o640)
+        try:
+            os.write(fd, (line + "\n").encode())
+        finally:
+            os.close(fd)
+
+    def approval_names(self) -> list[str]:
+        if not APPROVAL_DIR.exists():
+            return []
+        if APPROVAL_DIR.is_symlink():
+            raise MaintenanceFailure("refusing to list a symlinked approval directory")
+        return [
+            entry.name
+            for entry in sorted(APPROVAL_DIR.iterdir())
+            if entry.is_file() or entry.is_symlink()
+        ]
+
+    def read_approval(self, name: str) -> str:
+        self._check_approval_name(name)
+        path = APPROVAL_DIR / name
+        if path.is_symlink():
+            raise Denied("approval is not a regular file")
+        return path.read_text(encoding="utf-8")
+
+    def approval_is_restricted(self, name: str) -> bool:
+        self._check_approval_name(name)
+        path = APPROVAL_DIR / name
+        try:
+            info = os.lstat(path)
+        except OSError:
+            return False
+        if not stat.S_ISREG(info.st_mode) or info.st_mode & 0o022:
+            return False
+        return info.st_uid == 0
+
+    def consume_approval(self, name: str) -> None:
+        self._check_approval_name(name)
+        if name.endswith(".consumed"):
+            raise Denied("approval is already consumed")
+        path = APPROVAL_DIR / name
+        destination = APPROVAL_DIR / f"{name}.consumed"
+        if path.is_symlink() or destination.is_symlink() or destination.exists():
+            raise Denied("approval cannot be consumed")
+        os.rename(path, destination)
+
+    def ensure_state_dirs(self) -> None:
+        if not SHARED_DIR.is_dir() or SHARED_DIR.is_symlink():
+            raise MaintenanceFailure("shared directory is missing")
+        for directory in (SHARED_DIR / "maintenance", STATE_DIR, APPROVAL_DIR, SHARED_DIR / "logs"):
+            directory.mkdir(mode=0o750, exist_ok=True)
+
+    @contextlib.contextmanager
+    def exclusive_lock(self) -> Iterator[None]:
+        self.ensure_state_dirs()
+        fd = os.open(LOCK_PATH, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            yield
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            os.close(fd)
+
+    def now(self) -> datetime:
+        return datetime.now(timezone.utc)
+
+    def env(self, name: str) -> str:
+        if name not in {"SSH_CONNECTION", "SSH_CLIENT", "SUDO_USER"}:
+            return ""
+        return os.environ.get(name, "")
+
+    def exec_audit(self, token: str) -> int:
+        if token not in AUDIT_COMMANDS:
+            raise Denied("command is not in the maintenance allowlist")
+        os.execv(AUDIT_PROGRAM, [str(AUDIT_PROGRAM), token])
+        return 1
+
+    def _check_approval_name(self, name: str) -> None:
+        if name != Path(name).name or not _APPROVAL_NAME.fullmatch(name):
+            raise Denied("approval name is not available to maintenance")
+
+    def _check_name(self, name: str) -> None:
+        if name != Path(name).name or not _SAFE_TEXT.fullmatch(name):
+            raise Denied("drop-in name is not available to maintenance")
+
+    def _check_log_path(self, path: Path) -> None:
+        if path not in {LOG_PATH, HISTORY_PATH}:
+            raise Denied("record path is not available to maintenance")
+
+    def _write_exact(self, path: Path, text: str, mode: int) -> None:
+        if path.is_symlink():
+            raise MaintenanceFailure("refusing to write through a symlink")
+        path.parent.mkdir(mode=0o755, exist_ok=True)
+        tmp = path.with_name(path.name + ".tmp")
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode)
+        try:
+            os.write(fd, text.encode())
+        finally:
+            os.close(fd)
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+
+
+def main(argv: list[str] | None = None) -> int:
+    try:
+        return execute(argv if argv is not None else sys.argv, ProductionHost())
+    except Denied as exc:
+        sys.stderr.write(f"DENIED: {exc}\n")
+        return 126
+    except UsageError as exc:
+        sys.stderr.write(f"USAGE: {exc}\n")
+        return 2
+    except MaintenanceFailure as exc:
+        sys.stderr.write(f"FAILED: {exc}\n")
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
