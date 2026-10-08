@@ -38,8 +38,16 @@ are taken in fill order; one that fills while the account (or market) is still
 in a trade, or after its session already has 3, is skipped. A trade the
 resolver left open is played forward on the stored bars (stop checked before
 target) and otherwise closed at the 17:00 ET close of its trading date. Shown
-for the report's trading date and the week so far, next to every signal under
-the same pricing. Raw collection is untouched: this is a view of the same rows.
+for the report's trading date, the week so far and the running total since
+2026-09-23 (CAPPED_SINCE), all slices of ONE selection pass that starts at
+min(CAPPED_SINCE, Monday), next to every signal under the same pricing.
+
+This is a counterfactual report view, not an execution policy: the bot's own
+trade limit is unchanged. Dollars cover the priced trades only (MNQ/MES cost
+model; an OPEN trade with no stored bars is unpriced), and each summary carries
+its coverage: priced count, estimated fill times, bar-settled trades and trades
+assumed flat at 17:00 ET. Raw collection is untouched: this is a view of the
+same rows.
 """
 from __future__ import annotations
 
@@ -96,7 +104,7 @@ def load_outcomes_range(log_dir: str | Path, first: date, last: date) -> list[di
         with path.open(encoding="utf-8") as fh:
             for line in fh:
                 line = line.strip()
-                if not line:
+                if not line or '"SHADOW_OUTCOME"' not in line:
                     continue
                 try:
                     row = json.loads(line)
@@ -207,6 +215,8 @@ def mark_stacked(rows: list[dict], log_dir: str | Path | None = None) -> dict[in
 
 
 SESSION_CAP = 3
+# Start of the capped running total: first full trading date of the 2026-09 shadow cohort.
+CAPPED_SINCE = date(2026, 9, 23)
 DAY_OPEN, DAY_CLOSE, NIGHT_OPEN = time(9, 30), time(17, 0), time(18, 0)
 CAP_SCOPES = ("account", "per_market")
 
@@ -275,6 +285,7 @@ def capped_trades(rows: list[dict], log_dir: str | Path | None = None) -> list[d
         tick_value, tick_size = TICK_VALUE.get(inst), TICK_SIZE.get(inst)
         trading_date, session = trading_session(times[0])
         exit_dt, ticks, how = times[1], outcome.get("pnl_ticks"), result.lower()
+        assumed_close = exit_dt is None
         if exit_dt is None:  # no exit bar recorded: hold the position to the 17:00 ET close
             exit_dt = datetime.combine(trading_date, DAY_CLOSE, ET)
         if result == "OPEN":
@@ -285,13 +296,14 @@ def capped_trades(rows: list[dict], log_dir: str | Path | None = None) -> list[d
                 exit_dt, price, how = settled
                 sign = 1 if row.get("direction") == "LONG" else -1
                 ticks = sign * (price - float(row["entry"])) / tick_size
+            assumed_close = how in ("close", "unpriced")
         net = None
         if ticks is not None and tick_value is not None:
             net = net_dollars(inst, float(ticks) * tick_value, tick_value)
         trades.append({
             "key": str(row.get("candidate_key")), "instrument": inst, "fill": times[0],
             "exit": exit_dt, "trading_date": trading_date, "session": session,
-            "how": how, "net_usd": net,
+            "how": how, "net_usd": net, "approx_timing": times[2], "assumed_close": assumed_close,
             "won": result == "WIN" or (result == "OPEN" and net is not None and net > 0),
         })
     trades.sort(key=lambda t: (t["fill"], t["key"]))
@@ -331,24 +343,40 @@ def _cap_summary(trades: list[dict]) -> dict:
         "losses": sum(not t["won"] for t in priced),
         "net_usd": round(pnl, 2) if priced else None,
         "max_drawdown_usd": round(drawdown, 2),
-        "played_out_on_bars": sum(t["how"] in ("stop", "target", "close") for t in trades),
+        # Coverage / provenance of the dollars above.
+        "priced": len(priced),
         "unpriced": len(trades) - len(priced),
+        "estimated_fill_times": sum(t["approx_timing"] for t in trades),
+        "played_out_on_bars": sum(t["how"] in ("stop", "target", "close") for t in trades),
+        "assumed_flat_at_close": sum(t["assumed_close"] for t in trades),
         "day_session": sum(t["session"] == "day" for t in trades),
         "night_session": sum(t["session"] == "night" for t in trades),
         "outside_sessions": sum(t["session"] == "halt" for t in trades),
     }
 
 
-def capped_report(log_dir: str | Path, day: date, cap: int = SESSION_CAP) -> dict:
-    """Your-limits view for trading date `day` and its week so far (Monday..day)."""
+def capped_report(log_dir: str | Path, day: date, cap: int = SESSION_CAP,
+                  since: date = CAPPED_SINCE) -> dict:
+    """Your-limits view for trading date `day`, its week so far and the running total since `since`.
+
+    One selection pass from min(since, Monday) through `day`; every period is a
+    slice of it, so the same trade is kept or skipped in all three.
+    """
     monday = day - timedelta(days=day.weekday())
-    # Sunday-evening candidates open Monday's trading date; Saturday covers any carry-in.
-    trades = capped_trades(load_outcomes_range(log_dir, monday - timedelta(days=2), day), log_dir)
+    first = min(since, monday)
+    # The evening before `first` opens its trading date; carry-in before it is ignored.
+    rows = load_outcomes_range(log_dir, first - timedelta(days=2), day)
+    trades = [t for t in capped_trades(rows, log_dir) if first <= t["trading_date"] <= day]
     views = {"every_signal": trades, **{s: apply_session_cap(trades, s, cap) for s in CAP_SCOPES}}
     out = {"rule": {"per_session": cap, "day": "09:30-17:00 ET", "night": "18:00-09:30 ET",
-                    "reset": "18:00 ET", "one_position": True}, "trading_date": day.isoformat(),
-           "week_start": monday.isoformat()}
-    for label, lo in (("today", day), ("week_to_date", monday)):
+                    "reset": "18:00 ET", "one_position": True,
+                    "kind": "counterfactual report view; the bot's own trade limit is unchanged"},
+           "trading_date": day.isoformat(), "week_start": monday.isoformat(),
+           "since": since.isoformat(), "selection_start": first.isoformat()}
+    periods = [("today", day), ("week_to_date", monday)]
+    if since <= day:
+        periods.append(("since_start", since))
+    for label, lo in periods:
         out[label] = {
             name: _cap_summary([t for t in kept if lo <= t["trading_date"] <= day])
             for name, kept in views.items()
@@ -559,8 +587,23 @@ def _cap_line(label: str, s: dict) -> str:
         text += f", {pe.money(round(s['net_usd']))[:-3]} after costs"
         text += f", deepest drop {pe.money(round(s['max_drawdown_usd']), signed=False)[:-3]}"
     if s["unpriced"]:
-        text += f" ({s['unpriced']} could not be priced)"
+        text += f" (dollars cover {s['priced']} of {s['trades']} trades; {s['unpriced']} could not be priced)"
     return text
+
+
+def _coverage_line(views: dict) -> str | None:
+    """How much of the whole-account money rests on estimates."""
+    s = views["account"]
+    parts = []
+    if s["estimated_fill_times"]:
+        parts.append(f"{s['estimated_fill_times']} with estimated fill times")
+    if s["played_out_on_bars"]:
+        parts.append(f"{s['played_out_on_bars']} still open at the end of tracking, played out on stored prices")
+    if s["assumed_flat_at_close"]:
+        parts.append(f"{s['assumed_flat_at_close']} assumed closed at 5:00 PM ET")
+    if not parts:
+        return None
+    return "(whole-account trades above: " + "; ".join(parts) + ")"
 
 
 def _capped_lines(capped: dict | None, *, final: bool = True) -> list[str]:
@@ -570,20 +613,25 @@ def _capped_lines(capped: dict | None, *, final: bool = True) -> list[str]:
         return ["**Your limits**: not shown today — the calculation failed; the rest of this report is unaffected"]
     td, cap = capped["trading_date"], capped["rule"]["per_session"]
     prev = (date.fromisoformat(td) - timedelta(days=1)).isoformat()
-    lines = [f"**Your limits** — {cap} trades in the day session + {cap} in the night session,"
+    lines = [f"**Your limits (what-if)** — {cap} trades in the day session + {cap} in the night session,"
              f" one position at a time · trading day {pe.et_date(td)}"
-             f" (6:00 PM {pe.et_date(prev)} – 5:00 PM {pe.et_date(td)} ET)"]
+             f" (6:00 PM {pe.et_date(prev)} – 5:00 PM {pe.et_date(td)} ET)",
+             "Replays the recorded signals under these limits; it does not change what the bot trades."]
     if not final:
         lines.append("(first pass — trades still running tonight are added in tomorrow's final report)")
     for name, label in _CAP_LABELS:
         lines.append(_cap_line(f"Today, {label}", capped["today"][name]))
-    week = capped["week_to_date"]
     lines.append(f"Week so far (since {pe.et_date(capped['week_start'])}):")
     for name, label in _CAP_LABELS:
-        lines.append(_cap_line(f"Week, {label}", week[name]))
-    if any(v["played_out_on_bars"] for v in week.values()):
-        lines.append("(trades still open at the end of tracking were played out on stored prices,"
-                     " closing at 5:00 PM ET at the latest)")
+        lines.append(_cap_line(f"Week, {label}", capped["week_to_date"][name]))
+    total = capped.get("since_start")
+    if total:
+        lines.append(f"Running total (since {pe.et_date(capped['since'])}):")
+        for name, label in _CAP_LABELS:
+            lines.append(_cap_line(f"Total, {label}", total[name]))
+    coverage = _coverage_line(total or capped["week_to_date"])
+    if coverage:
+        lines.append(coverage)
     return lines
 
 

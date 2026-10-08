@@ -147,7 +147,7 @@ def test_your_limits_lines_render_both_systems_in_plain_english():
     text = "\n".join(lines)
     assert "Whole account: 12 trades, 5 won, 7 lost, -$40.50, deepest drop $210" in text
     assert "Each market separately: no trades" in text
-    assert "**Your limits · options** (at most 3 new paper trades a day)" in text
+    assert "**Your limits · options, what-if** (at most 3 new paper trades a day)" in text
     assert your_limits_lines(None) == [] and your_limits_lines({}) == []
 
 
@@ -170,3 +170,22 @@ def test_collect_your_limits_skips_futures_for_a_week_with_no_trading_days_yet(t
     monday = _date.today() + _td(days=14 - _date.today().weekday())
     got = collect_your_limits(tmp_path, tmp_path / "missing.sqlite", monday, monday + _td(days=6))
     assert "futures" not in got
+
+
+def test_your_limits_lines_show_running_total_coverage_and_tie_range():
+    from scripts.weekly_review import your_limits_lines
+
+    fut = {"trades": 4, "wins": 1, "losses": 3, "net_usd": -50.0, "max_drawdown_usd": 80.0,
+           "priced": 3, "unpriced": 1}
+    opt = {"closed": 4, "wins": 1, "losses": 3, "pnl_usd": -144.0, "max_drawdown_usd": 347.0,
+           "same_scan_ties": 1, "pnl_range_usd": [-834.0, -144.0]}
+    text = "\n".join(your_limits_lines({
+        "futures": {"account": fut, "per_market": fut, "every_signal": fut},
+        "futures_total": {"account": fut, "per_market": fut, "every_signal": fut},
+        "futures_since": "2026-09-23",
+        "options": {"account": opt, "per_ticker": opt, "no_limit": {**opt, "pnl_range_usd": None}},
+    }))
+    assert "**Your limits · futures, what-if**" in text and "the bot's own limit is unchanged" in text
+    assert "Running total since Sep 23:" in text
+    assert "(dollars cover 3 of 4 trades; 1 could not be priced)" in text
+    assert "-$834.00 to -$144.00 depending on which same-time trade is taken" in text

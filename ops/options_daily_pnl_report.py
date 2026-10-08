@@ -29,7 +29,7 @@ import json
 import os
 import sqlite3
 import sys
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -161,37 +161,86 @@ def _block_family(reason: str) -> str:
 DAILY_CAP = 3
 
 
-def apply_daily_cap(rows: list[dict], scope: str, cap: int = DAILY_CAP) -> list[dict]:
-    """Paper trades kept when at most `cap` open per New York day ('account' or 'per_ticker')."""
+def _cap_slots(rows: list[dict], scope: str) -> dict[tuple, list[dict]]:
+    """Opened paper trades per (New York day, 'account' | ticker), in entry order."""
     opened = [r for r in rows if r["status"] not in CONSUMED and r["status"] != "CANCELLED"]
     opened.sort(key=lambda r: (str(r["timestamp"]), r.get("id") or 0))
-    taken: Counter = Counter()
-    kept = []
+    slots: dict[tuple, list[dict]] = defaultdict(list)
     for r in opened:
-        slot = (_et_day(r["timestamp"]), "account" if scope == "account" else r.get("ticker"))
-        if taken[slot] < cap:
-            taken[slot] += 1
-            kept.append(r)
+        slots[(_et_day(r["timestamp"]), "account" if scope == "account" else r.get("ticker"))].append(r)
+    return slots
+
+
+def apply_daily_cap(rows: list[dict], scope: str, cap: int = DAILY_CAP) -> list[dict]:
+    """Paper trades kept when at most `cap` open per New York day ('account' or 'per_ticker').
+
+    Entry order is the scan timestamp; trades from the SAME scan are taken in id
+    order, which is arbitrary — see cap_ties for how much that choice matters.
+    """
+    kept = [r for slot in _cap_slots(rows, scope).values() for r in slot[:cap]]
+    kept.sort(key=lambda r: (str(r["timestamp"]), r.get("id") or 0))
     return kept
 
 
-def _cap_summary(rows: list[dict], first: date | None = None, last: date | None = None) -> dict:
-    """Closed trades (closed first..last, or all time) with dollars and the deepest drop in closing order."""
-    def _in(r: dict) -> bool:
-        d = _et_day(r.get("resolved_at") or r["timestamp"])
-        return (first is None or (d is not None and d >= first)) and (last is None or (d is not None and d <= last))
-    closed = [r for r in rows if r["status"] in CLOSED and _in(r)]
+def cap_ties(rows: list[dict], scope: str, cap: int = DAILY_CAP) -> list[tuple[list[dict], int]]:
+    """Same-scan groups the cap cuts through: (all tied trades, how many the cap keeps).
+
+    Any `kept` of the tied trades were equally entitled to the slots, so the
+    capped result is one of several equally valid picks there.
+    """
+    out = []
+    for slot in _cap_slots(rows, scope).values():
+        if len(slot) <= cap or str(slot[cap]["timestamp"]) != str(slot[cap - 1]["timestamp"]):
+            continue
+        ts = str(slot[cap - 1]["timestamp"])
+        tied = [r for r in slot if str(r["timestamp"]) == ts]
+        out.append((tied, sum(str(r["timestamp"]) == ts for r in slot[:cap])))
+    return out
+
+
+def _closed_in(r: dict, first: date | None, last: date | None) -> bool:
+    d = _et_day(r.get("resolved_at") or r["timestamp"])
+    return (r["status"] in CLOSED and (first is None or (d is not None and d >= first))
+            and (last is None or (d is not None and d <= last)))
+
+
+def _pnl(r: dict) -> float:
+    try:
+        return float(r.get("pnl_dollars") or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _cap_summary(rows: list[dict], first: date | None = None, last: date | None = None,
+                 ties: list[tuple[list[dict], int]] | None = None) -> dict:
+    """Closed trades (closed first..last, or all time) with dollars and the deepest drop in closing order.
+
+    With `ties`, also the lowest/highest total any equally valid same-scan pick gives.
+    """
+    closed = [r for r in rows if _closed_in(r, first, last)]
     closed.sort(key=lambda r: (str(r.get("resolved_at") or r["timestamp"]), r.get("id") or 0))
     pnl = peak = drop = 0.0
     for r in closed:
-        try:
-            pnl += float(r.get("pnl_dollars") or 0.0)
-        except (TypeError, ValueError):
-            pass
+        pnl += _pnl(r)
         peak, drop = max(peak, pnl), max(drop, max(peak, pnl) - pnl)
-    return {"closed": len(closed), "wins": sum(r["status"] == "WIN" for r in closed),
-            "losses": sum(r["status"] == "LOSS" for r in closed), "pnl_usd": round(pnl, 2),
-            "max_drawdown_usd": round(drop, 2)}
+    out = {"closed": len(closed), "wins": sum(r["status"] == "WIN" for r in closed),
+           "losses": sum(r["status"] == "LOSS" for r in closed), "pnl_usd": round(pnl, 2),
+           "max_drawdown_usd": round(drop, 2)}
+    if ties is not None:
+        lo = hi = pnl
+        kept_ids = {id(r) for r in rows}
+        affected = 0
+        for tied, n in ties:
+            value = sorted(_pnl(r) if _closed_in(r, first, last) else 0.0 for r in tied)
+            chosen = sum(_pnl(r) for r in tied if id(r) in kept_ids and _closed_in(r, first, last))
+            if value[:n] == value[-n:]:
+                continue  # every pick gives the same dollars
+            affected += 1
+            lo += sum(value[:n]) - chosen
+            hi += sum(value[-n:]) - chosen
+        out["same_scan_ties"] = affected
+        out["pnl_range_usd"] = [round(lo, 2), round(hi, 2)]
+    return out
 
 
 def capped_views(active: list[dict], cap: int = DAILY_CAP) -> dict:
@@ -200,21 +249,29 @@ def capped_views(active: list[dict], cap: int = DAILY_CAP) -> dict:
             "no_limit": apply_daily_cap(active, "account", cap=10 ** 9)}
 
 
+def _view_ties(active: list[dict], cap: int) -> dict:
+    return {"account": cap_ties(active, "account", cap), "per_ticker": cap_ties(active, "per_ticker", cap),
+            "no_limit": None}
+
+
 def capped_period(active: list[dict], first: date, last: date, cap: int = DAILY_CAP) -> dict:
     """Your-limits summary of trades closed first..last (e.g. a week), per view."""
-    return {k: _cap_summary(v, first, last) for k, v in capped_views(active, cap).items()}
+    ties = _view_ties(active, cap)
+    return {k: _cap_summary(v, first, last, ties[k]) for k, v in capped_views(active, cap).items()}
 
 
 def capped_view(active: list[dict], day: date, cap: int = DAILY_CAP) -> dict:
-    views = capped_views(active, cap)
+    views, ties = capped_views(active, cap), _view_ties(active, cap)
     opened_today = sum(_et_day(r["timestamp"]) == day for r in views["no_limit"])
     return {
-        "rule": {"per_day": cap, "scopes": ["account", "per_ticker"], "positions": "scanner rules unchanged"},
+        "rule": {"per_day": cap, "scopes": ["account", "per_ticker"], "positions": "scanner rules unchanged",
+                 "same_scan_order": "id (arbitrary); pnl_range_usd spans every equally valid pick",
+                 "kind": "counterfactual report view; scanner limits unchanged"},
         "opened_today": opened_today,
         "left_out_today": {k: opened_today - sum(_et_day(r["timestamp"]) == day for r in v)
                            for k, v in views.items() if k != "no_limit"},
-        "today": {k: _cap_summary(v, day, day) for k, v in views.items()},
-        "all_time": {k: _cap_summary(v) for k, v in views.items()},
+        "today": {k: _cap_summary(v, day, day, ties[k]) for k, v in views.items()},
+        "all_time": {k: _cap_summary(v, None, None, ties[k]) for k, v in views.items()},
     }
 
 
@@ -279,20 +336,28 @@ def format_digest(rep: dict) -> str:
 def _cap_line(label: str, s: dict) -> str:
     if not s["closed"]:
         return f"{label}: no closed trades"
-    return (f"{label}: {s['closed']} closed, {s['wins']} won, {s['losses']} lost, {_money(s['pnl_usd'])},"
+    text = (f"{label}: {s['closed']} closed, {s['wins']} won, {s['losses']} lost, {_money(s['pnl_usd'])},"
             f" deepest drop {pe.money(round(s['max_drawdown_usd']), signed=False)[:-3]}")
+    lo, hi = s.get("pnl_range_usd") or (None, None)
+    if lo is not None and lo != hi:
+        text += f" — {_money(lo)} to {_money(hi)} depending on which same-time trade is taken"
+    return text
 
 
 def _capped_lines(c: dict | None) -> list[str]:
     if not c:
         return []
     left = c["left_out_today"]
-    lines = [f"**Your limits** — at most {c['rule']['per_day']} new paper trades a day",
+    lines = [f"**Your limits (what-if)** — at most {c['rule']['per_day']} new paper trades a day;"
+             " replays the paper trades, the scanner's own rules are unchanged",
              f"Today: {c['opened_today']} opened · left out by the limit: {left['account']} (whole account),"
              f" {left['per_ticker']} (per ticker)"]
     for name, label in (("account", "whole account"), ("per_ticker", "each ticker separately"),
                         ("no_limit", "no limit (actual)")):
         lines.append(_cap_line(f"All time, {label}", c["all_time"][name]))
+    if any(c["all_time"][k].get("same_scan_ties") for k in ("account", "per_ticker")):
+        lines.append("(when several trades came from the same scan, the limit's pick among them is arbitrary;"
+                     " the range shows the best and worst equally valid pick)")
     return lines
 
 

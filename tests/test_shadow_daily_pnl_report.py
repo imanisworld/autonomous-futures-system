@@ -267,7 +267,8 @@ def _t(key, inst, fill_h, exit_h, net, session="day", tdate=date(2026, 9, 23)):
     base = datetime(2026, 9, 23, tzinfo=timezone.utc)
     return {"key": key, "instrument": inst, "fill": base + timedelta(hours=fill_h),
             "exit": base + timedelta(hours=exit_h), "trading_date": tdate, "session": session,
-            "how": "win" if net > 0 else "loss", "net_usd": net, "won": net > 0}
+            "how": "win" if net > 0 else "loss", "net_usd": net, "won": net > 0,
+            "approx_timing": False, "assumed_close": False}
 
 
 def test_cap_takes_first_three_per_session_and_one_position_at_a_time():
@@ -359,10 +360,56 @@ def test_report_with_log_dir_carries_your_limits_and_digest_lines(tmp_path):
     assert today["account"]["net_usd"] == round(2 * (20 - 1.98) + (-10 - 1.98), 2)
     assert rep["capped"]["week_to_date"]["account"] == today["account"]          # Wednesday, nothing earlier
     text = sdp.format_digest(rep)
-    assert "**Your limits**" in text and "Today, whole account: 3 trades, 2 won, 1 lost" in text
+    assert "**Your limits (what-if)**" in text and "Today, whole account: 3 trades, 2 won, 1 lost" in text
+    assert "it does not change what the bot trades" in text
     assert "Week, every signal, no limits: 4 trades" in text
+    # DAY is the first day of the running total, so it equals today.
+    assert rep["capped"]["since_start"]["account"] == today["account"]
+    assert "Running total (since Wed Sep 23):" in text and "Total, whole account: 3 trades" in text
     for word in ("LONG", "SHORT", "strat_"):
-        assert word not in text.split("**Your limits**")[1]
+        assert word not in text.split("**Your limits (what-if)**")[1]
+
+
+def test_running_total_is_one_selection_sliced_into_weeks(tmp_path):
+    # Wed Sep 23 .. Wed Sep 30: two calendar weeks, one selection pass.
+    days = ["2026-09-23", "2026-09-24", "2026-09-25", "2026-09-28", "2026-09-29", "2026-09-30"]
+    for i, d in enumerate(days):
+        rows = [_cap_row(f"{d}-{k}", "MNQ", "WIN" if k % 2 else "LOSS", 40 if k % 2 else -20,
+                         f"{d}T{14 + k}:00:00+00:00", 1, 2, day=d) for k in range(5)]
+        _write(tmp_path, f"journal_{d}.jsonl", rows)
+    late = sdp.capped_report(tmp_path, date(2026, 9, 30))
+    week1 = sdp.capped_report(tmp_path, date(2026, 9, 25))["week_to_date"]
+    week2 = late["week_to_date"]
+    total = late["since_start"]
+    assert late["selection_start"] == "2026-09-23"
+    for view in ("account", "per_market", "every_signal"):
+        assert total[view]["trades"] == week1[view]["trades"] + week2[view]["trades"]
+        assert total[view]["net_usd"] == round(week1[view]["net_usd"] + week2[view]["net_usd"], 2)
+    assert total["account"]["trades"] == 6 * 3 and total["every_signal"]["trades"] == 6 * 5
+
+
+def test_running_total_absent_before_start(tmp_path):
+    rep = sdp.capped_report(tmp_path, date(2026, 9, 22))
+    assert "since_start" not in rep and rep["selection_start"] == "2026-09-21"
+    assert "Running total" not in "\n".join(sdp._capped_lines(rep))
+
+
+def test_coverage_counts_and_priced_denominator(tmp_path):
+    rows = [
+        _cap_row("p", "MNQ", "WIN", 40, "2026-09-23T14:00:00+00:00", 1, 2),
+        # Resolver left it open and no stored bars exist: unpriced, assumed flat at 17:00 ET.
+        _cap_row("u", "MNQ", "OPEN", None, "2026-09-23T16:00:00+00:00", 1, None,
+                 entry=100.0, stop=90.0, target=120.0, resolved_at_bar_ts="2026-09-23T17:00:00+00:00"),
+    ]
+    _write(tmp_path, "journal_2026-09-23.jsonl", rows)
+    rep = sdp.capped_report(tmp_path, DAY)
+    acct = rep["since_start"]["account"]
+    assert (acct["trades"], acct["priced"], acct["unpriced"]) == (2, 1, 1)
+    assert acct["estimated_fill_times"] == 2          # no bar files: 15-minute fallback
+    assert acct["assumed_flat_at_close"] == 1 and acct["played_out_on_bars"] == 0
+    text = "\n".join(sdp._capped_lines(rep))
+    assert "dollars cover 1 of 2 trades; 1 could not be priced" in text
+    assert "(whole-account trades above: 2 with estimated fill times; 1 assumed closed at 5:00 PM ET)" in text
 
 
 def test_report_without_log_dir_has_no_capped_section():
