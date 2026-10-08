@@ -133,3 +133,29 @@ def test_main_failsoft_writes_artifact_no_webhook(tmp_path, monkeypatch, capsys)
     assert data["week"] == "2026-W26"
     assert data["approved_trades"] == 4
     assert "no webhook configured" in capsys.readouterr().out
+
+
+def test_your_limits_lines_render_both_systems_in_plain_english():
+    from scripts.weekly_review import your_limits_lines
+
+    fut = {"trades": 12, "wins": 5, "losses": 7, "net_usd": -40.5, "max_drawdown_usd": 210.0}
+    opt = {"closed": 4, "wins": 1, "losses": 3, "pnl_usd": -300.0, "max_drawdown_usd": 320.0}
+    lines = your_limits_lines({
+        "futures": {"account": fut, "per_market": {**fut, "trades": 0}, "every_signal": fut},
+        "options": {"account": opt, "per_ticker": opt, "no_limit": opt},
+    })
+    text = "\n".join(lines)
+    assert "Whole account: 12 trades, 5 won, 7 lost, -$40.50, deepest drop $210" in text
+    assert "Each market separately: no trades" in text
+    assert "**Your limits · options** (at most 3 new paper trades a day)" in text
+    assert your_limits_lines(None) == [] and your_limits_lines({}) == []
+
+
+def test_collect_your_limits_is_fail_soft(tmp_path):
+    from datetime import date as _date
+
+    from scripts.weekly_review import collect_your_limits
+
+    got = collect_your_limits(tmp_path, tmp_path / "missing.sqlite", _date(2026, 9, 28), _date(2026, 10, 4))
+    assert got["futures"]["account"]["trades"] == 0          # no journals: empty, not an error
+    assert got["options"]["no_limit"]["closed"] == 0

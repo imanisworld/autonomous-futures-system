@@ -3,7 +3,7 @@ dollars. Evidence only; the report must never claim authority."""
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 
@@ -241,3 +241,130 @@ def test_one_at_a_time_lines_stay_under_their_market_on_the_card(tmp_path):
     assert "One trade at a time" not in card.get("description", "")
     assert names.index("Total one at a time") == names.index("All markets") + 1
     assert names.index("MES one at a time") == names.index("MES (Micro S&P 500)") + 1
+
+
+# ── your limits: 3 per day session + 3 per night session, one position ──────
+from datetime import datetime, timezone  # noqa: E402
+
+
+def _cap_row(key, inst, result, ticks, cand_ts, n_fill, n_exit, *, day="2026-09-23", **extra):
+    row = _row(key, inst, result, ticks, day=day)
+    row.update({"candidate_bar_ts": cand_ts, "direction": "LONG", **extra})
+    row["shadow_outcome"].update({"bars_to_fill": n_fill, "bars_to_exit": n_exit})
+    return row
+
+
+def test_trading_session_boundaries_in_new_york_time():
+    utc = timezone.utc
+    assert sdp.trading_session(datetime(2026, 9, 23, 13, 29, tzinfo=utc)) == (date(2026, 9, 23), "night")  # 09:29 ET
+    assert sdp.trading_session(datetime(2026, 9, 23, 13, 30, tzinfo=utc)) == (date(2026, 9, 23), "day")    # 09:30 ET
+    assert sdp.trading_session(datetime(2026, 9, 23, 20, 59, tzinfo=utc)) == (date(2026, 9, 23), "day")    # 16:59 ET
+    assert sdp.trading_session(datetime(2026, 9, 23, 21, 30, tzinfo=utc)) == (date(2026, 9, 23), "halt")   # 17:30 ET
+    assert sdp.trading_session(datetime(2026, 9, 23, 22, 0, tzinfo=utc)) == (date(2026, 9, 24), "night")   # 18:00 ET resets
+
+
+def _t(key, inst, fill_h, exit_h, net, session="day", tdate=date(2026, 9, 23)):
+    base = datetime(2026, 9, 23, tzinfo=timezone.utc)
+    return {"key": key, "instrument": inst, "fill": base + timedelta(hours=fill_h),
+            "exit": base + timedelta(hours=exit_h), "trading_date": tdate, "session": session,
+            "how": "win" if net > 0 else "loss", "net_usd": net, "won": net > 0}
+
+
+def test_cap_takes_first_three_per_session_and_one_position_at_a_time():
+    trades = [
+        _t("a", "MNQ", 14.0, 14.5, 10), _t("b", "MES", 14.25, 14.75, 5),   # b fills while a is open
+        _t("c", "MNQ", 15.0, 15.5, -4), _t("d", "MNQ", 16.0, 16.5, 7),
+        _t("e", "MNQ", 17.0, 17.5, 99),                                      # 4th fill in the day session
+        _t("f", "MNQ", 3.0, 3.5, -2, session="night"),                        # night has its own 3
+        _t("g", "MNQ", 21.5, 21.75, 50, session="halt"),                      # 17:00-18:00 ET never counts
+    ]
+    trades.sort(key=lambda t: (t["fill"], t["key"]))
+    assert [t["key"] for t in sdp.apply_session_cap(trades, "account")] == ["f", "a", "c", "d"]
+    # each market separately: MES has its own position and its own 3
+    assert [t["key"] for t in sdp.apply_session_cap(trades, "per_market")] == ["f", "a", "b", "c", "d"]
+
+
+def test_same_bar_as_previous_exit_is_still_in_the_trade():
+    trades = [_t("a", "MNQ", 14.0, 15.0, 1), _t("b", "MNQ", 15.0, 15.5, 1), _t("c", "MNQ", 15.25, 16.0, 1)]
+    assert [t["key"] for t in sdp.apply_session_cap(trades, "account")] == ["a", "c"]
+
+
+def test_cap_summary_drawdown_follows_closing_order():
+    trades = [_t("a", "MNQ", 14, 18, 30), _t("b", "MNQ", 15, 16, -50), _t("c", "MNQ", 16.5, 17, -20)]
+    s = sdp._cap_summary(trades)
+    # closing order b(-50), c(-20), a(+30): 0 → -50 → -70 → -40, deepest drop 70
+    assert (s["trades"], s["wins"], s["losses"], s["net_usd"], s["max_drawdown_usd"]) == (3, 1, 2, -40.0, 70.0)
+
+
+def _bar_file(tmp_path, inst, day_iso, bars):
+    _write(tmp_path, f"bars_{inst}_{day_iso}.jsonl", bars)
+
+
+def _open_row(**kw):
+    row = _cap_row("o", "MNQ", "OPEN", None, "2026-09-23T14:00:00+00:00", 1, None,
+                  entry=100.0, stop=90.0, target=120.0, resolved_at_bar_ts="2026-09-23T15:00:00+00:00")
+    row.update(kw)
+    return row
+
+
+def test_open_trade_is_played_out_on_stored_bars(tmp_path):
+    _bar_file(tmp_path, "MNQ", "2026-09-23", [
+        {"ts": "2026-09-23T14:15:00+00:00", "high": 101, "low": 99, "close": 100},
+        {"ts": "2026-09-23T15:00:00+00:00", "high": 101, "low": 99, "close": 100},   # already seen by the resolver
+        {"ts": "2026-09-23T16:00:00+00:00", "high": 125, "low": 89, "close": 110},   # stop and target: stop first
+    ])
+    got = sdp._settle_open(_open_row(), date(2026, 9, 23), tmp_path, {})
+    assert got[1:] == (90.0, "stop")
+
+
+def test_open_trade_without_a_hit_closes_at_5pm_et(tmp_path):
+    _bar_file(tmp_path, "MNQ", "2026-09-23", [
+        {"ts": "2026-09-23T16:00:00+00:00", "high": 105, "low": 95, "close": 104},
+        {"ts": "2026-09-23T20:45:00+00:00", "high": 108, "low": 103, "close": 107},  # last bar before 17:00 ET
+        {"ts": "2026-09-23T22:00:00+00:00", "high": 200, "low": 1, "close": 150},    # next trading date: ignored
+    ])
+    when, price, how = sdp._settle_open(_open_row(), date(2026, 9, 23), tmp_path, {})
+    assert (price, how) == (107, "close")
+    assert when.astimezone(sdp.ET).hour == 17
+    trades = sdp.capped_trades([_open_row()], tmp_path)
+    assert trades[0]["how"] == "close" and trades[0]["net_usd"] == round(28 * 0.5 - 1.98, 2)  # +7 pts = 28 ticks
+
+
+def test_open_trade_without_bars_is_counted_but_not_priced(tmp_path):
+    trades = sdp.capped_trades([_open_row()], tmp_path)
+    s = sdp._cap_summary(trades)
+    assert (s["trades"], s["unpriced"], s["net_usd"]) == (1, 1, None)
+
+
+def test_load_outcomes_range_matches_single_days(tmp_path):
+    _write(tmp_path, "journal_2026-09-23.jsonl", [_row("a", "MNQ", "WIN", 4), _row("b", "MNQ", "WIN", 4, day="2026-09-24")])
+    _write(tmp_path, "journal_2026-09-25.jsonl", [_row("a", "MNQ", "LOSS", -4), _row("c", "MES", "WIN", 2, day="2026-09-25")])
+    both = sdp.load_outcomes_range(tmp_path, date(2026, 9, 23), date(2026, 9, 25))
+    singles = [r for d in (23, 24, 25) for r in sdp.load_outcomes(tmp_path, date(2026, 9, d))]
+    key = lambda r: (r["candidate_key"], r["shadow_outcome"]["result"])  # noqa: E731
+    assert sorted(map(key, both)) == sorted(map(key, singles)) == [("a", "LOSS"), ("b", "WIN"), ("c", "WIN")]
+
+
+def test_report_with_log_dir_carries_your_limits_and_digest_lines(tmp_path):
+    rows = [
+        _cap_row("w1", "MNQ", "WIN", 40, "2026-09-23T14:00:00+00:00", 1, 2),
+        _cap_row("w2", "MNQ", "WIN", 40, "2026-09-23T15:00:00+00:00", 1, 2),
+        _cap_row("w3", "MNQ", "LOSS", -20, "2026-09-23T16:00:00+00:00", 1, 2),
+        _cap_row("w4", "MNQ", "WIN", 40, "2026-09-23T17:00:00+00:00", 1, 2),     # 4th in the day session
+    ]
+    _write(tmp_path, "journal_2026-09-23.jsonl", rows)
+    rep = sdp.build_report(sdp.load_outcomes(tmp_path, DAY), DAY, log_dir=tmp_path)
+    today = rep["capped"]["today"]
+    assert today["account"]["trades"] == 3 and today["every_signal"]["trades"] == 4
+    assert today["account"]["net_usd"] == round(2 * (20 - 1.98) + (-10 - 1.98), 2)
+    assert rep["capped"]["week_to_date"]["account"] == today["account"]          # Wednesday, nothing earlier
+    text = sdp.format_digest(rep)
+    assert "**Your limits**" in text and "Today, whole account: 3 trades, 2 won, 1 lost" in text
+    assert "Week, every signal, no limits: 4 trades" in text
+    for word in ("LONG", "SHORT", "strat_"):
+        assert word not in text.split("**Your limits**")[1]
+
+
+def test_report_without_log_dir_has_no_capped_section():
+    rep = sdp.build_report([_row("w", "MNQ", "WIN", 40)], DAY)
+    assert "capped" not in rep and "Your limits" not in sdp.format_digest(rep)

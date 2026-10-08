@@ -14,6 +14,13 @@ in read-only mode and adds up one New York trading day:
 
 Dollars are the scanner's own `pnl_dollars` (entry at ask, exit at bid, no
 commission). Never grants eligibility. Never changes a rule.
+
+Your limits (operator rule, 2026-09-29, options counterpart): the same paper
+trades replayed with at most 3 new trades per New York day — once for the whole
+account and once per ticker — in entry order (ties by journal id). Options trade
+in the day session only. The scanner's own position and risk rules are untouched:
+this only leaves out a day's 4th and later entries. Shown for today and all time,
+next to the actual (no limit) result.
 """
 from __future__ import annotations
 
@@ -64,8 +71,8 @@ def load_rows(db_path: str | Path, day: date) -> dict:
     conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
     try:
         # REJECTED rows are ~all of the table and carry no dollars; skip them.
-        for ts, status, contract, outcome in conn.execute(
-            "SELECT timestamp, status, selected_contract_json, outcome_json "
+        for row_id, ts, ticker, status, contract, outcome in conn.execute(
+            "SELECT id, timestamp, ticker, status, selected_contract_json, outcome_json "
             "FROM options_shadow_journal WHERE status != 'REJECTED'"
         ):
             try:
@@ -73,7 +80,7 @@ def load_rows(db_path: str | Path, day: date) -> dict:
             except json.JSONDecodeError:
                 outcome_d = {}
             out["journal"].append({
-                "timestamp": ts, "status": status,
+                "id": row_id, "timestamp": ts, "ticker": ticker, "status": status,
                 "counterfactual": COUNTERFACTUAL_MARK in (contract or ""),
                 "resolved_at": outcome_d.get("resolved_at"),
                 "pnl_dollars": outcome_d.get("pnl_dollars"),
@@ -151,6 +158,66 @@ def _block_family(reason: str) -> str:
     return str(reason)
 
 
+DAILY_CAP = 3
+
+
+def apply_daily_cap(rows: list[dict], scope: str, cap: int = DAILY_CAP) -> list[dict]:
+    """Paper trades kept when at most `cap` open per New York day ('account' or 'per_ticker')."""
+    opened = [r for r in rows if r["status"] not in CONSUMED and r["status"] != "CANCELLED"]
+    opened.sort(key=lambda r: (str(r["timestamp"]), r.get("id") or 0))
+    taken: Counter = Counter()
+    kept = []
+    for r in opened:
+        slot = (_et_day(r["timestamp"]), "account" if scope == "account" else r.get("ticker"))
+        if taken[slot] < cap:
+            taken[slot] += 1
+            kept.append(r)
+    return kept
+
+
+def _cap_summary(rows: list[dict], first: date | None = None, last: date | None = None) -> dict:
+    """Closed trades (closed first..last, or all time) with dollars and the deepest drop in closing order."""
+    def _in(r: dict) -> bool:
+        d = _et_day(r.get("resolved_at") or r["timestamp"])
+        return (first is None or (d is not None and d >= first)) and (last is None or (d is not None and d <= last))
+    closed = [r for r in rows if r["status"] in CLOSED and _in(r)]
+    closed.sort(key=lambda r: (str(r.get("resolved_at") or r["timestamp"]), r.get("id") or 0))
+    pnl = peak = drop = 0.0
+    for r in closed:
+        try:
+            pnl += float(r.get("pnl_dollars") or 0.0)
+        except (TypeError, ValueError):
+            pass
+        peak, drop = max(peak, pnl), max(drop, max(peak, pnl) - pnl)
+    return {"closed": len(closed), "wins": sum(r["status"] == "WIN" for r in closed),
+            "losses": sum(r["status"] == "LOSS" for r in closed), "pnl_usd": round(pnl, 2),
+            "max_drawdown_usd": round(drop, 2)}
+
+
+def capped_views(active: list[dict], cap: int = DAILY_CAP) -> dict:
+    return {"account": apply_daily_cap(active, "account", cap),
+            "per_ticker": apply_daily_cap(active, "per_ticker", cap),
+            "no_limit": apply_daily_cap(active, "account", cap=10 ** 9)}
+
+
+def capped_period(active: list[dict], first: date, last: date, cap: int = DAILY_CAP) -> dict:
+    """Your-limits summary of trades closed first..last (e.g. a week), per view."""
+    return {k: _cap_summary(v, first, last) for k, v in capped_views(active, cap).items()}
+
+
+def capped_view(active: list[dict], day: date, cap: int = DAILY_CAP) -> dict:
+    views = capped_views(active, cap)
+    opened_today = sum(_et_day(r["timestamp"]) == day for r in views["no_limit"])
+    return {
+        "rule": {"per_day": cap, "scopes": ["account", "per_ticker"], "positions": "scanner rules unchanged"},
+        "opened_today": opened_today,
+        "left_out_today": {k: opened_today - sum(_et_day(r["timestamp"]) == day for r in v)
+                           for k, v in views.items() if k != "no_limit"},
+        "today": {k: _cap_summary(v, day, day) for k, v in views.items()},
+        "all_time": {k: _cap_summary(v) for k, v in views.items()},
+    }
+
+
 def build_report(data: dict, day: date) -> dict:
     active = [r for r in data["journal"] if not r["counterfactual"]]
     whatif = [r for r in data["journal"] if r["counterfactual"]]
@@ -164,6 +231,7 @@ def build_report(data: dict, day: date) -> dict:
         "blocked": dict(blocks.most_common()),
         "what_if": _tally(whatif, day),
         "scans": {"count": len(scans_today), "alerts_sent": sum(s["alert_sent"] for s in scans_today)},
+        "capped": capped_view(active, day),
         "cost_model": "scanner pnl_dollars: entry at ask, exit at bid, no commission",
         "authority": "evidence_only",
     }
@@ -203,8 +271,29 @@ def format_digest(rep: dict) -> str:
             f"{w['consumed_at_entry']} already done at entry"
         )
     lines.append(f"Scans: {rep['scans']['count']} · alerts sent: {rep['scans']['alerts_sent']}")
+    lines.extend(_capped_lines(rep.get("capped")))
     lines.append("[paper only · 1 contract · entry at ask, exit at bid, no commission · no rule change]")
     return "\n".join(lines)
+
+
+def _cap_line(label: str, s: dict) -> str:
+    if not s["closed"]:
+        return f"{label}: no closed trades"
+    return (f"{label}: {s['closed']} closed, {s['wins']} won, {s['losses']} lost, {_money(s['pnl_usd'])},"
+            f" deepest drop {pe.money(round(s['max_drawdown_usd']), signed=False)[:-3]}")
+
+
+def _capped_lines(c: dict | None) -> list[str]:
+    if not c:
+        return []
+    left = c["left_out_today"]
+    lines = [f"**Your limits** — at most {c['rule']['per_day']} new paper trades a day",
+             f"Today: {c['opened_today']} opened · left out by the limit: {left['account']} (whole account),"
+             f" {left['per_ticker']} (per ticker)"]
+    for name, label in (("account", "whole account"), ("per_ticker", "each ticker separately"),
+                        ("no_limit", "no limit (actual)")):
+        lines.append(_cap_line(f"All time, {label}", c["all_time"][name]))
+    return lines
 
 
 def main(argv: list[str] | None = None) -> int:
