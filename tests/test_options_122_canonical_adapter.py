@@ -108,7 +108,7 @@ def _repolicy(rows):
 
 def test_confirmed_catch_is_one_canonical_verified_observation(tmp_path):
     rows = _rows(tmp_path)
-    fold = fold_122_rows(rows, raw_root=tmp_path)
+    fold = fold_122_rows(rows, raw_root=tmp_path, max_quote_age_seconds=15)
     assert len(fold.verified_catches) == 1
     signal = fold.signal_for("s1")
     assert signal is not None
@@ -127,7 +127,7 @@ def test_unverified_raw_bytes_never_count_as_catch(tmp_path):
     assert no_root.signal_for("s1").state is LifecycleState.DATA_BLOCKED
     (tmp_path / "s1.iex.jsonl").write_bytes(b"mutated\n")
     with pytest.raises(AdapterError, match="iex_raw_hash_mismatch"):
-        fold_122_rows(rows, raw_root=tmp_path)
+        fold_122_rows(rows, raw_root=tmp_path, max_quote_age_seconds=15)
 
 
 @pytest.mark.parametrize("flaw", [
@@ -170,10 +170,10 @@ def test_forged_or_ambiguous_binding_fails_closed(tmp_path, flaw):
         rows[0].pop("canonical_binding")
     if flaw == "missing_binding":
         with pytest.raises(AdapterError, match="bound_row_without_arm|legacy_setup_upgrade"):
-            fold_122_rows(rows, raw_root=tmp_path)
+            fold_122_rows(rows, raw_root=tmp_path, max_quote_age_seconds=15)
     else:
         with pytest.raises(AdapterError):
-            fold_122_rows(rows, raw_root=tmp_path)
+            fold_122_rows(rows, raw_root=tmp_path, max_quote_age_seconds=15)
 
 
 def test_provisional_iex_reversal_is_pending_not_scoreable(tmp_path):
@@ -188,7 +188,7 @@ def test_sip_disagrees_with_iex_provisional(tmp_path):
     rows = _rows(tmp_path)
     rows[2]["sip"]["family_side"] = "CONTINUATION"
     _repolicy(rows)
-    fold = fold_122_rows(rows, raw_root=tmp_path)
+    fold = fold_122_rows(rows, raw_root=tmp_path, max_quote_age_seconds=15)
     assert not fold.verified_catches
     assert fold.signal_for("s1").state is LifecycleState.DATA_BLOCKED
 
@@ -200,7 +200,7 @@ def test_iex_missed_sip_reversal_remains_missed_late(tmp_path):
     rows[1]["observation"]["status"] = "WATCHING"
     rows[2]["observation"]["status"] = "WATCHING"
     _repolicy(rows)
-    fold = fold_122_rows(rows, raw_root=tmp_path)
+    fold = fold_122_rows(rows, raw_root=tmp_path, max_quote_age_seconds=15)
     assert not fold.verified_catches
     assert fold.excluded["MISSED_BY_IEX"] == 1
     assert fold.signal_for("s1").state is LifecycleState.MISSED_LATE
@@ -215,7 +215,7 @@ def test_same_direction_iex_first_break_cancels(tmp_path):
     rows[1]["observation"]["status"] = "CANCELLED"
     rows[2]["observation"]["status"] = "CANCELLED"
     _repolicy(rows)
-    fold = fold_122_rows(rows, raw_root=tmp_path)
+    fold = fold_122_rows(rows, raw_root=tmp_path, max_quote_age_seconds=15)
     assert not fold.verified_catches
     assert fold.signal_for("s1").state is LifecycleState.INVALIDATED
 
@@ -235,7 +235,7 @@ def test_blocked_or_late_capture_never_admitted(tmp_path, failure):
         rows[2]["sip"]["timestamp"] = "2026-10-07T14:00:30+00:00"
         rows[2]["sip"]["timestamp_ns"] = _time_ns(rows[2]["sip"]["timestamp"])
         _repolicy(rows)
-    fold = fold_122_rows(rows, raw_root=tmp_path)
+    fold = fold_122_rows(rows, raw_root=tmp_path, max_quote_age_seconds=15)
     assert not fold.verified_catches
     assert not fold.signal_for("s1").is_prospective_catch
 
@@ -264,4 +264,26 @@ def test_readonly_journal_never_changes_bytes_and_refuses_torn_tail(tmp_path):
     assert path.read_bytes() == data
     path.write_bytes(data + b'{"unfinished":')
     with pytest.raises(AdapterError, match="torn_journal_tail"):
+        list(read_122_journal(path))
+
+
+def test_without_explicit_trusted_freshness_limit_no_catch(tmp_path):
+    rows = _rows(tmp_path)
+    folded = fold_122_rows(rows, raw_root=tmp_path)
+    assert not folded.verified_catches
+    assert folded.signal_for("s1").state is LifecycleState.DATA_BLOCKED
+
+
+def test_stale_option_quote_refused_even_if_captured_status_claimed(tmp_path):
+    rows = _rows(tmp_path)
+    rows[1]["option_evidence"]["option_quote_age_seconds"] = 90.0
+    folded = fold_122_rows(rows, raw_root=tmp_path, max_quote_age_seconds=15)
+    assert not folded.verified_catches
+    assert folded.excluded["CAPTURE_UNUSABLE"] == 1
+
+
+def test_duplicate_json_keys_rejected_even_if_last_value_looks_valid(tmp_path):
+    path = tmp_path / "duplicate-keys.jsonl"
+    path.write_bytes(b'{"record_type":"ARMED","record_type":"RESOLUTION"}\n')
+    with pytest.raises(AdapterError, match="duplicate_json_key"):
         list(read_122_journal(path))

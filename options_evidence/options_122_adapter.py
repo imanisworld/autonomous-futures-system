@@ -52,6 +52,15 @@ class Canonical122Fold:
         return self.journal.get(sid) if sid else None
 
 
+def _unique_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise AdapterError("duplicate_json_key")
+        result[key] = value
+    return result
+
+
 def read_122_journal(path: Path | str) -> Iterator[dict[str, Any]]:
     """Never mutate, truncate, silently skip a torn tail or repair a record."""
     with Path(path).open("rb") as handle:
@@ -59,7 +68,7 @@ def read_122_journal(path: Path | str) -> Iterator[dict[str, Any]]:
             if not line.endswith(b"\n"):
                 raise AdapterError(f"torn_journal_tail_{number}")
             try:
-                record = json.loads(line)
+                record = json.loads(line, object_pairs_hook=_unique_pairs)
             except (ValueError, UnicodeError) as exc:
                 raise AdapterError(f"invalid_json_{number}") from exc
             if not isinstance(record, dict):
@@ -161,7 +170,10 @@ def _proof(source: Mapping[str, Any], feed: str, *, raw_root: Path | None, setup
         return False
     try:
         root = raw_root.resolve(strict=True)
-        artifact = Path(filename).resolve(strict=True)
+        literal = Path(filename)
+        if literal.is_symlink():
+            raise AdapterError(f"{feed}_raw_symlink_forbidden")
+        artifact = literal.resolve(strict=True)
         if not artifact.is_relative_to(root) or artifact.name != f"{setup_id}.{feed}.jsonl":
             raise AdapterError(f"{feed}_raw_path_mismatch")
         if not artifact.is_file() or artifact.is_symlink():
@@ -174,8 +186,13 @@ def _proof(source: Mapping[str, Any], feed: str, *, raw_root: Path | None, setup
 
 
 def fold_122_rows(rows: Iterable[Mapping[str, Any]], *, registry: EpochRegistry | None = None,
-                  raw_root: Path | None = None) -> Canonical122Fold:
+                  raw_root: Path | None = None,
+                  max_quote_age_seconds: float | None = None) -> Canonical122Fold:
     """Strict ordered fold; never upgrades legacy or assigns a provisional win."""
+    if max_quote_age_seconds is not None:
+        max_quote_age_seconds = _number(max_quote_age_seconds, "max_quote_age_seconds")
+        if not 0 < max_quote_age_seconds <= 120:
+            raise AdapterError("quote_freshness_limit_untrusted")
     reg = registry if registry is not None else default_registry()
     epoch = reg.get("options_122", POLICY_EPOCH)
     if epoch is None or epoch.definition_sha256 != DEFINITION_SHA:
@@ -368,6 +385,7 @@ def fold_122_rows(rows: Iterable[Mapping[str, Any]], *, registry: EpochRegistry 
             and isinstance(option.get("selected_contract"), str)
             and bool(option.get("selected_contract"))
             and iex_raw_verified and sip_raw_verified
+            and max_quote_age_seconds is not None
         )
         if eligible:
             taken = _time(captured, "option_capture_time")
@@ -379,7 +397,7 @@ def fold_122_rows(rows: Iterable[Mapping[str, Any]], *, registry: EpochRegistry 
                 except AdapterError:
                     eligible = False
                 else:
-                    if option[age] < 0:
+                    if option[age] < 0 or option[age] > max_quote_age_seconds:
                         eligible = False
         if not eligible:
             out.journal.append(state_event(
