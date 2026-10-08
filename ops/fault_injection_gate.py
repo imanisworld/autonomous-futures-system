@@ -69,7 +69,7 @@ def scenario_for_test(name: str) -> Optional[str]:
     token = match.group(1).lower()
     if token.startswith("fi"):
         return f"FI-{int(token[2:])}"
-    return "JW" if token in ("jw", "jwc") else "LW"
+    return "JW" if token in ("jw", "jwc", "jwt") else "LW"
 
 
 def _git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -230,6 +230,7 @@ def run_suite_at(
         junit = Path(tmp) / "fi.xml"
         env = os.environ.copy()
         env.pop("PYTEST_ADDOPTS", None)
+        env.pop("PYTEST_PLUGINS", None)
         try:
             proc = subprocess.run(
                 [
