@@ -51,8 +51,11 @@ def test_box_build_uses_explicit_python313_interpreter():
     assert 'box_python="${AFS_BOX_PYTHON:-python3.13}"' in build
     assert 'command -v "\\$box_python"' in build
     assert "box_python_version=" in build
-    assert "!= 3.13" in build
+    assert 'if [ "\\$box_python_version" != "3.13" ]; then' in build
     assert "expected 3.13" in build
+    remote_build = build.split('remote "', 1)[1]
+    assert remote_build.index('command -v "\\$box_python"') < remote_build.index("mkdir '$RELEASES/$sha'")
+    assert remote_build.index('box_python_version=') < remote_build.index("mkdir '$RELEASES/$sha'")
     assert (
         "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH='$RELEASES/$sha' "
         '"\\$box_python" -m ops.dependency_lock check-python'
