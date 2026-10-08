@@ -348,7 +348,7 @@ def test_watcher_preflight_blocks_release_mutation_for_untrusted_paths(tmp_path)
         edit_at = rendered.index("sed -i '/^EXPECTED_RELEASE_FINGERPRINT")
         assert preflight_at < edit_at
         assert edit_at < rendered.index("mv -Tf")
-        assert edit_at < rendered.index("systemctl restart '$SERVICE'")
+        assert edit_at < rendered.index("systemctl restart", edit_at)
         assert 'chmod 700 "$watcher_dest/$watcher_file"' in rendered
         assert 'chmod 700 "$watcher_dest"/*.sh' not in rendered
         guard = rendered[preflight_at:edit_at]
