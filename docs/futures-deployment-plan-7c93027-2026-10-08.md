@@ -61,7 +61,7 @@ Record the timestamp; canonical shared root; effective watcher WorkingDirectory 
 
 ### AFS-0166 — canonical watcher directory and reviewed rollback break-glass
 
-**Source:** PR #1194 (unmerged), current proposed fix in its own source PR. The
+**Source:** PR #1194 (source-merged `168e7420`; not proven installed on VPS). The
 reviewer found that the early watcher check resolves the configured
 `$SHARED` with `realpath`, while the late check previously compared the
 resolved destination against an unnormalized literal. A symlinked shared
@@ -138,7 +138,7 @@ Evidence class key: **BOX** = box observation with timestamp; **OPR** = operator
 | MES/MNQ refusal observability | SRC | Zero `CONTRACT_*` refusals after promote may simply mean no MES/MNQ signals arrived. Post-promote acceptance must report the signal count beside the refusal count; zero signals = **INCONCLUSIVE**, not PASS. |
 | Release-wrapper 51/51 | OPR | Operator-reported on 2026-10-08, not independently reproduced. Covers only unchanged paths; #1189/#1194 paths need their own exact-head tests. |
 | Installed drift gate | OPR / UNK | `/root/bin/afs-drift-gate.sh` was replaced by the #1129 fix on 2026-10-04 (OPR). The last recorded hash in the repo (`cc4d9f5a…`, 2026-09-18) predates that fix and is stale. Root read: installed sha256 vs `scripts/afs-server-drift-gate.sh` at the commit it was installed from. |
-| B10 watcher (#1194) | SRC; independently reviewed PASS AFS-0168, unmerged | #1194 `1b7b996` passed Grok after earlier CHANGES REQUIRED at `adc09f8`. Promote/rollback preflight uses the same canonical destination for late re-arm, including symlinked or trailing-slash roots; invalid paths fail before mutation. **Live watcher effective unit/path, rollback drill and all operator approvals remain UNVERIFIED.** |
+| B10 watcher (#1194) | SRC; independently reviewed PASS AFS-0168 and source-merged | #1194 `1b7b996` passed Grok after earlier CHANGES REQUIRED at `adc09f8`. Promote/rollback preflight uses the same canonical destination for late re-arm, including symlinked or trailing-slash roots; invalid paths fail before mutation. **Live watcher effective unit/path, rollback drill and all operator approvals remain UNVERIFIED.** |
 
 **Evidence independence and access.** Cursor's B1–B8 matrices (comments 6051491065, 6051610034) used a restricted **audit-allowlist** identity. Those observations are not independent Grok verification; Grok compares them with its own captures. That credential is not to be reused for builder workflows. A separate least-privilege read-only builder identity is its own operator access decision. This Claude session has no VPS access and used none. No credential is posted, injected, rotated or revoked through this PR.
 
@@ -169,9 +169,9 @@ Before **any** v0.2 repin (#1186), scan the installed journal for duplicate `ARM
 
 ### Required next action
 
-1. Obtain Grok exact-head review and fresh CI for #1194 and #1186; **do not merge as part of this plan**.
-2. Once #1194 is separately merged with operator approval, nominate the **new** exact deployment candidate, compare deployed → candidate end-to-end, and refresh all identities and risk-path checks below. The nominated SHA then needs its own **independent Grok exact-SHA review**. Candidate stays UNSET until then.
-3. Obtain read-only root-level box proof for B1/B5/B6/B8/B9/B10 and rollback readiness.
+1. Treat #1194 and #1186 as **source-merged**; do not rerun their completed PR approvals. AFS-0181 covered combined source at exact `393ad72b`; #1198 adapter is a subsequent separately reviewed source merge. No deployed proof follows from those merges.
+2. Obtain authorized on-box evidence B1–B10, watcher/history, B8 effective options pin and options journal integrity. Require exact safe command/full output/exit status/UTC for each gate and a coherent B7/B9 same-session reading.
+3. After blockers are reconciled, nominate a new exact candidate **only with a separate operator decision**; review the AFS-0181→nominee net delta and required CI. Candidate stays UNSET until then.
 4. Return a **GO FOR OPERATOR DECISION** or **HOLD** gate table with timestamps, artifacts and all decisions. Never build, promote, restart or submit orders from this document.
 
 ## Refreshed plan detail (2026-10-08; under the decision record above)
@@ -208,7 +208,7 @@ With an empty `WorkingDirectory`:
 
 A value of `/` passes as well.
 
-**Historical ordering defect, now corrected in unmerged #1194.** The old watcher block ran **after** `.env` edits, symlink swap and futures-bot restart. The earlier issue comment on head `547738c` came from the ChatGPT/Codex account, not Grok. Grok later issued CHANGES REQUIRED on `adc09f8` and **PASS at `1b7b996` (AFS-0168)**. Source PASS does not verify the VPS watcher unit/path or approve any merge or deployment.
+**Historical ordering defect, now corrected in source-merged #1194 (not proven installed).** The old watcher block ran **after** `.env` edits, symlink swap and futures-bot restart. The earlier issue comment on head `547738c` came from the ChatGPT/Codex account, not Grok. Grok later issued CHANGES REQUIRED on `adc09f8` and **PASS at `1b7b996` (AFS-0168)**. Source PASS does not verify the VPS watcher unit/path or approve any merge or deployment.
 
 **Additional B10 requirements:**
 
@@ -287,9 +287,9 @@ Source analysis does not satisfy any of them.
 
 | Step | Action | Gate |
 |---|---|---|
-| 1 | Merge this plan PR (#1190, docs only) | Exact-head CI green + Grok PASS + operator merge decision |
-| 2 | Merge the B10 fix (#1194 or successor) | Exact-head CI green + Grok PASS + operator merge decision |
-| 3 | Nominate the candidate: exact `main` SHA, plus delta review after `064ee67` | Operator, in writing; then **independent Grok exact-SHA review** of that SHA |
+| 1 | #1190 plan merged | **DONE in source only**; not release authority |
+| 2 | #1194 watcher and #1196 history guards merged | **DONE in source only**; effective VPS installation/path still requires proof |
+| 3 | Nominate candidate exact SHA after B1–B10 evidence; review AFS-0181→nominee delta | Operator, in writing; then **independent exact-SHA reviewer PASS** and current CI |
 | 4 | Root read-only box evidence: B1–B10, B8 reads, epoch readings | Ops, read-only; any gap means HOLD |
 | 5 | Policy decisions: B1 posture, B5 dependency changes, B6 pin, epoch treatment | Operator GO each |
 | 6 | Collector pin, and separately any v0.2 journal migration | Its own reviewed procedure + operator GO |
