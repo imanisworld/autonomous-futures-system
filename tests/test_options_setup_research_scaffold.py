@@ -225,7 +225,10 @@ def test_forged_catch_on_a_signal_that_never_triggered_is_excluded():
     s = journal.append(sg.integrity_event(journal, s.signal_id, detected_at=TRIG,
                                           signal_integrity="VALID", data_integrity="VALID"))
     record = {**sg.to_record(s), "prospective_catch": True}
-    assert "prospective_catch requires a TRIGGERED resolution in history" in sg.verify_record(\n        record, registry=REGISTRY\n    )\n    outcome = {
+    assert "prospective_catch requires a TRIGGERED resolution in history" in sg.verify_record(
+        record, registry=REGISTRY
+    )
+    outcome = {
         "schema": "options-outcome-evidence-v1", "signal_id": s.signal_id, "structure_id": s.structure_id,
         "strategy_epoch": s.strategy_epoch, "executed": False, "pnl_basis": "paper_equivalent",
         "resolution_state": None, "prospective_catch": True, "data_integrity": "VALID",
