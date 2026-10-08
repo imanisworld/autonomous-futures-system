@@ -1,4 +1,54 @@
-# Futures deployment plan: `c44d32b` → `7c93027` (2026-10-08)
+# Futures deployment plan — refreshed 2026-10-08; candidate NOT YET SELECTED
+
+**PLAN ONLY / HOLD.** This revision supersedes the former `c44d32b → 7c93027` release proposal below. The previous version remains as a historical review baseline, **not as a live deployment plan**.
+
+## Active decision record (governs all older sections below)
+
+| Item | Verified or required state |
+|---|---|
+| Previously deployed release | `c44d32bc4961e56fae5c5f88a976eb6783341638`, reported in the read-only VPS audit; reconfirm on box before GO |
+| Post-#1189 main | `064ee674b788c144fc8d3ca65082ed060927e2f1` (PR #1189 merged, Grok PASS on original head `f60ec6f`) |
+| Previous candidate | `7c930274179f7c76749f75b35adb14fbb9255e54` is HISTORICAL ONLY; do not build/promote it under this plan |
+| **Next candidate** | **UNSET** until #1194 watcher safety is independently reviewed, green on the exact head and merged. Select exact merged SHA and rerun source/trading-path delta and CI against that SHA |
+| Plan status | **CHANGES REQUIRED / HOLD** pending B1/B5/B6/B8/B9/B10, validated rollback, and an exact-SHA operator GO |
+| Cross-service boundary | Futures promotion must not silently change `options-122-prospective` collector code, Python, venv, journal schema or evidence cohort; independently pin or explicitly approve a proven migration under separate GO |
+| Previous 51/51 release-wrapper tests | Reuse only for unchanged code paths. Post-#1189 and #1194 quote/working-directory changes require their own fresh exact-head tests and reviewed render evidence |
+
+### B10 — Watcher WorkingDirectory and chmod safety (new mandatory gate)
+
+Grok identified a dangerous remote-shell quote expansion in **both** promote and rollback watcher re-arm. On an empty systemd WorkingDirectory, the effective unquoted `chmod 700 $watcher_dest/*.sh` could target `/*.sh`. Merely testing that a Bash source file parses is not enough.
+
+**Source fix:** [draft PR #1194](https://github.com/imanisworld/autonomous-futures-system/pull/1194), separate from this docs-only plan. It adds a fail-closed nonempty, realpath-resolved directory guard, restricts the canonical destination to the configured trusted shared-root subtree and preserves quoting through the nested remote command. #1194 is **not merged or approved** as of this revision.
+
+**Required proof before any build or promote:**
+1. Verify exact SHA of #1194 merged to main with green exact-head CI and Grok PASS; do not transfer #1189's PASS.
+2. Inspect the *rendered* remote Bash for promote **and** rollback. It must use quoted `"$watcher_dest"` in every path, including `chmod 700 "$watcher_dest"/*.sh`.
+3. Run isolated fake-box regressions: empty, root, relative, symlink escaping shared root, and other unapproved directories must fail **before any copy/remove/chmod/restart**.
+4. Obtain fresh read-only `systemctl show afs-watcher.service -p WorkingDirectory --value` and resolved path; confirm a nonempty existing directory beneath the configured shared root, or stop for a separate operator-approved safe-path decision.
+5. Verify watcher rollback still restores from the pinned previous release; require a non-production rehearsal and reviewer-approved rollback evidence. No actual service operation is authorized here.
+
+**Fail B10 = HOLD** even if every other CI/dependency/posture check passes. Do not use a manual `chmod`, bypass path guards, or deploy old `7c93027` to avoid this gate.
+
+### B1/B5/B6/B8/B9 — still unresolved
+
+- **B1:** Read actual six posture pins and release-script promote policy. No automatic reset.
+- **B5:** Compare deployed effective venv with the exact candidate lock and confirm Python 3.13. List/approve every material delta.
+- **B6:** Verify effective `CONTRACT_IDENTITY_GUARD_ENFORCED` and its proof pin. Keep OFF until separately reviewed Pine/rollover proof.
+- **B8:** Futures promote changes options collector code, dependencies and journal behavior if the collector remains on the live symlink. Prefer a reviewed independent pin/partition boundary; do not repin automatically. For #1186's v0.2 journal rollback, preserved old rows and separate new partitions require distinct operator-approved procedures and proof of the pinned old collector's actual startup.
+- **B9:** Fresh broker flatness, no working orders, no deploy lock, after-close window, and no in-flight lane actions. Restarts can lose webhook intake for at least several seconds; do not assume zero missed signals.
+
+**Evidence windows:** Preserve old journal bytes and report exact code/collector/source boundaries; do not merge cohorts with changed producer schemas or retroactively label non-catches. Whether to continue or reset each active epoch is an explicit operator decision supported by a recorded exact-SHA cutover.
+
+### Required next action
+
+1. Obtain Grok exact-head review and fresh CI for #1194 and #1186; **do not merge as part of this plan**.
+2. Once #1194 is separately merged with operator approval, nominate the **new** exact deployment candidate, compare deployed → candidate end-to-end, and refresh all identities and risk-path checks below.
+3. Obtain read-only root-level box proof for B1/B5/B6/B8/B9/B10 and rollback readiness.
+4. Return a **GO FOR OPERATOR DECISION** or **HOLD** gate table with timestamps, artifacts and all decisions. Never build, promote, restart or submit orders from this document.
+
+---
+
+## Historical plan: `c44d32b → 7c93027` (superseded; provenance only)
 
 ## Status
 
