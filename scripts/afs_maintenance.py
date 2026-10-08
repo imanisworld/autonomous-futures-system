@@ -870,18 +870,67 @@ def _append_history(host: Host, row: dict[str, object]) -> None:
     host.append_line(HISTORY_PATH, json.dumps(row, sort_keys=True))
 
 
+_CONTINUITY_FIELDS = (
+    "futures_active",
+    "futures_dropin_paths",
+    "futures_memory_raw",
+    "futures_pid",
+    "futures_restarts",
+    "health_http",
+    "scanner_active",
+    "scanner_dropin_paths",
+    "scanner_pid",
+    "scanner_restarts",
+)
+
+
 def _intent_row(stamp: str, command: str, before: Snapshot, target_mib: int) -> dict[str, object]:
     return {
         "action": "intent",
         "before_mib": before.scanner_mib,
         "cgroup_max": before.cgroup_max,
         "command": command,
+        "futures_active": before.futures_active,
+        "futures_dropin_paths": before.futures_dropin_paths,
+        "futures_memory_raw": before.futures_memory_raw,
+        "futures_need_reload": before.futures_need_reload,
+        "futures_pid": before.futures_pid,
+        "futures_restarts": before.futures_restarts,
+        "health_http": before.health_http,
         "our_dropin": before.our_dropin,
         "result": "open",
         "runtime_files": before.runtime_files,
+        "scanner_active": before.scanner_active,
+        "scanner_dropin_paths": before.scanner_dropin_paths,
+        "scanner_need_reload": before.scanner_need_reload,
+        "scanner_pid": before.scanner_pid,
+        "scanner_restarts": before.scanner_restarts,
         "stamp": stamp,
         "target_mib": target_mib,
     }
+
+
+def _continuity_baseline(intent: dict[str, object]) -> dict[str, str]:
+    """Return the pre-mutation service facts recovery must prove, or fail closed."""
+
+    baseline: dict[str, str] = {}
+    for key in _CONTINUITY_FIELDS:
+        value = intent.get(key)
+        if not isinstance(value, str):
+            raise MaintenanceFailure(
+                f"ROLLBACK UNVERIFIED / HOLD: intent has no {key} baseline",
+                unverified=True,
+            )
+        baseline[key] = value
+    for key in ("scanner_need_reload", "futures_need_reload"):
+        value = intent.get(key)
+        if value != "no":
+            raise MaintenanceFailure(
+                f"ROLLBACK UNVERIFIED / HOLD: intent has no quiet {key} baseline",
+                unverified=True,
+            )
+        baseline[key] = "no"
+    return baseline
 
 
 def _closed_stamps(rows: list[dict[str, object]]) -> set[object]:
@@ -1255,8 +1304,9 @@ def _runtime_record(value: object) -> dict[str, str]:
 
 def _recover_open_intent(host: Host, intent: dict[str, object], requested: str | None) -> int:
     command = canonical(RollbackAction(requested))
+    baseline = _continuity_baseline(intent)
     before = capture(host)
-    if before.futures_need_reload != "no" or before.etc_control or before.run_control:
+    if before.futures_need_reload != "no" or before.scanner_need_reload != "no" or before.etc_control or before.run_control:
         raise MaintenanceFailure(
             "ROLLBACK UNVERIFIED / HOLD: hidden unit state is present",
             unverified=True,
@@ -1291,8 +1341,25 @@ def _recover_open_intent(host: Host, intent: dict[str, object], requested: str |
     for name, text in runtime.items():
         if after.runtime_files.get(name) != text:
             problems.append(f"runtime {name}")
-    if after.futures_pid != before.futures_pid or after.futures_memory_raw != before.futures_memory_raw:
-        problems.append("futures identity")
+    continuity = (
+        ("scanner pid", after.scanner_pid, "scanner_pid"),
+        ("scanner restarts", after.scanner_restarts, "scanner_restarts"),
+        ("scanner state", after.scanner_active, "scanner_active"),
+        ("futures pid", after.futures_pid, "futures_pid"),
+        ("futures restarts", after.futures_restarts, "futures_restarts"),
+        ("futures state", after.futures_active, "futures_active"),
+        ("futures memory", after.futures_memory_raw, "futures_memory_raw"),
+        ("health", after.health_http, "health_http"),
+        ("scanner DropInPaths", after.scanner_dropin_paths, "scanner_dropin_paths"),
+        ("futures DropInPaths", after.futures_dropin_paths, "futures_dropin_paths"),
+    )
+    for label, got, key in continuity:
+        if got != baseline[key]:
+            problems.append(label)
+    if after.scanner_need_reload != "no":
+        problems.append("scanner NeedDaemonReload")
+    if after.futures_need_reload != "no":
+        problems.append("futures NeedDaemonReload")
     if problems:
         raise MaintenanceFailure(
             "ROLLBACK UNVERIFIED / HOLD: mismatch: " + ", ".join(problems),
@@ -1336,9 +1403,13 @@ def _recover_open_intent(host: Host, intent: dict[str, object], requested: str |
                 "result=ok",
                 f"undoes={intent.get('stamp')}",
                 f"restored_mib={intent.get('before_mib')}",
-                f"scanner_pid_unchanged={str(after.scanner_pid == before.scanner_pid).lower()}",
-                f"futures_pid_unchanged={str(after.futures_pid == before.futures_pid).lower()}",
-                "restarts_unchanged=true",
+                f"scanner_pid_unchanged={str(after.scanner_pid == baseline['scanner_pid']).lower()}",
+                f"futures_pid_unchanged={str(after.futures_pid == baseline['futures_pid']).lower()}",
+                "restarts_unchanged="
+                + str(
+                    after.scanner_restarts == baseline["scanner_restarts"]
+                    and after.futures_restarts == baseline["futures_restarts"]
+                ).lower(),
             ]
         )
         + "\n"
@@ -1492,6 +1563,14 @@ def execute(argv: list[str], host: Host) -> int:
         sys.stderr.write(f"FAILED: {exc}\n")
         return 1
     raise Denied("command is not in the maintenance allowlist")
+
+
+def _fsync_directory(directory: Path) -> None:
+    fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
 
 
 class ProductionHost(Host):
@@ -1654,12 +1733,38 @@ class ProductionHost(Host):
         self._check_log_path(path)
         if path.is_symlink():
             raise MaintenanceFailure("refusing to append through a symlink")
-        flags = os.O_APPEND | os.O_CREAT | os.O_WRONLY | os.O_NOFOLLOW
-        fd = os.open(path, flags, 0o640)
+        payload = (line + "\n").encode()
+        created = False
         try:
-            os.write(fd, (line + "\n").encode())
+            fd = os.open(path, os.O_APPEND | os.O_WRONLY | os.O_NOFOLLOW)
+        except FileNotFoundError:
+            fd = os.open(
+                path,
+                os.O_APPEND | os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW,
+                0o640,
+            )
+            created = True
+        try:
+            prior = 0 if created else os.lseek(fd, 0, os.SEEK_END)
+            written = 0
+            try:
+                while written < len(payload):
+                    chunk = os.write(fd, payload[written:])
+                    if chunk <= 0:
+                        raise MaintenanceFailure("maintenance record write was incomplete")
+                    written += chunk
+                os.fsync(fd)
+            except Exception:
+                try:
+                    os.ftruncate(fd, prior)
+                    os.fsync(fd)
+                except OSError:
+                    pass
+                raise
         finally:
             os.close(fd)
+        if created:
+            _fsync_directory(path.parent)
 
     def approval_names(self) -> list[str]:
         if not APPROVAL_DIR.exists():

@@ -80,6 +80,7 @@ class FakeHost(afs.Host):
         self.runtime_mutation: tuple[str, str] | None = None
         self.futures_dropin_on_reload: str | None = None
         self.fail_history = None
+        self.recovery_drift: str | None = None
         self.clock = datetime(2026, 10, 8, 20, 45, tzinfo=timezone.utc)
         self.environ = {"SUDO_USER": "grok-audit", "SSH_CONNECTION": "test-connection"}
         self.approvals: dict[str, dict[str, object]] = {}
@@ -139,6 +140,31 @@ class FakeHost(afs.Host):
         if self.futures_dropin_on_reload is not None:
             self.futures_dropin_paths = self.futures_dropin_on_reload
             self.futures_dropin_on_reload = None
+        self._apply_recovery_drift()
+
+    def _apply_recovery_drift(self) -> None:
+        drift = self.recovery_drift
+        if drift is None:
+            return
+        self.recovery_drift = None
+        if drift == "scanner-pid":
+            self.scanner["MainPID"] = str(int(self.scanner["MainPID"]) + 1)
+        elif drift == "scanner-restarts":
+            self.scanner["NRestarts"] = str(int(self.scanner["NRestarts"]) + 1)
+        elif drift == "futures-active":
+            self.futures["ActiveState"] = "activating"
+        elif drift == "futures-restarts":
+            self.futures["NRestarts"] = "1"
+        elif drift == "health":
+            self.health = "500"
+        elif drift == "need-reload":
+            self.scanner["NeedDaemonReload"] = "yes"
+        elif drift == "dropin-paths":
+            self.extra_scanner_paths.append(
+                "/etc/systemd/system/options-scanner.service.d/unexpected.conf"
+            )
+        else:
+            raise AssertionError(drift)
 
     def read_cgroup(self, control_group: str, leaf: str) -> str | None:
         if control_group != afs.EXPECTED_CGROUP:
@@ -683,6 +709,152 @@ def test_killed_change_keeps_a_record_rollback_can_use():
     code, _out, err = _run(host, "options-scanner-memory", "set", "500M")
     assert code == 126
     assert "operator approval is required" in err
+
+
+def _open_intent(host: FakeHost) -> dict:
+    rows = [json.loads(line) for line in host.records[afs.HISTORY_PATH].splitlines()]
+    return [row for row in rows if row["action"] == "intent"][-1]
+
+
+def test_intent_write_failure_does_not_change_memory():
+    host = FakeHost()
+    host.fail_history = lambda line: '"action": "intent"' in line
+    host.grant("options-scanner-memory set 600M")
+    code, out, err = _run(host, "options-scanner-memory", "set", "600M")
+    assert code == 1
+    assert "result=ok" not in out
+    assert "could not record the maintenance intent" in err
+    assert "configuration was not changed" in err
+    assert ("daemon-reload",) not in host.calls
+    assert afs.DROPIN_NAME not in host.etc
+    assert host.scanner["MemoryMax"] == str(350 * afs.MIB)
+
+
+def test_intent_record_keeps_the_service_baseline():
+    host = FakeHost()
+    host.crash_on_reload = True
+    host.grant("options-scanner-memory set 600M")
+    with pytest.raises(SystemExit):
+        _run(host, "options-scanner-memory", "set", "600M")
+    intent = _open_intent(host)
+    assert intent["scanner_pid"] == "1695873"
+    assert intent["scanner_restarts"] == "0"
+    assert intent["futures_pid"] == "1851835"
+    assert intent["futures_restarts"] == "0"
+    assert intent["futures_active"] == "active"
+    assert intent["health_http"] == "200"
+    assert intent["scanner_need_reload"] == "no"
+    assert intent["futures_need_reload"] == "no"
+    assert "no-bytecode.conf" in intent["scanner_dropin_paths"]
+
+
+@pytest.mark.parametrize(
+    "drift",
+    [
+        "scanner-pid",
+        "scanner-restarts",
+        "futures-active",
+        "futures-restarts",
+        "health",
+        "need-reload",
+        "dropin-paths",
+    ],
+)
+def test_recovery_drift_cannot_report_success(drift: str):
+    host = FakeHost()
+    host.crash_on_reload = True
+    host.grant("options-scanner-memory set 600M")
+    with pytest.raises(SystemExit):
+        _run(host, "options-scanner-memory", "set", "600M")
+    intent = _open_intent(host)
+    host.crash_on_reload = False
+    host.recovery_drift = drift
+    host.grant(f"options-scanner-memory rollback {intent['stamp']}", name="rollback0001")
+    code, out, err = _run(host, "options-scanner-memory", "rollback", intent["stamp"])
+    assert code == 1
+    assert "result=ok" not in out
+    assert "restarts_unchanged=true" not in out
+    assert "ROLLBACK UNVERIFIED / HOLD" in err
+
+
+def test_recovery_without_a_continuity_baseline_does_not_mutate():
+    host = FakeHost()
+    stamp = "20261008T204500Z"
+    row = {
+        "action": "intent",
+        "before_mib": 350,
+        "cgroup_max": str(350 * afs.MIB),
+        "command": "options-scanner-memory set 600M",
+        "our_dropin": None,
+        "result": "open",
+        "runtime_files": {},
+        "stamp": stamp,
+        "target_mib": 600,
+    }
+    host.records[afs.HISTORY_PATH] = json.dumps(row, sort_keys=True) + "\n"
+    host.grant(f"options-scanner-memory rollback {stamp}", name="rollback0001")
+    code, out, err = _run(host, "options-scanner-memory", "rollback", stamp)
+    assert code == 1
+    assert "result=ok" not in out
+    assert "intent has no futures_active baseline" in err
+    assert ("daemon-reload",) not in host.calls
+    assert "rollback0001" in host.approvals
+
+
+def test_history_append_retries_short_writes_and_fsyncs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    history = tmp_path / "maintenance" / "history.jsonl"
+    history.parent.mkdir()
+    monkeypatch.setattr(afs, "HISTORY_PATH", history)
+    fsynced: list[int] = []
+    real_fsync = os.fsync
+    real_write = os.write
+
+    def spy_fsync(fd: int) -> None:
+        fsynced.append(fd)
+        real_fsync(fd)
+
+    def one_byte(fd: int, data: bytes) -> int:
+        return real_write(fd, data[:1])
+
+    monkeypatch.setattr(afs.os, "fsync", spy_fsync)
+    monkeypatch.setattr(afs.os, "write", one_byte)
+    line = '{"action": "intent", "result": "open"}'
+    afs.ProductionHost().append_line(history, line)
+    assert history.read_text(encoding="utf-8") == line + "\n"
+    assert len(fsynced) >= 2
+
+
+def test_partial_history_write_is_removed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    history = tmp_path / "history.jsonl"
+    original = '{"action": "old"}\n'
+    history.write_text(original, encoding="utf-8")
+    monkeypatch.setattr(afs, "HISTORY_PATH", history)
+    real_write = os.write
+    calls = {"n": 0}
+
+    def short_then_fail(fd: int, data: bytes) -> int:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return real_write(fd, data[:2])
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(afs.os, "write", short_then_fail)
+    with pytest.raises(OSError):
+        afs.ProductionHost().append_line(history, '{"action": "intent"}')
+    assert history.read_text(encoding="utf-8") == original
+
+
+def test_history_fsync_failure_is_not_a_successful_record(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    history = tmp_path / "history.jsonl"
+    monkeypatch.setattr(afs, "HISTORY_PATH", history)
+
+    def boom(_fd: int) -> None:
+        raise OSError(5, "Input/output error")
+
+    monkeypatch.setattr(afs.os, "fsync", boom)
+    with pytest.raises(OSError):
+        afs.ProductionHost().append_line(history, '{"action": "intent"}')
+    assert history.read_text(encoding="utf-8") == ""
 
 
 def test_history_is_append_only_and_noop_does_not_add_a_set():
