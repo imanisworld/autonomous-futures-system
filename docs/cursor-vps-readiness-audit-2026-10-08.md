@@ -121,3 +121,127 @@ Still **NOT READY**: candidate UNSET; B2 pin confirm; B3/B4/B5/B8; watcher/histo
 
 - Allowlist bundle: `/opt/cursor/artifacts/vps-audit-2026-10-08T12:33:42Z/`
 - Public JSON: `/opt/cursor/artifacts/public-status/live-preflight.json` (+ health/diagnostics/broker-account)
+
+---
+
+## Addendum — root-read attempt 2026-10-08T12:42:26Z (GO on operator decision #1)
+
+**Operator authorization to attempt root read-only proofs:** yes (chat “You can do 1 if you can… And go”).  
+**Mac root-key path:** unavailable in this Cloud Agent environment; operator cannot edit Mac now.
+
+| Attempt | Result |
+|---|---|
+| Same injected allowlist key as `root@host` | `Permission denied (publickey,password)` |
+| Allowlist verb expansion / args | All denied except bare verbs; `service-logs` returns futures-bot journal only |
+| Public `/options/*` SPA paths | HTML shell, not collector unit/journal API |
+| Public `/scanner/status` | Options **scanner** advisory surface only — not `options-122-prospective` pin/journal |
+
+**Conclusion:** Root gates (B2 durable pin, B3 rollback readiness, B4 Python, B5 freeze, B8 unit class, B10 watcher/history, options ARMED scan, disk) remain **UNVERIFIED**. No privilege escalation, no new credentials, no mutations performed.
+
+### Exact Mac/root read-only block (for operator when Mac is available)
+
+Run from the proven Mac `ssh hetzner` / root path. **Read-only.** Do not paste `Environment=` secrets.
+
+```bash
+date -u +%Y-%m-%dT%H:%M:%SZ
+
+# B10 + release history
+readlink -f /root/afs-shared
+systemctl show afs-watcher.service -p WorkingDirectory -p NeedDaemonReload -p DropInPaths -p FragmentPath
+systemctl cat afs-watcher.service
+ls -l /root/afs-shared/afs_watcher_src/
+test -f /root/afs-shared/release_history.txt && stat -c '%F %n' /root/afs-shared/release_history.txt
+
+# B2 fingerprint (presence/length/match only — do not print full .env)
+python3 - <<'PY'
+from pathlib import Path
+env = Path('/root/afs-shared/.env').read_text().splitlines()
+keys = ('EXPECTED_RELEASE_FINGERPRINT','EXPECTED_LIVE_COMMIT','EXPECTED_LIVE_BRANCH')
+for line in env:
+    if line.startswith(keys) or any(line.startswith(k+'=') for k in keys):
+        k, _, v = line.partition('=')
+        print(f'{k}: set={bool(v)} len={len(v)} prefix={v[:12]!r}')
+PY
+# bare vs injected integrity (no .env mutation)
+RELEASE=/root/afs-releases/c44d32bc4961e56fae5c5f88a976eb6783341638
+( cd "$RELEASE" && PYTHONPATH="$RELEASE" "$RELEASE/.venv/bin/python" -B -m ops.release_integrity --repo-root "$RELEASE" ) || true
+FP=$(python3 -c 'import json; print(json.load(open("/root/afs-releases/c44d32bc4961e56fae5c5f88a976eb6783341638/release_manifest.json"))["fingerprint_sha256"])')
+( cd "$RELEASE" && EXPECTED_RELEASE_FINGERPRINT="$FP" PYTHONPATH="$RELEASE" "$RELEASE/.venv/bin/python" -B -m ops.release_integrity --repo-root "$RELEASE" ) || true
+
+# B3 previous release
+readlink -f /root/afs-releases/current /root/afs-releases/current.previous 2>/dev/null || true
+PREV=$(readlink -f /root/afs-releases/current.previous 2>/dev/null || true)
+echo "previous=$PREV"
+if [ -n "$PREV" ] && [ -d "$PREV" ]; then
+  test -f "$PREV/release_manifest.json" && echo manifest=yes
+  test -d "$PREV/.venv" && echo venv=yes
+  test -f /root/afs-shared/release-complete/"$(basename "$PREV")" && echo complete=yes || ls /root/afs-shared/release-complete 2>/dev/null | head
+fi
+
+# B4 / B5
+command -v python3.13; python3.13 --version
+"$RELEASE/.venv/bin/python" --version
+"$RELEASE/.venv/bin/python" -m ops.dependency_lock check-python
+"$RELEASE/.venv/bin/pip" freeze | "$RELEASE/.venv/bin/python" -m ops.dependency_lock check-freeze --lock "$RELEASE/requirements.lock" --freeze -
+
+# B6 / B1 six lines from .env (values only for these keys)
+grep -E '^(SCHEDULE_MODE|EXPECTED_PROOF_SCHEDULE_MODE|HTF_DIRECTION_MODE|EXPECTED_PROOF_HTF_DIRECTION_MODE|EXIT_MODE|EXPECTED_PROOF_EXIT_MODE|CONTRACT_IDENTITY_GUARD_ENFORCED|EXPECTED_PROOF_CONTRACT_IDENTITY_GUARD_ENFORCED)=' /root/afs-shared/.env || true
+
+# B8 collector classification
+systemctl cat options-122-prospective.service
+systemctl show options-122-prospective.service -p WorkingDirectory -p FragmentPath -p DropInPaths -p ExecStart
+systemctl cat options-122-prospective.timer 2>/dev/null || true
+# classify: PINNED if ExecStart/WorkingDirectory under /root/afs-releases/<sha> (expect db9bc7e2…); LIVE-TREE if /root/autonomous-futures-system
+
+# Options journal integrity (read-only scan)
+J=/root/afs-shared/logs/options_122_prospective.jsonl
+stat -c '%n size=%s mtime=%y' "$J"
+sha256sum "$J"
+python3 - <<'PY'
+import json, collections
+from pathlib import Path
+p=Path('/root/afs-shared/logs/options_122_prospective.jsonl')
+armed=collections.defaultdict(list)
+first={}
+formats=set()
+for i,line in enumerate(p.read_text().splitlines(),1):
+    if not line.strip(): continue
+    try: r=json.loads(line)
+    except Exception: continue
+    # format markers
+    for k in ('schema_version','journal_version','evidence_schema_version','record_schema'):
+        if k in r: formats.add(f'{k}={r[k]}')
+    sid=r.get('setup_id') or r.get('setupId')
+    coll=r.get('collector') or r.get('producer') or r.get('collector_id')
+    epoch=r.get('epoch') or r.get('strategy_epoch') or r.get('epoch_id')
+    state=r.get('state') or r.get('status') or r.get('event') or r.get('record_type')
+    key=(coll, epoch, sid)
+    if sid and sid not in first: first[sid]=(i, state)
+    if state and 'ARMED' in str(state).upper():
+        armed[key].append(i)
+dups={k:v for k,v in armed.items() if len(v)>1 and k[2]}
+print('formats', sorted(formats)[:20])
+print('armed_groups', len(armed), 'duplicate_armed_groups', len(dups))
+for k,v in list(dups.items())[:20]:
+    print('DUP', k, 'lines', v)
+ooo=0
+for sid,(fi,st) in first.items():
+    # if first record is not ARMED but an ARMED exists later with earlier? check first precedes ARMED
+    pass
+# first-record-before-ARMED: first line for setup is not ARMED but ARMED exists
+for (coll,epoch,sid), lines in armed.items():
+    if not sid: continue
+    fi, st = first.get(sid, (None,None))
+    if fi is not None and fi < min(lines) and (st is None or 'ARMED' not in str(st).upper()):
+        ooo += 1
+        if ooo <= 20:
+            print('OOO setup', sid, 'first_line', fi, 'first_state', st, 'armed_lines', lines)
+print('out_of_order_armed_setups', ooo)
+PY
+
+# Disk + lock
+df -h /root/afs-releases /root/afs-shared / | head
+test ! -e /root/afs-shared/deploy.lock && echo deploy_lock=absent || ls -l /root/afs-shared/deploy.lock
+```
+
+Paste redacted outputs back for Cursor/Grok to close the UNVERIFIED gates. **No deploy.**

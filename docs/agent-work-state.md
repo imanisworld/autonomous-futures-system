@@ -81,6 +81,6 @@
 ## NEXT
 
 1. Grok: challenge Cursor VPS audit (`docs/cursor-vps-readiness-audit-2026-10-08.md` / #1190 handoff); return independent HOLD/NOT READY/READY FOR OPERATOR REVIEW.
-2. Operator: authorize root read-only proofs listed in that audit (B2/B3/B4/B5/B8/B10/journal ARMED/disk).
+2. Operator (when Mac available): run the root read-only block in the audit addendum (`ssh hetzner`); paste redacted outputs. Cloud Agent has only allowlist SSH — root same-key = Permission denied @ 2026-10-08T12:42:26Z.
 3. Keep deployment separate; any build/verify/promote requires nominated SHA + fresh root proof + explicit operator GO.
 4. For options/research work, follow `docs/options-current-state-handoff.md`; do not silently ride collector on a futures promote.
