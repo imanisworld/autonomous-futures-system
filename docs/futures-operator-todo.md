@@ -8,7 +8,7 @@
 
 ## Current source/runtime boundary — 2026-10-07
 
-- Repository `main`: `1ec48a0ed76aea23c82882ff8c8ae258fda20c95` after U11 / #1166.
+- Source-safety baseline: `1ec48a0ed76aea23c82882ff8c8ae258fda20c95` after U11 / #1166. Fetch current `main` before acting; later docs/guidance-only merges may be ahead of this baseline.
 - U3→U11 are merged **source changes only**. Do not treat them as deployed.
 - Last preserved verified futures runtime checkpoint: `c44d32bc4961e56fae5c5f88a976eb6783341638` from 2026-10-04.
 - No fresh runtime verification was performed during this source/docs cleanup.
