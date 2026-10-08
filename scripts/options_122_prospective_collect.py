@@ -180,6 +180,11 @@ def _load_state(path: Path):
         obs = row.get("observation") if isinstance(row.get("observation"), dict) else {}
         binding = row.get("canonical_binding")
         record_type = row.get("record_type")
+        # A setup has exactly one authoritative ARMED event across legacy and v0.2.
+        # Never permit a duplicate stamped ARMED to convert an existing legacy
+        # setup into a canonical prospective catch.
+        if record_type == "ARMED" and setup_id in armed:
+            raise RuntimeError(f"journal_duplicate_armed_{number}")
         if record_type == "ARMED" and row.get("collector_version") == COLLECTOR_VERSION and binding is None:
             raise RuntimeError(f"journal_canonical_binding_missing_{number}")
         if binding is not None:
