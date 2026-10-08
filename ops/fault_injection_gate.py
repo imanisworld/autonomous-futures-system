@@ -378,7 +378,6 @@ def verify_manifest(
         tests = entry.get("tests")
         if not isinstance(tests, list) or sum(counts.values()) != len(tests):
             blockers.append(f"fault-injection scenario {scenario} count/test detail mismatch")
-            continue
         if entry.get("result") != "PASS" or counts["passed"] <= 0 or counts["failed"] or counts["skipped"]:
             blockers.append(f"fault-injection scenario {scenario} is {entry.get('result')!r}, not PASS")
     pytest_exit = manifest.get("pytest_exit_code")
