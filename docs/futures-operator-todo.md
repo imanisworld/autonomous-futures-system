@@ -1,5 +1,47 @@
 # Futures Operator TODO
 
+## Operator checklist — 2026-10-08 (completion requires operator verification)
+
+**Priority:** Resolve Grok's actual blockers first. Do not deploy merely to finish this checklist.
+
+### 1. Overnight audit
+- [ ] Read Grok AFS-0159–0163 consolidated findings; distinguish completed review from remaining operator decisions.
+- [ ] Identify genuine blockers and assign fixes without duplicating other agents' work.
+- [ ] Confirm current `main` SHA, CI, and exact deployment candidate.
+
+### 2. Options system
+- [x] #1186/#1177 part 1 reviewed (Grok PASS reported at `51d6427`) and source-merged as `0d02a8bd`. [ ] Ops root read-only journal/pin verification and separate approved B2 rollback rehearsal remain open. [ ] Implement/review #1177 read-only adapter separately.
+- [ ] Advance #1184 authority-history security; no authority persistence/runtime use before verification.
+- [ ] Keep #1154 parked until #1177 prerequisites pass.
+
+### 3. Futures deployment
+- [x] #1190 plan merged as `e3c84a78` (Grok AFS-0174 PASS); #1194 watcher guard merged as `168e7420` (Grok AFS-0168 PASS); #1196 release-history preflight source-merged as `a602501c` after Grok PASS AFS-0178 at `a3535c7`.
+- [ ] Authorized Ops/Cursor/Grok restricted read-only box proof of the effective watcher and `release_history.txt` paths, B1/B5/B6 pins, B8 collector isolation, journal integrity and rollback remains outstanding. Keep their audit access available; use separate, least-privilege evidence access without exposing secrets or enabling deployments. Next nominated release candidate SHA remains UNSET.
+- [ ] Resolve B1, B5, B6, B8 and B10 (watcher preflight) plus evidence-window decisions using fresh authorized VPS proof and reviewed source/tests; never assume missing evidence.
+- [ ] Confirm options collector isolation, fresh-journal rollback boundaries, and futures watcher rollback can fail safely **before** any release mutation.
+- [ ] Decide whether the exact release is eligible for *separate* operator deployment approval. No automatic merge/build/promote/restart.
+
+### 4. Documentation and cleanup
+- [ ] #1191 options handoff corrected to distinguish #1184 reviewer recommendation from operator decision and record #1186 source merge. Await independent exact-head Grok re-review and green CI before merging.
+- [ ] #1192 coordination/futures TODO reconciled to merged #1190/#1194/#1186 facts. #1187 and #1193 CLOSED without merge. Keep #1190's deployment plan authoritative for release gates; don't reintroduce a duplicate agent-work-state checkpoint.
+- [ ] Keep #1167 cleanup audit-only; no code or evidence deletion.
+
+### 5. Trading evidence
+- [ ] Keep existing read-only collection unchanged if evidence integrity is verified; check whether 'dead companion daily' was a retired Discord job using root read-only census, not assume loss of trading evidence.
+- [ ] Defer combined trade-performance review until the weekend. Preserve existing reports without promotion claims.
+
+**End-of-day goal:** Verified readiness, current documentation, and a clear deployment decision — not necessarily deployment itself.
+
+## Latest operator queue — 2026-10-08
+
+- GitHub `main`: `a602501cb0e665952da2101e9c4f73a3e68aea90` at this check (source merges #1190, #1194, #1186 and #1196). Last audited futures VPS release is reported `c44d32bc4961e56fae5c5f88a976eb6783341638`, not reconfirmed with root read-only evidence.
+- **#1189 (MERGED)** — reviewed remote-build quote repair at `f60ec6ff3268e1b193ff8e21aefa3cd5d8420319`, merged as `064ee674b788c144fc8d3ca65082ed060927e2f1`; GitHub exact-head CI and post-merge checks reported green. Merging a fix does not authorize build/verify or promote.
+- **#1190 (MERGED / PLAN ONLY):** AFS-0174 Grok PASS on `aa96563e`; merged as `e3c84a78`. Candidate remains UNSET, root-runtime and rollback gates remain HOLD. #1194 watcher source fix separately Grok-PASS-reported at `1b7b996` and source-merged as `168e7420`. Neither source merge authorizes a release.
+- Prior `afs-deploy` CI-proof wrapper **51/51 tests and real U11 fetch/`verify-live` PASS are operator-reported, not independently verified here**. They apply only to the reported code and evidence; do not transfer them to changed #1189/#1194 paths or call them verified proof. New exact-head regression checks and independent review are required for relevant changes.
+- **Remaining futures gate:** #1196 release-history-file preflight is source-MERGED as `a602501c` (Grok PASS AFS-0178 on `a3535c7`). Release candidate remains UNSET. Nominate an exact candidate and obtain new independent Grok trading-path review only after root evidence and other prerequisites are reconciled. Root read-only B1/B5/B6, B8 collector isolation, watcher paths, release history, broker/orders, evidence windows and rollback remain UNVERIFIED. Do not reset journals or repin collector automatically.
+- Just before any separately authorized release action re-prove deploy lock, current source/box identity, integrity, demo + live-off + cap-one pins, broker flatness/orders, recovery/rollback and watcher state.
+- **HOLD**: no build, promote, restart, deployment or live execution authorized by completed source tests or any docs PR.
+
 > **Purpose:** compact list of operator-owned futures infrastructure/safety actions. Historical snapshots and completed detail are in `docs/futures-operator-todo-archive-through-2026-10-07.md`.
 >
 > This file is **not** strategy-status authority. Futures strategy truth is `docs/strategy-rules/Strategy_Inventory.md`; experiment history is `docs/research-trial-ledger.jsonl`; runtime truth requires fresh box evidence.
