@@ -179,9 +179,15 @@ def _load_state(path: Path):
             continue
         obs = row.get("observation") if isinstance(row.get("observation"), dict) else {}
         binding = row.get("canonical_binding")
+        record_type = row.get("record_type")
+        if record_type == "ARMED" and row.get("collector_version") == COLLECTOR_VERSION and binding is None:
+            raise RuntimeError(f"journal_canonical_binding_missing_{number}")
         if binding is not None:
             if row.get("collector_version") != COLLECTOR_VERSION or not isinstance(binding, Mapping):
                 raise RuntimeError(f"journal_canonical_binding_invalid_{number}")
+            if record_type != "ARMED" and setup_id not in canonically_bound:
+                # A pre-binding setup can never be upgraded by a later row.
+                raise RuntimeError(f"journal_canonical_binding_upgrade_{number}")
             class _BoundObservation:
                 pass
             bound_obs = _BoundObservation()
@@ -194,6 +200,9 @@ def _load_state(path: Path):
             if dict(binding) != expected_binding:
                 raise RuntimeError(f"journal_canonical_binding_invalid_{number}")
             canonically_bound.add(setup_id)
+        elif setup_id in canonically_bound and row.get("collector_version") == COLLECTOR_VERSION:
+            # New bound setups must carry the exact binding on every state row.
+            raise RuntimeError(f"journal_canonical_binding_missing_{number}")
         fp = obs.get("setup_fingerprint")
         if fp is not None:
             fp = str(fp)
