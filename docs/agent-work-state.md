@@ -74,15 +74,6 @@
 - Operator runtime/safety actions: `docs/futures-operator-todo.md`
 - Historical long checkpoints: the archive named above plus dated evidence documents
 
-## Checkpoint — 2026-10-08 (Cursor AFS-0165 docs sync)
-
-- **Lane:** futures deployment plan docs (#1190).
-- **DONE / DO NOT REDO:** Cursor B1–B8 RO matrices posted on #1190 (comments 6051491065, 6051610034). Claude AFS-0165/AFS-0166 docs body through `59b4e263`. Cursor parallel full rewrite abandoned as duplicate.
-- **Landed:** #1190 head `e5bdab9b373c8a80635c4e51b8ce4407ccc0c10e` — audit-allowlist wording redaction + historic B3 align to `489b55b`. Tracking mirror branch/PR: `cursor/futures-deploy-plan-grok-afs0165-dd85` / #1195 (prefer merge via #1190).
-- **Grok re-review requested:** comment 6058847973 on #1190. No Grok PASS claimed.
-- **NOT DONE:** deploy/promote/restart/env/collector/broker. Candidate remains UNSET. Root box proofs still UNVERIFIED.
-- **Branches:** `docs/futures-deploy-plan-7c93027-20261008` (#1190), `cursor/futures-deploy-plan-grok-afs0165-dd85` (#1195 mirror).
-
 ## NEXT
 
 1. Finish this bounded repo cleanup without changing execution behavior.

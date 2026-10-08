@@ -16,9 +16,9 @@
 
 ### B10 — Watcher WorkingDirectory and chmod safety (new mandatory gate)
 
-Review comments on #1190/#1194 (posted via the ChatGPT/Codex account, not Grok) identified a dangerous remote-shell quote expansion in **both** promote and rollback watcher re-arm. Grok has **not** independently reviewed #1194; no reviewer PASS is inferred. On an empty systemd WorkingDirectory, the effective unquoted `chmod 700 $watcher_dest/*.sh` could target `/*.sh`. Merely testing that a Bash source file parses is not enough.
+Early #1190/#1194 comments posted via the ChatGPT/Codex account (not Grok) documented the unsafe remote-shell quote expansion in promote and rollback watcher re-arm. **Grok subsequently returned CHANGES REQUIRED on #1194 at `adc09f8` and independent PASS at exact `1b7b996e4d02b269f5ee1b680ca67ee232a866f0` (AFS-0168).** #1194 remains unmerged. Under the old code an empty systemd WorkingDirectory could expand `chmod 700 $watcher_dest/*.sh` into `chmod 700 /*.sh`; source parsing alone is insufficient.
 
-**Source fix:** [draft PR #1194](https://github.com/imanisworld/autonomous-futures-system/pull/1194), separate from this docs-only plan. It adds a fail-closed nonempty, realpath-resolved directory guard, restricts the canonical destination to the configured trusted shared-root subtree and preserves quoting through the nested remote command. #1194 is **not merged or approved** as of this revision.
+**Source fix:** [draft PR #1194](https://github.com/imanisworld/autonomous-futures-system/pull/1194) at `1b7b996e4d02b269f5ee1b680ca67ee232a866f0` passed independent Grok source review (AFS-0168) and exact-head CI. It validates and stores the canonical watcher directory **before** release mutations and reuses it for watcher re-arm. **It is not merged and has no operator GO to merge, build, promote or roll back.**
 
 **Required proof before any build or promote:**
 1. Verify exact SHA of #1194 merged to main with green exact-head CI and Grok PASS; do not transfer #1189's PASS.
@@ -26,6 +26,20 @@ Review comments on #1190/#1194 (posted via the ChatGPT/Codex account, not Grok) 
 3. Run isolated fake-box regressions: empty, root, relative, symlink escaping shared root, and other unapproved directories must fail **before any copy/remove/chmod/restart**.
 4. Obtain fresh read-only `systemctl show afs-watcher.service -p WorkingDirectory --value` and resolved path; confirm a nonempty existing directory beneath the configured shared root, or stop for a separate operator-approved safe-path decision.
 5. Verify watcher rollback still restores from the pinned previous release; require a non-production rehearsal and reviewer-approved rollback evidence. No actual service operation is authorized here.
+
+**Mandatory root read-only B10 and release-history preflight (no runtime changes):**
+
+```bash
+readlink -f /root/afs-shared
+systemctl show afs-watcher.service -p WorkingDirectory -p NeedDaemonReload -p DropInPaths -p FragmentPath
+systemctl cat afs-watcher.service
+ls -l /root/afs-shared/afs_watcher_src/
+test -f /root/afs-shared/release_history.txt
+```
+
+Record the timestamp; canonical shared root; effective watcher WorkingDirectory and its resolved path; `NeedDaemonReload`, `DropInPaths` and `FragmentPath`; and the read-only listing of `afs_watcher_src/`. If the actual watcher source or effective directory differs, investigate and **HOLD**, rather than assuming the proposed path is correct.
+
+**STOP before promote if `test -f /root/afs-shared/release_history.txt` fails.** The current release script writes release history after the .env/symlink/service switch; a missing history file can cause a late failure. This document requires an independently reviewed pre-mutation `test -f` guard and a fake-box zero-mutation regression in the release source **before any future candidate is eligible**. Merely documenting or manually checking it does not repair the script. Never create or rewrite the history file simply to satisfy this gate.
 
 **Fail B10 = HOLD** even if every other CI/dependency/posture check passes. Do not use a manual `chmod`, bypass path guards, or deploy old `7c93027` to avoid this gate.
 
@@ -108,7 +122,7 @@ Evidence class key: **BOX** = box observation with timestamp; **OPR** = operator
 | MES/MNQ refusal observability | SRC | Zero `CONTRACT_*` refusals after promote may simply mean no MES/MNQ signals arrived. Post-promote acceptance must report the signal count beside the refusal count; zero signals = **INCONCLUSIVE**, not PASS. |
 | Release-wrapper 51/51 | OPR | Operator-reported on 2026-10-08, not independently reproduced. Covers only unchanged paths; #1189/#1194 paths need their own exact-head tests. |
 | Installed drift gate | OPR / UNK | `/root/bin/afs-drift-gate.sh` was replaced by the #1129 fix on 2026-10-04 (OPR). The last recorded hash in the repo (`cc4d9f5a…`, 2026-09-18) predates that fix and is stale. Root read: installed sha256 vs `scripts/afs-server-drift-gate.sh` at the commit it was installed from. |
-| B10 watcher (#1194) | SRC; not Grok-reviewed | Prove pre-mutation checks on #1194's exact head for promote **and** rollback; independent Grok review; no preapproval or merge implied. Also prove: the pre-flight and post-activation path checks agree when the shared root itself resolves through a symlink, and a rejection leaves **no partial edit** (`.env`, symlink, drop-in, service state). |
+| B10 watcher (#1194) | SRC; independently reviewed PASS AFS-0168, unmerged | #1194 `1b7b996` passed Grok after earlier CHANGES REQUIRED at `adc09f8`. Promote/rollback preflight uses the same canonical destination for late re-arm, including symlinked or trailing-slash roots; invalid paths fail before mutation. **Live watcher effective unit/path, rollback drill and all operator approvals remain UNVERIFIED.** |
 
 **Evidence independence and access.** Cursor's B1–B8 matrices (comments 6051491065, 6051610034) used a restricted **audit-allowlist** identity. Those observations are not independent Grok verification; Grok compares them with its own captures. That credential is not to be reused for builder workflows. A separate least-privilege read-only builder identity is its own operator access decision. This Claude session has no VPS access and used none. No credential is posted, injected, rotated or revoked through this PR.
 
@@ -178,7 +192,7 @@ With an empty `WorkingDirectory`:
 
 A value of `/` passes as well.
 
-**Ordering.** The block runs only **after** the `.env` pin edit, the `current` symlink swap and the `futures-bot` restart. So a refused value still leaves a partially activated release, and the same block in rollback can stop a clean rollback. That is the finding recorded on #1194 head `547738c06781ae0fe74307c8c71ed9b6953d501e` (comment 6051361758, not a Grok review). Grok has not independently reviewed #1194.
+**Historical ordering defect, now corrected in unmerged #1194.** The old watcher block ran **after** `.env` edits, symlink swap and futures-bot restart. The earlier issue comment on head `547738c` came from the ChatGPT/Codex account, not Grok. Grok later issued CHANGES REQUIRED on `adc09f8` and **PASS at `1b7b996` (AFS-0168)**. Source PASS does not verify the VPS watcher unit/path or approve any merge or deployment.
 
 **Additional B10 requirements:**
 
