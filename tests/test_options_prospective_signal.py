@@ -319,6 +319,25 @@ def test_record_round_trip_and_tamper_detection():
         {**watching, "trigger": HIGH})
 
 
+
+def test_record_history_times_must_match_summary_to_prevent_late_find_laundering():
+    journal = sg.SignalJournal()
+    s = trigger(journal, opened(journal), at=T0 + timedelta(minutes=10))
+    record = sg.to_record(s)
+    assert sg.verify_record(record) == []
+
+    # Moving the summary first-seen time cannot rewrite the WATCHING event.
+    earlier_seen = {**record, "first_seen_time": T0.isoformat()}
+    assert any("first_seen_time does not match" in p for p in sg.verify_record(earlier_seen))
+
+    # Market and detection clocks must agree with the stored resolution.
+    altered_market = {**record, "trigger_market_time": (T0 + timedelta(minutes=11)).isoformat()}
+    assert any("trigger_market_time does not match" in p for p in sg.verify_record(altered_market))
+
+    altered_detection = {**record, "trigger_detection_time": (T0 + timedelta(minutes=30)).isoformat()}
+    assert any("resolution history detected_at precedes" in p for p in sg.verify_record(altered_detection))
+
+
 def test_dedupe_groups_by_structure_without_rewriting():
     journal = sg.SignalJournal()
     a = sg.to_record(opened(journal))
