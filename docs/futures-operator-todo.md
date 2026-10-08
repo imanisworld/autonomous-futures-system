@@ -1,14 +1,35 @@
 # Futures Operator TODO
 
-## Next operator window — 2026-10-08 (priority order)
+## Tomorrow's To-Do — Thursday, 2026-10-08 (0/15 complete; pending verification)
 
-1. **Review Grok's unified audit output**, if completed; verify each cited PR/head, CI, reviewer verdict and current `main` against GitHub before accepting PASS. No claim that the audit has completed yet.
-2. **Futures release decision:** reconcile #1189 review/CI and #1190 candidate plan; check B1 (fresh box posture), B5 (Python/dependency lock), B6 (guard setting remains off pending contract proof), B8 (options collector isolation), rollback and evidence-window effects. Choose an exact candidate only after the required gates; otherwise HOLD.
-3. **Options lanes (separate):** check #1186/#1177 dedicated 1-2-2 producer/adaptor review and CI, #1184 authority-history hard prerequisite before persistence/runtime use, and #1154 parked until prerequisites pass. #1167 cleanup stays audit-only. Avoid overlapping another agent's implementation.
-4. **Evidence/monitoring:** review the dead/stale companion collector report (last seen Sep 23 21:15 UTC) with actual collector census/logs if authorized. Oct 5–7 shadow P&L and trending/sideways screenshots are operator-provided observations, not a strategy promotion or deployment requirement; if reconciling them, use dated handoff in draft #1193 and original journal evidence rather than launching a fresh study.
-5. **Documentation hygiene:** reconcile overlapping open drafts #1187/#1191/#1192/#1193 without merging conflicting status claims or discarding unique evidence. Make no deletion or broad refactor solely for tidiness.
+**Priority:** Resolve Grok's actual blockers first. Do not deploy merely to finish this checklist.
 
-**Stop condition:** only operator-approved exact-SHA merge/deploy actions after independent review and a fresh runtime safety check; no overnight deployment, automatic merge, broker execution or strategy rule change.
+### 1. Overnight audit
+- [ ] Review Grok's consolidated PASS / FAIL / BLOCKED findings.
+- [ ] Identify genuine blockers and assign fixes without duplicating other agents' work.
+- [ ] Confirm current `main` SHA, CI, and exact deployment candidate.
+
+### 2. Options system
+- [ ] Continue #1177 dedicated 1-2-2 collector integration (coordinate with existing owner).
+- [ ] Advance #1184 authority-history security; no authority persistence/runtime use before verification.
+- [ ] Keep #1154 parked until #1177 prerequisites pass.
+
+### 3. Futures deployment
+- [ ] Review #1189 and #1190 status and exact-head reviews/CI.
+- [ ] Resolve B1, B5, B6, B8 and evidence-window decisions using fresh, authorized VPS proof; never assume missing evidence.
+- [ ] Confirm options collector isolation and rollback readiness.
+- [ ] Decide whether the exact release is eligible for *separate* operator deployment approval. No automatic merge/build/promote/restart.
+
+### 4. Documentation and cleanup
+- [ ] Review #1191 CI and independent Grok verdict.
+- [ ] Reconcile current handoffs with actual `main`; account for overlapping docs PRs #1187/#1192/#1193.
+- [ ] Keep #1167 cleanup audit-only; no code or evidence deletion.
+
+### 5. Trading evidence
+- [ ] Continue **existing** daily read-only collection if its collector and evidence integrity are verified; do not change strategies or restart collectors automatically.
+- [ ] Defer combined trade-performance review until the weekend. Preserve existing reports without promotion claims.
+
+**End-of-day goal:** Verified readiness, current documentation, and a clear deployment decision — not necessarily deployment itself.
 
 ## Latest operator queue — 2026-10-08
 
