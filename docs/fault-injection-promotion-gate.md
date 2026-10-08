@@ -19,11 +19,15 @@ manifest:
   failure, no skip/xfail) with a clean pytest exit;
 - is mechanically re-run by the verifier from a temporary `git archive` of
   the exact qualified SHA, so manifest PASS claims are not trusted by themselves;
+- re-runs with a pinned pytest config, inherited `PYTEST_ADDOPTS` / `PYTEST_PLUGINS`
+  removed, a bounded timeout, exact committed FI-file/archive parity, and proof
+  that every committed mapped FI test was actually collected;
 - matches the scenario inventory mechanically rediscovered from the committed
   FI suite at the exact qualified SHA. New/removed scenarios block until the
   required inventory is deliberately reconciled.
 
 Missing, stale (other SHA), different-suite/inventory, failed, skipped/xfailed,
+invalid count fields, archive omissions, incomplete test collection, timeout,
 outside-repository or non-generator manifests block promotion. A general green `pytest` run is not
 FI proof.
 
