@@ -140,7 +140,7 @@ Still **NOT READY**: candidate UNSET; B2 pin confirm; B3/B4/B5/B8; watcher/histo
 
 ### Exact Mac/root read-only block (for operator when Mac is available)
 
-Run from the proven Mac `ssh hetzner` / root path. **Read-only.** Do not paste `Environment=` secrets.
+**Operator only, using an existing separately authorized evidence identity/access path.** Do not reuse the restricted Cloud Agent/audit key for root authentication. These commands are a *reviewed proposal* until independent Grok review, not permission to connect. **Read-only.** Do not paste `Environment=` secrets. For each command capture the exact command, full safely redacted output, exit status and UTC start/end timestamp; any failure is UNVERIFIED/HOLD. Never assume the `RELEASE` path is still current without verifying the symlink on-box.
 
 ```bash
 date -u +%Y-%m-%dT%H:%M:%SZ
@@ -168,21 +168,34 @@ RELEASE=/root/afs-releases/c44d32bc4961e56fae5c5f88a976eb6783341638
 FP=$(python3 -c 'import json; print(json.load(open("/root/afs-releases/c44d32bc4961e56fae5c5f88a976eb6783341638/release_manifest.json"))["fingerprint_sha256"])')
 ( cd "$RELEASE" && EXPECTED_RELEASE_FINGERPRINT="$FP" PYTHONPATH="$RELEASE" "$RELEASE/.venv/bin/python" -B -m ops.release_integrity --repo-root "$RELEASE" ) || true
 
-# B3 previous release
-readlink -f /root/afs-releases/current /root/afs-releases/current.previous 2>/dev/null || true
-PREV=$(readlink -f /root/afs-releases/current.previous 2>/dev/null || true)
-echo "previous=$PREV"
-if [ -n "$PREV" ] && [ -d "$PREV" ]; then
-  test -f "$PREV/release_manifest.json" && echo manifest=yes
-  test -d "$PREV/.venv" && echo venv=yes
-  test -f /root/afs-shared/release-complete/"$(basename "$PREV")" && echo complete=yes || ls /root/afs-shared/release-complete 2>/dev/null | head
-fi
+# B3 previous release — corrected to match scripts/atomic_release.sh (plain text pointer, not a symlink)
+( set -e
+  readlink -f /root/autonomous-futures-system
+  test -f /root/afs-shared/current.previous
+  PREV=$(cat /root/afs-shared/current.previous)
+  case "$PREV" in /root/afs-releases/*) ;; *) echo 'B3 BLOCKED: unexpected previous-release path' >&2; exit 1;; esac
+  printf 'previous=%s\n' "$PREV"
+  test -d "$PREV"
+  test -f "$PREV/release_manifest.json"
+  test -d "$PREV/.venv"
+  test -f "/root/afs-shared/release-complete/$(basename "$PREV")"
+  for watcher_file in watcher.py watcher_memory_guard.py run_ro.sh supervisor.sh bootstrap_tmp_state.sh; do
+    test -f "$PREV/ops/afs_watcher/$watcher_file"
+    printf 'previous_watcher_source_present=%s\n' "$watcher_file"
+  done
+  echo B3_files_present_only_not_integrity_or_rollback_proof
+)
 
-# B4 / B5
-command -v python3.13; python3.13 --version
-"$RELEASE/.venv/bin/python" --version
-"$RELEASE/.venv/bin/python" -m ops.dependency_lock check-python
-"$RELEASE/.venv/bin/pip" freeze | "$RELEASE/.venv/bin/python" -m ops.dependency_lock check-freeze --lock "$RELEASE/requirements.lock" --freeze -
+# B4/B5 — collect read-only interpreter and installed freeze; candidate lock comparison is NOT possible while SHA UNSET
+command -v python3.13
+python3.13 --version
+PYTHONDONTWRITEBYTECODE=1 "$RELEASE/.venv/bin/python" --version
+PYTHONDONTWRITEBYTECODE=1 "$RELEASE/.venv/bin/pip" --version
+PYTHONDONTWRITEBYTECODE=1 "$RELEASE/.venv/bin/pip" freeze
+# Do NOT run: "$RELEASE/.venv/bin/python" -m ops.dependency_lock (not present in c44d32b).
+# Do NOT use --freeze -: the newer checker reads an on-disk/path argument, not literal stdin.
+# Compare the captured live freeze with requirements.lock at the separately nominated exact SHA.
+# Until that identity and comparison are proven, B5 remains UNVERIFIED.
 
 # B6 / B1 six lines from .env (values only for these keys)
 grep -E '^(SCHEDULE_MODE|EXPECTED_PROOF_SCHEDULE_MODE|HTF_DIRECTION_MODE|EXPECTED_PROOF_HTF_DIRECTION_MODE|EXIT_MODE|EXPECTED_PROOF_EXIT_MODE|CONTRACT_IDENTITY_GUARD_ENFORCED|EXPECTED_PROOF_CONTRACT_IDENTITY_GUARD_ENFORCED)=' /root/afs-shared/.env || true
@@ -193,55 +206,68 @@ systemctl show options-122-prospective.service -p WorkingDirectory -p FragmentPa
 systemctl cat options-122-prospective.timer 2>/dev/null || true
 # classify: PINNED if ExecStart/WorkingDirectory under /root/afs-releases/<sha> (expect db9bc7e2…); LIVE-TREE if /root/autonomous-futures-system
 
-# Options journal integrity (read-only scan)
+# Options journal integrity — one read-only byte snapshot, strict JSON and lifecycle census.
+# Historical/legacy rows may exist. A clean census is NOT complete source/authority proof.
 J=/root/afs-shared/logs/options_122_prospective.jsonl
 stat -c '%n size=%s mtime=%y' "$J"
 sha256sum "$J"
-python3 - <<'PY'
-import json, collections
+PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+import hashlib, json, sys
 from pathlib import Path
-p=Path('/root/afs-shared/logs/options_122_prospective.jsonl')
-armed=collections.defaultdict(list)
-first={}
-formats=set()
-for i,line in enumerate(p.read_text().splitlines(),1):
-    if not line.strip(): continue
-    try: r=json.loads(line)
-    except Exception: continue
-    # format markers
-    for k in ('schema_version','journal_version','evidence_schema_version','record_schema'):
-        if k in r: formats.add(f'{k}={r[k]}')
-    sid=r.get('setup_id') or r.get('setupId')
-    coll=r.get('collector') or r.get('producer') or r.get('collector_id')
-    epoch=r.get('epoch') or r.get('strategy_epoch') or r.get('epoch_id')
-    state=r.get('state') or r.get('status') or r.get('event') or r.get('record_type')
-    key=(coll, epoch, sid)
-    if sid and sid not in first: first[sid]=(i, state)
-    if state and 'ARMED' in str(state).upper():
-        armed[key].append(i)
-dups={k:v for k,v in armed.items() if len(v)>1 and k[2]}
-print('formats', sorted(formats)[:20])
-print('armed_groups', len(armed), 'duplicate_armed_groups', len(dups))
-for k,v in list(dups.items())[:20]:
-    print('DUP', k, 'lines', v)
-ooo=0
-for sid,(fi,st) in first.items():
-    # if first record is not ARMED but an ARMED exists later with earlier? check first precedes ARMED
-    pass
-# first-record-before-ARMED: first line for setup is not ARMED but ARMED exists
-for (coll,epoch,sid), lines in armed.items():
-    if not sid: continue
-    fi, st = first.get(sid, (None,None))
-    if fi is not None and fi < min(lines) and (st is None or 'ARMED' not in str(st).upper()):
-        ooo += 1
-        if ooo <= 20:
-            print('OOO setup', sid, 'first_line', fi, 'first_state', st, 'armed_lines', lines)
-print('out_of_order_armed_setups', ooo)
+
+p = Path('/root/afs-shared/logs/options_122_prospective.jsonl')
+raw = p.read_bytes()  # One read; report digest of exactly the bytes scanned
+def no_duplicates(pairs):
+    obj = {}
+    for key, val in pairs:
+        if key in obj:
+            raise ValueError('duplicate_json_key')
+        obj[key] = val
+    return obj
+def bad_constant(value):
+    raise ValueError('invalid_json_constant')
+
+seen = {}
+armed_lines = {}
+issues = []
+rows = 0
+try:
+    text = raw.decode('utf-8')
+except UnicodeDecodeError as exc:
+    raise SystemExit(f'BLOCKED: invalid UTF-8: {exc}')
+for lineno, line in enumerate(text.splitlines(), 1):
+    if not line.strip():
+        continue
+    try:
+        row = json.loads(line, object_pairs_hook=no_duplicates, parse_constant=bad_constant)
+    except (json.JSONDecodeError, ValueError) as exc:
+        issues.append(f'invalid_json_line_{lineno}:{type(exc).__name__}')
+        continue
+    if not isinstance(row, dict) or not row.get('setup_id'):
+        issues.append(f'invalid_row_{lineno}')
+        continue
+    rows += 1
+    sid = str(row['setup_id'])
+    kind = row.get('record_type')
+    if kind == 'ARMED':
+        if sid in seen:
+            issues.append(f'armed_after_prior_row_line_{lineno}_prior_{seen[sid]}')
+        armed_lines.setdefault(sid, lineno)
+    seen.setdefault(sid, lineno)
+print('scanned_bytes_sha256', hashlib.sha256(raw).hexdigest())
+print('scanned_rows', rows, 'setups', len(seen), 'setups_with_armed', len(armed_lines))
+print('invalid_or_out_of_order_count', len(issues))
+for issue in issues[:20]:
+    print('BLOCKED', issue)
+if issues:
+    sys.exit(2)
+print('SCAN_CENSUS_PASS_ONLY: producer/version/canonical binding and authority still need separate validation')
 PY
+sha256sum "$J"  # Compare before/after; changed journal during scan = INCONCLUSIVE/HOLD
 
 # Disk + lock
 df -h /root/afs-releases /root/afs-shared / | head
 test ! -e /root/afs-shared/deploy.lock && echo deploy_lock=absent || ls -l /root/afs-shared/deploy.lock
 ```
 
-Paste redacted outputs back for Cursor/Grok to close the UNVERIFIED gates. **No deploy.**
+**This block does not itself complete B7/B9.** In the same authorized read-only session, collect the actual Tradovate DEMO/live-off/cap-one environment, flat broker positions, working orders, in-flight state and deploy-lock state in a timestamped target window of 120 seconds; repeat immediately before any future separately approved GO. Do not invent broker commands or rely on old flatness. For every gate: **exact command, full safely redacted output, exit code, UTC timestamp**, with failing/unknown evidence marked UNVERIFIED. Any journal change during scan, unexpected exit, lost command output, or missing permission is HOLD. Preserve previous Cursor snapshot and raw inputs. **No deploy.**
