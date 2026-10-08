@@ -1065,6 +1065,10 @@ REQUIRED_RECORD_FIELDS = (
     "signal_integrity",
     "execution_integrity",
     "lifecycle_state",
+    "resolution_state",
+    "prospective_catch",
+    "capture",
+    "history",
 )
 
 
@@ -1175,14 +1179,38 @@ def verify_record(record: Mapping[str, Any], registry: EpochRegistry | None = No
         state = LifecycleState(record["lifecycle_state"])
         statuses = {key: _status(record[key], key) for key in ("data_integrity", "signal_integrity", "execution_integrity")}
         resolution = LifecycleState(record["resolution_state"]) if record.get("resolution_state") else None
-        history_states = [LifecycleState(change["state"]) for change in record.get("history") or ()]
-        capture = record.get("capture") or {}
+        history_raw = record["history"]
+        if not isinstance(history_raw, list) or not history_raw:
+            raise TypeError("history must be a non-empty list")
+        history_states: list[LifecycleState] = []
+        history_detected: list[datetime] = []
+        for index, change in enumerate(history_raw):
+            if not isinstance(change, Mapping):
+                raise TypeError(f"history[{index}] must be a mapping")
+            history_states.append(LifecycleState(change["state"]))
+            detected_at = _utc(change.get("detected_at"), f"history[{index}].detected_at")
+            if detected_at is None:
+                raise LifecycleError(f"history[{index}].detected_at is required")
+            history_detected.append(detected_at)
+        capture = record["capture"]
         if not isinstance(capture, Mapping):
             raise TypeError("capture must be a mapping")
+        prospective = record["prospective_catch"]
+        if not isinstance(prospective, bool):
+            raise TypeError("prospective_catch must be a bool")
         crosses = _capture_crosses(capture)
     except (ValueError, TypeError, KeyError, LifecycleError) as exc:
         problems.append(str(exc))
         return problems
+
+    if history_states[0] is not LifecycleState.WATCHING:
+        problems.append("history must begin with WATCHING")
+    for previous, current in zip(history_states, history_states[1:]):
+        if current not in ALLOWED_TRANSITIONS[previous]:
+            problems.append(f"illegal lifecycle history transition {previous.value} -> {current.value}")
+    if any(later < earlier for earlier, later in zip(history_detected, history_detected[1:])):
+        problems.append("history detected_at values are not monotonic")
+
     # The resolution is derived from history, never trusted from the summary field.
     derived = next((st for st in reversed(history_states) if st in RESOLVED_WITH_DIRECTION), None)
     if derived is not resolution:
@@ -1243,8 +1271,15 @@ def verify_record(record: Mapping[str, Any], registry: EpochRegistry | None = No
                 and capture.get("trigger_source") not in epoch_trigger_sources(epoch)
             ):
                 problems.append("record trigger source is not a source the epoch declares")
-    if record.get("prospective_catch") is True and statuses["signal_integrity"] is not IntegrityStatus.VALID:
-        problems.append("prospective_catch without VALID signal integrity")
+    if prospective:
+        if resolution is not LifecycleState.TRIGGERED:
+            problems.append("prospective_catch requires a TRIGGERED resolution in history")
+        if capture.get("prospective_catch") is not True or prearmed is not True:
+            problems.append("prospective_catch requires pre-armed capture evidence")
+        if capture.get("capture_late") is True or capture.get("gap_through") is True:
+            problems.append("prospective_catch cannot be late or gapped")
+        if statuses["signal_integrity"] is not IntegrityStatus.VALID:
+            problems.append("prospective_catch without VALID signal integrity")
     return problems
 
 
