@@ -26,9 +26,22 @@
 - [ ] #1192 coordination/futures TODO reconciled to merged #1190/#1194/#1186 facts. #1187 and #1193 CLOSED without merge. Keep #1190's deployment plan authoritative for release gates; don't reintroduce a duplicate agent-work-state checkpoint.
 - [ ] Keep #1167 cleanup audit-only; no code or evidence deletion.
 
-### 5. Trading evidence
+### 5. Trading evidence — primary performance objective
+
+**Question:** Can we demonstrate a repeatable, realistic futures trading advantage **after commissions, slippage, executable fills, and the account's actual risk constraints**? **Current answer: NOT PROVEN.** Safety/source improvements make results more trustworthy; they do not demonstrate a profitable strategy. Use the existing Strategy Inventory for individual strategy verdicts and the trial ledger for attempt history; this checklist does not reclassify either.
+
+| Proof requirement | Current position | Remaining proof |
+|---|---|---|
+| Positive net expectancy | **NOT PROVEN** | Frozen eligible setup with positive net P&L and expectancy after all costs and fill rejects; no counterfactual or hypothetical-only profits |
+| Repeatability | **INCOMPLETE** | Independent/forward periods, sufficient resolved fills and trading days, stable chronological halves, controlled concentration and drawdown under the existing preregistered gates |
+| Realistic execution | **PARTIAL / SOURCE AUDITED** | Demonstrate causal entries, IOC/limit behavior, pessimistic same-bar outcomes, commission/slippage assumptions, and current box-side behavior for the exact tested lane |
+| Risk control | **SOURCE CONTROLS BUILT; RUNTIME UNVERIFIED** | Confirm the actual stop, quantity, daily-loss/trade-count and lockout gates on the deployed route; no strategy qualifies if current-account risk gates make its profitable trades inadmissible |
+| Replay/live-path parity | **SOURCE AUDITS PRESENT; END-TO-END UNVERIFIED** | Match signal timing, bars, formulas, bracket, entry/fill settings and journal reconciliation for the same frozen strategy/commit; re-prove runtime pins separately |
+
 - [ ] Keep existing read-only collection unchanged if evidence integrity is verified; check whether 'dead companion daily' was a retired Discord job using root read-only census, not assume loss of trading evidence.
-- [ ] Defer combined trade-performance review until the weekend. Preserve existing reports without promotion claims.
+- [ ] At the planned combined trade-performance review, use existing inventory, preregistration, trial ledger and original artifacts first. Reconcile gross P&L to **net after costs**, actual filled trades, chronological/independent windows, risk-admissible opportunities, and evidence identity. Clearly report **NO PROVEN EDGE** if no eligible candidate passes.
+- [ ] Choose the smallest already-approved, unresolved evidence test that can change that conclusion; do not restart completed audits, retune failed variants, expand instruments or change strategies merely to generate trades.
+- [ ] Keep paper/observer only. No promotion, deployment, or live execution from positive historical or hypothetical P&L alone.
 
 **End-of-day goal:** Verified readiness, current documentation, and a clear deployment decision — not necessarily deployment itself.
 
