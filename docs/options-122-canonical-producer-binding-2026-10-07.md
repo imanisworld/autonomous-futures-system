@@ -103,6 +103,21 @@ upgrade a legacy setup into the canonical population. Delayed reconciliation of
 a pre-binding setup may finish, but it remains unbound because missing
 historical identity is never invented.
 
+## AFS-0167 — no late ARMED after any earlier setup row
+
+The v0.2 loader additionally refuses an `ARMED` event if **any** earlier
+journal row already mentioned the same `setup_id` (including unstamped
+RESOLUTION, RECONCILIATION, SOURCE_DRIFT and error rows). A legacy setup
+must never acquire a first stamped ARMED merely because no old ARMED was
+present. The original journal is read-only; no retrospective fixes or
+backfills are permitted.
+
+The collector entry-point's Git mode is retained as executable (`100755`).
+Before any production repin, scan the exact live journal read-only for both
+duplicate ARMED rows **and** setup IDs whose first record precedes ARMED.
+Also confirm the effective pin against the reported `db9bc7e2` release.
+Any discrepancy remains HOLD; never rewrite or rotate a live journal implicitly.
+
 ## Source-stamp continuity and pre-repin audit (AFS-0164)
 
 - One ARMED stamp is authoritative for each setup. Every later RESOLUTION and

@@ -153,6 +153,7 @@ def _load_state(path: Path):
     reconciled: set[str] = set()
     drifted: set[str] = set()
     canonically_bound: dict[str, dict[str, Any]] = {}
+    seen_setups: set[str] = set()
     if not path.exists():
         return armed, terminal, fingerprints, reconciled, drifted, canonically_bound
     for number, raw in enumerate(path.read_text().splitlines(), start=1):
@@ -175,11 +176,12 @@ def _load_state(path: Path):
         obs = row.get("observation") if isinstance(row.get("observation"), dict) else {}
         binding = row.get("canonical_binding")
         record_type = row.get("record_type")
-        # A setup has exactly one authoritative ARMED event across legacy and v0.2.
-        # Never permit a duplicate stamped ARMED to convert an existing legacy
-        # setup into a canonical prospective catch.
-        if record_type == "ARMED" and setup_id in armed:
+        # Any earlier row for the same setup, even RESOLUTION, SOURCE_DRIFT
+        # or another non-ARMED record, makes a later ARMED impossible.
+        # Otherwise a legacy unbound setup could be laundered into a v0.2 arm.
+        if record_type == "ARMED" and setup_id in seen_setups:
             raise RuntimeError(f"journal_duplicate_armed_{number}")
+        seen_setups.add(setup_id)
         if record_type == "ARMED" and row.get("collector_version") == COLLECTOR_VERSION and binding is None:
             raise RuntimeError(f"journal_canonical_binding_missing_{number}")
         # ARMED is the only authority for a setup's canonical stamp. Later

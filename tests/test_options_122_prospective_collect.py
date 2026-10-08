@@ -339,6 +339,49 @@ def test_rollback_partitions_remain_separate_and_preserve_legacy_journal(tmp_pat
 
 
 
+
+def test_unstamped_legacy_row_before_arm_cannot_upgrade_setup(tmp_path: Path):
+    import json
+    import pytest
+
+    for precursor in ("RESOLUTION", "RECONCILIATION", "SOURCE_DRIFT"):
+        old = _row(precursor, "s1", "f1")
+        arm = {
+            "record_type": "ARMED", "collector_id": COLLECTOR_ID,
+            "collector_version": COLLECTOR_VERSION, "policy_epoch": POLICY_EPOCH,
+            "setup_id": "s1", "observed_at": "2026-09-18T15:00:20+00:00",
+            "observation": _obs().to_dict(), "canonical_binding": _canonical_binding(_obs()),
+        }
+        path = tmp_path / f"preceded-by-{precursor}.jsonl"
+        path.write_text(old + json.dumps(arm) + "\n")
+        before = path.read_bytes()
+        with pytest.raises(RuntimeError, match="journal_duplicate_armed_2"):
+            _load_state(path)
+        assert path.read_bytes() == before
+
+
+def test_other_prior_row_blocks_arm_but_separate_setup_id_is_valid(tmp_path: Path):
+    import json
+    import pytest
+
+    prior = json.loads(_row("COLLECTOR_ERROR", "s1", "f1"))
+    arm = {
+        "record_type": "ARMED", "collector_id": COLLECTOR_ID,
+        "collector_version": COLLECTOR_VERSION, "policy_epoch": POLICY_EPOCH,
+        "setup_id": "s1", "observed_at": "2026-09-18T15:00:20+00:00",
+        "observation": _obs().to_dict(), "canonical_binding": _canonical_binding(_obs()),
+    }
+    path = tmp_path / "error-before-armed.jsonl"
+    path.write_text(json.dumps(prior) + "\n" + json.dumps(arm) + "\n")
+    with pytest.raises(RuntimeError, match="journal_duplicate_armed_2"):
+        _load_state(path)
+    arm["setup_id"] = "s2"
+    path.write_text(json.dumps(prior) + "\n" + json.dumps(arm) + "\n")
+    *_, bound = _load_state(path)
+    assert set(bound) == {"s2"}
+
+
+
 def _bound_row(record_type, obs=None):
     obs = _obs() if obs is None else obs
     return {
