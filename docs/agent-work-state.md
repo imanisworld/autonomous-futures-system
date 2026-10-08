@@ -78,7 +78,7 @@
 
 - **Lane:** futures deployment plan docs (#1190).
 - **DONE / DO NOT REDO:** Cursor B1–B8 RO matrices posted on #1190 (comments 6051491065, 6051610034). Claude AFS-0165/AFS-0166 docs body through `59b4e263`. Cursor parallel full rewrite abandoned as duplicate.
-- **Landed:** #1190 head `b51c11f5dcbfbadba320f6be923a8733d5ab482d` — audit-allowlist wording redaction + historic B3 align to `489b55b`. Tracking mirror branch/PR: `cursor/futures-deploy-plan-grok-afs0165-dd85` / #1195 (prefer merge via #1190).
+- **Landed:** #1190 head `15ba3675af196a30c2f190fbc4fd5c0fa1c65c87` — audit-allowlist wording redaction + historic B3 align to `489b55b`. Tracking mirror branch/PR: `cursor/futures-deploy-plan-grok-afs0165-dd85` / #1195 (prefer merge via #1190).
 - **Grok re-review requested:** comment 6058847973 on #1190. No Grok PASS claimed.
 - **NOT DONE:** deploy/promote/restart/env/collector/broker. Candidate remains UNSET. Root box proofs still UNVERIFIED.
 - **Branches:** `docs/futures-deploy-plan-7c93027-20261008` (#1190), `cursor/futures-deploy-plan-grok-afs0165-dd85` (#1195 mirror).
