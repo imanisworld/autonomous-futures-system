@@ -34,6 +34,22 @@ def test_atomic_release_script_parses_with_bash():
     subprocess.run(["bash", "-n", str(SCRIPT)], check=True)
 
 
+def test_atomic_release_script_is_committed_executable():
+    # The operator runs `scripts/atomic_release.sh build|promote` directly, so
+    # the committed mode must stay 100755. Every other test here invokes it via
+    # `bash`, which is why #1166 could drop the bit without a failure. Read the
+    # git index, not the filesystem, so a local chmod cannot mask the loss.
+    staged = subprocess.run(
+        ["git", "ls-files", "-s", "--", str(SCRIPT)],
+        cwd=SCRIPT.parent.parent.resolve(),
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    assert staged, f"{SCRIPT} is not tracked by git"
+    assert staged[0] == "100755", f"{SCRIPT} committed mode is {staged[0]}, expected 100755"
+
+
 def test_release_actions_reject_moving_refs_and_require_exact_sha():
     repo_root = SCRIPT.parent.parent.resolve()
     env = os.environ.copy()
