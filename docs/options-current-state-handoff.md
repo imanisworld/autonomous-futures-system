@@ -1,12 +1,41 @@
 # Options — Current State Handoff
 
-_As of 2026-10-07. The newest dated repository refresh below governs source state; the latest verified box-specific sections govern runtime state until a fresh local/provider or VPS check is performed. This is the single current-state authority for the options lane._
+_As of 2026-10-08. The newest dated repository refresh below governs source state; the latest verified box-specific sections govern runtime state until a fresh local/provider or VPS check is performed. This is the single current-state authority for the options lane._
 
 Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`; the read-only coverage evidence lane (observer, reducer, outcome study, after-close collector) is described in `docs/options-coverage-observer.md`. The observation-only **setup-capture** lifecycle (`WATCHING` → `TRIGGERED` / `MISSED_LATE`) is described in `docs/options-setup-capture-observer.md`.
 
-## Current options-system checkpoint — 2026-10-07
+## Current options-system checkpoint — 2026-10-08
 
-This section is the active source-state checkpoint for the canonical options evidence stack. Older sections below remain provenance and must not be replayed over this state.
+This section is the active source-state checkpoint for the canonical options evidence stack. It supersedes the 2026-10-07 checkpoint below, which remains provenance and must not be replayed over this state. Merge gate for every options PR: exact-head CI green **and** a Grok PASS on that exact head; Claude reviews are QA only and do not satisfy the gate.
+
+### DONE / DO NOT REDO
+
+- #1145–#1150: unchanged from the 2026-10-07 checkpoint below.
+- #1151 merged as `8da0a98`: canonical prospective signal + outcome evidence. Non-catches are counterfactual-only; epoch membership is exact (ticker/universe, data source, timeframe, family, effective window); unknown or mismatched scope fails closed as unregistered.
+- #1153 merged as `5cd239b`: alert model on canonical state + setup research scaffold. Research admits only TRIGGERED prospective catches; a repeated `signal_id` excludes every copy as `duplicate_signal`.
+- #1169 merged as `aa77079`: agent audits synced with the canonical forward-proof contract.
+- Do not reimplement #1151 provenance, chronology, counterfactual, or epoch-scope rules downstream.
+
+### OPEN / NEXT
+
+1. **#1152** (revoke-only strategy fitness kill-switch) is the active merge gate. Grok CHANGES REQUIRED on `8b5cbfe` (B1 forged catches on never-triggered structures could hide a kill; B2 execution authority constructible without a human grant). Both fixed on frozen head `3ad4051774dfd7eb78a79143b656c2028568cfb1`; exact-head CI green; Grok re-review pending. Do not move the branch for non-overlapping main commits.
+2. **#1183 / #1176**: move the "prospective catch must be a history-backed TRIGGERED catch" invariant into canonical `verify_record`. Until it lands, #1152 and #1153 each carry their own TRIGGERED gate as defense in depth.
+3. **#1177**: bind the dedicated 1-2-2 collector (`OPTIONS_122_IEX_PROSPECTIVE_COLLECTOR`) to `122-IEX-E1` with a forward-only canonical binding. #1145 is **not** the E1 producer and must not be aliased into it. Until then, no real data is admitted into `122-IEX-E1` fitness/research.
+4. **#1184**: tamper-evident / append-only authority history. Defense in depth; not a #1152 blocker unless Grok makes it one.
+5. **#1154** (readiness + docs reconciliation) stays parked until #1152 and #1183/#1176 merge and #1177 is reconciled (or readiness fails closed on producer/epoch mismatch). Readiness may report NOT READY or READY TO START FORWARD PROOF; it never starts proof or trading, and READY TO START FORWARD PROOF is not READY FOR PAPER.
+6. **#1167**: options modernization / dead-code audit, after #1154.
+7. Runtime observer/timer install and forward proof remain separate operator-approved phases after the code stack is complete.
+
+### Runtime / proof boundary
+
+- No setup-capture timer install, observer install, or new options deployment is authorized by this checkpoint.
+- No forward-proof window is started; options Day 1 is not declared.
+- `122-IEX-E1` is not proof/trading ready: fitness evaluates it as COLLECTING / `no_oos_reference`, and its producer binding (#1177) is open. FROZEN is not READY or execution authority.
+- Fitness is not runtime-wired; it can only revoke authority, and authority exists only through a recorded human grant.
+
+## Options-system checkpoint — 2026-10-07 (provenance; superseded by 2026-10-08 above)
+
+This was the active source-state checkpoint on 2026-10-07. It is kept as provenance and must not be replayed over the 2026-10-08 state.
 
 ### DONE / DO NOT REDO
 
