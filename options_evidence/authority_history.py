@@ -134,6 +134,8 @@ def read_history_jsonl(path: Path | str) -> list[Mapping[str, Any]]:
                 row = json.loads(line, object_pairs_hook=_unique_pairs,
                                  parse_constant=lambda _: (_ for _ in ()).throw(
                                      AuthorityHistoryError("nonfinite_json")))
+            except AuthorityHistoryError:
+                raise
             except (ValueError, UnicodeError) as exc:
                 raise AuthorityHistoryError(f"invalid_json_{number}") from exc
             if not isinstance(row, dict):
@@ -188,6 +190,8 @@ def replay_history(
     previous_digest = GENESIS_DIGEST
     previous_time: datetime | None = None
     granted = False
+    had_grant = False
+    revoked = False
     retired = False
     for event in events:
         if not isinstance(event, Mapping) or set(event) != EVENT_FIELDS:
@@ -246,23 +250,21 @@ def replay_history(
             if event["approval_ref"] is not None or event["approval_proof"] is not None:
                 raise AuthorityHistoryError("revoke_must_not_contain_approval")
         if action == "GRANT":
-            if granted:
-                raise AuthorityHistoryError("duplicate_active_grant")
-            if seq > 1 and was_revoked:
-                raise AuthorityHistoryError("revoked_requires_explicit_restore")
+            if granted or revoked or had_grant:
+                raise AuthorityHistoryError("grant_not_permitted_after_prior_grant_or_revoke")
             granted = True
+            had_grant = True
         elif action == "RESTORE":
-            if granted or seq == 1 or not was_revoked:
-                raise AuthorityHistoryError("restore_without_revocation")
+            if granted or not revoked or not had_grant:
+                raise AuthorityHistoryError("restore_without_previous_grant_and_revocation")
             granted = True
+            revoked = False
         elif action == "REVOKE":
             granted = False
+            revoked = True
         elif action == "RETIRE":
             granted = False
             retired = True
-        was_revoked = action == "REVOKE" or (
-            action not in ("GRANT", "RESTORE") and locals().get("was_revoked", False)
-        )
         previous_digest = current_digest
     if seq != last_seq or previous_digest != final_digest:
         raise AuthorityHistoryError("trusted_head_replay_or_truncation")
