@@ -121,7 +121,7 @@ def test_journal_is_version_locked_and_append_only_state(tmp_path: Path):
     assert armed["s1"] == datetime(2026,9,18,15,0,10,tzinfo=UTC)
     assert "s1" in terminal and fp["s1"] == "f1" and "s1" in reconciled
     assert drifted == set()
-    assert bound == set()
+    assert bound == {}
 
 
 def test_collector_has_no_broker_order_or_risk_imports():
@@ -207,7 +207,7 @@ def test_own_source_drift_row_reloads_and_blocks_setup(tmp_path: Path):
     assert fp["drift"] == "fp1"
     assert "drift" not in terminal and "drift" not in reconciled
     assert set(armed) == {"drift", "pending"} and fp["pending"] == "fpp"
-    assert bound == set()
+    assert bound == {}
 
 
 def test_fingerprint_drift_outside_source_drift_rows_still_fails_closed(tmp_path: Path):
@@ -247,7 +247,7 @@ def test_legacy_collector_rows_load_but_never_become_canonically_bound(tmp_path:
     assert terminal == {}
     assert fp == {"legacy": "fp1"}
     assert reconciled == set() and drifted == set()
-    assert bound == set()
+    assert bound == {}
 
 
 def test_legacy_setup_cannot_be_upgraded_by_later_bound_row(tmp_path: Path):
@@ -327,14 +327,103 @@ def test_rollback_partitions_remain_separate_and_preserve_legacy_journal(tmp_pat
         "observation": _obs().to_dict(), "canonical_binding": _canonical_binding(_obs()),
     }
     current.write_text(json.dumps(row) + "\n")
-    assert _load_state(legacy)[-1] == set()  # no retroactive canonical binding
-    assert _load_state(current)[-1] == {"s1"}
+    assert _load_state(legacy)[-1] == {}  # no retroactive canonical binding
+    assert set(_load_state(current)[-1]) == {"s1"}
     assert legacy.read_bytes() == frozen  # never reset or rewrite the legacy bytes
 
     mixed = tmp_path / "unsafe-combined.jsonl"
     mixed.write_bytes(frozen + current.read_bytes())
     with pytest.raises(RuntimeError, match="journal_duplicate_armed_2"):
         _load_state(mixed)
+
+
+
+
+def _bound_row(record_type, obs=None):
+    obs = _obs() if obs is None else obs
+    return {
+        "record_type": record_type, "collector_id": COLLECTOR_ID,
+        "collector_version": COLLECTOR_VERSION, "policy_epoch": POLICY_EPOCH,
+        "setup_id": "s1", "observed_at": "2026-09-18T15:00:10+00:00",
+        "observation": obs.to_dict(), "canonical_binding": _canonical_binding(obs),
+    }
+
+
+def test_stamped_armed_rejects_unstamped_legacy_resolution(tmp_path: Path):
+    import json
+    import pytest
+
+    legacy_resolution = json.loads(_row("RESOLUTION", "s1", "f1"))
+    path = tmp_path / "mixed.jsonl"
+    path.write_text(json.dumps(_bound_row("ARMED")) + "\n" + json.dumps(legacy_resolution) + "\n")
+    with pytest.raises(RuntimeError, match="journal_canonical_binding_version_mismatch_2"):
+        _load_state(path)
+
+
+def test_stamped_armed_rejects_unstamped_v02_reconciliation(tmp_path: Path):
+    import json
+    import pytest
+
+    row = _bound_row("RECONCILIATION")
+    row.pop("canonical_binding")
+    path = tmp_path / "missing.jsonl"
+    path.write_text(json.dumps(_bound_row("ARMED")) + "\n" + json.dumps(row) + "\n")
+    with pytest.raises(RuntimeError, match="journal_canonical_binding_missing_2"):
+        _load_state(path)
+
+
+def test_stamped_resolution_cannot_change_structure_close(tmp_path: Path):
+    import json
+    import pytest
+    from dataclasses import replace
+
+    changed = replace(_obs(), structure_close_time="2026-09-18T14:30:00+00:00")
+    path = tmp_path / "changed-time.jsonl"
+    path.write_text(json.dumps(_bound_row("ARMED")) + "\n" + json.dumps(_bound_row("RESOLUTION", changed)) + "\n")
+    with pytest.raises(RuntimeError, match="journal_canonical_binding_changed_2"):
+        _load_state(path)
+
+
+def test_stamped_reconciliation_cannot_change_pattern(tmp_path: Path):
+    import json
+    import pytest
+    from dataclasses import replace
+
+    changed = replace(_obs(), reference_direction="two_down")
+    path = tmp_path / "changed-pattern.jsonl"
+    path.write_text(json.dumps(_bound_row("ARMED")) + "\n" + json.dumps(_bound_row("RECONCILIATION", changed)) + "\n")
+    with pytest.raises(RuntimeError, match="journal_canonical_binding_changed_2"):
+        _load_state(path)
+
+
+def test_source_drift_rejects_forged_stamp_but_allows_valid_revision(tmp_path: Path):
+    import json
+    import pytest
+    from dataclasses import replace
+
+    revised = replace(_obs(), setup_fingerprint="revised", reference_direction="two_down")
+    armed = _bound_row("ARMED")
+    drift = _bound_row("SOURCE_DRIFT", revised)
+    path = tmp_path / "source-drift.jsonl"
+    forged = {**drift, "canonical_binding": armed["canonical_binding"]}
+    path.write_text(json.dumps(armed) + "\n" + json.dumps(forged) + "\n")
+    with pytest.raises(RuntimeError, match="journal_canonical_binding_invalid_2"):
+        _load_state(path)
+    path.write_text(json.dumps(armed) + "\n" + json.dumps(drift) + "\n")
+    armed_seen, terminal, fp, reconciled, drifted, bound = _load_state(path)
+    assert drifted == {"s1"} and "s1" in armed_seen and terminal == {}
+    assert bound["s1"] == armed["canonical_binding"]  # original stamp unchanged
+
+
+def test_matching_stamped_lifecycle_rows_reload(tmp_path: Path):
+    import json
+
+    rows = [_bound_row(name) for name in ("ARMED", "RESOLUTION", "RECONCILIATION")]
+    path = tmp_path / "valid.jsonl"
+    path.write_text("".join(json.dumps(row) + "\n" for row in rows))
+    _, terminal, _, reconciled, drifted, bound = _load_state(path)
+    assert "s1" in terminal and reconciled == {"s1"} and drifted == set()
+    assert bound["s1"] == rows[0]["canonical_binding"]
 
 
 
@@ -375,7 +464,7 @@ def test_bound_row_is_recomputed_and_tamper_checked_on_reload(tmp_path: Path):
     p = tmp_path / "bound.jsonl"
     p.write_text(json.dumps(base) + "\n")
     *_, bound = _load_state(p)
-    assert bound == {"bound"}
+    assert set(bound) == {"bound"}
 
     tampered = dict(base)
     tampered["canonical_binding"] = {**base["canonical_binding"], "arm_source": "public_regular_30m"}

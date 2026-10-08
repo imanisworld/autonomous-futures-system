@@ -152,7 +152,7 @@ def _load_state(path: Path):
     fingerprints: dict[str, str] = {}
     reconciled: set[str] = set()
     drifted: set[str] = set()
-    canonically_bound: set[str] = set()
+    canonically_bound: dict[str, dict[str, Any]] = {}
     if not path.exists():
         return armed, terminal, fingerprints, reconciled, drifted, canonically_bound
     for number, raw in enumerate(path.read_text().splitlines(), start=1):
@@ -172,11 +172,6 @@ def _load_state(path: Path):
             ):
                 raise RuntimeError(f"journal_collector_version_mismatch_{number}")
         setup_id = str(row["setup_id"])
-        if row.get("record_type") == "SOURCE_DRIFT":
-            # The row carries the revised fingerprint by design; keep the frozen
-            # one and block the setup (never re-armed, resolved or reconciled).
-            drifted.add(setup_id)
-            continue
         obs = row.get("observation") if isinstance(row.get("observation"), dict) else {}
         binding = row.get("canonical_binding")
         record_type = row.get("record_type")
@@ -187,11 +182,17 @@ def _load_state(path: Path):
             raise RuntimeError(f"journal_duplicate_armed_{number}")
         if record_type == "ARMED" and row.get("collector_version") == COLLECTOR_VERSION and binding is None:
             raise RuntimeError(f"journal_canonical_binding_missing_{number}")
+        # ARMED is the only authority for a setup's canonical stamp. Later
+        # lifecycle rows cannot independently restamp their identity.
+        if record_type in {"RESOLUTION", "RECONCILIATION", "SOURCE_DRIFT"} and setup_id in canonically_bound:
+            if row.get("collector_version") != COLLECTOR_VERSION:
+                raise RuntimeError(f"journal_canonical_binding_version_mismatch_{number}")
+            if binding is None:
+                raise RuntimeError(f"journal_canonical_binding_missing_{number}")
         if binding is not None:
             if row.get("collector_version") != COLLECTOR_VERSION or not isinstance(binding, Mapping):
                 raise RuntimeError(f"journal_canonical_binding_invalid_{number}")
             if record_type != "ARMED" and setup_id not in canonically_bound:
-                # A pre-binding setup can never be upgraded by a later row.
                 raise RuntimeError(f"journal_canonical_binding_upgrade_{number}")
             class _BoundObservation:
                 pass
@@ -204,10 +205,15 @@ def _load_state(path: Path):
                 raise RuntimeError(f"journal_canonical_binding_invalid_{number}") from exc
             if dict(binding) != expected_binding:
                 raise RuntimeError(f"journal_canonical_binding_invalid_{number}")
-            canonically_bound.add(setup_id)
-        elif setup_id in canonically_bound and row.get("collector_version") == COLLECTOR_VERSION:
-            # New bound setups must carry the exact binding on every state row.
-            raise RuntimeError(f"journal_canonical_binding_missing_{number}")
+            if record_type == "ARMED":
+                canonically_bound[setup_id] = dict(binding)
+            elif record_type in {"RESOLUTION", "RECONCILIATION"} and dict(binding) != canonically_bound[setup_id]:
+                raise RuntimeError(f"journal_canonical_binding_changed_{number}")
+            # SOURCE_DRIFT may legitimately change 2U to 2D; validate its stamp
+            # against its own observation, but never admit it as a catch.
+        if record_type == "SOURCE_DRIFT":
+            drifted.add(setup_id)
+            continue
         fp = obs.get("setup_fingerprint")
         if fp is not None:
             fp = str(fp)
@@ -538,7 +544,7 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
                 if setup_id not in armed_seen:
                     arm_record={"record_type":"ARMED","observed_at":observed_at.isoformat(),"collector_id":COLLECTOR_ID,"collector_version":COLLECTOR_VERSION,"policy_epoch":POLICY_EPOCH,"setup_id":setup_id,"canonical_binding":_canonical_binding(obs),"observation":obs.to_dict()}
                     if not args.dry_run: _append(journal,arm_record)
-                    armed_seen[setup_id]=observed_at; fingerprints[setup_id]=obs.setup_fingerprint; canonically_bound.add(setup_id); summary["armed_written"] += 1
+                    armed_seen[setup_id]=observed_at; fingerprints[setup_id]=obs.setup_fingerprint; canonically_bound[setup_id]=dict(arm_record["canonical_binding"]); summary["armed_written"] += 1
 
                 source = await _source_first_boundary(iex_provider, obs=obs, end=observed_at, setup_id=setup_id, raw_dir=raw_dir, feed="iex", persist_raw=not args.dry_run)
                 if source.get("status") == "DATA_BLOCKED":

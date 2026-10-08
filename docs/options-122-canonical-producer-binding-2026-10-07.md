@@ -103,6 +103,24 @@ upgrade a legacy setup into the canonical population. Delayed reconciliation of
 a pre-binding setup may finish, but it remains unbound because missing
 historical identity is never invented.
 
+## Source-stamp continuity and pre-repin audit (AFS-0164)
+
+- One ARMED stamp is authoritative for each setup. Every later RESOLUTION and
+  RECONCILIATION for that setup must use collector v0.2 and match that exact
+  original structure-close, pattern and source binding, not just a newly
+  recomputed self-consistent stamp. An unstamped old-format row is refused.
+- SOURCE_DRIFT is always excluded from eligible catches. Its optional stamp
+  is checked against its own observation because a genuine Public chart
+  revision can change a 2U structure into 2D; it never replaces the ARMED stamp.
+- **Before any repin, migration or v0.2 activation**, obtain a read-only,
+  timestamped scan of the **actual live JSONL** grouped by collector ID,
+  epoch and setup ID for duplicate ARMED rows. Report path/release, count,
+  duplicate IDs and journal hash without exposing secrets. Any duplicate
+  means **HOLD**: the new loader correctly fails startup. Do not rewrite,
+  dedupe, truncate, re-arm or silently switch journals.
+- A fresh segregated journal and old-release startup rehearsal are still
+  separate, operator-approved B2/B8 gates; the tests are source-only.
+
 ## What this does not do
 
 This first slice does **not** yet make the rows scoreable.
