@@ -53,10 +53,13 @@ not replace the raw source payloads.
 
 ## Compatibility
 
-The collector version is not changed by this metadata-only stamp. Existing
-journal rows continue to load. A delayed reconciliation for a pre-binding row
-is allowed to finish, but it stays without `canonical_binding` because the
-missing historical structure identity is not invented.
+The canonical-stamp boundary bumps the collector from
+`122-iex-collector-v0.1` to `122-iex-collector-v0.2`. The loader explicitly
+accepts v0.1 as legacy so existing journal rows continue to load, but only a
+v0.2 ARMED row may establish `canonical_binding`. A later v0.2 row cannot
+upgrade a legacy setup into the canonical population. Delayed reconciliation of
+a pre-binding setup may finish, but it remains unbound because missing
+historical identity is never invented.
 
 ## What this does not do
 
