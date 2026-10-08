@@ -46,6 +46,125 @@ Grok identified a dangerous remote-shell quote expansion in **both** promote and
 3. Obtain read-only root-level box proof for B1/B5/B6/B8/B9/B10 and rollback readiness.
 4. Return a **GO FOR OPERATOR DECISION** or **HOLD** gate table with timestamps, artifacts and all decisions. Never build, promote, restart or submit orders from this document.
 
+## Refreshed plan detail (2026-10-08; under the decision record above)
+
+Responds to Grok comments 6051298646 and 6051370612 on #1190. Where this section and the decision record differ, the decision record governs. Nothing here is approved for execution.
+
+### Delta `7c93027` → `064ee67` (verified)
+
+Re-reviewed so the trading-path review in the historical plan carries forward. It must be redone for the actual nominated SHA.
+
+- **#1152** `options_evidence/fitness.py` (new) and **#1183** `options_evidence/signal.py`: no module outside `tests/`, `options_evidence/` and `docs/` imports `options_evidence`. No live service runs this code.
+- **#1188**: docs only.
+- **#1189** `scripts/atomic_release.sh`: escapes inner quotes in the remote **build** block only. This is release tooling.
+- `git diff --stat 7c93027 064ee67` lists 12 files, none under `strategy/`, `risk/`, `execution/`, `webhook/`, `context/`, `journal/`, `alert_ranker/` or `ops/afs_watcher/`.
+
+Every commit merged after `064ee67` before nomination needs the same review. Any runtime-path change re-opens the trading-path review.
+
+### B10 detail — defect at `064ee67` (and `7c93027`)
+
+**The defect.** In both `promote` and `rollback`, the watcher block sits inside the outer `remote "…"` double-quoted string, and its inner quotes are unescaped. A local render of that block shows the remote shell receives:
+
+```
+test -n $watcher_dest
+test -d $watcher_dest
+cp -f $watcher_src/$watcher_file $watcher_dest/$watcher_file
+chmod 700 $watcher_dest/*.sh
+```
+
+With an empty `WorkingDirectory`:
+
+- `test -n` and `test -d` with no operand both succeed;
+- the copies land at `/watcher.py`, `/run_ro.sh` and so on;
+- `chmod 700 /*.sh` runs at the filesystem root.
+
+A value of `/` passes as well.
+
+**Ordering.** The block runs only **after** the `.env` pin edit, the `current` symlink swap and the `futures-bot` restart. So a refused value still leaves a partially activated release, and the same block in rollback can stop a clean rollback. That is the finding Grok recorded on #1194 head `547738c06781ae0fe74307c8c71ed9b6953d501e`.
+
+**Additional B10 requirements:**
+
+1. **Pre-mutation validation in both promote and rollback**, before the `.env` edit, symlink swap or any restart:
+   - `WorkingDirectory` is non-empty, absolute and not `/`;
+   - it resolves (`readlink -f`) inside the approved shared tree;
+   - it is an existing directory;
+   - every watcher source file is present in the release being activated.
+
+   Any failure exits non-zero with **no** file, env, symlink or service change.
+2. **Fake-box regression on the rendered remote command** for blank, `/`, relative, missing, symlink-escape and unapproved values. It must prove:
+   - no `.env` edit;
+   - no symlink change;
+   - no `systemctl restart`;
+   - no write or chmod outside a scratch root.
+3. **No wildcard mutation:** name the `.sh` files explicitly rather than relying on a quoted glob.
+4. **Box reads:** before promote, record the `afs-watcher` `WorkingDirectory`, its resolved path, its file hashes, and a listing of `/`. After promote or rollback, confirm there are no new files at `/`.
+
+### B8 detail — collector boundaries (source on `main`; box state UNVERIFIED)
+
+**Current boundaries.** `ops/systemd/options-122-prospective.service` sets:
+
+- `WorkingDirectory=/root/autonomous-futures-system` — the live symlink;
+- `EnvironmentFile=/root/afs-shared/.env`;
+- `ExecStart=/root/autonomous-futures-system/.venv/bin/python -m scripts.options_122_prospective_collect`, writing to:
+  - journal `/root/afs-shared/logs/options_122_prospective.jsonl`;
+  - raw trades `/root/afs-shared/logs/options_122_source_trades`.
+
+It is driven by `options-122-prospective.timer`. Code, venv and imports therefore follow the futures symlink. The `afs-paper-collection-{eod,eow}` units also run from the live symlink.
+
+**Pin mechanism.** The #1147 template `ops/systemd/options-122-prospective.service.d/10-release.conf.template` rewrites `WorkingDirectory`, `PYTHONPATH` and `ExecStart` to `/root/afs-releases/@RELEASE_SHA@` and its own `.venv`. Journal and raw paths are unchanged. Pinning is its own reviewed procedure with its own GO.
+
+**Required root reads** (the `FUTURES_LANE.md` §3 classification; that file is referenced by review but is not in this repository, so its location is unverified):
+
+- the effective release identity the collector process loads;
+- the unit and any drop-ins;
+- the timer state;
+- the journal path, size, sha256 and last-row collector version.
+
+**#1186 boundary.** #1186 (not merged) moves the collector from `122-iex-collector-v0.1` to `v0.2`.
+
+- If it merges before nomination, the collector must already be pinned to its pre-switch release.
+- The switch to v0.2 is its own migration GO, using a fresh, segregated journal path with the immutable pre-switch snapshot and hash preserved, per `docs/options-122-canonical-producer-binding-2026-10-07.md`.
+- **Rollback across that boundary:** restore the v0.1 pin and the v0.1 journal path. Never point v0.1 at a journal containing v0.2 rows.
+
+**Classification.**
+
+| Condition | Outcome |
+|---|---|
+| Isolation verified (pinned, effective identity read back, journal untouched) | Futures promote may proceed with respect to B8. |
+| Isolation cannot be verified | **HOLD.** |
+
+**Post-promote check.** The collector's code, venv, journal path and journal schema equal the pre-promote reading. Any change is an abort condition.
+
+### UNVERIFIED pending root read-only box evidence
+
+These stay unverified until Ops runs the `FUTURES_LANE.md` §5 commands:
+
+- B1 posture pins;
+- B5 exact lock vs live venv freeze, and box `python3.13`;
+- B6 effective `CONTRACT_IDENTITY_GUARD_ENFORCED` and its pin;
+- epoch boundaries and pins;
+- rollback inputs (`current.previous`, the `c44d32b` release, manifest, integrity, watcher files);
+- watcher recovery;
+- the companion collector classification (also the §3 root check).
+
+Source analysis does not satisfy any of them.
+
+### Operator checklist (each step its own GO; none preapproved)
+
+| Step | Action | Gate |
+|---|---|---|
+| 1 | Merge this plan PR (#1190, docs only) | Exact-head CI green + Grok PASS + operator merge decision |
+| 2 | Merge the B10 fix (#1194 or successor) | Exact-head CI green + Grok PASS + operator merge decision |
+| 3 | Nominate the candidate: exact `main` SHA, plus delta review after `064ee67` | Operator, in writing |
+| 4 | Root read-only box evidence: B1–B10, B8 reads, epoch readings | Ops, read-only; any gap means HOLD |
+| 5 | Policy decisions: B1 posture, B5 dependency changes, B6 pin, epoch treatment | Operator GO each |
+| 6 | Collector pin, and separately any v0.2 journal migration | Its own reviewed procedure + operator GO |
+| 7 | `build` then `verify` of the nominated SHA | Operator GO; no service change |
+| 8 | Record preregistration boundary and pre-promote readings | Before step 9 |
+| 9 | `promote` | Operator GO naming the SHA |
+| 10 | Post-promote acceptance; on any abort condition, `rollback` | Rollback is authorized only as the abort response inside an approved step 9 |
+| 11 | Record the outcome with box evidence in `docs/futures-current-state-handoff.md` and `docs/agent-work-state.md` | — |
+
 ---
 
 ## Historical plan: `c44d32b → 7c93027` (superseded; provenance only)
