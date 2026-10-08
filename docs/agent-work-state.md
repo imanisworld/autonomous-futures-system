@@ -1,5 +1,14 @@
 # Agent Work State
 
+## Current coordination checkpoint — 2026-10-08
+
+- **Repository:** GitHub `main` `f8e4257e2b9481f4b670b24e7602634e9cf47649` at this check. Do not infer running release identity from repository head.
+- **Futures:** #1189 remote-build quote repair remains **open** at `f60ec6ff3268e1b193ff8e21aefa3cd5d8420319`; independent source review recorded here, but Grok second review/merge decision remains separate. #1190 is an **open, docs-only deployment plan** at `c90af59ec5edcafad4d8ebf9b6b30a4c7789baeb`, not a deployment command. Intended older release candidate was `7c930274179f7c76749f75b35adb14fbb9255e54`; any merged fix needs new exact-SHA proof and a reviewed plan before build/verify/promote. Last audited deployed release `c44d32bc4961e56fae5c5f88a976eb6783341638` must be freshly reconfirmed.
+- **Futures wrapper evidence:** operator reports `afs-deploy` CI-proof wrapper tests 51/51 and real `verify-live` PASS; do not redo without changed evidence. This is not permission to deploy.
+- **Options:** #1152 and #1188 merged; #1183 open at `09bf04542044cdc1a3106320adf1ba2313ee3b95` awaiting required Grok exact-head PASS before merge; #1177 canonical collector integration is the next source-only implementation; #1184 security gate remains mandatory before authority persistence/action/runtime wiring; #1154 parked. Follow `docs/options-current-state-handoff.md` for complete options authority.
+- **Next:** independent exact-head reviews, bounded #1177 work, operator decisions on merges; futures #1190 planning only. Avoid parallel duplicate audits and redundant handoffs.
+- **Non-negotiable:** paper/advisory posture, no live trading, no deploy/build/promote/restart, no broker changes, no proof-window activation without separate explicit GO.
+
 > **Purpose:** compact resume checkpoint for agents. This file is coordination state only; it is **not** strategy-status, experiment, deployment, or runtime authority.
 >
 > **Authoritative records:** follow the source-of-truth table in `AGENTS.md`.
