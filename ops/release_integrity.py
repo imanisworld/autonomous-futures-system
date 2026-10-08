@@ -164,7 +164,7 @@ def _runtime_extras(root: Path, listed: set[str]) -> list[str]:
 def _recorded_site_paths(venv: Path) -> set[str]:
     """Absolute paths of files named by installed ``*.dist-info/RECORD`` entries.
 
-    ``python3 -m venv`` plus ``pip install -r requirements.txt`` (see
+    ``python3 -m venv`` plus ``pip install --no-deps -r requirements.lock`` (see
     ``scripts/atomic_release.sh``) records legitimate ``.pth`` files here.
     ``distutils-precedence.pth`` from setuptools is one. Editable installs
     record their ``__editable__.*.pth`` the same way. ``sitecustomize.py`` and

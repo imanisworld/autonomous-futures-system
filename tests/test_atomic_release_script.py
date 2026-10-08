@@ -172,12 +172,18 @@ def _render_remote_command(action: str) -> tuple[int, str]:
     repo_root = SCRIPT.parent.parent.resolve()
     env = os.environ.copy()
     env["AFS_BOX"] = "unused"
+    # promote now has a local exact-SHA CI/ancestry preflight before any box
+    # contact. This helper is testing remote quoting only, so stub that local
+    # preflight while leaving the remote command under test unchanged.
+    env["RELEASE_CI_PROOF"] = str(SCRIPT.resolve())
     proc = subprocess.run(
         [
             "bash",
             "-c",
             f'''source "{SCRIPT.resolve()}"
 REF={"a" * 40}
+git() {{ return 0; }}
+python3() {{ return 0; }}
 deploy_lock_acquire() {{ DEPLOY_LOCK_OWNER=stub; return 0; }}
 deploy_lock_release() {{ return 0; }}
 _promote_gate_check() {{ return 0; }}
