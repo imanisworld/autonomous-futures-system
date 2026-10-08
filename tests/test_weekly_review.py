@@ -189,3 +189,10 @@ def test_your_limits_lines_show_running_total_coverage_and_tie_range():
     assert "Running total since Sep 23:" in text
     assert "(dollars cover 3 of 4 trades; 1 could not be priced)" in text
     assert "-$834.00 to -$144.00 depending on which same-time trade is taken" in text
+
+
+def test_your_limits_futures_unavailable_is_said_not_dropped():
+    from scripts.weekly_review import your_limits_lines
+
+    text = "\n".join(your_limits_lines({"futures": {"unavailable": "futures limits could not be computed"}}))
+    assert "**Your limits · futures**: not shown — futures limits could not be computed" in text

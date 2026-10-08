@@ -269,6 +269,22 @@ def _settle_open(row: dict, trading_date: date, log_dir: str | Path | None, cach
     return close_dt, last_close, "close"
 
 
+def _last_close_before(row: dict, close_dt: datetime, log_dir: str | Path | None, cache: dict) -> float | None:
+    """Close of the last stored bar that opened before `close_dt` (from the candidate day on)."""
+    start = date.fromisoformat(str(row.get("candidate_day")))
+    best: tuple[datetime, float] | None = None
+    for offset in range((close_dt.astimezone(ZoneInfo("UTC")).date() - start).days + 1):
+        for bar in _load_bars(log_dir, str(row.get("instrument")), (start + timedelta(days=offset)).isoformat(), cache):
+            bar_dt = _parse_dt(str(bar.get("ts") or ""))
+            if bar_dt is None or bar_dt >= close_dt or (best is not None and bar_dt <= best[0]):
+                continue
+            try:
+                best = (bar_dt, float(bar["close"]))
+            except (KeyError, TypeError, ValueError):
+                continue
+    return best[1] if best else None
+
+
 def capped_trades(rows: list[dict], log_dir: str | Path | None = None) -> list[dict]:
     """Filled shadow trades with fill/exit time, CME session and dollars after costs."""
     cache: dict = {}
@@ -297,6 +313,15 @@ def capped_trades(rows: list[dict], log_dir: str | Path | None = None) -> list[d
                 sign = 1 if row.get("direction") == "LONG" else -1
                 ticks = sign * (price - float(row["entry"])) / tick_size
             assumed_close = how in ("close", "unpriced")
+        close_dt = datetime.combine(trading_date, DAY_CLOSE, ET)
+        if result in ("WIN", "LOSS") and exit_dt > close_dt and tick_size and row.get("entry") is not None:
+            # The resolver's window runs past the 17:00 ET close; an unresolved trade is closed
+            # at 17:00, so a resolved one is too — the rule must not depend on how it ended.
+            price = _last_close_before(row, close_dt, log_dir, cache)
+            if price is not None:
+                sign = 1 if row.get("direction") == "LONG" else -1
+                ticks = sign * (price - float(row["entry"])) / tick_size
+                exit_dt, how, assumed_close = close_dt, "close", True
         net = None
         if ticks is not None and tick_value is not None:
             net = net_dollars(inst, float(ticks) * tick_value, tick_value)
@@ -304,7 +329,7 @@ def capped_trades(rows: list[dict], log_dir: str | Path | None = None) -> list[d
             "key": str(row.get("candidate_key")), "instrument": inst, "fill": times[0],
             "exit": exit_dt, "trading_date": trading_date, "session": session,
             "how": how, "net_usd": net, "approx_timing": times[2], "assumed_close": assumed_close,
-            "won": result == "WIN" or (result == "OPEN" and net is not None and net > 0),
+            "won": result == "WIN" if how in ("win", "loss") else (net is not None and net > 0),
         })
     trades.sort(key=lambda t: (t["fill"], t["key"]))
     return trades
@@ -347,7 +372,7 @@ def _cap_summary(trades: list[dict]) -> dict:
         "priced": len(priced),
         "unpriced": len(trades) - len(priced),
         "estimated_fill_times": sum(t["approx_timing"] for t in trades),
-        "played_out_on_bars": sum(t["how"] in ("stop", "target", "close") for t in trades),
+        "played_out_on_bars": sum(t["how"] in ("stop", "target") for t in trades),
         "assumed_flat_at_close": sum(t["assumed_close"] for t in trades),
         "day_session": sum(t["session"] == "day" for t in trades),
         "night_session": sum(t["session"] == "night" for t in trades),
@@ -598,9 +623,9 @@ def _coverage_line(views: dict) -> str | None:
     if s["estimated_fill_times"]:
         parts.append(f"{s['estimated_fill_times']} with estimated fill times")
     if s["played_out_on_bars"]:
-        parts.append(f"{s['played_out_on_bars']} still open at the end of tracking, played out on stored prices")
+        parts.append(f"{s['played_out_on_bars']} ran past the end of tracking and hit their stop or target on stored prices")
     if s["assumed_flat_at_close"]:
-        parts.append(f"{s['assumed_flat_at_close']} assumed closed at 5:00 PM ET")
+        parts.append(f"{s['assumed_flat_at_close']} closed at the 5:00 PM ET close")
     if not parts:
         return None
     return "(whole-account trades above: " + "; ".join(parts) + ")"
@@ -613,12 +638,13 @@ def _capped_lines(capped: dict | None, *, final: bool = True) -> list[str]:
         return ["**Your limits**: not shown today — the calculation failed; the rest of this report is unaffected"]
     td, cap = capped["trading_date"], capped["rule"]["per_session"]
     prev = (date.fromisoformat(td) - timedelta(days=1)).isoformat()
-    lines = [f"**Your limits (what-if)** — {cap} trades in the day session + {cap} in the night session,"
-             f" one position at a time · trading day {pe.et_date(td)}"
-             f" (6:00 PM {pe.et_date(prev)} – 5:00 PM {pe.et_date(td)} ET)",
-             "Replays the recorded signals under these limits; it does not change what the bot trades."]
+    lines = ["**Your limits (what-if)**",
+             f"{cap} trades in the day session + {cap} in the night session, one position at a time"
+             f" · trading day {pe.et_date(td)} (6:00 PM {pe.et_date(prev)} – 5:00 PM {pe.et_date(td)} ET)."
+             " Replays the recorded signals under these limits; it does not change what the bot trades."]
     if not final:
-        lines.append("(first pass — trades still running tonight are added in tomorrow's final report)")
+        lines.append("(first pass — today's picks and dollars are provisional: trades not yet resolved can"
+                     " change which trades the limits take; tomorrow's final report has the settled figures)")
     for name, label in _CAP_LABELS:
         lines.append(_cap_line(f"Today, {label}", capped["today"][name]))
     lines.append(f"Week so far (since {pe.et_date(capped['week_start'])}):")

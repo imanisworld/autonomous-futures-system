@@ -409,7 +409,7 @@ def test_coverage_counts_and_priced_denominator(tmp_path):
     assert acct["assumed_flat_at_close"] == 1 and acct["played_out_on_bars"] == 0
     text = "\n".join(sdp._capped_lines(rep))
     assert "dollars cover 1 of 2 trades; 1 could not be priced" in text
-    assert "(whole-account trades above: 2 with estimated fill times; 1 assumed closed at 5:00 PM ET)" in text
+    assert "(whole-account trades above: 2 with estimated fill times; 1 closed at the 5:00 PM ET close)" in text
 
 
 def test_report_without_log_dir_has_no_capped_section():
@@ -446,3 +446,28 @@ def test_first_pass_digest_says_running_trades_come_later(tmp_path):
     rep["pass"] = "final"
     assert "first pass" not in sdp.format_digest(rep)
     assert "(6:00 PM Tue Sep 22 – 5:00 PM Wed Sep 23 ET)" in sdp.format_digest(rep)
+
+
+def test_resolved_exit_after_the_close_is_settled_at_the_close(tmp_path):
+    # Day-session trade still running at 17:00 ET; the resolver's UTC-day window let it hit its
+    # stop at the 18:00 ET reopen. Under the rule it is closed at 17:00, like an unresolved one.
+    bars = [{"ts": f"2026-09-23T{h:02d}:{m:02d}:00+00:00", "high": 106, "low": 99, "close": 105}
+            for h, m in ((19, 15), (19, 30), (19, 45), (20, 0), (20, 15), (20, 30), (20, 45))]
+    bars.append({"ts": "2026-09-23T22:00:00+00:00", "high": 101, "low": 89, "close": 90})
+    _bar_file(tmp_path, "MNQ", "2026-09-23", bars)
+    row = _cap_row("late", "MNQ", "LOSS", -40, "2026-09-23T19:00:00+00:00", 1, 8,
+                   entry=100.0, stop=90.0, target=120.0, resolved_at_bar_ts="2026-09-23T22:00:00+00:00")
+    (t,) = sdp.capped_trades([row], tmp_path)
+    assert t["exit"] == datetime(2026, 9, 23, 21, 0, tzinfo=timezone.utc)      # 17:00 ET
+    assert (t["how"], t["assumed_close"], t["won"]) == ("close", True, True)
+    assert t["net_usd"] == round(20 * 0.5 - 1.98, 2)                           # 105 vs 100 = +20 ticks
+    s = sdp._cap_summary([t])
+    assert (s["played_out_on_bars"], s["assumed_flat_at_close"]) == (0, 1)    # counted once
+
+
+def test_capped_header_is_its_own_line_and_first_pass_says_provisional(tmp_path):
+    rep = sdp.capped_report(tmp_path, DAY)
+    lines = sdp._capped_lines(rep, final=False)
+    assert lines[0] == "**Your limits (what-if)**"
+    assert "it does not change what the bot trades" in lines[1]
+    assert "today's picks and dollars are provisional" in lines[2]

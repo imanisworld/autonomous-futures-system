@@ -209,7 +209,9 @@ def your_limits_lines(limits: Optional[dict]) -> list[str]:
         return []
     lines = []
     fut = limits.get("futures")
-    if fut:
+    if fut and fut.get("unavailable"):
+        lines.append(f"**Your limits · futures**: not shown — {fut['unavailable']}")
+    elif fut:
         lines.append("**Your limits · futures, what-if** (3 day-session + 3 night-session trades,"
                      " one position at a time; the bot's own limit is unchanged)")
         labels = (("account", "Whole account"), ("per_market", "Each market separately"),
@@ -329,7 +331,7 @@ def collect_your_limits(log_dir: Path, options_db: Path, monday: date, sunday: d
             if rep.get("since_start"):
                 out["futures_total"], out["futures_since"] = rep["since_start"], rep["since"]
         except Exception:  # noqa: BLE001 - a report error never blocks the weekly card
-            pass
+            out["futures"] = {"unavailable": "futures limits could not be computed"}
     if not options_db.exists():
         out["options"] = {"unavailable": f"options database not found at {options_db}"}
         return out
