@@ -268,11 +268,19 @@ def test_promote_and_rollback_rearm_readonly_watcher_after_release_verification(
 
 def test_watcher_remote_directory_guard_fails_before_file_mutation(tmp_path):
     """Test the *rendered* SSH command, not merely the source shell string."""
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    approved = shared / "watcher"
+    approved.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (shared / "escape").symlink_to(outside, target_is_directory=True)
+    preamble = _REMOTE_RENDER_PREAMBLE.replace("SHARED=/s", f"SHARED={shared}")
     for func, _, block in _remote_blocks():
         if func not in ("promote_release", "rollback_release"):
             continue
         rendered = subprocess.run(
-            ["bash", "-c", _REMOTE_RENDER_PREAMBLE + "\n".join(block)],
+            ["bash", "-c", preamble + "\n".join(block)],
             capture_output=True, text=True, check=True,
         ).stdout
         assert 'test -z "$watcher_dest"' in rendered
@@ -283,7 +291,7 @@ def test_watcher_remote_directory_guard_fails_before_file_mutation(tmp_path):
         begin = rendered.index("watcher_dest=$(systemctl show")
         end = rendered.index("for watcher_file in", begin)
         guard = rendered[begin:end]
-        for malicious in ("", "/", "/tmp", "relative"):
+        for malicious in ("", "/", "/tmp", "relative", str(shared / "escape")):
             proc = subprocess.run(
                 ["bash", "-c",
                  "set -e\nsystemctl() { printf '%s\\n' \"$WATCHER_DIRECTORY\"; }\n"
@@ -293,6 +301,16 @@ def test_watcher_remote_directory_guard_fails_before_file_mutation(tmp_path):
             )
             assert proc.returncode != 0, (func, malicious, proc.stdout)
             assert "GUARD_BYPASSED" not in proc.stdout, (func, malicious)
+        safe = subprocess.run(
+            ["bash", "-c",
+             "set -e\nsystemctl() { printf '%s\\n' \"$WATCHER_DIRECTORY\"; }\n"
+             + guard + "\nprintf 'GUARD_BYPASSED\\n'"],
+            capture_output=True, text=True,
+            env={**os.environ, "WATCHER_DIRECTORY": str(approved)},
+        )
+        assert safe.returncode == 0, (func, safe.stderr)
+        assert "GUARD_BYPASSED" in safe.stdout
+
 
 
 def test_rollback_restores_previous_release_proof_pins_and_verifies_integrity():
