@@ -1,11 +1,49 @@
 # Branch Archive Index
 
+## 2026-10-07 post-U11 source-state consolidation
+
+Main after the source-safety campaign: `1ec48a0ed76aea23c82882ff8c8ae258fda20c95` (#1166 / U11).
+
+- U3→U11 are now merged source state. No deployment is implied.
+- The compact live `docs/agent-work-state.md` and `docs/futures-operator-todo.md` are updated to the post-U11 boundary; their pre-consolidation long-form content remains preserved in the dated archive files.
+- Cleanup remains classification-first. No release/archive ref is deleted merely for age.
+- Open options/research PRs are not treated as cleanup candidates without lane-specific review.
+- No runtime, strategy, risk, broker, env/config, or deployment mutation occurred in this documentation pass.
+
+---
+
 Record of local/remote branches removed during repo-hygiene cleanups, and the
 durable annotated tag each one's commit was preserved under before deletion.
 
 **Archived code is NOT approved, merged, validated, or deployed.** A tag here
 means the commit is recoverable — nothing more. Reviving any of it requires
 the same PR + review process as new work.
+
+---
+
+## 2026-10-07 source-of-truth consolidation
+
+Main at audit: `f35b976efe523dbbc2090809ce72e91f0e9d3e95` (#1162 / U7).
+
+This pass reduced duplicate coordination state without deleting branch history:
+
+- Closed superseded status/checkpoint PRs **#1119, #1125, #1141, #1142, and #1156**. Their head branches were intentionally preserved.
+- Archived the pre-consolidation long-form `docs/agent-work-state.md` and `docs/futures-operator-todo.md` before replacing the live files with compact current-action versions.
+- No runtime, strategy, risk, broker, deployment, env/config, or execution state changed.
+- Active U8–U11 branches/PRs remain preserved.
+
+### Historical cleanup note preserved from closed PR #1142
+
+PR #1142 contained a cleanup record that had not landed on `main`. It is preserved here as provenance only; this 2026-10-07 pass did **not** re-execute or independently re-verify the old local-worktree removals.
+
+| Item | Historical disposition recorded by #1142 |
+|---|---|
+| `options/observation-rating-schema` | merged via #1089; remote branch already gone; local branch/worktree cleanup recorded |
+| `ops/post-cap-eligibility-shadow-20261005` | merged via #1137; remote branch already gone; local review trackers cleanup recorded |
+| `cursor/review-1137-ffce` / `review-1137-deb2346` | local review trackers recorded as safe local cleanup after merge |
+| `/tmp/wt-1140` | local worktree recorded removed; remote `audit/options-daily-cap-shadow-20261005` preserved because PR #1140 remained open |
+
+No branch deletion was performed by this consolidation. Any future branch deletion still requires current merge/supersession proof and preservation of unique work.
 
 ---
 
