@@ -69,6 +69,8 @@ def read_122_journal(path: Path | str) -> Iterator[dict[str, Any]]:
                 raise AdapterError(f"torn_journal_tail_{number}")
             try:
                 record = json.loads(line, object_pairs_hook=_unique_pairs)
+            except AdapterError:
+                raise
             except (ValueError, UnicodeError) as exc:
                 raise AdapterError(f"invalid_json_{number}") from exc
             if not isinstance(record, dict):
