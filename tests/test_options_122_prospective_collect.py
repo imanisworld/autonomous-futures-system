@@ -3,11 +3,19 @@ from pathlib import Path
 
 from alert_ranker.options_122_prospective import Prospective122Observation
 from scripts.options_122_prospective_collect import (
+    CANONICAL_ARM_SOURCE,
+    CANONICAL_BINDING_SCHEMA,
+    CANONICAL_PROVISIONAL_TRIGGER_SOURCE,
+    CANONICAL_RECONCILIATION_SOURCE,
+    CANONICAL_STRATEGY,
+    CANONICAL_TIMEFRAME,
+    CANONICAL_UNIVERSE,
     COLLECTOR_ID,
     COLLECTOR_VERSION,
     DEFAULT_CADENCE_SECONDS,
     DEFAULT_MAX_CAPTURE_LAG_SECONDS,
     POLICY_EPOCH,
+    _canonical_binding,
     _live_observation,
     _load_state,
 )
@@ -18,6 +26,7 @@ UTC = timezone.utc
 def _obs():
     return Prospective122Observation(
         setup_id="s1", setup_fingerprint="f1", ticker="SPY", session_date="2026-09-18",
+        structure_close_time="2026-09-18T15:00:00+00:00",
         watch_start="2026-09-18T15:00:00+00:00", watch_until="2026-09-18T15:30:00+00:00",
         status="WATCHING", family=None, subtype=None, direction=None,
         trigger_bar_start=None, trigger_detectable_at=None, trigger_level=None,
@@ -32,6 +41,48 @@ def test_epoch_policy_is_frozen():
     assert POLICY_EPOCH == "122-IEX-E1"
     assert DEFAULT_CADENCE_SECONDS == 60
     assert DEFAULT_MAX_CAPTURE_LAG_SECONDS == 120
+
+
+def test_canonical_binding_matches_frozen_epoch_vocabulary():
+    from options_evidence.strategy_epochs import load_registry
+
+    binding = _canonical_binding(_obs())
+    epoch = load_registry().get(CANONICAL_STRATEGY, POLICY_EPOCH)
+    assert epoch is not None
+    assert binding == {
+        "schema": CANONICAL_BINDING_SCHEMA,
+        "strategy": CANONICAL_STRATEGY,
+        "strategy_epoch": POLICY_EPOCH,
+        "timeframe": CANONICAL_TIMEFRAME,
+        "universe": CANONICAL_UNIVERSE,
+        "pattern": "122:2U",
+        "structure_close_time": "2026-09-18T15:00:00+00:00",
+        "data_source": f"{COLLECTOR_ID}:{CANONICAL_ARM_SOURCE}",
+        "arm_source": CANONICAL_ARM_SOURCE,
+        "raw_arm_source": "public:/userapigateway/historicdata/{type}/{symbol}/{period}",
+        "provisional_trigger_source": CANONICAL_PROVISIONAL_TRIGGER_SOURCE,
+        "authoritative_reconciliation_source": CANONICAL_RECONCILIATION_SOURCE,
+        "collector_id": COLLECTOR_ID,
+        "collector_version": COLLECTOR_VERSION,
+    }
+    assert epoch.definition["setup"]["timeframe"] == binding["timeframe"]
+    assert epoch.definition["setup"]["universe"] == binding["universe"]
+    assert epoch.definition["trigger"]["arm_source"] == binding["arm_source"]
+    assert epoch.definition["trigger"]["provisional_source"] == binding["provisional_trigger_source"]
+    assert (
+        epoch.definition["trigger"]["authoritative_reconciliation"]
+        == binding["authoritative_reconciliation_source"]
+    )
+
+
+def test_canonical_binding_refuses_missing_structure_identity():
+    import pytest
+    from dataclasses import replace
+
+    with pytest.raises(ValueError, match="structure_close_time"):
+        _canonical_binding(replace(_obs(), structure_close_time=""))
+    with pytest.raises(ValueError, match="reference direction"):
+        _canonical_binding(replace(_obs(), reference_direction=None))
 
 
 def test_iex_reversal_maps_to_122_and_keeps_geometry_unresolved():
