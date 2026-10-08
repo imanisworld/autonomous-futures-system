@@ -364,16 +364,16 @@ promote_release() {
       watcher_dest=\$(systemctl show afs-watcher.service -p WorkingDirectory --value)
       # A blank systemd WorkingDirectory must never expand chmod into /*.sh.
       # Resolve symlinks and refuse anything outside the trusted shared tree.
-      if test -z \\"\$watcher_dest\\"; then
+      if test -z \"\$watcher_dest\"; then
         echo 'watcher re-arm refused: empty WorkingDirectory' >&2
         exit 1
       fi
-      watcher_dest=\$(realpath -e -- \\"\$watcher_dest\\") || exit 1
-      case \\"\$watcher_dest\\" in
+      watcher_dest=\$(realpath -e -- \"\$watcher_dest\") || exit 1
+      case \"\$watcher_dest\" in
         '$SHARED'/*) ;;
         *) echo 'watcher re-arm refused: directory outside shared root' >&2; exit 1 ;;
       esac
-      test -d \\"\$watcher_dest\\"
+      test -d \"\$watcher_dest\"
       for watcher_file in watcher.py watcher_memory_guard.py run_ro.sh supervisor.sh bootstrap_tmp_state.sh; do
         test -f \"\$watcher_src/\$watcher_file\"
         cp -f \"\$watcher_src/\$watcher_file\" \"\$watcher_dest/\$watcher_file\"
@@ -445,16 +445,16 @@ rollback_release() {
       watcher_dest=\$(systemctl show afs-watcher.service -p WorkingDirectory --value)
       # A blank systemd WorkingDirectory must never expand chmod into /*.sh.
       # Resolve symlinks and refuse anything outside the trusted shared tree.
-      if test -z \\"\$watcher_dest\\"; then
+      if test -z \"\$watcher_dest\"; then
         echo 'watcher re-arm refused: empty WorkingDirectory' >&2
         exit 1
       fi
-      watcher_dest=\$(realpath -e -- \\"\$watcher_dest\\") || exit 1
-      case \\"\$watcher_dest\\" in
+      watcher_dest=\$(realpath -e -- \"\$watcher_dest\") || exit 1
+      case \"\$watcher_dest\" in
         '$SHARED'/*) ;;
         *) echo 'watcher re-arm refused: directory outside shared root' >&2; exit 1 ;;
       esac
-      test -d \\"\$watcher_dest\\"
+      test -d \"\$watcher_dest\"
       for watcher_file in watcher.py watcher_memory_guard.py run_ro.sh supervisor.sh bootstrap_tmp_state.sh; do
         test -f \"\$watcher_src/\$watcher_file\"
         cp -f \"\$watcher_src/\$watcher_file\" \"\$watcher_dest/\$watcher_file\"
