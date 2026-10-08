@@ -29,6 +29,59 @@ Review comments on #1190/#1194 (posted via the ChatGPT/Codex account, not Grok) 
 
 **Fail B10 = HOLD** even if every other CI/dependency/posture check passes. Do not use a manual `chmod`, bypass path guards, or deploy old `7c93027` to avoid this gate.
 
+### AFS-0166 — canonical watcher directory and reviewed rollback break-glass
+
+**Source:** PR #1194 (unmerged), current proposed fix in its own source PR. The
+reviewer found that the early watcher check resolves the configured
+`$SHARED` with `realpath`, while the late check previously compared the
+resolved destination against an unnormalized literal. A symlinked shared
+directory or trailing slash can therefore produce a *late failure after*
+release .env edits, symlink replacement and futures restart.
+
+**Required gate before any release approval:**
+
+- The same pre-mutation canonical watcher destination and canonical shared
+  root must be reused by the late re-arm path in **both** promote and rollback;
+  do not reread the unit or reinterpret raw `$SHARED` after mutations.
+- Render nested SSH Bash and run fake-box canaries for a valid shared-root path,
+  a symlinked shared root, a symlinked destination, trailing-slash variants,
+  blank/root/relative/unapproved paths, and symlink escape. Invalid preflight
+  must prevent **all** release mutations, valid path variants must not spuriously
+  abort re-arm. Keep explicitly named chmod targets, not glob expansion.
+- Require fresh exact-head CI, independently attributed reviewer PASS, verified
+  effective watcher unit/path from root read-only evidence, and a separate
+  operator GO. PR comments entered via the ChatGPT Codex app are *not* by
+  themselves evidence that Grok performed independent review.
+
+**Rollback break-glass (DOCUMENTED CONTINGENCY, NOT AN AUTOMATIC BYPASS):**
+
+If watcher directory validation fails, the standard rollback must refuse
+rather than write outside its proven scope. Do **not** disable the guard,
+set an invented directory, recursively chmod root, repoint the collector,
+or force an untested script to execute.
+
+1. Declare **ROLLBACK BLOCKED**, stop further release operations and capture
+   immutable read-only snapshots: current/previous release symlinks, .env
+   proof pins (secret values redacted), systemd effective paths, manifests,
+   rollback target integrity, service status, watcher state, journal hashes
+   and broker/demo posture.
+2. The operator and a separately assigned recovery reviewer must decide on
+   an **explicit, narrowly scoped recovery plan** (including recovery of
+   futures service and watcher independently), identify exact target release,
+   paths, ordered mutations, rollback-of-recovery and expected interruption;
+   preserve evidence and options isolation.
+3. Review a **non-production rehearsal** of that exact plan, including invalid
+   watcher directory and root-file mutation canaries. Verify backups/recovery
+   inputs exist before granting separate operator GO for any live repair.
+4. Execute only under that distinct GO and supervision, with after-close/flat
+   constraints and post-recovery integrity/service/watchdog/evidence checks.
+   Do not silently call normal rollback, edit systemd/env, or promote in this
+   document's name.
+
+If independent review, system recovery evidence or operator GO is absent,
+the verdict remains **HOLD; manual intervention required**. This plan
+does not authorize a production break-glass operation.
+
 ### B1/B5/B6/B8/B9 — still unresolved
 
 - **B1:** Read actual six posture pins and release-script promote policy. No automatic reset.
