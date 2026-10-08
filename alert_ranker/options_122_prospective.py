@@ -28,6 +28,7 @@ class Prospective122Observation:
     setup_fingerprint: str
     ticker: str
     session_date: str
+    structure_close_time: str
     watch_start: str
     watch_until: str
     status: str
@@ -192,6 +193,7 @@ def observe_122_setups(
                 setup_id=_setup_id(ticker, watch_start),
                 setup_fingerprint=_setup_fingerprint(high=armed.boundary_high, low=armed.boundary_low, reference=armed.reference_direction),
                 ticker=ticker.upper(), session_date=session.date.isoformat(),
+                structure_close_time=last_close.isoformat(),
                 watch_start=watch_start.isoformat(), watch_until=watch_until.isoformat(),
                 status="DATA_BLOCKED", family=None, subtype=None, direction=None,
                 trigger_bar_start=None, trigger_detectable_at=None, trigger_level=None,
@@ -219,6 +221,7 @@ def observe_122_setups(
             setup_id=_setup_id(ticker, watch_start),
             setup_fingerprint=_setup_fingerprint(high=armed.boundary_high, low=armed.boundary_low, reference=armed.reference_direction),
             ticker=ticker.upper(), session_date=session.date.isoformat(),
+            structure_close_time=last_close.isoformat(),
             watch_start=watch_start.isoformat(), watch_until=watch_until.isoformat(),
             status=status, family=result.family, subtype=result.subtype, direction=result.direction,
             trigger_bar_start=trigger_start.isoformat() if trigger_start else None,
