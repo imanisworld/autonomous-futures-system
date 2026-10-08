@@ -229,8 +229,11 @@ def run_suite_at(
         config.write_text("[pytest]\naddopts =\n", encoding="utf-8")
         junit = Path(tmp) / "fi.xml"
         env = os.environ.copy()
-        env.pop("PYTEST_ADDOPTS", None)
-        env.pop("PYTEST_PLUGINS", None)
+        for key in tuple(env):
+            if key.startswith("PYTEST_"):
+                env.pop(key, None)
+        env.pop("PYTHONPATH", None)
+        env["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
         try:
             proc = subprocess.run(
                 [
