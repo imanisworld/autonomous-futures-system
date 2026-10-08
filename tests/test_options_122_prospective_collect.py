@@ -271,6 +271,73 @@ def test_legacy_setup_cannot_be_upgraded_by_later_bound_row(tmp_path: Path):
         _load_state(p)
 
 
+
+def test_duplicate_armed_never_upgrades_legacy_setup(tmp_path: Path):
+    import json
+    import pytest
+
+    legacy = json.loads(_row("ARMED", "s1", "f1"))
+    obs = _obs().to_dict()
+    stamped = {
+        "record_type": "ARMED", "collector_id": COLLECTOR_ID,
+        "collector_version": COLLECTOR_VERSION, "policy_epoch": POLICY_EPOCH,
+        "setup_id": "s1", "observed_at": "2026-09-18T15:00:15+00:00",
+        "observation": obs, "canonical_binding": _canonical_binding(_obs()),
+    }
+    p = tmp_path / "shared.jsonl"
+    old_bytes = (json.dumps(legacy) + "\n").encode()
+    p.write_bytes(old_bytes + (json.dumps(stamped) + "\\n").encode())
+    before = p.read_bytes()
+    with pytest.raises(RuntimeError, match="journal_duplicate_armed_2"):
+        _load_state(p)
+    assert p.read_bytes() == before
+    assert p.read_bytes().startswith(old_bytes)
+
+
+def test_duplicate_current_armed_refused_even_with_identical_binding(tmp_path: Path):
+    import json
+    import pytest
+
+    row = {
+        "record_type": "ARMED", "collector_id": COLLECTOR_ID,
+        "collector_version": COLLECTOR_VERSION, "policy_epoch": POLICY_EPOCH,
+        "setup_id": "s1", "observed_at": "2026-09-18T15:00:10+00:00",
+        "observation": _obs().to_dict(), "canonical_binding": _canonical_binding(_obs()),
+    }
+    p = tmp_path / "twice.jsonl"
+    p.write_text(json.dumps(row) + "\\n" + json.dumps(row) + "\\n")
+    with pytest.raises(RuntimeError, match="journal_duplicate_armed_2"):
+        _load_state(p)
+
+
+def test_rollback_partitions_remain_separate_and_preserve_legacy_journal(tmp_path: Path):
+    import json
+    import pytest
+
+    # Source-only compatibility rehearsal. Real old-release process start
+    # against its own new empty partition is a separate operator-approved gate.
+    legacy = tmp_path / "legacy-e1.jsonl"
+    current = tmp_path / "v02-e1.jsonl"
+    legacy.write_text(_row("ARMED", "s1", "f1"))
+    frozen = legacy.read_bytes()
+    row = {
+        "record_type": "ARMED", "collector_id": COLLECTOR_ID,
+        "collector_version": COLLECTOR_VERSION, "policy_epoch": POLICY_EPOCH,
+        "setup_id": "s1", "observed_at": "2026-09-18T15:00:10+00:00",
+        "observation": _obs().to_dict(), "canonical_binding": _canonical_binding(_obs()),
+    }
+    current.write_text(json.dumps(row) + "\\n")
+    assert _load_state(legacy)[-1] == set()  # no retroactive canonical binding
+    assert _load_state(current)[-1] == {"s1"}
+    assert legacy.read_bytes() == frozen  # never reset or rewrite the legacy bytes
+
+    mixed = tmp_path / "unsafe-combined.jsonl"
+    mixed.write_bytes(frozen + current.read_bytes())
+    with pytest.raises(RuntimeError, match="journal_duplicate_armed_2"):
+        _load_state(mixed)
+
+
+
 def test_current_version_armed_requires_binding(tmp_path: Path):
     import json
     import pytest
