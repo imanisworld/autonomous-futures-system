@@ -52,7 +52,9 @@ def test_undefined_scenarios_are_reported_not_invented():
         ("test_fi10_torn_trade_row_is_not_read_as_flat", "FI-10"),
         ("test_jwc1_x", "JW"),
         ("test_jw1_lost_trade_row", "JW"),
+        ("test_jwt_token_case", "JW"),
         ("test_lw_ledger", "LW"),
+        ("test_lwm_memory_case", "LW"),
         ("test_something_else", None),
     ],
 )
@@ -243,6 +245,73 @@ def test_generate_cli_refuses_output_outside_repo(tmp_path):
 def test_unknown_code_sha_blocks(good):
     repo, _, manifest = good
     assert any("exact code SHA" in b for b in fi.verify_manifest(repo, manifest, code_sha=None))
+
+
+def test_exact_sha_runner_ignores_inherited_pytest_addopts(tmp_path, monkeypatch):
+    repo = _repo(tmp_path)
+    head = runner._git(repo, "rev-parse", "HEAD").stdout.strip()
+    monkeypatch.setenv("PYTEST_ADDOPTS", "-k definitely_not_a_real_fi_test")
+    code, cases = fi.run_suite_at(repo, head, python=sys.executable)
+    assert code == 0
+    executed = {name.split("[", 1)[0] for name, _ in cases if fi.scenario_for_test(name)}
+    assert executed == fi.committed_fi_tests_at(repo, head)
+
+
+def test_exact_sha_runner_pins_pytest_config_to_extracted_tree(tmp_path):
+    repo = _repo(tmp_path)
+    (repo / "pytest.ini").write_text("[pytest]\naddopts = -k definitely_not_a_real_fi_test\n", encoding="utf-8")
+    runner._git(repo, "add", "pytest.ini")
+    runner._git(repo, "commit", "-m", "hostile pytest config")
+    head = runner._git(repo, "rev-parse", "HEAD").stdout.strip()
+    code, cases = fi.run_suite_at(repo, head, python=sys.executable)
+    assert code == 0
+    executed = {name.split("[", 1)[0] for name, _ in cases if fi.scenario_for_test(name)}
+    assert executed == fi.committed_fi_tests_at(repo, head)
+
+
+def test_exact_sha_runner_rejects_export_ignored_fi_test(tmp_path):
+    repo = _repo(tmp_path)
+    (repo / ".gitattributes").write_text(
+        "tests/fault_injection/test_synthetic_fi.py export-ignore\n",
+        encoding="utf-8",
+    )
+    runner._git(repo, "add", ".gitattributes")
+    runner._git(repo, "commit", "-m", "hide FI suite from archive")
+    head = runner._git(repo, "rev-parse", "HEAD").stdout.strip()
+    with pytest.raises(fi.FaultInjectionGateError, match="archive FI suite mismatch"):
+        fi.run_suite_at(repo, head, python=sys.executable)
+
+
+def test_exact_sha_runner_has_bounded_timeout(tmp_path):
+    repo = _repo(
+        tmp_path,
+        extra="import time\n\ndef test_fi3_hang():\n    time.sleep(5)\n    assert True\n",
+    )
+    head = runner._git(repo, "rev-parse", "HEAD").stdout.strip()
+    with pytest.raises(fi.FaultInjectionGateError, match="exceeded 1s timeout"):
+        fi.run_suite_at(repo, head, python=sys.executable, timeout_seconds=1)
+
+
+@pytest.mark.parametrize("bad", [True, 1.0, -1, "1"])
+def test_manifest_counts_require_nonnegative_exact_integers(good, bad):
+    repo, head, manifest = good
+    manifest["scenarios"]["FI-1"]["passed"] = bad
+    blockers = fi.verify_manifest(repo, manifest, code_sha=head)
+    assert any("FI-1 has invalid non-integer counts" in b for b in blockers)
+
+
+def test_manifest_count_detail_mismatch_blocks(good):
+    repo, head, manifest = good
+    manifest["scenarios"]["FI-1"]["passed"] = 2
+    blockers = fi.verify_manifest(repo, manifest, code_sha=head)
+    assert any("FI-1 count/test detail mismatch" in b for b in blockers)
+
+
+def test_manifest_pytest_exit_code_rejects_bool(good):
+    repo, head, manifest = good
+    manifest["pytest_exit_code"] = False
+    blockers = fi.verify_manifest(repo, manifest, code_sha=head)
+    assert any("did not exit cleanly" in b for b in blockers)
 
 
 # ─── Promotion integration ─────────────────────────────────────────────────

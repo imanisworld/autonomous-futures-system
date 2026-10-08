@@ -23,6 +23,7 @@ import ast
 import hashlib
 import io
 import json
+import os
 import platform
 import re
 import subprocess
@@ -37,6 +38,7 @@ from typing import Any, Iterable, Optional
 SCHEMA_VERSION = "1.0.0"
 GENERATOR = "ops.fault_injection_gate"
 SUITE_DIR = "tests/fault_injection"
+SUITE_TIMEOUT_SECONDS = 300
 
 # Formally defined FI scenarios (test function names in tests/fault_injection).
 REQUIRED_SCENARIOS: tuple[str, ...] = (
@@ -67,7 +69,7 @@ def scenario_for_test(name: str) -> Optional[str]:
     token = match.group(1).lower()
     if token.startswith("fi"):
         return f"FI-{int(token[2:])}"
-    return "JW" if token in ("jw", "jwc") else "LW"
+    return "JW" if token in ("jw", "jwc", "jwt") else "LW"
 
 
 def _git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -117,6 +119,55 @@ def discovered_scenarios_at(root: Path, sha: str) -> set[str]:
                     found.add(scenario)
     return found
 
+
+def committed_fi_tests_at(root: Path, sha: str) -> set[str]:
+    """Mapped FI test function names committed at the requested SHA."""
+    tests: set[str] = set()
+    for rel in _suite_files_at(root, sha):
+        if not Path(rel).name.startswith("test_"):
+            continue
+        shown = _git(root, "show", f"{sha}:{rel}")
+        if shown.returncode != 0:
+            raise FaultInjectionGateError(f"cannot read {rel} at {sha}")
+        try:
+            tree = ast.parse(shown.stdout)
+        except SyntaxError as exc:
+            raise FaultInjectionGateError(f"cannot parse {rel} at {sha}: {exc}") from exc
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and scenario_for_test(node.name):
+                tests.add(node.name)
+    return tests
+
+
+def _verify_archived_suite(root: Path, sha: str, checkout: Path) -> None:
+    """Prove git archive did not omit or alter any committed FI suite file."""
+    expected = _suite_files_at(root, sha)
+    suite_root = checkout / SUITE_DIR
+    actual = sorted(
+        path.relative_to(checkout).as_posix()
+        for path in suite_root.rglob("*.py")
+        if path.is_file()
+    ) if suite_root.is_dir() else []
+    if actual != expected:
+        missing = sorted(set(expected) - set(actual))
+        extra = sorted(set(actual) - set(expected))
+        raise FaultInjectionGateError(
+            f"exact-SHA archive FI suite mismatch: missing={missing}, extra={extra}"
+        )
+    for rel in expected:
+        shown = subprocess.run(
+            ["git", "-C", str(root), "show", f"{sha}:{rel}"],
+            capture_output=True,
+            check=False,
+        )
+        if shown.returncode != 0 or (checkout / rel).read_bytes() != shown.stdout:
+            raise FaultInjectionGateError(f"exact-SHA archive changed FI suite file {rel}")
+
+
+def _exact_nonnegative_int(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
 def scenario_results(testcases: Iterable[tuple[str, str]]) -> dict[str, dict[str, Any]]:
     """Fold (test name, outcome) pairs into per-scenario results."""
     out: dict[str, dict[str, Any]] = {}
@@ -147,8 +198,16 @@ def _junit_cases(path: Path) -> list[tuple[str, str]]:
     return cases
 
 
-def run_suite_at(root: Path, sha: str, *, python: str = sys.executable) -> tuple[int, list[tuple[str, str]]]:
-    """Run the committed FI suite from an exact-SHA archive, never the worktree."""
+def run_suite_at(
+    root: Path,
+    sha: str,
+    *,
+    python: str = sys.executable,
+    timeout_seconds: int = SUITE_TIMEOUT_SECONDS,
+) -> tuple[int, list[tuple[str, str]]]:
+    """Run the committed FI suite from an isolated exact-SHA archive."""
+    if not _exact_nonnegative_int(timeout_seconds) or timeout_seconds <= 0:
+        raise FaultInjectionGateError("FI suite timeout must be a positive integer")
     archived = subprocess.run(
         ["git", "-C", str(root), "archive", "--format=tar", sha],
         capture_output=True, check=False,
@@ -163,17 +222,51 @@ def run_suite_at(root: Path, sha: str, *, python: str = sys.executable) -> tuple
                 archive.extractall(checkout, filter="data")
         except (tarfile.TarError, OSError) as exc:
             raise FaultInjectionGateError(f"cannot materialize qualified SHA {sha}: {exc}") from exc
+
+        _verify_archived_suite(Path(root), sha, checkout)
+        expected_tests = committed_fi_tests_at(Path(root), sha)
+        config = checkout / ".fi-pytest.ini"
+        config.write_text("[pytest]\naddopts =\n", encoding="utf-8")
         junit = Path(tmp) / "fi.xml"
-        proc = subprocess.run(
-            [python, "-m", "pytest", "-q", "-p", "no:cacheprovider", SUITE_DIR,
-             f"--junitxml={junit}"],
-            cwd=checkout, capture_output=True, text=True, check=False,
-        )
+        env = os.environ.copy()
+        for key in tuple(env):
+            if key.startswith("PYTEST_"):
+                env.pop(key, None)
+        env.pop("PYTHONPATH", None)
+        env["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
+        try:
+            proc = subprocess.run(
+                [
+                    python, "-m", "pytest", "-q", "-p", "no:cacheprovider",
+                    "-c", str(config), SUITE_DIR, f"--junitxml={junit}",
+                ],
+                cwd=checkout,
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=timeout_seconds,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise FaultInjectionGateError(
+                f"exact-SHA FI suite exceeded {timeout_seconds}s timeout"
+            ) from exc
         if not junit.is_file():
             raise FaultInjectionGateError(
                 f"exact-SHA FI suite produced no results: {proc.stderr[-500:]}"
             )
         cases = _junit_cases(junit)
+        executed = {
+            name.split("[", 1)[0]
+            for name, _ in cases
+            if scenario_for_test(name) is not None
+        }
+        if executed != expected_tests:
+            missing = sorted(expected_tests - executed)
+            extra = sorted(executed - expected_tests)
+            raise FaultInjectionGateError(
+                f"exact-SHA FI test collection mismatch: missing={missing}, extra={extra}"
+            )
     return proc.returncode, cases
 
 
@@ -280,9 +373,18 @@ def verify_manifest(
         entry = scenarios.get(scenario)
         if not isinstance(entry, dict):
             blockers.append(f"fault-injection scenario {scenario} has no result")
-        elif entry.get("result") != "PASS" or not entry.get("passed") or entry.get("failed") or entry.get("skipped"):
+            continue
+        counts = {name: entry.get(name) for name in ("passed", "failed", "skipped")}
+        if not all(_exact_nonnegative_int(value) for value in counts.values()):
+            blockers.append(f"fault-injection scenario {scenario} has invalid non-integer counts")
+            continue
+        tests = entry.get("tests")
+        if not isinstance(tests, list) or sum(counts.values()) != len(tests):
+            blockers.append(f"fault-injection scenario {scenario} count/test detail mismatch")
+        if entry.get("result") != "PASS" or counts["passed"] <= 0 or counts["failed"] or counts["skipped"]:
             blockers.append(f"fault-injection scenario {scenario} is {entry.get('result')!r}, not PASS")
-    if manifest.get("pytest_exit_code") != 0:
+    pytest_exit = manifest.get("pytest_exit_code")
+    if not _exact_nonnegative_int(pytest_exit) or pytest_exit != 0:
         blockers.append("fault-injection suite run did not exit cleanly")
     if not blockers and len(sha) == 40:
         try:
