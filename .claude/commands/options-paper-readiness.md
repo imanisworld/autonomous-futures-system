@@ -100,7 +100,7 @@ Safe Next Step:
 Smallest safe action only.
 
 Important:
-If the scanner can only produce advisory alerts, classify as READY FOR PAPER only if alerts are explainable and risk-gated.
+If the scanner can only produce advisory alerts, explainable/risk-gated alerts are necessary but **not sufficient** for READY FOR PAPER. Without the prospective forward-proof requirements below, use READY TO START FORWARD PROOF, READY FOR PREVIEW, or HOLD as appropriate.
 If the system can produce non-executable prepared tickets, classify as READY FOR PREVIEW only if executable is always False, broker is None, broker_order_id is None, and no submit/place/order API exists.
 If any path can submit, place, route, or execute an options order, classify as EXECUTION CAPABLE and do not approve paper/preview readiness without live-lock proof.
 If provider data can be missing or stale without a clear rejection reason, classify as HOLD.
