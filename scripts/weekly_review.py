@@ -194,6 +194,8 @@ def _limit_line(label: str, s: dict, *, count_key: str, money_key: str) -> str:
     text = f"{label}: {s[count_key]} trades, {s['wins']} won, {s['losses']} lost"
     if s.get(money_key) is not None:
         text += f", {_signed(s[money_key])}, deepest drop ${abs(s.get('max_drawdown_usd') or 0):,.0f}"
+    if s.get("unpriced"):
+        text += f" ({s['unpriced']} could not be priced)"
     return text
 
 
@@ -209,7 +211,9 @@ def your_limits_lines(limits: Optional[dict]) -> list[str]:
                             ("every_signal", "Every signal, no limits")):
             lines.append(_limit_line(label, fut[name], count_key="trades", money_key="net_usd"))
     opt = limits.get("options")
-    if opt:
+    if opt and opt.get("unavailable"):
+        lines.append(f"**Your limits · options**: not shown — {opt['unavailable']}")
+    elif opt:
         lines.append("**Your limits · options** (at most 3 new paper trades a day)")
         for name, label in (("account", "Whole account"), ("per_ticker", "Each ticker separately"),
                             ("no_limit", "No limit (actual)")):
@@ -304,19 +308,23 @@ def collect_your_limits(log_dir: Path, options_db: Path, monday: date, sunday: d
     last = min(sunday, datetime.now(timezone.utc).date())
     while last.weekday() >= 5:
         last -= timedelta(days=1)
-    try:
-        from ops import shadow_daily_pnl_report as sdp
+    if last >= monday:  # a future WEEKLY_REVIEW_DATE has no trading days yet
+        try:
+            from ops import shadow_daily_pnl_report as sdp
 
-        out["futures"] = sdp.capped_report(log_dir, last)["week_to_date"]
-    except Exception:  # noqa: BLE001 - a report error never blocks the weekly card
-        pass
+            out["futures"] = sdp.capped_report(log_dir, last)["week_to_date"]
+        except Exception:  # noqa: BLE001 - a report error never blocks the weekly card
+            pass
+    if not options_db.exists():
+        out["options"] = {"unavailable": f"options database not found at {options_db}"}
+        return out
     try:
         from ops import options_daily_pnl_report as odp
 
         active = [r for r in odp.load_rows(options_db, last)["journal"] if not r["counterfactual"]]
         out["options"] = odp.capped_period(active, monday, sunday)
     except Exception:  # noqa: BLE001
-        pass
+        out["options"] = {"unavailable": "options limits could not be computed"}
     return out
 
 
@@ -333,7 +341,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     data = summarize_week(journal, options, health=health)
     data["your_limits"] = collect_your_limits(
-        log_dir, Path(os.getenv("OPTIONS_SCANNER_SQLITE_PATH", str(log_dir / "options_scanner.sqlite"))), monday, sunday
+        log_dir, Path(os.getenv("OPTIONS_SCANNER_SQLITE_PATH") or str(log_dir / "options_scanner.sqlite")), monday, sunday
     )
     report = format_report(data, week=week, monday=monday, sunday=sunday)
 

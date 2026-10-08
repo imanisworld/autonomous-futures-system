@@ -246,8 +246,8 @@ def _settle_open(row: dict, trading_date: date, log_dir: str | Path | None, cach
                 high, low, close = float(bar["high"]), float(bar["low"]), float(bar["close"])
             except (KeyError, TypeError, ValueError):
                 continue
-            if seen is not None and bar_dt <= seen:
-                last_close = close  # the resolver already saw no stop/target here
+            if day_iso == str(row.get("candidate_day")) and seen is not None and bar_dt <= seen:
+                last_close = close  # inside the resolver's window (candidate day only): no stop/target here
                 continue
             if (low <= stop) if long_side else (high >= stop):
                 return bar_dt, stop, "stop"
@@ -275,6 +275,8 @@ def capped_trades(rows: list[dict], log_dir: str | Path | None = None) -> list[d
         tick_value, tick_size = TICK_VALUE.get(inst), TICK_SIZE.get(inst)
         trading_date, session = trading_session(times[0])
         exit_dt, ticks, how = times[1], outcome.get("pnl_ticks"), result.lower()
+        if exit_dt is None:  # no exit bar recorded: hold the position to the 17:00 ET close
+            exit_dt = datetime.combine(trading_date, DAY_CLOSE, ET)
         if result == "OPEN":
             settled = _settle_open(row, trading_date, log_dir, cache)
             ticks, how = None, "unpriced"
@@ -288,7 +290,7 @@ def capped_trades(rows: list[dict], log_dir: str | Path | None = None) -> list[d
             net = net_dollars(inst, float(ticks) * tick_value, tick_value)
         trades.append({
             "key": str(row.get("candidate_key")), "instrument": inst, "fill": times[0],
-            "exit": exit_dt or times[0], "trading_date": trading_date, "session": session,
+            "exit": exit_dt, "trading_date": trading_date, "session": session,
             "how": how, "net_usd": net,
             "won": result == "WIN" or (result == "OPEN" and net is not None and net > 0),
         })
@@ -329,10 +331,11 @@ def _cap_summary(trades: list[dict]) -> dict:
         "losses": sum(not t["won"] for t in priced),
         "net_usd": round(pnl, 2) if priced else None,
         "max_drawdown_usd": round(drawdown, 2),
-        "closed_at_5pm": sum(t["how"] in ("stop", "target", "close") for t in trades),
+        "played_out_on_bars": sum(t["how"] in ("stop", "target", "close") for t in trades),
         "unpriced": len(trades) - len(priced),
         "day_session": sum(t["session"] == "day" for t in trades),
         "night_session": sum(t["session"] == "night" for t in trades),
+        "outside_sessions": sum(t["session"] == "halt" for t in trades),
     }
 
 
@@ -351,6 +354,14 @@ def capped_report(log_dir: str | Path, day: date, cap: int = SESSION_CAP) -> dic
             for name, kept in views.items()
         }
     return out
+
+
+def _safe_capped_report(log_dir: str | Path, day: date) -> dict:
+    """The your-limits view never takes the rest of the report down with it."""
+    try:
+        return capped_report(log_dir, day)
+    except Exception as exc:  # noqa: BLE001 - evidence report: degrade, never crash
+        return {"error": f"{type(exc).__name__}: {exc}"}
 
 
 def build_report(rows: list[dict], day: date, *, log_dir: str | Path | None = None) -> dict:
@@ -417,7 +428,7 @@ def build_report(rows: list[dict], day: date, *, log_dir: str | Path | None = No
             "note": "total net_usd covers costed instruments only; others gross only",
         },
         "authority": "evidence_only",
-        **({"capped": capped_report(log_dir, day)} if log_dir is not None else {}),
+        **({"capped": _safe_capped_report(log_dir, day)} if log_dir is not None else {}),
     }
 
 
@@ -531,7 +542,7 @@ def format_digest(report: dict, *, top: int = 3) -> str:
         lines.append(
             f"(overlap timing estimated for {first_signal['timing_approx']} trades — bar files missing)"
         )
-    lines.extend(_capped_lines(report.get("capped")))
+    lines.extend(_capped_lines(report.get("capped"), final=final))
     lines.append("[shadow only · 1 contract each · no orders · no rule change]")
     return "\n".join(lines)
 
@@ -552,19 +563,25 @@ def _cap_line(label: str, s: dict) -> str:
     return text
 
 
-def _capped_lines(capped: dict | None) -> list[str]:
+def _capped_lines(capped: dict | None, *, final: bool = True) -> list[str]:
     if not capped:
         return []
-    lines = [f"**Your limits** — 3 trades in the day session + 3 in the night session,"
-             f" one position at a time, reset 6:00 PM ET · {pe.et_date(capped['trading_date'])}"]
+    if capped.get("error"):
+        return ["**Your limits**: not shown today — the calculation failed; the rest of this report is unaffected"]
+    td, cap = capped["trading_date"], capped["rule"]["per_session"]
+    prev = (date.fromisoformat(td) - timedelta(days=1)).isoformat()
+    lines = [f"**Your limits** — {cap} trades in the day session + {cap} in the night session,"
+             f" one position at a time · trading day {pe.et_date(td)}"
+             f" (6:00 PM {pe.et_date(prev)} – 5:00 PM {pe.et_date(td)} ET)"]
+    if not final:
+        lines.append("(first pass — trades still running tonight are added in tomorrow's final report)")
     for name, label in _CAP_LABELS:
         lines.append(_cap_line(f"Today, {label}", capped["today"][name]))
     week = capped["week_to_date"]
     lines.append(f"Week so far (since {pe.et_date(capped['week_start'])}):")
     for name, label in _CAP_LABELS:
         lines.append(_cap_line(f"Week, {label}", week[name]))
-    marked = week["account"]["closed_at_5pm"] + week["per_market"]["closed_at_5pm"]
-    if marked:
+    if any(v["played_out_on_bars"] for v in week.values()):
         lines.append("(trades still open at the end of tracking were played out on stored prices,"
                      " closing at 5:00 PM ET at the latest)")
     return lines

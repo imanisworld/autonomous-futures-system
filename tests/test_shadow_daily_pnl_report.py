@@ -368,3 +368,34 @@ def test_report_with_log_dir_carries_your_limits_and_digest_lines(tmp_path):
 def test_report_without_log_dir_has_no_capped_section():
     rep = sdp.build_report([_row("w", "MNQ", "WIN", 40)], DAY)
     assert "capped" not in rep and "Your limits" not in sdp.format_digest(rep)
+
+
+def test_bars_after_the_candidate_day_are_always_checked(tmp_path):
+    # Night trade from a UTC evening: the resolver stamps resolved_at with the next
+    # UTC day's first bar but never checked it — the stop there must count.
+    row = _cap_row("n", "MNQ", "OPEN", None, "2026-10-05T23:00:00+00:00", 1, None, day="2026-10-05",
+                   entry=100.0, stop=95.0, target=110.0, resolved_at_bar_ts="2026-10-06T00:00:00+00:00")
+    _bar_file(tmp_path, "MNQ", "2026-10-05", [{"ts": "2026-10-05T23:15:00+00:00", "high": 101, "low": 99, "close": 100}])
+    _bar_file(tmp_path, "MNQ", "2026-10-06", [
+        {"ts": "2026-10-06T00:00:00+00:00", "high": 101, "low": 90, "close": 92},
+        {"ts": "2026-10-06T00:15:00+00:00", "high": 120, "low": 92, "close": 118},
+    ])
+    trades = sdp.capped_trades([row], tmp_path)
+    assert trades[0]["how"] == "stop" and trades[0]["net_usd"] < 0 and not trades[0]["won"]
+
+
+def test_capped_failure_never_breaks_the_report(tmp_path, monkeypatch):
+    monkeypatch.setattr(sdp, "capped_report", lambda *a, **k: (_ for _ in ()).throw(ValueError("bad row")))
+    rep = sdp.build_report([_row("w", "MNQ", "WIN", 40)], DAY, log_dir=tmp_path)
+    assert rep["capped"]["error"].startswith("ValueError")
+    text = sdp.format_digest(rep)
+    assert "All markets:" in text and "not shown today" in text
+
+
+def test_first_pass_digest_says_running_trades_come_later(tmp_path):
+    _write(tmp_path, "journal_2026-09-23.jsonl", [_cap_row("w1", "MNQ", "WIN", 40, "2026-09-23T14:00:00+00:00", 1, 2)])
+    rep = sdp.build_report(sdp.load_outcomes(tmp_path, DAY), DAY, log_dir=tmp_path)
+    assert "first pass" in sdp.format_digest(rep)
+    rep["pass"] = "final"
+    assert "first pass" not in sdp.format_digest(rep)
+    assert "(6:00 PM Tue Sep 22 – 5:00 PM Wed Sep 23 ET)" in sdp.format_digest(rep)

@@ -154,8 +154,19 @@ def test_your_limits_lines_render_both_systems_in_plain_english():
 def test_collect_your_limits_is_fail_soft(tmp_path):
     from datetime import date as _date
 
-    from scripts.weekly_review import collect_your_limits
+    from scripts.weekly_review import collect_your_limits, your_limits_lines
 
     got = collect_your_limits(tmp_path, tmp_path / "missing.sqlite", _date(2026, 9, 28), _date(2026, 10, 4))
     assert got["futures"]["account"]["trades"] == 0          # no journals: empty, not an error
-    assert got["options"]["no_limit"]["closed"] == 0
+    assert "not found" in got["options"]["unavailable"]      # missing data is said, not shown as "no trades"
+    assert "not shown — options database not found" in "\n".join(your_limits_lines(got))
+
+
+def test_collect_your_limits_skips_futures_for_a_week_with_no_trading_days_yet(tmp_path):
+    from datetime import date as _date, timedelta as _td
+
+    from scripts.weekly_review import collect_your_limits
+
+    monday = _date.today() + _td(days=14 - _date.today().weekday())
+    got = collect_your_limits(tmp_path, tmp_path / "missing.sqlite", monday, monday + _td(days=6))
+    assert "futures" not in got
