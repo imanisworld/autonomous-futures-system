@@ -230,6 +230,46 @@ def test_source_drift_row_stays_version_locked(tmp_path: Path):
         _load_state(p)
 
 
+def test_legacy_terminal_reconciliation_stays_unbound(tmp_path: Path):
+    import asyncio
+    import json
+    import scripts.options_122_prospective_collect as mod
+
+    journal = tmp_path / "legacy.jsonl"
+    obs = {
+        "session_date": "2026-09-18",
+        "ticker": "SPY",
+        "watch_start": "2026-09-18T15:00:00+00:00",
+        "watch_until": "2026-09-18T15:30:00+00:00",
+        "boundary_high": 11.0,
+        "boundary_low": 6.5,
+        "reference_direction": "two_up",
+        # Deliberately no structure_close_time: this is a pre-binding row.
+    }
+    terminal = {
+        "legacy": {
+            "observation": obs,
+            "source_outcome": "NO_BREAK",
+            "trigger_source": {"status": "NO_BREAK"},
+        }
+    }
+    result = asyncio.run(
+        mod._reconcile_pending(
+            journal=journal,
+            terminal=terminal,
+            reconciled=set(),
+            sip_provider=None,
+            raw_dir=tmp_path / "raw",
+            now=datetime(2026, 9, 18, 16, 0, tzinfo=UTC),
+            dry_run=False,
+        )
+    )
+    assert result["blocked"] == 1
+    row = json.loads(journal.read_text().strip())
+    assert row["record_type"] == "RECONCILIATION"
+    assert "canonical_binding" not in row
+
+
 def test_run_survives_source_drift_restart_and_keeps_collecting(monkeypatch, tmp_path):
     import argparse
     import asyncio
