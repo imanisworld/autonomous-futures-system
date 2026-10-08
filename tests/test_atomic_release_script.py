@@ -252,9 +252,9 @@ def test_promote_and_rollback_rearm_readonly_watcher_after_release_verification(
         assert "watcher_src='$CURRENT/ops/afs_watcher'" in block
         assert "systemctl show afs-watcher.service -p WorkingDirectory --value" in block
         assert "watcher_memory_guard.py run_ro.sh supervisor.sh bootstrap_tmp_state.sh" in block
-        assert 'if test -f "\$watcher_src/bounded_log_pipe.py"; then' in block
-        assert 'cp -f "\$watcher_src/bounded_log_pipe.py" "\$watcher_dest/bounded_log_pipe.py"' in block
-        assert 'cmp -s "\$watcher_src/bounded_log_pipe.py" "\$watcher_dest/bounded_log_pipe.py"' in block
+        assert r'if test -f \"\$watcher_src/bounded_log_pipe.py\"; then' in block
+        assert r'cp -f \"\$watcher_src/bounded_log_pipe.py\" \"\$watcher_dest/bounded_log_pipe.py\"' in block
+        assert r'cmp -s \"\$watcher_src/bounded_log_pipe.py\" \"\$watcher_dest/bounded_log_pipe.py\"' in block
         assert "cmp -s" in block
         assert "watcher_triage.py" in block
         assert "systemctl restart afs-watcher.service" in block
@@ -263,6 +263,36 @@ def test_promote_and_rollback_rearm_readonly_watcher_after_release_verification(
         sync_at = block.index("watcher_src='$CURRENT/ops/afs_watcher'")
         restart_at = block.index("systemctl restart afs-watcher.service")
         assert integrity_at < sync_at < restart_at
+
+
+
+def test_watcher_remote_directory_guard_fails_before_file_mutation(tmp_path):
+    """Test the *rendered* SSH command, not merely the source shell string."""
+    for func, _, block in _remote_blocks():
+        if func not in ("promote_release", "rollback_release"):
+            continue
+        rendered = subprocess.run(
+            ["bash", "-c", _REMOTE_RENDER_PREAMBLE + "\n".join(block)],
+            capture_output=True, text=True, check=True,
+        ).stdout
+        assert 'test -z "$watcher_dest"' in rendered
+        assert 'watcher_dest=$(realpath -e -- "$watcher_dest")' in rendered
+        assert 'chmod 700 "$watcher_dest"/*.sh' in rendered
+        assert 'chmod 700 $watcher_dest/*.sh' not in rendered
+
+        begin = rendered.index("watcher_dest=$(systemctl show")
+        end = rendered.index("for watcher_file in", begin)
+        guard = rendered[begin:end]
+        for malicious in ("", "/", "/tmp", "relative"):
+            proc = subprocess.run(
+                ["bash", "-c",
+                 "set -e\nsystemctl() { printf '%s\\n' \"$WATCHER_DIRECTORY\"; }\n"
+                 + guard + "\nprintf 'GUARD_BYPASSED\\n'"],
+                capture_output=True, text=True,
+                env={**os.environ, "WATCHER_DIRECTORY": malicious},
+            )
+            assert proc.returncode != 0, (func, malicious, proc.stdout)
+            assert "GUARD_BYPASSED" not in proc.stdout, (func, malicious)
 
 
 def test_rollback_restores_previous_release_proof_pins_and_verifies_integrity():
