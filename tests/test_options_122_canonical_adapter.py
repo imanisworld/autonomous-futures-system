@@ -288,7 +288,7 @@ def test_readonly_journal_never_changes_bytes_and_refuses_torn_tail(tmp_path):
 
 def test_without_explicit_trusted_freshness_limit_no_catch(tmp_path):
     rows = _rows(tmp_path)
-    folded = fold_122_rows(rows, raw_root=tmp_path, max_quote_age_seconds=15)
+    folded = fold_122_rows(rows, raw_root=tmp_path)
     assert not folded.verified_catches
     assert folded.signal_for("s1").state is LifecycleState.DATA_BLOCKED
 
