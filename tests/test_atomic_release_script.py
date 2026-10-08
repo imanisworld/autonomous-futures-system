@@ -547,7 +547,10 @@ def test_promote_appends_durable_release_history_after_verification():
     assert "release_history.txt" in promote
     # Recorded only after activation and the post-activation integrity check
     # pass, so the file lists releases that came up, never attempts.
-    assert promote.index("release_history.txt") > promote.index(
+    # The early read-only existence guard deliberately mentions the file
+    # before activation. The *actual history append* stays after integrity.
+    append_at = promote.index("    hist='$SHARED/release_history.txt'")
+    assert append_at > promote.index(
         "-m ops.release_integrity --repo-root '$CURRENT'"
     )
     # Same rules as the afs-deploy.sh append: deduped, atomic, append-only.
@@ -558,7 +561,7 @@ def test_promote_appends_durable_release_history_after_verification():
     assert "'%s %s %s\\n' '$sha'" in promote
     assert "date -u +%Y-%m-%dT%H:%M:%SZ" in promote
     # Nothing in the durable-history update block may delete or rewrite rows.
-    history_tail = promote.split("release_history.txt", 1)[1]
+    history_tail = promote[append_at:]
     history_block = history_tail.split(
         "# The watcher runs from a persistent shared source directory", 1
     )[0]
