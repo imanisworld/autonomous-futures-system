@@ -313,6 +313,76 @@ def test_watcher_remote_directory_guard_fails_before_file_mutation(tmp_path):
 
 
 
+
+def test_watcher_preflight_blocks_release_mutation_for_untrusted_paths(tmp_path):
+    """Execute rendered preflight in a fake box with a mutation canary."""
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    approved = shared / "watcher"
+    approved.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (shared / "escaped").symlink_to(outside, target_is_directory=True)
+    releases = tmp_path / "releases"
+    release = releases / ("7c930274179f7c76749f75b35adb14fbb9255e54")
+    prior = tmp_path / "prior-release"
+    for root in (release, prior):
+        src = root / "ops" / "afs_watcher"
+        src.mkdir(parents=True)
+        for name in ("watcher.py", "watcher_memory_guard.py", "run_ro.sh",
+                     "supervisor.sh", "bootstrap_tmp_state.sh"):
+            (src / name).write_text("safe")
+    prem = (_REMOTE_RENDER_PREAMBLE.replace("SHARED=/s", f"SHARED={shared}")
+            .replace("RELEASES=/r", f"RELEASES={releases}"))
+
+    for func, _, block in _remote_blocks():
+        if func not in ("promote_release", "rollback_release"):
+            continue
+        rendered = subprocess.run(
+            ["bash", "-c", prem + "\n".join(block)],
+            capture_output=True, text=True, check=True,
+        ).stdout
+        preflight_at = rendered.index(
+            "# Read-only watcher destination/source preflight BEFORE"
+        )
+        edit_at = rendered.index("sed -i '/^EXPECTED_RELEASE_FINGERPRINT")
+        assert preflight_at < edit_at
+        assert edit_at < rendered.index("mv -Tf")
+        assert edit_at < rendered.index("systemctl restart '$SERVICE'")
+        assert 'chmod 700 "$watcher_dest/$watcher_file"' in rendered
+        assert 'chmod 700 "$watcher_dest"/*.sh' not in rendered
+        guard = rendered[preflight_at:edit_at]
+        marker = tmp_path / (func + "-mutation-canary")
+
+        def try_path(dest):
+            marker.unlink(missing_ok=True)
+            prog = (
+                "set -e\n"
+                "previous=\"$PREVIOUS_RELEASE\"\n"
+                "systemctl() {\n"
+                "  if [ \"$1\" = cat ]; then return 0; fi\n"
+                "  if [ \"$1\" = show ]; then printf '%s\\n' \"$WATCHER_DIRECTORY\"; return 0; fi\n"
+                "  return 99\n"
+                "}\n"
+                + guard
+                + '\nprintf "MUTATED\\n" > "$MUTATION_CANARY"\n'
+            )
+            res = subprocess.run(
+                ["bash", "-c", prog], capture_output=True, text=True,
+                env={**os.environ, "PREVIOUS_RELEASE": str(prior),
+                     "WATCHER_DIRECTORY": dest, "MUTATION_CANARY": str(marker)},
+            )
+            return res
+
+        for bad in ("", "/", "relative", str(outside), str(shared / "escaped")):
+            res = try_path(bad)
+            assert res.returncode != 0, (func, bad, res.stdout, res.stderr)
+            assert not marker.exists(), (func, bad)
+        good = try_path(str(approved))
+        assert good.returncode == 0, (func, good.stdout, good.stderr)
+        assert marker.read_text() == "MUTATED\n"
+
+
 def test_rollback_restores_previous_release_proof_pins_and_verifies_integrity():
     text = SCRIPT.read_text()
     assert "prev_fp=" in text
