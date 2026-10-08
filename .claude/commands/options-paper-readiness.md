@@ -60,7 +60,7 @@ Required checks:
 Output format:
 
 Verdict:
-READY FOR PAPER / READY FOR PREVIEW / HOLD / REJECT / AUDIT ONLY
+READY TO START FORWARD PROOF / READY FOR PREVIEW / READY FOR PAPER / HOLD / REJECT / AUDIT ONLY
 
 System Classification:
 ADVISORY ONLY / PREVIEW ONLY / EXECUTION CAPABLE / UNSAFE / INCONCLUSIVE
@@ -105,3 +105,32 @@ If the system can produce non-executable prepared tickets, classify as READY FOR
 If any path can submit, place, route, or execute an options order, classify as EXECUTION CAPABLE and do not approve paper/preview readiness without live-lock proof.
 If provider data can be missing or stale without a clear rejection reason, classify as HOLD.
 If risk rejections are not human-readable or not logged, classify as HOLD.
+
+## Forward-proof and paper-readiness gate
+
+Do not use alert quality, risk-gate success, a FROZEN epoch, or a non-executable ticket as a substitute for prospective proof.
+
+Before `READY TO START FORWARD PROOF`, verify:
+
+- canonical signal/outcome schema is merged and its integrity/provenance checks are active;
+- the intended strategy epoch is registered/frozen with exact setup, timeframe, universe/ticker, data source, effective dates, stop/invalidation, targets/runner, and required cost/friction assumptions;
+- capture source labels match the registered epoch exactly or an explicit reviewed mapping exists;
+- observer/runtime posture is separately verified: exact release, release pin, health/journal behavior, clock/source freshness, and any required market-data entitlement;
+- the proof window has not been contaminated by retrospective relabelling or already-viewed outcomes.
+
+Before `READY FOR PAPER`, additionally verify:
+
+- a prospective forward sample has actually been collected under that frozen epoch;
+- only canonical prospective catches contribute realised/scorable outcomes;
+- misses/late/gaps/data-blocked/unregistered/counterfactual rows remain excluded from realised expectancy;
+- the preregistered fitness/readiness criteria pass and the revoke-only fitness gate has not suspended the epoch;
+- costs/slippage/MAE/MFE/outcomes required by the proof contract are present and valid;
+- no mid-epoch rule/source/target change was smuggled into the sample.
+
+Classification:
+
+- `READY TO START FORWARD PROOF` = source/runtime/readiness gates are satisfied, but prospective proof is not yet complete.
+- `READY FOR PREVIEW` = non-executable preview path is safe, but this does not imply strategy proof.
+- `READY FOR PAPER` = prospective proof and the current readiness contract are satisfied; it does not authorize live trading.
+- Any missing provenance, source match, runtime proof, or forward evidence = HOLD/REJECT as appropriate.
+

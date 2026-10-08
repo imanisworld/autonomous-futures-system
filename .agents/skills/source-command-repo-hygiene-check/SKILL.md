@@ -138,3 +138,29 @@ Separate:
 SAFE NEXT STEP
 Give the smallest safe action.
 Do not perform cleanup.
+
+## File / artifact modernization classification
+
+When the task is codebase modernization, dead-code removal, or simplification, classify files/artifacts separately from branches/worktrees.
+
+Use:
+
+- ACTIVE_RUNTIME — required by a currently supported runtime path.
+- ACTIVE_RESEARCH — used by an approved/current research workflow.
+- REPLAY_REQUIRED — needed to reproduce or validate historical/current evidence.
+- HISTORICAL_EVIDENCE — provenance that should be retained but not treated as current authority.
+- COMPATIBILITY_ONLY — retained solely for an older caller/format; requires caller proof before removal.
+- DEAD / UNREFERENCED — no current caller, no replay/evidence requirement, no rollback dependency, and no supported runtime use.
+
+Deletion/consolidation rules:
+
+- Never delete based only on age, naming, or a search result.
+- Search callers/imports/config/systemd/docs/tests and check runtime/replay/evidence dependencies.
+- Historical evidence may be archived/clearly labeled rather than removed.
+- A duplicate validator may be consolidated only after its authority relationship is understood; never remove a stricter fail-closed safeguard because it looks redundant.
+- Runtime collectors/services require a separate retirement proof (effective unit/reference check, journal consumers, rollback/provenance needs) before deletion.
+- Prefer one current-state authority plus historical provenance over multiple competing status documents.
+- Modernization must reduce complexity without weakening provenance, risk, exact validation, release pinning, or execution isolation.
+
+Report modernization candidates as: **safe now / requires migration / preserve as evidence / unknown-do-not-touch**.
+

@@ -122,3 +122,15 @@ For substantial work, report:
 - tests/checks run and their results,
 - remaining uncertainty or blockers,
 - exact next action when one is required.
+
+## Options evidence / progression contract
+
+These are stable options-lane rules; volatile PR/SHA status belongs in `docs/options-current-state-handoff.md`, not here.
+
+- The canonical options evidence path is prospective: capture → canonical signal → plan/contract/risk validation → outcome → fitness/research.
+- A realised/scorable options outcome must preserve canonical provenance and be tied to the registered strategy epoch/scope. A retrospective observation, late/missed trigger, gap-through miss, data-blocked row, unregistered epoch, or other counterfactual row cannot be relabelled into a prospective catch or realised trade result.
+- A FROZEN epoch is only a locked definition. It is not forward-proof readiness, paper readiness, or execution authority.
+- Progression order is: merged/reviewed source → separately verified observer/runtime posture → proof-ready registered epoch → prospective forward evidence → paper automation only if evidence supports it. Do not skip stages because alerts, previews, or backtests look good.
+- Options readiness audits must distinguish **ready to collect forward proof** from **ready for paper automation**.
+- Modernization/cleanup must classify artifacts before deletion and preserve replay-required or historical evidence. Simplify implementation, not safeguards.
+

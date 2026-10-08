@@ -96,3 +96,18 @@ If the risk gate can prepare non-executable tickets, classify it as preview-only
 If any path can submit, place, route, or execute an options order, classify as execution-capable and audit live-lock enforcement.
 If risk rejection reasons are missing, vague, or not journaled, classify as HOLD.
 If filters exist but are not tested, classify as PROMISING BUT UNPROVEN, not VALIDATED.
+
+## Canonical risk authority checks
+
+Also verify the current canonical options risk authority rather than accepting multiple disagreeing risk calculations:
+
+- planned dollar risk uses the canonical entry-premium/premium-stop/contract-count path and fails closed on missing, malformed, non-finite, boolean, zero/negative, or oversized values;
+- the exact per-trade boundary and aggregate-open-risk boundary behave correctly at and around their limits;
+- underlying invalidation and premium stop are both present where the current plan contract requires them;
+- no older companion/legacy validator can silently override a canonical BLOCK;
+- duplicate validators may add stricter warnings/constraints but must not create a second authority that can convert a canonical rejection into approval;
+- risk/reward remains advisory unless the current canonical contract explicitly makes it binding;
+- any change to risk math, caps, or authority requires focused boundary tests and parity checks.
+
+If two current paths can disagree about whether the same plan is risk-valid, classify HOLD until the authority relationship is explicit.
+
