@@ -1,43 +1,43 @@
 # Futures Operator TODO
 
-## Tomorrow's To-Do — Thursday, 2026-10-08 (0/15 complete; pending verification)
+## Operator checklist — 2026-10-08 (completion requires operator verification)
 
 **Priority:** Resolve Grok's actual blockers first. Do not deploy merely to finish this checklist.
 
 ### 1. Overnight audit
-- [ ] Review Grok's consolidated PASS / FAIL / BLOCKED findings.
+- [ ] Read Grok AFS-0159–0163 consolidated findings; distinguish completed review from remaining operator decisions.
 - [ ] Identify genuine blockers and assign fixes without duplicating other agents' work.
 - [ ] Confirm current `main` SHA, CI, and exact deployment candidate.
 
 ### 2. Options system
-- [ ] Continue #1177 dedicated 1-2-2 collector integration (coordinate with existing owner).
+- [ ] Return #1186/#1177 part-1 B1 duplicate ARMED and B2 fresh-journal rollback blockers to its builder, then require exact-head retest and Grok review; keep adapter separate.
 - [ ] Advance #1184 authority-history security; no authority persistence/runtime use before verification.
 - [ ] Keep #1154 parked until #1177 prerequisites pass.
 
 ### 3. Futures deployment
-- [ ] Review #1189 and #1190 status and exact-head reviews/CI.
+- [ ] Confirm merged #1189 (`064ee674`) and review corrected #1190 exact candidate, root/watcher path tests and exact-head CI.
 - [ ] Resolve B1, B5, B6, B8 and evidence-window decisions using fresh, authorized VPS proof; never assume missing evidence.
 - [ ] Confirm options collector isolation and rollback readiness.
 - [ ] Decide whether the exact release is eligible for *separate* operator deployment approval. No automatic merge/build/promote/restart.
 
 ### 4. Documentation and cleanup
-- [ ] Review #1191 CI and independent Grok verdict.
-- [ ] Reconcile current handoffs with actual `main`; account for overlapping docs PRs #1187/#1192/#1193.
+- [ ] Revise #1191 options handoff to include #1186 and corrected #1183 merge, then confirm CI and Grok verdict.
+- [ ] Reconcile current handoffs with actual `main`; #1191 owns options handoff, #1192 coordination/futures TODO, #1193 shadow reports remain draft; avoid merging obsolete #1187.
 - [ ] Keep #1167 cleanup audit-only; no code or evidence deletion.
 
 ### 5. Trading evidence
-- [ ] Continue **existing** daily read-only collection if its collector and evidence integrity are verified; do not change strategies or restart collectors automatically.
+- [ ] Keep existing read-only collection unchanged if evidence integrity is verified; check whether 'dead companion daily' was a retired Discord job using root read-only census, not assume loss of trading evidence.
 - [ ] Defer combined trade-performance review until the weekend. Preserve existing reports without promotion claims.
 
 **End-of-day goal:** Verified readiness, current documentation, and a clear deployment decision — not necessarily deployment itself.
 
 ## Latest operator queue — 2026-10-08
 
-- GitHub `main`: `f8e4257e2b9481f4b670b24e7602634e9cf47649` at this check. Latest audited deployed futures release remains `c44d32bc4961e56fae5c5f88a976eb6783341638` until a fresh box check.
-- **#1189 (OPEN)** — scoped Bash remote build quoting fix at `f60ec6ff3268e1b193ff8e21aefa3cd5d8420319`. Reported CI green; second Grok review is sought, not yet independently evidenced here. Merge requires explicit operator decision; no automated merge.
+- GitHub `main`: `064ee674b788c144fc8d3ca65082ed060927e2f1` (#1189 merge) at this check. Latest audited deployed futures release remains `c44d32bc4961e56fae5c5f88a976eb6783341638` until a fresh box check.
+- **#1189 (MERGED)** — reviewed remote-build quote repair at `f60ec6ff3268e1b193ff8e21aefa3cd5d8420319`, merged as `064ee674b788c144fc8d3ca65082ed060927e2f1`; GitHub exact-head CI and post-merge checks reported green. Merging a fix does not authorize build/verify or promote.
 - **#1190 (OPEN)** — deployment **plan only**, head `c90af59ec5edcafad4d8ebf9b6b30a4c7789baeb`. Review its preregistration, trading-path delta, acceptance/abort conditions, post-deploy read-only checks, rollback and watcher re-arm; do not duplicate the plan.
 - Prior `afs-deploy` CI-proof fix has operator-reported 51/51 fake-box passes and real U11 fetch/`verify-live` pass. Reuse verified proof, do not re-run unless inputs/code change.
-- If #1189 merges, **do not reuse** proof or deployment-plan candidate SHA `7c930274179f7c76749f75b35adb14fbb9255e54` as if it covered the new merged tree. Pin the new exact release SHA, reconcile scope and pass required release/CI gates.
+- **#1190 CHANGES REQUIRED:** retarget from superseded `7c930274179f7c76749f75b35adb14fbb9255e54` to candidate `064ee674b788c144fc8d3ca65082ed060927e2f1`; require safe, nonempty, non-root watcher cwd validation before any privileged re-arm/copy/chmod action. Root read-only evidence for B1/B5/B6, evidence epochs, rollback and B8 isolation is missing. Prefer separate reviewed collector pin/GO to prevent #1186 format from riding a futures release; no journal reset approved.
 - Just before any separately authorized release action re-prove deploy lock, current source/box identity, integrity, demo + live-off + cap-one pins, broker flatness/orders, recovery/rollback and watcher state.
 - **HOLD**: no build, promote, restart, deployment or live execution authorized by completed source tests or any docs PR.
 
