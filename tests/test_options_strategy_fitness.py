@@ -530,7 +530,7 @@ def _forged_expired_catch_record(registry, ticker):
     s = journal.append(sg.integrity_event(journal, s.signal_id, detected_at=at,
                                           signal_integrity="VALID", data_integrity="VALID"))
     record = {**sg.to_record(s), "prospective_catch": True}
-    assert sg.verify_record(record, registry=registry) == []  # the canonical verifier alone admits it (#1176)
+    assert sg.verify_record(record, registry=registry)  # canonical verifier rejects the forged catch
     return record
 
 
@@ -541,11 +541,13 @@ def test_forged_wins_on_never_triggered_signals_cannot_hide_a_kill():
     assert fx.evaluate_fitness(ep, rows, registry=registry).state is fx.FitnessState.FAIL_CANDIDATE
 
     forged = [_forged_expired_catch_record(registry, t) for t in _TICKERS[12:]]
-    forged_rows = [fx.Observation.from_records(r, _canonical_outcome_record(r, 2.0), registry=registry) for r in forged]
-    assert all(not o.prospective_catch and fx.classify(o, ep) == "not_prospective_catch" for o in forged_rows)
-    verdict = fx.evaluate_fitness(ep, rows + forged_rows, registry=registry)
+    # Canonical verification rejects forged never-triggered catches before fitness admission.
+    for record in forged:
+        with pytest.raises(ValueError, match="invalid canonical signal record"):
+            fx.Observation.from_records(record, _canonical_outcome_record(record, 2.0), registry=registry)
+    verdict = fx.evaluate_fitness(ep, rows, registry=registry)
     assert verdict.state is fx.FitnessState.FAIL_CANDIDATE
-    assert verdict.valid_n == 12 and verdict.excluded == {"not_prospective_catch": len(forged)}
+    assert verdict.valid_n == 12 and verdict.excluded == {}
     holder = fx.human_grant(fx.AuthorityState(ep.strategy, ep.epoch), approved_by="operator",
                             approval_ref="GO-1", at=AT)
     assert fx.apply_verdict(holder, verdict, at=AT).execution_authority is False

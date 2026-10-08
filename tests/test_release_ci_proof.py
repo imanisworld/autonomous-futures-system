@@ -212,7 +212,7 @@ def test_release_installs_only_the_lock_and_verifies_it():
     assert "python3 -m ops.dependency_lock check-python" in text
     assert (
         "PYTHONPATH='$RELEASES/$sha' "
-        '"\\$box_python" -m ops.dependency_lock check-python'
+        '\\"\\$box_python\\" -m ops.dependency_lock check-python'
     ) in text
     assert "git merge-base --is-ancestor \"$sha\" origin/main" in text
     assert 'archive="$(mktemp "/tmp/afs-release-${short}.XXXX")"' in text
