@@ -22,7 +22,7 @@ Review comments on #1190/#1194 (posted via the ChatGPT/Codex account, not Grok) 
 
 **Required proof before any build or promote:**
 1. Verify exact SHA of #1194 merged to main with green exact-head CI and Grok PASS; do not transfer #1189's PASS.
-2. Inspect the *rendered* remote Bash for promote **and** rollback. It must use quoted `"$watcher_dest"` in every path, including `chmod 700 "$watcher_dest"/*.sh`.
+2. Inspect the *rendered* remote Bash for promote **and** rollback. It must use quoted `"$watcher_dest"` in every path, including explicit `chmod 700 "$watcher_dest/$watcher_file"` with a fixed approved filename list; wildcard chmod is prohibited.
 3. Run isolated fake-box regressions: empty, root, relative, symlink escaping shared root, and other unapproved directories must fail **before any copy/remove/chmod/restart**.
 4. Obtain fresh read-only `systemctl show afs-watcher.service -p WorkingDirectory --value` and resolved path; confirm a nonempty existing directory beneath the configured shared root, or stop for a separate operator-approved safe-path decision.
 5. Verify watcher rollback still restores from the pinned previous release; require a non-production rehearsal and reviewer-approved rollback evidence. No actual service operation is authorized here.
@@ -216,7 +216,13 @@ It is driven by `options-122-prospective.timer`. Code, venv and imports therefor
 - the effective release identity the collector process loads;
 - the unit and any drop-ins;
 - the timer state;
-- the journal path, size, sha256 and last-row collector version.
+- the journal path, size, sha256 and last-row collector version;
+- a **read-only** full-journal inventory of duplicate `ARMED` rows grouped by
+  collector/epoch/setup ID and any `setup_id` whose first row was
+  RESOLUTION/RECONCILIATION/SOURCE_DRIFT/error before its ARMED row;
+- whether the effective pinned collector release is exactly `db9bc7e2`
+  (operator-reported candidate; verify actual resolved unit/drop-ins,
+  executable path, loaded Python/venv and release manifest).
 
 **#1186 boundary.** #1186 (not merged) moves the collector from `122-iex-collector-v0.1` to `v0.2`.
 
