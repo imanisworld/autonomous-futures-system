@@ -34,6 +34,49 @@ def test_atomic_release_script_parses_with_bash():
     subprocess.run(["bash", "-n", str(SCRIPT)], check=True)
 
 
+def test_atomic_release_script_is_executable_in_git():
+    mode = subprocess.run(
+        ["git", "ls-files", "-s", str(SCRIPT)],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.split()[0]
+    assert mode == "100755"
+
+
+def test_half_built_release_cannot_verify_or_promote():
+    text = SCRIPT.read_text()
+    build = text.split("build_release() {", 1)[1].split("verify_release() {", 1)[0]
+    verify = text.split("verify_release() {", 1)[1].split(
+        "# Decides whether", 1
+    )[0]
+    promote = text.split("promote_release() {", 1)[1].split("rollback_release() {", 1)[0]
+
+    marker = "$SHARED/release-complete/$sha"
+    assert marker in build and marker in verify and marker in promote
+
+    # Completion is published only after box-side dependency and integrity
+    # checks have succeeded. A failed build may leave a directory, but no
+    # completion proof.
+    marker_publish = build.index("mv -f '$SHARED/release-complete/$sha.tmp'")
+    assert marker_publish > build.index("/pip' check")
+    assert marker_publish > build.index("-m ops.dependency_lock check-freeze")
+    assert marker_publish > build.index("-m ops.release_integrity --repo-root '$RELEASES/$sha'")
+
+    # Verify refuses before it starts a candidate, and promote refuses before
+    # it mutates .env / symlinks / systemd.
+    verify_gate = verify.index("test -f '$SHARED/release-complete/$sha'")
+    assert verify_gate < verify.index("systemd-run --unit='$unit'")
+
+    promote_gate = promote.index("test -f '$SHARED/release-complete/$sha'")
+    assert promote_gate < promote.index("sed -i '/^EXPECTED_RELEASE_FINGERPRINT=")
+    assert promote_gate < promote.index("ln -s '$RELEASES/$sha' '$CURRENT.next'")
+
+    # Marker is bound to the release manifest fingerprint, not mere existence.
+    assert 'test "\\$complete_fp" = "\\$release_fp"' in verify
+    assert 'test "\\$complete_fp" = "\\$fp"' in promote
+
+
 def test_release_actions_reject_moving_refs_and_require_exact_sha():
     repo_root = SCRIPT.parent.parent.resolve()
     env = os.environ.copy()

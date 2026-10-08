@@ -100,11 +100,12 @@ build_release() {
   deploy_lock_acquire "$LOCK_DIR" "build $REF" "$0" "$FORCE_LOCK" || exit 1
   trap "deploy_lock_release '$LOCK_DIR' '$DEPLOY_LOCK_OWNER'" EXIT
   trap "git worktree remove -f '$work' >/dev/null 2>&1 || true; rm -f '$archive'; deploy_lock_release '$LOCK_DIR' '$DEPLOY_LOCK_OWNER'" EXIT
-  remote "mkdir -p '$RELEASES' '$SHARED/logs' '$SHARED/data' '$SHARED/backups' '$SHARED/candidate-logs'"
+  remote "mkdir -p '$RELEASES' '$SHARED/logs' '$SHARED/data' '$SHARED/backups' '$SHARED/candidate-logs' '$SHARED/release-complete'"
   scp -q "$archive" "$BOX:/tmp/afs-release-${short}.tgz"
   remote "
     set -e
     test ! -e '$RELEASES/$sha' || { echo 'release already exists: $sha'; exit 2; }
+    rm -f '$SHARED/release-complete/$sha' '$SHARED/release-complete/$sha.tmp'
     mkdir '$RELEASES/$sha'
     tar xzf '/tmp/afs-release-${short}.tgz' -C '$RELEASES/$sha'
     PYTHONDONTWRITEBYTECODE=1 PYTHONPATH='$RELEASES/$sha' python3 -m ops.dependency_lock check-python
@@ -124,6 +125,10 @@ build_release() {
     PYTHONDONTWRITEBYTECODE=1 PYTHONPATH='$RELEASES/$sha' '$RELEASES/$sha/.venv/bin/python' \
       -m ops.release_integrity --repo-root '$RELEASES/$sha'
     chmod -R a-w '$RELEASES/$sha'
+    # A release directory can exist after a failed box-side install/check.
+    # Publish completion only after every dependency/integrity check succeeds.
+    printf '%s\n' "\$built_fp" > '$SHARED/release-complete/$sha.tmp'
+    mv -f '$SHARED/release-complete/$sha.tmp' '$SHARED/release-complete/$sha'
     rm -f '/tmp/afs-release-${short}.tgz'
   "
   echo "$sha"
@@ -146,6 +151,10 @@ verify_release() {
   remote "
     set -e
     test -d '$RELEASES/$sha'
+    test -f '$SHARED/release-complete/$sha' || { echo 'release incomplete: $sha'; exit 3; }
+    complete_fp=\$(cat '$SHARED/release-complete/$sha')
+    release_fp=\$('$RELEASES/$sha/.venv/bin/python' -c \"import json;print(json.load(open('$RELEASES/$sha/release_manifest.json'))['fingerprint_sha256'])\")
+    test "\$complete_fp" = "\$release_fp" || { echo 'release completion fingerprint mismatch: $sha'; exit 3; }
     test -f '$SHARED/.env'
     candidate_env='$SHARED/candidate-env-$sha'
     cleanup_candidate() {
@@ -272,8 +281,11 @@ promote_release() {
   remote "
     set -e
     test -d '$RELEASES/$sha'
-    test -f '$SHARED/.env'
+    test -f '$SHARED/release-complete/$sha' || { echo 'release incomplete: $sha'; exit 3; }
+    complete_fp=\$(cat '$SHARED/release-complete/$sha')
     fp=\$('$RELEASES/$sha/.venv/bin/python' -c \"import json;print(json.load(open('$RELEASES/$sha/release_manifest.json'))['fingerprint_sha256'])\")
+    test "\$complete_fp" = "\$fp" || { echo 'release completion fingerprint mismatch: $sha'; exit 3; }
+    test -f '$SHARED/.env'
     risk_sha=\$('$RELEASES/$sha/.venv/bin/python' -c \"import json;print(json.load(open('$RELEASES/$sha/release_manifest.json'))['risk_rules_sha256'])\")
     sed -i '/^EXPECTED_RELEASE_FINGERPRINT=/d;/^EXPECTED_LIVE_BRANCH=/d;/^EXPECTED_LIVE_COMMIT=/d;/^EXPECTED_RISK_RULES_SHA256=/d' '$SHARED/.env'
     printf 'EXPECTED_RELEASE_FINGERPRINT=%s\nEXPECTED_LIVE_BRANCH=main\nEXPECTED_LIVE_COMMIT=%s\nEXPECTED_RISK_RULES_SHA256=%s\n' \
