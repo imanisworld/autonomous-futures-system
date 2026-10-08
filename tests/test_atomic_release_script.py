@@ -44,6 +44,23 @@ def test_atomic_release_script_is_executable_in_git():
     assert mode == "100755"
 
 
+def test_box_build_uses_explicit_python313_interpreter():
+    text = SCRIPT.read_text()
+    build = text.split("build_release() {", 1)[1].split("verify_release() {", 1)[0]
+
+    assert 'box_python="${AFS_BOX_PYTHON:-python3.13}"' in build
+    assert 'command -v "\\$box_python"' in build
+    assert "box_python_version=" in build
+    assert "!= 3.13" in build
+    assert "expected 3.13" in build
+    assert (
+        "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH='$RELEASES/$sha' "
+        '"\\$box_python" -m ops.dependency_lock check-python'
+    ) in build
+    assert '"\\$box_python" -m venv \'$RELEASES/$sha/.venv\'' in build
+    assert "python3 -m venv '$RELEASES/$sha/.venv'" not in build
+
+
 def test_half_built_release_cannot_verify_or_promote():
     text = SCRIPT.read_text()
     build = text.split("build_release() {", 1)[1].split("verify_release() {", 1)[0]
