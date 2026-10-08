@@ -371,6 +371,70 @@ def test_b5_tampered_record_chronology_is_detected():
         {**record, "trigger_detection_time": T0.isoformat()})
 
 
+def test_b5_forged_prospective_catch_on_expired_signal_fails_canonical_verification():
+    journal = _reg_journal()
+    s = _reg_opened(journal)
+    s = journal.append(
+        sg.state_event(
+            journal,
+            s.signal_id,
+            sg.LifecycleState.EXPIRED,
+            detected_at=AT,
+            reason="no_trigger",
+        )
+    )
+    s = journal.append(
+        sg.integrity_event(
+            journal,
+            s.signal_id,
+            detected_at=AT,
+            signal_integrity="VALID",
+            data_integrity="VALID",
+        )
+    )
+    record = sg.to_record(s)
+    forged = {
+        **record,
+        "prospective_catch": True,
+        "capture": {**record["capture"], "prospective_catch": True},
+    }
+    problems = sg.verify_record(forged, registry=REGISTRY)
+    assert "prospective_catch requires a TRIGGERED resolution in history" in problems
+    assert "prospective_catch requires pre-armed capture evidence" in problems
+
+
+def test_b5_record_history_must_follow_legal_append_only_lifecycle():
+    record = sg.to_record(caught())
+    watching, triggered = record["history"]
+    forged = {
+        **record,
+        "history": [
+            watching,
+            {**triggered, "state": "EXPIRED"},
+            triggered,
+        ],
+    }
+    problems = sg.verify_record(forged, registry=REGISTRY)
+    assert "illegal lifecycle history transition EXPIRED -> TRIGGERED" in problems
+
+    reversed_time = {
+        **record,
+        "history": [
+            watching,
+            {**triggered, "detected_at": (T0 - timedelta(minutes=1)).isoformat()},
+        ],
+    }
+    assert "history detected_at values are not monotonic" in sg.verify_record(reversed_time, registry=REGISTRY)
+
+
+@pytest.mark.parametrize("bad", ["true", 1, None])
+def test_b5_record_prospective_catch_is_exact_bool(bad):
+    record = sg.to_record(caught())
+    assert "prospective_catch must be a bool" in sg.verify_record(
+        {**record, "prospective_catch": bad}, registry=REGISTRY
+    )
+
+
 # ── B6: epochs come from the registry, with context ─────────────────────────
 
 
