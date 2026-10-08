@@ -286,7 +286,7 @@ def test_duplicate_armed_never_upgrades_legacy_setup(tmp_path: Path):
     }
     p = tmp_path / "shared.jsonl"
     old_bytes = (json.dumps(legacy) + "\n").encode()
-    p.write_bytes(old_bytes + (json.dumps(stamped) + "\\n").encode())
+    p.write_bytes(old_bytes + (json.dumps(stamped) + "\n").encode())
     before = p.read_bytes()
     with pytest.raises(RuntimeError, match="journal_duplicate_armed_2"):
         _load_state(p)
@@ -305,7 +305,7 @@ def test_duplicate_current_armed_refused_even_with_identical_binding(tmp_path: P
         "observation": _obs().to_dict(), "canonical_binding": _canonical_binding(_obs()),
     }
     p = tmp_path / "twice.jsonl"
-    p.write_text(json.dumps(row) + "\\n" + json.dumps(row) + "\\n")
+    p.write_text(json.dumps(row) + "\n" + json.dumps(row) + "\n")
     with pytest.raises(RuntimeError, match="journal_duplicate_armed_2"):
         _load_state(p)
 
@@ -326,7 +326,7 @@ def test_rollback_partitions_remain_separate_and_preserve_legacy_journal(tmp_pat
         "setup_id": "s1", "observed_at": "2026-09-18T15:00:10+00:00",
         "observation": _obs().to_dict(), "canonical_binding": _canonical_binding(_obs()),
     }
-    current.write_text(json.dumps(row) + "\\n")
+    current.write_text(json.dumps(row) + "\n")
     assert _load_state(legacy)[-1] == set()  # no retroactive canonical binding
     assert _load_state(current)[-1] == {"s1"}
     assert legacy.read_bytes() == frozen  # never reset or rewrite the legacy bytes
