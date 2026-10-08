@@ -6,6 +6,16 @@
 >
 > Core rule: **No proof, no run.**
 
+## Deployment-planning update — 2026-10-08
+
+- **Candidate:** `7c930274179f7c76749f75b35adb14fbb9255e54`, held fixed despite newer `main` at `58606b43ac8f391f4b3ed861fbd6c3fdf807e303`.
+- **Audited running release:** `c44d32bc4961e56fae5c5f88a976eb6783341638` (historical snapshot; verify again before execution).
+- **CI-proof wrapper:** reported installed; **51/51** isolated fake-box checks passed, including fail-closed wrong-SHA/fetch failures; the real Python U11 proof fetch and live verification passed from the Mac outside the sandbox.
+- **Previous immediate blocker is reported resolved.** Do not redo its testing unless code or evidence changes.
+- **Next actual work is one plan/review**, already assigned to Futures: classify unreviewed trading-path changes between exact release SHAs; preregister acceptance/abort criteria; define staged rollback and watcher re-arm; define post-release read-only checks; obtain independent approval.
+- **Runtime safeguards remain requirements, not standing proof:** live disabled, demo, cap 1, flat account, integrity, deploy lock, risk pins, recovery path. Recheck immediately before a separately authorized release.
+- **HOLD — no build, promote, restart, merge, or deploy permission from this doc update.**
+
 ## Latest handoff — 2026-10-07 (#1180)
 
 - Verified GitHub `main` is `7c930274179f7c76749f75b35adb14fbb9255e54` (squash-merged #1180); handoff reports reviewed tree matches merged tree.
