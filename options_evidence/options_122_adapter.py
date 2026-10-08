@@ -123,7 +123,7 @@ def _stamp(row: Mapping[str, Any], epoch: Any) -> Mapping[str, Any]:
         epoch.definition["trigger"]["authoritative_reconciliation"],
     ):
         raise AdapterError("source_vocabulary_mismatch")
-    if obs.get("ticker") not in _PRIMARY_20 or obs.get("source_timeframe", "30m") != "30m":
+    if obs.get("ticker") not in _PRIMARY_20 or obs.get("source_timeframe") != "30Min":
         raise AdapterError("universe_or_timeframe_mismatch")
     if obs.get("reference_direction") not in {"two_up", "two_down"}:
         raise AdapterError("reference_direction_missing")

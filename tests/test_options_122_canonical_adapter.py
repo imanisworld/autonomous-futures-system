@@ -47,7 +47,7 @@ def _rows(tmp_path: Path):
     armobs = {
         "setup_id": "s1", "setup_fingerprint": "fingerprint-1",
         "ticker": "SPY", "session_date": "2026-10-07",
-        "source_timeframe": "30m", "structure_close_time": CLOSE,
+        "source_timeframe": "30Min", "structure_close_time": CLOSE,
         "watch_start": CLOSE, "watch_until": "2026-10-07T14:30:00+00:00",
         "reference_direction": "two_up", "boundary_high": 11.0,
         "boundary_low": 6.5, "status": "WATCHING",
