@@ -15,7 +15,8 @@
 - [ ] Keep #1154 parked until #1177 prerequisites pass.
 
 ### 3. Futures deployment
-- [x] #1190 plan MERGED as `e3c84a78` (Grok AFS-0174 PASS reported); #1194 watcher source guard MERGED as `168e7420` (AFS-0168 PASS reported). [ ] #1196 release-history preflight merged as `a602501c` after Grok PASS AFS-0178 at `a3535c7`; root VPS history-file presence remains unverified. Next buildable candidate SHA remains UNSET.
+- [x] #1190 plan merged as `e3c84a78` (Grok AFS-0174 PASS); #1194 watcher guard merged as `168e7420` (Grok AFS-0168 PASS); #1196 release-history preflight source-merged as `a602501c` after Grok PASS AFS-0178 at `a3535c7`.
+- [ ] Authorized Ops/Cursor/Grok restricted read-only box proof of the effective watcher and `release_history.txt` paths, B1/B5/B6 pins, B8 collector isolation, journal integrity and rollback remains outstanding. Keep their audit access available; use separate, least-privilege evidence access without exposing secrets or enabling deployments. Next nominated release candidate SHA remains UNSET.
 - [ ] Resolve B1, B5, B6, B8 and B10 (watcher preflight) plus evidence-window decisions using fresh authorized VPS proof and reviewed source/tests; never assume missing evidence.
 - [ ] Confirm options collector isolation, fresh-journal rollback boundaries, and futures watcher rollback can fail safely **before** any release mutation.
 - [ ] Decide whether the exact release is eligible for *separate* operator deployment approval. No automatic merge/build/promote/restart.
