@@ -1,5 +1,14 @@
 # Futures Operator TODO
 
+## Active handoff — 2026-10-08 (source-only; no release authorization)
+
+- **GitHub main:** `307fe56771031b44eeb8d0235224cf010616ce4a` (#1198 source-merged). **Last reported deployed futures:** `c44d32bc4961e56fae5c5f88a976eb6783341638`, not freshly verified. **Candidate UNSET; FUTURES HOLD / OPTIONS HOLD.**
+- **Reviewed source baseline:** Grok AFS-0181 PASS on exact `393ad72bc1caaa736e1958beb35124908a2054a2` against last reported deployed `c44d32b`. It is not a release GO and does not automatically approve the later main merge. #1198 received independent AFS-0183 PASS on `25dec22371fa686acb5a794c901cf2fc7c028aed` and source-merged as `307fe567` (read-only adapter/tests). Before release candidacy, compare any nominated exact SHA to AFS-0181 and verify changed paths separately.
+- **Documentation work:** #1191 and #1192 are already merged; do not redo. Draft #1197 preserves historical Cursor restricted-access VPS evidence and is pending its own review. Other options PRs remain separate; issue #1184 is closed/deferred with draft #1199 unmerged.
+- **Current operator action:** collect authorized read-only, timestamped B1–B10/collector/journal/disk proof, with **exact command, complete safely redacted output, exit status, UTC timestamp, host/path identity**; summaries alone do not substantiate a PASS. For **B7 + B9**, capture positions, working orders, demo/live posture and deploy lock **in one read-only session with a target span of 120 seconds**, and repeat before any GO. Restricted Cloud Agent credentials are **not** root authorization.
+- **Decisions remain separate:** access method; candidate nomination; approved evidence windows; build/verify; demo promote. Never change keys, permissions, env, collector pins, broker positions, release symlinks, services or journals as part of read-only evidence collection.
+- **Audit-command blockers (do not execute #1197 block unchanged):** Claude's read-only source cross-check found #1197 B3 incorrectly points at `/root/afs-releases/current(.previous)` rather than live symlink `/root/autonomous-futures-system` and text pointer `/root/afs-shared/current.previous`; additionally B5's `check-freeze --freeze -` cannot read pip's stdin because the checker expects an actual path. The options ARMED scan also silently skips invalid JSON and can miss setup-ID lifecycle anomalies. Correct/independently review the existing #1197 commands first (see PR #1197 review comment `6061369464`); any missing/invalid evidence is HOLD. Claude's `docs/claude-vps-readiness-audit-2026-10-08.md` is source-only supporting evidence, not box verification. GitHub's full ancestry comparison from reported deployed `c44d32b` to main `307fe567` is 204 commits ahead/0 behind, 237 changed files; AFS-0181 `393ad72b` to main is the single source-only #1198 merge.
+
 ## Operator checklist — 2026-10-08 (completion requires operator verification)
 
 **Priority:** Resolve Grok's actual blockers first. Do not deploy merely to finish this checklist.
@@ -10,8 +19,8 @@
 - [ ] Confirm current `main` SHA, CI, and exact deployment candidate.
 
 ### 2. Options system
-- [x] #1186/#1177 part 1 reviewed (Grok PASS reported at `51d6427`) and source-merged as `0d02a8bd`. [ ] Ops root read-only journal/pin verification and separate approved B2 rollback rehearsal remain open. [ ] Implement/review #1177 read-only adapter separately.
-- [ ] Advance #1184 authority-history security; no authority persistence/runtime use before verification.
+- [x] #1186/#1177 part 1 source-merged as `0d02a8bd`; #1198/#1177 part 2 read-only adapter source-merged as `307fe567` after reported Grok AFS-0183 PASS on `25dec223` and green CI. [ ] Effective options collector pin, raw journal/ARMED integrity, authoritative quote-age config and approved rollback rehearsal remain **UNVERIFIED**.
+- [x] #1184 issue closed/deferred; draft #1199 offline authority-history validator remains unmerged. [ ] No authenticated human approvers or independent durable approval-store proof; no authority persistence/runtime use, and do not restart this work absent explicit approval.
 - [ ] Keep #1154 parked until #1177 prerequisites pass.
 
 ### 3. Futures deployment
@@ -22,8 +31,8 @@
 - [ ] Decide whether the exact release is eligible for *separate* operator deployment approval. No automatic merge/build/promote/restart.
 
 ### 4. Documentation and cleanup
-- [ ] #1191 options handoff corrected to distinguish #1184 reviewer recommendation from operator decision and record #1186 source merge. Await independent exact-head Grok re-review and green CI before merging.
-- [ ] #1192 coordination/futures TODO reconciled to merged #1190/#1194/#1186 facts. #1187 and #1193 CLOSED without merge. Keep #1190's deployment plan authoritative for release gates; don't reintroduce a duplicate agent-work-state checkpoint.
+- [x] #1191 options handoff already merged; do not reopen its reviewed document work. Later #1198 source merge belongs in the current options authority record (avoid concurrent edits with active draft #1200).
+- [x] #1192 coordination/futures documentation already merged. #1187 and #1193 CLOSED without merge. [ ] #1197 dated VPS audit PR remains draft/pending independent review; keep the single agent checkpoint and do not treat historical snapshots as root box proof.
 - [ ] Keep #1167 cleanup audit-only; no code or evidence deletion.
 
 ### 5. Trading evidence
@@ -34,11 +43,11 @@
 
 ## Latest operator queue — 2026-10-08
 
-- GitHub `main`: `a602501cb0e665952da2101e9c4f73a3e68aea90` at this check (source merges #1190, #1194, #1186 and #1196). Last audited futures VPS release is reported `c44d32bc4961e56fae5c5f88a976eb6783341638`, not reconfirmed with root read-only evidence.
+- GitHub `main`: `307fe56771031b44eeb8d0235224cf010616ce4a` after source-only #1198 merge. Grok AFS-0181 covers source main only through exact `393ad72bc1caaa736e1958beb35124908a2054a2`; new source changes have their own review boundaries. Last reported VPS futures release `c44d32bc4961e56fae5c5f88a976eb6783341638` still requires authorized readback.
 - **#1189 (MERGED)** — reviewed remote-build quote repair at `f60ec6ff3268e1b193ff8e21aefa3cd5d8420319`, merged as `064ee674b788c144fc8d3ca65082ed060927e2f1`; GitHub exact-head CI and post-merge checks reported green. Merging a fix does not authorize build/verify or promote.
 - **#1190 (MERGED / PLAN ONLY):** AFS-0174 Grok PASS on `aa96563e`; merged as `e3c84a78`. Candidate remains UNSET, root-runtime and rollback gates remain HOLD. #1194 watcher source fix separately Grok-PASS-reported at `1b7b996` and source-merged as `168e7420`. Neither source merge authorizes a release.
 - Prior `afs-deploy` CI-proof wrapper **51/51 tests and real U11 fetch/`verify-live` PASS are operator-reported, not independently verified here**. They apply only to the reported code and evidence; do not transfer them to changed #1189/#1194 paths or call them verified proof. New exact-head regression checks and independent review are required for relevant changes.
-- **Remaining futures gate:** #1196 release-history-file preflight is source-MERGED as `a602501c` (Grok PASS AFS-0178 on `a3535c7`). Release candidate remains UNSET. Nominate an exact candidate and obtain new independent Grok trading-path review only after root evidence and other prerequisites are reconciled. Root read-only B1/B5/B6, B8 collector isolation, watcher paths, release history, broker/orders, evidence windows and rollback remain UNVERIFIED. Do not reset journals or repin collector automatically.
+- **Remaining futures gate:** #1196 release-history preflight is source-MERGED as `a602501c`; #1194 watcher pre-mutation fix is source-MERGED as `168e7420`. Candidate remains UNSET. Authorized B1–B10 read-only verification, B8 options pin/ARMED journal integrity, B7/B9 coherent flat/lock snapshot, rollback and Python 3.13/dependency state remain UNVERIFIED on box. Reconcile net source since AFS-0181 for an exact future nominee, then seek separate GOs. No auto journal reset or collector repin.
 - Just before any separately authorized release action re-prove deploy lock, current source/box identity, integrity, demo + live-off + cap-one pins, broker flatness/orders, recovery/rollback and watcher state.
 - **HOLD**: no build, promote, restart, deployment or live execution authorized by completed source tests or any docs PR.
 
