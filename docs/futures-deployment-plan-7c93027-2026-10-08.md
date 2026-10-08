@@ -2,14 +2,30 @@
 
 **PLAN ONLY / HOLD.** This revision supersedes the former `c44d32b → 7c93027` release proposal below. The previous version remains as a historical review baseline, **not as a live deployment plan**.
 
-## Active decision record (governs all older sections below)
+## Current evidence / source update — 2026-10-08 (governs historical statuses below)
+
+- **Verified GitHub main:** `307fe56771031b44eeb8d0235224cf010616ce4a`; this contains #1198's read-only options adapter and is **not** a deployed release. **Last reported futures VPS release:** `c44d32bc4961e56fae5c5f88a976eb6783341638` (Cursor's restricted-access snapshot 2026-10-08T12:33:42Z), pending fresh authorized VPS readback.
+- **AFS-0181 Grok source PASS baseline:** exact `393ad72bc1caaa736e1958beb35124908a2054a2`, comparing the combined trading-path tree to reported deployed `c44d32b`. The reviewer reported no source blockers and successful tests. **AFS-0181 is not a review of newer `307fe567`**. #1198 was independently source-reviewed (AFS-0183, reviewed `25dec22371fa686acb5a794c901cf2fc7c028aed`) and merged as `307fe567`, with no new runtime authority. Review the bounded net delta since AFS-0181 when nominating any release.
+- **Source-merged:** #1190 plan `e3c84a78`, #1194 watcher pre-mutation guard `168e7420`, #1196 release-history preflight `a602501c`, #1186 options producer `0d02a8bd`, #1198 options adapter `307fe567`. Older lines claiming #1194/#1196 are unmerged are historical, not current directions. **Candidate UNSET. FUTURES HOLD / OPTIONS HOLD.** #1197 remains an unmerged historical VPS-audit docs PR; it is not root proof.
+
+### Cursor → Grok independently checkable evidence
+
+For **every B1–B10 gate**, effective collector isolation/pin, options journal ARMED ordering/hash and disk/rollback checks, attach **the exact authorized read-only command, complete safely redacted output, exit status, UTC timestamp, and source host/path/release identity**. Include evidence-session start and end timestamps. **Summaries are not evidence.** Never dump `.env`, credentials, keys or sensitive account identifiers; redact secret values before sharing and label redactions. If the command or full safe output cannot be obtained, mark the gate **UNVERIFIED**, not PASS.
+
+**B7 and B9 same-session requirement:** Capture DEMO/live-off/cap-one, account/positions, working orders, in-flight lane status and deploy-lock state in **one authorized read-only session, within a target 120-second window**. Record individual UTC timestamps and first/last capture times. Missing, stale, different-session or over-window evidence means HOLD; repeat the complete B7/B9 set immediately before any separately authorized operator GO. A previously flat broker is not currently proven flat.
+
+**Access rule:** Root-level *read-only evidence approval* was not express permission to log in as root with the restricted/injected Cloud Agent SSH key. The reported attempt was denied. Preserve Cursor/Grok existing authorized restricted access. No root SSH retries with that identity, allowlist bypass, sudo/SSH/permission changes, secret access or new tools without a distinct operator-approved method. Root-only proofs belong to an authorized evidence operator and remain UNVERIFIED until captured.
+
+**Decision order:** Obtain current on-box B1/B2/B3/B4/B5/B6/B8/B10 and options journal proof; review AFS-0181→candidate source delta and rollback; obtain coherent fresh B7/B9 at GO; then request separate operator approval for candidate nomination, build/verify and eventual demo promote. No live execution and no automatic options collector repin.
+
+## Active decision record (read with the current source update above)
 
 | Item | Verified or required state |
 |---|---|
 | Previously deployed release | `c44d32bc4961e56fae5c5f88a976eb6783341638`, reported in the read-only VPS audit; reconfirm on box before GO |
-| Post-#1189 main | `064ee674b788c144fc8d3ca65082ed060927e2f1` (PR #1189 merged; Grok PASS on original head `f60ec6f` is operator-reported) |
+| GitHub main at this docs update | `307fe56771031b44eeb8d0235224cf010616ce4a` (source only; no deployment inferred) |
 | Previous candidate | `7c930274179f7c76749f75b35adb14fbb9255e54` is HISTORICAL ONLY; do not build/promote it under this plan |
-| **Next candidate** | **UNSET** until #1194 watcher safety is independently reviewed, green on the exact head and merged. Select exact merged SHA and rerun source/trading-path delta and CI against that SHA |
+| **Next candidate** | **UNSET** until current VPS/rollback evidence, a bounded AFS-0181→nominee source review, exact-SHA CI, and explicit operator decisions |
 | Plan status | **CHANGES REQUIRED / HOLD** pending B1/B2/B5/B6/B7/B8/B9/B10, the AFS-0165 gates below, validated rollback, an independent Grok review of the nominated SHA, and an exact-SHA operator GO |
 | Cross-service boundary | Futures promotion must not silently change `options-122-prospective` collector code, Python, venv, journal schema or evidence cohort; independently pin or explicitly approve a proven migration under separate GO |
 | Previous 51/51 release-wrapper tests | **Operator-reported, not independently reproduced.** Reuse only for unchanged code paths. Post-#1189 and #1194 quote/working-directory changes require their own fresh exact-head tests and reviewed render evidence |
@@ -18,7 +34,7 @@
 
 Early #1190/#1194 comments posted via the ChatGPT/Codex account (not Grok) documented the unsafe remote-shell quote expansion in promote and rollback watcher re-arm. **Grok subsequently returned CHANGES REQUIRED on #1194 at `adc09f8` and independent PASS at exact `1b7b996e4d02b269f5ee1b680ca67ee232a866f0` (AFS-0168).** #1194 remains unmerged. Under the old code an empty systemd WorkingDirectory could expand `chmod 700 $watcher_dest/*.sh` into `chmod 700 /*.sh`; source parsing alone is insufficient.
 
-**Source fix:** [draft PR #1194](https://github.com/imanisworld/autonomous-futures-system/pull/1194) at `1b7b996e4d02b269f5ee1b680ca67ee232a866f0` passed independent Grok source review (AFS-0168) and exact-head CI. It validates and stores the canonical watcher directory **before** release mutations and reuses it for watcher re-arm. **It is not merged and has no operator GO to merge, build, promote or roll back.**
+**Source fix:** PR #1194 passed AFS-0168 source review at `1b7b996e4d02b269f5ee1b680ca67ee232a866f0` and **merged as `168e7420`**. Its pre-mutation watcher directory guard is source-only; installed VPS watcher state and rollback still need authorized evidence. No build, promote or rollback GO.
 
 **Required proof before any build or promote:**
 1. Verify exact SHA of #1194 merged to main with green exact-head CI and Grok PASS; do not transfer #1189's PASS.
@@ -39,7 +55,7 @@ test -f /root/afs-shared/release_history.txt
 
 Record the timestamp; canonical shared root; effective watcher WorkingDirectory and its resolved path; `NeedDaemonReload`, `DropInPaths` and `FragmentPath`; and the read-only listing of `afs_watcher_src/`. If the actual watcher source or effective directory differs, investigate and **HOLD**, rather than assuming the proposed path is correct.
 
-**STOP before promote if `test -f /root/afs-shared/release_history.txt` fails.** The current release script writes release history after the .env/symlink/service switch; a missing history file can cause a late failure. This document requires an independently reviewed pre-mutation `test -f` guard and a fake-box zero-mutation regression in the release source **before any future candidate is eligible**. Merely documenting or manually checking it does not repair the script. Never create or rewrite the history file simply to satisfy this gate.
+**STOP before promote if `test -f /root/afs-shared/release_history.txt` fails.** #1196's source-merged pre-mutation guard refuses missing release history, but neither the file nor the effective installed VPS wrapper has been proven. Never create/rewrite release history just to pass a check.
 
 **Fail B10 = HOLD** even if every other CI/dependency/posture check passes. Do not use a manual `chmod`, bypass path guards, or deploy old `7c93027` to avoid this gate.
 
