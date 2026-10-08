@@ -18,7 +18,7 @@ safety. It is not wired to any runtime.
 Only **verified canonical prospective catches** judge the epoch. A valid fitness observation meets all of these:
 - same strategy and epoch
 - constructed through `Observation.from_records` from a canonical #1151 signal record that passes `verify_record(..., registry=...)`
-- `prospective_catch = true`
+- `prospective_catch = true` **and** the canonical `resolution_state` is `TRIGGERED` (tied to the record's history by `verify_record`); a catch flag on a structure that never triggered is excluded as `not_prospective_catch`, so forged wins cannot dilute a kill
 - trade basis is `executed` or `paper_equivalent` (never `counterfactual`)
 - `executed` is an exact boolean and agrees with the P&L basis
 - `data_integrity = VALID`
@@ -62,7 +62,7 @@ The verdict also reports:
 - Once a strategy is SUSPENDED or RETIRED, that status is sticky against the evaluator, and it never holds authority there: `AuthorityState` refuses that combination, and `apply_verdict` revokes it if it is ever met.
 - `apply_verdict` accepts only evaluator verdict states (COLLECTING, WARNING, FAIL_CANDIDATE); a hand-built SUSPENDED/RETIRED verdict is refused, so RETIRED stays human-only.
 - `apply_verdict` never sets `execution_authority` to true and never touches `observer_enabled`.
-- `human_grant` is the only way to grant or restore authority. It requires all of these:
+- `human_grant` is the only way to grant or restore authority, and `AuthorityState` enforces it: `execution_authority=True` is refused on construction (or `replace`) unless the history's latest human change is a `human grant <approval_ref>` with no revocation after it, and never in FAIL_CANDIDATE, SUSPENDED or RETIRED. `human_grant` requires all of these:
   - a named approver who is not the evaluator
   - an approval reference
   - `restore_from_suspension=True` when the strategy is SUSPENDED

@@ -217,7 +217,13 @@ class Observation:
             mfe_r=known("mfe_r"),
             gross_pnl=known("gross_pnl"),
             net_pnl=known("net_pnl"),
-            prospective_catch=signal_record.get("prospective_catch") is True,
+            # A catch is a TRIGGERED resolution (resolution_state is tied to the
+            # record's history by verify_record); a prospective_catch flag on a
+            # signal that never triggered is never fitness evidence.
+            prospective_catch=(
+                signal_record.get("prospective_catch") is True
+                and signal_record.get("resolution_state") == "TRIGGERED"
+            ),
             pnl_basis=pnl_basis,
         )
         object.__setattr__(observation, "canonical_provenance", True)
@@ -542,8 +548,34 @@ class AuthorityState:
         for name in ("execution_authority", "observer_enabled"):
             if not isinstance(getattr(self, name), bool):
                 raise ValueError(f"{name} must be an exact bool")
-        if self.execution_authority and self.status in (FitnessState.SUSPENDED, FitnessState.RETIRED):
-            raise ValueError(f"a {self.status.value} strategy cannot hold execution authority")
+        if not isinstance(self.history, tuple) or not all(isinstance(c, AuthorityChange) for c in self.history):
+            raise ValueError("history must be a tuple of AuthorityChange")
+        if self.execution_authority:
+            if self.status in (FitnessState.SUSPENDED, FitnessState.RETIRED, FitnessState.FAIL_CANDIDATE):
+                raise ValueError(f"a {self.status.value} strategy cannot hold execution authority")
+            problem = _human_grant_problem(self.approval_ref, self.history)
+            if problem is not None:
+                # Only human_grant mints authority; direct construction cannot.
+                raise ValueError(f"execution authority requires a human grant: {problem}")
+
+
+def _is_evaluator(actor: Any) -> bool:
+    return not isinstance(actor, str) or not actor.strip() or actor.strip().casefold() == EVALUATOR_ACTOR
+
+
+def _human_grant_problem(approval_ref: Any, history: tuple["AuthorityChange", ...]) -> str | None:
+    """Why ``history`` does not show authority currently held under a human grant."""
+    if not isinstance(approval_ref, str) or not approval_ref.strip():
+        return "no approval reference"
+    human = [i for i, change in enumerate(history) if not _is_evaluator(change.actor)]
+    if not human:
+        return "no human grant in history"
+    grant = history[human[-1]]
+    if grant.execution_authority is not True or grant.reason != f"human grant {approval_ref}":
+        return "the latest human change is not a grant under this approval reference"
+    if any(change.execution_authority is not True for change in history[human[-1]:]):
+        return "authority was revoked after the grant"
+    return None
 
 
 EVALUATOR_ACTOR = "fitness_evaluator"
@@ -613,9 +645,9 @@ def human_grant(
     restore_from_suspension: bool = False,
 ) -> AuthorityState:
     """Human-only path to grant/restore execution authority. Never called by the evaluator."""
-    if not approved_by.strip() or approved_by.strip() == EVALUATOR_ACTOR:
+    if _is_evaluator(approved_by):
         raise PermissionError("a named human approver is required")
-    if not approval_ref.strip():
+    if not isinstance(approval_ref, str) or not approval_ref.strip():
         raise PermissionError("an approval reference is required")
     if state.status is FitnessState.RETIRED:
         raise PermissionError("a RETIRED epoch cannot be re-granted; register a new epoch")
@@ -642,7 +674,7 @@ def human_grant(
 
 def human_retire(state: AuthorityState, *, approved_by: str, reason: str, at: datetime) -> AuthorityState:
     """Human-only retirement. Observer collection is left enabled."""
-    if not approved_by.strip() or approved_by.strip() == EVALUATOR_ACTOR:
+    if _is_evaluator(approved_by):
         raise PermissionError("a named human approver is required")
     change = AuthorityChange(at, approved_by.strip(), state.status, FitnessState.RETIRED, False, reason)
     return replace(state, status=FitnessState.RETIRED, execution_authority=False, history=(*state.history, change))

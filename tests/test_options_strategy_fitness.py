@@ -481,3 +481,110 @@ def test_hand_built_authority_state_verdict_is_refused(state):
     # A later real failure still revokes.
     after = fx.apply_verdict(holder, fit(epoch(), series(FAILING)), at=AT)
     assert after.execution_authority is False and after.status is fx.FitnessState.SUSPENDED
+
+
+# ── Grok blockers on 8b5cbfe ────────────────────────────────────────────────
+
+_TICKERS = ("SPY", "QQQ", "AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "GOOGL", "PLTR", "INTC", "IWM", "TLT",
+            "JPM", "BAC", "COIN", "XOM", "MRK")
+
+
+def _registered_epoch_with_oos():
+    from dataclasses import replace as dc_replace
+
+    from tests.test_options_prospective_signal import registered_epoch
+
+    ep = dc_replace(registered_epoch(), oos_reference=OOSReference("oos", "docs/r.json", "b" * 64, OOS, "ask/bid + fees"))
+    return ep, EpochRegistry((ep,))
+
+
+def _real_catch_record(registry, ticker):
+    from datetime import timedelta
+
+    from options_evidence import signal as sg
+    from tests.test_options_prospective_signal import CATCH_EPOCH, CATCH_STRATEGY, T0, identity, opened, trigger
+
+    at = T0 + timedelta(minutes=10)
+    journal = sg.SignalJournal(registry)
+    s = opened(journal, strategy=CATCH_STRATEGY, strategy_epoch=CATCH_EPOCH, identity=identity(ticker=ticker))
+    s = trigger(journal, s, at=at)
+    s = journal.append(sg.observation_event(journal, s.signal_id, detected_at=at + timedelta(seconds=4),
+                                            prospective_catch=True, capture_late=False, gap_through=False,
+                                            trigger_source="alpaca_iex"))
+    s = journal.append(sg.integrity_event(journal, s.signal_id, detected_at=at + timedelta(seconds=4),
+                                          signal_integrity="VALID", data_integrity="VALID"))
+    return sg.to_record(s)
+
+
+def _forged_expired_catch_record(registry, ticker):
+    """A clean EXPIRED (never triggered) structure with a forged prospective_catch flag."""
+    from datetime import timedelta
+
+    from options_evidence import signal as sg
+    from tests.test_options_prospective_signal import CATCH_EPOCH, CATCH_STRATEGY, T0, identity, opened
+
+    at = T0 + timedelta(minutes=10)
+    journal = sg.SignalJournal(registry)
+    s = opened(journal, strategy=CATCH_STRATEGY, strategy_epoch=CATCH_EPOCH, identity=identity(ticker=ticker))
+    s = journal.append(sg.state_event(journal, s.signal_id, sg.LifecycleState.EXPIRED, detected_at=at, reason="no_trigger"))
+    s = journal.append(sg.integrity_event(journal, s.signal_id, detected_at=at,
+                                          signal_integrity="VALID", data_integrity="VALID"))
+    record = {**sg.to_record(s), "prospective_catch": True}
+    assert sg.verify_record(record, registry=registry) == []  # the canonical verifier alone admits it (#1176)
+    return record
+
+
+def test_forged_wins_on_never_triggered_signals_cannot_hide_a_kill():
+    ep, registry = _registered_epoch_with_oos()
+    losers = [_real_catch_record(registry, t) for t in _TICKERS[:12]]
+    rows = [fx.Observation.from_records(r, _canonical_outcome_record(r, -1.0), registry=registry) for r in losers]
+    assert fx.evaluate_fitness(ep, rows, registry=registry).state is fx.FitnessState.FAIL_CANDIDATE
+
+    forged = [_forged_expired_catch_record(registry, t) for t in _TICKERS[12:]]
+    forged_rows = [fx.Observation.from_records(r, _canonical_outcome_record(r, 2.0), registry=registry) for r in forged]
+    assert all(not o.prospective_catch and fx.classify(o, ep) == "not_prospective_catch" for o in forged_rows)
+    verdict = fx.evaluate_fitness(ep, rows + forged_rows, registry=registry)
+    assert verdict.state is fx.FitnessState.FAIL_CANDIDATE
+    assert verdict.valid_n == 12 and verdict.excluded == {"not_prospective_catch": len(forged)}
+    holder = fx.human_grant(fx.AuthorityState(ep.strategy, ep.epoch), approved_by="operator",
+                            approval_ref="GO-1", at=AT)
+    assert fx.apply_verdict(holder, verdict, at=AT).execution_authority is False
+
+
+@pytest.mark.parametrize("kwargs", [
+    {},
+    {"approval_ref": "GO-1"},
+    {"approval_ref": "GO-1", "history": (fx.AuthorityChange(AT, fx.EVALUATOR_ACTOR, fx.FitnessState.COLLECTING,
+                                                            fx.FitnessState.COLLECTING, True, "human grant GO-1"),)},
+    {"approval_ref": "GO-1", "history": (fx.AuthorityChange(AT, "Fitness_Evaluator", fx.FitnessState.COLLECTING,
+                                                            fx.FitnessState.COLLECTING, True, "human grant GO-1"),)},
+    {"approval_ref": "GO-2", "history": (fx.AuthorityChange(AT, "operator", fx.FitnessState.COLLECTING,
+                                                            fx.FitnessState.COLLECTING, True, "human grant GO-1"),)},
+    {"approval_ref": "GO-1", "history": (fx.AuthorityChange(AT, "operator", fx.FitnessState.COLLECTING,
+                                                            fx.FitnessState.COLLECTING, False, "human grant GO-1"),)},
+])
+def test_authority_cannot_be_minted_without_a_human_grant(kwargs):
+    with pytest.raises(ValueError, match="requires a human grant"):
+        fx.AuthorityState("322", "2026Q4_v1", execution_authority=True, **kwargs)
+
+
+def test_authority_never_survives_revocation_or_fail_candidate_by_construction():
+    from dataclasses import replace as dc_replace
+
+    held = granted()
+    assert held.execution_authority is True and held.approval_ref == "GO-2026-10-06-1"
+    revoked = fx.apply_verdict(held, fit(epoch(), series(FAILING)), at=AT)
+    assert revoked.execution_authority is False
+    with pytest.raises(ValueError):
+        dc_replace(revoked, execution_authority=True, status=fx.FitnessState.COLLECTING)
+    with pytest.raises(ValueError, match="cannot hold execution authority"):
+        dc_replace(held, status=fx.FitnessState.FAIL_CANDIDATE)
+    # Evaluator status changes keep a legitimately granted authority valid.
+    warned = fx.apply_verdict(held, fit(epoch(), series([-1.0] * 8)), at=AT)
+    assert warned.status is fx.FitnessState.WARNING and warned.execution_authority is True
+    # A human restore after suspension is the only way back.
+    restored = fx.human_grant(revoked, approved_by="operator", approval_ref="GO-2", at=AT, restore_from_suspension=True)
+    assert restored.execution_authority is True
+    with pytest.raises(PermissionError):
+        fx.human_grant(revoked, approved_by="Fitness_Evaluator", approval_ref="GO-3", at=AT,
+                       restore_from_suspension=True)
