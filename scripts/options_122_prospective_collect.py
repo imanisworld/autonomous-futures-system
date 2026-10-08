@@ -404,9 +404,13 @@ async def _reconcile_pending(*, journal: Path, terminal: Mapping[str, dict[str, 
             "record_type": "RECONCILIATION", "observed_at": now.isoformat(),
             "collector_id": COLLECTOR_ID, "collector_version": COLLECTOR_VERSION,
             "policy_epoch": POLICY_EPOCH, "setup_id": setup_id,
-            "canonical_binding": _canonical_binding(o),
             "observation": obs, "iex": iex, "sip": sip, "policy": policy,
         }
+        # Historical rows predate the canonical binding stamp. Reconcile them
+        # without inventing missing identity; only new rows with explicit
+        # structure_close_time receive the binding.
+        if obs.get("structure_close_time"):
+            rec["canonical_binding"] = _canonical_binding(o)
         if not dry_run:
             _append(journal, rec)
         if policy.get("reconciliation") == "DATA_BLOCKED": counts["blocked"] += 1
