@@ -54,8 +54,13 @@ build_release() {
     echo "build refused: set RELEASE_CI_PROOF to the exact-SHA CI proof file (ops.release_ci_proof fetch)" >&2
     exit 65
   fi
-  local ci_proof
+  local ci_proof box_python
   ci_proof="$(cd "$(dirname "$RELEASE_CI_PROOF")" && pwd)/$(basename "$RELEASE_CI_PROOF")"
+  box_python="${AFS_BOX_PYTHON:-python3.13}"
+  if [[ ! "$box_python" =~ ^[A-Za-z0-9_./-]+$ ]]; then
+    echo "build refused: AFS_BOX_PYTHON contains unsupported characters: $box_python" >&2
+    exit 67
+  fi
 
   # Refresh canonical main and prove the exact release commit is merged into it.
   # It need not be the current tip: sanctioned releases intentionally allow an
@@ -104,12 +109,22 @@ build_release() {
   scp -q "$archive" "$BOX:/tmp/afs-release-${short}.tgz"
   remote "
     set -e
+    box_python='$box_python'
+    if ! command -v "\$box_python" >/dev/null 2>&1; then
+      echo "build refused: box python interpreter not found: \$box_python" >&2
+      exit 67
+    fi
+    box_python_version=\$("\$box_python" -c 'import sys; print(sys.version_info.major, sys.version_info.minor, sep=chr(46))')
+    if [ "\$box_python_version" != "3.13" ]; then
+      echo "build refused: box python interpreter \$box_python is \$box_python_version; expected 3.13" >&2
+      exit 67
+    fi
     test ! -e '$RELEASES/$sha' || { echo 'release already exists: $sha'; exit 2; }
     rm -f '$SHARED/release-complete/$sha' '$SHARED/release-complete/$sha.tmp'
     mkdir '$RELEASES/$sha'
     tar xzf '/tmp/afs-release-${short}.tgz' -C '$RELEASES/$sha'
-    PYTHONDONTWRITEBYTECODE=1 PYTHONPATH='$RELEASES/$sha' python3 -m ops.dependency_lock check-python
-    python3 -m venv '$RELEASES/$sha/.venv'
+    PYTHONDONTWRITEBYTECODE=1 PYTHONPATH='$RELEASES/$sha' "\$box_python" -m ops.dependency_lock check-python
+    "\$box_python" -m venv '$RELEASES/$sha/.venv'
     # U11: install ONLY the exact production lock, no dependency resolution;
     # then prove the venv is complete and identical to the lock.
     '$RELEASES/$sha/.venv/bin/pip' install -q --no-deps --requirement '$RELEASES/$sha/requirements.lock'
