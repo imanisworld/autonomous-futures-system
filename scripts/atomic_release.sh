@@ -302,6 +302,35 @@ promote_release() {
     test "\$complete_fp" = "\$fp" || { echo 'release completion fingerprint mismatch: $sha'; exit 3; }
     test -f '$SHARED/.env'
     risk_sha=\$('$RELEASES/$sha/.venv/bin/python' -c \"import json;print(json.load(open('$RELEASES/$sha/release_manifest.json'))['risk_rules_sha256'])\")
+    # Read-only watcher destination/source preflight BEFORE .env, symlink or service mutation.
+    watcher_preflight_enabled=0
+    if systemctl cat afs-watcher.service >/dev/null 2>&1; then
+      watcher_pre_src='$RELEASES/$sha/ops/afs_watcher'
+      watcher_pre_dest=\$(systemctl show afs-watcher.service -p WorkingDirectory --value)
+      if test -z \"\$watcher_pre_dest\"; then
+        echo 'release refused: watcher WorkingDirectory is empty' >&2
+        exit 1
+      fi
+      case \"\$watcher_pre_dest\" in
+        /*) ;;
+        *) echo 'release refused: watcher WorkingDirectory is not absolute' >&2; exit 1 ;;
+      esac
+      watcher_shared_root=\$(realpath -e -- '$SHARED') || exit 1
+      watcher_pre_dest=\$(realpath -e -- \"\$watcher_pre_dest\") || exit 1
+      case \"\$watcher_pre_dest\" in
+        \"\$watcher_shared_root\"/*) ;;
+        *) echo 'release refused: watcher WorkingDirectory outside shared root' >&2; exit 1 ;;
+      esac
+      test -d \"\$watcher_pre_dest\" || exit 1
+      for watcher_file in watcher.py watcher_memory_guard.py run_ro.sh supervisor.sh bootstrap_tmp_state.sh; do
+        test -f \"\$watcher_pre_src/\$watcher_file\" || exit 1
+        test ! -L \"\$watcher_pre_dest/\$watcher_file\" || exit 1
+      done
+      for watcher_file in bounded_log_pipe.py watcher_triage.py discord_card.py plain_english.py; do
+        test ! -L \"\$watcher_pre_dest/\$watcher_file\" || exit 1
+      done
+      watcher_preflight_enabled=1
+    fi
     sed -i '/^EXPECTED_RELEASE_FINGERPRINT=/d;/^EXPECTED_LIVE_BRANCH=/d;/^EXPECTED_LIVE_COMMIT=/d;/^EXPECTED_RISK_RULES_SHA256=/d' '$SHARED/.env'
     printf 'EXPECTED_RELEASE_FINGERPRINT=%s\nEXPECTED_LIVE_BRANCH=main\nEXPECTED_LIVE_COMMIT=%s\nEXPECTED_RISK_RULES_SHA256=%s\n' \
       \"\$fp\" '$sha' \"\$risk_sha\" >> '$SHARED/.env'
@@ -359,34 +388,38 @@ promote_release() {
     # continues running its /tmp copy until restart, so these copies cannot
     # mutate the currently executing watcher mid-tick. Secrets/backups in the
     # shared directory are untouched.
-    if systemctl cat afs-watcher.service >/dev/null 2>&1; then
+    if test \"\$watcher_preflight_enabled\" = 1; then
       watcher_src='$CURRENT/ops/afs_watcher'
-      watcher_dest=\$(systemctl show afs-watcher.service -p WorkingDirectory --value)
-      test -n "\$watcher_dest"
-      test -d "\$watcher_dest"
+      # Use the exact resolved destination approved before the release changed.
+      # Never reinterpret the raw $SHARED spelling or systemd WorkingDirectory
+      # after .env, symlink and futures service mutations.
+      watcher_dest=\"\$watcher_pre_dest\"
+      test -d \"\$watcher_dest\" || exit 1
       for watcher_file in watcher.py watcher_memory_guard.py run_ro.sh supervisor.sh bootstrap_tmp_state.sh; do
-        test -f "\$watcher_src/\$watcher_file"
-        cp -f "\$watcher_src/\$watcher_file" "\$watcher_dest/\$watcher_file"
-        cmp -s "\$watcher_src/\$watcher_file" "\$watcher_dest/\$watcher_file"
+        test -f \"\$watcher_src/\$watcher_file\"
+        cp -f \"\$watcher_src/\$watcher_file\" \"\$watcher_dest/\$watcher_file\"
+        cmp -s \"\$watcher_src/\$watcher_file\" \"\$watcher_dest/\$watcher_file\"
       done
-      if test -f "\$watcher_src/bounded_log_pipe.py"; then
-        cp -f "\$watcher_src/bounded_log_pipe.py" "\$watcher_dest/bounded_log_pipe.py"
-        cmp -s "\$watcher_src/bounded_log_pipe.py" "\$watcher_dest/bounded_log_pipe.py"
+      if test -f \"\$watcher_src/bounded_log_pipe.py\"; then
+        cp -f \"\$watcher_src/bounded_log_pipe.py\" \"\$watcher_dest/bounded_log_pipe.py\"
+        cmp -s \"\$watcher_src/bounded_log_pipe.py\" \"\$watcher_dest/bounded_log_pipe.py\"
       fi
-      if test -f "\$watcher_src/watcher_triage.py"; then
-        cp -f "\$watcher_src/watcher_triage.py" "\$watcher_dest/watcher_triage.py"
-        cmp -s "\$watcher_src/watcher_triage.py" "\$watcher_dest/watcher_triage.py"
+      if test -f \"\$watcher_src/watcher_triage.py\"; then
+        cp -f \"\$watcher_src/watcher_triage.py\" \"\$watcher_dest/watcher_triage.py\"
+        cmp -s \"\$watcher_src/watcher_triage.py\" \"\$watcher_dest/watcher_triage.py\"
       else
-        rm -f "\$watcher_dest/watcher_triage.py"
+        rm -f \"\$watcher_dest/watcher_triage.py\"
       fi
       # Display helpers the watcher imports fail-open (cards, plain-English wording).
       for helper_file in discord_card.py plain_english.py; do
         if test -f "$CURRENT/notifications/\$helper_file"; then
-          cp -f "$CURRENT/notifications/\$helper_file" "\$watcher_dest/\$helper_file"
-          cmp -s "$CURRENT/notifications/\$helper_file" "\$watcher_dest/\$helper_file"
+          cp -f "$CURRENT/notifications/\$helper_file" \"\$watcher_dest/\$helper_file\"
+          cmp -s "$CURRENT/notifications/\$helper_file" \"\$watcher_dest/\$helper_file\"
         fi
       done
-      chmod 700 "\$watcher_dest"/*.sh
+      for watcher_file in run_ro.sh supervisor.sh bootstrap_tmp_state.sh; do
+        chmod 700 \"\$watcher_dest/\$watcher_file\"
+      done
       systemctl restart afs-watcher.service
       sleep 2
       systemctl is-active afs-watcher.service
@@ -407,6 +440,35 @@ rollback_release() {
     prev_fp=\$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[\"fingerprint_sha256\"])' \"\$manifest\")
     prev_commit=\$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[\"repo\"][\"commit\"])' \"\$manifest\")
     prev_risk=\$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[\"risk_rules_sha256\"])' \"\$manifest\")
+    # Read-only watcher destination/source preflight BEFORE .env, symlink or service mutation.
+    watcher_preflight_enabled=0
+    if systemctl cat afs-watcher.service >/dev/null 2>&1; then
+      watcher_pre_src=\"\$previous/ops/afs_watcher\"
+      watcher_pre_dest=\$(systemctl show afs-watcher.service -p WorkingDirectory --value)
+      if test -z \"\$watcher_pre_dest\"; then
+        echo 'release refused: watcher WorkingDirectory is empty' >&2
+        exit 1
+      fi
+      case \"\$watcher_pre_dest\" in
+        /*) ;;
+        *) echo 'release refused: watcher WorkingDirectory is not absolute' >&2; exit 1 ;;
+      esac
+      watcher_shared_root=\$(realpath -e -- '$SHARED') || exit 1
+      watcher_pre_dest=\$(realpath -e -- \"\$watcher_pre_dest\") || exit 1
+      case \"\$watcher_pre_dest\" in
+        \"\$watcher_shared_root\"/*) ;;
+        *) echo 'release refused: watcher WorkingDirectory outside shared root' >&2; exit 1 ;;
+      esac
+      test -d \"\$watcher_pre_dest\" || exit 1
+      for watcher_file in watcher.py watcher_memory_guard.py run_ro.sh supervisor.sh bootstrap_tmp_state.sh; do
+        test -f \"\$watcher_pre_src/\$watcher_file\" || exit 1
+        test ! -L \"\$watcher_pre_dest/\$watcher_file\" || exit 1
+      done
+      for watcher_file in bounded_log_pipe.py watcher_triage.py discord_card.py plain_english.py; do
+        test ! -L \"\$watcher_pre_dest/\$watcher_file\" || exit 1
+      done
+      watcher_preflight_enabled=1
+    fi
     sed -i '/^EXPECTED_RELEASE_FINGERPRINT=/d;/^EXPECTED_LIVE_BRANCH=/d;/^EXPECTED_LIVE_COMMIT=/d;/^EXPECTED_RISK_RULES_SHA256=/d' '$SHARED/.env'
     printf 'EXPECTED_RELEASE_FINGERPRINT=%s\nEXPECTED_LIVE_BRANCH=main\nEXPECTED_LIVE_COMMIT=%s\nEXPECTED_RISK_RULES_SHA256=%s\n' \
       \"\$prev_fp\" \"\$prev_commit\" \"\$prev_risk\" >> '$SHARED/.env'
@@ -430,34 +492,38 @@ rollback_release() {
       -m ops.release_integrity --repo-root '$CURRENT'
     # Rollback changes the same release pins/link as promotion. Restore the
     # persistent watcher source from that verified release before re-arming it.
-    if systemctl cat afs-watcher.service >/dev/null 2>&1; then
+    if test \"\$watcher_preflight_enabled\" = 1; then
       watcher_src='$CURRENT/ops/afs_watcher'
-      watcher_dest=\$(systemctl show afs-watcher.service -p WorkingDirectory --value)
-      test -n "\$watcher_dest"
-      test -d "\$watcher_dest"
+      # Use the exact resolved destination approved before the release changed.
+      # Never reinterpret the raw $SHARED spelling or systemd WorkingDirectory
+      # after .env, symlink and futures service mutations.
+      watcher_dest=\"\$watcher_pre_dest\"
+      test -d \"\$watcher_dest\" || exit 1
       for watcher_file in watcher.py watcher_memory_guard.py run_ro.sh supervisor.sh bootstrap_tmp_state.sh; do
-        test -f "\$watcher_src/\$watcher_file"
-        cp -f "\$watcher_src/\$watcher_file" "\$watcher_dest/\$watcher_file"
-        cmp -s "\$watcher_src/\$watcher_file" "\$watcher_dest/\$watcher_file"
+        test -f \"\$watcher_src/\$watcher_file\"
+        cp -f \"\$watcher_src/\$watcher_file\" \"\$watcher_dest/\$watcher_file\"
+        cmp -s \"\$watcher_src/\$watcher_file\" \"\$watcher_dest/\$watcher_file\"
       done
-      if test -f "\$watcher_src/bounded_log_pipe.py"; then
-        cp -f "\$watcher_src/bounded_log_pipe.py" "\$watcher_dest/bounded_log_pipe.py"
-        cmp -s "\$watcher_src/bounded_log_pipe.py" "\$watcher_dest/bounded_log_pipe.py"
+      if test -f \"\$watcher_src/bounded_log_pipe.py\"; then
+        cp -f \"\$watcher_src/bounded_log_pipe.py\" \"\$watcher_dest/bounded_log_pipe.py\"
+        cmp -s \"\$watcher_src/bounded_log_pipe.py\" \"\$watcher_dest/bounded_log_pipe.py\"
       fi
-      if test -f "\$watcher_src/watcher_triage.py"; then
-        cp -f "\$watcher_src/watcher_triage.py" "\$watcher_dest/watcher_triage.py"
-        cmp -s "\$watcher_src/watcher_triage.py" "\$watcher_dest/watcher_triage.py"
+      if test -f \"\$watcher_src/watcher_triage.py\"; then
+        cp -f \"\$watcher_src/watcher_triage.py\" \"\$watcher_dest/watcher_triage.py\"
+        cmp -s \"\$watcher_src/watcher_triage.py\" \"\$watcher_dest/watcher_triage.py\"
       else
-        rm -f "\$watcher_dest/watcher_triage.py"
+        rm -f \"\$watcher_dest/watcher_triage.py\"
       fi
       # Display helpers the watcher imports fail-open (cards, plain-English wording).
       for helper_file in discord_card.py plain_english.py; do
         if test -f "$CURRENT/notifications/\$helper_file"; then
-          cp -f "$CURRENT/notifications/\$helper_file" "\$watcher_dest/\$helper_file"
-          cmp -s "$CURRENT/notifications/\$helper_file" "\$watcher_dest/\$helper_file"
+          cp -f "$CURRENT/notifications/\$helper_file" \"\$watcher_dest/\$helper_file\"
+          cmp -s "$CURRENT/notifications/\$helper_file" \"\$watcher_dest/\$helper_file\"
         fi
       done
-      chmod 700 "\$watcher_dest"/*.sh
+      for watcher_file in run_ro.sh supervisor.sh bootstrap_tmp_state.sh; do
+        chmod 700 \"\$watcher_dest/\$watcher_file\"
+      done
       systemctl restart afs-watcher.service
       sleep 2
       systemctl is-active afs-watcher.service

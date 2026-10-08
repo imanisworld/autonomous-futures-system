@@ -252,9 +252,9 @@ def test_promote_and_rollback_rearm_readonly_watcher_after_release_verification(
         assert "watcher_src='$CURRENT/ops/afs_watcher'" in block
         assert "systemctl show afs-watcher.service -p WorkingDirectory --value" in block
         assert "watcher_memory_guard.py run_ro.sh supervisor.sh bootstrap_tmp_state.sh" in block
-        assert 'if test -f "\$watcher_src/bounded_log_pipe.py"; then' in block
-        assert 'cp -f "\$watcher_src/bounded_log_pipe.py" "\$watcher_dest/bounded_log_pipe.py"' in block
-        assert 'cmp -s "\$watcher_src/bounded_log_pipe.py" "\$watcher_dest/bounded_log_pipe.py"' in block
+        assert r'if test -f \"\$watcher_src/bounded_log_pipe.py\"; then' in block
+        assert r'cp -f \"\$watcher_src/bounded_log_pipe.py\" \"\$watcher_dest/bounded_log_pipe.py\"' in block
+        assert r'cmp -s \"\$watcher_src/bounded_log_pipe.py\" \"\$watcher_dest/bounded_log_pipe.py\"' in block
         assert "cmp -s" in block
         assert "watcher_triage.py" in block
         assert "systemctl restart afs-watcher.service" in block
@@ -263,6 +263,126 @@ def test_promote_and_rollback_rearm_readonly_watcher_after_release_verification(
         sync_at = block.index("watcher_src='$CURRENT/ops/afs_watcher'")
         restart_at = block.index("systemctl restart afs-watcher.service")
         assert integrity_at < sync_at < restart_at
+
+
+
+def test_watcher_rearm_reuses_same_preflight_resolved_destination():
+    """Both paths use the early canonical path, not a late raw path check."""
+    for func, _, block in _remote_blocks():
+        if func not in ("promote_release", "rollback_release"):
+            continue
+        rendered = subprocess.run(
+            ["bash", "-c", _REMOTE_RENDER_PREAMBLE + "\n".join(block)],
+            capture_output=True, text=True, check=True,
+        ).stdout
+        pre = rendered.index("watcher_pre_dest=$(systemctl show")
+        activated = rendered.index("sed -i '/^EXPECTED_RELEASE_FINGERPRINT")
+        post = rendered.index('watcher_dest="$watcher_pre_dest"')
+        assert pre < activated < post
+        assert 'watcher_shared_root=$(realpath -e --' in rendered[pre:activated]
+        assert 'watcher_pre_dest=$(realpath -e -- "$watcher_pre_dest")' in rendered[pre:activated]
+        assert 'if test "$watcher_preflight_enabled" = 1; then' in rendered[activated:post]
+        assert 'watcher_dest=$(systemctl show' not in rendered[activated:]
+        assert "case \"$watcher_dest\" in" not in rendered[activated:]
+        assert 'chmod 700 "$watcher_dest/$watcher_file"' in rendered
+        assert 'chmod 700 "$watcher_dest"/*.sh' not in rendered
+
+
+def test_watcher_preflight_blocks_release_mutation_for_untrusted_paths(tmp_path):
+    """Execute rendered preflight in a fake box with a mutation canary."""
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    approved = shared / "watcher"
+    approved.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (shared / "escaped").symlink_to(outside, target_is_directory=True)
+    shared_alias = tmp_path / "shared-alias"
+    shared_alias.symlink_to(shared, target_is_directory=True)
+    watcher_alias = tmp_path / "watcher-alias"
+    watcher_alias.symlink_to(approved, target_is_directory=True)
+    releases = tmp_path / "releases"
+    release = releases / ("7c930274179f7c76749f75b35adb14fbb9255e54")
+    prior = tmp_path / "prior-release"
+    for root in (release, prior):
+        src = root / "ops" / "afs_watcher"
+        src.mkdir(parents=True)
+        for name in ("watcher.py", "watcher_memory_guard.py", "run_ro.sh",
+                     "supervisor.sh", "bootstrap_tmp_state.sh"):
+            (src / name).write_text("safe")
+    prem = (_REMOTE_RENDER_PREAMBLE.replace("SHARED=/s", f"SHARED={shared}")
+            .replace("RELEASES=/r", f"RELEASES={releases}"))
+
+    for func, _, block in _remote_blocks():
+        if func not in ("promote_release", "rollback_release"):
+            continue
+        rendered = subprocess.run(
+            ["bash", "-c", prem + "\n".join(block)],
+            capture_output=True, text=True, check=True,
+        ).stdout
+        preflight_at = rendered.index(
+            "# Read-only watcher destination/source preflight BEFORE"
+        )
+        edit_at = rendered.index("sed -i '/^EXPECTED_RELEASE_FINGERPRINT")
+        assert preflight_at < edit_at
+        assert edit_at < rendered.index("mv -Tf")
+        assert edit_at < rendered.index("systemctl restart", edit_at)
+        assert 'chmod 700 "$watcher_dest/$watcher_file"' in rendered
+        assert 'chmod 700 "$watcher_dest"/*.sh' not in rendered
+        guard = rendered[preflight_at:edit_at]
+        marker = tmp_path / (func + "-mutation-canary")
+
+        def try_path(dest):
+            marker.unlink(missing_ok=True)
+            prog = (
+                "set -e\n"
+                "previous=\"$PREVIOUS_RELEASE\"\n"
+                "systemctl() {\n"
+                "  if [ \"$1\" = cat ]; then return 0; fi\n"
+                "  if [ \"$1\" = show ]; then printf '%s\\n' \"$WATCHER_DIRECTORY\"; return 0; fi\n"
+                "  return 99\n"
+                "}\n"
+                + guard
+                + '\nprintf "MUTATED\\n" > "$MUTATION_CANARY"\n'
+            )
+            res = subprocess.run(
+                ["bash", "-c", prog], capture_output=True, text=True,
+                env={**os.environ, "PREVIOUS_RELEASE": str(prior),
+                     "WATCHER_DIRECTORY": dest, "MUTATION_CANARY": str(marker)},
+            )
+            return res
+
+        for bad in ("", "/", "relative", str(outside), str(shared / "escaped")):
+            res = try_path(bad)
+            assert res.returncode != 0, (func, bad, res.stdout, res.stderr)
+            assert not marker.exists(), (func, bad)
+        for good_path in (str(approved), str(approved) + "/",
+                          str(watcher_alias), str(watcher_alias) + "/"):
+            good = try_path(good_path)
+            assert good.returncode == 0, (func, good_path, good.stdout, good.stderr)
+            assert marker.read_text() == "MUTATED\n"
+        # $SHARED may itself be a symlink or carry a trailing slash.
+        for root_form in (str(shared_alias), str(shared_alias) + "/",
+                          str(shared) + "/"):
+            marker.unlink(missing_ok=True)
+            alt_guard = guard.replace(str(shared), root_form)
+            prog = (
+                'set -e\nprevious="$PREVIOUS_RELEASE"\n'
+                'systemctl() {\n'
+                '  if [ "$1" = cat ]; then return 0; fi\n'
+                '  if [ "$1" = show ]; then printf "%s\\n" "$WATCHER_DIRECTORY"; return 0; fi\n'
+                '  return 99\n}\n'
+                + alt_guard
+                + '\nprintf "MUTATED\\n" > "$MUTATION_CANARY"\n'
+            )
+            check = subprocess.run(
+                ["bash", "-c", prog], capture_output=True, text=True,
+                env={**os.environ, "PREVIOUS_RELEASE": str(prior),
+                     "WATCHER_DIRECTORY": str(watcher_alias) + "/",
+                     "MUTATION_CANARY": str(marker)},
+            )
+            assert check.returncode == 0, (func, root_form, check.stdout, check.stderr)
+            assert marker.read_text() == "MUTATED\n"
 
 
 def test_rollback_restores_previous_release_proof_pins_and_verifies_integrity():
