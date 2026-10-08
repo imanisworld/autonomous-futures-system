@@ -48,7 +48,9 @@ PRIMARY_20 = (
     "IWM", "TLT", "JPM", "BAC", "COIN", "XOM", "MRK", "WMT", "NFLX", "GE",
 )
 COLLECTOR_ID = "OPTIONS_122_IEX_PROSPECTIVE_COLLECTOR"
-COLLECTOR_VERSION = "122-iex-collector-v0.1"
+LEGACY_COLLECTOR_VERSIONS = frozenset({"122-iex-collector-v0.1"})
+COLLECTOR_VERSION = "122-iex-collector-v0.2"
+ACCEPTED_COLLECTOR_VERSIONS = LEGACY_COLLECTOR_VERSIONS | {COLLECTOR_VERSION}
 POLICY_EPOCH = "122-IEX-E1"
 CANONICAL_BINDING_SCHEMA = "options-122-canonical-binding-v1"
 CANONICAL_STRATEGY = "options_122"
@@ -150,8 +152,9 @@ def _load_state(path: Path):
     fingerprints: dict[str, str] = {}
     reconciled: set[str] = set()
     drifted: set[str] = set()
+    canonically_bound: set[str] = set()
     if not path.exists():
-        return armed, terminal, fingerprints, reconciled, drifted
+        return armed, terminal, fingerprints, reconciled, drifted, canonically_bound
     for number, raw in enumerate(path.read_text().splitlines(), start=1):
         if not raw.strip():
             continue
@@ -162,9 +165,18 @@ def _load_state(path: Path):
         if not isinstance(row, dict) or not row.get("setup_id"):
             raise RuntimeError(f"journal_invalid_row_{number}")
         if row.get("record_type") in {"ARMED", "RESOLUTION", "SOURCE_DRIFT", "RECONCILIATION"}:
-            if row.get("collector_id") != COLLECTOR_ID or row.get("collector_version") != COLLECTOR_VERSION:
+            if (
+                row.get("collector_id") != COLLECTOR_ID
+                or row.get("collector_version") not in ACCEPTED_COLLECTOR_VERSIONS
+                or row.get("policy_epoch") != POLICY_EPOCH
+            ):
                 raise RuntimeError(f"journal_collector_version_mismatch_{number}")
         setup_id = str(row["setup_id"])
+        if row.get("canonical_binding") is not None:
+            binding = row.get("canonical_binding")
+            if not isinstance(binding, Mapping) or binding.get("schema") != CANONICAL_BINDING_SCHEMA:
+                raise RuntimeError(f"journal_canonical_binding_invalid_{number}")
+            canonically_bound.add(setup_id)
         if row.get("record_type") == "SOURCE_DRIFT":
             # The row carries the revised fingerprint by design; keep the frozen
             # one and block the setup (never re-armed, resolved or reconciled).
@@ -186,7 +198,7 @@ def _load_state(path: Path):
             terminal[setup_id] = row
         elif row.get("record_type") == "RECONCILIATION":
             reconciled.add(setup_id)
-    return armed, terminal, fingerprints, reconciled, drifted
+    return armed, terminal, fingerprints, reconciled, drifted, canonically_bound
 
 
 async def _capture_selector_evidence(pub: PublicMarketDataClient, *, ticker: str, direction: str, cfg: Any) -> dict[str, Any]:
@@ -429,7 +441,7 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
     sip_provider = HistoricalTradeProvider(cfg.alpaca_data_base_url, key, secret, "sip") if key and secret else None
     journal = Path(args.journal)
     raw_dir = Path(args.raw_trade_dir)
-    armed_seen, terminal_seen, fingerprints, reconciled, drifted = _load_state(journal)
+    armed_seen, terminal_seen, fingerprints, reconciled, drifted, canonically_bound = _load_state(journal)
     started = datetime.now(timezone.utc)
     session = nyse_session_for(started.date())
     tickers = tuple(dict.fromkeys(t.upper() for t in (args.ticker or PRIMARY_20)))
@@ -492,13 +504,16 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
                 if setup_id in fingerprints and fingerprints[setup_id] != obs.setup_fingerprint:
                     summary["data_blocked"] += 1
                     if not args.dry_run:
-                        _append(journal,{"record_type":"SOURCE_DRIFT","observed_at":observed_at.isoformat(),"collector_id":COLLECTOR_ID,"collector_version":COLLECTOR_VERSION,"policy_epoch":POLICY_EPOCH,"setup_id":setup_id,"canonical_binding":_canonical_binding(obs),"observation":obs.to_dict(),"reason_code":"public_completed_bar_revision"})
+                        row={"record_type":"SOURCE_DRIFT","observed_at":observed_at.isoformat(),"collector_id":COLLECTOR_ID,"collector_version":COLLECTOR_VERSION,"policy_epoch":POLICY_EPOCH,"setup_id":setup_id,"observation":obs.to_dict(),"reason_code":"public_completed_bar_revision"}
+                        if setup_id in canonically_bound:
+                            row["canonical_binding"]=_canonical_binding(obs)
+                        _append(journal,row)
                     drifted.add(setup_id)
                     continue
                 if setup_id not in armed_seen:
                     arm_record={"record_type":"ARMED","observed_at":observed_at.isoformat(),"collector_id":COLLECTOR_ID,"collector_version":COLLECTOR_VERSION,"policy_epoch":POLICY_EPOCH,"setup_id":setup_id,"canonical_binding":_canonical_binding(obs),"observation":obs.to_dict()}
                     if not args.dry_run: _append(journal,arm_record)
-                    armed_seen[setup_id]=observed_at; fingerprints[setup_id]=obs.setup_fingerprint; summary["armed_written"] += 1
+                    armed_seen[setup_id]=observed_at; fingerprints[setup_id]=obs.setup_fingerprint; canonically_bound.add(setup_id); summary["armed_written"] += 1
 
                 source = await _source_first_boundary(iex_provider, obs=obs, end=observed_at, setup_id=setup_id, raw_dir=raw_dir, feed="iex", persist_raw=not args.dry_run)
                 if source.get("status") == "DATA_BLOCKED":
@@ -532,7 +547,9 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
                 else:
                     summary["no_break"] += 1
 
-                row={"record_type":"RESOLUTION","observed_at":observed_at.isoformat(),"collector_id":COLLECTOR_ID,"collector_version":COLLECTOR_VERSION,"policy_epoch":POLICY_EPOCH,"setup_id":setup_id,"canonical_binding":_canonical_binding(live_obs),"prearmed_at":armed_seen.get(setup_id).isoformat() if armed_seen.get(setup_id) else None,"source_outcome":source_outcome,"capture_gate_eligible":capture_gate_eligible,"option_evidence_usable":bool(option_evidence and option_evidence.get("status")=="CAPTURED"),"observation":live_obs.to_dict(),"trigger_source":source,"option_evidence":option_evidence,"reconciliation_status":"PENDING_DELAYED_SIP"}
+                row={"record_type":"RESOLUTION","observed_at":observed_at.isoformat(),"collector_id":COLLECTOR_ID,"collector_version":COLLECTOR_VERSION,"policy_epoch":POLICY_EPOCH,"setup_id":setup_id,"prearmed_at":armed_seen.get(setup_id).isoformat() if armed_seen.get(setup_id) else None,"source_outcome":source_outcome,"capture_gate_eligible":capture_gate_eligible,"option_evidence_usable":bool(option_evidence and option_evidence.get("status")=="CAPTURED"),"observation":live_obs.to_dict(),"trigger_source":source,"option_evidence":option_evidence,"reconciliation_status":"PENDING_DELAYED_SIP"}
+                if setup_id in canonically_bound:
+                    row["canonical_binding"]=_canonical_binding(live_obs)
                 if not args.dry_run: _append(journal,row)
                 terminal_seen[setup_id]=row; summary["resolutions_written"] += 1
 
