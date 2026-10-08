@@ -50,6 +50,13 @@ PRIMARY_20 = (
 COLLECTOR_ID = "OPTIONS_122_IEX_PROSPECTIVE_COLLECTOR"
 COLLECTOR_VERSION = "122-iex-collector-v0.1"
 POLICY_EPOCH = "122-IEX-E1"
+CANONICAL_BINDING_SCHEMA = "options-122-canonical-binding-v1"
+CANONICAL_STRATEGY = "options_122"
+CANONICAL_TIMEFRAME = "30m"
+CANONICAL_UNIVERSE = "PRIMARY_20"
+CANONICAL_ARM_SOURCE = "public_regular_session_chart"
+CANONICAL_PROVISIONAL_TRIGGER_SOURCE = "alpaca_iex_trades"
+CANONICAL_RECONCILIATION_SOURCE = "alpaca_sip_trades_delayed"
 DEFAULT_CADENCE_SECONDS = 60
 DEFAULT_MAX_CAPTURE_LAG_SECONDS = 120
 RECONCILE_DELAY_MINUTES = 16
@@ -74,6 +81,38 @@ def _append(path: Path, row: Mapping[str, Any]) -> None:
         handle.write(payload)
         handle.flush()
         os.fsync(handle.fileno())
+
+
+def _canonical_binding(obs: Any) -> dict[str, Any]:
+    """Forward-only canonical identity for newly written 122 collector rows.
+
+    Historical rows that predate this stamp remain legacy/unbound. Raw provider
+    source labels are retained separately; these canonical source names are the
+    exact policy vocabulary frozen in 122-IEX-E1.
+    """
+    close = _parse_ts(getattr(obs, "structure_close_time", None))
+    if close is None:
+        raise ValueError("canonical binding requires structure_close_time")
+    reference = getattr(obs, "reference_direction", None)
+    pattern = {"two_up": "122:2U", "two_down": "122:2D"}.get(reference)
+    if pattern is None:
+        raise ValueError("canonical binding requires 122 reference direction")
+    return {
+        "schema": CANONICAL_BINDING_SCHEMA,
+        "strategy": CANONICAL_STRATEGY,
+        "strategy_epoch": POLICY_EPOCH,
+        "timeframe": CANONICAL_TIMEFRAME,
+        "universe": CANONICAL_UNIVERSE,
+        "pattern": pattern,
+        "structure_close_time": close.isoformat(),
+        "data_source": f"{COLLECTOR_ID}:{CANONICAL_ARM_SOURCE}",
+        "arm_source": CANONICAL_ARM_SOURCE,
+        "raw_arm_source": PUBLIC_CHART_SOURCE,
+        "provisional_trigger_source": CANONICAL_PROVISIONAL_TRIGGER_SOURCE,
+        "authoritative_reconciliation_source": CANONICAL_RECONCILIATION_SOURCE,
+        "collector_id": COLLECTOR_ID,
+        "collector_version": COLLECTOR_VERSION,
+    }
 
 
 def _persist_raw(directory: Path, *, setup_id: str, feed: str, payload: bytes) -> tuple[str, str]:
@@ -365,6 +404,7 @@ async def _reconcile_pending(*, journal: Path, terminal: Mapping[str, dict[str, 
             "record_type": "RECONCILIATION", "observed_at": now.isoformat(),
             "collector_id": COLLECTOR_ID, "collector_version": COLLECTOR_VERSION,
             "policy_epoch": POLICY_EPOCH, "setup_id": setup_id,
+            "canonical_binding": _canonical_binding(o),
             "observation": obs, "iex": iex, "sip": sip, "policy": policy,
         }
         if not dry_run:
@@ -448,11 +488,11 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
                 if setup_id in fingerprints and fingerprints[setup_id] != obs.setup_fingerprint:
                     summary["data_blocked"] += 1
                     if not args.dry_run:
-                        _append(journal,{"record_type":"SOURCE_DRIFT","observed_at":observed_at.isoformat(),"collector_id":COLLECTOR_ID,"collector_version":COLLECTOR_VERSION,"policy_epoch":POLICY_EPOCH,"setup_id":setup_id,"observation":obs.to_dict(),"reason_code":"public_completed_bar_revision"})
+                        _append(journal,{"record_type":"SOURCE_DRIFT","observed_at":observed_at.isoformat(),"collector_id":COLLECTOR_ID,"collector_version":COLLECTOR_VERSION,"policy_epoch":POLICY_EPOCH,"setup_id":setup_id,"canonical_binding":_canonical_binding(obs),"observation":obs.to_dict(),"reason_code":"public_completed_bar_revision"})
                     drifted.add(setup_id)
                     continue
                 if setup_id not in armed_seen:
-                    arm_record={"record_type":"ARMED","observed_at":observed_at.isoformat(),"collector_id":COLLECTOR_ID,"collector_version":COLLECTOR_VERSION,"policy_epoch":POLICY_EPOCH,"setup_id":setup_id,"observation":obs.to_dict()}
+                    arm_record={"record_type":"ARMED","observed_at":observed_at.isoformat(),"collector_id":COLLECTOR_ID,"collector_version":COLLECTOR_VERSION,"policy_epoch":POLICY_EPOCH,"setup_id":setup_id,"canonical_binding":_canonical_binding(obs),"observation":obs.to_dict()}
                     if not args.dry_run: _append(journal,arm_record)
                     armed_seen[setup_id]=observed_at; fingerprints[setup_id]=obs.setup_fingerprint; summary["armed_written"] += 1
 
@@ -488,7 +528,7 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
                 else:
                     summary["no_break"] += 1
 
-                row={"record_type":"RESOLUTION","observed_at":observed_at.isoformat(),"collector_id":COLLECTOR_ID,"collector_version":COLLECTOR_VERSION,"policy_epoch":POLICY_EPOCH,"setup_id":setup_id,"prearmed_at":armed_seen.get(setup_id).isoformat() if armed_seen.get(setup_id) else None,"source_outcome":source_outcome,"capture_gate_eligible":capture_gate_eligible,"option_evidence_usable":bool(option_evidence and option_evidence.get("status")=="CAPTURED"),"observation":live_obs.to_dict(),"trigger_source":source,"option_evidence":option_evidence,"reconciliation_status":"PENDING_DELAYED_SIP"}
+                row={"record_type":"RESOLUTION","observed_at":observed_at.isoformat(),"collector_id":COLLECTOR_ID,"collector_version":COLLECTOR_VERSION,"policy_epoch":POLICY_EPOCH,"setup_id":setup_id,"canonical_binding":_canonical_binding(live_obs),"prearmed_at":armed_seen.get(setup_id).isoformat() if armed_seen.get(setup_id) else None,"source_outcome":source_outcome,"capture_gate_eligible":capture_gate_eligible,"option_evidence_usable":bool(option_evidence and option_evidence.get("status")=="CAPTURED"),"observation":live_obs.to_dict(),"trigger_source":source,"option_evidence":option_evidence,"reconciliation_status":"PENDING_DELAYED_SIP"}
                 if not args.dry_run: _append(journal,row)
                 terminal_seen[setup_id]=row; summary["resolutions_written"] += 1
 
