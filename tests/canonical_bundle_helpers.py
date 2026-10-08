@@ -268,7 +268,11 @@ def make_fi_manifest(root: Path, code_sha: str, *, mutate=None) -> str:
         "discovered_scenarios": discovered,
         "scenarios": {
             scenario: {
-                "passed": 1, "failed": 0, "skipped": 0, "result": "PASS", "tests": []
+                "passed": 1,
+                "failed": 0,
+                "skipped": 0,
+                "result": "PASS",
+                "tests": [{"name": f"test_{scenario.replace('FI-', 'fi').lower()}_synthetic", "outcome": "passed"}],
             }
             for scenario in fi.REQUIRED_SCENARIOS
         },
