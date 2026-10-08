@@ -1,17 +1,5 @@
 # Options — Current State Handoff
 
-## Active follow-up — 2026-10-08 (GitHub PR reconciliation)
-
-- GitHub `main` at this check: `f8e4257e2b9481f4b670b24e7602634e9cf47649`. **#1152 and the options handoff PR #1188 are merged**. Do not redo their work.
-- **#1183** (canonical prospective catch invariant) remains **OPEN**, exact head `09bf04542044cdc1a3106320adf1ba2313ee3b95`. Implementation is reported complete; independently verify the current exact-head CI and obtain the required **Grok PASS** before any operator-approved merge. Do not rebuild the PR merely because review is pending.
-- **#1177** is a tracked integration work item, not a PR at this check. Implement dedicated `OPTIONS_122_IEX_PROSPECTIVE_COLLECTOR` → `122-IEX-E1` canonical binding in the specified phases, source-only and forward-only. Do not alias #1145; no synthetic or historical evidence promotion.
-- **#1184** is a security-hardening work item, not a PR at this check. Tamper-evident/append-only authority history remains mandatory **before** authority storage, acting on authority flags, or runtime wiring.
-- **#1154** remains **OPEN / PARKED** until #1183 and dedicated #1177 producer prerequisites are complete. Its readiness result is only eligibility to start forward proof, never permission to trade.
-- **#1167** remains later modernization/audit work; do not expand scope now.
-- **#1190 futures deployment plan and #1189 release-script repair** are separate from the options readiness gates; neither authorizes any options activation.
-- Grok review is **pending unless an exact-head verdict is recorded**. Green CI alone is not a substitute for the required reviewer PASS.
-- No options observer/timer installation, forward-proof start, broker action, deployment, or strategy activation is authorized.
-
 _As of 2026-10-08. The newest dated repository refresh below governs source state; the latest verified box-specific sections govern runtime state until a fresh local/provider or VPS check is performed. This is the single current-state authority for the options lane._
 
 Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`; the read-only coverage evidence lane (observer, reducer, outcome study, after-close collector) is described in `docs/options-coverage-observer.md`. The observation-only **setup-capture** lifecycle (`WATCHING` → `TRIGGERED` / `MISSED_LATE`) is described in `docs/options-setup-capture-observer.md`.
