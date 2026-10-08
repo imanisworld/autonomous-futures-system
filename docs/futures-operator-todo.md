@@ -6,7 +6,15 @@
 >
 > Core rule: **No proof, no run.**
 
-## Current source/runtime boundary — 2026-10-07
+## Latest handoff — 2026-10-07 (#1180)
+
+- Verified GitHub `main` is `7c930274179f7c76749f75b35adb14fbb9255e54` (squash-merged #1180); handoff reports reviewed tree matches merged tree.
+- #1180 reviewer fixes complete; exact-head CI **8,532 passed / 8 skipped**. **No build, promote, restart, or deployment.**
+- Box reportedly has separate Python **3.13.16**, with system Python **3.14.4** unchanged and trading services untouched. Runtime release readiness is not thereby established.
+- **Sole currently reported blocker:** `afs-deploy` CI-proof handling. Fix only the wrapper; require **two fake-box regression tests**, independent review, then a **read-only deployment-readiness audit**.
+- **Decision: HOLD. No deployment, live trading, broker submissions, risk/strategy/config changes.** Do not redo closed #1180 reviewer work.
+
+## Previous source/runtime boundary — 2026-10-07
 
 - Source-safety baseline: `1ec48a0ed76aea23c82882ff8c8ae258fda20c95` after U11 / #1166. Fetch current `main` before acting; later docs/guidance-only merges may be ahead of this baseline.
 - U3→U11 are merged **source changes only**. Do not treat them as deployed.
@@ -25,6 +33,13 @@ U3→U11 is complete on `main`. Do not reopen or reimplement those units merely 
 - reproducible main-release version lock + build/promotion live-CI proof
 
 A merge is not deployment authority.
+
+## IMMEDIATE NEXT — docs/source only
+
+1. Once the development Mac/authorized environment is reachable, inspect exact `afs-deploy` CI-proof failure and patch the wrapper only.
+2. Run both fake-box regression tests, covering accepted exact-head CI proof and missing/stale/mismatched CI proof **fail-closed** behavior. Record commands and outputs; do not assume tests pass.
+3. Obtain independent scoped review. Perform a final **read-only** readiness audit of wrapper proof plus host/runtime gates below.
+4. Keep **NO DEPLOY** until the audit passes and explicit operator GO is separately issued.
 
 ## OPERATOR ACTION — before any future deployment/runtime mutation
 
