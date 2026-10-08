@@ -6,6 +6,7 @@ observation, a proof-window start, or execution authority.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 from collections import Counter
@@ -135,7 +136,7 @@ def _stamp(row: Mapping[str, Any], epoch: Any) -> Mapping[str, Any]:
     return binding
 
 
-def _proof(source: Mapping[str, Any], feed: str) -> None:
+def _proof(source: Mapping[str, Any], feed: str, *, raw_root: Path | None, setup_id: str) -> bool:
     if source.get("status") != "PROVEN" or source.get("source") != f"alpaca_{feed}":
         raise AdapterError(f"{feed}_not_proven")
     if source.get("break_side") not in {"HIGH", "LOW"} or source.get("direction") not in {"LONG", "SHORT"}:
@@ -154,9 +155,26 @@ def _proof(source: Mapping[str, Any], feed: str) -> None:
             or any(c not in "0123456789abcdef" for c in digest)
             or not isinstance(filename, str) or not filename):
         raise AdapterError(f"{feed}_missing_raw_provenance")
+    # Source claims alone are NOT trusted evidence. An explicit authorized raw
+    # directory is required, without following paths outside that directory.
+    if raw_root is None:
+        return False
+    try:
+        root = raw_root.resolve(strict=True)
+        artifact = Path(filename).resolve(strict=True)
+        if not artifact.is_relative_to(root) or artifact.name != f"{setup_id}.{feed}.jsonl":
+            raise AdapterError(f"{feed}_raw_path_mismatch")
+        if not artifact.is_file() or artifact.is_symlink():
+            raise AdapterError(f"{feed}_raw_file_invalid")
+        if hashlib.sha256(artifact.read_bytes()).hexdigest() != digest:
+            raise AdapterError(f"{feed}_raw_hash_mismatch")
+    except (OSError, RuntimeError) as exc:
+        raise AdapterError(f"{feed}_raw_read_failed") from exc
+    return True
 
 
-def fold_122_rows(rows: Iterable[Mapping[str, Any]], *, registry: EpochRegistry | None = None) -> Canonical122Fold:
+def fold_122_rows(rows: Iterable[Mapping[str, Any]], *, registry: EpochRegistry | None = None,
+                  raw_root: Path | None = None) -> Canonical122Fold:
     """Strict ordered fold; never upgrades legacy or assigns a provisional win."""
     reg = registry if registry is not None else default_registry()
     epoch = reg.get("options_122", POLICY_EPOCH)
@@ -255,7 +273,7 @@ def fold_122_rows(rows: Iterable[Mapping[str, Any]], *, registry: EpochRegistry 
         if resolution.get("prearmed_at") != arm.get("observed_at"):
             raise AdapterError("prearmed_time_mismatch")
         if kind == "REVERSAL":
-            _proof(iex, "iex")
+            iex_raw_verified = _proof(iex, "iex", raw_root=raw_root, setup_id=sid)
             trade_at = _time(iex["timestamp"], "iex_timestamp")
             expected_side = "LOW" if arm_obs["reference_direction"] == "two_up" else "HIGH"
             if (iex["break_side"] != expected_side or iex.get("family_side") != "REVERSAL"
@@ -269,7 +287,7 @@ def fold_122_rows(rows: Iterable[Mapping[str, Any]], *, registry: EpochRegistry 
                 reason="provisional_iex_reversal_pending_sip",
             ))
         elif kind == "CONTINUATION":
-            _proof(iex, "iex")
+            _proof(iex, "iex", raw_root=raw_root, setup_id=sid)
             if (iex.get("family_side") != "CONTINUATION"
                     or _field(resolution, "observation").get("status") != "CANCELLED"):
                 raise AdapterError("continuation_inconsistent")
@@ -280,10 +298,8 @@ def fold_122_rows(rows: Iterable[Mapping[str, Any]], *, registry: EpochRegistry 
         elif kind == "NO_BREAK":
             if iex.get("status") != "NO_BREAK":
                 raise AdapterError("no_break_inconsistent")
-            out.journal.append(state_event(
-                out.journal, opened.signal_id, LifecycleState.EXPIRED,
-                detected_at=at, reason="iex_no_break",
-            ))
+            # IEX NO_BREAK cannot be concluded until SIP reconciles; a SIP-only
+            # reversal is MISSED_LATE, never a fabricated IEX catch.
         else:
             raise AdapterError("unknown_source_outcome")
         if len(group) == 2:
@@ -298,7 +314,7 @@ def fold_122_rows(rows: Iterable[Mapping[str, Any]], *, registry: EpochRegistry 
         if final_iex != ({"status": "NO_BREAK"} if kind == "NO_BREAK" else iex):
             raise AdapterError("reconciliation_iex_changed")
         if sip.get("status") == "PROVEN":
-            _proof(sip, "sip")
+            sip_raw_verified = _proof(sip, "sip", raw_root=raw_root, setup_id=sid)
         if sip.get("status") not in {"PROVEN", "NO_BREAK", "DATA_BLOCKED"}:
             raise AdapterError("unknown_sip_status")
         shape = Arm(
@@ -313,10 +329,19 @@ def fold_122_rows(rows: Iterable[Mapping[str, Any]], *, registry: EpochRegistry 
             raise AdapterError("reconciliation_policy_mismatch")
         if kind != "REVERSAL":
             if kind == "NO_BREAK" and sip.get("status") == "PROVEN" and sip.get("family_side") == "REVERSAL":
-                # An IEX miss is not a late prospective catch. The early EXPIRED
-                # observation remains a no-catch; no fake IEX reversal is created.
+                out.journal.append(state_event(
+                    out.journal, opened.signal_id, LifecycleState.MISSED_LATE,
+                    detected_at=rec_at, market_time=_time(sip.get("timestamp"), "sip_timestamp"),
+                    payload={"direction": sip["direction"], "trigger_detected_at": rec_at},
+                    reason="sip_reversal_missed_by_iex",
+                ))
                 out.excluded["MISSED_BY_IEX"] += 1
             else:
+                if kind == "NO_BREAK":
+                    out.journal.append(state_event(
+                        out.journal, opened.signal_id, LifecycleState.EXPIRED,
+                        detected_at=rec_at, reason="no_iex_reversal",
+                    ))
                 out.excluded["NOT_REVERSAL"] += 1
             continue
         if policy["reconciliation"] != "CONFIRMED_SAME_REVERSAL":
@@ -342,6 +367,7 @@ def fold_122_rows(rows: Iterable[Mapping[str, Any]], *, registry: EpochRegistry 
             and evidence.get("production_replay_parity") is True
             and isinstance(option.get("selected_contract"), str)
             and bool(option.get("selected_contract"))
+            and iex_raw_verified and sip_raw_verified
         )
         if eligible:
             taken = _time(captured, "option_capture_time")
@@ -383,5 +409,11 @@ def fold_122_rows(rows: Iterable[Mapping[str, Any]], *, registry: EpochRegistry 
         if problems or not signal.is_prospective_catch or snapshot["execution_authority"] is not False:
             raise AdapterError(f"canonical_verification_failed:{problems}")
         catches.append(signal.signal_id)
+    # Every output, including provisional, blocked and missed observations,
+    # must pass the hardened #1183 canonical record contract.
+    for signal in out.journal.signals():
+        errors = verify_record(to_record(signal), registry=reg)
+        if errors:
+            raise AdapterError(f"canonical_record_invalid:{errors}")
     out.verified_catches = tuple(catches)
     return out
