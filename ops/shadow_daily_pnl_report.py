@@ -233,10 +233,11 @@ def trading_session(fill_dt: datetime) -> tuple[date, str]:
     return trading_date, "halt"
 
 
-def _settle_open(row: dict, trading_date: date, log_dir: str | Path | None, cache: dict) -> tuple[datetime, float, str] | None:
+def _settle_open(row: dict, fill_dt: datetime, trading_date: date, log_dir: str | Path | None,
+                 cache: dict) -> tuple[datetime, float, str] | None:
     """Play a resolver-OPEN trade forward on the stored bars after its last resolved bar:
-    stop (checked first), then target, else the last close before 17:00 ET of its
-    trading date. None when no stored bar covers it."""
+    stop (checked first), then target, else the close of the last bar that starts at/after
+    the fill bar and ends by 17:00 ET of its trading date. None when no such bar exists."""
     try:
         stop, target = float(row["stop"]), float(row["target"])
     except (KeyError, TypeError, ValueError):
@@ -250,8 +251,8 @@ def _settle_open(row: dict, trading_date: date, log_dir: str | Path | None, cach
         day_iso = (start + timedelta(days=offset)).isoformat()
         for bar in sorted(_load_bars(log_dir, str(row.get("instrument")), day_iso, cache), key=lambda b: str(b.get("ts"))):
             bar_dt = _parse_dt(str(bar.get("ts") or ""))
-            if bar_dt is None or _ends_after(bar_dt, close_dt):
-                continue
+            if bar_dt is None or bar_dt < fill_dt or _ends_after(bar_dt, close_dt):
+                continue  # before the fill, or not finished by the close
             try:
                 high, low, close = float(bar["high"]), float(bar["low"]), float(bar["close"])
             except (KeyError, TypeError, ValueError):
@@ -312,7 +313,7 @@ def capped_trades(rows: list[dict], log_dir: str | Path | None = None) -> list[d
         if exit_dt is None:  # no exit bar recorded: hold the position to the 17:00 ET close
             exit_dt = datetime.combine(trading_date, DAY_CLOSE, ET)
         if result == "OPEN":
-            settled = _settle_open(row, trading_date, log_dir, cache)
+            settled = _settle_open(row, times[0], trading_date, log_dir, cache)
             ticks, how = None, "unpriced"
             exit_dt = datetime.combine(trading_date, DAY_CLOSE, ET)
             if settled is not None and tick_size and row.get("entry") is not None:

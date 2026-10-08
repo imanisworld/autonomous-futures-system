@@ -308,13 +308,16 @@ def _open_row(**kw):
     return row
 
 
+OPEN_FILL = datetime(2026, 9, 23, 14, 15, tzinfo=timezone.utc)   # candidate 14:00Z + 1 bar
+
+
 def test_open_trade_is_played_out_on_stored_bars(tmp_path):
     _bar_file(tmp_path, "MNQ", "2026-09-23", [
         {"ts": "2026-09-23T14:15:00+00:00", "high": 101, "low": 99, "close": 100},
         {"ts": "2026-09-23T15:00:00+00:00", "high": 101, "low": 99, "close": 100},   # already seen by the resolver
         {"ts": "2026-09-23T16:00:00+00:00", "high": 125, "low": 89, "close": 110},   # stop and target: stop first
     ])
-    got = sdp._settle_open(_open_row(), date(2026, 9, 23), tmp_path, {})
+    got = sdp._settle_open(_open_row(), OPEN_FILL, date(2026, 9, 23), tmp_path, {})
     assert got[1:] == (90.0, "stop")
 
 
@@ -324,7 +327,7 @@ def test_open_trade_without_a_hit_closes_at_5pm_et(tmp_path):
         {"ts": "2026-09-23T20:45:00+00:00", "high": 108, "low": 103, "close": 107},  # last bar before 17:00 ET
         {"ts": "2026-09-23T22:00:00+00:00", "high": 200, "low": 1, "close": 150},    # next trading date: ignored
     ])
-    when, price, how = sdp._settle_open(_open_row(), date(2026, 9, 23), tmp_path, {})
+    when, price, how = sdp._settle_open(_open_row(), OPEN_FILL, date(2026, 9, 23), tmp_path, {})
     assert (price, how) == (107, "close")
     assert when.astimezone(sdp.ET).hour == 17
     trades = sdp.capped_trades([_open_row()], tmp_path)
@@ -510,3 +513,16 @@ def test_flatten_price_uses_a_bar_that_has_ended_by_the_close(tmp_path):
     row["shadow_outcome"]["bars_to_exit"] = 3
     (t,) = sdp.capped_trades([row], tmp_path)
     assert t["how"] == "close" and t["net_usd"] == round(16 * 0.5 - 1.98, 2)   # 104, not 110
+
+
+def test_open_trade_never_flattens_at_a_price_from_before_its_fill(tmp_path):
+    # Only bars before the fill (inside the resolver's window) and after the close exist:
+    # no price after the fill is known by 17:00 ET, so the trade stays unpriced.
+    _bar_file(tmp_path, "MNQ", "2026-09-23", [
+        {"ts": "2026-09-23T13:00:00+00:00", "high": 151, "low": 149, "close": 150},  # before the candidate
+        {"ts": "2026-09-23T14:00:00+00:00", "high": 151, "low": 149, "close": 150},  # candidate bar, before the fill
+        {"ts": "2026-09-23T22:00:00+00:00", "high": 101, "low": 99, "close": 100},   # next trading date
+    ])
+    assert sdp._settle_open(_open_row(), OPEN_FILL, date(2026, 9, 23), tmp_path, {}) is None
+    (t,) = sdp.capped_trades([_open_row()], tmp_path)
+    assert (t["how"], t["net_usd"], t["assumed_close"]) == ("unpriced", None, True)
