@@ -1,5 +1,15 @@
 # Futures Operator TODO
 
+## Latest operator queue — 2026-10-08
+
+- GitHub `main`: `f8e4257e2b9481f4b670b24e7602634e9cf47649` at this check. Latest audited deployed futures release remains `c44d32bc4961e56fae5c5f88a976eb6783341638` until a fresh box check.
+- **#1189 (OPEN)** — scoped Bash remote build quoting fix at `f60ec6ff3268e1b193ff8e21aefa3cd5d8420319`. Reported CI green; second Grok review is sought, not yet independently evidenced here. Merge requires explicit operator decision; no automated merge.
+- **#1190 (OPEN)** — deployment **plan only**, head `c90af59ec5edcafad4d8ebf9b6b30a4c7789baeb`. Review its preregistration, trading-path delta, acceptance/abort conditions, post-deploy read-only checks, rollback and watcher re-arm; do not duplicate the plan.
+- Prior `afs-deploy` CI-proof fix has operator-reported 51/51 fake-box passes and real U11 fetch/`verify-live` pass. Reuse verified proof, do not re-run unless inputs/code change.
+- If #1189 merges, **do not reuse** proof or deployment-plan candidate SHA `7c930274179f7c76749f75b35adb14fbb9255e54` as if it covered the new merged tree. Pin the new exact release SHA, reconcile scope and pass required release/CI gates.
+- Just before any separately authorized release action re-prove deploy lock, current source/box identity, integrity, demo + live-off + cap-one pins, broker flatness/orders, recovery/rollback and watcher state.
+- **HOLD**: no build, promote, restart, deployment or live execution authorized by completed source tests or any docs PR.
+
 > **Purpose:** compact list of operator-owned futures infrastructure/safety actions. Historical snapshots and completed detail are in `docs/futures-operator-todo-archive-through-2026-10-07.md`.
 >
 > This file is **not** strategy-status authority. Futures strategy truth is `docs/strategy-rules/Strategy_Inventory.md`; experiment history is `docs/research-trial-ledger.jsonl`; runtime truth requires fresh box evidence.
