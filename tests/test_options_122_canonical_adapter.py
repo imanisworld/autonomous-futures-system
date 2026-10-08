@@ -141,7 +141,7 @@ def test_confirmed_catch_is_one_canonical_verified_observation(tmp_path):
 
 def test_unverified_raw_bytes_never_count_as_catch(tmp_path):
     rows = _rows(tmp_path)
-    no_root = fold_122_rows(rows)
+    no_root = fold_122_rows(rows, max_quote_age_seconds=15)
     assert not no_root.verified_catches
     assert no_root.signal_for("s1").state is LifecycleState.DATA_BLOCKED
     (tmp_path / "s1.iex.jsonl").write_bytes(b"mutated\n")
