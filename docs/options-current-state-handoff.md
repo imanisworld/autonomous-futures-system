@@ -22,11 +22,11 @@ Historical dated notes and old/closed PRs are provenance only. They do not overr
 This check updates workflow status without changing the frozen evidence, the current checkpoint's strategy definitions, or operational state. #1188 was merged as `f8e4257e2b9481f4b670b24e7602634e9cf47649`; the 2026-10-08 checkpoint immediately below is now on main.
 
 - **#1183 / #1176 — MERGED / DONE.** Grok PASS on exact reviewed head `82a2d91411169b6923e26c8c79287757b81b6d37`; CI and Agent Handoff Check passed; merged as `8675cd43e0ecb9340614117e1afec0595c881cc6`. The canonical history-backed TRIGGERED-catch verifier and history/summary chronology fix are now on main. #1184's independent authority-history hardening remains mandatory before runtime authority wiring.
-- **#1177 — OPEN / next source implementation (upstream #1183 merged).** Dedicated `OPTIONS_122_IEX_PROSPECTIVE_COLLECTOR` only; forward-only exact registry/producer/source binding. #1145 cannot be used as `122-IEX-E1` evidence. No historical rewrite or real-data admission before the canonical contract is proven.
-- **#1184 — OPEN / security prerequisite.** Tamper-evident authority grant history, ordered timestamps, Unicode evaluator-name lookalikes, and the smaller fitness validation residuals must be resolved **before** storage of authority state, use of its flag, or fitness runtime wiring.
+- **#1177 / #1186 — IN PROGRESS / HOLD.** Producer part 1 PR #1186 (head `c8f19dbea01b760015fb033ae61fd9cec0f8e27c` at this checkpoint) added a duplicate-ARMED rejection and documented a fresh-journal rollback boundary after the Grok B1/B2 findings. Exact-head CI, independent Grok re-review and a separately approved, verified rollback-partition procedure remain outstanding. The dedicated read-only canonical adapter (part 2) is separate and not yet proven. `#1145` is **not** the `122-IEX-E1` producer; legacy rows cannot be relabeled or admitted.
+- **#1184 — OPEN / security prerequisite.** Design direction is an authenticated, append-only event history anchored by an independently trusted durable latest head, with strict evaluator identity and approval provenance. Approved human identities have **not** been supplied (none preapproved); storage, reading `execution_authority` as authority, and fitness runtime wiring stay blocked until design and tests pass.
 - **#1154 — OPEN / PARKED.** Final readiness reconciliation waits for #1183/#1176 merge and #1177 producer contract (parts 1 and 2). Preserve both 2026-10-07 and 2026-10-08 checkpoints. No proof-ready or paper-ready claim without exact provenance.
 - **#1167 — OPEN / deferred cleanup.** Modernization and dead-code audit follow readiness reconciliation; no speculative removal of active paths.
-- **#1190 — OPEN DRAFT / separate futures deployment plan, HOLD.** Pending fresh read-only VPS evidence and operator decisions on posture B1, dependency drift B5, guard setting B6, options ride-along B8, and evidence-window continuity. It does not authorize promotion.
+- **#1190 — OPEN / CHANGES REQUIRED / separate futures deployment plan.** #1189 merged as `064ee674b788c144fc8d3ca65082ed060927e2f1` (source-only). A later source fix #1194 is open for fail-closed watcher WorkingDirectory handling; the next buildable release SHA remains **UNSET** until reviewed changes merge. Fresh VPS proof for B1/B5/B6/B8 and explicit options collector isolation, evidence-window and rollback decisions remain outstanding. Neither the plan nor the merged source fix authorizes a build or promotion.
 
 **Gates:** Exact-head CI and independent Grok PASS before a code merge, then separate operator approval. No new build, promotion, install, restart, timer activation, live execution, or forward-proof Day 1 is authorized by this documentation update.
 
@@ -54,10 +54,10 @@ This section is the active source-state checkpoint for the canonical options evi
 
 ### OPEN / NEXT
 
-1. **#1183 / #1176**: move the "prospective catch must be a history-backed TRIGGERED catch" invariant into canonical `verify_record`. Until it lands, #1152 fitness and #1153 research each carry their own TRIGGERED gate as defense in depth.
-2. **#1177**: bind the dedicated 1-2-2 collector (`OPTIONS_122_IEX_PROSPECTIVE_COLLECTOR`) to `122-IEX-E1` with a forward-only canonical binding. #1145 is **not** the E1 producer and must not be aliased into it. Until then, no real data is admitted into `122-IEX-E1` fitness/research.
+1. **#1183 / #1176 — MERGED** as `8675cd43e0ecb9340614117e1afec0595c881cc6`: canonical verifier requires history-backed TRIGGERED catch and history/summary chronology. #1152/#1153 downstream guards remain defense in depth; this item is no longer an implementation blocker.
+2. **#1177 / #1186**: dedicated 1-2-2 collector producer-stamp implementation is in PR #1186, pending B1/B2 regression review, final exact-head CI, and a separate journal rollback/cutover decision. The forward-only read-only canonical adapter remains a distinct unfinished phase. #1145 is **not** the E1 producer. No real E1 fitness/research evidence admission yet.
 3. **#1184**: tamper-evident / append-only authority history, including timestamp ordering and evaluator-name lookalikes. Not a #1152 blocker (Grok ruling); a hard prerequisite before any code stores the authority object, acts on its flag, or wires fitness into runtime.
-4. **#1154** (readiness + docs reconciliation) stays parked until #1183/#1176 merges and #1177 parts 1/2 establish the producer contract. Runtime evidence must be bound to the exact strategy/epoch/definition/window/release/producer; for `122-IEX-E1` capture integrity comes from the dedicated 1-2-2 adapter, not #1145. Readiness may report NOT READY or READY TO START FORWARD PROOF; it never starts proof or trading, and READY TO START FORWARD PROOF is not READY FOR PAPER.
+4. **#1154** (readiness + docs reconciliation) stays parked. #1183/#1176 has merged, but #1177 parts 1 and 2 have not completed all review/provenance gates. Readiness requires exact strategy/epoch/definition/window/release/producer evidence and can say at most READY TO START FORWARD PROOF, **not** READY FOR PAPER or authority to start proof/trading.
 5. **#1167**: options modernization / dead-code audit, after #1154.
 6. Runtime observer/timer install and forward proof remain separate operator-approved phases after the code stack is complete.
 
@@ -65,7 +65,7 @@ This section is the active source-state checkpoint for the canonical options evi
 
 - No setup-capture timer install, observer install, or new options deployment is authorized by this checkpoint.
 - No forward-proof window is started; options Day 1 is not declared.
-- `122-IEX-E1` is not proof/trading ready: fitness evaluates it as COLLECTING / `no_oos_reference`, and its producer binding (#1177) is open. FROZEN is not READY or execution authority.
+- `122-IEX-E1` is not proof/trading ready: its producer binding (#1177 / #1186) and OOS reference/stop-target/runner operator decisions are incomplete; the last reported fitness state was COLLECTING / `no_oos_reference` and must not be presumed newly verified. FROZEN is not READY or execution authority.
 - Fitness is not runtime-wired; it can only revoke authority, and authority exists only through a recorded human grant. #1184 must land before authority state is persisted or acted on.
 
 ## Options-system checkpoint — 2026-10-07 (provenance; superseded by 2026-10-08 above)
