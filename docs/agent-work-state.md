@@ -16,7 +16,16 @@
 4. Runtime/deployment claims require fresh runtime evidence; repository state alone is never proof of what is deployed.
 5. Update this compact checkpoint after a meaningful work unit. Put dated historical detail in a lane-specific evidence file or archive, not here.
 
-## Current repository checkpoint — 2026-10-07
+## Latest verified source checkpoint — 2026-10-07
+
+- **GitHub main:** `7c930274179f7c76749f75b35adb14fbb9255e54` — #1180 squash merge, independently matched to the reviewed tree (operator handoff).
+- **#1180 source review:** reviewer fixes applied; exact-head CI reported **8,532 passed / 8 skipped**. This is **source/CI proof**, not deployed-runtime proof.
+- **Host Python prerequisite (operator handoff):** Python 3.13.16 installed separately on the box; system Python remains 3.14.4. Trading services unchanged. This does not prove the candidate release venv or deployment wrapper is ready.
+- **Only currently reported deployment-readiness blocker:** `afs-deploy` wrapper **CI-proof handling**. Requires a bounded fix plus **two fake-box regression tests**, followed by one final **read-only deployment-readiness audit**. Treat the blocker as open until tests and audit are verified.
+- **Decision:** **HOLD / NO DEPLOY**. #1180 was not built, promoted, restarted, or deployed. No live execution authorization.
+- **Next:** on an authorized available development machine, inspect the `afs-deploy` wrapper and exact CI-proof failure, apply only that scoped repair, run the two fake-box tests, request independent review, then run a read-only readiness audit. No source-wide re-audit or unrelated changes.
+
+## Previous source-safety checkpoint — 2026-10-07
 
 - **Source-safety baseline:** `1ec48a0ed76aea23c82882ff8c8ae258fda20c95` — U11 / PR #1166. Fetch current `main` before acting; later docs/guidance-only merges may be ahead of this baseline.
 - **U3→U11 safety campaign: source-complete / merged.**
@@ -55,7 +64,7 @@
 - **DO NOT DEPLOY yet.** First run a fresh deployment-safety/runtime reconciliation from an authorized read-only source.
 - Re-prove exact deployed SHA, rollback target, service/integrity health, demo/live posture, broker positions/orders, journal writes, deploy lock, and U11 host prerequisites.
 - Keep `CONTRACT_IDENTITY_GUARD_ENFORCED` off until the Pine contract-hint / roll-seam proof is explicitly complete.
-- U11 still has known runtime unknowns: actual release-host GitHub API reachability and VPS Python minor. Both fail closed.
+- U11 release-host GitHub API reachability and the effective release-venv proof must still be established at readiness audit. Separately installed Python 3.13.16 is handoff-reported; it does not authorize deployment. The immediate known blocker is `afs-deploy` CI-proof handling.
 
 ### Cleanup / modernization
 - Keep cleanup bounded and classification-first: ACTIVE_RUNTIME / ACTIVE_RESEARCH / REPLAY_REQUIRED / HISTORICAL_EVIDENCE / COMPATIBILITY_ONLY / DEAD-UNREFERENCED.
@@ -76,7 +85,7 @@
 
 ## NEXT
 
-1. Finish this bounded repo cleanup without changing execution behavior.
-2. Keep deployment separate; any build/verify/promote attempt requires fresh runtime proof plus explicit operator GO.
+1. Repair only `afs-deploy` CI-proof handling and pass its two fake-box regression tests; independent source review required.
+2. Complete a final read-only deployment-readiness audit. Keep deployment on HOLD; any build/verify/promote attempt later requires proven prerequisites plus explicit operator GO.
 3. For options/research work, follow their lane authorities and preserve prospective evidence rules.
 4. Do not create another general status/checkpoint document. Update this compact file or the lane authority instead.
