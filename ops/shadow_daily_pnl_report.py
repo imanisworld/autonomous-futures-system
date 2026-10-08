@@ -46,7 +46,11 @@ This is a counterfactual report view, not an execution policy: the bot's own
 trade limit is unchanged. Dollars cover the priced trades only (MNQ/MES cost
 model; an OPEN trade with no stored bars is unpriced), and each summary carries
 its coverage: priced count, estimated fill times, bar-settled trades and trades
-assumed flat at 17:00 ET. Raw collection is untouched: this is a view of the
+assumed flat at 17:00 ET. A "5 PM" price is used only from a stored bar that
+starts at/after the fill and ends within STALE_CLOSE_MINUTES before 17:00 ET;
+otherwise the trade is unpriced ("stale"). The CME holiday calendar and early
+closes are NOT modelled: every trading date is assumed to close at 17:00 ET, so
+an early-close day (bars stop at ~13:15 ET) shows up as stale, unpriced trades. Raw collection is untouched: this is a view of the
 same rows.
 """
 from __future__ import annotations
@@ -219,6 +223,8 @@ SESSION_CAP = 3
 CAPPED_SINCE = date(2026, 9, 23)
 DAY_OPEN, DAY_CLOSE, NIGHT_OPEN = time(9, 30), time(17, 0), time(18, 0)
 CAP_SCOPES = ("account", "per_market")
+# The flatten price must come from a bar ending this close to 17:00 ET, else it is stale.
+STALE_CLOSE_MINUTES = 30
 
 
 def trading_session(fill_dt: datetime) -> tuple[date, str]:
@@ -237,7 +243,8 @@ def _settle_open(row: dict, fill_dt: datetime, trading_date: date, log_dir: str 
                  cache: dict) -> tuple[datetime, float, str] | None:
     """Play a resolver-OPEN trade forward on the stored bars after its last resolved bar:
     stop (checked first), then target, else the close of the last bar that starts at/after
-    the fill bar and ends by 17:00 ET of its trading date. None when no such bar exists."""
+    the fill bar and ends by 17:00 ET of its trading date — "stale" (no price) when that bar
+    ends more than STALE_CLOSE_MINUTES before 17:00. None when no such bar exists."""
     try:
         stop, target = float(row["stop"]), float(row["target"])
     except (KeyError, TypeError, ValueError):
@@ -246,7 +253,7 @@ def _settle_open(row: dict, fill_dt: datetime, trading_date: date, log_dir: str 
     close_dt = datetime.combine(trading_date, DAY_CLOSE, ET)
     seen = _parse_dt(str(row.get("resolved_at_bar_ts") or "")) or _parse_dt(str(row.get("candidate_bar_ts") or ""))
     start = date.fromisoformat(str(row.get("candidate_day")))
-    last_close = None
+    last_close: tuple[datetime, float] | None = None
     for offset in range((close_dt.astimezone(ZoneInfo("UTC")).date() - start).days + 1):
         day_iso = (start + timedelta(days=offset)).isoformat()
         for bar in sorted(_load_bars(log_dir, str(row.get("instrument")), day_iso, cache), key=lambda b: str(b.get("ts"))):
@@ -258,16 +265,18 @@ def _settle_open(row: dict, fill_dt: datetime, trading_date: date, log_dir: str 
             except (KeyError, TypeError, ValueError):
                 continue
             if day_iso == str(row.get("candidate_day")) and seen is not None and bar_dt <= seen:
-                last_close = close  # inside the resolver's window (candidate day only): no stop/target here
+                last_close = (bar_dt, close)  # inside the resolver's window (candidate day only): no stop/target here
                 continue
             if (low <= stop) if long_side else (high >= stop):
                 return bar_dt, stop, "stop"
             if (high >= target) if long_side else (low <= target):
                 return bar_dt, target, "target"
-            last_close = close
+            last_close = (bar_dt, close)
     if last_close is None:
         return None
-    return close_dt, last_close, "close"
+    if _is_stale(last_close[0], close_dt):
+        return close_dt, None, "stale"
+    return close_dt, last_close[1], "close"
 
 
 def _ends_after(bar_dt: datetime, close_dt: datetime) -> bool:
@@ -275,9 +284,14 @@ def _ends_after(bar_dt: datetime, close_dt: datetime) -> bool:
     return bar_dt + timedelta(minutes=FALLBACK_BAR_MINUTES) > close_dt
 
 
+def _is_stale(bar_dt: datetime, close_dt: datetime) -> bool:
+    """The bar ended more than STALE_CLOSE_MINUTES before the close (feed gap, early close)."""
+    return bar_dt + timedelta(minutes=FALLBACK_BAR_MINUTES) < close_dt - timedelta(minutes=STALE_CLOSE_MINUTES)
+
+
 def _last_close_before(row: dict, fill_dt: datetime, close_dt: datetime, log_dir: str | Path | None,
-                       cache: dict) -> float | None:
-    """Close of the last stored bar that starts at/after the fill bar and ends by `close_dt`."""
+                       cache: dict) -> tuple[datetime, float] | None:
+    """(start, close) of the LATEST stored bar that starts at/after the fill bar and ends by `close_dt`."""
     start = date.fromisoformat(str(row.get("candidate_day")))
     best: tuple[datetime, float] | None = None
     for offset in range((close_dt.astimezone(ZoneInfo("UTC")).date() - start).days + 1):
@@ -290,7 +304,7 @@ def _last_close_before(row: dict, fill_dt: datetime, close_dt: datetime, log_dir
                 best = (bar_dt, float(bar["close"]))
             except (KeyError, TypeError, ValueError):
                 continue
-    return best[1] if best else None
+    return best
 
 
 def capped_trades(rows: list[dict], log_dir: str | Path | None = None) -> list[dict]:
@@ -316,25 +330,31 @@ def capped_trades(rows: list[dict], log_dir: str | Path | None = None) -> list[d
             settled = _settle_open(row, times[0], trading_date, log_dir, cache)
             ticks, how = None, "unpriced"
             exit_dt = datetime.combine(trading_date, DAY_CLOSE, ET)
-            if settled is not None and tick_size and row.get("entry") is not None:
+            if settled is not None and settled[2] == "stale":
+                how = "stale"
+            elif settled is not None and tick_size and row.get("entry") is not None:
                 exit_dt, price, how = settled
                 sign = 1 if row.get("direction") == "LONG" else -1
                 ticks = sign * (price - float(row["entry"])) / tick_size
-            assumed_close = how in ("close", "unpriced")
+            assumed_close = how in ("close", "unpriced", "stale")
         close_dt = datetime.combine(trading_date, DAY_CLOSE, ET)
-        if result in ("WIN", "LOSS") and exit_dt > close_dt:
+        if result in ("WIN", "LOSS") and exit_dt >= close_dt:
             # The resolver's window runs past the 17:00 ET close; an unresolved trade is closed
             # at 17:00, so a resolved one is too — the rule must not depend on how it ended.
             # Without a usable pre-close price it is unpriced, never credited its later exit.
-            price = None
+            # An exit stamped exactly 17:00 (estimated timing, or no exit recorded) is treated
+            # the same way: it is not known to have happened before the close.
+            last = None
             if tick_size and row.get("entry") is not None:
-                price = _last_close_before(row, times[0], close_dt, log_dir, cache)
+                last = _last_close_before(row, times[0], close_dt, log_dir, cache)
             exit_dt, assumed_close = close_dt, True
-            if price is None:
+            if last is None:
                 ticks, how = None, "unpriced"
+            elif _is_stale(last[0], close_dt):
+                ticks, how = None, "stale"
             else:
                 sign = 1 if row.get("direction") == "LONG" else -1
-                ticks = sign * (price - float(row["entry"])) / tick_size
+                ticks = sign * (last[1] - float(row["entry"])) / tick_size
                 how = "close"
         net = None
         if ticks is not None and tick_value is not None:
@@ -388,6 +408,7 @@ def _cap_summary(trades: list[dict]) -> dict:
         "estimated_fill_times": sum(t["approx_timing"] for t in trades),
         "played_out_on_bars": sum(t["how"] in ("stop", "target") for t in trades),
         "assumed_flat_at_close": sum(t["assumed_close"] for t in trades),
+        "stale_close_price": sum(t["how"] == "stale" for t in trades),
         "day_session": sum(t["session"] == "day" for t in trades),
         "night_session": sum(t["session"] == "night" for t in trades),
         "outside_sessions": sum(t["session"] == "halt" for t in trades),
@@ -409,7 +430,10 @@ def capped_report(log_dir: str | Path, day: date, cap: int = SESSION_CAP,
     views = {"every_signal": trades, **{s: apply_session_cap(trades, s, cap) for s in CAP_SCOPES}}
     out = {"rule": {"per_session": cap, "day": "09:30-17:00 ET", "night": "18:00-09:30 ET",
                     "reset": "18:00 ET", "one_position": True,
-                    "kind": "counterfactual report view; the bot's own trade limit is unchanged"},
+                    "kind": "counterfactual report view; the bot's own trade limit is unchanged",
+                    "calendar": "17:00 ET close assumed every trading date; CME holidays and early closes"
+                                f" not modelled; a close price older than {STALE_CLOSE_MINUTES} min is stale"
+                                " and unpriced"},
            "trading_date": day.isoformat(), "week_start": monday.isoformat(),
            "since": since.isoformat(), "selection_start": first.isoformat()}
     periods = [("today", day), ("week_to_date", monday)]
@@ -640,6 +664,9 @@ def _coverage_line(views: dict) -> str | None:
         parts.append(f"{s['played_out_on_bars']} ran past the end of tracking and hit their stop or target on stored prices")
     if s["assumed_flat_at_close"]:
         parts.append(f"{s['assumed_flat_at_close']} closed at the 5:00 PM ET close")
+    if s["stale_close_price"]:
+        parts.append(f"{s['stale_close_price']} had no price within {STALE_CLOSE_MINUTES} minutes of the close,"
+                     " so no dollars")
     if not parts:
         return None
     return "(whole-account trades above: " + "; ".join(parts) + ")"
@@ -655,7 +682,8 @@ def _capped_lines(capped: dict | None, *, final: bool = True) -> list[str]:
     lines = ["**Your limits (what-if)**",
              f"{cap} trades in the day session + {cap} in the night session, one position at a time"
              f" · trading day {pe.et_date(td)} (6:00 PM {pe.et_date(prev)} – 5:00 PM {pe.et_date(td)} ET)."
-             " Replays the recorded signals under these limits; it does not change what the bot trades."]
+             " Replays the recorded signals under these limits; it does not change what the bot trades."
+             " Assumes a regular 5:00 PM close (holidays and early closes not modelled)."]
     if not final:
         lines.append("(first pass — today's picks and dollars are provisional: trades not yet resolved can"
                      " change which trades the limits take; tomorrow's final report has the settled figures)")

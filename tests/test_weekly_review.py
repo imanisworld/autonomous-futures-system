@@ -196,3 +196,25 @@ def test_your_limits_futures_unavailable_is_said_not_dropped():
 
     text = "\n".join(your_limits_lines({"futures": {"unavailable": "futures limits could not be computed"}}))
     assert "**Your limits · futures**: not shown — futures limits could not be computed" in text
+
+
+def test_k35_k36_weekly_guards_show_unavailable_when_a_calculation_fails(tmp_path, monkeypatch):
+    from datetime import date as _date
+
+    from ops import options_daily_pnl_report as odp
+    from ops import shadow_daily_pnl_report as sdp
+    from scripts.weekly_review import collect_your_limits, your_limits_lines
+
+    def boom(*a, **k):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(sdp, "capped_report", boom)
+    monkeypatch.setattr(odp, "load_rows", boom)
+    db = tmp_path / "options.sqlite"
+    db.write_bytes(b"")
+    got = collect_your_limits(tmp_path, db, _date(2026, 9, 28), _date(2026, 10, 4))
+    assert got["futures"] == {"unavailable": "futures limits could not be computed"}
+    assert got["options"] == {"unavailable": "options limits could not be computed"}
+    text = "\n".join(your_limits_lines(got))
+    assert "futures**: not shown — futures limits could not be computed" in text
+    assert "options**: not shown — options limits could not be computed" in text
