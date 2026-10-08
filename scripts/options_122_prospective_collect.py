@@ -172,17 +172,28 @@ def _load_state(path: Path):
             ):
                 raise RuntimeError(f"journal_collector_version_mismatch_{number}")
         setup_id = str(row["setup_id"])
-        if row.get("canonical_binding") is not None:
-            binding = row.get("canonical_binding")
-            if not isinstance(binding, Mapping) or binding.get("schema") != CANONICAL_BINDING_SCHEMA:
-                raise RuntimeError(f"journal_canonical_binding_invalid_{number}")
-            canonically_bound.add(setup_id)
         if row.get("record_type") == "SOURCE_DRIFT":
             # The row carries the revised fingerprint by design; keep the frozen
             # one and block the setup (never re-armed, resolved or reconciled).
             drifted.add(setup_id)
             continue
         obs = row.get("observation") if isinstance(row.get("observation"), dict) else {}
+        binding = row.get("canonical_binding")
+        if binding is not None:
+            if row.get("collector_version") != COLLECTOR_VERSION or not isinstance(binding, Mapping):
+                raise RuntimeError(f"journal_canonical_binding_invalid_{number}")
+            class _BoundObservation:
+                pass
+            bound_obs = _BoundObservation()
+            for key, value in obs.items():
+                setattr(bound_obs, key, value)
+            try:
+                expected_binding = _canonical_binding(bound_obs)
+            except (TypeError, ValueError) as exc:
+                raise RuntimeError(f"journal_canonical_binding_invalid_{number}") from exc
+            if dict(binding) != expected_binding:
+                raise RuntimeError(f"journal_canonical_binding_invalid_{number}")
+            canonically_bound.add(setup_id)
         fp = obs.get("setup_fingerprint")
         if fp is not None:
             fp = str(fp)
@@ -418,11 +429,11 @@ async def _reconcile_pending(*, journal: Path, terminal: Mapping[str, dict[str, 
             "policy_epoch": POLICY_EPOCH, "setup_id": setup_id,
             "observation": obs, "iex": iex, "sip": sip, "policy": policy,
         }
-        # Historical rows predate the canonical binding stamp. Reconcile them
-        # without inventing missing identity; only new rows with explicit
-        # structure_close_time receive the binding.
-        if obs.get("structure_close_time"):
-            rec["canonical_binding"] = _canonical_binding(o)
+        # Binding is setup-scoped and forward-only. A legacy ARMED/RESOLUTION
+        # stays legacy even if current code can reconstruct extra fields later.
+        # New bound resolutions carry the exact validated binding forward.
+        if row.get("canonical_binding") is not None:
+            rec["canonical_binding"] = dict(row["canonical_binding"])
         if not dry_run:
             _append(journal, rec)
         if policy.get("reconciliation") == "DATA_BLOCKED": counts["blocked"] += 1
