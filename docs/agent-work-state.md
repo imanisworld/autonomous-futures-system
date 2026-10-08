@@ -16,12 +16,9 @@
 4. Runtime/deployment claims require fresh runtime evidence; repository state alone is never proof of what is deployed.
 5. Update this compact checkpoint after a meaningful work unit. Put dated historical detail in a lane-specific evidence file or archive, not here.
 
-## Current repository checkpoint — 2026-10-08
+## Current repository checkpoint — 2026-10-07
 
-- **GitHub `main` tip (verified this session):** `a602501cb0e665952da2101e9c4f73a3e68aea90` — includes merged #1186, #1190, #1194, #1196.
-- **Deployed futures release (allowlist, 2026-10-08T12:33:42Z):** still `c44d32bc4961e56fae5c5f88a976eb6783341638` — **not** equal to `main`.
-- **VPS readiness audit:** `docs/cursor-vps-readiness-audit-2026-10-08.md` — READ-ONLY allowlist+public evidence; FUTURES HOLD / OPTIONS HOLD; pending Grok challenge. Root B10/watcher/history/journal-ARMED/Python/freeze/collector-pin remain UNVERIFIED under allowlist.
-- **Source-safety baseline (historical):** `1ec48a0ed76aea23c82882ff8c8ae258fda20c95` — U11 / PR #1166. Later merges are ahead; do not treat baseline as tip.
+- **Source-safety baseline:** `1ec48a0ed76aea23c82882ff8c8ae258fda20c95` — U11 / PR #1166. Fetch current `main` before acting; later docs/guidance-only merges may be ahead of this baseline.
 - **U3→U11 safety campaign: source-complete / merged.**
   - U3 #1158 → `ebef089fa379fe555136a4f8f492c201139d3a51`
   - U4 #1159 → `36b59aa3ef626c5200d4c070f0a91bcd41a22b9e`
@@ -47,19 +44,18 @@
 
 ## Runtime boundary
 
-- Last preserved verified futures runtime checkpoint remains release `c44d32bc4961e56fae5c5f88a976eb6783341638` from 2026-10-04 (still live on box as of 2026-10-08T12:33:42Z allowlist read).
-- Fresh Cursor allowlist/public VPS audit completed 2026-10-08 — see `docs/cursor-vps-readiness-audit-2026-10-08.md`. It does **not** authorize deploy.
+- Last preserved verified futures runtime checkpoint remains release `c44d32bc4961e56fae5c5f88a976eb6783341638` from 2026-10-04.
+- **No fresh VPS/runtime verification was performed by the U3→U11 source campaign or this documentation cleanup.**
 - Do not infer that current `main` is deployed.
 - No deploy, restart, env/config mutation, broker mutation, order action, strategy change, risk change, or execution enablement is authorized by this checkpoint.
 
 ## Current open work — keep lanes separate
 
 ### Futures runtime / deployment
-- **DO NOT DEPLOY yet.** Candidate remains **UNSET**. Cursor VPS audit 2026-10-08: HOLD; handoff for Grok on #1190.
-- Allowlist-proven: deployed `c44d32b`, demo/live-off/flat/disarmed, Path-1 posture in process env, deploy lock absent, futures journal writing.
-- Still UNVERIFIED without root: watcher unit/path, `release_history.txt`, durable fingerprint pin, Python 3.13, live freeze, options collector pin class, options ARMED journal scan, disk capacity, rollback readiness.
+- **DO NOT DEPLOY yet.** First run a fresh deployment-safety/runtime reconciliation from an authorized read-only source.
+- Re-prove exact deployed SHA, rollback target, service/integrity health, demo/live posture, broker positions/orders, journal writes, deploy lock, and U11 host prerequisites.
 - Keep `CONTRACT_IDENTITY_GUARD_ENFORCED` off until the Pine contract-hint / roll-seam proof is explicitly complete.
-- U11 host unknowns remain: release-host GitHub API reachability and VPS Python minor (fail closed).
+- U11 still has known runtime unknowns: actual release-host GitHub API reachability and VPS Python minor. Both fail closed.
 
 ### Cleanup / modernization
 - Keep cleanup bounded and classification-first: ACTIVE_RUNTIME / ACTIVE_RESEARCH / REPLAY_REQUIRED / HISTORICAL_EVIDENCE / COMPATIBILITY_ONLY / DEAD-UNREFERENCED.
@@ -80,7 +76,7 @@
 
 ## NEXT
 
-1. Grok: challenge Cursor VPS audit (`docs/cursor-vps-readiness-audit-2026-10-08.md` / #1190 handoff); return independent HOLD/NOT READY/READY FOR OPERATOR REVIEW.
-2. Operator (when Mac available): run the root read-only block in the audit addendum (`ssh hetzner`); paste redacted outputs. Cloud Agent has only allowlist SSH — root same-key = Permission denied @ 2026-10-08T12:42:26Z.
-3. Keep deployment separate; any build/verify/promote requires nominated SHA + fresh root proof + explicit operator GO.
-4. For options/research work, follow `docs/options-current-state-handoff.md`; do not silently ride collector on a futures promote.
+1. Finish this bounded repo cleanup without changing execution behavior.
+2. Keep deployment separate; any build/verify/promote attempt requires fresh runtime proof plus explicit operator GO.
+3. For options/research work, follow their lane authorities and preserve prospective evidence rules.
+4. Do not create another general status/checkpoint document. Update this compact file or the lane authority instead.
