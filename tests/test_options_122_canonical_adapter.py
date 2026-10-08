@@ -15,7 +15,8 @@ from options_evidence.signal import LifecycleState, to_record, verify_record
 from scripts.options_122_prospective_collect import (
     COLLECTOR_ID, COLLECTOR_VERSION, POLICY_EPOCH, _canonical_binding,
 )
-from scripts.options_122_iex_provisional_audit import Arm, reconcile_pair
+from scripts.options_122_iex_provisional_audit import Arm, _first_boundary, reconcile_pair
+from scripts.options_trigger_trade_timestamp_audit import CanonicalTrade, canonical_trade_payload
 
 CLOSE = "2026-10-07T14:00:00+00:00"
 ARMED = "2026-10-07T14:01:00+00:00"
@@ -30,14 +31,32 @@ def _time_ns(value):
 
 
 def _feed(tmp_path: Path, feed: str, at: str, direction: str, family: str):
+    """Valid canonical trade tape, not a self-hashed placeholder."""
     path = tmp_path / f"s1.{feed}.jsonl"
-    payload = (feed + ":strict-trade-window\n").encode()
+    iso = datetime.fromisoformat(at).isoformat().replace("+00:00", "Z")
+    arm = Arm(
+        session_date="2026-10-07", symbol="SPY",
+        watch_start=datetime.fromisoformat(CLOSE),
+        watch_end=datetime.fromisoformat("2026-10-07T14:30:00+00:00"),
+        boundary_high=11.0, boundary_low=6.5, reference_direction="two_up",
+    )
+    trade = CanonicalTrade(
+        symbol="SPY", timestamp=iso, timestamp_ns=_time_ns(at),
+        price=6.0 if direction == "SHORT" else 12.0,
+        size=100, exchange="V", conditions=(), tape="A", trade_id="101",
+    )
+    payload = canonical_trade_payload([trade])
     path.write_bytes(payload)
+    end = datetime.fromisoformat(
+        "2026-10-07T14:30:00+00:00" if feed == "sip" else RESOLVED
+    )
+    result = _first_boundary([trade], arm=arm,
+                             window_start=arm.watch_start, window_end=end)
+    assert result["status"] == "PROVEN" and result["family_side"] == family
     return {
-        "status": "PROVEN", "source": f"alpaca_{feed}",
-        "break_side": "LOW" if direction == "SHORT" else "HIGH",
-        "direction": direction, "family_side": family,
-        "timestamp": at, "timestamp_ns": _time_ns(at),
+        **result, "source": f"alpaca_{feed}",
+        "query_window_start": arm.watch_start.isoformat(),
+        "query_window_end_exclusive": end.isoformat(),
         "raw_trade_file": str(path),
         "raw_trade_sha256": hashlib.sha256(payload).hexdigest(),
     }
@@ -186,7 +205,7 @@ def test_provisional_iex_reversal_is_pending_not_scoreable(tmp_path):
 
 def test_sip_disagrees_with_iex_provisional(tmp_path):
     rows = _rows(tmp_path)
-    rows[2]["sip"]["family_side"] = "CONTINUATION"
+    rows[2]["sip"] = _feed(tmp_path, "sip", SIP, "LONG", "CONTINUATION")
     _repolicy(rows)
     fold = fold_122_rows(rows, raw_root=tmp_path, max_quote_age_seconds=15)
     assert not fold.verified_catches
@@ -209,9 +228,7 @@ def test_iex_missed_sip_reversal_remains_missed_late(tmp_path):
 def test_same_direction_iex_first_break_cancels(tmp_path):
     rows = _rows(tmp_path)
     rows[1]["source_outcome"] = "CONTINUATION"
-    rows[1]["trigger_source"]["direction"] = "LONG"
-    rows[1]["trigger_source"]["break_side"] = "HIGH"
-    rows[1]["trigger_source"]["family_side"] = "CONTINUATION"
+    rows[1]["trigger_source"] = _feed(tmp_path, "iex", IEX, "LONG", "CONTINUATION")
     rows[1]["observation"]["status"] = "CANCELLED"
     rows[2]["observation"]["status"] = "CANCELLED"
     _repolicy(rows)
@@ -232,8 +249,10 @@ def test_blocked_or_late_capture_never_admitted(tmp_path, failure):
         rows[1]["option_evidence"]["captured_at"] = "2026-10-07T14:08:00Z"
     elif failure == "sip_earlier_than_arm":
         # Keep the timestamp and nanoseconds together, while the pre-arm proof fails.
-        rows[2]["sip"]["timestamp"] = "2026-10-07T14:00:30+00:00"
-        rows[2]["sip"]["timestamp_ns"] = _time_ns(rows[2]["sip"]["timestamp"])
+        rows[2]["sip"] = _feed(
+            tmp_path, "sip", "2026-10-07T14:00:30+00:00",
+            "SHORT", "REVERSAL",
+        )
         _repolicy(rows)
     fold = fold_122_rows(rows, raw_root=tmp_path, max_quote_age_seconds=15)
     assert not fold.verified_catches
@@ -259,7 +278,7 @@ def test_readonly_journal_never_changes_bytes_and_refuses_torn_tail(tmp_path):
     path = tmp_path / "journal.jsonl"
     data = b"".join((json.dumps(row, sort_keys=True) + "\n").encode() for row in rows)
     path.write_bytes(data)
-    fold = fold_122_rows(read_122_journal(path), raw_root=tmp_path)
+    fold = fold_122_rows(read_122_journal(path), raw_root=tmp_path, max_quote_age_seconds=15)
     assert fold.verified_catches
     assert path.read_bytes() == data
     path.write_bytes(data + b'{"unfinished":')
@@ -269,7 +288,7 @@ def test_readonly_journal_never_changes_bytes_and_refuses_torn_tail(tmp_path):
 
 def test_without_explicit_trusted_freshness_limit_no_catch(tmp_path):
     rows = _rows(tmp_path)
-    folded = fold_122_rows(rows, raw_root=tmp_path)
+    folded = fold_122_rows(rows, raw_root=tmp_path, max_quote_age_seconds=15)
     assert not folded.verified_catches
     assert folded.signal_for("s1").state is LifecycleState.DATA_BLOCKED
 
@@ -287,3 +306,49 @@ def test_duplicate_json_keys_rejected_even_if_last_value_looks_valid(tmp_path):
     path.write_bytes(b'{"record_type":"ARMED","record_type":"RESOLUTION"}\n')
     with pytest.raises(AdapterError, match="duplicate_json_key"):
         list(read_122_journal(path))
+
+
+def test_self_hashed_non_trade_bytes_never_prove_break(tmp_path):
+    rows = _rows(tmp_path)
+    invalid = b"iex:strict-trade-window\n"
+    (tmp_path / "s1.iex.jsonl").write_bytes(invalid)
+    digest = hashlib.sha256(invalid).hexdigest()
+    rows[1]["trigger_source"]["raw_trade_sha256"] = digest
+    rows[2]["iex"]["raw_trade_sha256"] = digest
+    with pytest.raises(AdapterError, match="iex_raw_trade"):
+        fold_122_rows(rows, raw_root=tmp_path, max_quote_age_seconds=15)
+
+
+def test_replay_rejects_forged_first_break_with_matching_digest(tmp_path):
+    rows = _rows(tmp_path)
+    other = _feed(tmp_path, "iex", IEX, "LONG", "CONTINUATION")
+    rows[1]["trigger_source"]["raw_trade_sha256"] = other["raw_trade_sha256"]
+    rows[2]["iex"]["raw_trade_sha256"] = other["raw_trade_sha256"]
+    with pytest.raises(AdapterError, match="iex_raw_first_break_mismatch"):
+        fold_122_rows(rows, raw_root=tmp_path, max_quote_age_seconds=15)
+
+
+def test_raw_symlink_leaf_and_parent_rejected(tmp_path):
+    rows = _rows(tmp_path)
+    leaf = tmp_path / "s1.iex.jsonl"
+    payload = leaf.read_bytes()
+    directory = tmp_path / "nested"
+    directory.mkdir()
+    (directory / leaf.name).write_bytes(payload)
+    leaf.unlink()
+    leaf.symlink_to(directory / leaf.name)
+    with pytest.raises(AdapterError, match="iex_raw_read_failed"):
+        fold_122_rows(rows, raw_root=tmp_path, max_quote_age_seconds=15)
+    leaf.unlink()
+    (tmp_path / "linked_dir").symlink_to(directory, target_is_directory=True)
+    for row, key in ((rows[1], "trigger_source"), (rows[2], "iex")):
+        row[key]["raw_trade_file"] = str(tmp_path / "linked_dir" / leaf.name)
+    with pytest.raises(AdapterError, match="iex_raw_read_failed"):
+        fold_122_rows(rows, raw_root=tmp_path, max_quote_age_seconds=15)
+
+
+def test_sip_replay_requires_full_watch_window(tmp_path):
+    rows = _rows(tmp_path)
+    rows[2]["sip"]["query_window_end_exclusive"] = RESOLVED
+    with pytest.raises(AdapterError, match="sip_raw_window_incomplete"):
+        fold_122_rows(rows, raw_root=tmp_path, max_quote_age_seconds=15)
