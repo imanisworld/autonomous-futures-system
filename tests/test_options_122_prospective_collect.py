@@ -22,6 +22,7 @@ from scripts.options_122_prospective_collect import (
 )
 
 UTC = timezone.utc
+LEGACY_VERSION = next(iter(LEGACY_COLLECTOR_VERSIONS))
 
 
 def _obs():
@@ -114,7 +115,7 @@ def test_journal_is_version_locked_and_append_only_state(tmp_path: Path):
         '{"record_type":"ARMED","collector_id":"%s","collector_version":"%s","policy_epoch":"%s","setup_id":"s1","observed_at":"2026-09-18T15:00:10+00:00","observation":{"setup_fingerprint":"f1"}}\n'
         '{"record_type":"RESOLUTION","collector_id":"%s","collector_version":"%s","policy_epoch":"%s","setup_id":"s1","observation":{"setup_fingerprint":"f1"}}\n'
         '{"record_type":"RECONCILIATION","collector_id":"%s","collector_version":"%s","policy_epoch":"%s","setup_id":"s1","observation":{"setup_fingerprint":"f1"}}\n'
-        % (COLLECTOR_ID,COLLECTOR_VERSION,POLICY_EPOCH,COLLECTOR_ID,COLLECTOR_VERSION,POLICY_EPOCH,COLLECTOR_ID,COLLECTOR_VERSION,POLICY_EPOCH)
+        % (COLLECTOR_ID,LEGACY_VERSION,POLICY_EPOCH,COLLECTOR_ID,LEGACY_VERSION,POLICY_EPOCH,COLLECTOR_ID,LEGACY_VERSION,POLICY_EPOCH)
     )
     armed, terminal, fp, reconciled, drifted, bound = _load_state(p)
     assert armed["s1"] == datetime(2026,9,18,15,0,10,tzinfo=UTC)
@@ -186,7 +187,7 @@ def _row(record_type, setup_id, fp, **extra):
 
     return json.dumps({
         "record_type": record_type, "collector_id": COLLECTOR_ID,
-        "collector_version": COLLECTOR_VERSION, "policy_epoch": POLICY_EPOCH,
+        "collector_version": LEGACY_VERSION, "policy_epoch": POLICY_EPOCH,
         "setup_id": setup_id, "observed_at": "2026-09-22T16:30:11+00:00",
         "observation": {"setup_fingerprint": fp}, **extra,
     }) + "\n"
@@ -228,7 +229,7 @@ def test_source_drift_row_stays_version_locked(tmp_path: Path):
     import pytest
 
     p = tmp_path / "j.jsonl"
-    p.write_text(_row("ARMED", "s1", "fp1") + _row("SOURCE_DRIFT", "s1", "fp2").replace(COLLECTOR_VERSION, "old"))
+    p.write_text(_row("ARMED", "s1", "fp1") + _row("SOURCE_DRIFT", "s1", "fp2").replace(LEGACY_VERSION, "old"))
     with pytest.raises(RuntimeError, match="journal_collector_version_mismatch_2"):
         _load_state(p)
 
@@ -236,7 +237,7 @@ def test_source_drift_row_stays_version_locked(tmp_path: Path):
 def test_legacy_collector_rows_load_but_never_become_canonically_bound(tmp_path: Path):
     import json
 
-    legacy = next(iter(LEGACY_COLLECTOR_VERSIONS))
+    legacy = LEGACY_VERSION
     row = json.loads(_row("ARMED", "legacy", "fp1"))
     row["collector_version"] = legacy
     p = tmp_path / "legacy-state.jsonl"
@@ -247,6 +248,46 @@ def test_legacy_collector_rows_load_but_never_become_canonically_bound(tmp_path:
     assert fp == {"legacy": "fp1"}
     assert reconciled == set() and drifted == set()
     assert bound == set()
+
+
+def test_legacy_setup_cannot_be_upgraded_by_later_bound_row(tmp_path: Path):
+    import json
+    import pytest
+
+    legacy = json.loads(_row("ARMED", "s1", "f1"))
+    current = {
+        "record_type": "RESOLUTION",
+        "collector_id": COLLECTOR_ID,
+        "collector_version": COLLECTOR_VERSION,
+        "policy_epoch": POLICY_EPOCH,
+        "setup_id": "s1",
+        "observed_at": "2026-09-18T15:10:00+00:00",
+        "observation": _obs().to_dict(),
+        "canonical_binding": _canonical_binding(_obs()),
+    }
+    p = tmp_path / "upgrade.jsonl"
+    p.write_text(json.dumps(legacy) + "\n" + json.dumps(current) + "\n")
+    with pytest.raises(RuntimeError, match="journal_canonical_binding_upgrade_2"):
+        _load_state(p)
+
+
+def test_current_version_armed_requires_binding(tmp_path: Path):
+    import json
+    import pytest
+
+    row = {
+        "record_type": "ARMED",
+        "collector_id": COLLECTOR_ID,
+        "collector_version": COLLECTOR_VERSION,
+        "policy_epoch": POLICY_EPOCH,
+        "setup_id": "s1",
+        "observed_at": "2026-09-18T15:00:10+00:00",
+        "observation": _obs().to_dict(),
+    }
+    p = tmp_path / "missing-binding.jsonl"
+    p.write_text(json.dumps(row) + "\n")
+    with pytest.raises(RuntimeError, match="journal_canonical_binding_missing_1"):
+        _load_state(p)
 
 
 def test_bound_row_is_recomputed_and_tamper_checked_on_reload(tmp_path: Path):
