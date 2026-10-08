@@ -197,6 +197,7 @@ def make_promotion_bundle(
     }
     spec_path = root / "docs/research-experiment-specs" / f"{experiment_id}.json"
     spec_path.write_text(json.dumps(spec, indent=2) + "\n", encoding="utf-8")
+    write_synthetic_fi_suite(root)
     runner._git(root, "init")
     runner._git(root, "config", "user.email", "t@example.com")
     runner._git(root, "config", "user.name", "t")
@@ -236,3 +237,45 @@ def make_promotion_bundle(
     status = evidence_identity.classify_evidence_bundle(root, root / bundle_rel)
     assert status.status == evidence_identity.PROMOTION_QUALITY, status.reasons
     return bundle_rel, head
+
+
+def write_synthetic_fi_suite(root: Path) -> None:
+    """One trivially passing committed test per required FI scenario (U10 fixtures)."""
+    from ops.fault_injection_gate import REQUIRED_SCENARIOS
+
+    suite = root / "tests/fault_injection"
+    suite.mkdir(parents=True, exist_ok=True)
+    lines: list[str] = []
+    for scenario in REQUIRED_SCENARIOS:
+        token = scenario.replace("FI-", "fi").lower()
+        lines.append(f"def test_{token}_synthetic():\n    assert True\n")
+    (suite / "test_synthetic_fi.py").write_text("\n\n".join(lines), encoding="utf-8")
+
+
+def make_fi_manifest(root: Path, code_sha: str, *, mutate=None) -> str:
+    """Write synthetic FI proof structurally bound to an exact fixture SHA."""
+    from ops import fault_injection_gate as fi
+
+    discovered = sorted(fi.discovered_scenarios_at(root, code_sha))
+    manifest = {
+        "schema_version": fi.SCHEMA_VERSION,
+        "generator": fi.GENERATOR,
+        "code_sha": code_sha,
+        "suite_dir": fi.SUITE_DIR,
+        "suite_fingerprint": fi.suite_fingerprint_at(root, code_sha),
+        "pytest_exit_code": 0,
+        "required_scenarios": list(fi.REQUIRED_SCENARIOS),
+        "discovered_scenarios": discovered,
+        "scenarios": {
+            scenario: {
+                "passed": 1, "failed": 0, "skipped": 0, "result": "PASS", "tests": []
+            }
+            for scenario in fi.REQUIRED_SCENARIOS
+        },
+        "overall": "PASS",
+    }
+    if mutate is not None:
+        mutate(manifest)
+    path = root / "fi_manifest.json"
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    return "fi_manifest.json"

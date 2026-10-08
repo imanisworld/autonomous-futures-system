@@ -283,7 +283,7 @@ def _pin_runtime_head_and_diff(monkeypatch, changed_files: str = "strategy/examp
 def _canonical_complete_evidence(tmp_path: Path, monkeypatch) -> Path:
     """Complete packet whose execution/realism/window/provenance facts come
     from a real PROMOTION_QUALITY canonical bundle (U5)."""
-    from tests.canonical_bundle_helpers import make_promotion_bundle
+    from tests.canonical_bundle_helpers import make_fi_manifest, make_promotion_bundle
 
     bundle, code_sha = make_promotion_bundle(tmp_path)
     payload = _complete_evidence(tmp_path)
@@ -301,6 +301,7 @@ def _canonical_complete_evidence(tmp_path: Path, monkeypatch) -> Path:
     payload["replay_provenance"]["code_sha"] = code_sha
     payload.pop("execution")
     payload["canonical_evidence"] = {"bundles": [bundle]}
+    payload["fault_injection"] = {"manifest": make_fi_manifest(tmp_path, code_sha)}
     monkeypatch.setattr(
         "ops.project_check.demo_qualification.gitutil.head_sha", lambda _root: code_sha
     )

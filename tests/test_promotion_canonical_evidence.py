@@ -13,7 +13,7 @@ from ops.project_check.promotion import (
     _apply_canonical_facts,
     build_promotion_report,
 )
-from tests.canonical_bundle_helpers import make_promotion_bundle
+from tests.canonical_bundle_helpers import make_fi_manifest, make_promotion_bundle
 
 
 @pytest.fixture(autouse=True)
@@ -50,6 +50,7 @@ def _packet(bundles: list[str] | None, **overrides) -> dict:
             "commission_slippage_assumptions": "frozen execution_assumptions",
         },
         "stated_classification": "PROMISING BUT UNPROVEN",
+        "fault_injection": {"manifest": "fi_manifest.json"},
     }
     if bundles is not None:
         payload["canonical_evidence"] = {"bundles": bundles}
@@ -66,7 +67,8 @@ def _report(tmp_path: Path, payload: dict) -> dict:
 
 @pytest.fixture
 def bundle(tmp_path):
-    rel, _ = make_promotion_bundle(tmp_path)
+    rel, code_sha = make_promotion_bundle(tmp_path)
+    make_fi_manifest(tmp_path, code_sha)
     return rel
 
 
