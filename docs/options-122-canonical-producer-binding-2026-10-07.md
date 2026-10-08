@@ -53,6 +53,48 @@ not replace the raw source payloads.
 
 ## Compatibility
 
+### Grok B1 — one authoritative arm per setup
+
+The journal loader now rejects every second `ARMED` for the same setup
+(including legacy ARMED followed by a valid-looking stamped ARMED). This
+refuses duplicate-event laundering before canonical population membership
+can be established. Historical rows remain untouched.
+
+### Grok B2 — rollback is a schema-boundary migration, not a code-only revert
+
+**BLOCKED until an explicit, separately reviewed operator-approved
+journal-partition procedure is demonstrated on the release host.**
+
+The old v0.1 collector refuses v0.2 rows in a shared cumulative journal,
+so a straightforward rollback of the executable while pointing it at the
+v0.2 journal can fail at startup. Neither deployment nor rollback may silently
+delete, truncate, rewrite, or rename the historical evidence in place.
+
+Required staged procedure before any v0.2 promotion or rollback:
+
+1. Snapshot and hash the original cumulative JSONL, its raw trade inputs,
+   source release SHA, collector schema, registry definition hash, timestamps
+   and provenance manifest; verify the snapshot is immutable/read-only.
+2. Select a **new, distinct, empty journal partition path** for the active
+   code version. Update unit/config journal location only under a separate
+   operator-approved change after a reviewed path/permission check. Never
+   reuse an old path containing incompatible rows.
+3. For a rollback, stop/switch the producer only under operator GO and
+   point the prior v0.1 release at a fresh v0.1-compatible partition; retain
+   the original v0.2 journal and its manifest for audit, unrelabelled.
+4. Prove the **actual pinned v0.1 collector executable** can start and
+   complete a closed-session no-evidence cycle against the empty rollback
+   partition, without mutating preserved journals, executing orders or
+   starting proof. A v0.2 loader test alone is **not** this proof.
+5. Record the two exact release identities, path ownership, cutover time,
+   episode boundaries and one-way provenance. Do not stitch the partitions
+   into a single admitted catch population without separate registration
+   and reproducible identity verification. Fail closed if evidence is missing.
+
+Source-only regressions demonstrate that partition files remain separate,
+a combined duplicate arm is refused and historic bytes stay unchanged.
+They do **not** simulate or authorize a real VPS rollback rehearsal.
+
 The canonical-stamp boundary bumps the collector from
 `122-iex-collector-v0.1` to `122-iex-collector-v0.2`. The loader explicitly
 accepts v0.1 as legacy so existing journal rows continue to load, but only a
