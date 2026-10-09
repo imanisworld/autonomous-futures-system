@@ -614,3 +614,40 @@ def test_k7_open_settlement_ignores_a_bar_ending_after_the_close(tmp_path):
     ])
     got = sdp._settle_open(_open_row(), OPEN_FILL, date(2026, 9, 23), tmp_path, {})
     assert got[1:] == (104, "close")
+
+
+# ── AFS-0193 R1 ──────────────────────────────────────────────────────────────
+def _unknown_exit_win():
+    # Resolved WIN, +80 ticks, but bars_to_exit missing: exit time unknown.
+    return _cap_row("k45", "MNQ", "WIN", 80, "2026-09-23T19:00:00+00:00", 1, None,
+                    entry=100.0, stop=90.0, target=120.0, resolved_at_bar_ts="2026-09-23T21:30:00+00:00")
+
+
+def test_k45_unknown_exit_keeps_the_recorded_result_with_a_pre_close_bar(tmp_path):
+    _bar_file(tmp_path, "MNQ", "2026-09-23", [
+        {"ts": "2026-09-23T19:15:00+00:00", "high": 101, "low": 99, "close": 100},    # fill bar
+        {"ts": "2026-09-23T20:45:00+00:00", "high": 111, "low": 99, "close": 110},    # 16:45 ET: would give +$18.02
+    ])
+    (t,) = sdp.capped_trades([_unknown_exit_win()], tmp_path)
+    assert t["net_usd"] == round(80 * 0.5 - 1.98, 2) == 38.02                    # recorded, not repriced
+    assert (t["how"], t["won"], t["exit_time_unknown"], t["assumed_close"]) == ("win", True, True, False)
+    s = sdp._cap_summary([t])
+    assert (s["exit_time_unknown"], s["assumed_flat_at_close"], s["priced"]) == (1, 0, 1)
+
+
+def test_k45_unknown_exit_keeps_the_recorded_result_without_bars(tmp_path):
+    (t,) = sdp.capped_trades([_unknown_exit_win()], tmp_path)
+    assert (t["net_usd"], t["exit_time_unknown"], t["how"]) == (38.02, True, "win")
+
+
+def test_k45_unknown_exit_is_disclosed_and_held_to_the_close_for_the_limits(tmp_path):
+    later = _cap_row("after", "MNQ", "WIN", 40, "2026-09-23T20:00:00+00:00", 1, 2)    # fills 16:15 ET
+    _write(tmp_path, "journal_2026-09-23.jsonl", [_unknown_exit_win(), later])
+    rep = sdp.capped_report(tmp_path, DAY)
+    acct = rep["today"]["account"]
+    # The unknown exit is not made precise: the position is held to 17:00, so the 16:15 fill is skipped.
+    assert acct["trades"] == 1 and acct["exit_time_unknown"] == 1 and acct["net_usd"] == 38.02
+    assert rep["today"]["every_signal"]["trades"] == 2
+    text = "\n".join(sdp._capped_lines(rep))
+    assert "1 with an unknown exit time — recorded result kept, counted as held until 5:00 PM ET" in text
+    assert "closed at the 5:00 PM ET close" not in text

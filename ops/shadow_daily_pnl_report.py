@@ -323,8 +323,12 @@ def capped_trades(rows: list[dict], log_dir: str | Path | None = None) -> list[d
         tick_value, tick_size = TICK_VALUE.get(inst), TICK_SIZE.get(inst)
         trading_date, session = trading_session(times[0])
         exit_dt, ticks, how = times[1], outcome.get("pnl_ticks"), result.lower()
-        assumed_close = exit_dt is None
-        if exit_dt is None:  # no exit bar recorded: hold the position to the 17:00 ET close
+        # A resolved WIN/LOSS without bars_to_exit: its exit time is UNKNOWN. Keep the recorded
+        # result (never reprice it), and for one-position selection hold it to the 17:00 ET
+        # close — the latest it can run under the rule — flagged, never shown as a known exit.
+        exit_unknown = exit_dt is None and result in ("WIN", "LOSS")
+        assumed_close = False
+        if exit_dt is None:
             exit_dt = datetime.combine(trading_date, DAY_CLOSE, ET)
         if result == "OPEN":
             settled = _settle_open(row, times[0], trading_date, log_dir, cache)
@@ -338,7 +342,7 @@ def capped_trades(rows: list[dict], log_dir: str | Path | None = None) -> list[d
                 ticks = sign * (price - float(row["entry"])) / tick_size
             assumed_close = how in ("close", "unpriced", "stale")
         close_dt = datetime.combine(trading_date, DAY_CLOSE, ET)
-        if result in ("WIN", "LOSS") and exit_dt >= close_dt:
+        if result in ("WIN", "LOSS") and not exit_unknown and exit_dt >= close_dt:
             # The resolver's window runs past the 17:00 ET close; an unresolved trade is closed
             # at 17:00, so a resolved one is too — the rule must not depend on how it ended.
             # Without a usable pre-close price it is unpriced, never credited its later exit.
@@ -363,6 +367,7 @@ def capped_trades(rows: list[dict], log_dir: str | Path | None = None) -> list[d
             "key": str(row.get("candidate_key")), "instrument": inst, "fill": times[0],
             "exit": exit_dt, "trading_date": trading_date, "session": session,
             "how": how, "net_usd": net, "approx_timing": times[2], "assumed_close": assumed_close,
+            "exit_time_unknown": exit_unknown,
             "won": result == "WIN" if how in ("win", "loss") else (net is not None and net > 0),
         })
     trades.sort(key=lambda t: (t["fill"], t["key"]))
@@ -409,6 +414,7 @@ def _cap_summary(trades: list[dict]) -> dict:
         "played_out_on_bars": sum(t["how"] in ("stop", "target") for t in trades),
         "assumed_flat_at_close": sum(t["assumed_close"] for t in trades),
         "stale_close_price": sum(t["how"] == "stale" for t in trades),
+        "exit_time_unknown": sum(t.get("exit_time_unknown", False) for t in trades),
         "day_session": sum(t["session"] == "day" for t in trades),
         "night_session": sum(t["session"] == "night" for t in trades),
         "outside_sessions": sum(t["session"] == "halt" for t in trades),
@@ -664,6 +670,9 @@ def _coverage_line(views: dict) -> str | None:
         parts.append(f"{s['played_out_on_bars']} ran past the end of tracking and hit their stop or target on stored prices")
     if s["assumed_flat_at_close"]:
         parts.append(f"{s['assumed_flat_at_close']} closed at the 5:00 PM ET close")
+    if s["exit_time_unknown"]:
+        parts.append(f"{s['exit_time_unknown']} with an unknown exit time — recorded result kept,"
+                     " counted as held until 5:00 PM ET for the limits")
     if s["stale_close_price"]:
         parts.append(f"{s['stale_close_price']} had no price within {STALE_CLOSE_MINUTES} minutes of the close,"
                      " so no dollars")
