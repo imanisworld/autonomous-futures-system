@@ -99,8 +99,9 @@ class FakeHost(afs.Host):
         self.approvals: dict[str, dict[str, object]] = {}
 
     def _scanner_paths(self) -> str:
-        paths = [str(afs.ETC_DROPIN_DIR / name) for name in sorted(self.etc)]
-        return " ".join([*paths, *self.extra_scanner_paths])
+        etc_paths = [str(afs.ETC_DROPIN_DIR / name) for name in sorted(self.etc)]
+        runtime_paths = [str(afs.RUNTIME_DROPIN_DIR / name) for name in sorted(self.runtime)]
+        return " ".join([*etc_paths, *runtime_paths, *self.extra_scanner_paths])
 
     def systemctl_show(self, unit: str) -> dict[str, str]:
         self.calls.append(("show", unit))
@@ -1038,6 +1039,47 @@ def test_crash_before_reload_can_be_recovered():
     assert "result=ok" in out
     assert afs.DROPIN_NAME not in host.etc
     assert host.scanner["NeedDaemonReload"] == "no"
+
+
+def _crash_before_reload() -> tuple[FakeHost, dict]:
+    host = FakeHost()
+    host.crash_on_reload = True
+    host.grant("options-scanner-memory set 600M")
+    with pytest.raises(SystemExit):
+        _run(host, "options-scanner-memory", "set", "600M")
+    intent = _open_intent(host)
+    host.crash_on_reload = False
+    return host, intent
+
+
+def test_base_unit_edit_after_crash_is_not_reloaded():
+    host, intent = _crash_before_reload()
+    host.base = "[Service]\nMemoryMax=350M\nExecStart=/usr/bin/false\n"
+    planted = host.base
+    host.grant(f"options-scanner-memory rollback {intent['stamp']}", name="rollback0001")
+    reloads = host.reload_count
+    code, out, err = _run(host, "options-scanner-memory", "rollback", intent["stamp"])
+    assert code == 1
+    assert "result=ok" not in out
+    assert "ROLLBACK UNVERIFIED" in err
+    assert "rollback0001" in host.approvals
+    assert host.reload_count == reloads
+    assert host.base == planted
+
+
+def test_new_runtime_environment_dropin_is_not_reloaded():
+    host, intent = _crash_before_reload()
+    host.runtime["aa-env.conf"] = "[Service]\nEnvironment=AFS_MAINTENANCE_TEST=1\n"
+    host.grant(f"options-scanner-memory rollback {intent['stamp']}", name="rollback0001")
+    reloads = host.reload_count
+    code, out, err = _run(host, "options-scanner-memory", "rollback", intent["stamp"])
+    assert code == 1
+    assert "result=ok" not in out
+    assert "ROLLBACK UNVERIFIED" in err
+    assert "rollback0001" in host.approvals
+    assert host.reload_count == reloads
+    assert host.calls.count(("daemon-reload",)) == reloads
+    assert host.runtime["aa-env.conf"].startswith("[Service]\nEnvironment=")
 
 
 def test_crash_plus_foreign_dropin_edit_keeps_the_approval():

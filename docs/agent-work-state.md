@@ -13,12 +13,11 @@
 
 ## Prepared, not installed — Cursor Cloud maintenance (2026-10-08)
 
-- **Branch:** `ops/cursor-cloud-vps-maintenance`, draft PR #1206. Follow-up to `5ae3e40` for AFS-0191: a failed memory-limit put-back is `ROLLBACK UNVERIFIED / HOLD` with the intent left open, and recovery no longer refuses the scanner reload flag that a drop-in write sets before `daemon-reload`. An unrelated drop-in edit, futures reload flag, or `system.control` file still refuses before the approval is consumed. Not installed. `main` stays `bd5ea24`.
-- **Verified read-only:** `grok-audit` `cursor-cloud-agent` key is `restrict` plus `sudo -n /usr/local/sbin/afs-grok-audit`. Other grok-audit keys stay on that audit command. `options-scanner` remained active, PID `1695873`, `NRestarts=0`, `MemoryMax=367001600` (350MiB). futures-bot PID `1851835` unchanged. `/usr/local/sbin/afs-maintenance` was absent. That box check is from before this commit and was not repeated.
-- **Prepared:** `scripts/afs_maintenance.py`, `scripts/afs-maintenance.sudoers`, `scripts/install_afs_maintenance.py`. The only mutation is `options-scanner` MemoryMax from 350M through 600M, with verification and rollback. `set` and `rollback` fail closed unless root has placed a matching one-time approval file. The program can consume that file and cannot create one. No restart, deploy, env read, or key-blob change is available.
-- **Tests:** `python3 -m pytest tests/test_afs_maintenance.py -q` — 78 passed. No VPS write. The new tests cover the AFS-0191 mutation list: put-back failure, crash-before-reload recovery, foreign drop-in edit, hidden reload/`system.control` state, futures identity on the restore reload, DropInPaths and NeedDaemonReload drift, open-intent HOLD, cgroup rewrite, partial-history read, and directory-sync failure. These tests do not prove power-loss durability on the VPS. Approval-directory ancestor ownership was not changed.
-- **DONE / DO NOT REDO:** AFS-0191 NB1 and NB2 source fixes and the listed mutation tests on this commit. Do not install from an agent session.
-- **NEXT:** Claude and Grok review this exact commit, the mutation tests, and CI. No installation, daemon-reload, MemoryMax change, SSH change, or VPS write.
+- **Branch:** `ops/cursor-cloud-vps-maintenance`, draft PR #1206. Follow-up to `69c435e` for AFS-0194 NB3: recovery records the base-unit sha256 and refuses, before consuming the approval or reloading, when that hash changes or when DropInPaths changes by anything other than our own memory drop-in. Not installed. `main` stays `bd5ea24`.
+- **Tests:** `python3 -m pytest tests/test_afs_maintenance.py -q` — 80 passed. No VPS write. NB3a and NB3b cover a base ExecStart edit and a new runtime `Environment=` drop-in after the pre-reload crash. Approval lifetime and approval-directory ancestor ownership were not changed. These tests do not prove power-loss durability on the VPS.
+- **Runtime:** No VPS read or write in this commit. The earlier read-only check was not repeated.
+- **DONE / DO NOT REDO:** AFS-0191 NB1/NB2 and AFS-0194 NB3 source fixes. Do not install from an agent session.
+- **NEXT:** Claude and Grok review this exact commit and CI. No installation, daemon-reload, MemoryMax change, SSH change, or VPS write.
 
 > **Purpose:** compact resume checkpoint for agents. This file is coordination state only; it is **not** strategy-status, experiment, deployment, or runtime authority.
 >

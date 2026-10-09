@@ -904,6 +904,7 @@ def _intent_row(stamp: str, command: str, before: Snapshot, target_mib: int) -> 
     return {
         "action": "intent",
         "before_mib": before.scanner_mib,
+        "base_sha256": before.base_sha256,
         "cgroup_max": before.cgroup_max,
         "command": command,
         "etc_files": before.etc_files,
@@ -1359,6 +1360,37 @@ def _foreign_etc_changes(intent: dict[str, object], before: Snapshot) -> list[st
     return changes
 
 
+def _require_same_unit_sources(intent: dict[str, object], before: Snapshot, baseline: dict[str, str]) -> None:
+    """Refuse recovery before reload when the base unit or drop-in path set changed.
+
+    The only DropInPaths change recovery may proceed through is our own memory
+    drop-in appearing or disappearing. That is the crash between writing it
+    and daemon-reload. Any other path, and any base-unit change, stays unloaded.
+    """
+
+    recorded_base = intent.get("base_sha256")
+    if not isinstance(recorded_base, str) or not recorded_base:
+        raise MaintenanceFailure(
+            "ROLLBACK UNVERIFIED / HOLD: intent has no base unit baseline",
+            unverified=True,
+        )
+    if before.base_sha256 != recorded_base:
+        raise MaintenanceFailure(
+            "ROLLBACK UNVERIFIED / HOLD: base unit changed",
+            unverified=True,
+        )
+    if not _scanner_paths_allowed(baseline["scanner_dropin_paths"], before.scanner_dropin_paths):
+        raise MaintenanceFailure(
+            "ROLLBACK UNVERIFIED / HOLD: scanner DropInPaths changed",
+            unverified=True,
+        )
+    if before.futures_dropin_paths != baseline["futures_dropin_paths"]:
+        raise MaintenanceFailure(
+            "ROLLBACK UNVERIFIED / HOLD: futures DropInPaths changed",
+            unverified=True,
+        )
+
+
 def _log_recovery_failure(host: Host, command: str, exc: MaintenanceFailure) -> None:
     with contextlib.suppress(Exception):
         _log(
@@ -1410,6 +1442,7 @@ def _recover_recorded_intent(host: Host, intent: dict[str, object], command: str
             "ROLLBACK UNVERIFIED / HOLD: unrelated drop-in changed: " + ", ".join(foreign),
             unverified=True,
         )
+    _require_same_unit_sources(intent, before, baseline)
     if before.scanner_need_reload != "no" and before.our_dropin == _recorded_dropin(intent):
         raise MaintenanceFailure(
             "ROLLBACK UNVERIFIED / HOLD: hidden unit state is present",
