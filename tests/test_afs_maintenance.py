@@ -59,6 +59,9 @@ class FakeHost(afs.Host):
         self.base = "[Service]\nMemoryMax=350M\nExecStart=/usr/bin/true\n"
         self.etc = {"no-bytecode.conf": "Environment=PYTHONDONTWRITEBYTECODE=1\n"}
         self.runtime: dict[str, str] = {}
+        # Loaded DropInPaths stay frozen until daemon-reload, like systemd.
+        self.loaded_etc_dropins = sorted(self.etc)
+        self.loaded_runtime_dropins = sorted(self.runtime)
         self.records: dict[Path, str] = {}
         self.calls: list[tuple[str, ...]] = []
         self.reload_updates_property = True
@@ -99,15 +102,23 @@ class FakeHost(afs.Host):
         self.approvals: dict[str, dict[str, object]] = {}
 
     def _scanner_paths(self) -> str:
-        etc_paths = [str(afs.ETC_DROPIN_DIR / name) for name in sorted(self.etc)]
-        runtime_paths = [str(afs.RUNTIME_DROPIN_DIR / name) for name in sorted(self.runtime)]
+        etc_paths = [str(afs.ETC_DROPIN_DIR / name) for name in self.loaded_etc_dropins]
+        runtime_paths = [str(afs.RUNTIME_DROPIN_DIR / name) for name in self.loaded_runtime_dropins]
         return " ".join([*etc_paths, *runtime_paths, *self.extra_scanner_paths])
+
+    def _refresh_loaded_dropins(self) -> None:
+        self.loaded_etc_dropins = sorted(self.etc)
+        self.loaded_runtime_dropins = sorted(self.runtime)
 
     def systemctl_show(self, unit: str) -> dict[str, str]:
         self.calls.append(("show", unit))
         if unit == afs.SCANNER_UNIT:
             props = dict(self.scanner)
             props.setdefault("NeedDaemonReload", "no")
+            # Steady state matches disk. After a unit-file write, NeedDaemonReload
+            # stays yes and DropInPaths keep the pre-reload loaded set.
+            if props["NeedDaemonReload"] == "no":
+                self._refresh_loaded_dropins()
             props["DropInPaths"] = self._scanner_paths()
             return props
         if unit == afs.FUTURES_UNIT:
@@ -162,6 +173,7 @@ class FakeHost(afs.Host):
         if self.futures_dropin_on_reload is not None:
             self.futures_dropin_paths = self.futures_dropin_on_reload
             self.futures_dropin_on_reload = None
+        self._refresh_loaded_dropins()
         self.scanner["NeedDaemonReload"] = "no"
         self.futures["NeedDaemonReload"] = "no"
         if self.leave_scanner_need_reload or self.leave_scanner_need_reload_on_call == self.reload_count:
@@ -1070,16 +1082,41 @@ def test_base_unit_edit_after_crash_is_not_reloaded():
 def test_new_runtime_environment_dropin_is_not_reloaded():
     host, intent = _crash_before_reload()
     host.runtime["aa-env.conf"] = "[Service]\nEnvironment=AFS_MAINTENANCE_TEST=1\n"
+    # Loaded DropInPaths must stay stale; the on-disk runtime check catches this.
+    assert "aa-env.conf" not in host.systemctl_show(afs.SCANNER_UNIT)["DropInPaths"]
     host.grant(f"options-scanner-memory rollback {intent['stamp']}", name="rollback0001")
     reloads = host.reload_count
     code, out, err = _run(host, "options-scanner-memory", "rollback", intent["stamp"])
     assert code == 1
     assert "result=ok" not in out
     assert "ROLLBACK UNVERIFIED" in err
+    assert "on-disk runtime drop-in changed" in err
+    assert "aa-env.conf" in err
     assert "rollback0001" in host.approvals
     assert host.reload_count == reloads
     assert host.calls.count(("daemon-reload",)) == reloads
     assert host.runtime["aa-env.conf"].startswith("[Service]\nEnvironment=")
+
+
+def test_runtime_execstart_after_crash_is_not_reloaded():
+    """NB3b: on-disk ExecStart must be refused even when loaded DropInPaths look unchanged."""
+
+    host, intent = _crash_before_reload()
+    planted = "[Service]\nExecStart=/usr/bin/evil\n"
+    host.runtime["zz-exec.conf"] = planted
+    assert "zz-exec.conf" not in host.systemctl_show(afs.SCANNER_UNIT)["DropInPaths"]
+    host.grant(f"options-scanner-memory rollback {intent['stamp']}", name="rollback0001")
+    reloads = host.reload_count
+    code, out, err = _run(host, "options-scanner-memory", "rollback", intent["stamp"])
+    assert code == 1
+    assert "result=ok" not in out
+    assert "ROLLBACK UNVERIFIED" in err
+    assert "on-disk runtime drop-in changed" in err
+    assert "zz-exec.conf" in err
+    assert "rollback0001" in host.approvals
+    assert host.reload_count == reloads
+    assert host.calls.count(("daemon-reload",)) == reloads
+    assert host.runtime["zz-exec.conf"] == planted
 
 
 def test_crash_plus_foreign_dropin_edit_keeps_the_approval():

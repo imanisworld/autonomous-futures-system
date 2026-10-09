@@ -1360,6 +1360,23 @@ def _foreign_etc_changes(intent: dict[str, object], before: Snapshot) -> list[st
     return changes
 
 
+def _unexpected_runtime_on_disk(intent: dict[str, object], before: Snapshot) -> list[str]:
+    """On-disk runtime drop-ins that are absent from or differ from the intent.
+
+    Loaded ``DropInPaths`` alone is not enough: systemd keeps the pre-reload
+    path set until ``daemon-reload``, so a new runtime file (for example an
+    ``ExecStart=`` override) can sit on disk while ``systemctl show`` still
+    looks unchanged. Missing intent files are allowed — recovery restores them.
+    """
+
+    recorded = _runtime_record(intent.get("runtime_files"))
+    unexpected: list[str] = []
+    for name, text in before.runtime_files.items():
+        if recorded.get(name) != text:
+            unexpected.append(name)
+    return unexpected
+
+
 def _require_same_unit_sources(intent: dict[str, object], before: Snapshot, baseline: dict[str, str]) -> None:
     """Refuse recovery before reload when the base unit or drop-in path set changed.
 
@@ -1440,6 +1457,13 @@ def _recover_recorded_intent(host: Host, intent: dict[str, object], command: str
     if foreign:
         raise MaintenanceFailure(
             "ROLLBACK UNVERIFIED / HOLD: unrelated drop-in changed: " + ", ".join(foreign),
+            unverified=True,
+        )
+    unexpected_runtime = _unexpected_runtime_on_disk(intent, before)
+    if unexpected_runtime:
+        raise MaintenanceFailure(
+            "ROLLBACK UNVERIFIED / HOLD: on-disk runtime drop-in changed: "
+            + ", ".join(unexpected_runtime),
             unverified=True,
         )
     _require_same_unit_sources(intent, before, baseline)

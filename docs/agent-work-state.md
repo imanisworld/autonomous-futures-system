@@ -11,15 +11,17 @@
 
 - **Next — FUTURES:** Decide package downgrades, memory pressure, and paper LONG disposition, then candidate nomination/review **separately**. Historical box proof is operator-supplied and must be freshness-checked at any later release GO, not endlessly rerun during source work. No runtime mutation authorized.
 
-## Prepared, not installed — Cursor Cloud maintenance (2026-10-08 / re-verified 2026-10-09)
+## Prepared, not installed — Cursor Cloud maintenance (2026-10-09)
 
-- **Branch:** `ops/cursor-cloud-vps-maintenance`, draft PR #1206 at `32799045`. Follow-up to `69c435e` for AFS-0194 NB3: recovery records the base-unit sha256 and refuses, before consuming the approval or reloading, when that hash changes or when DropInPaths changes by anything other than our own memory drop-in. Not installed. `main` stays `bd5ea24`.
-- **Tests (re-verified this session):** `.venv/bin/python -m pytest tests/test_afs_maintenance.py -q` — 80 passed. Exact-head GitHub CI on `32799045`: handoff-fields / tests / Analyze (python) / Analyze (actions) / CodeQL = SUCCESS. No VPS write. NB3a and NB3b cover a base ExecStart edit and a new runtime `Environment=` drop-in after the pre-reload crash. Approval lifetime and approval-directory ancestor ownership were not changed. These tests do not prove power-loss durability on the VPS.
-- **Runtime:** No VPS read or write in this session. Trading-data reconciliation remains blocked on VPS journals/DB/marks.
-- **DONE / DO NOT REDO:** AFS-0191 NB1/NB2 and AFS-0194 NB3 source fixes. Do not re-implement #1206. Do not install from an agent session.
-- **#1207 (fixture-only review, 2026-10-09):** draft PR `claude/capped-session-reporting` at `f7722697` (AFS-0193 R1 keep recorded P&L when exit time unknown). Focused report tests: 68 passed. Fixture accounting review: SOURCE OK FOR FIXTURES — sessions/caps/costs/OPEN settle/R1/exact-17:00/options ties/fail-soft pinned. Published what-if totals and live options SQLite parity remain UNVERIFIED without journals/bars. No further speculative reporting fix cycle.
-- **#1071:** still OPEN/UNMERGED at `0dca986e`, ~286 commits behind `main`. Auditor already accepts `--db` / `--epoch` for a read-only SQLite path. Do not rebase or invent a second P&L system until an authorized ledger snapshot is available.
-- **NEXT:** Grok reviews only the #1206 changed code (not a full audit redo) and the #1207 R1 delta. Stop source churn until VPS journals/DB/option marks are accessible. No installation, daemon-reload, MemoryMax change, SSH change, merge, deploy, or capital increase.
+- **Branch:** `ops/cursor-cloud-vps-maintenance`, draft PR #1206. Not installed. `main` stays `bd5ea24`.
+- **AFS-0194 NB3a — DONE:** recovery refuses when the base unit file hash changes (covered by `test_base_unit_edit_after_crash_is_not_reloaded`).
+- **AFS-0194 NB3b — FIXED THIS HEAD (pending Grok):** recovery now compares on-disk runtime drop-in bytes to the intent **before** approval consumption; refuses unexpected/changed runtime files even when loaded `DropInPaths` still look unchanged. FakeHost keeps loaded `DropInPaths` frozen until `daemon-reload` (systemd-accurate). Regression: `test_runtime_execstart_after_crash_is_not_reloaded` plus updated Environment= case.
+- **Tests:** `.venv/bin/python -m pytest tests/test_afs_maintenance.py -q` — 81 passed on this head. Mutation removing the on-disk runtime gate makes `test_runtime_execstart_after_crash_is_not_reloaded` fail. Prior `ef11bef1` / `32799045` checkpoint wrongly labelled all of NB3 complete — that is corrected here.
+- **Runtime:** No VPS read or write. Trading-data reconciliation remains blocked on VPS journals/DB/marks.
+- **DONE / DO NOT REDO:** AFS-0191 NB1/NB2; NB3a. Do not install from an agent session.
+- **#1207 (fixture-only review, 2026-10-09):** draft at `f7722697`. SOURCE OK FOR FIXTURES; live totals UNVERIFIED. Do not repeat the fixture review.
+- **#1071:** leave unchanged until VPS ledger arrives (`--db` / `--epoch` already available).
+- **NEXT:** Grok reviews only this NB3b delta on the new exact head. No installation, daemon-reload, MemoryMax change, SSH change, merge, deploy, or capital increase.
 
 > **Purpose:** compact resume checkpoint for agents. This file is coordination state only; it is **not** strategy-status, experiment, deployment, or runtime authority.
 >
