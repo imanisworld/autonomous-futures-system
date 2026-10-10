@@ -86,17 +86,25 @@ def reconcile_identity_only(
     """
     five_by_arm: dict[str, list[tuple[int, Mapping[str, Any]]]] = defaultdict(list)
     for j, row in enumerate(five_rows):
+        if not isinstance(row, Mapping):
+            continue
         arm_key = row.get("arm_key")
         if isinstance(arm_key, str) and arm_key:
             five_by_arm[arm_key].append((j, row))
     touch_arms = Counter(
         row.get("arm_key") for row in touches
-        if row.get("event") == "TRIGGER_TOUCH"
+        if isinstance(row, Mapping) and row.get("event") == "TRIGGER_TOUCH"
         and isinstance(row.get("arm_key"), str) and row.get("arm_key")
     )
     results: list[dict[str, Any]] = []
     used_five: set[int] = set()
     for i, touch in enumerate(touches):
+        if not isinstance(touch, Mapping):
+            results.append({
+                "touch_index": i, "arm_key": None,
+                "status": "UNMATCHABLE", "reason": "MALFORMED_NATURAL_RECORD",
+            })
+            continue
         status, reason = "UNMATCHABLE", ""
         item: dict[str, Any] = {"touch_index": i, "arm_key": touch.get("arm_key")}
         if touch.get("event") != "TRIGGER_TOUCH":
@@ -150,9 +158,13 @@ def reconcile_identity_only(
         item.update(status=status, reason=reason)
         results.append(item)
     unused = [
-        {"five_index": j, "candidate_key": row.get("candidate_key"),
-         "arm_key": row.get("arm_key"),
-         "reason": row.get("reason") or "NOT_IDENTITY_MATCHED"}
+        {"five_index": j,
+         "candidate_key": row.get("candidate_key") if isinstance(row, Mapping) else None,
+         "arm_key": row.get("arm_key") if isinstance(row, Mapping) else None,
+         "reason": (
+             (row.get("reason") or "NOT_IDENTITY_MATCHED")
+             if isinstance(row, Mapping) else "MALFORMED_FIVE_MIN_RECORD"
+         )}
         for j, row in enumerate(five_rows) if j not in used_five
     ]
     counts = dict(sorted(Counter(r["status"] for r in results).items()))
