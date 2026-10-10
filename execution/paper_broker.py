@@ -19,6 +19,7 @@ is_live always returns False.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import isfinite
 from typing import Optional
 from uuid import uuid4
 
@@ -104,13 +105,16 @@ class PaperBroker(BrokerInterface):
         self._runner_trail_r = float(runner_trail_r)
         self._runner_max_fav: Optional[float] = None  # running favourable price extreme
         # Entry fill model. "market" = legacy: every
-        # entry fills at the plan price ± slippage. "ioc_limit" mirrors the live
+        # entry fills at the plan price ± slippage. "market_at_reference" requires
+        # a causal market_price supplied by the caller (next executable price
+        # in a historical replay), applies adverse slippage, and never falls
+        # back to order.entry. "ioc_limit" mirrors the live
         # Tradovate entry leg (#2): a Limit-IOC capped at entry ± tolerance —
         # the order fills at the CURRENT market (never worse than the cap) or
         # self-cancels. "stop_market" arms a one-next-bar stop entry; it fills
         # causally from NextBarOHLC.open/high/low or fails closed.
         model = str(entry_fill_model or "market").strip().lower()
-        if model not in ("market", "ioc_limit", "stop_market"):
+        if model not in ("market", "market_at_reference", "ioc_limit", "stop_market"):
             raise ValueError(f"PaperBroker: unknown entry_fill_model {entry_fill_model!r}")
         self._entry_fill_model = model
         self._entry_tol_by_root = dict(entry_tolerance_ticks_by_root or {})
@@ -235,7 +239,24 @@ class PaperBroker(BrokerInterface):
         # Entry is a MARKET order — apply adverse slippage. LONG fills higher,
         # SHORT fills lower. Stop/target stay at their ordered (resting) prices.
         slip = self._slippage_ticks * tick
-        if self._entry_fill_model == "ioc_limit":
+        if self._entry_fill_model == "market_at_reference":
+            # Strict research market fill: a historical planned entry is NOT an
+            # executable price. The caller must pass the first executable
+            # reference price (typically the NEXT bar open); never fabricate
+            # a fill at order.entry or silently fall back when data is absent.
+            try:
+                reference = float(market_price)
+            except (TypeError, ValueError, OverflowError) as exc:
+                raise ValueError("market_at_reference requires a valid market_price") from exc
+            if not isfinite(reference) or reference <= 0:
+                raise ValueError("market_at_reference requires a positive finite market_price")
+            if order.direction == "LONG":
+                fill_entry = reference + slip
+            elif order.direction == "SHORT":
+                fill_entry = reference - slip
+            else:
+                raise ValueError("market_at_reference requires LONG or SHORT direction")
+        elif self._entry_fill_model == "ioc_limit":
             if market_price is None:
                 raise ValueError(
                     "PaperBroker(entry_fill_model='ioc_limit') requires "
