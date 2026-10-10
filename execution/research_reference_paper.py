@@ -26,7 +26,17 @@ class ResearchReferencePaperBroker(PaperBroker):
             raise ValueError("ResearchReferencePaperBroker requires market_at_reference")
         # The audited broker's force_market_entry path already fills at
         # market_price plus adverse slippage and validates bracket geometry.
-        super().__init__(entry_fill_model="market", **kwargs)
+        # A strict real-price study must not turn a bar touching BOTH
+        # stop and target into a guaranteed win. The canonical broker
+        # defaults to optimistic target-priority for legacy reproduction;
+        # research strict mode overrides that default, without changing
+        # the hash-pinned canonical broker or production.
+        kwargs.pop("pessimistic_both_hit", None)
+        super().__init__(
+            entry_fill_model="market",
+            pessimistic_both_hit=True,
+            **kwargs,
+        )
 
     def execute_bracket(
         self,
