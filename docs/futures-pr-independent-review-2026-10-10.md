@@ -2,6 +2,10 @@
 
 **Reviewer role:** Cursor (breaker-style, read-only). **Not** operator merge/deploy authorization.
 
+**Historical review record — not a current merge checklist.** This report captures the specific PR heads listed below; **#1208, #1209, #1210 and #1211 have since merged into `main`**, verified from GitHub on Oct 10. Do not interpret the “pending merge” or “tests pending” wording below as current. It must not be used as a fresh independent review of **open #1212/#1213**. Exact-head #1213 CI passed 8,777 / 8 skipped, while #1212 latest observed head `9df1a09` was still running when checked. Independent #1212/#1213 source review and DEMO permissions remain separate requirements. The Track B source candidate is not deployed by any of these merges.
+
+
+
 **Exact heads reviewed:**
 
 | PR | Branch | HEAD | GitHub CI (2026-10-10 session) |
