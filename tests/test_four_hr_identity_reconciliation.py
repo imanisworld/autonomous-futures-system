@@ -3,8 +3,10 @@ from __future__ import annotations
 
 from copy import deepcopy
 
+import pytest
+
 from research.four_hr_identity_reconciliation import reconcile_identity_only
-from tests.test_wide_stop_4hr_join_provenance import _build, _touch
+from tests.test_wide_stop_4hr_join_provenance import _build, _candidate, _touch
 
 
 def _natural(five):
@@ -141,6 +143,37 @@ def test_blocked_or_duplicate_events_preserved_but_not_counted_as_touches():
     ], [five])
     assert data["counts"] == {"NON_TOUCH_EVENT": 2}
     assert len(data["unused_five_candidates"]) == 1
+
+
+@pytest.mark.parametrize(
+    ("field", "timestamp"),
+    [
+        ("setup_bar_ts", "2026-06-02T09:36:00-04:00"),
+        ("four_am_bar_ts", "2026-06-02T09:36:00-04:00"),
+        ("setup_bar_ts", "2026-06-02T10:00:00-04:00"),
+        ("four_am_bar_ts", "2026-06-02T09:40:00-04:00"),
+    ],
+)
+def test_five_min_identity_rejects_post_decision_arm_stamps(field, timestamp):
+    five = _build(candidate=_candidate(**{field: timestamp}))
+    assert five["joinability"] == "UNMATCHABLE"
+    good = _build()
+    data = reconcile_identity_only([_natural(good)], [five])
+    assert data["counts"] == {"UNMATCHED": 1}
+    assert data["touch_classifications"][0]["reason"] == "NO_FIVE_MIN_FULL_ARM_IDENTITY"
+    assert data["unused_five_candidates"][0]["reason"] == "MISSING_OR_INVALID_ARM_STAMPS"
+
+
+@pytest.mark.parametrize("authority_field", ["trade_authorized", "external_broker"])
+def test_one_min_touch_with_broker_authority_is_excluded(authority_field):
+    five = _build()
+    natural = _natural(five)
+    natural["trade_authorized"] = False
+    natural["external_broker"] = False
+    natural[authority_field] = True
+    data = reconcile_identity_only([natural], [five])
+    assert data["counts"] == {"UNMATCHABLE": 1}
+    assert data["touch_classifications"][0]["reason"] == "NOT_OBSERVATION_ONLY"
 
 
 def test_absent_observer_authority_flags_fail_closed():

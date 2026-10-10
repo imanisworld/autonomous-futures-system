@@ -113,6 +113,24 @@ def test_unknown_or_unusable_source_contract_cannot_join(hint):
     assert join.compare_with_1m_touch(_touch(row), row)["status"] == "UNMATCHABLE"
 
 
+@pytest.mark.parametrize(
+    ("field", "timestamp"),
+    [
+        ("setup_bar_ts", "2026-06-02T09:36:00-04:00"),
+        ("four_am_bar_ts", "2026-06-02T09:36:00-04:00"),
+        ("setup_bar_ts", "2026-06-02T10:00:00-04:00"),
+        ("four_am_bar_ts", "2026-06-02T09:40:00-04:00"),
+    ],
+)
+def test_four_hr_arm_stamp_after_five_min_decision_is_rejected(field, timestamp):
+    """5m decision closes at source+5m (09:35); later 4HR stamps are lookahead."""
+    row = _build(candidate=_candidate(**{field: timestamp}))
+    assert row["joinability"] == "UNMATCHABLE"
+    assert row["reason"] == "MISSING_OR_INVALID_ARM_STAMPS"
+    assert row["arm_key"] is None
+    assert row["candidate_decision_at"] == "2026-06-02T09:35:00-04:00"
+
+
 @pytest.mark.parametrize(("changed", "reason"), [
     ({"setup_bar_ts": "2026-06-02T09:10:00"}, "MISSING_OR_INVALID_ARM_STAMPS"),
     ({"setup_bar_ts": "2026-06-03T09:10:00-04:00"}, "MISSING_OR_INVALID_ARM_STAMPS"),
