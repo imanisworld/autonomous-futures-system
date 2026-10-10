@@ -32,6 +32,7 @@ def test_unique_causal_setup_matches_identity_but_not_execution_or_pnl():
     assert item["five_decision_at"] == "2026-06-02T09:35:00-04:00"
     assert item["five_signal_after_one_min_touch"] is True
     assert item["five_after_one_min_seconds"] == 240
+    assert item["after_one_min_decision_seconds"] == 180
     assert item["stop_price_equal"] is True
     assert item["entry_fill_parity"] == "UNPROVEN"
     assert item["outcome_parity"] == "UNPROVEN"
@@ -157,3 +158,27 @@ def test_absent_five_min_broker_isolation_fails_closed():
     data = reconcile_identity_only([_natural(five)], [five])
     assert data["counts"] == {"UNMATCHABLE": 1}
     assert data["touch_classifications"][0]["reason"] == "FIVE_MIN_AUTHORITY_INCONSISTENT"
+
+
+def test_cross_day_reused_arm_key_must_not_match():
+    five = _build()
+    touch = _natural(five)
+    touch["bar_ts"] = "2026-06-03T09:31:00-04:00"
+    touch["decision_time"] = "2026-06-03T09:32:00-04:00"
+    result = reconcile_identity_only([touch], [five])
+    assert result["touch_classifications"][0]["reason"] == "NATURAL_TOUCH_ARM_DATE_MISMATCH"
+
+
+def test_misaligned_five_min_source_clock_does_not_match():
+    five = _build()
+    five["source_bar_ts"] = "2026-06-02T09:31:00-04:00"
+    five["candidate_decision_at"] = "2026-06-02T09:36:00-04:00"
+    result = reconcile_identity_only([_natural(five)], [five])
+    assert result["touch_classifications"][0]["reason"] == "FIVE_MIN_DECISION_CLOCK_UNPROVEN"
+
+
+def test_wrong_five_min_trading_date_fails_closed():
+    five = _build()
+    five["trading_date"] = "2026-06-01"
+    result = reconcile_identity_only([_natural(five)], [five])
+    assert result["touch_classifications"][0]["reason"] == "FIVE_MIN_TRADING_DATE_MISMATCH"
