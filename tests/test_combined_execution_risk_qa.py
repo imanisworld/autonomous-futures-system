@@ -64,3 +64,20 @@ def test_valid_reference_and_actual_rr_open_without_external_route(monkeypatch):
     assert fill.result == "OPEN"
     assert broker.get_position() is not None
     assert fill.entry_price == 104.25
+
+
+
+def test_short_reference_after_adverse_move_cannot_pass_bracket_rr():
+    # Prior signal metadata says 3R, but after a worse short fill the
+    # target may sit close enough that actual reward:risk is <2.
+    order = BracketOrder(
+        instrument="MNQ", direction="SHORT", entry=200.0,
+        stop=210.0, target=170.0, rr_ratio=3.0,
+        strategy="isolated_qa", contracts=1,
+        min_rr_ratio=2.0,
+    )
+    broker = ResearchReferencePaperBroker(entry_fill_model="market_at_reference")
+    fill = broker.execute_bracket(order, market_price=190.0)
+    assert fill.result == "CANCELLED"
+    assert fill.exit_reason == "POST_FILL_VALIDATION_FAILED"
+    assert broker.get_position() is None
