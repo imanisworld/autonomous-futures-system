@@ -7,7 +7,7 @@ Read **only** this block + `AGENTS.md` + `docs/futures-research-resume-checkpoin
 | Item | Value |
 |---|---|
 | **GitHub `main`** | **`572cd13`** — **#1208–#1213** merged; **#1215** still open (not on `main`) |
-| **Track B branch** | `research/4hr-mnq-400-forward-rebase-20261010` includes **#1215** @ **`368b024`**. **`1c97764` is the reviewed parent, not the candidate.** Demo stop cap follows in the next commit. **No deploy.** |
+| **Track B branch** | `research/4hr-mnq-400-forward-rebase-20261010` includes **#1215** @ **`368b024`**. **`1c97764` is the reviewed parent, not the candidate.** Demo order stop is capped at **300** ticks / **$150**. Paper `wide_stop_4k` cell stays **400**. **No deploy.** |
 | **DO NOT deploy** | `research/4hr-mnq-400-forward-20261009` @ **`2f4f776`** (~157 commits behind `main`; no **#1208/#1209**) and this branch until an explicit GO |
 | **Open futures research PRs (this lane)** | **#1206**, **#1207**, **#1215** |
 | **Daily tsmom prereg** | `research/equity-index-daily-tsmom-forward-20261010` @ **`3fc8709`** — pushed, **PLANNED**, paper/log only, no score before 40 round-turns, no deploy |
@@ -23,7 +23,7 @@ Read **only** this block + `AGENTS.md` + `docs/futures-research-resume-checkpoin
 
 **DO NOT REDO:** gzip 4HR cell reproduction; ORB/VWAP TF×window sweeps (baseline + trending + orb48); Grok PASS work on merged **#1208**/**#1209**; Sep decompositions listed below.
 
-**NEXT:** Cap the Track B **demo** stop at **300** ticks, push, and open a PR so CI runs. Do not deploy. Do not score the daily tsmom prereg. 1m arm fills/costs **not implemented**. **NOT done:** deploy, forward collection, DEMO-ready claim, tsmom score.
+**NEXT:** Open the Track B PR so CI runs on the 300-tick demo cap plus the **#1215** merge. Do not deploy. Do not score the daily tsmom prereg. 1m arm fills/costs **not implemented**. **NOT done:** deploy, forward collection, DEMO-ready claim, tsmom score.
 
 Prior chat context for this session is **closed**. Section below is coordination archive unless stale.
 

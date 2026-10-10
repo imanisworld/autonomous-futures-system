@@ -202,8 +202,9 @@ def test_demo_submits_one_contract_with_strategy_caps_and_postfill_guard(tmp_pat
     )
     assert broker.execute_calls == 1
     assert broker.last_order.contracts == 1
-    assert broker.last_order.max_stop_ticks == 400.0
-    assert broker.last_order.max_dollar_risk == 200.0
+    assert broker.last_order.max_stop_ticks == 300.0
+    assert broker.last_order.max_dollar_risk == 150.0
+    assert broker.last_order.max_stop_ticks <= execution.DEMO_MAX_STOP_TICKS
     assert broker.last_order.max_slippage_ticks == 8.0
     assert broker.last_order.post_fill_validation_required is True
     assert broker.last_order.entry_execution_mode_override == "ioc_limit"
@@ -213,6 +214,24 @@ def test_demo_submits_one_contract_with_strategy_caps_and_postfill_guard(tmp_pat
     assert state["position"] is not None
     assert state["pending"] is None
     assert any(row.get("fill_status") == "OPEN" for row in events)
+
+
+def test_demo_blocks_a_stop_wider_than_300_ticks(tmp_path, monkeypatch):
+    _demo_env(monkeypatch)
+    _patch_candidate(monkeypatch, FOUR_HR)
+    wide = _setup(FOUR_HR)
+    wide.stop = wide.entry - 301 * 0.25
+    monkeypatch.setattr(collector, "_trade_setup", lambda state, out: wide)
+    broker = _FakeBroker()
+    events = demo.process_demo_five_min_bar(
+        payload=_payload(), cfg=_cfg(), bars_5m=[], log_dir=tmp_path,
+        for_date=DAY, broker_factory=lambda: broker,
+    )
+    assert broker.execute_calls == 0
+    assert any(row.get("lane_failed_rule") == "demo_stop_cap" for row in events)
+    state = demo_state.load_state(_root(tmp_path), DAY)
+    assert state.get("pending") is None
+    assert state.get("position") is None
 
 
 def test_demo_storage_is_separate_from_paper_ledger(tmp_path, monkeypatch):

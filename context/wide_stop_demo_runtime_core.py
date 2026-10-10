@@ -759,8 +759,14 @@ def process_demo_five_min_bar(
                 events.append(audit)
                 continue
 
+            lane_cfg = contract.lane_config(cfg, ledger)
+            stop_caps = dict(getattr(lane_cfg, "max_stop_ticks", {}) or {})
+            stop_caps[contract.INSTRUMENT] = execution.demo_stop_cap_ticks(
+                ledger.max_stop_ticks
+            )
+            setattr(lane_cfg, "max_stop_ticks", stop_caps)
             lane_result = RiskEngine(
-                config=contract.lane_config(cfg, ledger),
+                config=lane_cfg,
                 schedule_mode=getattr(cfg, "schedule_mode", "current"),
             ).validate(setup, lane_daily)
             if not lane_result.approved:
@@ -769,6 +775,22 @@ def process_demo_five_min_bar(
                     key=key, log_dir=log_dir, for_date=for_date, state=state,
                     failed_rule=str(lane_result.failed_rule or "lane_risk"),
                     reason=str(lane_result.reason or "lane risk rejected"),
+                )
+                demo_state.save_state(log_dir, state)
+                events.append(audit)
+                continue
+
+            demo_cap = execution.demo_stop_cap_ticks(ledger.max_stop_ticks)
+            stop_ticks = abs(float(setup.entry) - float(setup.stop)) / _TICK
+            if stop_ticks > demo_cap:
+                audit = _journal_block(
+                    cfg=cfg, ledger=ledger, strategy=strategy, candidate=candidate,
+                    key=key, log_dir=log_dir, for_date=for_date, state=state,
+                    failed_rule="demo_stop_cap",
+                    reason=(
+                        f"demo stop is {stop_ticks:.1f} ticks; "
+                        f"cap is {demo_cap:.0f}"
+                    ),
                 )
                 demo_state.save_state(log_dir, state)
                 events.append(audit)
@@ -866,8 +888,10 @@ def process_demo_five_min_bar(
                 strategy=setup.strategy,
                 contracts=contract.CONTRACTS,
                 min_rr_ratio=float(ledger.min_rr_ratio),
-                max_dollar_risk=float(ledger.worst_case_stop_dollars),
-                max_stop_ticks=float(ledger.max_stop_ticks),
+                max_dollar_risk=execution.demo_stop_cap_dollars(
+                    ledger.max_stop_ticks, contract.CONTRACTS
+                ),
+                max_stop_ticks=execution.demo_stop_cap_ticks(ledger.max_stop_ticks),
                 max_slippage_ticks=execution.FROZEN_MNQ_IOC_TICKS,
                 execution_model="anchored_structure",
                 post_fill_validation_required=True,
