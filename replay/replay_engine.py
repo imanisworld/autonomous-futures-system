@@ -43,6 +43,7 @@ from execution.day_only_exit import (
     strategy_is_day_only,
 )
 from execution.paper_broker import NextBarOHLC, PaperBroker
+from execution.research_reference_paper import ResearchReferencePaperBroker
 from config.futures_contracts import contract_economics as _contract_economics
 from journal.journal_logger import JournalLogger
 from context.htf_loader import HTFLookup
@@ -252,7 +253,11 @@ class ReplayEngine:
         journal_date = _date_to_date(run_date)
         decision_engine = DecisionEngine(config=self.config)
         risk_engine = RiskEngine(config=self.config)
-        broker = PaperBroker(
+        # Strict research references are an opt-in wrapper around the audited
+        # PaperBroker. Never mutate its canonical fill implementation.
+        strict_reference = getattr(self.config, "entry_fill_model", "market") == "market_at_reference"
+        broker_cls = ResearchReferencePaperBroker if strict_reference else PaperBroker
+        broker = broker_cls(
             starting_balance=(
                 self._rolling_balance
                 if self._rolling_balance is not None
