@@ -7,6 +7,7 @@ rehabilitate an exploratory screen that already saw those data.
 from __future__ import annotations
 
 from datetime import date, datetime
+import re
 from typing import Any, Iterable, Mapping
 
 LAST_UNSEALED_MNQ_SESSION = date(2026, 6, 26)
@@ -19,15 +20,19 @@ class MNQSealViolation(ValueError):
 
 def _date(value: Any, label: str) -> date:
     if isinstance(value, datetime):
-        return value.date()
+        raise MNQSealViolation(
+            f"{label}: provide CME session-end DATE, not timestamp"
+        )
     if isinstance(value, date):
         return value
     if isinstance(value, str):
+        if not re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}", value):
+            raise MNQSealViolation(f"{label}: invalid YYYY-MM-DD date")
         try:
             return date.fromisoformat(value)
         except ValueError as exc:
             raise MNQSealViolation(f"{label}: invalid YYYY-MM-DD date") from exc
-    raise MNQSealViolation(f"{label}: date is required, not {type(value).__name__}")
+    raise MNQSealViolation(f"{label}: CME session-end date is required")
 
 
 def _must_be_mnq(ticker: Any) -> None:
