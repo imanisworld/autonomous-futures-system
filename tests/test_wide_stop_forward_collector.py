@@ -59,7 +59,7 @@ def _setup():
     return TradeSetup(
         direction="LONG",
         entry=20_000.0,
-        stop=19_936.5,  # 254 ticks: rejected globally, admitted by 300t lane
+        stop=19_936.5,  # 254 ticks: rejected globally, admitted by 400t lane
         target=20_088.9,
         rr_ratio=1.4,
         strategy=FOUR_HR,
@@ -114,7 +114,7 @@ def test_isolated_config_never_reenables_strategy_in_active_book():
     assert isolated.enabled_concepts == [FOUR_HR]
     assert isolated.strategy_status[FOUR_HR] == "PAPER_ELIGIBLE"
     assert FOUR_HR not in isolated.disabled_concepts_per_instrument["MNQ"]
-    assert isolated.max_stop_ticks["MNQ"] == 300.0
+    assert isolated.max_stop_ticks["MNQ"] == 400.0
     assert isolated.min_rr_ratio == 1.0
 
 

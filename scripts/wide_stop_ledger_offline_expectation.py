@@ -6,13 +6,13 @@ forward record is measured against something fixed rather than tuned after the
 fact. It replays the approved/amended cells through the production `ioc_limit`
 entry at the frozen contract (8 ticks, 1 adverse tick, decision-bar close):
 
-  wide_stop_4k  4HR MNQ,   stop <= 300 ticks and R:R >= 1.0
+  wide_stop_4k  4HR MNQ,   stop <= 400 ticks and R:R >= 1.0
   wide_stop_6k  3-2-2 MNQ, stop <= 600 ticks, no R:R floor
 
-The 4HR cap was reduced from 400 to 300 ticks by operator instruction on
-2026-09-08. The replacement historical cell was recomputed from the committed
-candidate artifact before merge: 32 trades, +$1,901.14 net, PF 2.313, with both
-chronological halves positive (+$1,164.82 / +$736.32).
+The 4HR cap was restored from 300 to 400 ticks on 2026-10-09. The historical
+cell on the committed candidate artifact is 36 trades, +$3,076.72 net, PF 3.125,
+with both chronological halves positive (+$1,433.86 / +$1,642.86). The
+2026-09-08 300-tick cell (32 trades, +$1,901.14) is the prior contract.
 
 **Scope, stated rather than implied.** This establishes the *entry* side —
 which candidates the lane admits, which fill under the frozen IOC, at what
@@ -52,10 +52,10 @@ SLIPPAGE_TICKS = 1.0
 #: 2026-09-08 cap reduction; 3-2-2 is unchanged.
 BRACKET_CELLS = {
     "wide_stop_4k": {
-        "lane": "4hr_mnq", "admitted": 32, "bracket_net": 1901.14,
-        "profit_factor": 2.313232, "h1": 1164.82, "h2": 736.32,
+        "lane": "4hr_mnq", "admitted": 36, "bracket_net": 3076.72,
+        "profit_factor": 3.125, "h1": 1433.86, "h2": 1642.86,
         "losses_over_150": 2,
-        "note": "300-tick operator amendment; prior 400-tick cell was 36 trades / +$3,076.72 / PF 3.125",
+        "note": "2026-10-09 restore of the 400-tick cell; the 300-tick contract was 32 trades / +$1,901.14 / PF 2.313",
     },
     "wide_stop_6k": {
         "lane": "322_mnq", "admitted": 24, "bracket_net": 1790.0, "profit_factor": 9.9,

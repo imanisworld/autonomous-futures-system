@@ -8,7 +8,7 @@
 
 **Experiment ID:** `E-2026-10-09-4hr-mnq-400-forward-01`
 
-This record freezes one measurement. It does not enable `strat_4hr_retrigger`, change the global 120-tick cap, change the wired 300-tick `wide_stop_4k` paper lane, move money, or submit an order.
+This record freezes one measurement. The isolated `wide_stop_4k` paper lane now uses this 400-tick cell. It does not enable `strat_4hr_retrigger` on the $1,500 book, change that book's 120-tick cap, move money, or submit an order.
 
 ## Question
 
@@ -48,4 +48,4 @@ Stop at 40 fills, or at 24 months from the approved start, whichever comes first
 
 ## What this approval does not do
 
-The $1,500 book's 120-tick cap and 2.0 reward-to-risk floor stay. The 300-tick paper lane stays on its own contract. Strategy inventory verdict stays **PROMISING BUT UNPROVEN**. No deploy.
+The $1,500 book's 120-tick cap and 2.0 reward-to-risk floor stay. The isolated paper lane is the 400-tick contract. Strategy inventory verdict stays **PROMISING BUT UNPROVEN**. No deploy.

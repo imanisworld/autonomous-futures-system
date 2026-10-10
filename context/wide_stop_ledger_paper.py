@@ -1,7 +1,7 @@
 """Paper-only runtime contract for the wide-stop hypothetical-ledger lane.
 
 Implements `docs/wide-stop-hypothetical-ledger-lane-spec-2026-09-07.md`
-(approved 2026-09-07, D1-D7; 4HR cap amended 2026-09-08; 3-2-2 forward
+(approved 2026-09-07, D1-D7; 4HR cap restored to 400 ticks 2026-10-09; 3-2-2 forward
 capital capped at the operator's $5,000 ceiling 2026-09-09). The lane produces
 a forward IOC-real record for three day strategies the $1,500 book's
 `max_stop_ticks` / `min_rr_ratio` reject 95-100% of the time.
@@ -83,9 +83,9 @@ LEDGERS: dict[str, Ledger] = {
     "wide_stop_4k": Ledger(
         name="wide_stop_4k",
         starting_balance=4_000.0,
-        max_stop_ticks=300.0,
+        max_stop_ticks=400.0,
         min_rr_ratio=1.0,
-        daily_loss_limit=300.0,        # 2 x worst case ($150), amended 2026-09-08
+        daily_loss_limit=400.0,        # 2 x worst case ($200); 2026-10-09 restore of the 400-tick cell
         max_drawdown_percent=0.20,
         fill_eligible=("strat_4hr_retrigger",),
         shadow_only=(),
@@ -268,7 +268,7 @@ def evaluate(cfg=None) -> LedgerDecision:
         marketable_ticks=MARKETABLE_TICKS,
         reason=(
             "paper_sim: isolated hypothetical $4k/$5k ledgers (legacy 6k journal "
-            "identifier retained), family stop caps 300/600 ticks, one contract, "
+            "identifier retained), family stop caps 400/600 ticks, one contract, "
             "eight-tick marketable IOC, static bracket, no promotion path"
             if active
             else "observe_only: no lane ledger, no lane fills, real book unchanged"

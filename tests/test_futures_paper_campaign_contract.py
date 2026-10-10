@@ -16,7 +16,7 @@ def test_4hr_and_322_capital_contracts_are_pinned():
     four = wide.LEDGERS["wide_stop_4k"]
     three_two_two = wide.LEDGERS["wide_stop_6k"]
     assert four.starting_balance == 4_000.0
-    assert four.max_stop_ticks == 300.0
+    assert four.max_stop_ticks == 400.0
     # Historical journal identifier only; actual forward capital is capped at $5k.
     assert three_two_two.starting_balance == 5_000.0
     assert three_two_two.max_stop_ticks == 600.0

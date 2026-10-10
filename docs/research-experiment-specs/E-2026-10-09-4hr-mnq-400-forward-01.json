@@ -13,7 +13,7 @@
   },
   "candidate": {
     "commit_sha": null,
-    "change": "Measure forward MNQ 4HR re-trigger fills under a 400-tick ($200) stop cap and R:R >= 1.0 on an isolated $4,000 ledger. Do not rescore the consumed 2024-07-09 through 2026-06-03 cell. Do not change the global 120-tick cap or the wired 300-tick lane.",
+    "change": "The isolated wide_stop_4k ledger admits MNQ 4HR re-trigger fills at a 400-tick ($200) stop cap and R:R >= 1.0. Do not rescore the consumed 2024-07-09 through 2026-06-03 cell. Do not change the $1,500 book's 120-tick cap.",
     "label": "4HR MNQ 400-tick forward cell"
   },
   "data": {
@@ -40,7 +40,7 @@
     "minimum reward-to-risk 1.0",
     "isolated ledger; not the $1,500 book",
     "global max_stop_ticks 120 and min_rr_ratio 2.0 unchanged on the $1,500 book",
-    "wired wide_stop_4k 300-tick lane unchanged",
+    "isolated wide_stop_4k lane is the 400-tick contract",
     "strat_4hr_retrigger stays out of enabled_concepts until a separate operator decision",
     "entry ioc_limit at the decision-bar close, 1 adverse tick",
     "static bracket exit, no runner",
@@ -82,5 +82,5 @@
   ],
   "evidence_path": "docs/research-evidence/T-2026-10-09-prereg-4hr-mnq-400-forward-2026-10-09-01/",
   "variant_manifest": null,
-  "notes": "Operator approved measurement on 2026-10-10T03:50:00Z. Eligible session dates start 2026-10-12. Sessions through 2026-10-09 inclusive are ineligible. Not collected and not scored. This approval does not deposit the $4,000, enable strat_4hr_retrigger, change the 120-tick cap, change the wired 300-tick lane, or deploy. Fewer than 40 fills at 24 months is INSUFFICIENT SAMPLE. Strategy inventory verdict stays PROMISING BUT UNPROVEN."
+  "notes": "Operator approved measurement on 2026-10-10T03:50:00Z and then ordered the isolated paper lane onto this cell. Eligible session dates start 2026-10-12. Sessions through 2026-10-09 inclusive are ineligible. Not collected and not scored. This does not deposit the $4,000, enable strat_4hr_retrigger on the $1,500 book, change that book's 120-tick cap, or deploy. Fewer than 40 fills at 24 months is INSUFFICIENT SAMPLE. Strategy inventory verdict stays PROMISING BUT UNPROVEN."
 }

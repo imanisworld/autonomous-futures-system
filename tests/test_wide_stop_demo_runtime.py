@@ -202,8 +202,8 @@ def test_demo_submits_one_contract_with_strategy_caps_and_postfill_guard(tmp_pat
     )
     assert broker.execute_calls == 1
     assert broker.last_order.contracts == 1
-    assert broker.last_order.max_stop_ticks == 300.0
-    assert broker.last_order.max_dollar_risk == 150.0
+    assert broker.last_order.max_stop_ticks == 400.0
+    assert broker.last_order.max_dollar_risk == 200.0
     assert broker.last_order.max_slippage_ticks == 8.0
     assert broker.last_order.post_fill_validation_required is True
     assert broker.last_order.entry_execution_mode_override == "ioc_limit"
