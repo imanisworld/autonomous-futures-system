@@ -260,6 +260,31 @@ def test_350_tick_setup_is_refused_on_demo_and_admitted_on_paper(tmp_path, monke
     assert lane_cfg.max_stop_ticks["MNQ"] == 400.0
 
 
+def test_demo_combined_open_risk_blocks_a_stop_under_300_ticks(tmp_path, monkeypatch):
+    """The $450 backup must still refuse when the stop itself is inside 300 ticks.
+
+    A mutant that turns the check into ``if False`` would send the order.
+    """
+    inside_cap = _setup(FOUR_HR)
+    inside_cap.stop = inside_cap.entry - 200 * 0.25  # $100, under 300 ticks
+    _demo_env(monkeypatch)
+    _patch_candidate(monkeypatch, FOUR_HR)
+    monkeypatch.setattr(collector, "_trade_setup", lambda state, out: inside_cap)
+    monkeypatch.setattr(demo_state, "MAX_COMBINED_OPEN_RISK_DOLLARS", 40.0)
+    broker = _FakeBroker()
+    events = demo.process_demo_five_min_bar(
+        payload=_payload(), cfg=_cfg(), bars_5m=[], log_dir=tmp_path,
+        for_date=DAY, broker_factory=lambda: broker,
+    )
+    assert abs(inside_cap.entry - inside_cap.stop) / 0.25 < 300
+    assert broker.execute_calls == 0
+    assert any(row.get("lane_failed_rule") == "demo_combined_open_risk" for row in events)
+    assert not any(row.get("lane_failed_rule") == "demo_stop_cap" for row in events)
+    state = demo_state.load_state(_root(tmp_path), DAY)
+    assert state.get("pending") is None
+    assert state.get("position") is None
+
+
 def test_demo_blocks_a_stop_wider_than_300_ticks(tmp_path, monkeypatch):
     _demo_env(monkeypatch)
     _patch_candidate(monkeypatch, FOUR_HR)
