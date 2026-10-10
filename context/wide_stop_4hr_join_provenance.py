@@ -80,9 +80,10 @@ def build_5m_provenance(
     setup_ts = str(state.get("setup_bar_ts") or "")
     four_ts = str(state.get("four_am_bar_ts") or "")
     setup_dt, four_dt = _aware(setup_ts), _aware(four_ts)
-    trigger, entry, stop, target = (
+    trigger, entry, stop, target, arm_target = (
         _price(state.get("trigger")), _price(candidate.get("entry")),
-        _price(candidate.get("stop")), _price(candidate.get("target"))
+        _price(candidate.get("stop")), _price(candidate.get("target")),
+        _price(state.get("target")),
     )
     direction = str(state.get("direction") or candidate.get("direction") or "").upper()
     claimed_date = str(state.get("trading_date") or "")
@@ -116,8 +117,13 @@ def build_5m_provenance(
         setup_dt > closed or four_dt > closed
     ):
         row["reason"] = "MISSING_OR_INVALID_ARM_STAMPS"
-    elif direction not in {"LONG", "SHORT"} or None in (trigger, entry, stop, target):
+    elif direction not in {"LONG", "SHORT"} or None in (trigger, entry, stop, target, arm_target):
         row["reason"] = "INVALID_STRUCTURAL_PRICES_OR_DIRECTION"
+    elif (
+        entry != trigger or target != arm_target or
+        str(candidate.get("direction") or "").upper() != direction
+    ):
+        row["reason"] = "CANDIDATE_DIFFERS_FROM_ARM"
     elif (
         (direction == "LONG" and not (stop < entry < target)) or
         (direction == "SHORT" and not (target < entry < stop))
@@ -148,6 +154,12 @@ def compare_with_1m_touch(touch: Mapping[str, Any], five: Mapping[str, Any]) -> 
         return {"status": "UNMATCHABLE", "reason": "MISSING_VERIFIED_SETUP_ID"}
     if touch.get("arm_key") != five.get("arm_key"):
         return {"status": "MISMATCH", "reason": "ARM_KEY_DIFFERENT"}
+    if (
+        str(touch.get("direction") or "").upper() != five.get("direction") or
+        _price(touch.get("trigger")) != five.get("trigger") or
+        _price(touch.get("target")) != five.get("planned_target")
+    ):
+        return {"status": "MISMATCH", "reason": "ARM_GEOMETRY_DIFFERENT"}
     contract_check = touch.get("contract_check")
     if not isinstance(contract_check, Mapping) or contract_check.get("status") != "MATCH":
         return {"status": "UNMATCHABLE", "reason": "NATURAL_TOUCH_CONTRACT_UNPROVEN"}
