@@ -6,6 +6,8 @@
 
 `PaperBroker(entry_fill_model="market")` historically fills at `BracketOrder.entry` even if the order is submitted after the market has moved. For close-confirmed signals, that planned price may not be executable. This legacy behavior explains part of the inflated earlier backtest results.
 
+Strict research fills bypass the canonical broker's optional Webull sandbox-mirror hook while preserving the contract hard-cap guard. No outside order may be emitted by this research path.
+
 The existing `ioc_limit` and `stop_market` models already address specific order types. Do not replace them with this new model.
 
 ## Corrected, opt-in research behavior
