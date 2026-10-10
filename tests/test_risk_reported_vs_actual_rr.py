@@ -74,6 +74,47 @@ def test_wrong_way_target_cannot_pass_from_claimed_rr() -> None:
     assert result is not None and result.failed_rule == "rr_below_minimum"
 
 
+@pytest.mark.parametrize(
+    ("instrument", "entry", "stop", "target"),
+    [
+        ("MCL", 72.37, 72.07, 72.97),
+        ("MGC", 1850.0, 1849.0, 1852.0),
+        ("M2K", 2300.0, 2299.0, 2302.0),
+    ],
+)
+def test_exact_two_to_one_brackets_pass_despite_float_noise(
+    instrument: str, entry: float, stop: float, target: float
+) -> None:
+    actual_rr = (target - entry) / (entry - stop)
+    assert actual_rr >= 1.99
+    setup = TradeSetup(
+        direction="LONG",
+        entry=entry,
+        stop=stop,
+        target=target,
+        rr_ratio=actual_rr,
+        strategy="research",
+        instrument=instrument,
+        session="new_york",
+    )
+    assert _engine()._check_rr_ratio(setup, DailyState()) is None
+
+
+def test_one_point_nine_nine_rr_still_rejected() -> None:
+    setup = TradeSetup(
+        direction="LONG",
+        entry=100.0,
+        stop=90.0,
+        target=119.9,
+        rr_ratio=1.99,
+        strategy="research",
+        instrument="MNQ",
+        session="new_york",
+    )
+    result = _engine()._check_rr_ratio(setup, DailyState())
+    assert result is not None and result.failed_rule == "rr_below_minimum"
+
+
 def test_runner_existing_rr_floor_exemption_remains() -> None:
     # Runner targets are not the exit, so the original R:R gate remains
     # intentionally bypassed. This change does not modify runner policy.

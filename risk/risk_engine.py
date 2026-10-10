@@ -35,6 +35,9 @@ _ET = ZoneInfo("America/New_York")
 # this is a skew tolerance, not a risk policy knob.
 _ALERT_FUTURE_TOLERANCE_SECONDS = 5.0
 
+# Float-comparison tolerance for min R:R only (not a policy loosening).
+_RR_EPS = 1e-9
+
 
 def _parse_hhmm(value: str) -> _time:
     hour, minute = value.split(":", 1)
@@ -1107,11 +1110,12 @@ class RiskEngine:
             else float("nan")
         )
         min_rr = float(self.config.min_rr_ratio)
+        rr_floor = min_rr - _RR_EPS
         if (
             not math.isfinite(reported_rr)
             or not math.isfinite(actual_rr)
-            or reported_rr < min_rr
-            or actual_rr < min_rr
+            or reported_rr < rr_floor
+            or actual_rr < rr_floor
         ):
             return RiskResult(
                 result="REJECTED",
