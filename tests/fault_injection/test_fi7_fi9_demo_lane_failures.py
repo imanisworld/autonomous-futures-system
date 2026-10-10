@@ -219,6 +219,11 @@ def test_fi7i_real_risk_engine_at_daily_loss_limit_blocks_entry(config, tmp_path
 
 
 def test_fi7j_planned_risk_over_450_blocks_entry(tmp_path, monkeypatch):
+    """A stop wide enough to exceed $450 is also wider than the 300-tick demo cap.
+
+    One MNQ contract at 300 ticks is $150, so the $450 combined-risk gate is
+    not the first refusal. The order must still not be sent.
+    """
     demo_env(monkeypatch)
     patch_candidate(monkeypatch, FOUR_HR)
     from tests.test_wide_stop_demo_runtime import _setup
@@ -229,7 +234,8 @@ def test_fi7j_planned_risk_over_450_blocks_entry(tmp_path, monkeypatch):
     broker = FakeDemoBroker()
     events = _bar(tmp_path, broker)
     assert broker.execute_calls == 0
-    assert "demo_combined_open_risk" in _blocks(events)
+    assert "demo_stop_cap" in _blocks(events)
+    assert "demo_combined_open_risk" not in _blocks(events)
 
 
 # ── FI-8: a position recovered after restart is never exited at EOD ───────────

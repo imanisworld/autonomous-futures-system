@@ -8,14 +8,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from config.settings import load_config
+from config.settings import SystemConfig, load_config
 from context import wide_stop_demo_state as demo_state
 from context import wide_stop_execution as execution
 from context import wide_stop_forward_collector as collector
 from context import wide_stop_ledger_paper as contract
 import context.wide_stop_demo_runtime as demo
 from execution.broker_interface import Fill, Position
-from risk.risk_engine import DailyState, RiskResult, TradeSetup
+from risk.risk_engine import DailyState, RiskEngine, RiskResult, TradeSetup
 
 DAY = date(2026, 9, 8)
 EPOCH = "2026-09-08T00:00:00+00:00"
@@ -232,6 +232,32 @@ def test_demo_exact_300_tick_stop_reaches_the_broker(tmp_path, monkeypatch):
     assert broker.last_order is not None
     assert abs(broker.last_order.entry - broker.last_order.stop) / 0.25 == 300
     assert broker.last_order.max_stop_ticks == 300.0
+
+
+def test_350_tick_setup_is_refused_on_demo_and_admitted_on_paper(tmp_path, monkeypatch):
+    """Paper may measure a 350-tick stop. The demo order may not."""
+    wide = _setup(FOUR_HR)
+    wide.stop = wide.entry - 350 * 0.25
+    wide.target = wide.entry + 350 * 0.25 * wide.rr_ratio
+    _demo_env(monkeypatch)
+    _patch_candidate(monkeypatch, FOUR_HR)
+    monkeypatch.setattr(collector, "_trade_setup", lambda state, out: wide)
+    broker = _FakeBroker()
+    events = demo.process_demo_five_min_bar(
+        payload=_payload(), cfg=_cfg(), bars_5m=[], log_dir=tmp_path,
+        for_date=DAY, broker_factory=lambda: broker,
+    )
+    assert broker.execute_calls == 0
+    assert any(row.get("lane_failed_rule") == "demo_stop_cap" for row in events)
+
+    book = SystemConfig.__new__(SystemConfig)
+    object.__setattr__(book, "max_stop_ticks", {"MNQ": 120.0})
+    object.__setattr__(book, "min_rr_ratio", 2.0)
+    lane_cfg = contract.lane_config(book, contract.LEDGERS["wide_stop_4k"])
+    engine = RiskEngine(config=lane_cfg)
+    assert engine._check_max_stop_distance(wide, DailyState()) is None
+    assert engine._check_rr_ratio(wide, DailyState()) is None
+    assert lane_cfg.max_stop_ticks["MNQ"] == 400.0
 
 
 def test_demo_blocks_a_stop_wider_than_300_ticks(tmp_path, monkeypatch):

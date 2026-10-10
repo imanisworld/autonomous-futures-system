@@ -97,8 +97,8 @@ Append-only. Complements the Grok appendix and the operator’s **private** Chat
 
 | Artifact | Branch / note |
 |---|---|
-| MNQ 4HR 400-tick historical benchmark + forward prereg wiring | `research/4hr-mnq-400-forward-20261009` (not merged); `docs/research-evidence/T-2026-10-09-prereg-4hr-mnq-400-forward-2026-10-09-01/` |
-| ORB/VWAP 10m·15m·30m × NY windows 09:40–11:00 & 13:30–16:00, IOC | `docs/research-evidence/orb-vwap-tf-window-sweep-2026-10-10/` (`README.md`, `results.json`) |
+| MNQ 4HR 400-tick historical benchmark + forward prereg wiring | `research/4hr-mnq-400-forward-20261009` (not merged); `docs/research-notes/4hr-mnq-400-historical-benchmark-2026-10-10/` |
+| ORB/VWAP 10m·15m·30m × NY windows 09:40–11:00 & 13:30–16:00, IOC | `docs/research-notes/orb-vwap-tf-window-sweep-2026-10-10/` (`README.md`, `results.json`) |
 | Same sweep + **TRENDING** filter; + **TRENDING** and MNQ ORB stop 48t | `FOLLOWUP-trending.md`, `results-trending.json`, `results-trending-orb48.json` in that folder |
 | Runner | `scripts/orb_vwap_tf_window_sweep.py` (`--require-trending`, `--mnq-orb-stop-ticks`) |
 

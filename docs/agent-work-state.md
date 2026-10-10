@@ -13,8 +13,8 @@ Read **only** this block + `AGENTS.md` + `docs/futures-research-resume-checkpoin
 | **Daily tsmom prereg** | `research/equity-index-daily-tsmom-forward-20261010` @ **`3fc8709`** — pushed, **PLANNED**, paper/log only, no score before 40 round-turns, no deploy |
 | **Public resume** | `docs/futures-research-resume-checkpoint-2026-10-10.md` (+ Cursor + Claude options appendices) |
 | **Options ETF handoff** | Branch **`claude/options-time-exit-research-20261010`** **deleted** from GitHub (2026-10-10 cleanup); copy in **`/workspace/afs-shared/`** if needed — **unverified here** |
-| **Saved 4HR benchmark** | `docs/research-evidence/T-2026-10-09-prereg-4hr-mnq-400-forward-2026-10-09-01/` (on **research** branch) |
-| **Saved ORB/VWAP sweeps** | `docs/research-evidence/orb-vwap-tf-window-sweep-2026-10-10/` (on **research** branch) |
+| **Saved 4HR benchmark** | `docs/research-notes/4hr-mnq-400-historical-benchmark-2026-10-10/` (on **research** branch) |
+| **Saved ORB/VWAP sweeps** | `docs/research-notes/orb-vwap-tf-window-sweep-2026-10-10/` (on **research** branch) |
 | **Forward 4HR start** | **2026-10-12** — Track B; not collected, not deployed |
 | **Step 4 parity doc** | `docs/futures-demo-step4-1m-vs-5m-ioc-parity-2026-10-10.md` |
 | **Track B readiness** | `docs/futures-track-b-forward-readiness-2026-10-10.md` |
@@ -23,7 +23,7 @@ Read **only** this block + `AGENTS.md` + `docs/futures-research-resume-checkpoin
 
 **DO NOT REDO:** gzip 4HR cell reproduction; ORB/VWAP TF×window sweeps (baseline + trending + orb48); Grok PASS work on merged **#1208**/**#1209**; Sep decompositions listed below.
 
-**NEXT:** Open the Track B PR so CI runs on the 300-tick demo cap plus the **#1215** merge. Do not deploy. Do not score the daily tsmom prereg. 1m arm fills/costs **not implemented**. **NOT done:** deploy, forward collection, DEMO-ready claim, tsmom score.
+**NEXT:** [#1216](https://github.com/imanisworld/autonomous-futures-system/pull/1216) is the Track B PR. Demo stays **300** ticks / **$150**; paper stays **400**. A 350-tick setup is refused on demo and admitted on paper. Merge **#1215**, then re-merge `main` and send Grok that SHA. Do not deploy. 1m arm fills/costs **not implemented**. **NOT done:** deploy, forward collection, DEMO-ready claim, tsmom score.
 
 Prior chat context for this session is **closed**. Section below is coordination archive unless stale.
 

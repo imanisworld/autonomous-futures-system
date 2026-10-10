@@ -121,7 +121,7 @@ These look like “old research” but are **authoritative or DO NOT REDO**:
 | Artifact | Location |
 |---|---|
 | 4HR benchmark + forward prereg | `research/4hr-mnq-400-forward-20261009` branch |
-| ORB/VWAP sweep results | `docs/research-evidence/orb-vwap-tf-window-sweep-2026-10-10/` (on research branch) |
+| ORB/VWAP sweep results | `docs/research-notes/orb-vwap-tf-window-sweep-2026-10-10/` (on research branch) |
 | Futures checkpoints (2026-10-10) | #1211 branch docs |
 | Claude options handoff | `claude/options-time-exit-research-20261010` |
 | Strategy inventory / trial ledger | `docs/strategy-rules/Strategy_Inventory.md`, `docs/research-trial-ledger.jsonl` |
