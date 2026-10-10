@@ -20,8 +20,14 @@ Use `close_ts` (not `ts`) to prove a higher-timeframe signal was available to an
 
 `pytest -q tests/test_timeframe_integrity.py`
 
-The 30 focused tests cover supported periods, closed-bar timestamps, New York DST shifts, UTC-vs-session alignment, missing source intervals, incomplete last buckets, contract rolls, invalid price/source metadata, and the daily maintenance break. Two additional diagnostics deliberately compare the legacy frozen resampler against the new, strict path on synthetic incomplete/cross-contract candles; no live study data is opened. GitHub exact-head full CI and independent review are required before relying on the new path.
+The 32 focused tests cover supported periods, closed-bar timestamps, New York DST shifts, UTC-vs-session alignment, missing source intervals, incomplete last buckets, contract rolls, invalid price/source metadata, and the daily maintenance break. Two additional diagnostics deliberately compare the legacy frozen resampler against the new, strict path on synthetic incomplete/cross-contract candles; no live study data is opened. GitHub exact-head full CI and independent review are required before relying on the new path.
 
 This PR is **not** an edge discovery result or permission to trade. If the validation changes measured signals, the earlier unguarded result is not grandfathered into evidence.
 
 **Daily bars** are deliberately unsupported by the generic clock-sized resampler: the regular CME Globex day lasts approximately 23 trading hours and holiday calendars can shorten it further. Treating 1D as an ordinary 1,440-minute bucket would be another false time-frame identity. A daily-bar contract needs a separate explicit exchange-session calendar and verification.
+
+## No shared four-hour or twelve-hour clock
+
+This helper requires **explicit** `anchor="cme_session_18_et"` for 4H and 12H use. It deliberately refuses unimplemented named anchor contracts. Specifically, `strategy/four_hr_retrigger.py` builds fixed ET wall-clock 00/04/08/12/16/20 buckets; `research/bars_12hr_miyagi_loader.py` builds 04:00/16:00 ET twelve-hour buckets. Neither may be substituted with this helper's 18:00 ET session buckets. A strategy-specific complete-bar/maintenance calendar contract must be established independently before either lane is changed.
+
+No general claim is made that any existing 4HR or Miyagi live/research bar is currently wrong. The identified incomplete 4H emission applies to the inspected frozen MGC-style resampler; the extra synthetic comparisons establish the failure mode without reading forward outcomes.
