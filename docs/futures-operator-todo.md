@@ -1,5 +1,22 @@
 # Futures Operator TODO
 
+## CURRENT — 2026-10-10 (supersedes older queue below; NOT trading authority)
+
+**Objective:** Establish genuinely executable positive expectancy, not merely green CI. Historical #1208–#1211 engineering corrections are now **merged source-only**; do not restart their old reviews/tests unless relevant code changed. The older Oct 8 operational sections remain historical context, with their release/box safety requirements **still open**.
+
+- [x] **Evidence triage:** Keep MNQ broad 4HR pre-armed historical lead and 60M 3-2-2 comparator; keep ORB/VWAP and other rejected cells closed (see Strategy Inventory and trial ledger). No freshly validated profitable strategy.
+- [x] **Engineering source work:** #1208, #1209, #1210, #1211 merged. **No automatic deployment or strategy enablement.**
+- [ ] **Independent breaker review:** #1212 optional future-only, **OFF** 5m full-arm provenance; #1213 stacked/overlapping offline identity matcher. Read both exact-head diffs and check whether #1212 has new CI after `9df1a09`; #1213 `2e5c2fa` previously passed 8,777/8 skipped. Avoid merging duplicate shared files twice or promoting a partial revision.
+- [ ] **Separate collection decision:** Decide whether to authorize prospective 5m provenance recording with new identifiable cohort. **Do not set `WIDE_STOP_4HR_JOIN_PROVENANCE_V2_ENABLED` without explicit approval; do not backfill archival 5m rows.**
+- [ ] **Observer proof:** Natural 1m minimum (10 distinct eligible touches, 20 trading days, 2 calendar months), zero contract/date/dedupe/causal violations; no synthetic QA counts. Check current box/epoch via authorized read-only access; the Oct 4 start is documented, not a current sample count.
+- [ ] **Track B vs Track A:** Keep 5m IOC8/400-tick future candidate (`research/4hr-mnq-400-forward-20261009`, last documented `2f4f776`) separate from 1m pre-armed mechanism. Verify current exact source head and prereg before *any* eligible forward recording. No release was performed by this docs update.
+- [ ] **DEMO/box readiness:** Independent release audit: broker account, flatness/orders, live-off/demo/cap-one, effective watcher/deploy lock, Python pins, journal identity, rollback, exact SHA/CI, and permissions. **Explicit GO separately** before any build/restart/deployment/order action.
+- [ ] **Cleanup:** Review the classified candidates in `docs/repo-hygiene-deferred-removal-tracker-2026-10-10.md`; preserve archival hashes and confirm local usage/backup/restore before any deletion. Local Mac filesystem and VPS storage were **not inspected** in this docs update.
+
+**Sources of truth:** Strategy verdict = `docs/strategy-rules/Strategy_Inventory.md`; experiment history = `docs/research-trial-ledger.jsonl`; runtime = independently verified box/broker. Concise agent handoff = `docs/agent-work-state.md` START HERE. Private P&L research remains in ChatGPT Library, not public GitHub.
+
+---
+
 ## Operator checklist — 2026-10-08 (completion requires operator verification)
 
 **Priority:** Resolve Grok's actual blockers first. Do not deploy merely to finish this checklist.
