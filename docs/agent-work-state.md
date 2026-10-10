@@ -1,5 +1,35 @@
 # Agent Work State
 
+## Latest futures research coordination — 2026-10-10 (source-only; no trading authority)
+
+**Operator sequence:** **(2) assess rules → (3) choose lead → (1) finish justified correctness fixes → (4) prepare DEMO → (5) independent forward/DEMO proof only after gates and explicit operator GO.** This is a work order, **not** approval to merge, deploy, activate a broker, reset a paper/observer epoch, inspect blinded P&L, or loosen global risk rules. Do not tell the operator work will run in the background.
+
+**DONE / DO NOT REDO (existing evidence):**
+- The Sep 7 decomposed signal-vs-fill-vs-bracket-vs-risk waterfall, its ablations, the Sep 18 causal 4HR pre-armed touch A/B, the Sep 8 wide-stop 300t paper amendment, the Sep 20 4H 2→2 treatment, and the Oct 4 corrected 3-2-2 EOD rerun are **already completed**. Do not re-run these populations or create different default parameters to get greener historical results. See `docs/edge-decomposition-audit-2026-09-07.md`, `docs/4hr-prearmed-touch-ab-2026-09-18.md`, `docs/wide-stop-hypothetical-ledger-lane-amendment-2026-09-08.md`, `docs/4hr-prearmed-continuation-treatment-2026-09-20.md` and the trial ledger.
+- The previously broken 4HR natural-1m observer was **repaired** and had a canonical evidence epoch independently documented as started **2026-10-04T21:30:05Z**, release `c44d32b`; do **not** rebuild it or backfill the invalid Sep 18–Oct 4 interval. Current runtime state/event count as of Oct 10 is **UNVERIFIED here**, because the Mac connector was offline. See `docs/4hr-natural-1m-observation-epoch-2026-10-01.md`.
+
+**Step 2 results / Step 3 lead (evidence-only, not a new Inventory verdict):**
+- **Primary:** MNQ **4HR Re-Trigger — broad pre-armed trigger**, not the post-hoc 4H-2→2 treatment. The corrected pre-armed historical fills retain a positive net sign across chronological halves and adverse ticks, with a larger sample than 3-2-2. Risk stop cap and 2R global minimum exclude most trades; *this is not a justification to loosen account safety*. The existing isolated `wide_stop_4k` paper cell is **300 ticks / 1.0 R:R / 8-tick completed-5m IOC**, which is not identical to 1m pre-armed execution. Its valid IOC fill participation is low. Do not pretend this established 1m DEMO edge.
+- **Comparator:** MNQ **60M 3-2-2 First Live**; corrected historical sample is smaller (32 terminal, no stop hits) and cannot be called validated; its preregistered forward 1m touch proof is still required.
+- **Hold:** MGC wide is a **blinded** distinct prospective trial; Miyagi lacks sample/engine, MES 4HR historically failed, and the already rejected UTC-timeframe momentum/ORB/VWAP variants are **DO NOT REDO**. Do not change the authoritative Strategy Inventory or `research-trial-ledger.jsonl` without an actual registered state/approved decision. Full numeric findings are in the operator's private ChatGPT Library handoff `/Futures Research/Futures Research Handoff - 2026-10-10.md`, not for this public repository.
+
+**Step 1 source fixes (open drafts, no independent reviewer approval):** #1208 strict next-executable-price research fill, #1209 actual-bracket R:R and protective stop direction, #1210 combined QA, #1211 explicit anchor and complete/cross-contract bar validation. Each passed Python CI on earlier exact heads; retrieve current head/CI/reviews before any review or merge. #1211 is a **new-study isolated helper**, not a change to the frozen MGC scorer. Method comparison and public-safe notes: `docs/futures-research-resume-checkpoint-2026-10-10.md` on #1211.
+
+**Step 4 existing DEMO scaffolding / blockers:**
+- A separate **guarded Tradovate DEMO** wide-stop route already exists in `context/wide_stop_execution.py` and an isolated paper ledger exists in `context/wide_stop_ledger_paper.py`; do not create a competing execution path. Verify whether the route consumes **completed-5m IOC** or true **natural 1m pre-armed touch** before claiming mechanism parity. No new demo order is authorized.
+- The existing forward 1m observer prereg `docs/prereg-forward-one-min-trigger-evidence-review-2026-09-18.md` requires **10 distinct eligible natural trigger arm_keys**, **20 trading days**, and **2 calendar months** separately for 4HR and 3-2-2, zero causal/parity/dedupe/isolation violations. Synthetic tests are NOT eligible. The 4HR verified epoch began Oct 4; the calendar-month gate cannot have elapsed as of Oct 10, no matter how well software tests pass. Even passing this gate establishes mechanism parity only, not profitable strategy/DEMO authority.
+- Remaining release readiness requires fresh restricted read-only VPS checks of deployed exact SHA, live-off/demo/one-contract pins, broker orders/positions, journal integrity, deploy lock, rollback and services. **Box not checked this turn.** See `docs/futures-operator-todo.md` and source deployment plan; do not duplicate the deployment audit or skip independent reviewer.
+
+**Agent next tasks without duplication:**
+- **Grok (research):** identify *unexamined* causal 4HR failure conditions or truly distinct strategy ideas; do not rerun closed grids or tune exhausted same-fold samples. Provide prereg hypothesis only; no orders or config edits.
+- **Cursor (builder/test runner):** inspect the existing 4HR paper-vs-natural-1m DEMO route, then produce the **smallest source-only QA/parity change** that closes a demonstrated defect; respect existing observer/ledger names and frozen epochs. Run focused + exact-head full CI. Do not deploy.
+- **Claude/Codex (independent breaker):** review #1208–#1211 and the mechanism/DEMO path, attack stop-first, timestamp alignment, order-route isolation, gap stops, risk arithmetic, intrabar lookahead. Independent PASS/FAIL, not a fresh duplicate test suite.
+- **ChatGPT/operator (lead):** reconcile verified agent reports by exact SHA, nominate one narrowly defined **approved/preregistered** new analysis only if genuinely unresolved, choose a viable position-risk/margin budget based on documented stops, and withhold DEMO progression until both profitability and mechanism proof are established.
+
+**DONE criterion for this step:** Preserve state, proofs, blockers, and agent owners; don't restart full repo audit. **Current status: NOT DEMO-READY; no net-positive forward proof in this session.**
+
+---
+
 ## Current coordination checkpoint — 2026-10-08
 
 - **Repository:** GitHub source baseline at this handoff: `a74c6f8f93e744e93627c09be06a77b0e7e974f7` (#1202), including source-only #1198 adapter plus previously merged watcher/history guards. **Source SHA is not VPS release identity.**
