@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "experiment_id": "E-2026-10-09-4hr-mnq-400-forward-01",
+  "trial_id": "T-2026-10-09-prereg-4hr-mnq-400-forward-2026-10-09-01",
+  "status": "APPROVED",
+  "approved_by": "Operator",
+  "approved_at": "2026-10-10T03:50:00Z",
+  "hypothesis": "New MNQ 4HR re-trigger candidates admitted by a 400-tick stop cap and reward-to-risk of at least 1.0 have positive one-contract IOC net P&L in both chronological halves, with top-three-month share under 60 percent, once 40 forward fills exist.",
+  "prereg_path": "docs/prereg-4hr-mnq-400-forward-2026-10-09.md",
+  "baseline": {
+    "commit_sha": "9a754ed9292333215d1490c9383f2d860d44133a",
+    "label": "wired wide_stop_4k contract: 300-tick cap, R:R >= 1.0, $150; historical cell 32 trades, +$1,901.14, PF 2.313"
+  },
+  "candidate": {
+    "commit_sha": null,
+    "change": "Measure forward MNQ 4HR re-trigger fills under a 400-tick ($200) stop cap and R:R >= 1.0 on an isolated $4,000 ledger. Do not rescore the consumed 2024-07-09 through 2026-06-03 cell. Do not change the global 120-tick cap or the wired 300-tick lane.",
+    "label": "4HR MNQ 400-tick forward cell"
+  },
+  "data": {
+    "source": "Forward IOC fills of strat_4hr_retrigger on MNQ after operator approval. The committed candidate artifact scripts/edge_decomposition_audit_results_candidates.jsonl.gz is the exposed historical benchmark only and is not a scoring input.",
+    "window": {
+      "start": "2026-10-12",
+      "end": "the session of the 40th forward fill, or 24 months from the approved start, whichever comes first"
+    },
+    "dataset_id": "forward://mnq-4hr-retrigger/stop-le-400/rr-ge-1/from-approval/ioc-1tick"
+  },
+  "population": "MNQ strat_4hr_retrigger; one contract; stop cap 400 ticks ($200) and minimum reward-to-risk 1.0; isolated ledger starting balance $4,000; forward sessions strictly after this spec is operator-approved; the consumed historical cell 2024-07-09 through 2026-06-03 and every session through 2026-10-09 inclusive are ineligible and are never rescored as this trial's result",
+  "setup_type": "strat_4hr_retrigger",
+  "timeframe": "4H",
+  "changed_variables": [
+    {
+      "name": "family_stop_cap_ticks",
+      "baseline_value": 300,
+      "candidate_value": 400
+    }
+  ],
+  "held_constant": [
+    "instrument MNQ",
+    "one contract",
+    "minimum reward-to-risk 1.0",
+    "isolated ledger; not the $1,500 book",
+    "global max_stop_ticks 120 and min_rr_ratio 2.0 unchanged on the $1,500 book",
+    "wired wide_stop_4k 300-tick lane unchanged",
+    "strat_4hr_retrigger stays out of enabled_concepts until a separate operator decision",
+    "entry ioc_limit at the decision-bar close, 1 adverse tick",
+    "static bracket exit, no runner",
+    "round-turn cost $1.48",
+    "historical 36-trade cell is a benchmark, not a scoring input"
+  ],
+  "execution": {
+    "entry_logic": "Production ioc_limit at the decision-bar close. A candidate is admitted only when stop distance is at most 400 ticks and reward-to-risk is at least 1.0. Fills that land outside the bracket are invalid-at-fill and are counted separately, never as P&L.",
+    "exit_logic": "Static documented bracket. No runner and no breakeven adjustment.",
+    "stop_logic": "Strategy stop, capped at 400 ticks ($200) per contract. A wider structural stop is not admitted.",
+    "target_logic": "The strategy target already on the candidate. Reward-to-risk below 1.0 is not admitted.",
+    "sizing": "One MNQ contract. Isolated ledger starting balance $4,000. Daily-loss floor for this ledger is $200 so one capped loss does not halt the day by the $150 floor.",
+    "friction": "One adverse tick on entry. Round-turn cost $1.48, matching the historical bracket net."
+  },
+  "required_metrics": [
+    "population_size",
+    "completed_trades",
+    "wins",
+    "losses",
+    "invalid_at_fill",
+    "net",
+    "profit_factor",
+    "expectancy",
+    "h1_net",
+    "h2_net",
+    "top3_month_share",
+    "max_loss"
+  ],
+  "acceptance_criteria": [
+    "at least 40 filled trades",
+    "net P&L positive",
+    "both chronological halves positive",
+    "top-three-month share of net under 60 percent"
+  ],
+  "rejection_criteria": [
+    "net P&L not positive at the stopping point",
+    "either chronological half not positive",
+    "top-three-month share of net 60 percent or more"
+  ],
+  "evidence_path": "docs/research-evidence/T-2026-10-09-prereg-4hr-mnq-400-forward-2026-10-09-01/",
+  "variant_manifest": null,
+  "notes": "Operator approved measurement on 2026-10-10T03:50:00Z. Eligible session dates start 2026-10-12. Sessions through 2026-10-09 inclusive are ineligible. Not collected and not scored. This approval does not deposit the $4,000, enable strat_4hr_retrigger, change the 120-tick cap, change the wired 300-tick lane, or deploy. Fewer than 40 fills at 24 months is INSUFFICIENT SAMPLE. Strategy inventory verdict stays PROMISING BUT UNPROVEN."
+}
