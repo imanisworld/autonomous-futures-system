@@ -6,9 +6,10 @@ Read **only** this block + `AGENTS.md` + `docs/futures-research-resume-checkpoin
 
 | Item | Value |
 |---|---|
-| **GitHub `main`** | **`6d3078f`** — research stack **#1208–#1213** merged (latest: **#1213**) |
-| **Open futures research PRs (this lane)** | **#1206**, **#1207** (reports/docs); no open #1210–#1213 |
-| **Demo wiring branch (not merged)** | `research/4hr-mnq-400-forward-20261009` @ **`2f4f776`** — 4HR 400-tick forward, 3-2-2 shadow |
+| **GitHub `main`** | **`572cd13`** — **#1208–#1213** merged; **#1215** pending (AFS-0234/0235 mutant tests) |
+| **Track B deploy candidate** | `research/4hr-mnq-400-forward-rebase-20261010` @ **`1c97764`** — Grok review before deploy |
+| **DO NOT deploy** | `research/4hr-mnq-400-forward-20261009` @ **`2f4f776`** (~157 commits behind `main`; no **#1208/#1209**) |
+| **Open futures research PRs (this lane)** | **#1206**, **#1207**, **#1215** |
 | **Public resume** | `docs/futures-research-resume-checkpoint-2026-10-10.md` (+ Cursor + Claude options appendices) |
 | **Options ETF handoff** | Branch **`claude/options-time-exit-research-20261010`** **deleted** from GitHub (2026-10-10 cleanup); copy in **`/workspace/afs-shared/`** if needed — **unverified here** |
 | **Saved 4HR benchmark** | `docs/research-evidence/T-2026-10-09-prereg-4hr-mnq-400-forward-2026-10-09-01/` (on **research** branch) |
@@ -18,10 +19,11 @@ Read **only** this block + `AGENTS.md` + `docs/futures-research-resume-checkpoin
 | **Track B readiness** | `docs/futures-track-b-forward-readiness-2026-10-10.md` |
 | **Deferred cleanup list** | `docs/repo-hygiene-deferred-removal-tracker-2026-10-10.md` (classify only; delete at end) |
 | **Verdict** | **NOT DEMO-READY** — Track B forward after reviewed deploy of **research** SHA; Track A 1m observer parallel |
+| **New forward prereg (unscored)** | `research/equity-index-daily-tsmom-forward-20261010` — `docs/prereg-equity-index-daily-tsmom-forward-2026-10-10.md` — trial `T-2026-10-10-prereg-equity-index-daily-tsmom-forward-2026-10-10-01`. MES/MNQ/M2K/MYM daily 60-session sign, next 09:30 ET open, 20-session max hold. First eligible entry **2026-10-12**. **PLANNED only. Do not score. Do not backfill.** |
 
-**DO NOT REDO:** gzip 4HR cell reproduction; ORB/VWAP TF×window sweeps (baseline + trending + orb48); Grok PASS work on merged **#1208**/**#1209**; Sep decompositions listed below.
+**DO NOT REDO:** gzip 4HR cell reproduction; ORB/VWAP TF×window sweeps (baseline + trending + orb48); Grok PASS work on merged **#1208**/**#1209**; Sep decompositions listed below. Do not retune or historically score the 2026-10-10 daily time-series momentum prereg.
 
-**NEXT:** **Explicit GO** before deploy **research** SHA (`2f4f776` or successor on `research/4hr-mnq-400-forward-20261009`); fresh VPS read-only pins + deployment-safety at promote time. Optional: refresh `docs/futures-pr-independent-review-2026-10-10.md` for post-#1213 `main`. **NOT done:** deploy, forward collection, DEMO-ready claim.
+**NEXT:** Merge **#1215**; Grok review **`1c97764`**; merge mutant tests to `main` then re-merge `main` into rebase branch if needed; **explicit GO** before Track B deploy (never **`2f4f776`**). 1m arm fills/costs **not implemented**. Daily tsmom stays unscored until the forward window can complete a look. **NOT done:** deploy, forward collection, DEMO-ready claim, tsmom score.
 
 Prior chat context for this session is **closed**. Section below is coordination archive unless stale.
 
