@@ -37,7 +37,9 @@ def _bucket_key(ts: int, timeframe_minutes: int) -> tuple[int, int] | None:
     return (start + ((ts - start) // width) * width, start)
 
 
-def confirmed_session_bars(raw15: Sequence[Mapping], *, minutes: int, source_minutes: int = 15) -> ConfirmedBars:
+def confirmed_session_bars(
+    raw15: Sequence[Mapping], *, minutes: int, source_minutes: int = 15, anchor: str | None = None
+) -> ConfirmedBars:
     """Only produce closed, contiguous, single-contract bars.
 
     Each source 5m/15m bar must supply UTC timestamp-open SECONDS as ts,
@@ -48,6 +50,13 @@ def confirmed_session_bars(raw15: Sequence[Mapping], *, minutes: int, source_min
         raise ValueError("timeframe must be one of 5, 15, 30, 60, 240, 720 minutes")
     if type(source_minutes) is not int or source_minutes not in _SOURCE_MINUTES or minutes % source_minutes:
         raise ValueError("source_minutes must divide timeframe and be 5 or 15")
+    # 4HR Re-Trigger uses 00/04/08 ET wall-clock buckets, and Miyagi 12H
+    # uses 04/16 ET buckets: neither is this 18:00 ET CME session anchor.
+    # No hidden aliasing of two different named 4H/12H definitions.
+    if anchor is not None and anchor != "cme_session_18_et":
+        raise ValueError("unsupported anchor; requires a separate strategy-specific resampler")
+    if minutes in (240, 720) and anchor != "cme_session_18_et":
+        raise ValueError("4H/12H requires explicit anchor=cme_session_18_et")
     if not raw15:
         return ConfirmedBars((), {}, 0)
     source_seconds = source_minutes * 60
