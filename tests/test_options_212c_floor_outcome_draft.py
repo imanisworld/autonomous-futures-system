@@ -93,7 +93,8 @@ def test_draft_is_registered_and_not_executable(tmp_path: Path) -> None:
 
     approved = discover_specs(ROOT)
     assert [path.name for path in approved] == [
-        "E-2026-09-25-options-212c-target-geometry-01.json"
+        "E-2026-09-25-options-212c-target-geometry-01.json",
+        "E-2026-10-09-4hr-mnq-400-forward-01.json",
     ]
 
     superseded = json.loads((ROOT / SUPERSEDED_REL).read_text(encoding="utf-8"))

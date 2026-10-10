@@ -52,7 +52,7 @@
     "exit_logic": "Static documented bracket. No runner and no breakeven adjustment.",
     "stop_logic": "Strategy stop, capped at 400 ticks ($200) per contract. A wider structural stop is not admitted.",
     "target_logic": "The strategy target already on the candidate. Reward-to-risk below 1.0 is not admitted.",
-    "sizing": "One MNQ contract. Isolated ledger starting balance $4,000. Daily-loss floor for this ledger is $200 so one capped loss does not halt the day by the $150 floor.",
+    "sizing": "One MNQ contract. Isolated ledger starting balance $4,000. Daily-loss floor for this ledger is $400, two times the $200 capped stop, so one full stop does not halt the day.",
     "friction": "One adverse tick on entry. Round-turn cost $1.48, matching the historical bracket net."
   },
   "required_metrics": [
