@@ -1,6 +1,6 @@
 """Offline time-frame integrity for NEW futures research only.
 
-Exclude partial, gapped and contract-mixed 15/30/60/240-minute bars.
+Exclude partial, gapped and contract-mixed 5/15/30/60/240/720-minute bars.
 Do not alter the sealed MGC forward scorer or any runtime/order path.
 """
 from __future__ import annotations
@@ -13,8 +13,8 @@ from typing import Mapping, Sequence
 from zoneinfo import ZoneInfo
 
 _ET = ZoneInfo("America/New_York")
-_PERIODS = frozenset({15, 30, 60, 240})
-_BASE_SECONDS = 900
+_PERIODS = frozenset({5, 15, 30, 60, 240, 720})
+_SOURCE_MINUTES = frozenset({5, 15})
 
 
 @dataclass(frozen=True)
@@ -37,17 +37,20 @@ def _bucket_key(ts: int, timeframe_minutes: int) -> tuple[int, int] | None:
     return (start + ((ts - start) // width) * width, start)
 
 
-def confirmed_session_bars(raw15: Sequence[Mapping], *, minutes: int) -> ConfirmedBars:
+def confirmed_session_bars(raw15: Sequence[Mapping], *, minutes: int, source_minutes: int = 15) -> ConfirmedBars:
     """Only produce closed, contiguous, single-contract bars.
 
-    Each source 15m bar must supply UTC timestamp-open SECONDS as ts,
+    Each source 5m/15m bar must supply UTC timestamp-open SECONDS as ts,
     a dated ticker, and OHLCV. Fail closed on missing provenance or invalid
     source chronology/geometry. Partial HTF buckets never become signals.
     """
     if type(minutes) is not int or minutes not in _PERIODS:
-        raise ValueError("timeframe must be one of 15, 30, 60, 240 minutes")
+        raise ValueError("timeframe must be one of 5, 15, 30, 60, 240, 720 minutes")
+    if type(source_minutes) is not int or source_minutes not in _SOURCE_MINUTES or minutes % source_minutes:
+        raise ValueError("source_minutes must divide timeframe and be 5 or 15")
     if not raw15:
         return ConfirmedBars((), {}, 0)
+    source_seconds = source_minutes * 60
     groups: dict[tuple[int, int], list[dict]] = defaultdict(list)
     rejected: Counter[str] = Counter()
     previous = None
@@ -58,8 +61,8 @@ def confirmed_session_bars(raw15: Sequence[Mapping], *, minutes: int) -> Confirm
         if previous is not None and ts <= previous:
             raise ValueError("source timestamps must be unique and increasing")
         previous = ts
-        if ts % _BASE_SECONDS:
-            raise ValueError("source timestamp is not on a 15-minute boundary")
+        if ts % source_seconds:
+            raise ValueError("source timestamp is not on the declared source time boundary")
         ticker = str(row.get("ticker") or "").strip()
         if not ticker:
             raise ValueError("dated source ticker is required for roll safety")
@@ -78,9 +81,9 @@ def confirmed_session_bars(raw15: Sequence[Mapping], *, minutes: int) -> Confirm
             "low": l, "close": c, "volume": v,
         })
     out: list[dict] = []
-    width_bars = minutes // 15
+    width_bars = minutes // source_minutes
     for (bucket_start, session_start), items in sorted(groups.items()):
-        expected = [bucket_start + _BASE_SECONDS * n for n in range(width_bars)]
+        expected = [bucket_start + source_seconds * n for n in range(width_bars)]
         if [b["ts"] for b in items] != expected:
             rejected["partial_or_gap"] += 1
             continue
