@@ -193,3 +193,77 @@ def test_malformed_natural_and_five_rows_are_retained_not_crash():
     assert data["touch_classifications"][2]["reason"] == "MALFORMED_NATURAL_RECORD"
     assert len(data["unused_five_candidates"]) == 2
     assert all(x["reason"] == "MALFORMED_FIVE_MIN_RECORD" for x in data["unused_five_candidates"])
+
+
+def test_edited_five_min_source_stamp_cannot_keep_an_unchanged_arm_key():
+    five = _build()
+    five["setup_bar_ts"] = "2026-06-02T09:05:00-04:00"
+    data = reconcile_identity_only([_natural(five)], [five])
+    assert data["counts"] == {"UNMATCHABLE": 1}
+    assert data["touch_classifications"][0]["reason"] == "FIVE_MIN_ARM_KEY_INCONSISTENT"
+
+
+def test_edited_five_min_trigger_cannot_keep_an_unchanged_arm_key():
+    five = _build()
+    five["trigger"] = 20000.25
+    data = reconcile_identity_only([_natural(five)], [five])
+    assert data["counts"] == {"UNMATCHABLE": 1}
+    assert data["touch_classifications"][0]["reason"] == "FIVE_MIN_ARM_KEY_INCONSISTENT"
+
+
+def test_incorrect_five_min_strategy_schema_cannot_match():
+    five = _build()
+    five["strategy"] = "strat_322_first_live"
+    data = reconcile_identity_only([_natural(five)], [five])
+    assert data["counts"] == {"UNMATCHABLE": 1}
+    assert data["touch_classifications"][0]["reason"] == "FIVE_MIN_SOURCE_IDENTITY_UNPROVEN"
+
+
+def test_genuine_one_min_observer_event_schema_reconciles_identity_only(
+    tmp_path, monkeypatch
+):
+    """Use the real production observer event, not the synthetic _touch helper.
+
+    All bars and arms remain test fixtures; no real or sealed evidence is read.
+    """
+    from datetime import datetime, timezone, timedelta
+    from context.one_min_trigger import evaluate_armed_4hr_touch
+    from tests.test_one_min_trigger import (
+        _payload, _seed_completed_8am_hour, _arm_observation, _enable_observer, DAY,
+    )
+    from context.wide_stop_4hr_join_provenance import build_5m_provenance, STRATEGY
+
+    _enable_observer(monkeypatch)
+    monkeypatch.setenv("WIDE_STOP_LEDGER_MODE", "observe_only")
+    _seed_completed_8am_hour(str(tmp_path))
+    _arm_observation(str(tmp_path), contract="MNQM2026")
+    ET = timezone(timedelta(hours=-4))
+    event = evaluate_armed_4hr_touch(
+        _payload(datetime(2026, 6, 2, 9, 31, tzinfo=ET), contract_hint="MNQM2026"),
+        str(tmp_path), for_date=DAY,
+    )
+    assert event is not None and event["event"] == "TRIGGER_TOUCH"
+    candidate = {
+        "entry": 20000.0, "stop": 19900.0, "target": 20200.0,
+        "direction": "LONG", "entry_time": datetime(2026, 6, 2, 9, 35, tzinfo=ET),
+        "state": {
+            "trading_date": DAY.isoformat(),
+            "direction": "LONG", "status": "TRIGGERED", "trigger": 20000.0,
+            "target": 20200.0, "setup_bar_ts": "2026-06-02T09:10:00-04:00",
+            "four_am_bar_ts": "2026-06-02T04:00:00-04:00",
+        },
+    }
+    five = build_5m_provenance(
+        strategy=STRATEGY, candidate=candidate,
+        candidate_key="synthetic-source-candidate-only",
+        source_bar_ts="2026-06-02T09:30:00-04:00",
+        contract_hint="MNQM2026", day=DAY,
+    )
+    data = reconcile_identity_only([event], [five])
+    assert data["counts"] == {"MATCHED_IDENTITY_ONLY": 1}
+    item = data["touch_classifications"][0]
+    assert item["stop_price_equal"] is True
+    assert item["five_signal_after_one_min_touch"] is True
+    assert item["entry_fill_parity"] == "UNPROVEN"
+    assert item["outcome_parity"] == "UNPROVEN"
+    assert data["demo_ready"] is False
