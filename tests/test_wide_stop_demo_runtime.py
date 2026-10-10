@@ -216,6 +216,24 @@ def test_demo_submits_one_contract_with_strategy_caps_and_postfill_guard(tmp_pat
     assert any(row.get("fill_status") == "OPEN" for row in events)
 
 
+def test_demo_exact_300_tick_stop_reaches_the_broker(tmp_path, monkeypatch):
+    """A stop of exactly 300 ticks is inside the cap. A `>=` mutant blocks it."""
+    _demo_env(monkeypatch)
+    _patch_candidate(monkeypatch, FOUR_HR)
+    at_cap = _setup(FOUR_HR)
+    at_cap.stop = at_cap.entry - 300 * 0.25
+    monkeypatch.setattr(collector, "_trade_setup", lambda state, out: at_cap)
+    broker = _FakeBroker()
+    demo.process_demo_five_min_bar(
+        payload=_payload(), cfg=_cfg(), bars_5m=[], log_dir=tmp_path,
+        for_date=DAY, broker_factory=lambda: broker,
+    )
+    assert broker.execute_calls == 1
+    assert broker.last_order is not None
+    assert abs(broker.last_order.entry - broker.last_order.stop) / 0.25 == 300
+    assert broker.last_order.max_stop_ticks == 300.0
+
+
 def test_demo_blocks_a_stop_wider_than_300_ticks(tmp_path, monkeypatch):
     _demo_env(monkeypatch)
     _patch_candidate(monkeypatch, FOUR_HR)
