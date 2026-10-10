@@ -24,6 +24,7 @@ MAX_HOLD_SESSIONS = 20
 COMMISSION_PER_SIDE = 1.48
 SLIPPAGE_TICKS = 2
 FIRST_ELIGIBLE = date(2026, 10, 12)
+PRE_REGISTRATION_THROUGH = date(2026, 10, 9)
 MNQ_SEAL_START = date(2026, 6, 29)
 MNQ_SEAL_END = date(2027, 1, 29)
 LOOK_DEADLINE = date(2028, 10, 12)
@@ -56,10 +57,21 @@ def reject_rule_edit(_proposed: dict) -> None:
     )
 
 
-def signal_from_closes(closes: list[float]) -> int:
-    if len(closes) < LOOKBACK_SESSIONS + 1:
+def close_prices(closes: list) -> list[float]:
+    prices: list[float] = []
+    for item in closes:
+        if isinstance(item, dict):
+            prices.append(float(item["close"]))
+        else:
+            prices.append(float(item))
+    return prices
+
+
+def signal_from_closes(closes: list) -> int:
+    values = close_prices(closes)
+    if len(values) < LOOKBACK_SESSIONS + 1:
         return 0
-    change = closes[-1] / closes[-1 - LOOKBACK_SESSIONS] - 1.0
+    change = values[-1] / values[-1 - LOOKBACK_SESSIONS] - 1.0
     if change > 0:
         return 1
     if change < 0:
@@ -123,7 +135,27 @@ class PaperLedger:
             return [event]
 
         events: list[dict] = []
-        closes: list[float] = self.state["closes"].setdefault(root, [])
+        closes: list = self.state["closes"].setdefault(root, [])
+        if bar.session in self.stored_sessions(root):
+            return []
+        if bar.session <= PRE_REGISTRATION_THROUGH:
+            closes.append({
+                "session": bar.session.isoformat(),
+                "close": float(bar.session_close),
+                "pre_registration": True,
+                "counts_toward_forty": False,
+            })
+            event = {
+                "trial_id": TRIAL_ID,
+                "kind": "PRE_REGISTRATION",
+                "root": root,
+                "session": bar.session.isoformat(),
+                "contract": bar.contract,
+                "counts_toward_forty": False,
+            }
+            events.append(event)
+            self._save(events)
+            return events
         position = self.state["positions"].get(root)
         exited_today = False
         if isinstance(position, dict) and position["contract"] != bar.contract:
@@ -179,13 +211,62 @@ class PaperLedger:
                 "side": side,
             })
 
-        closes.append(float(bar.session_close))
+        closes.append({
+            "session": bar.session.isoformat(),
+            "close": float(bar.session_close),
+            "pre_registration": False,
+            "counts_toward_forty": True,
+        })
         self._save(events)
         return events
+
+    def stored_sessions(self, root: str) -> set[date]:
+        found: set[date] = set()
+        for item in self.state["closes"].get(root, []):
+            if isinstance(item, dict) and item.get("session"):
+                found.add(date.fromisoformat(str(item["session"])))
+        return found
+
+    def bare_close_count(self, root: str) -> int:
+        return sum(
+            1 for item in self.state["closes"].get(root, [])
+            if not isinstance(item, dict)
+        )
+
+    def mark_preregistration(self, root: str, prints: list[SessionPrint]) -> None:
+        """Attach dates to the backfill and keep those days out of the 40."""
+        bare = [
+            float(item) for item in self.state["closes"].get(root, [])
+            if not isinstance(item, dict)
+        ]
+        if not bare:
+            return
+        prereg = [item for item in prints if item.session <= PRE_REGISTRATION_THROUGH]
+        fetched = [float(item.session_close) for item in prereg]
+        if len(bare) != len(fetched) or any(
+            abs(old - new) > 1e-4 for old, new in zip(bare, fetched)
+        ):
+            raise RuntimeError(
+                f"{root} backfill has {len(bare)} prices and the refetch has {len(fetched)}"
+            )
+        self.state["closes"][root] = [
+            {
+                "session": item.session.isoformat(),
+                "close": float(item.session_close),
+                "pre_registration": True,
+                "counts_toward_forty": False,
+            }
+            for item in prereg
+        ]
+        self._save()
 
     @property
     def round_turns(self) -> int:
         return int(self.state["round_turns"])
+
+    @property
+    def scoring_round_turns(self) -> int:
+        return self.round_turns
 
     def _scheduled_front_ok(self, bar: SessionPrint, root: str) -> bool:
         try:
@@ -198,7 +279,10 @@ class PaperLedger:
         side = int(position["side"])
         pnl = paper_pnl(root, side, float(position["entry_open"]), exit_open)
         self.state["positions"][root] = None
-        self.state["round_turns"] = int(self.state["round_turns"]) + 1
+        entry_session = date.fromisoformat(str(position["entry_session"]))
+        counts = session >= FIRST_ELIGIBLE and entry_session >= FIRST_ELIGIBLE
+        if counts:
+            self.state["round_turns"] = int(self.state["round_turns"]) + 1
         event = {
             "trial_id": TRIAL_ID,
             "kind": "ROUND_TURN",
@@ -207,6 +291,8 @@ class PaperLedger:
             "contract": position["contract"],
             "side": side,
             "pnl": pnl,
+            "pre_registration": not counts,
+            "counts_toward_forty": counts,
             "round_turns": self.state["round_turns"],
         }
         self._append(event)

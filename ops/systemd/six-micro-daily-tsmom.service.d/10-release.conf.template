@@ -1,0 +1,10 @@
+# Replace @RELEASE_SHA@ with the exact SHA Grok reviewed.
+# The box drop-in is not installed by the registration commit.
+[Service]
+WorkingDirectory=/root/afs-releases/@RELEASE_SHA@
+Environment=PYTHONPATH=/root/afs-releases/@RELEASE_SHA@
+Environment=PYTHONDONTWRITEBYTECODE=1
+EnvironmentFile=/root/afs-shared/.env
+ExecStart=
+ExecStart=/root/afs-releases/@RELEASE_SHA@/.venv/bin/python -m research.six_micro_daily_tsmom_collect --journal /root/afs-shared/logs/six-micro-daily-tsmom
+ReadWritePaths=/root/afs-shared/logs

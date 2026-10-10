@@ -80,6 +80,20 @@ def test_ineligible_session_does_not_open_and_exact_front_is_required(tmp_path: 
         session_close=201.0,
     ))
     assert ledger.round_turns == 0
+    assert ledger.scoring_round_turns == 0
+    assert early[0]["kind"] == "PRE_REGISTRATION"
+    assert early[0]["counts_toward_forty"] is False
+    stored = ledger.state["closes"]["MNQ"][-1]
+    assert stored["session"] == "2026-10-09"
+    assert stored["pre_registration"] is True
+    assert stored["counts_toward_forty"] is False
+    assert ledger.on_session(SessionPrint(
+        session=date(2026, 10, 9),
+        root="MNQ",
+        contract=front_contract("MNQ", date(2026, 10, 9)),
+        rth_open=200.0,
+        session_close=201.0,
+    )) == []
     assert not any(row["kind"] == "OPEN" for row in early)
     mismatch = ledger.on_session(SessionPrint(
         session=FIRST_ELIGIBLE, root="MNQ", contract="MNQ_NOT_FRONT",
@@ -117,6 +131,12 @@ def test_round_turns_on_mnq_and_mgc_share_one_count(tmp_path: Path):
         assert any(row["kind"] == "ROUND_TURN" for row in events)
         assert ledger.state["positions"].get(root) is None
     assert ledger.round_turns == 2
+    assert ledger.scoring_round_turns == 2
+    assert all(
+        row["pre_registration"] is True
+        for row in ledger.state["closes"]["MNQ"]
+        if row["session"] <= "2026-10-09"
+    )
     assert frozen_rule_sha256() == before
     text = Path("research/six_micro_daily_tsmom_paper.py").read_text(encoding="utf-8")
     assert "tradovate" not in text.lower()

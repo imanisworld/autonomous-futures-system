@@ -7,6 +7,7 @@ contract. This does not place an order and does not score the study.
 """
 from __future__ import annotations
 
+import argparse
 from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
@@ -188,21 +189,27 @@ def _with_roll_open(prints: list[SessionPrint], bars: list[PolygonBar]) -> list[
     return out
 
 
-def _store_new_closes(
-    ledger: PaperLedger,
-    root: str,
-    bars: list[PolygonBar],
-    *,
-    start: date,
-    end: date,
-) -> int:
-    if ledger.state["closes"].get(root):
-        return len(ledger.state["closes"][root])
-    recorded = 0
-    for print_ in _with_roll_open(session_prints(root, bars, start=start, end=end), bars):
+def _fetch_start(ledger: PaperLedger, root: str, start: date, end: date) -> date | None:
+    if ledger.bare_close_count(root):
+        return start
+    stored = ledger.stored_sessions(root)
+    if not stored:
+        return start
+    nxt = max(stored)
+    if nxt >= end:
+        return None
+    return nxt
+
+
+def _store_prints(ledger: PaperLedger, root: str, prints: list) -> int:
+    if ledger.bare_close_count(root):
+        ledger.mark_preregistration(root, prints)
+    stored = ledger.stored_sessions(root)
+    for print_ in prints:
+        if print_.session in stored:
+            continue
         ledger.on_session(print_)
-        recorded += 1
-    return recorded
+    return len(ledger.state["closes"].get(root, []))
 
 
 def collect_listed(
@@ -218,23 +225,21 @@ def collect_listed(
     ledger = PaperLedger(journal_dir)
     counts: dict[str, int] = {}
     for root in UNSCHEDULED_ROOTS:
-        if ledger.state["closes"].get(root):
-            counts[root] = len(ledger.state["closes"][root])
+        fetch_from = _fetch_start(ledger, root, start, end)
+        if fetch_from is None:
+            counts[root] = len(ledger.state["closes"].get(root, []))
             continue
         bars: list[PolygonBar] = []
-        for ticker in candidate_tickers(root, start, end):
+        for ticker in candidate_tickers(root, fetch_from, end):
             try:
-                bars.extend(client.fetch_bars(ticker, start, end, 15))
+                bars.extend(client.fetch_bars(ticker, fetch_from, end, 15))
             except PolygonError:
                 continue
-        if ledger.state["closes"].get(root):
-            counts[root] = len(ledger.state["closes"][root])
-            continue
-        recorded = 0
-        for print_ in _with_roll_open(prints_for_soonest(root, bars, start=start, end=end), bars):
-            ledger.on_session(print_)
-            recorded += 1
-        counts[root] = recorded
+        prints = _with_roll_open(
+            prints_for_soonest(root, bars, start=fetch_from, end=end),
+            bars,
+        )
+        counts[root] = _store_prints(ledger, root, prints)
     return counts
 
 
@@ -251,13 +256,18 @@ def collect_scheduled(
     ledger = PaperLedger(journal_dir)
     counts: dict[str, int] = {}
     for root in SCHEDULED_ROOTS:
-        if ledger.state["closes"].get(root):
-            counts[root] = len(ledger.state["closes"][root])
+        fetch_from = _fetch_start(ledger, root, start, end)
+        if fetch_from is None:
+            counts[root] = len(ledger.state["closes"].get(root, []))
             continue
-        bars: list[PolygonBar] = []
-        for ticker, seg_start, seg_end in contract_schedule(root, start, end):
+        bars = []
+        for ticker, seg_start, seg_end in contract_schedule(root, fetch_from, end):
             bars.extend(client.fetch_bars(ticker, seg_start, seg_end, 15))
-        counts[root] = _store_new_closes(ledger, root, bars, start=start, end=end)
+        prints = _with_roll_open(
+            session_prints(root, bars, start=fetch_from, end=end),
+            bars,
+        )
+        counts[root] = _store_prints(ledger, root, prints)
     return CollectResult(
         sessions=counts,
         round_turns=ledger.round_turns,
@@ -273,18 +283,31 @@ def _repo_root() -> Path:
     return here.parents[1]
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     root = _repo_root()
     load_dotenv(root / ".env")
+    parser = argparse.ArgumentParser(description="Record completed six-micro sessions.")
+    parser.add_argument("--journal", type=Path, default=root / "logs" / "six-micro-daily-tsmom")
+    args = parser.parse_args(argv)
     end = completed_through(datetime.now(ET))
-    journal = root / "logs" / "six-micro-daily-tsmom"
+    journal = args.journal
     client = PolygonFuturesClient(min_request_interval=13.0)
     scheduled = collect_scheduled(journal, client, end=end)
     listed = collect_listed(journal, client, end=end)
+    ledger = PaperLedger(journal)
     sessions = {**scheduled.sessions, **listed}
+    pre_registration = {
+        name: sum(
+            1 for row in rows
+            if isinstance(row, dict) and row.get("pre_registration") is True
+        )
+        for name, rows in ledger.state["closes"].items()
+    }
     print(
         f"recorded through {end.isoformat()} "
-        f"sessions={sessions} round_turns={scheduled.round_turns}"
+        f"sessions={sessions} "
+        f"pre_registration={pre_registration} "
+        f"scoring_round_turns={ledger.scoring_round_turns}"
     )
 
 

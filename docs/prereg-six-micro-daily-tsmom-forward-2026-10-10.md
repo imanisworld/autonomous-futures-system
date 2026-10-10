@@ -70,7 +70,7 @@ Fail any one of those and the study is dead. There is no second look.
 ## 5. What counts
 
 - First eligible entry session: **2026-10-12**.
-- Sessions through **2026-10-09** may be stored as warm-up closes. They are not round-turns and they have no P&L.
+- Sessions through **2026-10-09** are pre-registration. They may be stored as signal inputs. Each is marked `pre_registration` and `counts_toward_forty: false`. They are excluded from the score and from the 40 round-turn count. Scoring starts with the **2026-10-12** session.
 - The single look is the session that completes the 40th round-turn across the six roots. Include every round-turn that completes on that session.
 - If 40 round-turns have not completed by **2028-10-12**, append `ABORTED` / `NOT_RUN`.
 - Halves: sort by exit session, then by MNQ, MES, M2K, MGC, MCL, MBT. The first `floor(n/2)` are half 1.
@@ -85,6 +85,11 @@ a broker, does not submit a demo order, and does not write
 `docs/research-evidence/`. The VPS does not run it until a separate deploy
 GO. This registration does not grant that GO. Gold, crude, and bitcoin use
 the same runner and the listed nearest expiry, not a volume ranking.
+
+The daily job is `ops/systemd/six-micro-daily-tsmom.timer`, weekdays at
+17:10 America/New_York, after the 16:00 close. The service does not run
+until a drop-in pins the reviewed release SHA. Installing that drop-in is a
+separate deploy GO. This commit does not install it and does not start it.
 
 ## 7. Evidence boundary
 
