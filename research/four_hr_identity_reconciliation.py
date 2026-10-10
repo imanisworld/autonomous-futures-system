@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
+from math import isfinite
 from typing import Any, Mapping, Sequence
 from zoneinfo import ZoneInfo
 
@@ -54,8 +55,36 @@ def _touch_clock(touch: Mapping[str, Any]) -> tuple[datetime | None, str | None]
 
 
 def _five_clock(five: Mapping[str, Any]) -> str | None:
-    if five.get("schema") != SCHEMA or five.get("joinability") != "IDENTITY_AVAILABLE":
+    if (
+        five.get("schema") != SCHEMA or
+        five.get("kind") != "5M_CANONICAL_CANDIDATE_IDENTITY" or
+        five.get("source_timeframe") != "5m" or
+        five.get("strategy") != "strat_4hr_retrigger" or
+        five.get("joinability") != "IDENTITY_AVAILABLE"
+    ):
         return "FIVE_MIN_SOURCE_IDENTITY_UNPROVEN"
+    # Don't trust an arm_key supplied alongside independently inconsistent
+    # fields. The persisted 5m key must reproduce the source detector state
+    # rather than merely equal a natural event's claimed arm_key.
+    day = five.get("trading_date")
+    direction = five.get("direction")
+    trigger = five.get("trigger")
+    setup_ts = five.get("setup_bar_ts")
+    four_am_ts = five.get("four_am_bar_ts")
+    if (
+        not isinstance(day, str) or not isinstance(direction, str) or
+        direction not in {"LONG", "SHORT"} or
+        not isinstance(trigger, (int, float)) or isinstance(trigger, bool) or
+        not isfinite(trigger) or trigger <= 0 or
+        not isinstance(setup_ts, str) or not isinstance(four_am_ts, str) or
+        _dt(setup_ts) is None or _dt(four_am_ts) is None
+    ):
+        return "FIVE_MIN_ARM_FIELDS_UNPROVEN"
+    rebuilt = "|".join(
+        (day, direction, f"{trigger:.8f}", setup_ts, four_am_ts)
+    )
+    if rebuilt != five.get("arm_key"):
+        return "FIVE_MIN_ARM_KEY_INCONSISTENT"
     opened = _dt(five.get("source_bar_ts"))
     decided = _dt(five.get("candidate_decision_at"))
     if (
