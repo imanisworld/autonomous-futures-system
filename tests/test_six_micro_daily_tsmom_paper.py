@@ -96,7 +96,7 @@ def test_ineligible_session_does_not_open_and_exact_front_is_required(tmp_path: 
     )) == []
     assert not any(row["kind"] == "OPEN" for row in early)
     mismatch = ledger.on_session(SessionPrint(
-        session=FIRST_ELIGIBLE, root="MNQ", contract="MNQ_NOT_FRONT",
+        session=FIRST_ELIGIBLE, root="MNQ", contract="MNQU6",
         rth_open=202.0, session_close=203.0,
     ))
     assert mismatch[0]["kind"] == "FRONT_MISMATCH"
@@ -142,3 +142,25 @@ def test_round_turns_on_mnq_and_mgc_share_one_count(tmp_path: Path):
     assert "tradovate" not in text.lower()
     assert "MYM" not in ROOTS
     assert set(ROOTS) == {"MNQ", "MES", "M2K", "MGC", "MCL", "MBT"}
+
+def test_duplicate_is_idempotent_and_older_session_is_rejected(tmp_path: Path):
+    ledger = PaperLedger(tmp_path)
+    new = SessionPrint(date(2026, 10, 9), "MGC", "MGCZ6", 100.0, 101.0)
+    assert ledger.on_session(new)[0]["kind"] == "PRE_REGISTRATION"
+    state = ledger.state_path.read_text(encoding="utf-8")
+    journal = ledger.journal_path.read_text(encoding="utf-8")
+    assert ledger.on_session(new) == []
+    assert ledger.state_path.read_text(encoding="utf-8") == state
+    assert ledger.journal_path.read_text(encoding="utf-8") == journal
+    older = SessionPrint(date(2026, 10, 8), "MGC", "MGCZ6", 99.0, 100.0)
+    with pytest.raises(ValueError, match="out-of-order"):
+        ledger.on_session(older)
+    assert ledger.state_path.read_text(encoding="utf-8") == state
+
+
+def test_cross_root_contract_is_rejected(tmp_path: Path):
+    ledger = PaperLedger(tmp_path)
+    with pytest.raises(ValueError, match="contract mismatch"):
+        ledger.on_session(SessionPrint(
+            date(2026, 10, 9), "MGC", "MCLZ6", 100.0, 101.0
+        ))
