@@ -22,7 +22,7 @@ Read **only** this block + `AGENTS.md` + `docs/futures-research-resume-checkpoin
 
 **DO NOT REDO:** gzip 4HR cell reproduction; ORB/VWAP TF×window sweeps (baseline + trending + orb48); Grok PASS work on merged **#1208**/**#1209**; Sep decompositions listed below. Do not retune the six-micro daily rule. Do not rerun the failed month-end, cross-market momentum, or VIX tests (414 total). MNQ bars from 2026-06-29 through 2027-01-29 are scoring inputs only.
 
-**NEXT:** Six-micro paper journal has local warmup through **2026-10-09** for MNQ, MES, and M2K (73 sessions each, zero round-turns). MGC, MCL, and MBT are still blank. Do not score. Do not deploy. 1m arm fills/costs **not implemented**. **NOT done:** deploy, box collection, DEMO-ready claim, tsmom score.
+**NEXT:** Six-micro paper journal has local warmup through **2026-10-09** for all six roots (MNQ, MES, M2K, MGC, MCL 73 sessions; MBT 74). Zero round-turns. Do not score. Do not deploy. 1m arm fills/costs **not implemented**. **NOT done:** deploy, box collection, Monday's session, DEMO-ready claim, tsmom score.
 
 Prior chat context for this session is **closed**. Section below is coordination archive unless stale.
 

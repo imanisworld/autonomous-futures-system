@@ -8,6 +8,8 @@ import pytest
 from research.six_micro_daily_tsmom_collect import (
     UNSCHEDULED_ROOTS,
     completed_through,
+    listed_front,
+    prints_for_soonest,
     session_prints,
 )
 from sources.polygon_client import PolygonBar
@@ -49,6 +51,34 @@ def test_missing_close_is_not_stored():
 
 def test_gold_crude_and_bitcoin_are_not_in_the_scheduled_fetch():
     assert UNSCHEDULED_ROOTS == ("MGC", "MCL", "MBT")
+
+
+def test_listed_front_is_the_soonest_expiry_still_open():
+    rows = [
+        {"ticker": "MGCZ6", "first_trade_date": "2025-12-01", "last_trade_date": "2026-12-28"},
+        {"ticker": "MGCV6", "first_trade_date": "2025-10-01", "last_trade_date": "2026-10-28"},
+    ]
+    assert listed_front("MGC", rows, date(2026, 10, 9)) == "MGCV6"
+
+
+def test_two_contracts_keep_the_sooner_expiry():
+    bars = [
+        _bar("2026-10-09T13:30:00", ticker="MGCZ6"),
+        _bar("2026-10-09T19:45:00", ticker="MGCZ6", price=10),
+        _bar("2026-10-09T13:30:00", ticker="MGCV6", price=20),
+        _bar("2026-10-09T19:45:00", ticker="MGCV6", price=30),
+    ]
+    prints = prints_for_soonest("MGC", bars, start=date(2026, 6, 29), end=date(2026, 10, 9))
+    assert len(prints) == 1
+    assert prints[0].contract == "MGCV6"
+
+
+def test_expired_listing_is_not_used():
+    rows = [
+        {"ticker": "MGCV6", "first_trade_date": "2025-10-01", "last_trade_date": "2026-09-28"},
+        {"ticker": "MGCZ6", "first_trade_date": "2025-12-01", "last_trade_date": "2026-12-28"},
+    ]
+    assert listed_front("MGC", rows, date(2026, 10, 9)) == "MGCZ6"
 
 
 def test_journal_under_research_evidence_is_refused(tmp_path):

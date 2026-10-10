@@ -63,7 +63,7 @@ Fail any one of those and the study is dead. There is no second look.
 - Dollar conversion uses `config.futures_contracts.tick_size` and `tick_value` only. No handwritten tick table.
 - Commission is $1.48 per side. Slippage is 2 ticks adverse on the entry fill and 2 ticks adverse on the exit fill.
 - MNQ, MES, and M2K must match `sources.polygon_client.front_contract(root, session_date, roll_days=8)`. Any other ticker is not a fill.
-- MGC, MCL, and MBT use the dated ticker on the bar. There is no volume-front choice in this ledger.
+- MGC, MCL, and MBT use the dated ticker on the bar. That ticker is the listed outright whose last trade date is the soonest date still on or after the session. There is no volume-front choice in this ledger.
 - A contract change exits on the old contract's 09:30 open. If that price is missing, the position stays unresolved and that session is not a round-turn.
 - Missing open or close: no fill and no substituted bar.
 
@@ -83,8 +83,8 @@ runner is `research/six_micro_daily_tsmom_collect.py`. It appends the paper
 journal under `logs/six-micro-daily-tsmom/` (gitignored). It does not import
 a broker, does not submit a demo order, and does not write
 `docs/research-evidence/`. The VPS does not run it until a separate deploy
-GO. This registration does not grant that GO. Gold, crude, and bitcoin are
-not fetched until a bar supplies a dated contract ticker.
+GO. This registration does not grant that GO. Gold, crude, and bitcoin use
+the same runner and the listed nearest expiry, not a volume ranking.
 
 ## 7. Evidence boundary
 
