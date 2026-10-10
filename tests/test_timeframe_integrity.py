@@ -23,7 +23,7 @@ def _bars(start, n, *, skip=(), roll_at=None):
     ]
 
 
-@pytest.mark.parametrize(("minutes", "n"), [(15, 1), (30, 2), (60, 4), (240, 16)])
+@pytest.mark.parametrize(("minutes", "n"), [(15, 1), (30, 2), (60, 4), (240, 16), (720, 48)])
 def test_full_buckets_are_closed_and_ohlcv_correct(minutes, n):
     result = confirmed_session_bars(_bars(_et(2026, 3, 9, 18), n), minutes=minutes)
     assert len(result.bars) == 1
@@ -94,7 +94,46 @@ def test_invalid_ohlcv_provenance_and_timestamp_order_fail_closed():
         confirmed_session_bars([{**r[0], "high": 88.0}], minutes=15)
 
 
-@pytest.mark.parametrize("unsupported", [0, 1, 5, 45, 1440, 240.0, True])
+@pytest.mark.parametrize("unsupported", [0, 1, 45, 1440, 240.0, True])
 def test_unsupported_or_ambiguous_resolution_is_rejected(unsupported):
     with pytest.raises(ValueError, match="timeframe"):
         confirmed_session_bars([], minutes=unsupported)
+
+
+def test_five_minute_source_can_build_5m_and_15m_bars():
+    start = int(_et(2026, 3, 9, 18).timestamp())
+    bars = [
+        {"ts": start+300*i, "ticker": "MGCJ6", "open": 100+i,
+         "high": 101+i, "low": 99+i, "close": 100.5+i, "volume": 2}
+        for i in range(3)
+    ]
+    five = confirmed_session_bars(bars, minutes=5, source_minutes=5)
+    fifteen = confirmed_session_bars(bars, minutes=15, source_minutes=5)
+    assert len(five.bars) == 3
+    assert len(fifteen.bars) == 1
+    assert fifteen.bars[0]["volume"] == 6
+    assert fifteen.bars[0]["close_ts"] == start + 900
+
+
+def test_five_minute_source_gap_blocks_sixty_minute_bar():
+    start = int(_et(2026, 3, 9, 18).timestamp())
+    bars = [
+        {"ts": start+300*i, "ticker": "MGCJ6", "open": 100,
+         "high": 101, "low": 99, "close": 100, "volume": 1}
+        for i in range(12) if i != 4
+    ]
+    result = confirmed_session_bars(bars, minutes=60, source_minutes=5)
+    assert not result.bars
+    assert result.rejected == {"partial_or_gap": 1}
+
+
+@pytest.mark.parametrize(("source","tf"), [(15,5), (0,60), (10,60), (15,30.0)])
+def test_timeframe_source_mismatch_rejected(source, tf):
+    with pytest.raises(ValueError):
+        confirmed_session_bars([], minutes=tf, source_minutes=source)
+
+
+def test_session_last_eleven_hours_not_full_twelve_hour_bar():
+    result = confirmed_session_bars(_bars(_et(2026, 3, 9, 18), 92), minutes=720)
+    assert len(result.bars) == 1
+    assert result.rejected == {"partial_or_gap": 1}
