@@ -28,6 +28,8 @@
 | **Keep** | Open PR #1212/#1213 source heads, Track B research branch, live/rollback `release/*`, `private/webull-proof/`, authoritative research evidence, strategy inventory, trial ledger, sealed forward artifacts | **DO NOT DELETE** under this cleanup pass |
 | **Superseded procedural text** | Old copy-paste force-delete/`rm -rf` block in this tracker | **Removed from documentation**; no filesystem content was deleted |
 
+**Additional PR consolidation candidate (GitHub-diff verified):** [#1201](https://github.com/imanisworld/autonomous-futures-system/pull/1201) is a docs-only PR editing **only** `docs/futures-operator-todo.md`. Its five net-edge evidence gates have been preserved in the refreshed CURRENT TODO here. **CANDIDATE TO CLOSE UNMERGED** only after an independent reviewer confirms the content is fully superseded; don't close it automatically. #1203/#1204 are separate historical deployment-status documentation PRs and may overlap existing checkpoint/plan docs, but their unique source facts and owners were **not** fully reconciled, so **KEEP/REVIEW**, not delete. #1205/#1206/#1207 change code/scripts/tests and are **not** documentation-only cleanup targets.
+
 **No actual local files, branches, worktrees, evidence corpora or remote refs were deleted here.** This is a deferred classification, not a verified current disk inventory.
 
 ---
