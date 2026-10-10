@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from collections import deque
 from dataclasses import replace
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 from uuid import uuid4
@@ -61,6 +61,29 @@ from strategy.strat_classifier import StratContext, classify_from_ohlc
 from webhook.runner import normalize_timeframe_minutes
 
 logger = logging.getLogger(__name__)
+
+
+def _next_executable_market_reference(candles: list[ReplayCandle], idx: int) -> tuple[float, str]:
+    """First same-contract/same-timeframe next-bar OPEN, or fail closed.
+
+    A signal confirmed on a completed candle cannot fill at that candle's
+    earlier close. The next expected bar opening is the first causal market
+    reference; holes, mismatched clocks or a missing next bar are not trades.
+    """
+    signal = candles[idx]
+    minutes = normalize_timeframe_minutes(signal.timeframe)
+    if not minutes or minutes <= 0:
+        raise ValueError("market_at_reference requires a valid signal timeframe")
+    expected_time = _parse_timestamp(signal.timestamp) + timedelta(minutes=minutes)
+    for following in candles[idx + 1:]:
+        if following.instrument != signal.instrument:
+            continue
+        if normalize_timeframe_minutes(following.timeframe) != minutes:
+            continue
+        if _parse_timestamp(following.timestamp) != expected_time:
+            raise ValueError("market_at_reference refuses non-adjacent next bar")
+        return following.open, following.timestamp
+    raise ValueError("market_at_reference requires the next executable same-market bar")
 
 _DEFAULT_HTF_FILES = {
     "1D": "data/htf/CME_MINI_MNQ1!_1D.jsonl",
@@ -718,6 +741,17 @@ class ReplayEngine:
 
                 if risk_result.approved:
                     contracts = trade_setup.contracts
+                    _market_reference_ts = None
+                    _strict_reference_model = (
+                        getattr(self.config, "entry_fill_model", "market") == "market_at_reference"
+                    )
+                    if _strict_reference_model and decision.setup.strategy in (STRAT_212, STRAT_122):
+                        # These strategies restore a previously triggered
+                        # position rather than send a new market-entry order.
+                        # Never claim the strict next-open model covers them.
+                        raise ValueError(
+                            "market_at_reference cannot reprice pre-resolved STRAT_212/122 entries"
+                        )
                     # strategy/strat_212_122.py's causal resolver only ever
                     # hands an "OPEN" (non-pre_resolved) candidate back once
                     # the watched bar has already shown entry triggering at
@@ -774,19 +808,25 @@ class ReplayEngine:
                             max_slippage_ticks=float(
                                 (getattr(self.config, "entry_tolerance_ticks_by_root", {}) or {}).get(state.instrument, 0) or 0
                             ) or None,
-                            post_fill_validation_required=False,
+                            post_fill_validation_required=_strict_reference_model,
                         )
+                        _market_reference_price = candle.close
+                        if _strict_reference_model:
+                            (_market_reference_price, _market_reference_ts) = (
+                                _next_executable_market_reference(candles, idx)
+                            )
                         entry_fill = broker.execute_bracket(
-                            order, market_price=candle.close, paper_order_id=_paper_order_id
+                            order, market_price=_market_reference_price, paper_order_id=_paper_order_id
                         )
-                    # Historical timestamps are evidence-only metadata. Market/IOC
-                    # and the causal 2-1-2/1-2-2 restore path are open on the
-                    # decision bar. A stop-market entry is not open until a later
+                    # Historical timestamps are evidence-only metadata. Legacy
+                    # market/IOC and causal 2-1-2/1-2-2 restores are open on the
+                    # decision bar; strict market_at_reference opens on the
+                    # verified NEXT bar. Stop-market entries open only after a later
                     # bar actually triggers it, so leave entry time unknown until
                     # that transition is observed below.
                     _historical_signal_ts = candle.timestamp
                     _historical_entry_ts = (
-                        candle.timestamp
+                        (_market_reference_ts or candle.timestamp)
                         if (
                             decision.setup.strategy in (STRAT_212, STRAT_122)
                             or (entry_fill is not None and entry_fill.result == "OPEN")
