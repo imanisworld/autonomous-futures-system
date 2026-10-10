@@ -176,6 +176,14 @@ def test_the_shadow_member_is_journaled_but_never_filled(tmp_path):
     assert "fill_status" not in audit
 
 
+def test_322_written_bracket_is_shadow_and_cannot_fill(tmp_path):
+    """The written 3-2-2 bracket is a loser. The lane must not order it."""
+    audit = _observe(tmp_path, setup=_setup(THREE_TWO_TWO, stop_ticks=472.0, rr=0.24))
+    assert audit["role"] == "shadow_only"
+    assert audit["lane_result"] == "SHADOW_ONLY_NOT_FILLED"
+    assert "fill_status" not in audit
+
+
 def test_an_invalid_at_fill_outcome_is_counted_not_blended(tmp_path):
     """§6: a fill landing outside its own bracket is its own line.
 
@@ -244,20 +252,20 @@ def expectation() -> dict:
 
 
 def test_the_cells_reproduce_the_amended_caps_exactly(expectation):
-    """32 admitted for 4HR at 300 ticks; 24 for 3-2-2 at 600 ticks."""
+    """36 admitted for 4HR at 400 ticks; 24 for 3-2-2 at 600 ticks."""
     four = expectation["ledgers"]["wide_stop_4k"]
     six = expectation["ledgers"]["wide_stop_6k"]
-    assert four["cell_size"] == four["expected_cell_size"] == 32
+    assert four["cell_size"] == four["expected_cell_size"] == 36
     assert six["cell_size"] == six["expected_cell_size"] == 24
     assert four["cell_matches_memo"] and six["cell_matches_memo"]
 
 
-def test_4hr_300_tick_ioc_expectation_is_pinned(expectation):
+def test_4hr_400_tick_ioc_expectation_is_pinned(expectation):
     four = expectation["ledgers"]["wide_stop_4k"]
-    assert four["ioc_filled"] == 11
-    assert four["ioc_unmarketable"] == 19
+    assert four["ioc_filled"] == 13
+    assert four["ioc_unmarketable"] == 21
     assert four["invalid_at_fill"] == 2
-    assert four["fill_rate"] == 0.344
+    assert four["fill_rate"] == 0.361
 
 
 def test_invalid_at_fill_is_reported_separately(expectation):

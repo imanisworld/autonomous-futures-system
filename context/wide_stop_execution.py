@@ -1,8 +1,10 @@
 """Fail-closed execution selector for the wide-stop evidence campaign.
 
 Paper collection is unconditional and always runs. Tradovate demo is an
-explicit, proof-pinned lane that runs ADDITIVELY alongside paper for 4HR
-Re-Trigger and 60M 3-2-2 only. Daily 2-2 is never demo-eligible here.
+explicit, proof-pinned lane that runs ADDITIVELY alongside paper. The only
+fill is 4HR Re-Trigger. 3-2-2 and Miyagi are shadow only. Daily 2-2 is
+never demo-eligible here. The demo stop cap stays 300 ticks even when
+the paper measurement cell is wider.
 
 The demo lane carries its own LANE-LOCAL execution permission so it never
 depends on — and can never be enabled by — the box-wide ``SCHEDULE_MODE``.
@@ -28,6 +30,19 @@ FROZEN_MNQ_IOC_TICKS = 8.0
 # other Tradovate strategy this same process runs and must not be forced to
 # match this route's requirement.
 DEMO_ENTRY_EXECUTION_MODE = "ioc_limit"
+# Operator review of 1c97764: a wider paper cell must not widen the Tradovate
+# demo order. 300 ticks is the 2026-09-08 cap. MNQ tick value is $0.50.
+DEMO_MAX_STOP_TICKS = 300.0
+
+
+def demo_stop_cap_ticks(ledger_max_stop_ticks: float) -> float:
+    """Ticks the demo order may use. Never above 300, never above the ledger."""
+    return min(float(ledger_max_stop_ticks), DEMO_MAX_STOP_TICKS)
+
+
+def demo_stop_cap_dollars(ledger_max_stop_ticks: float, contracts: float) -> float:
+    """Dollar risk matching ``demo_stop_cap_ticks`` at $0.50 per MNQ tick."""
+    return demo_stop_cap_ticks(ledger_max_stop_ticks) * 0.50 * contracts
 
 # Lane-local execution permission. Deliberately NOT the box-wide SCHEDULE_MODE:
 # arming this lane must never re-arm order placement for any other strategy in

@@ -72,14 +72,16 @@ def test_validate_example_structurally_valid_but_not_executable():
 
 
 def test_discover_approved_is_only_the_frozen_212c_experiment():
-    """Approved discovery stays an allowlist of one frozen experiment.
+    """Approved discovery stays a named allowlist.
 
-    An empty result was the pre-approval tripwire. Approval of any other
-    spec, or loss of this spec's frozen identity, still fails.
+    An empty result was the pre-approval tripwire. The frozen options
+    experiment and the operator-approved 4HR MNQ forward spec are the only
+    two names. Any other approved file, or loss of either identity, fails.
     """
     found = runner.discover_specs(ROOT, status="APPROVED", include_examples=False)
     assert [path.name for path in found] == [
-        "E-2026-09-25-options-212c-target-geometry-01.json"
+        "E-2026-09-25-options-212c-target-geometry-01.json",
+        "E-2026-10-09-4hr-mnq-400-forward-01.json",
     ]
     spec = json.loads(found[0].read_text(encoding="utf-8"))
     assert spec["status"] == "APPROVED"
@@ -98,6 +100,16 @@ def test_discover_approved_is_only_the_frozen_212c_experiment():
             "candidate_value": "floor_ge1r",
         }
     ]
+    forward = json.loads(found[1].read_text(encoding="utf-8"))
+    assert forward["experiment_id"] == "E-2026-10-09-4hr-mnq-400-forward-01"
+    assert forward["status"] == "APPROVED"
+    assert forward["data"]["window"]["start"] == "2026-10-12"
+    blocked = runner.run_validation(ROOT, found[1], for_execution=True)
+    assert blocked.status == "BLOCKED"
+    assert any(
+        check.name == "execution_adapter" and not check.passed
+        for check in blocked.integrity_checks
+    )
 
 
 def test_discover_examples_when_requested():

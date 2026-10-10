@@ -40,7 +40,7 @@ from tests.fault_injection._harness import FaultSetupError
 from tests.fault_injection import _p2_harness as p2
 from tests.fault_injection._p2_harness import FakeDemoBroker, fixture_bars, run_fixture_bar
 
-STRATEGY = "strat_322_first_live"
+STRATEGY = "strat_4hr_retrigger"
 
 
 class _DiskFull:
@@ -201,11 +201,11 @@ def _run(config, tmp_path, monkeypatch):
     return broker, rules
 
 
-# ── Daily-loss cap ($600 on the 3-2-2 ledger) ─────────────────────────────────
+# ── Daily-loss cap ($400 on the 4HR ledger) ───────────────────────────────────
 # A small WIN between the two losses resets the consecutive-loss count, so the
 # daily-loss cap is the gate under test (a first draft hit consecutive_loss_limit
 # instead; per the prereg stop rule only the seeding was changed).
-DAILY_SEEN, DAILY_WIN, DAILY_LOST = 500.0, 50.0, 250.0  # net -450 > -600; -700 <= -600
+DAILY_SEEN, DAILY_WIN, DAILY_LOST = 200.0, 50.0, 300.0  # net -150 > -400; -450 <= -400
 
 
 def _daily_seed(tmp_path, *, paper: bool = False):
@@ -241,9 +241,9 @@ def test_lw_daily_lost_outcome_does_not_reopen_the_lane(config, tmp_path, monkey
     assert alerts, state
 
 
-# ── Drawdown halt (20% of $5,000 = $1,000 on the 3-2-2 ledger) ────────────────
+# ── Drawdown halt (20% of $4,000 = $800 on the 4HR ledger) ────────────────────
 DD_DAY_EARLIER = "2026-06-12"
-DD_SEEN, DD_LOST = 850.0, 250.0  # 850 < 1000 <= 850 + 250; both on an earlier day
+DD_SEEN, DD_LOST = 700.0, 200.0  # 700 < 800 <= 700 + 200; both on an earlier day
 
 
 def _earlier_epoch(monkeypatch):
@@ -283,6 +283,7 @@ def test_lw_drawdown_lost_outcome_does_not_reopen_the_lane(config, tmp_path, mon
 
 # ── Paper forward collector (operator G1): the same daily-loss case ───────────
 def _run_paper(config, tmp_path, monkeypatch):
+    p2.force_4hr_candidate(monkeypatch)
     payload = p2.arm_fixture(monkeypatch, fixture_bars())
     events = collector.process_five_min_bar(
         payload=payload, cfg=p2.fixture_cfg(config), bars_5m=fixture_bars(),
