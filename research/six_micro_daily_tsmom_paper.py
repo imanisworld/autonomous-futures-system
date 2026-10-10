@@ -13,7 +13,7 @@ from datetime import date
 from pathlib import Path
 from typing import Optional
 
-from config.futures_contracts import tick_size, tick_value
+from config.futures_contracts import contract_root, tick_size, tick_value
 from sources.polygon_client import PolygonError, front_contract
 
 TRIAL_ID = "T-2026-10-10-prereg-six-micro-daily-tsmom-forward-2026-10-10-01"
@@ -122,6 +122,8 @@ class PaperLedger:
             raise ValueError(f"{root} is not one of the six frozen micros")
         if not bar.contract.strip():
             raise ValueError("dated contract ticker is required")
+        if contract_root(bar.contract) != root:
+            raise ValueError(f"{root} contract mismatch: {bar.contract}")
         if root in SCHEDULED_ROOTS and not self._scheduled_front_ok(bar, root):
             event = {
                 "trial_id": TRIAL_ID,
@@ -136,8 +138,11 @@ class PaperLedger:
 
         events: list[dict] = []
         closes: list = self.state["closes"].setdefault(root, [])
-        if bar.session in self.stored_sessions(root):
+        admitted = self.stored_sessions(root)
+        if bar.session in admitted:
             return []
+        if admitted and bar.session < max(admitted):
+            raise ValueError(f"{root} refuses out-of-order session {bar.session}")
         if bar.session <= PRE_REGISTRATION_THROUGH:
             closes.append({
                 "session": bar.session.isoformat(),
