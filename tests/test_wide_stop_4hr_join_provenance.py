@@ -21,7 +21,7 @@ KEY = "strat_4hr_retrigger|2026-06-02T09:35:00-04:00|20000.0000|19900.0000|20200
 def _candidate(**state_override):
     state = {
         "trading_date": DAY.isoformat(), "status": "TRIGGERED",
-        "direction": "LONG", "trigger": 20000.0,
+        "direction": "LONG", "trigger": 20000.0, "target": 20200.0,
         "setup_bar_ts": SETUP, "four_am_bar_ts": FOUR_AM,
     }
     state.update(state_override)
@@ -44,6 +44,8 @@ def _build(candidate=None, *, contract_hint="CME_MINI:MNQM2026", **kwargs):
 def _touch(row, contract="MNQM2026"):
     return {
         "event": "TRIGGER_TOUCH", "arm_key": row["arm_key"],
+        "direction": row["direction"], "trigger": row["trigger"],
+        "target": row["planned_target"],
         "contract_check": {
             "status": "MATCH", "arm_contract": contract,
             "bar_contract": contract,
@@ -195,3 +197,28 @@ def test_nonnumeric_bracket_not_promoted_to_identity():
     row = _build(candidate=candidate)
     assert row["arm_key"] is None
     assert row["joinability"] == "UNMATCHABLE"
+
+
+def test_changed_one_min_target_does_not_claim_same_setup():
+    row = _build()
+    event = _touch(row)
+    event["target"] = 20201.0
+    assert join.compare_with_1m_touch(event, row) == {
+        "status": "MISMATCH", "reason": "ARM_GEOMETRY_DIFFERENT",
+    }
+
+
+def test_five_min_target_different_from_armed_target_is_unmatchable():
+    candidate = _candidate()
+    candidate["target"] = 20201.0
+    row = _build(candidate=candidate)
+    assert row["arm_key"] is None
+    assert row["reason"] == "CANDIDATE_DIFFERS_FROM_ARM"
+
+
+def test_five_min_direction_different_from_armed_direction_is_unmatchable():
+    candidate = _candidate()
+    candidate["direction"] = "SHORT"
+    row = _build(candidate=candidate)
+    assert row["arm_key"] is None
+    assert row["reason"] == "CANDIDATE_DIFFERS_FROM_ARM"
