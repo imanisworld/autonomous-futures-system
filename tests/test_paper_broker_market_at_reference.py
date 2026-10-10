@@ -8,7 +8,7 @@ from __future__ import annotations
 import pytest
 
 from execution.broker_interface import BracketOrder
-from execution.paper_broker import PaperBroker
+from execution.paper_broker import NextBarOHLC, PaperBroker
 from execution.research_reference_paper import ResearchReferencePaperBroker
 
 
@@ -78,3 +78,20 @@ def test_research_fill_never_invokes_paper_mirror_hook(monkeypatch) -> None:
     broker = ResearchReferencePaperBroker(entry_fill_model="market_at_reference")
     fill = broker.execute_bracket(_order(), market_price=100.0)
     assert fill.result != "CANCELLED"
+
+
+@pytest.mark.parametrize("requested_optimism", [None, False, True])
+def test_strict_intrabar_ambiguity_always_books_stop_first(requested_optimism):
+    options = {} if requested_optimism is None else {
+        "pessimistic_both_hit": requested_optimism
+    }
+    broker = ResearchReferencePaperBroker(
+        entry_fill_model="market_at_reference", **options
+    )
+    initial = broker.execute_bracket(_order(), market_price=100.0)
+    assert initial.result == "OPEN"
+    # Both levels traded during one five-minute candle: its OHLC alone
+    # cannot establish intrabar order. Stop-first prevents lookahead wins.
+    outcome = broker.resolve_position(NextBarOHLC(open=100.0, high=135.0, low=90.0))
+    assert outcome is not None and outcome.result == "LOSS"
+    assert outcome.exit_reason == "STOP_HIT"
