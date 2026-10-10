@@ -6,8 +6,7 @@ Read **only** this block + `AGENTS.md` + `docs/futures-research-resume-checkpoin
 
 | Item | Value |
 |---|---|
-| **GitHub `main`** | **`a675a8d`** — includes merged **#1208** (`94df6c7`) + **#1209** (`102a550`) |
-| **PR #1211 (merge next)** | `fix/timeframe-causal-buckets-research-20261010` @ **`8c57d84`** — CI green; **not merged** |
+| **GitHub `main`** | **`71e5f45`** — **#1208** + **#1209** + **#1211** (`e9c9a0e` PR head) merged |
 | **Open research PRs** | **#1210** integration R:R regression; **#1212** 4HR arm identity; **#1213** 1m/5m join fail-closed |
 | **Demo wiring branch (not merged)** | `research/4hr-mnq-400-forward-20261009` @ **`2f4f776`** — 4HR 400-tick forward, 3-2-2 shadow |
 | **Public resume** | `docs/futures-research-resume-checkpoint-2026-10-10.md` (+ Cursor + Claude options appendices) |
@@ -22,7 +21,7 @@ Read **only** this block + `AGENTS.md` + `docs/futures-research-resume-checkpoin
 
 **DO NOT REDO:** gzip 4HR cell reproduction; ORB/VWAP TF×window sweeps (baseline + trending + orb48); Grok PASS work on merged **#1208**/**#1209**; Sep decompositions listed below.
 
-**NEXT:** Merge **#1211** @ `8c57d84` after final head + CI check; independent review **#1210** / **#1212** / **#1213** before merge; **explicit GO** before deploy **research** SHA (`2f4f776` or successor); fresh VPS read-only pins at promote time. **Independent review (Oct 10):** `docs/futures-pr-independent-review-2026-10-10.md` (pre-#1208 merge; refresh after #1211). **NOT done:** deploy, forward collection, DEMO-ready claim.
+**NEXT:** Independent review **#1210** / **#1212** / **#1213** before merge; **explicit GO** before deploy **research** SHA (`2f4f776` or successor); fresh VPS read-only pins at promote time. **Independent review (Oct 10):** `docs/futures-pr-independent-review-2026-10-10.md` (pre-#1208 merge; refresh after #1211). **NOT done:** deploy, forward collection, DEMO-ready claim.
 
 Prior chat context for this session is **closed**. Section below is coordination archive unless stale.
 

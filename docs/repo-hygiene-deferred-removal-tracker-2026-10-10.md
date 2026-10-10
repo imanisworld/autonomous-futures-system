@@ -7,7 +7,8 @@
 **Remove only after ALL gates (edit when done):**
 
 - [x] Grok sign-off on #1208 / #1209 (merged on `main` @ `a675a8d`)
-- [ ] Merge train #1210 / #1211 / #1212 / #1213 (or explicit abandon with SHA recorded)
+- [x] **#1211** merged on `main` @ `71e5f45`
+- [ ] Merge **#1210** / **#1212** / **#1213** (or explicit abandon with SHA recorded)
 - [ ] Track B decision: research SHA deployed **or** forward prereg explicitly paused with SHA frozen in checkpoint
 - [ ] Claude options handoff merged/archived on GitHub (`claude/options-time-exit-research-20261010` @ `a30f0a6` or successor)
 - [ ] Any open PR you still care about is **merged, closed, or copied** to `main`/checkpoint docs
