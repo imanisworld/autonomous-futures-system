@@ -1,0 +1,39 @@
+{
+  "saved_at": "2026-10-10",
+  "trial_id": "T-2026-10-09-prereg-4hr-mnq-400-forward-2026-10-09-01",
+  "experiment_id": "E-2026-10-09-4hr-mnq-400-forward-01",
+  "kind": "historical_benchmark_not_forward_result",
+  "strategy": "strat_4hr_retrigger",
+  "instrument": "MNQ",
+  "cell": {
+    "max_stop_ticks": 400,
+    "min_rr_ratio": 1.0,
+    "contracts": 1,
+    "ledger": "wide_stop_4k",
+    "starting_balance_usd": 4000,
+    "daily_loss_limit_usd": 400,
+    "entry_fill_model": "ioc_limit",
+    "marketable_ticks_mnq": 8
+  },
+  "artifact_path": "scripts/edge_decomposition_audit_results_candidates.jsonl.gz",
+  "artifact_lane": "4hr_mnq",
+  "consumed_window": {
+    "start": "2024-07-09",
+    "end": "2026-06-03"
+  },
+  "metrics": {
+    "resolved": 36,
+    "wins": 20,
+    "losses": 16,
+    "net_usd": 3076.72,
+    "profit_factor": 3.125,
+    "h1_net_usd": 1433.86,
+    "h2_net_usd": 1642.86,
+    "top3_month_share_pct": 66.8,
+    "losses_over_150_usd": 2
+  },
+  "source_branch": "research/4hr-mnq-400-forward-20261009",
+  "source_commit": "0c5db3d",
+  "forward_eligible_from": "2026-10-12",
+  "forward_ineligible_through": "2026-10-09"
+}

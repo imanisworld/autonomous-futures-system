@@ -114,7 +114,8 @@ def test_approved_spec_validates_and_is_discoverable_for_execution() -> None:
 
     approved = discover_specs(ROOT)
     assert [path.name for path in approved] == [
-        "E-2026-09-25-options-212c-target-geometry-01.json"
+        "E-2026-09-25-options-212c-target-geometry-01.json",
+        "E-2026-10-09-4hr-mnq-400-forward-01.json",
     ]
     visible = discover_specs(ROOT, status=None)
     assert any(path.name == "E-2026-09-25-options-212c-target-geometry-01.json" for path in visible)

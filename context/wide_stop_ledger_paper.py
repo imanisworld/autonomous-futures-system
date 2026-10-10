@@ -1,10 +1,10 @@
 """Paper-only runtime contract for the wide-stop hypothetical-ledger lane.
 
 Implements `docs/wide-stop-hypothetical-ledger-lane-spec-2026-09-07.md`
-(approved 2026-09-07, D1-D7; 4HR cap amended 2026-09-08; 3-2-2 forward
+(approved 2026-09-07, D1-D7; 4HR cap restored to 400 ticks 2026-10-09; 3-2-2 forward
 capital capped at the operator's $5,000 ceiling 2026-09-09). The lane produces
-a forward IOC-real record for three day strategies the $1,500 book's
-`max_stop_ticks` / `min_rr_ratio` reject 95-100% of the time.
+a forward IOC-real record for 4HR, the one cell that paid under its
+own bracket. 3-2-2 and Miyagi stay on the ledger as shadow only.
 
 Contract, in one place:
   - isolated hypothetical ledgers, each with its own balance, peak, daily state
@@ -83,9 +83,9 @@ LEDGERS: dict[str, Ledger] = {
     "wide_stop_4k": Ledger(
         name="wide_stop_4k",
         starting_balance=4_000.0,
-        max_stop_ticks=300.0,
+        max_stop_ticks=400.0,
         min_rr_ratio=1.0,
-        daily_loss_limit=300.0,        # 2 x worst case ($150), amended 2026-09-08
+        daily_loss_limit=400.0,        # 2 x worst case ($200); 2026-10-09 restore of the 400-tick cell
         max_drawdown_percent=0.20,
         fill_eligible=("strat_4hr_retrigger",),
         shadow_only=(),
@@ -99,10 +99,12 @@ LEDGERS: dict[str, Ledger] = {
         min_rr_ratio=0.0,              # disabled; 3-2-2 median R:R is 0.24
         daily_loss_limit=600.0,        # 2 x worst case ($300), D2
         max_drawdown_percent=0.20,
-        fill_eligible=("strat_322_first_live",),
-        # D5: research detector only, never wired into signal_engine, so the
-        # lane cannot fill it. Journaled with the family caps recorded.
-        shadow_only=("strat_12hr_miyagi",),
+        fill_eligible=(),
+        # 2026-10-10: the written 3-2-2 bracket is not a fill. Median
+        # reward-to-risk is about 0.24 and the stop is hundreds of ticks.
+        # Miyagi stays a research detector. Neither can place a paper or
+        # demo order. The only fill on this campaign is 4HR on wide_stop_4k.
+        shadow_only=("strat_322_first_live", "strat_12hr_miyagi"),
     ),
 }
 
@@ -268,7 +270,7 @@ def evaluate(cfg=None) -> LedgerDecision:
         marketable_ticks=MARKETABLE_TICKS,
         reason=(
             "paper_sim: isolated hypothetical $4k/$5k ledgers (legacy 6k journal "
-            "identifier retained), family stop caps 300/600 ticks, one contract, "
+            "identifier retained), family stop caps 400/600 ticks, one contract, "
             "eight-tick marketable IOC, static bracket, no promotion path"
             if active
             else "observe_only: no lane ledger, no lane fills, real book unchanged"

@@ -93,8 +93,8 @@ def _prices_sane(order) -> bool:
 
 
 def test_fi5_control_clean_fixture_submits_a_real_demo_order(config, tmp_path, monkeypatch):
-    """Proves the pipeline below is live: the unmodified 3-2-2 fixture passes
-    every real risk gate and reaches the (fake) broker."""
+    """Proves the pipeline below is live: the 4HR cell passes every real risk
+    gate and reaches the (fake) broker. 3-2-2 is shadow and must not."""
     broker = FakeDemoBroker()
     run_fixture_bar(config, tmp_path, monkeypatch, fixture_bars(), broker)
     assert broker.execute_calls == 1
@@ -103,24 +103,26 @@ def test_fi5_control_clean_fixture_submits_a_real_demo_order(config, tmp_path, m
 
 def test_fi5c_nan_stop_candidate_is_never_submitted(config, tmp_path, monkeypatch):
     from context import wide_stop_forward_collector as collector
+    from tests.fault_injection._p2_harness import force_4hr_candidate
 
-    real = collector._evaluate_canonical_candidate
+    force_4hr_candidate(monkeypatch)
+    real_setup = collector._trade_setup
 
-    def poisoned(**kwargs):
-        decision, state, candidate, machine = real(**kwargs)
-        if candidate is not None:
-            candidate = dict(candidate, stop=float("nan"))
-            decision.setup.stop = float("nan")
-        return decision, state, candidate, machine
+    def poisoned(state, decision):
+        setup = real_setup(state, decision)
+        setup.stop = float("nan")
+        return setup
 
-    monkeypatch.setattr(collector, "_evaluate_canonical_candidate", poisoned)
+    monkeypatch.setattr(collector, "_trade_setup", poisoned)
     broker = FakeDemoBroker()
-    events = run_fixture_bar(config, tmp_path, monkeypatch, fixture_bars(), broker)
+    events = run_fixture_bar(
+        config, tmp_path, monkeypatch, fixture_bars(), broker, force=False
+    )
     rec = FaultRecord(
         case="FI-5c NaN stop reaches the demo pre-submit gates",
         initial_journal="empty demo state",
         initial_broker="flat demo account (fake)",
-        injected_failure="real 3-2-2 candidate with setup.stop = NaN",
+        injected_failure="4HR candidate with setup.stop = NaN",
         expected_safe_state="blocked before the broker; no order sent",
         actual_state=(
             f"execute_calls={broker.execute_calls} order="

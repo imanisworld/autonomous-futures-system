@@ -32,7 +32,7 @@ This document is a **pre-deploy / pre-collection checklist**. It does **not** au
 | `wide_stop_4k` stop cap | **300** ticks (`context/wide_stop_ledger_paper.py`) | **400** ticks |
 | 3-2-2 fills | Still eligible in collector loop | **Disabled** — shadow only |
 | Forward prereg + spec | Not on current #1211 branch | Present on research branch |
-| Saved benchmark artifact | Referenced from checkpoint | `docs/research-evidence/T-2026-10-09-prereg-4hr-mnq-400-forward-2026-10-09-01/` |
+| Saved benchmark artifact | Referenced from checkpoint | `docs/research-notes/4hr-mnq-400-historical-benchmark-2026-10-10/` |
 | ORB/VWAP sweeps | — | Same branch (DO NOT REDO) |
 
 **Gap:** Forward trial **E-2026-10-09-*** requires **400-tick** lane code. Deploying **`main` or #1211 without the research branch ledger change** would score the **wrong cell** (300-tick baseline in experiment spec).
