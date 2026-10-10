@@ -116,7 +116,25 @@ Polygon notes: `/v3/reference/options/contracts` with `as_of` + `expired` return
 
   Read: n=9 cannot confirm or reject. The in-sample mean of about +$35/trade implies about +$315 expected here, against a standard error of about ±$700, so the miss is within noise. **It does not support the lead.** MES→SPY is +$416 and MNQ→QQQ is −$801, the same split as in-sample 2026 (SPY carried, QQQ lagged). The signal rate was about 3.6/month combined, lower than the historical ~6–7/month. Sep 15 and Sep 30 MNQ match the box wide-stop collector's live 4HR candidates (same dates and directions), an independent sanity check that the tracker sees what the box sees.
 - 1% OTM ~7DTE QQQ/SPY: _pending_.
-- Scanner 413-setup time-exit re-sim (own contract / ~7DTE ATM): _pending_.
+- **Scanner 413-setup time-exit re-sim (done).** Window: only **2026-09-09 → 2026-10-07**, the span where WIN/LOSS rows carry a selected contract. Entry = option minute VWAP at first sighting (≤10 min lag). Exits = 15:59 ET same day (eod), next session close (d1), second session close (d2). Costs: own contract uses half its recorded entry spread per side; ~7DTE ATM uses max($0.02, 1.5%) per side; plus $0.65/side commission.
+
+  | Family | Contract | eod | d1 | d2 |
+  |---|---|---|---|---|
+  | ALL | own (45–75 DTE), n≈290 | −$7,299 (t −7.3) | +$256 | +$4,443 (t 1.1; H2 −$825) |
+  | ALL | ~7DTE ATM, n≈340 | −$6,805 (t −5.3) | +$2,775 | +$8,659 (t 1.3; H2 −$3,105) |
+  | H1 2-2-2/2-1-2/3-2-2 | ~7DTE | −$3,385 | −$2,143 | −$3,322 |
+  | 30m 2-1-2 | ~7DTE | −$708 | +$240 | +$1,545 (t 0.8) |
+  | **H4 2-2-2/3-2-2/2-1-2** | **~7DTE, n≈68** | −$930 | **+$6,097 (t 2.01; H1 +$3.8k / H2 +$2.3k)** | **+$12,589 (t 2.62; H1 +$10.9k / H2 +$1.7k)** |
+  | H4 | own contract, n≈55 | −$1,014 | +$2,742 (t 1.5; H2 −$578) | +$6,507 (t 2.4; H2 −$120) |
+  | DAILY | ~7DTE | −$1,782 | −$1,418 | −$2,154 |
+
+  Read:
+  1. **Same-day exits lose for every family** (t −2 to −7). The scanner's intraday-target model can't be rescued by a same-day time exit.
+  2. **The H4 family held 1–2 sessions on ~7DTE ATM is the only positive cell with both halves positive** (d1). It echoes the 4HR futures finding: 4-hour-timeframe signals carry direction over the following session(s); 1H and Daily don't.
+  3. **Weak evidence:** one month, one regime, setups clustered on the same days (not independent), best of 24 family×exit×contract cells (max |t| ≈ 2.5 expected by chance). The scanner's realised 45–75 DTE choice also costs about half the H4 edge versus ~7DTE.
+  4. Per-trade cost: ~7DTE ATM on single names had a median premium of about $290–300, which fits the $300 OPTIONS_PAPER_V1 per-trade cap. The scanner's own contracts were about $750–850.
+
+  Hypothesis worth a frozen forward test, not a rule change: **H4 Strat setups → ~7DTE ATM, exit at the next session's close.**
 
 ## 7. Proposed next step (needs operator GO; nothing is armed)
 Freeze the rule exactly as in `scripts/options_4hr_etf_forward.py` (signal, ETF map, ATM by parity, first expiry ≥6 days, entry ≤10 min lag, exit 15:59 ET, one contract). Register it as a prospective paper trial in `docs/research-trial-ledger.jsonl` with a fixed one-look:
