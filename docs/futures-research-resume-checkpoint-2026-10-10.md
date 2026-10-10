@@ -46,3 +46,38 @@ The pre-registered MGC 4H wide forward observation is controlled by `docs/prereg
 5. A candidate can approach DEMO only after independent evidence of positive net expectancy, executable parity, acceptable drawdown/margin, working fail-safe and broker-demo route, and an explicit operator GO. **No candidate currently meets all gates.**
 
 **Explicit non-actions:** No merges, VPS/box changes, builds, redeploys, restarts, broker orders, live or demo activation, capital changes, permission expansions, loosening of risk caps, or access to sealed forward results were made as part of this checkpoint.
+
+## Appendix — Grok research addendum (Oct 9–10, 2026)
+
+Append-only. No account data, journals, or paper-trade P&L. Backtest figures are on public market bars (Polygon, Oct 2024 – Jun 26 2026; no bars from Jun 29 2026 onward, per the MNQ seal). Costs $1.48/side + 2–3 ticks; honest fills (next-bar open or stop entry); 1 micro contract; holdout Jan–Jun 26 2026 run once per rule; every rule frozen (timestamp + sha256) before testing. Ledger references are in the private AFS ledger.
+
+### Verdicts
+| Study | Verdict | Ledger |
+|---|---|---|
+| Options V1 (current formulation) | REJECT tested formulation | AFS-0201 |
+| 4HR Re-Trigger / 60M 3-2-2 | INSUFFICIENT EVIDENCE (0 qualifying forward fills; not risk-eligible at the current account size) | AFS-0202 – AFS-0204 |
+| Existing inventory vs the current account | None qualifies | AFS-0205 |
+| Capital-unconstrained ranking | No proven edge at any size | AFS-0206 |
+| Overnight long + 20-day filter | Dead on clean data (no better than random) | AFS-0209 / 0210 |
+| Intraday MNQ rules (OR breakout, stretch fade, gap fade, last-hour) | All fail | AFS-0211 |
+| Daily trend, 5 micros | Parked candidate: holdout positive but concentrated (gold, June); design weak | AFS-0214 |
+| Full sweep: Strat setups / ORB / VWAP / 4HR / trend / failed breakdown × 5m–daily × 5 micros, 358 frozen fixes | Nothing robust; 1 survivor consistent with chance | AFS-0215 |
+| Events (CPI, FOMC, NFP, EIA) | 1 lead: FOMC first-15m follow (thin, 14 FOMC days); the rest fail | AFS-0216 |
+
+Total evaluations: 384. Nothing passes a Bonferroni correction.
+
+### Why setups fail
+- Stops sit inside normal noise: the 120-tick cap is smaller than the median 5m bar at 9–11 ET, and about 32% of stopped trades later reached their target.
+- Strat reversals lose even before costs (pre-cost PF 0.70–0.80).
+- Typical favorable excursion is 0.33–0.68R against 2R targets.
+- ORB and VWAP pre-cost PF is 1.09–1.14, so costs erase it.
+- At 1–4 hour holds, intraday MNQ behaves like a coin flip. 5m is the worst timeframe and daily the least bad.
+
+### Do not redo
+Intraday pattern rules on MNQ/MES at 5m–60m; Strat reversal variants; ORB/VWAP variants; overnight drift; CPI/NFP/EIA fades; re-scoring options V1.
+
+### Active
+Log-only shadow tracking of the daily trend rule and the FOMC follow rule (no orders).
+
+### Untested
+Options volatility selling (needs more than a month of option quotes); carry/roll yield; longer-history multi-market trend.
