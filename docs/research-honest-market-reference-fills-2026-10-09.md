@@ -10,20 +10,22 @@ The existing `ioc_limit` and `stop_market` models already address specific order
 
 ## Corrected, opt-in research behavior
 
-`market_at_reference` requires an explicit, **causally available** `market_price` and enters at that reference plus adverse slippage for LONG, minus adverse slippage for SHORT. Missing, zero, non-finite or otherwise invalid references raise `ValueError`; no position opens. Existing bracket-validity checks still reject fills beyond the stop/target.
+`ResearchReferencePaperBroker` is a separate, research-only wrapper around the hash-pinned canonical `PaperBroker`; the audited broker implementation is unchanged. Its `market_at_reference` mode requires an explicit, **causally available** `market_price` and enters at that reference plus adverse slippage for LONG, minus adverse slippage for SHORT. Missing, zero, non-finite or otherwise invalid references raise `ValueError`; no position opens. Existing bracket-validity checks still reject fills beyond the stop/target.
 
-For historical market-entry tests pass the **next available bar open**, not the close of the already-completed signal bar. The API cannot independently verify the reference timestamp; caller must prove it was available at the entry decision. Include reference-bar timestamp, quote source, slippage, and commissions in every result artifact. These are simulation assumptions, not guaranteed broker executions.
+For historical market-entry tests pass the **next available bar open**, not the close of the already-completed signal bar. The wrapper cannot independently verify the reference timestamp. `ReplayEngine` enforces the next same-market/timeframe bar open, while other direct callers must prove their quote timing. Include reference-bar timestamp, quote source, slippage, and commissions in every result artifact. These are simulation assumptions, not guaranteed broker executions.
 
 Example:
 
 ```python
-broker = PaperBroker(entry_fill_model="market_at_reference", slippage_ticks=1)
+from execution.research_reference_paper import ResearchReferencePaperBroker
+
+broker = ResearchReferencePaperBroker(entry_fill_model="market_at_reference", slippage_ticks=1)
 fill = broker.execute_bracket(order, market_price=next_bar.open)
 ```
 
-`ReplayEngine` now obtains the next same-instrument, same-timeframe bar's **open** with exact adjacent-bar timing for this strict model. Missing/gapped future bars cause a hard refusal; the research result must not silently fill. Pre-resolved 2-1-2 / 1-2-2 entries are explicitly excluded because they use an already-triggered position rather than a fresh market order. The replay calls post-fill validation for strict fills.
+`ReplayEngine` now obtains the next same-instrument, same-timeframe bar's **open** with exact adjacent-bar timing for this strict model. Missing/gapped future bars cause a hard refusal; the research result must not silently fill. The wrapper also forces post-fill verification of actual bracket risk/R:R. Pre-resolved 2-1-2 / 1-2-2 entries are explicitly excluded because they use an already-triggered position rather than a fresh market order. The replay calls post-fill validation for strict fills.
 
-The strict model is available in `SystemConfig` via `ENTRY_FILL_MODEL=market_at_reference` **only for isolated research**. The default remains the legacy `market` to reproduce frozen experiments; do not treat a default plan-price result as profitability evidence. Live routing, existing strategies, existing sealed cohorts, and risk policies are unchanged.
+The strict model is available in `SystemConfig` via `ENTRY_FILL_MODEL=market_at_reference` **only for isolated research**. It is selected by the offline `ReplayEngine`, never by the production broker factory. Enabling it outside that path is unsupported and must fail closed. The default remains the legacy `market` to reproduce frozen experiments; do not treat a default plan-price result as profitability evidence. Live routing, existing strategies, existing sealed cohorts, and risk policies are unchanged.
 
 ## Independent acceptance gates
 
