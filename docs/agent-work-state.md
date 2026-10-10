@@ -11,9 +11,14 @@ Read **only** this block + `AGENTS.md` unless drift is detected.
 | Saved “what worked” | `docs/research-evidence/T-2026-10-09-prereg-4hr-mnq-400-forward-2026-10-09-01/historical-benchmark-saved-2026-10-10.md` |
 | Forward spec | `E-2026-10-09-4hr-mnq-400-forward-01` — collection from **2026-10-12** only |
 | **NEXT (operator)** | Push reviewed SHA if desired → controlled deploy for demo; optional merge **#1210** after independent review — **not** done in this lane |
-| **DO NOT REDO** | Gzip cell reproduction; #1208/#1209/#1210 CI read unless PR heads move; trading-evidence DB pass below |
+| **DO NOT REDO** | Gzip cell reproduction; #1208/#1209/#1210 CI read unless PR heads move; ORB/VWAP TF×window sweep (`docs/research-evidence/orb-vwap-tf-window-sweep-2026-10-10/`); trading-evidence DB pass below |
 
 Prior chat context for this lane is **closed**. Details below are archive unless a row above is stale.
+
+## SAVED — ORB/VWAP TF×window sweep (2026-10-10) — DONE / DO NOT REDO
+
+- **Copy:** `docs/research-evidence/orb-vwap-tf-window-sweep-2026-10-10/README.md` + `results.json`; runner `scripts/orb_vwap_tf_window_sweep.py`.
+- **Takeaway:** 10/15/30m × morning (9:40–11) / afternoon (1:30–4) NY, IOC — no strong ORB/VWAP lane; weak **10m ORB reclaim** only (+$19 morning / +$352 all NY). **15m** windows negative. **VWAP** all negative.
 
 ## SAVED — what worked (2026-10-10) — DONE / DO NOT REDO
 

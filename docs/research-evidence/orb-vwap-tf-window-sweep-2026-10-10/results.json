@@ -1,0 +1,387 @@
+{
+  "meta": {
+    "instrument": "MNQ",
+    "ny_only": true,
+    "fill": "ioc_limit"
+  },
+  "cells": [
+    {
+      "timeframe_minutes": 15,
+      "strategy": "orb_reclaim",
+      "window": "morning_940_1100",
+      "candidates": 149,
+      "ioc_resolved": {
+        "resolved": 27,
+        "net": -492.96,
+        "pf": 0.53,
+        "wins": 6,
+        "losses": 21
+      },
+      "no_fill": 122
+    },
+    {
+      "timeframe_minutes": 15,
+      "strategy": "orb_reclaim",
+      "window": "afternoon_1330_1600",
+      "candidates": 48,
+      "ioc_resolved": {
+        "resolved": 13,
+        "net": -97.74,
+        "pf": 0.782,
+        "wins": 4,
+        "losses": 9
+      },
+      "no_fill": 32
+    },
+    {
+      "timeframe_minutes": 15,
+      "strategy": "orb_reclaim",
+      "window": "ny_session_all",
+      "candidates": 278,
+      "ioc_resolved": {
+        "resolved": 65,
+        "net": -170.7,
+        "pf": 0.921,
+        "wins": 22,
+        "losses": 43
+      },
+      "no_fill": 209
+    },
+    {
+      "timeframe_minutes": 15,
+      "strategy": "orb_breakout",
+      "window": "morning_940_1100",
+      "candidates": 238,
+      "ioc_resolved": {
+        "resolved": 20,
+        "net": -291.6,
+        "pf": 0.425,
+        "wins": 5,
+        "losses": 15
+      },
+      "no_fill": 210
+    },
+    {
+      "timeframe_minutes": 15,
+      "strategy": "orb_breakout",
+      "window": "afternoon_1330_1600",
+      "candidates": 23,
+      "ioc_resolved": {
+        "resolved": 2,
+        "net": -64.96,
+        "pf": 0.0,
+        "wins": 0,
+        "losses": 2
+      },
+      "no_fill": 20
+    },
+    {
+      "timeframe_minutes": 15,
+      "strategy": "orb_breakout",
+      "window": "ny_session_all",
+      "candidates": 339,
+      "ioc_resolved": {
+        "resolved": 26,
+        "net": -414.98,
+        "pf": 0.386,
+        "wins": 6,
+        "losses": 20
+      },
+      "no_fill": 298
+    },
+    {
+      "timeframe_minutes": 15,
+      "strategy": "vwap_hold",
+      "window": "morning_940_1100",
+      "candidates": 347,
+      "ioc_resolved": {
+        "resolved": 13,
+        "net": -227.04,
+        "pf": 0.254,
+        "wins": 2,
+        "losses": 11
+      },
+      "no_fill": 328
+    },
+    {
+      "timeframe_minutes": 15,
+      "strategy": "vwap_hold",
+      "window": "afternoon_1330_1600",
+      "candidates": 545,
+      "ioc_resolved": {
+        "resolved": 22,
+        "net": -268.52,
+        "pf": 0.369,
+        "wins": 5,
+        "losses": 17
+      },
+      "no_fill": 512
+    },
+    {
+      "timeframe_minutes": 15,
+      "strategy": "vwap_hold",
+      "window": "ny_session_all",
+      "candidates": 1546,
+      "ioc_resolved": {
+        "resolved": 66,
+        "net": -656.38,
+        "pf": 0.47,
+        "wins": 17,
+        "losses": 49
+      },
+      "no_fill": 1449
+    },
+    {
+      "timeframe_minutes": 10,
+      "strategy": "orb_reclaim",
+      "window": "morning_940_1100",
+      "candidates": 176,
+      "ioc_resolved": {
+        "resolved": 43,
+        "net": 18.86,
+        "pf": 1.018,
+        "wins": 11,
+        "losses": 32
+      },
+      "no_fill": 119
+    },
+    {
+      "timeframe_minutes": 10,
+      "strategy": "orb_reclaim",
+      "window": "afternoon_1330_1600",
+      "candidates": 91,
+      "ioc_resolved": {
+        "resolved": 31,
+        "net": -98.38,
+        "pf": 0.872,
+        "wins": 7,
+        "losses": 24
+      },
+      "no_fill": 49
+    },
+    {
+      "timeframe_minutes": 10,
+      "strategy": "orb_reclaim",
+      "window": "ny_session_all",
+      "candidates": 424,
+      "ioc_resolved": {
+        "resolved": 132,
+        "net": 352.14,
+        "pf": 1.103,
+        "wins": 39,
+        "losses": 93
+      },
+      "no_fill": 252
+    },
+    {
+      "timeframe_minutes": 10,
+      "strategy": "orb_breakout",
+      "window": "morning_940_1100",
+      "candidates": 323,
+      "ioc_resolved": {
+        "resolved": 48,
+        "net": -608.04,
+        "pf": 0.407,
+        "wins": 9,
+        "losses": 39
+      },
+      "no_fill": 267
+    },
+    {
+      "timeframe_minutes": 10,
+      "strategy": "orb_breakout",
+      "window": "afternoon_1330_1600",
+      "candidates": 78,
+      "ioc_resolved": {
+        "resolved": 9,
+        "net": -66.82,
+        "pf": 0.661,
+        "wins": 3,
+        "losses": 6
+      },
+      "no_fill": 66
+    },
+    {
+      "timeframe_minutes": 10,
+      "strategy": "orb_breakout",
+      "window": "ny_session_all",
+      "candidates": 439,
+      "ioc_resolved": {
+        "resolved": 63,
+        "net": -651.74,
+        "pf": 0.493,
+        "wins": 14,
+        "losses": 49
+      },
+      "no_fill": 365
+    },
+    {
+      "timeframe_minutes": 10,
+      "strategy": "vwap_hold",
+      "window": "morning_940_1100",
+      "candidates": 951,
+      "ioc_resolved": {
+        "resolved": 49,
+        "net": -126.64,
+        "pf": 0.799,
+        "wins": 13,
+        "losses": 36
+      },
+      "no_fill": 887
+    },
+    {
+      "timeframe_minutes": 10,
+      "strategy": "vwap_hold",
+      "window": "afternoon_1330_1600",
+      "candidates": 1200,
+      "ioc_resolved": {
+        "resolved": 57,
+        "net": -466.18,
+        "pf": 0.436,
+        "wins": 11,
+        "losses": 46
+      },
+      "no_fill": 1133
+    },
+    {
+      "timeframe_minutes": 10,
+      "strategy": "vwap_hold",
+      "window": "ny_session_all",
+      "candidates": 3789,
+      "ioc_resolved": {
+        "resolved": 187,
+        "net": -1027.9,
+        "pf": 0.596,
+        "wins": 43,
+        "losses": 144
+      },
+      "no_fill": 3552
+    },
+    {
+      "timeframe_minutes": 30,
+      "strategy": "orb_reclaim",
+      "window": "morning_940_1100",
+      "candidates": 52,
+      "ioc_resolved": {
+        "resolved": 9,
+        "net": -317.82,
+        "pf": 0.0,
+        "wins": 0,
+        "losses": 9
+      },
+      "no_fill": 42
+    },
+    {
+      "timeframe_minutes": 30,
+      "strategy": "orb_reclaim",
+      "window": "afternoon_1330_1600",
+      "candidates": 42,
+      "ioc_resolved": {
+        "resolved": 14,
+        "net": -33.72,
+        "pf": 0.907,
+        "wins": 3,
+        "losses": 11
+      },
+      "no_fill": 24
+    },
+    {
+      "timeframe_minutes": 30,
+      "strategy": "orb_reclaim",
+      "window": "ny_session_all",
+      "candidates": 152,
+      "ioc_resolved": {
+        "resolved": 31,
+        "net": -531.88,
+        "pf": 0.439,
+        "wins": 4,
+        "losses": 27
+      },
+      "no_fill": 114
+    },
+    {
+      "timeframe_minutes": 30,
+      "strategy": "orb_breakout",
+      "window": "morning_940_1100",
+      "candidates": 116,
+      "ioc_resolved": {
+        "resolved": 14,
+        "net": -8.72,
+        "pf": 0.957,
+        "wins": 4,
+        "losses": 10
+      },
+      "no_fill": 102
+    },
+    {
+      "timeframe_minutes": 30,
+      "strategy": "orb_breakout",
+      "window": "afternoon_1330_1600",
+      "candidates": 30,
+      "ioc_resolved": {
+        "resolved": 6,
+        "net": -117.38,
+        "pf": 0.261,
+        "wins": 1,
+        "losses": 5
+      },
+      "no_fill": 24
+    },
+    {
+      "timeframe_minutes": 30,
+      "strategy": "orb_breakout",
+      "window": "ny_session_all",
+      "candidates": 165,
+      "ioc_resolved": {
+        "resolved": 21,
+        "net": -145.08,
+        "pf": 0.618,
+        "wins": 5,
+        "losses": 16
+      },
+      "no_fill": 144
+    },
+    {
+      "timeframe_minutes": 30,
+      "strategy": "vwap_hold",
+      "window": "morning_940_1100",
+      "candidates": 318,
+      "ioc_resolved": {
+        "resolved": 16,
+        "net": -232.78,
+        "pf": 0.217,
+        "wins": 2,
+        "losses": 14
+      },
+      "no_fill": 299
+    },
+    {
+      "timeframe_minutes": 30,
+      "strategy": "vwap_hold",
+      "window": "afternoon_1330_1600",
+      "candidates": 459,
+      "ioc_resolved": {
+        "resolved": 27,
+        "net": -118.88,
+        "pf": 0.639,
+        "wins": 6,
+        "losses": 21
+      },
+      "no_fill": 430
+    },
+    {
+      "timeframe_minutes": 30,
+      "strategy": "vwap_hold",
+      "window": "ny_session_all",
+      "candidates": 1269,
+      "ioc_resolved": {
+        "resolved": 73,
+        "net": -540.0,
+        "pf": 0.472,
+        "wins": 14,
+        "losses": 59
+      },
+      "no_fill": 1184
+    }
+  ]
+}
