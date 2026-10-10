@@ -1,27 +1,30 @@
 # Agent Work State
 
-## START HERE — session closed (2026-10-10, context cleared)
+## START HERE — current source checkpoint (2026-10-10)
 
-Read **only** this block + `AGENTS.md` + `docs/futures-research-resume-checkpoint-2026-10-10.md` unless drift is detected. Private numeric handoff: ChatGPT Library `/Futures Research/Futures Research Handoff - 2026-10-10.md`.
+Read `AGENTS.md`, **this START HERE block**, the applicable authoritative strategy/trial record, and the specific current PR before working. The older material below is a **historical coordination archive**, not the latest PR/deployment status. Private numerical research stays in ChatGPT Library `/Futures Research/Futures Research Handoff - 2026-10-10.md`; do not mirror it to public GitHub.
 
-| Item | Value |
+| Scope | Verified source checkpoint / action |
 |---|---|
-| **GitHub `main`** | **`71e5f45`** — **#1208** + **#1209** + **#1211** (`e9c9a0e` PR head) merged |
-| **Open research PRs** | **#1210** integration R:R regression; **#1212** 4HR arm identity; **#1213** 1m/5m join fail-closed |
-| **Demo wiring branch (not merged)** | `research/4hr-mnq-400-forward-20261009` @ **`2f4f776`** — 4HR 400-tick forward, 3-2-2 shadow |
-| **Public resume** | `docs/futures-research-resume-checkpoint-2026-10-10.md` (+ Cursor + Claude options appendices) |
-| **Options ETF handoff (separate branch)** | `claude/options-time-exit-research-20261010` @ **`a30f0a6`** — [handoff md](https://github.com/imanisworld/autonomous-futures-system/blob/claude/options-time-exit-research-20261010/docs/options-etf-expression-research-2026-10-10.md); **NOT merged**; OOS 9t −$384 per Claude; parity 41/41 **unverified re-run** |
-| **Saved 4HR benchmark** | `docs/research-evidence/T-2026-10-09-prereg-4hr-mnq-400-forward-2026-10-09-01/` (on **research** branch) |
-| **Saved ORB/VWAP sweeps** | `docs/research-evidence/orb-vwap-tf-window-sweep-2026-10-10/` (on **research** branch) |
-| **Forward 4HR start** | **2026-10-12** — Track B; not collected, not deployed |
-| **Step 4 parity doc** | `docs/futures-demo-step4-1m-vs-5m-ioc-parity-2026-10-10.md` |
-| **Track B readiness** | `docs/futures-track-b-forward-readiness-2026-10-10.md` |
-| **Deferred cleanup list** | `docs/repo-hygiene-deferred-removal-tracker-2026-10-10.md` (classify only; delete at end) |
-| **Verdict** | **NOT DEMO-READY** — Track B forward after reviewed deploy of **research** SHA; Track A 1m observer parallel |
+| **Correctness PRs already merged** | **#1208**, **#1209**, **#1210**, **#1211** are **MERGED** into `main` (checked Oct 10). The earlier statement “#1210 open” is stale. A merge is **not** a deployment. |
+| **Future-only 5m provenance sidecar** | [#1212](https://github.com/imanisworld/autonomous-futures-system/pull/1212), draft/open, latest observed head `9df1a09ff2cd5b52af6c3a4cc1c9c920904e00a2`; **CI in progress when checked**; independent review not recorded. Feature `WIDE_STOP_4HR_JOIN_PROVENANCE_V2_ENABLED` defaults **OFF**. Do not enable. |
+| **Offline 1m/5m identity matcher** | [#1213](https://github.com/imanisworld/autonomous-futures-system/pull/1213), draft/open at `2e5c2fa0411bde197532a1700d58fd4395721543`, **8,777 passed / 8 skipped** on exact-head GitHub CI; independent review not recorded. It includes #1212 code in its PR diff; **never merge both without reconciling overlap**. |
+| **Primary 4HR execution gap** | Natural 1m observer is **non-executable**; guarded DEMO/paper wide-stop uses completed-5m close **IOC8**. Matching `arm_key` proves **identity only**, not fills, stop geometry or net edge. No real paired prospective 1m/5m cohort verified. |
+| **Future 4HR Track B** | `research/4hr-mnq-400-forward-20261009` @ `2f4f776` is the **last documented** source candidate for a separate 400-tick 5m IOC8 forward study; **current head/box/deploy unverified here**. Trial first eligible session **Oct 12, 2026**, only after explicit controlled GO. No deployment or scoring claimed. |
+| **Other open tasks** | #1201 futures net-edge TODO draft (handoff check failed on its observed head); unrelated options/ops PRs remain separately owned. Do not close or delete based solely on age. |
+| **Strategy and experiment authority** | `docs/strategy-rules/Strategy_Inventory.md` (verdict), `docs/research-trial-ledger.jsonl` (attempts), prereg contracts (prospective rules), **VPS/broker read-only evidence** (runtime). Neither this checkpoint nor software CI changes any authority. |
+| **Cleanup** | `docs/repo-hygiene-deferred-removal-tracker-2026-10-10.md` holds classified candidates; **no deletion approved**, no current local disk census verified. |
+| **Overall verdict** | **NOT DEMO-READY / profitability unproven**. No build, restart, deploy, broker order, live-enable, collector-flag change, or epoch reset was done by this docs task. |
 
-**DO NOT REDO:** gzip 4HR cell reproduction; ORB/VWAP TF×window sweeps (baseline + trending + orb48); Grok PASS work on merged **#1208**/**#1209**; Sep decompositions listed below.
+**DONE — do not redo:** Sep 7 signal/fill/risk decompositions; 4HR historical pre-armed A/B + 2→2 study; corrected 3-2-2 EOD replay; ORB/VWAP timeframe sweeps; earlier 5m/15m provider parity; reviewed #1208–#1211 source CI. Avoid repeating historical optimization to chase green backtests. Note: existing natural 1m observer epoch was documented as starting **Oct 4**; its current sample counts require fresh evidence.
 
-**NEXT:** Independent review **#1210** / **#1212** / **#1213** before merge; **explicit GO** before deploy **research** SHA (`2f4f776` or successor); fresh VPS read-only pins at promote time. **Independent review (Oct 10):** `docs/futures-pr-independent-review-2026-10-10.md` (pre-#1208 merge; refresh after #1211). **NOT done:** deploy, forward collection, DEMO-ready claim.
+**NEXT — smallest useful sequence:**
+1. Independently review current exact heads of **#1212 and #1213**, especially nested PR overlap, true TradingView timestamp semantics, contract provenance, and source-identity integrity. Recheck CI if SHA changed; no duplicate matcher.
+2. Decide whether to authorize **separate, future-only, default-OFF 5m identity sidecar collection**. If approved later, freeze new evidence cohort and preserve the 1m observer's established epoch; do **not** backfill missing old IDs.
+3. After eligible natural observations, conduct only a **preregistered, read-only identity/timing/stop/fill-feasibility comparison**, preserving unmatched and ambiguous records; do not infer realized returns.
+4. Independently reconcile risk budget, source candidate, broker DEMO route and box release checks. **No trade/demo order action without separate explicit GO**; profitability and observer minimum (10 natural eligible touches, 20 days, 2 calendar months) remain unmet/unverified.
+
+**Cleanup/reuse rule:** Do not create another status authority, repost private returns, or merge a documentation-only branch directly to `main`. For agent details see `docs/futures-research-resume-checkpoint-2026-10-10.md` and `docs/4hr-offline-identity-reconciliation-2026-10-10.md` **on #1213**, not on `main` yet.
 
 Prior chat context for this session is **closed**. Section below is coordination archive unless stale.
 
