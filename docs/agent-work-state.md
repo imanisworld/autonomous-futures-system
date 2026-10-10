@@ -1,11 +1,26 @@
 # Agent Work State
 
-## SAVED — what worked (2026-10-10)
+## START HERE — session resume (2026-10-10, context cleared)
+
+Read **only** this block + `AGENTS.md` unless drift is detected.
+
+| Item | Value |
+|---|---|
+| Active branch | `research/4hr-mnq-400-forward-20261009` |
+| Branch HEAD | `01e0804` (saved benchmark docs; execution wiring in `0c5db3d..01e0804`) |
+| Saved “what worked” | `docs/research-evidence/T-2026-10-09-prereg-4hr-mnq-400-forward-2026-10-09-01/historical-benchmark-saved-2026-10-10.md` |
+| Forward spec | `E-2026-10-09-4hr-mnq-400-forward-01` — collection from **2026-10-12** only |
+| **NEXT (operator)** | Push reviewed SHA if desired → controlled deploy for demo; optional merge **#1210** after independent review — **not** done in this lane |
+| **DO NOT REDO** | Gzip cell reproduction; #1208/#1209/#1210 CI read unless PR heads move; trading-evidence DB pass below |
+
+Prior chat context for this lane is **closed**. Details below are archive unless a row above is stale.
+
+## SAVED — what worked (2026-10-10) — DONE / DO NOT REDO
 
 - **Authoritative saved copy:** `docs/research-evidence/T-2026-10-09-prereg-4hr-mnq-400-forward-2026-10-09-01/historical-benchmark-saved-2026-10-10.md` (+ `.json`).
 - **Cell:** MNQ `strat_4hr_retrigger`, stop ≤ 400 ticks, R:R ≥ 1.0, one contract, `wide_stop_4k` @ $4,000 — **36 resolved, +$3,076.72, PF 3.125**, both halves positive (artifact `scripts/edge_decomposition_audit_results_candidates.jsonl.gz`, dates 2024-07-09..2026-06-03 consumed).
-- **Code that wires it:** branch `research/4hr-mnq-400-forward-20261009` @ **`0c5db3d`** (400-tick ledger, approved forward spec, 3-2-2 fill disabled). **Not pushed. Not deployed.**
-- **DO NOT REDO:** gzip reproduction or this save unless the artifact hash or branch head for this lane changes.
+- **Code that wires it:** branch `research/4hr-mnq-400-forward-20261009` @ **`01e0804`** (400-tick ledger, approved forward spec, 3-2-2 fill disabled). **Not pushed. Not deployed.**
+- **DO NOT REDO:** gzip reproduction or this save unless the artifact hash or branch HEAD changes.
 
 ## Trading-evidence reconciliation — 2026-10-09 (read-only)
 
