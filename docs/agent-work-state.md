@@ -1,5 +1,26 @@
 # Agent Work State
 
+## START HERE — session closed (2026-10-10, context cleared)
+
+Read **only** this block + `AGENTS.md` + `docs/futures-research-resume-checkpoint-2026-10-10.md` unless drift is detected. Private numeric handoff: ChatGPT Library `/Futures Research/Futures Research Handoff - 2026-10-10.md`.
+
+| Item | Value |
+|---|---|
+| **This checkout** | `fix/timeframe-causal-buckets-research-20261010` @ **`f952caa`** (PR **#1211**, pushed) |
+| **Demo wiring branch (not merged)** | `research/4hr-mnq-400-forward-20261009` @ **`2f4f776`** — 4HR 400-tick forward, 3-2-2 shadow; **not pushed** last verified |
+| **Public resume** | `docs/futures-research-resume-checkpoint-2026-10-10.md` (+ Cursor addendum at bottom) |
+| **Saved 4HR benchmark** | `docs/research-evidence/T-2026-10-09-prereg-4hr-mnq-400-forward-2026-10-09-01/` (on **research** branch) |
+| **Saved ORB/VWAP sweeps** | `docs/research-evidence/orb-vwap-tf-window-sweep-2026-10-10/` (on **research** branch) |
+| **Fill/R:R drafts** | #1208 / #1209 / #1210 — CI green on checkpoint heads; **not merged** |
+| **Forward 4HR start** | **2026-10-12** — not collected, not deployed |
+| **Verdict** | **NOT DEMO-READY** — best path = deploy reviewed 4HR branch + forward collection after operator GO |
+
+**DO NOT REDO:** gzip 4HR cell reproduction; ORB/VWAP TF×window sweeps (baseline + trending + orb48); #1208–#1210 CI read unless heads move; Sep decompositions listed below.
+
+**NEXT (operator):** independent review on open PRs; optional push/deploy **research** SHA for 4HR-only demo; no ORB/VWAP promotion from sweeps.
+
+Prior chat context for this session is **closed**. Section below is coordination archive unless stale.
+
 ## Latest futures research coordination — 2026-10-10 (source-only; no trading authority)
 
 **Operator sequence:** **(2) assess rules → (3) choose lead → (1) finish justified correctness fixes → (4) prepare DEMO → (5) independent forward/DEMO proof only after gates and explicit operator GO.** This is a work order, **not** approval to merge, deploy, activate a broker, reset a paper/observer epoch, inspect blinded P&L, or loosen global risk rules. Do not tell the operator work will run in the background.
