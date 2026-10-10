@@ -1,5 +1,62 @@
 # Agent Work State
 
+## START HERE — session closed (2026-10-10, context cleared)
+
+Read **only** this block + `AGENTS.md` + `docs/futures-research-resume-checkpoint-2026-10-10.md` unless drift is detected. Private numeric handoff: ChatGPT Library `/Futures Research/Futures Research Handoff - 2026-10-10.md`.
+
+| Item | Value |
+|---|---|
+| **GitHub `main`** | **`71e5f45`** — **#1208** + **#1209** + **#1211** (`e9c9a0e` PR head) merged |
+| **Open research PRs** | **#1210** integration R:R regression; **#1212** 4HR arm identity; **#1213** 1m/5m join fail-closed |
+| **Demo wiring branch (not merged)** | `research/4hr-mnq-400-forward-20261009` @ **`2f4f776`** — 4HR 400-tick forward, 3-2-2 shadow |
+| **Public resume** | `docs/futures-research-resume-checkpoint-2026-10-10.md` (+ Cursor + Claude options appendices) |
+| **Options ETF handoff (separate branch)** | `claude/options-time-exit-research-20261010` @ **`a30f0a6`** — [handoff md](https://github.com/imanisworld/autonomous-futures-system/blob/claude/options-time-exit-research-20261010/docs/options-etf-expression-research-2026-10-10.md); **NOT merged**; OOS 9t −$384 per Claude; parity 41/41 **unverified re-run** |
+| **Saved 4HR benchmark** | `docs/research-evidence/T-2026-10-09-prereg-4hr-mnq-400-forward-2026-10-09-01/` (on **research** branch) |
+| **Saved ORB/VWAP sweeps** | `docs/research-evidence/orb-vwap-tf-window-sweep-2026-10-10/` (on **research** branch) |
+| **Forward 4HR start** | **2026-10-12** — Track B; not collected, not deployed |
+| **Step 4 parity doc** | `docs/futures-demo-step4-1m-vs-5m-ioc-parity-2026-10-10.md` |
+| **Track B readiness** | `docs/futures-track-b-forward-readiness-2026-10-10.md` |
+| **Deferred cleanup list** | `docs/repo-hygiene-deferred-removal-tracker-2026-10-10.md` (classify only; delete at end) |
+| **Verdict** | **NOT DEMO-READY** — Track B forward after reviewed deploy of **research** SHA; Track A 1m observer parallel |
+
+**DO NOT REDO:** gzip 4HR cell reproduction; ORB/VWAP TF×window sweeps (baseline + trending + orb48); Grok PASS work on merged **#1208**/**#1209**; Sep decompositions listed below.
+
+**NEXT:** Independent review **#1210** / **#1212** / **#1213** before merge; **explicit GO** before deploy **research** SHA (`2f4f776` or successor); fresh VPS read-only pins at promote time. **Independent review (Oct 10):** `docs/futures-pr-independent-review-2026-10-10.md` (pre-#1208 merge; refresh after #1211). **NOT done:** deploy, forward collection, DEMO-ready claim.
+
+Prior chat context for this session is **closed**. Section below is coordination archive unless stale.
+
+## Latest futures research coordination — 2026-10-10 (source-only; no trading authority)
+
+**Operator sequence:** **(2) assess rules → (3) choose lead → (1) finish justified correctness fixes → (4) prepare DEMO → (5) independent forward/DEMO proof only after gates and explicit operator GO.** This is a work order, **not** approval to merge, deploy, activate a broker, reset a paper/observer epoch, inspect blinded P&L, or loosen global risk rules. Do not tell the operator work will run in the background.
+
+**DONE / DO NOT REDO (existing evidence):**
+- The Sep 7 decomposed signal-vs-fill-vs-bracket-vs-risk waterfall, its ablations, the Sep 18 causal 4HR pre-armed touch A/B, the Sep 8 wide-stop 300t paper amendment, the Sep 20 4H 2→2 treatment, and the Oct 4 corrected 3-2-2 EOD rerun are **already completed**. Do not re-run these populations or create different default parameters to get greener historical results. See `docs/edge-decomposition-audit-2026-09-07.md`, `docs/4hr-prearmed-touch-ab-2026-09-18.md`, `docs/wide-stop-hypothetical-ledger-lane-amendment-2026-09-08.md`, `docs/4hr-prearmed-continuation-treatment-2026-09-20.md` and the trial ledger.
+- The previously broken 4HR natural-1m observer was **repaired** and had a canonical evidence epoch independently documented as started **2026-10-04T21:30:05Z**, release `c44d32b`; do **not** rebuild it or backfill the invalid Sep 18–Oct 4 interval. Current runtime state/event count as of Oct 10 is **UNVERIFIED here**, because the Mac connector was offline. See `docs/4hr-natural-1m-observation-epoch-2026-10-01.md`.
+
+**Step 2 results / Step 3 lead (evidence-only, not a new Inventory verdict):**
+- **Primary:** MNQ **4HR Re-Trigger — broad pre-armed trigger**, not the post-hoc 4H-2→2 treatment. The corrected pre-armed historical fills retain a positive net sign across chronological halves and adverse ticks, with a larger sample than 3-2-2. Risk stop cap and 2R global minimum exclude most trades; *this is not a justification to loosen account safety*. The existing isolated `wide_stop_4k` paper cell is **300 ticks / 1.0 R:R / 8-tick completed-5m IOC**, which is not identical to 1m pre-armed execution. Its valid IOC fill participation is low. Do not pretend this established 1m DEMO edge.
+- **Comparator:** MNQ **60M 3-2-2 First Live**; corrected historical sample is smaller (32 terminal, no stop hits) and cannot be called validated; its preregistered forward 1m touch proof is still required.
+- **Hold:** MGC wide is a **blinded** distinct prospective trial; Miyagi lacks sample/engine, MES 4HR historically failed, and the already rejected UTC-timeframe momentum/ORB/VWAP variants are **DO NOT REDO**. Do not change the authoritative Strategy Inventory or `research-trial-ledger.jsonl` without an actual registered state/approved decision. Full numeric findings are in the operator's private ChatGPT Library handoff `/Futures Research/Futures Research Handoff - 2026-10-10.md`, not for this public repository.
+
+**Step 1 source fixes (open drafts, no independent reviewer approval):** #1208 strict next-executable-price research fill, #1209 actual-bracket R:R and protective stop direction, #1210 combined QA, #1211 explicit anchor and complete/cross-contract bar validation. Each passed Python CI on earlier exact heads; retrieve current head/CI/reviews before any review or merge. #1211 is a **new-study isolated helper**, not a change to the frozen MGC scorer. Method comparison and public-safe notes: `docs/futures-research-resume-checkpoint-2026-10-10.md` on #1211.
+
+**Step 4 DEMO parity report (2026-10-10):** `docs/futures-demo-step4-1m-vs-5m-ioc-parity-2026-10-10.md` — source-only. **Conclusion:** existing DEMO/paper wide-stop = **5m close IOC8**; primary historical lead = **1m pre-armed touch**; honest DEMO tests Track B unless/until approved wiring for Track C. VPS box check still **open**.
+
+**Step 4 existing DEMO scaffolding / blockers:**
+- A separate **guarded Tradovate DEMO** wide-stop route already exists in `context/wide_stop_execution.py` and an isolated paper ledger exists in `context/wide_stop_ledger_paper.py`; do not create a competing execution path. **VERIFIED SOURCE MISMATCH:** `webhook/runner.py` returns `ONE_MIN_CONTEXT` with `execution_reachable=False` before DecisionEngine/RiskEngine/broker for every eligible 1m alert; `context/wide_stop_execution.py::DEMO_ENTRY_EXECUTION_MODE` is `ioc_limit` with `FROZEN_MNQ_IOC_TICKS=8`, used as `BracketOrder.entry_execution_mode_override` by `context/wide_stop_demo_runtime_core.py`. The wide-stop collector is driven from completed 5m bars (`context/wide_stop_forward_collector.py`). Therefore the existing guarded DEMO order route is **NOT the 1m pre-armed trigger path**. Do not claim 1m historical pre-armed profits apply to this DEMO model. Before proposing any route change, obtain separate human approval + independent order-safety review; next task is source-only 1m-vs-5m parity/feasibility report, not order wiring. No new demo order is authorized.
+- The existing forward 1m observer prereg `docs/prereg-forward-one-min-trigger-evidence-review-2026-09-18.md` requires **10 distinct eligible natural trigger arm_keys**, **20 trading days**, and **2 calendar months** separately for 4HR and 3-2-2, zero causal/parity/dedupe/isolation violations. Synthetic tests are NOT eligible. The 4HR verified epoch began Oct 4; the calendar-month gate cannot have elapsed as of Oct 10, no matter how well software tests pass. Even passing this gate establishes mechanism parity only, not profitable strategy/DEMO authority.
+- Remaining release readiness requires fresh restricted read-only VPS checks of deployed exact SHA, live-off/demo/one-contract pins, broker orders/positions, journal integrity, deploy lock, rollback and services. **Box not checked this turn.** See `docs/futures-operator-todo.md` and source deployment plan; do not duplicate the deployment audit or skip independent reviewer.
+
+**Agent next tasks without duplication:**
+- **Grok (research):** identify *unexamined* causal 4HR failure conditions or truly distinct strategy ideas; do not rerun closed grids or tune exhausted same-fold samples. Provide prereg hypothesis only; no orders or config edits.
+- **Cursor (builder/test runner):** inspect the existing 4HR paper-vs-natural-1m DEMO route, then produce the **smallest source-only QA/parity change** that closes a demonstrated defect; respect existing observer/ledger names and frozen epochs. Run focused + exact-head full CI. Do not deploy.
+- **Claude/Codex (independent breaker):** review #1208–#1211 and the mechanism/DEMO path, attack stop-first, timestamp alignment, order-route isolation, gap stops, risk arithmetic, intrabar lookahead. Independent PASS/FAIL, not a fresh duplicate test suite.
+- **ChatGPT/operator (lead):** reconcile verified agent reports by exact SHA, nominate one narrowly defined **approved/preregistered** new analysis only if genuinely unresolved, choose a viable position-risk/margin budget based on documented stops, and withhold DEMO progression until both profitability and mechanism proof are established.
+
+**DONE criterion for this step:** Preserve state, proofs, blockers, and agent owners; don't restart full repo audit. **Current status: NOT DEMO-READY; no net-positive forward proof in this session.**
+
+---
+
 ## Current coordination checkpoint — 2026-10-08
 
 - **Repository:** GitHub source baseline at this handoff: `a74c6f8f93e744e93627c09be06a77b0e7e974f7` (#1202), including source-only #1198 adapter plus previously merged watcher/history guards. **Source SHA is not VPS release identity.**

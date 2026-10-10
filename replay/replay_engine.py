@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from collections import deque
 from dataclasses import replace
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 from uuid import uuid4
@@ -43,6 +43,7 @@ from execution.day_only_exit import (
     strategy_is_day_only,
 )
 from execution.paper_broker import NextBarOHLC, PaperBroker
+from execution.research_reference_paper import ResearchReferencePaperBroker
 from config.futures_contracts import contract_economics as _contract_economics
 from journal.journal_logger import JournalLogger
 from context.htf_loader import HTFLookup
@@ -61,6 +62,48 @@ from strategy.strat_classifier import StratContext, classify_from_ohlc
 from webhook.runner import normalize_timeframe_minutes
 
 logger = logging.getLogger(__name__)
+
+
+def _next_executable_market_reference(
+    candles: list[ReplayCandle], idx: int
+) -> tuple[float, str] | None:
+    """First same-contract/same-timeframe next-bar OPEN, or no executable reference.
+
+    A signal confirmed on a completed candle cannot fill at that candle's
+    earlier close. The next expected bar opening is the first causal market
+    reference; holes, mismatched clocks or a missing next bar mean no fill.
+    """
+    signal = candles[idx]
+    minutes = normalize_timeframe_minutes(signal.timeframe)
+    if not minutes or minutes <= 0:
+        return None
+    expected_time = _parse_timestamp(signal.timestamp) + timedelta(minutes=minutes)
+    for following in candles[idx + 1:]:
+        if following.instrument != signal.instrument:
+            continue
+        if normalize_timeframe_minutes(following.timeframe) != minutes:
+            continue
+        if _parse_timestamp(following.timestamp) != expected_time:
+            return None
+        return following.open, following.timestamp
+    return None
+
+
+def _strict_research_commission_round_trip(config) -> float:
+    if getattr(config, "entry_fill_model", "market") != "market_at_reference":
+        return 0.0
+    return float(getattr(config, "research_commission_round_trip", 1.48) or 0.0)
+
+
+def _strict_net_pnl(
+    gross: float | None,
+    commission_per_contract: float,
+    contracts: int = 1,
+) -> float | None:
+    if gross is None or commission_per_contract <= 0:
+        return gross
+    qty = max(int(contracts or 1), 1)
+    return round(float(gross) - (commission_per_contract * qty), 2)
 
 _DEFAULT_HTF_FILES = {
     "1D": "data/htf/CME_MINI_MNQ1!_1D.jsonl",
@@ -229,7 +272,14 @@ class ReplayEngine:
         journal_date = _date_to_date(run_date)
         decision_engine = DecisionEngine(config=self.config)
         risk_engine = RiskEngine(config=self.config)
-        broker = PaperBroker(
+        # Strict research references are an opt-in wrapper around the audited
+        # PaperBroker. Never mutate its canonical fill implementation.
+        strict_reference = getattr(self.config, "entry_fill_model", "market") == "market_at_reference"
+        broker_cls = ResearchReferencePaperBroker if strict_reference else PaperBroker
+        strict_commission_rt = (
+            _strict_research_commission_round_trip(self.config) if strict_reference else 0.0
+        )
+        broker = broker_cls(
             starting_balance=(
                 self._rolling_balance
                 if self._rolling_balance is not None
@@ -315,6 +365,12 @@ class ReplayEngine:
                     # alongside the TRADE row it belongs to, joined by the
                     # SAME paper_order_id already minted on that row (#327/
                     # #332's exact-identity join).
+                    _carry_gross = _carry_fill.pnl_dollars
+                    _carry_net = _strict_net_pnl(
+                        _carry_gross,
+                        strict_commission_rt,
+                        _carry_fill.contracts,
+                    )
                     journal.log_outcome(
                         instrument=_carry_fill.instrument,
                         session=_carried.get("session") or "",
@@ -323,7 +379,7 @@ class ReplayEngine:
                         exit_price=_carry_fill.exit_price,
                         exit_reason=_carry_fill.exit_reason,
                         pnl_ticks=_carry_fill.pnl_ticks,
-                        pnl_dollars=_carry_fill.pnl_dollars,
+                        pnl_dollars=_carry_net,
                         contracts=_carry_fill.contracts,
                         for_date=_carried["journal_date"],
                         strategy=_carried.get("strategy"),
@@ -336,6 +392,18 @@ class ReplayEngine:
                             "historical_signal_bar_ts": _carried.get("historical_signal_bar_ts"),
                             "historical_entry_bar_ts": _carried.get("historical_entry_bar_ts"),
                             "historical_resolution_bar_ts": _fc.timestamp,
+                                **(
+                                    {
+                                        "gross_pnl_dollars": _carry_gross,
+                                        "commission_round_trip": strict_commission_rt,
+                                        "commission_dollars": round(
+                                            strict_commission_rt * max(int(_carry_fill.contracts or 1), 1),
+                                            2,
+                                        ),
+                                    }
+                                    if strict_commission_rt
+                                    else {}
+                                ),
                         },
                     )
                     # Mirror the engine's own NORMAL same-day resolve path
@@ -361,9 +429,7 @@ class ReplayEngine:
                     #     max_trades_per_day/bonus capacity for a trade that
                     #     isn't really "today's" entry (see the trade_count
                     #     capacity check near the top of this loop).
-                    daily_state.realized_pnl_dollars += float(
-                        _carry_fill.pnl_dollars or 0.0
-                    )
+                    daily_state.realized_pnl_dollars += float(_carry_net or 0.0)
                     if _carry_fill.result == "LOSS":
                         daily_state.consecutive_losses += 1
                         daily_state.last_loss_at = _parse_timestamp(_fc.timestamp)
@@ -683,6 +749,12 @@ class ReplayEngine:
                         _pre["result"], float(_pre["exit_price"])
                     )
                     resolved_fill.exit_reason = _pre["exit_reason"]
+                    _pre_gross = resolved_fill.pnl_dollars
+                    _pre_net = _strict_net_pnl(
+                        _pre_gross,
+                        strict_commission_rt,
+                        resolved_fill.contracts,
+                    )
                     journal.log_outcome(
                         instrument=resolved_fill.instrument,
                         session=state.session,
@@ -691,7 +763,7 @@ class ReplayEngine:
                         exit_price=resolved_fill.exit_price,
                         exit_reason=resolved_fill.exit_reason,
                         pnl_ticks=resolved_fill.pnl_ticks,
-                        pnl_dollars=resolved_fill.pnl_dollars,
+                        pnl_dollars=_pre_net,
                         contracts=resolved_fill.contracts,
                         for_date=journal_date,
                         strategy=decision.setup.strategy,
@@ -706,9 +778,7 @@ class ReplayEngine:
                     )
                     daily_state.trade_count += 1
                     daily_state.account_balance = broker.get_account_balance()
-                    daily_state.realized_pnl_dollars += float(
-                        resolved_fill.pnl_dollars or 0.0
-                    )
+                    daily_state.realized_pnl_dollars += float(_pre_net or 0.0)
                     if resolved_fill.result == "LOSS":
                         daily_state.consecutive_losses += 1
                         daily_state.last_loss_at = _parse_timestamp(candle.timestamp)
@@ -718,6 +788,34 @@ class ReplayEngine:
 
                 if risk_result.approved:
                     contracts = trade_setup.contracts
+                    _market_reference_ts = None
+                    _strict_reference_model = (
+                        getattr(self.config, "entry_fill_model", "market") == "market_at_reference"
+                    )
+                    if _strict_reference_model and decision.setup.strategy in (STRAT_212, STRAT_122):
+                        # Pre-resolved restore paths are not fresh next-open entries.
+                        journal.log_outcome(
+                            instrument=state.instrument,
+                            session=state.session,
+                            result="CANCELLED",
+                            entry_price=decision.setup.entry,
+                            exit_price=None,
+                            exit_reason="ENTRY_NOT_FILLED",
+                            pnl_ticks=0.0,
+                            pnl_dollars=0.0,
+                            contracts=contracts,
+                            for_date=journal_date,
+                            strategy=decision.setup.strategy,
+                            signal_timestamp=candle.timestamp,
+                            paper_order_id=_paper_order_id,
+                            execution_audit={
+                                "source": "replay_strict_reference_unsupported_strategy",
+                                "historical_signal_bar_ts": candle.timestamp,
+                                "historical_entry_bar_ts": None,
+                                "historical_resolution_bar_ts": None,
+                            },
+                        )
+                        continue
                     # strategy/strat_212_122.py's causal resolver only ever
                     # hands an "OPEN" (non-pre_resolved) candidate back once
                     # the watched bar has already shown entry triggering at
@@ -774,19 +872,47 @@ class ReplayEngine:
                             max_slippage_ticks=float(
                                 (getattr(self.config, "entry_tolerance_ticks_by_root", {}) or {}).get(state.instrument, 0) or 0
                             ) or None,
-                            post_fill_validation_required=False,
+                            post_fill_validation_required=_strict_reference_model,
                         )
+                        _market_reference_price = candle.close
+                        if _strict_reference_model:
+                            _ref = _next_executable_market_reference(candles, idx)
+                            if _ref is None:
+                                journal.log_outcome(
+                                    instrument=state.instrument,
+                                    session=state.session,
+                                    result="CANCELLED",
+                                    entry_price=decision.setup.entry,
+                                    exit_price=None,
+                                    exit_reason="ENTRY_NOT_FILLED",
+                                    pnl_ticks=0.0,
+                                    pnl_dollars=0.0,
+                                    contracts=contracts,
+                                    for_date=journal_date,
+                                    strategy=decision.setup.strategy,
+                                    signal_timestamp=candle.timestamp,
+                                    paper_order_id=_paper_order_id,
+                                    execution_audit={
+                                        "source": "replay_strict_reference_no_next_bar",
+                                        "historical_signal_bar_ts": candle.timestamp,
+                                        "historical_entry_bar_ts": None,
+                                        "historical_resolution_bar_ts": None,
+                                    },
+                                )
+                                continue
+                            _market_reference_price, _market_reference_ts = _ref
                         entry_fill = broker.execute_bracket(
-                            order, market_price=candle.close, paper_order_id=_paper_order_id
+                            order, market_price=_market_reference_price, paper_order_id=_paper_order_id
                         )
-                    # Historical timestamps are evidence-only metadata. Market/IOC
-                    # and the causal 2-1-2/1-2-2 restore path are open on the
-                    # decision bar. A stop-market entry is not open until a later
+                    # Historical timestamps are evidence-only metadata. Legacy
+                    # market/IOC and causal 2-1-2/1-2-2 restores are open on the
+                    # decision bar; strict market_at_reference opens on the
+                    # verified NEXT bar. Stop-market entries open only after a later
                     # bar actually triggers it, so leave entry time unknown until
                     # that transition is observed below.
                     _historical_signal_ts = candle.timestamp
                     _historical_entry_ts = (
-                        candle.timestamp
+                        (_market_reference_ts or candle.timestamp)
                         if (
                             decision.setup.strategy in (STRAT_212, STRAT_122)
                             or (entry_fill is not None and entry_fill.result == "OPEN")
@@ -891,6 +1017,12 @@ class ReplayEngine:
                     if fill is None and broker.has_pending_entry():
                         fill = broker.cancel_pending_entry("ENTRY_NO_NEXT_BAR")
                     if fill is not None:
+                        _fill_gross = fill.pnl_dollars
+                        _fill_net = _strict_net_pnl(
+                            _fill_gross,
+                            strict_commission_rt,
+                            fill.contracts,
+                        )
                         journal.log_outcome(
                             instrument=fill.instrument,
                             session=state.session,
@@ -899,7 +1031,7 @@ class ReplayEngine:
                             exit_price=fill.exit_price,
                             exit_reason=fill.exit_reason,
                             pnl_ticks=fill.pnl_ticks,
-                            pnl_dollars=fill.pnl_dollars,
+                            pnl_dollars=_fill_net,
                             contracts=fill.contracts,
                             for_date=journal_date,
                             strategy=decision.setup.strategy,
@@ -910,6 +1042,18 @@ class ReplayEngine:
                                 "historical_signal_bar_ts": _historical_signal_ts,
                                 "historical_entry_bar_ts": _historical_entry_ts,
                                 "historical_resolution_bar_ts": _historical_resolution_ts,
+                                **(
+                                    {
+                                        "gross_pnl_dollars": _fill_gross,
+                                        "commission_round_trip": strict_commission_rt,
+                                        "commission_dollars": round(
+                                            strict_commission_rt * max(int(fill.contracts or 1), 1),
+                                            2,
+                                        ),
+                                    }
+                                    if strict_commission_rt
+                                    else {}
+                                ),
                             },
                         )
                         if fill.result == "CANCELLED":
@@ -920,7 +1064,7 @@ class ReplayEngine:
                                 daily_state.session_trade_counts.get(session_key, 0) + 1
                             )
                         daily_state.trade_count += 1
-                        daily_state.realized_pnl_dollars += float(fill.pnl_dollars or 0.0)
+                        daily_state.realized_pnl_dollars += float(_fill_net or 0.0)
                         if fill.result == "LOSS":
                             daily_state.consecutive_losses += 1
                             daily_state.last_loss_at = _parse_timestamp(fc.timestamp)
