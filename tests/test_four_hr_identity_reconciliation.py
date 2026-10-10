@@ -182,3 +182,14 @@ def test_wrong_five_min_trading_date_fails_closed():
     five["trading_date"] = "2026-06-01"
     result = reconcile_identity_only([_natural(five)], [five])
     assert result["touch_classifications"][0]["reason"] == "FIVE_MIN_TRADING_DATE_MISMATCH"
+
+
+def test_malformed_natural_and_five_rows_are_retained_not_crash():
+    five = _build()
+    good = _natural(five)
+    data = reconcile_identity_only([None, good, "invalid"], [None, five, 42])
+    assert data["counts"] == {"MATCHED_IDENTITY_ONLY": 1, "UNMATCHABLE": 2}
+    assert data["touch_classifications"][0]["reason"] == "MALFORMED_NATURAL_RECORD"
+    assert data["touch_classifications"][2]["reason"] == "MALFORMED_NATURAL_RECORD"
+    assert len(data["unused_five_candidates"]) == 2
+    assert all(x["reason"] == "MALFORMED_FIVE_MIN_RECORD" for x in data["unused_five_candidates"])
