@@ -1,5 +1,5 @@
 """MNQ June 29 sealed-holdout guard: synthetic metadata only, no bar fetch."""
-from datetime import date
+from datetime import date, datetime, timezone
 
 import pytest
 
@@ -88,3 +88,24 @@ def test_unknown_end_before_fetch_is_not_assumed_safe():
         validate_mnq_backtest_window(
             ticker="MNQ", start_session="2025-01-01", end_session=None
         )
+
+
+@pytest.mark.parametrize("invalid", [
+    "20260626", "2026-W26-5", "2026-06-26T00:00:00Z",
+    datetime(2026, 6, 26, tzinfo=timezone.utc),
+])
+def test_vendor_timestamp_is_not_a_valid_cme_session_label(invalid):
+    with pytest.raises(MNQSealViolation):
+        validate_mnq_backtest_rows(
+            [{"ticker": "MNQM6", "session_end_date": invalid}]
+        )
+
+
+def test_sunday_evening_bar_belongs_to_protected_monday_session():
+    row = {
+        "ticker": "MNQU6",
+        "window_start": "2026-06-28T18:00:00-04:00",
+        "session_end_date": "2026-06-29",
+    }
+    with pytest.raises(MNQSealViolation, match="CONTAMINATED_POST_SEAL"):
+        validate_mnq_backtest_rows([row])
