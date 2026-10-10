@@ -144,3 +144,43 @@ Freeze the rule exactly as in `scripts/options_4hr_etf_forward.py` (signal, ETF 
 - no single month > 50% of net.
 
 Run the tracker after each session (paper only). DEMO or real options only after a pass, and through the release gates.
+
+---
+
+## 8. H4 scanner idea: NBBO re-price and $300 skip (requested by Grok/QA, 2026-10-10) — **FAILS; drop it**
+
+Script: `scripts/options_h4_quote_reprice.py`. Evidence: `docs/research-evidence/options-h4-7dte-d1-quotes-2026-10-10/` (`trades.csv`, `trades.jsonl`, `summary.json`; uncapped comparison in `no-cap/`).
+
+- Source DB: `private/trading-evidence-2026-10-09/options_scanner.sqlite` (not committed), SHA-256 `edca35da4ee6b111b57e0f26f5a1a72a001f51b6bbf5ca4e79b9f7fefe0ff4a8`.
+- Population: all 5 H4 setup types (2-2-2 rev/cont, 2-1-2 cont, 3-2-2 rev/cont), WIN/LOSS rows, first sighting per unique setup = **77 setups**, 2026-09-16 → 2026-10-07. The earlier VWAP re-sim priced 68 of these.
+- Contract: ATM on the setup's own underlying, first expiry 5–11 days out.
+- Fills: entry at the **ASK** of the first NBBO quote ≤10 min after the journal timestamp; exit at the **BID** of the last NBBO quote at or before 15:59 ET on the next weekday.
+- Costs: $1.30 commission round trip; one contract.
+
+| Run | Traded | Days | Wins | Net | t (trade) | t (day-clustered) | H1 / H2 | Best day share of net | Median cost | Median entry spread |
+|---|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|
+| **$300 skip (as requested)** | **36** (41 skipped) | 13 | 16 | **+$952** | 0.84 | **0.71** | +$327 / +$626 | **125%** | $180 | 3.6% |
+| No cap (comparison only) | 77 | 19 | 35 | +$5,027 | 1.69 | 1.29 | +$4,587 / +$440 | 63% | $335 | 4.0% |
+
+By setup type, no cap:
+- 2-2-2 continuation: n=21, +$2,902
+- 2-2-2 reversal: n=33, +$2,618
+- 2-1-2 continuation: n=9, +$53
+- 3-2-2 continuation: n=7, −$743
+- 3-2-2 reversal: n=7, +$197
+
+With the $300 skip, 2-2-2 reversal flips to −$419 (n=13).
+
+**Read:**
+- Real bid/ask alone doesn't erase the uncapped result.
+- The **$300 skip removes 53% of the setups, and they carry most of the profit**: the expensive single names.
+- What remains is not distinguishable from zero: day-clustered t 0.71, and one day is more than all of the net.
+- Even uncapped, the sample spans only 19 days (v2 needs ≥30 days), the second half is thin, and one day is 63% of net.
+
+**Verdict under the stated rule ("if it doesn't hold up, drop it"): DROP.** No paper trial is proposed for this idea.
+
+## 9. Where options research stands after this session
+- **Current scanner lane:** broken by geometry (targets 0.1–0.3× stop) and long DTE. Same-day time exits don't fix it.
+- **4HR futures signals → QQQ/SPY ~7DTE:** in-sample lead (151 trades, t≈2). First out-of-sample look: 9 trades, −$384. Not supportive. Under the v2 standard (≥60 trades, ≥30 days, one look, hard end date), it can only be judged by a fresh frozen forward test. At the observed ~3.6 signals/month that's 1.5+ years.
+- **H4 scanner → ~7DTE, next-day exit:** dropped (§8).
+- **No options idea from this session is ready for DEMO.**

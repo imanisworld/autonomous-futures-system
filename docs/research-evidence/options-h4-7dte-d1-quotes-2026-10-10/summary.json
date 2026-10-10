@@ -1,0 +1,77 @@
+{
+ "max_premium": 300.0,
+ "population_h4_unique_setups": 77,
+ "status_counts": {
+  "SKIPPED_OVER_300": 41,
+  "OK": 36
+ },
+ "traded": 36,
+ "distinct_signal_days": 13,
+ "first_day": "2026-09-16",
+ "last_day": "2026-10-07",
+ "wins": 16,
+ "net": 952.2,
+ "mean": 26.45,
+ "t_trade": 0.84,
+ "t_day_clustered": 0.71,
+ "h1_net": 326.5,
+ "h2_net": 625.7,
+ "max_drawdown": 799.8,
+ "best_day_share_of_net": 1.252,
+ "median_entry_cost": 179.5,
+ "median_entry_spread_pct": 3.55,
+ "by_setup_type": {
+  "H4_212_CONTINUATION": {
+   "n": 4,
+   "net": 216.8,
+   "wins": 2
+  },
+  "H4_222_CONTINUATION": {
+   "n": 13,
+   "net": 1338.1,
+   "wins": 8
+  },
+  "H4_222_REVERSAL": {
+   "n": 13,
+   "net": -418.9,
+   "wins": 4
+  },
+  "H4_322_CONTINUATION": {
+   "n": 3,
+   "net": 24.1,
+   "wins": 1
+  },
+  "H4_322_REVERSAL": {
+   "n": 3,
+   "net": -207.9,
+   "wins": 1
+  }
+ },
+ "by_direction": {
+  "LONG": {
+   "n": 18,
+   "net": 668.6,
+   "wins": 7
+  },
+  "SHORT": {
+   "n": 18,
+   "net": 283.6,
+   "wins": 9
+  }
+ },
+ "by_day": {
+  "2026-09-16": 84.2,
+  "2026-09-17": -99.8,
+  "2026-09-18": 348.7,
+  "2026-09-22": 8.7,
+  "2026-09-24": -15.3,
+  "2026-09-25": -36.8,
+  "2026-09-28": 58.7,
+  "2026-09-29": -201.9,
+  "2026-09-30": 118.7,
+  "2026-10-01": -161.6,
+  "2026-10-02": -215.3,
+  "2026-10-06": -127.9,
+  "2026-10-07": 1191.8
+ }
+}
