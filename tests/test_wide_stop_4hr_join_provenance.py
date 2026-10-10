@@ -222,3 +222,73 @@ def test_five_min_direction_different_from_armed_direction_is_unmatchable():
     row = _build(candidate=candidate)
     assert row["arm_key"] is None
     assert row["reason"] == "CANDIDATE_DIFFERS_FROM_ARM"
+
+
+def test_real_5m_collector_hook_writes_future_identity_without_trading(
+    tmp_path, monkeypatch
+):
+    import context.wide_stop_forward_collector as collector
+    from tests.test_wide_stop_forward_collector import (
+        _cfg, _payload, DAY as COLLECT_DAY,
+    )
+    from context import wide_stop_ledger_paper as contract
+    from context.wide_stop_forward_collector import (
+        _empty_state, _save_state, MAX_FILLED_PER_DAY,
+    )
+    from types import SimpleNamespace
+
+    monkeypatch.setenv(join.ENABLED_ENV, "true")
+    cfg = _cfg()
+    ledger = contract.LEDGERS["wide_stop_4k"]
+    state = _empty_state()
+    state["filled_date"] = COLLECT_DAY.isoformat()
+    state["filled_count"] = MAX_FILLED_PER_DAY
+    _save_state(tmp_path, ledger, state)
+
+    stamp = "2026-09-08T10:10:00-04:00"
+    candidate = {
+        "direction": "LONG", "entry": 20000.0, "stop": 19950.0,
+        "target": 20070.0,
+        "entry_time": datetime.fromisoformat(stamp),
+        "state": {
+            "status": "TRIGGERED", "trading_date": COLLECT_DAY.isoformat(),
+            "direction": "LONG", "trigger": 20000.0, "target": 20070.0,
+            "setup_bar_ts": "2026-09-08T09:10:00-04:00",
+            "four_am_bar_ts": "2026-09-08T04:00:00-04:00",
+        },
+    }
+    decision = SimpleNamespace(
+        decision="TRADE", setup=object(), failed_gates=[], reason="ok",
+    )
+    def fake_evaluate(**kwargs):
+        if kwargs["strategy"] == collector.FOUR_HR:
+            return decision, object(), candidate, None
+        return None, None, None, None
+
+    monkeypatch.setattr(collector, "_evaluate_canonical_candidate", fake_evaluate)
+    monkeypatch.setattr(collector, "_resolve_one_position", lambda **_: None)
+    alert = _payload()
+    alert.contract_hint = "CME_MINI:MNQU2026"
+    events = collector.process_five_min_bar(
+        payload=alert, cfg=cfg, bars_5m=[], log_dir=tmp_path,
+        for_date=COLLECT_DAY,
+    )
+    assert len(events) == 1
+    assert events[0]["lane_result"] == "BLOCKED_MAX_TRADES"
+    sidecars = list((tmp_path / join.DIRECTORY / str(COLLECT_DAY)).glob("*.json"))
+    assert len(sidecars) == 1
+    row = json.loads(sidecars[0].read_text())
+    assert row["joinability"] == "IDENTITY_AVAILABLE"
+    assert row["source_contract"] == "MNQU2026"
+    assert row["candidate_decision_at"] == stamp
+    assert row["broker_authorized"] is False
+    assert row["arm_key"].endswith(
+        "|2026-09-08T09:10:00-04:00|2026-09-08T04:00:00-04:00"
+    )
+    # The collector still obeys its existing admission/risk gates.
+    assert not (tmp_path / "tradovate_demo_evidence").exists()
+    collector.process_five_min_bar(
+        payload=alert, cfg=cfg, bars_5m=[], log_dir=tmp_path,
+        for_date=COLLECT_DAY,
+    )
+    assert len(list((tmp_path / join.DIRECTORY / str(COLLECT_DAY)).glob("*.json"))) == 1
