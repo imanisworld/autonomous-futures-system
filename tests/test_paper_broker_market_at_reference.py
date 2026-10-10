@@ -51,7 +51,7 @@ def test_strict_market_refuses_missing_or_invalid_reference(missing: float | Non
 
 def test_strict_market_refuses_reference_past_target() -> None:
     broker = ResearchReferencePaperBroker(entry_fill_model="market_at_reference")
-    fill = broker.execute_bracket(_order(), market_price=111.0)
+    fill = broker.execute_bracket(_order(), market_price=131.0)
     assert fill.result == "CANCELLED"
     assert fill.exit_reason == "ENTRY_BRACKET_INVALID_AT_FILL"
     assert broker.get_position() is None
