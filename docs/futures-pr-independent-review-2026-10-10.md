@@ -2,6 +2,10 @@
 
 **Reviewer role:** Cursor (breaker-style, read-only). **Not** operator merge/deploy authorization.
 
+**Historical review record — not a current merge checklist.** This report captures the specific PR heads listed below. **#1208–#1213 have since merged into `main`.** Do not interpret the “pending merge” wording below as current, and do not use this file as a review of **#1215** or of Track B `1c97764`. **Do not deploy `2f4f776`.**
+
+
+
 **Exact heads reviewed:**
 
 | PR | Branch | HEAD | GitHub CI (2026-10-10 session) |
@@ -66,11 +70,13 @@ Full Ubuntu CI suite on 1211 not re-run locally (non-Ubuntu env).
 
 ---
 
-## Research branch — deploy candidate (not a PR merge verdict)
+## Research branch — deploy candidate (historical; superseded)
+
+**Superseded 2026-10-10:** do **not** deploy `2f4f776`. It is behind `main` and lacks #1208/#1209. The review target is `research/4hr-mnq-400-forward-rebase-20261010` @ **`1c97764`**, and only after Grok reviews that exact SHA plus an explicit GO. The verdict below is the earlier session record.
 
 **Branch:** `research/4hr-mnq-400-forward-20261009` @ **`2f4f776`** (pushed).
 
-**VERDICT: APPROVED AS DEPLOY CANDIDATE SHA** for **Track B only** (`docs/futures-track-b-forward-readiness-2026-10-10.md`), subject to:
+**VERDICT (historical, withdrawn as a deploy approval):** previously marked deploy-candidate for Track B only (`docs/futures-track-b-forward-readiness-2026-10-10.md`), subject to:
 
 1. Operator **explicit GO** (not issued in this session).
 2. Controlled release of **this exact SHA** (or a merge commit that byte-preserves ledger + prereg intent).
@@ -102,7 +108,7 @@ Full Ubuntu CI suite on 1211 not re-run locally (non-Ubuntu env).
 1. **#1208** → **#1209** (order either way; both correctness)
 2. **#1210** (after both, or rebase)
 3. **#1211** (after tests green; independent of 1208–1210 but safe to merge in parallel once green)
-4. **Deploy** `research/4hr-mnq-400-forward-20261009` SHA via controlled release — **separate** from doc-only #1211 unless merged
+4. **Do not deploy `2f4f776`.** Review `research/4hr-mnq-400-forward-rebase-20261010` @ `1c97764` first. The old instruction to deploy the 20261009 branch is withdrawn.
 
 ---
 

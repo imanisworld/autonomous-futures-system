@@ -4,13 +4,25 @@
 
 **Handling:** This public-repo checkpoint intentionally contains no per-strategy P&L, trade levels, or individual strategy-return tables. The operator's **private numeric handoff** is saved in the ChatGPT Library at `/Futures Research/Futures Research Handoff - 2026-10-10.md`. Do not reproduce that private report in this public repo.
 
+## Current PR and evidence reconciliation — 2026-10-10 (supersedes historical table below)
+
+**VERIFIED on GitHub:** #1208 (executable research-reference fills), #1209 (actual R:R and stop geometry), #1210 (combined integration/1m route isolation), and #1211 (strict research-only timeframe helper) have **MERGED into main**. Their historical PR head CI numbers below are preserved for provenance; do **not** interpret the old “open draft” column or pre-merge review instruction as current. The isolated timeframe helper is **not automatically wired into the sealed MGC scorer**. A source merge is not a VPS release.
+
+**MERGED, NOT A 1m ARM:** #1212 optional prospective 5m full-arm provenance sidecar (default **OFF**, merged from `9df1a09`) and #1213 offline 1m/5m identity reconciliation (merged from `730ef53`). The **8,777 passed / 8 skipped** count belongs to earlier head `2e5c2fa`. A synthetic match is **not** live fill or performance parity. Open follow-up: **#1215** mutant tests @ `368b024` (CI green this session, not merged).
+
+**ACTIVE RESEARCH TRACKS:** MNQ broad 4HR pre-armed remains the best existing historical lead, not a proven DEMO model. Track A observes 1m natural touches without orders. Track B's deploy candidate is `research/4hr-mnq-400-forward-rebase-20261010` @ **`1c97764`**, which includes `main` @ `572cd13`. **Do not deploy** `research/4hr-mnq-400-forward-20261009` @ **`2f4f776`**. No forward collection, VPS state, or profitability is asserted here.
+
+**NEXT:** merge #1214 and #1215; Grok reviews exact Track B SHA `1c97764` (or its successor after #1215); explicit operator GO before deploy. Natural 1m observer's 10 eligible arms/20 trading days/2 months calendar gate and profitability/DEMO GO remain. See `docs/agent-work-state.md` START HERE. **Do not re-run closed historical sweeps, backfill a fictional arm key, enable flags, deploy `2f4f776`, or place orders.**
+
+---
+
 ## End goal and current verdict
 
 The goal is a consistently positive-expectancy futures strategy under causal signals, executable prices, transaction costs, adverse slippage, valid market calendars, risk limits, and independent-period testing, followed by an **explicitly authorized DEMO-only** trial. An engineering regression suite passing is **not** a profitable system.
 
 **Current strategy verdict: NOT PROVEN / NOT DEMO-READY.** Recent exploratory intraday momentum, reversal, divergence, gap, breakout, and fixed-time hypotheses did not survive extra periods, concentration checks, or proper higher-timeframe anchoring. Do not tune repeatedly on the same rejected data to produce a green backtest.
 
-## Source-only corrective work (open draft PRs, verified 2026-10-10)
+## Historical source-correction PR snapshots (all #1208–#1211 now merged)
 
 | PR | Scope | Exact-head CI at checkpoint | Remaining |
 |---|---|---|---|
@@ -19,7 +31,7 @@ The goal is a consistently positive-expectancy futures strategy under causal sig
 | [#1210](https://github.com/imanisworld/autonomous-futures-system/pull/1210) | Combined regression of fill and risk correctness | 8,688 passed, 8 skipped | Independent review; QA-only |
 | [#1211](https://github.com/imanisworld/autonomous-futures-system/pull/1211) | Isolated complete-bar, gap, DST and dated-contract provenance validation across 5m/15m/30m/60m/4H/12H | 8,677 passed, 8 skipped | Independent review; not wired to frozen trials |
 
-These CI numbers refer to the **tested heads before this documentation-only checkpoint**. Recheck exact head after changes. Do not assume Grok/Cursor independent testing is complete merely because the operator said they were running it.
+Historical table only: these CI numbers refer to the **tested heads before the later merges and reviews**. Recheck exact head after changes. Do not assume Grok/Cursor independent testing is complete merely because the operator said they were running it.
 
 ## Root causes now evidenced
 

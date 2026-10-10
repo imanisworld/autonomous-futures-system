@@ -13,7 +13,23 @@
 - [ ] Claude options handoff merged/archived on GitHub (`claude/options-time-exit-research-20261010` @ `a30f0a6` or successor)
 - [ ] Any open PR you still care about is **merged, closed, or copied** to `main`/checkpoint docs
 
-**Snapshot:** Mac checkout @ `8c57d84` (#1211); ~105 remote branch refs; ~**1.3 GB** `private/`; ~**2.3 GB** ignored `data/replay*`.
+**Mac census verified 2026-10-10 (this checkout):** `private/` **1.3 GB**; ignored replay/cross-market corpora still about **2.3 GB** (largest: `data/cross_market_2026_09_23` 573 MB, `data/replay_corpus_v1_5m` 455 MB, `data/replay_corpus_v1_5m_4hr_audit` 454 MB, `data/replay_polygon_5m` 375 MB, `private/trading-evidence-2026-10-09` 849 MB, `private/cross_market_grid_2026_09_23` 271 MB). **No evidence directory was deleted.** Local branches removed with `git branch -d` after `origin/main` contained them and no worktree was attached: `fix/strict-paper-reference-fills-20261009` (`94df6c7`), `fix/rr-verify-actual-bracket-20261009` (`102a550`), `fix/timeframe-causal-buckets-research-20261010` (`e9c9a0e`), `test/combined-execution-risk-20261010` (`7d766b2`), `docs/212c-1134-prep-checkpoint` (`9a754ed`), `docs/post-c44d32b-epoch-docs-20261004` (`8cdc078`). #1212/#1213 local branches, Track B branches, release refs, and worktrees were kept.
+
+---
+
+## Removal decisions as of 2026-10-10 (GitHub verified; local state unverified)
+
+| Class | Candidate | Current disposition |
+|---|---|---|
+| **Removed locally this session** | Merged **#1208–#1211** locals plus two merged docs checkpoints listed above | **DONE** — SHAs recorded; recreate with `git branch <name> <sha>` if needed |
+| **Low risk after handoff comparison** | Duplicate scratch/review text: `private/prune-review/`, `private/research-notes-2026-10-10/`, obsolete notes that are actually copied into current tracked docs | **Review**, do not delete an unseen directory by name |
+| **Potential high disk recovery, evidence risk** | `private/trading-evidence-2026-10-09/` (~849 MB historical), `private/cross_market_grid_2026_09_23/`, `private/mes598-proof/` and ignored `data/replay*` | **HOLD** until corpus independence, checksums, backups, and users verified; old size estimates only |
+| **Keep** | Open PR #1212/#1213 source heads, Track B research branch, live/rollback `release/*`, `private/webull-proof/`, authoritative research evidence, strategy inventory, trial ledger, sealed forward artifacts | **DO NOT DELETE** under this cleanup pass |
+| **Superseded procedural text** | Old copy-paste force-delete/`rm -rf` block in this tracker | **Removed from documentation**; no filesystem content was deleted |
+
+**Additional PR consolidation candidate (GitHub-diff verified):** [#1201](https://github.com/imanisworld/autonomous-futures-system/pull/1201) is a docs-only PR editing **only** `docs/futures-operator-todo.md`. Its five net-edge evidence gates have been preserved in the refreshed CURRENT TODO here. **CANDIDATE TO CLOSE UNMERGED** only after an independent reviewer confirms the content is fully superseded; don't close it automatically. #1203/#1204 are separate historical deployment-status documentation PRs and may overlap existing checkpoint/plan docs, but their unique source facts and owners were **not** fully reconciled, so **KEEP/REVIEW**, not delete. #1205/#1206/#1207 change code/scripts/tests and are **not** documentation-only cleanup targets.
+
+**No actual local files, branches, worktrees, evidence corpora or remote refs were deleted here.** This is a deferred classification, not a verified current disk inventory.
 
 ---
 
@@ -60,12 +76,13 @@ Not in git; tests may expect paths under `data/replay*`, `data/htf/`, etc. (see 
 
 | Path | Branch / HEAD | ~Size | Deferred action | Block until |
 |---|---|---:|---|---|
-| `private/wt-options-exits` | `claude/options-time-exit-research-20261010` | 30 MB | **`git worktree remove`** | Handoff on **origin**; local worktree optional |
+| `private/wt-options-docs` | `claude/options-time-exit-research-20261010` @ `9973f7e` | 37 MB | **KEEP** | Remote deleted; local worktree is the remaining copy. Clean except no extra untracked docs found |
 | `private/wt-capped` | `claude/capped-session-reporting` | 36 MB | **`worktree remove`** | #1207 merged/closed/abandoned |
 | `../afs-wt-1067` | `cursor/options-scanner-universe-expand-5735` | 34 MB | **`worktree remove`** | #1067 closed or explicitly parked forever |
 | `../afs-wt-1069` | `cursor/spx-spxw-paper-lane-5735` | 33 MB | **`worktree remove`** | #1069 closed or parked |
 | `../afs-cursor-cloud-maintenance` | `ops/cursor-cloud-vps-maintenance` | 37 MB | **`worktree remove`** | #1206 closed |
-| `../afs-options-1111` | detached `d238ea4` | 33 MB | **`worktree remove`** | Identify purpose; likely stale |
+| `../afs-options-1111` | detached `d238ea4` | 33 MB | **DIRTY — DO NOT REMOVE** | Untracked `docs/research-evidence/T-2026-09-25-prereg-options-212c-target-geometry-2026-09-25-01/` |
+| primary checkout | `research/equity-index-daily-tsmom-forward-20261010` | — | **ACTIVE WIP — DO NOT DELETE** | Dirty `docs/agent-work-state.md`, `docs/research-trial-ledger.jsonl`, untracked prereg doc |
 
 **Estimated recoverable:** ~**200 MB** (mostly duplicate `.git` object access — main repo keeps objects).
 
@@ -75,18 +92,18 @@ Not in git; tests may expect paths under `data/replay*`, `data/htf/`, etc. (see 
 
 | Branch | PR / state (2026-10-10) | Deferred action | Block until |
 |---|---|---|---|
-| `fix/timeframe-causal-buckets-research-20261010` | #1211 OPEN | **KEEP** → delete local after merge to `main` | PR merged |
+| `fix/timeframe-causal-buckets-research-20261010` | **#1211 MERGED** | **DELETED LOCAL** `e9c9a0e` | Recoverable from that SHA |
 | `research/4hr-mnq-400-forward-20261009` | no PR; on origin | **KEEP** → delete after deploy or abandon recorded | Track B GO + deploy or explicit cancel |
-| `fix/strict-paper-reference-fills-20261009` | #1208 OPEN | remote only after merge | #1208 merged |
-| `fix/rr-verify-actual-bracket-20261009` | #1209 OPEN | remote only after merge | #1209 merged |
-| `test/combined-execution-risk-20261010` | #1210 OPEN | remote only after merge | #1210 merged |
-| `claude/options-time-exit-research-20261010` | pushed; no PR | **KEEP** until options lane archived | Handoff merged or waived |
+| `fix/strict-paper-reference-fills-20261009` | **#1208 MERGED** | **DELETED LOCAL** `94df6c7` | On `main` |
+| `fix/rr-verify-actual-bracket-20261009` | **#1209 MERGED** | **DELETED LOCAL** `102a550` | On `main` |
+| `test/combined-execution-risk-20261010` | **#1210 MERGED** | **DELETED LOCAL** `7d766b2` | On `main` |
+| `claude/options-time-exit-research-20261010` | pushed, separate options research | **KEEP** until options lane archived | Handoff independently reconciled |
 | `claude/capped-session-reporting` | #1207 OPEN | delete after close | #1207 |
 | `ops/cursor-cloud-vps-maintenance` | #1206 OPEN | delete after close | #1206 |
 | `cursor/options-scanner-universe-expand-5735` | #1067 OPEN (parked) | delete local + worktree when PR closed | Operator |
 | `cursor/spx-spxw-paper-lane-5735` | #1069 OPEN (parked) | same | Operator |
-| `docs/212c-1134-prep-checkpoint` | #1138 **MERGED** | **`git branch -d`** | Verify merge on `main` |
-| `docs/post-c44d32b-epoch-docs-20261004` | #1132 **MERGED** | **`git branch -d`** | Verify merge on `main` |
+| `docs/212c-1134-prep-checkpoint` | #1138 **MERGED** | **DELETED LOCAL** `9a754ed` | On `main` |
+| `docs/post-c44d32b-epoch-docs-20261004` | #1132 **MERGED** | **DELETED LOCAL** `8cdc078` | On `main` |
 | `research/options-212c-forward-prep-20261004` | #1134 **MERGED** | **`git branch -d`** | Verify merge on `main` |
 | `research/options-212c-merged-checkpoint-20261002` | #1119 **CLOSED** | **DELETE local** after confirm superseded | Options handoff authority |
 | `audit/public-readiness-20260925` | #1037 OPEN | keep until close | — |
@@ -106,7 +123,7 @@ Not in git; tests may expect paths under `data/replay*`, `data/htf/`, etc. (see 
 |---|---:|---|
 | `release/*` | 33+ | **KEEP** until operator + VPS SHA map says otherwise; tag then delete |
 | `archive/*` on remote | few | **KEEP** (already archived) |
-| Open PR heads (#994–#1211, etc.) | ~21 open | Delete remote branch **only when PR merged/closed** (GitHub often auto-deletes) |
+| Open PR heads (including #1212/#1213, etc.) | count **stale/unverified** | Delete remote branch **only when PR merged/closed** (GitHub often auto-deletes) |
 | Old closed research (`research/mnq-orb-*`, etc.) | many | **Phase 2 cleanup:** list vs merged/superseded; tag then delete |
 | `research/4hr-mnq-400-forward-20261009` | 1 | **KEEP** through Track B deploy decision |
 
@@ -122,36 +139,20 @@ These look like “old research” but are **authoritative or DO NOT REDO**:
 |---|---|
 | 4HR benchmark + forward prereg | `research/4hr-mnq-400-forward-20261009` branch |
 | ORB/VWAP sweep results | `docs/research-evidence/orb-vwap-tf-window-sweep-2026-10-10/` (on research branch) |
-| Futures checkpoints (2026-10-10) | #1211 branch docs |
+| Futures checkpoints (2026-10-10) | **on `main` via merged #1211**; current revision may be on docs-only coordination PR |
 | Claude options handoff | `claude/options-time-exit-research-20261010` |
 | Strategy inventory / trial ledger | `docs/strategy-rules/Strategy_Inventory.md`, `docs/research-trial-ledger.jsonl` |
 
 ---
 
-## 7. End-of-campaign removal script (draft — run manually)
+## 7. End-of-campaign clean-up procedure (review only — no executable deletion script)
 
-**Only after Section gates are checked.**
+The older draft contained copy/paste `git worktree remove --force` and `rm -rf private/...` commands. **Removed those dangerous batch commands from this tracker**: the Mac worktree state and private evidence backups have not been checked in this session, so the commands are not safe to publish as “ready to run.”
 
-```bash
-# Example — adjust paths; review each line before running.
-
-# Worktrees
-git worktree remove private/wt-options-exits --force
-git worktree remove private/wt-capped --force
-git worktree remove ../afs-wt-1067 --force
-git worktree remove ../afs-wt-1069 --force
-git worktree remove ../afs-cursor-cloud-maintenance --force
-git worktree remove ../afs-options-1111 --force
-
-# Merged local branches
-git branch -d docs/212c-1134-prep-checkpoint docs/post-c44d32b-epoch-docs-20261004 research/options-212c-forward-prep-20261004
-
-# Private disk (irreversible)
-rm -rf private/trading-evidence-2026-10-09 private/cross_market_grid_2026_09_23 private/mes598-proof
-
-# Optional replay corpora
-# rm -rf data/cross_market_2026_09_23 data/replay_polygon_5m ...
-```
+1. From the operator's authorized **Mac**, inventory `git worktree list --porcelain`, `git status --short` in each worktree, `git branch -vv`, `git branch -r`, and actual per-path file counts and sizes. Check that no process, CI or active review is using a path. The current session had **GitHub-only evidence**, not local filesystem or live VPS access.
+2. For each proposed ref/worktree deletion, record the exact SHA and recoverable `origin` branch or **verified** `archive/*` tag, then prove the ref has no unique changes. Favor clean worktree removal over forced removal. Keep `research/4hr-mnq-400-forward-20261009`, #1212/#1213 heads and all release references until the operator confirms disposition.
+3. For `private/*` or ignored replay corpora, first prove ownership, a valid verified backup (if required), all downstream references, the ability to regenerate, and no open experiment that needs the original. Deleting a local copy of Git-ignored evidence does **not** imply that GitHub backs it up.
+4. Present an exact **per-path list with bytes, use/last access, SHA if Git, backup reference, deletion reason and rollback plan** to the operator. Delete only items separately approved after all gates at the top are met. No automatic bulk deletes or pruning from this document.
 
 ---
 

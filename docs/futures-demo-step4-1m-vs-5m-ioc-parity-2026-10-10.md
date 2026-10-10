@@ -2,6 +2,10 @@
 
 **Role:** source-only QA / feasibility (Cursor builder lane). **No merge, deploy, broker orders, wiring changes, or strategy-status edits.**
 
+**Current addendum (Oct 10; earlier feasibility analysis below preserved):** #1208–#1213 are **MERGED source-only**; no VPS or demo authority follows. #1212/#1213 record 5m setup identity and match it offline to 1m bars. They do **not** implement 1m fills or costs. Track B review target is `research/4hr-mnq-400-forward-rebase-20261010` @ `1c97764`. **Do not deploy `2f4f776`.** Historical status references below are source snapshots, not live status.
+
+
+
 **Operator decisions already fixed (do not re-run steps 2–3):**
 
 - **Primary lead:** MNQ **4HR Re-Trigger** (broad **pre-armed touch** historical story).

@@ -1,27 +1,28 @@
 # Agent Work State
 
-## START HERE — session closed (2026-10-10, context cleared)
+## START HERE — current source checkpoint (2026-10-10)
 
-Read **only** this block + `AGENTS.md` + `docs/futures-research-resume-checkpoint-2026-10-10.md` unless drift is detected. Private numeric handoff: ChatGPT Library `/Futures Research/Futures Research Handoff - 2026-10-10.md`.
+Read `AGENTS.md`, **this START HERE block**, the applicable authoritative strategy/trial record, and the specific current PR before working. The older material below is a **historical coordination archive**, not the latest PR/deployment status. Private numerical research stays in ChatGPT Library `/Futures Research/Futures Research Handoff - 2026-10-10.md`; do not mirror it to public GitHub.
 
-| Item | Value |
+| Scope | Verified source checkpoint / action |
 |---|---|
-| **GitHub `main`** | **`6d3078f`** — research stack **#1208–#1213** merged (latest: **#1213**) |
-| **Open futures research PRs (this lane)** | **#1206**, **#1207** (reports/docs); no open #1210–#1213 |
-| **Demo wiring branch (not merged)** | `research/4hr-mnq-400-forward-20261009` @ **`2f4f776`** — 4HR 400-tick forward, 3-2-2 shadow |
-| **Public resume** | `docs/futures-research-resume-checkpoint-2026-10-10.md` (+ Cursor + Claude options appendices) |
-| **Options ETF handoff** | Branch **`claude/options-time-exit-research-20261010`** **deleted** from GitHub (2026-10-10 cleanup); copy in **`/workspace/afs-shared/`** if needed — **unverified here** |
-| **Saved 4HR benchmark** | `docs/research-evidence/T-2026-10-09-prereg-4hr-mnq-400-forward-2026-10-09-01/` (on **research** branch) |
-| **Saved ORB/VWAP sweeps** | `docs/research-evidence/orb-vwap-tf-window-sweep-2026-10-10/` (on **research** branch) |
-| **Forward 4HR start** | **2026-10-12** — Track B; not collected, not deployed |
-| **Step 4 parity doc** | `docs/futures-demo-step4-1m-vs-5m-ioc-parity-2026-10-10.md` |
-| **Track B readiness** | `docs/futures-track-b-forward-readiness-2026-10-10.md` |
-| **Deferred cleanup list** | `docs/repo-hygiene-deferred-removal-tracker-2026-10-10.md` (classify only; delete at end) |
-| **Verdict** | **NOT DEMO-READY** — Track B forward after reviewed deploy of **research** SHA; Track A 1m observer parallel |
+| **GitHub `main`** | **`572cd13`** — **#1208–#1213** merged. A merge is **not** a deployment. |
+| **Mutant tests still open** | [#1215](https://github.com/imanisworld/autonomous-futures-system/pull/1215) @ **`368b024`** (AFS-0234/0235). CI green on that head in this session. Not merged. |
+| **5m provenance + offline matcher** | **#1212** merged (`9df1a09` → `05363a4`); **#1213** merged (`730ef53` → `6d3078f`). `WIDE_STOP_4HR_JOIN_PROVENANCE_V2_ENABLED` stays **OFF**. Identity match is not 1m fills, costs, or net edge. |
+| **Primary 4HR execution gap** | Natural 1m observer is **non-executable**; guarded DEMO/paper wide-stop uses completed-5m close **IOC8**. No 1m arm execution is implemented. |
+| **Track B deploy candidate** | `research/4hr-mnq-400-forward-rebase-20261010` @ **`1c97764`** (contains `main` @ `572cd13`). **Grok review of that exact SHA before any deploy.** |
+| **DO NOT deploy** | `research/4hr-mnq-400-forward-20261009` @ **`2f4f776`** — behind `main`; lacks **#1208/#1209**. |
+| **Other open tasks** | **#1206**, **#1207**, **#1214** (this docs refresh), **#1215**. #1201 remains a close-after-review candidate; five gates are copied into `docs/futures-operator-todo.md`. |
+| **Strategy and experiment authority** | `docs/strategy-rules/Strategy_Inventory.md` (verdict), `docs/research-trial-ledger.jsonl` (attempts), prereg contracts, **VPS/broker read-only evidence** (runtime). |
+| **Cleanup** | Mac census verified 2026-10-10 in `docs/repo-hygiene-deferred-removal-tracker-2026-10-10.md`. Local merged #1208–#1211 branches deleted. No evidence directories deleted. |
+| **Public resume / parity** | `docs/futures-research-resume-checkpoint-2026-10-10.md`; Step 4 `docs/futures-demo-step4-1m-vs-5m-ioc-parity-2026-10-10.md`; Track B `docs/futures-track-b-forward-readiness-2026-10-10.md`. |
+| **Options ETF handoff** | Remote `claude/options-time-exit-research-20261010` deleted on GitHub; local worktree `private/wt-options-docs` @ `9973f7e` still present. |
+| **Forward 4HR start** | **2026-10-12** — not collected, not deployed. |
+| **Overall verdict** | **NOT DEMO-READY / profitability unproven**. No build, restart, deploy, broker order, live-enable, collector-flag change, or epoch reset was done by this docs task. |
 
-**DO NOT REDO:** gzip 4HR cell reproduction; ORB/VWAP TF×window sweeps (baseline + trending + orb48); Grok PASS work on merged **#1208**/**#1209**; Sep decompositions listed below.
+**DONE — do not redo:** Sep 7 signal/fill/risk decompositions; 4HR historical pre-armed A/B + 2→2 study; corrected 3-2-2 EOD replay; ORB/VWAP timeframe sweeps; earlier 5m/15m provider parity; reviewed #1208–#1211 source CI. Avoid repeating historical optimization to chase green backtests. Note: existing natural 1m observer epoch was documented as starting **Oct 4**; its current sample counts require fresh evidence.
 
-**NEXT:** **Explicit GO** before deploy **research** SHA (`2f4f776` or successor on `research/4hr-mnq-400-forward-20261009`); fresh VPS read-only pins + deployment-safety at promote time. Optional: refresh `docs/futures-pr-independent-review-2026-10-10.md` for post-#1213 `main`. **NOT done:** deploy, forward collection, DEMO-ready claim.
+**NEXT:** Merge **#1214** after CI on this head; merge **#1215**; Grok reviews Track B **`1c97764`** (re-merge `main` into that branch if #1215 lands first). **Explicit GO** before any deploy. Never deploy **`2f4f776`**. 1m fills/costs are not implemented. Observer minimum and profitability gates remain unmet. **NOT done:** deploy, forward collection, DEMO-ready claim.
 
 Prior chat context for this session is **closed**. Section below is coordination archive unless stale.
 

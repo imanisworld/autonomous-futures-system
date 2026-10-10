@@ -1,5 +1,35 @@
 # Futures Operator TODO
 
+## CURRENT — 2026-10-10 (supersedes older queue below; NOT trading authority)
+
+**Objective:** Establish genuinely executable positive expectancy, not merely green CI. Historical #1208–#1211 engineering corrections are now **merged source-only**; do not restart their old reviews/tests unless relevant code changed. The older Oct 8 operational sections remain historical context, with their release/box safety requirements **still open**.
+
+**Five evidence gates (preserved from open docs-only PR #1201; PR disposition remains separate):**
+
+| Gate | Current result | What still counts as proof |
+|---|---|---|
+| **Net expectancy** | **NOT PROVEN** | Eligible actual fills net of commission/slippage and rejected/no-fill opportunities, under a frozen strategy specification |
+| **Repeatability** | **INCOMPLETE** | Adequate forward/independent sample, chronology, bounded concentration, acceptable drawdown, stated stop criteria |
+| **Executable entry** | **SOURCE-CHECKED, UNPROVEN ON BOX** | Causal bar/trigger availability, realistically timed limit/IOC entries, gap and ambiguous same-bar assumptions, genuine fill evidence |
+| **Risk admissibility** | **SOURCE GUARDS PRESENT; RUNTIME UNVERIFIED** | Actual position/stop/daily-loss/cap/kill-switch constraints, not relaxations chosen to make a backtest green |
+| **Replay/DEMO parity** | **NOT ESTABLISHED** | Exact signal, timestamp, source contract, bracket, fill policy and journal reconciliation on the same frozen candidate SHA |
+
+**Do not treat a positive synthetic, historical, or observer-only result as passing these gates.** Any rejected or aborted experiment keeps its original evidence ID; do not reopen it just to retune.
+
+- [x] **Evidence triage:** Keep MNQ broad 4HR pre-armed historical lead and 60M 3-2-2 comparator; keep ORB/VWAP and other rejected cells closed (see Strategy Inventory and trial ledger). No freshly validated profitable strategy.
+- [x] **Engineering source work:** #1208, #1209, #1210, #1211 merged. **No automatic deployment or strategy enablement.**
+- [x] **#1212 / #1213 source merge:** provenance sidecar and offline identity matcher are on `main`. They do not implement 1m fills or costs. Flag `WIDE_STOP_4HR_JOIN_PROVENANCE_V2_ENABLED` stays **OFF**.
+- [ ] **#1215 mutant tests:** merge after this docs PR if CI stays green (`368b024` was green).
+- [ ] **Separate collection decision:** Decide whether to authorize prospective 5m provenance recording with a new identifiable cohort. **Do not set `WIDE_STOP_4HR_JOIN_PROVENANCE_V2_ENABLED` without explicit approval; do not backfill archival 5m rows.**
+- [ ] **Observer proof:** Natural 1m minimum (10 distinct eligible touches, 20 trading days, 2 calendar months), zero contract/date/dedupe/causal violations; no synthetic QA counts. Check current box/epoch via authorized read-only access; the Oct 4 start is documented, not a current sample count.
+- [ ] **Track B vs Track A:** Review `research/4hr-mnq-400-forward-rebase-20261010` @ **`1c97764`**. **Do not deploy** `2f4f776`. No release was performed by this docs update.
+- [ ] **DEMO/box readiness:** Independent release audit: broker account, flatness/orders, live-off/demo/cap-one, effective watcher/deploy lock, Python pins, journal identity, rollback, exact SHA/CI, and permissions. **Explicit GO separately** before any build/restart/deployment/order action.
+- [ ] **Cleanup:** Review the classified candidates in `docs/repo-hygiene-deferred-removal-tracker-2026-10-10.md`; preserve archival hashes and confirm local usage/backup/restore before any deletion. Local Mac filesystem and VPS storage were **not inspected** in this docs update.
+
+**Sources of truth:** Strategy verdict = `docs/strategy-rules/Strategy_Inventory.md`; experiment history = `docs/research-trial-ledger.jsonl`; runtime = independently verified box/broker. Concise agent handoff = `docs/agent-work-state.md` START HERE. Private P&L research remains in ChatGPT Library, not public GitHub.
+
+---
+
 ## Operator checklist — 2026-10-08 (completion requires operator verification)
 
 **Priority:** Resolve Grok's actual blockers first. Do not deploy merely to finish this checklist.
