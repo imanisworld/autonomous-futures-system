@@ -62,8 +62,8 @@ Signal source: `scripts/edge_decomposition_audit_results_candidates.jsonl.gz` (l
 | 4 | **MES→SPY ATM ~7DTE** | 73 | +$2.0k…+$2.3k | 1.21–1.39 | +$0.9–1.0k / +$1.1–1.2k | 2024 −$0.5k, 2025 +$0.8–1.0k, **2026 +$1.75–1.8k** | ~$0.9k | $456 | lead |
 | 5 | 3-2-2 MNQ→QQQ ATM ~7DTE | 30 | +$1.4k…+$1.5k | 0.8–0.9 | **−$0.03…−$0.09k** / +$1.5k | — | ~$0.7k | $520 | weak (H1 negative) |
 | 6 | **COMBINED #2 + #4 (QQQ+SPY)** | 151 | **+$5.3k…+$5.9k** | **1.97–2.20** | +$3.1–3.4k / +$2.3–2.6k | 2024 −$0.2…−$0.4k, 2025 +$4.4–4.7k, 2026 +$1.3–1.5k | ~$1.8–1.9k | ~$490 | **best lead** |
-| 7 | MNQ→QQQ 1% OTM ~7DTE | — | — | — | — | — | — | — | running (§6) |
-| 8 | MES→SPY 1% OTM ~7DTE | — | — | — | — | — | — | — | running (§6) |
+| 7 | MNQ→QQQ 1% OTM ~7DTE | 75 | +$2.5k…+$2.8k | 1.46–1.63 | +$1.8–2.0k / +$0.7–0.8k | 2024 +$0.3k, 2025 +$2.6–2.7k, 2026 −$0.3k | ~$1.4k | $337 | same shape as ATM, cheaper |
+| 8 | MES→SPY 1% OTM ~7DTE | 73 | +$0.5k…+$0.8k | 0.55–0.86 | + / + | 2024 −$0.3…−$0.4k, 2025 +$0.2–0.3k, 2026 +$0.8k | ~$0.5k | $208 | weaker than ATM |
 
 Ranges are across spread haircuts of $0.01→$0.03 per side (and $0.05 for #1). Combined top-3-month share is 87–95%, and 13 of 24 months are positive.
 
@@ -115,7 +115,7 @@ Polygon notes: `/v3/reference/options/contracts` with `as_of` + `expired` return
   | 09-30 | MNQ | LONG | QQQ 261006 C742 | −10.30 |
 
   Read: n=9 cannot confirm or reject. The in-sample mean of about +$35/trade implies about +$315 expected here, against a standard error of about ±$700, so the miss is within noise. **It does not support the lead.** MES→SPY is +$416 and MNQ→QQQ is −$801, the same split as in-sample 2026 (SPY carried, QQQ lagged). The signal rate was about 3.6/month combined, lower than the historical ~6–7/month. Sep 15 and Sep 30 MNQ match the box wide-stop collector's live 4HR candidates (same dates and directions), an independent sanity check that the tracker sees what the box sees.
-- 1% OTM ~7DTE QQQ/SPY: _pending_.
+- **1% OTM ~7DTE (done, rows 7–8 in §3b).** Combined QQQ+SPY: about +$3.0k–3.6k on 148 trades at about $270 per trade, versus ATM's +$5.3k–5.9k at about $490. Return per dollar risked is similar (about 11–12×). The cheaper strike keeps the shape (2025-heavy for QQQ, 2026-positive for SPY) and roughly fits the $300 paper cap. No new information on edge; it's a sizing option.
 - **Scanner 413-setup time-exit re-sim (done).** Window: only **2026-09-09 → 2026-10-07**, the span where WIN/LOSS rows carry a selected contract. Entry = option minute VWAP at first sighting (≤10 min lag). Exits = 15:59 ET same day (eod), next session close (d1), second session close (d2). Costs: own contract uses half its recorded entry spread per side; ~7DTE ATM uses max($0.02, 1.5%) per side; plus $0.65/side commission.
 
   | Family | Contract | eod | d1 | d2 |
