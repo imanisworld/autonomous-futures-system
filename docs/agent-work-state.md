@@ -6,11 +6,9 @@ Read **only** this block + `AGENTS.md` + `docs/futures-research-resume-checkpoin
 
 | Item | Value |
 |---|---|
-| **GitHub `main`** | **`43385e0`** — **#1215** merged |
-| **Track B review SHA** | `research/4hr-mnq-400-forward-rebase-20261010` after `main` re-merge. Demo order stop is **300** ticks / **$150**. Paper `wide_stop_4k` stays **400**. **No deploy.** |
-| **DO NOT deploy** | `research/4hr-mnq-400-forward-20261009` @ **`2f4f776`** and this branch until Grok reviews the exact SHA and the operator gives GO |
-| **Open futures research PRs (this lane)** | **#1206**, **#1207**, **#1216** (Track B) |
-| **Daily tsmom prereg** | `research/equity-index-daily-tsmom-forward-20261010` @ **`3fc8709`** — pushed, **PLANNED**, paper/log only, no score before 40 round-turns, no deploy |
+| **GitHub `main`** | **`58d4cd6`** — **#1216** merged. Demo stop stays **300** ticks / **$150**. Paper `wide_stop_4k` stays **400**. **Not deployed.** |
+| **DO NOT deploy** | `research/4hr-mnq-400-forward-20261009` @ **`2f4f776`** |
+| **Open futures research PRs (this lane)** | **#1206**, **#1207**, **#1218** |
 | **Public resume** | `docs/futures-research-resume-checkpoint-2026-10-10.md` (+ Cursor + Claude options appendices) |
 | **Options ETF handoff** | Branch **`claude/options-time-exit-research-20261010`** **deleted** from GitHub (2026-10-10 cleanup); copy in **`/workspace/afs-shared/`** if needed — **unverified here** |
 | **Saved 4HR benchmark** | `docs/research-notes/4hr-mnq-400-historical-benchmark-2026-10-10/` (on **research** branch) |
@@ -20,10 +18,11 @@ Read **only** this block + `AGENTS.md` + `docs/futures-research-resume-checkpoin
 | **Track B readiness** | `docs/futures-track-b-forward-readiness-2026-10-10.md` |
 | **Deferred cleanup list** | `docs/repo-hygiene-deferred-removal-tracker-2026-10-10.md` (classify only; delete at end) |
 | **Verdict** | **NOT DEMO-READY** — Track B forward after reviewed deploy of **research** SHA; Track A 1m observer parallel |
+| **Daily tsmom** | AFS-0242 replacement `docs/prereg-six-micro-daily-tsmom-forward-2026-10-10.md` — trial `T-2026-10-10-prereg-six-micro-daily-tsmom-forward-2026-10-10-01`. Roots **MNQ, MES, M2K, MGC, MCL, MBT**. MYM dropped. Paper ledger `research/six_micro_daily_tsmom_paper.py`. Four-market trial superseded, never scored. **No demo route. Do not score. Do not deploy.** |
 
-**DO NOT REDO:** gzip 4HR cell reproduction; ORB/VWAP TF×window sweeps (baseline + trending + orb48); Grok PASS work on merged **#1208**/**#1209**; Sep decompositions listed below.
+**DO NOT REDO:** gzip 4HR cell reproduction; ORB/VWAP TF×window sweeps (baseline + trending + orb48); Grok PASS work on merged **#1208**/**#1209**; Sep decompositions listed below. Do not retune the six-micro daily rule. Do not rerun the failed month-end, cross-market momentum, or VIX tests (414 total). MNQ bars from 2026-06-29 through 2027-01-29 are scoring inputs only.
 
-**NEXT:** Grok reviews the Track B SHA on [#1216](https://github.com/imanisworld/autonomous-futures-system/pull/1216). Demo stays **300** ticks / **$150**; paper stays **400**. A 350-tick setup is refused on demo and admitted on paper. Do not deploy. 1m arm fills/costs **not implemented**. **NOT done:** deploy, forward collection, DEMO-ready claim, tsmom score.
+**NEXT:** Grok reviews the AFS-0254 commit on #1218 before the six-micro timer is installed. The pin is that reviewed SHA (`AFS_RELEASE_SHA`), not a hardcoded `f0cfd39`. Sessions through **2026-10-09** are pre-registration and do not count toward the 40. Scoring starts **2026-10-12**. The weekday job is **17:10 America/New_York** (`ops/systemd/six-micro-daily-tsmom.timer`) and is **not installed**. The service user is `afs-paper` with a Polygon-only env file. Do not load `/root/afs-shared/.env`. Do not score. Do not deploy. 1m arm fills/costs **not implemented**. **NOT done:** VPS install, Monday's session, DEMO-ready claim, tsmom score.
 
 Prior chat context for this session is **closed**. Section below is coordination archive unless stale.
 
