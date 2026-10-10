@@ -18,10 +18,11 @@
 
 - [x] **Evidence triage:** Keep MNQ broad 4HR pre-armed historical lead and 60M 3-2-2 comparator; keep ORB/VWAP and other rejected cells closed (see Strategy Inventory and trial ledger). No freshly validated profitable strategy.
 - [x] **Engineering source work:** #1208, #1209, #1210, #1211 merged. **No automatic deployment or strategy enablement.**
-- [ ] **Independent breaker review:** #1212 optional future-only, **OFF** 5m full-arm provenance; #1213 stacked/overlapping offline identity matcher. Read both exact-head diffs and check exact head changes; #1212 `9df1a09` and #1213 `730ef532` had **CI SUCCESS** at the last GitHub check; **8,777/8 skipped** refers to #1213's earlier `2e5c2fa` head. Avoid merging duplicate shared files twice or promoting a partial revision.
-- [ ] **Separate collection decision:** Decide whether to authorize prospective 5m provenance recording with new identifiable cohort. **Do not set `WIDE_STOP_4HR_JOIN_PROVENANCE_V2_ENABLED` without explicit approval; do not backfill archival 5m rows.**
+- [x] **#1212 / #1213 source merge:** provenance sidecar and offline identity matcher are on `main`. They do not implement 1m fills or costs. Flag `WIDE_STOP_4HR_JOIN_PROVENANCE_V2_ENABLED` stays **OFF**.
+- [ ] **#1215 mutant tests:** merge after this docs PR if CI stays green (`368b024` was green).
+- [ ] **Separate collection decision:** Decide whether to authorize prospective 5m provenance recording with a new identifiable cohort. **Do not set `WIDE_STOP_4HR_JOIN_PROVENANCE_V2_ENABLED` without explicit approval; do not backfill archival 5m rows.**
 - [ ] **Observer proof:** Natural 1m minimum (10 distinct eligible touches, 20 trading days, 2 calendar months), zero contract/date/dedupe/causal violations; no synthetic QA counts. Check current box/epoch via authorized read-only access; the Oct 4 start is documented, not a current sample count.
-- [ ] **Track B vs Track A:** Keep 5m IOC8/400-tick future candidate (`research/4hr-mnq-400-forward-20261009`, last documented `2f4f776`) separate from 1m pre-armed mechanism. Verify current exact source head and prereg before *any* eligible forward recording. No release was performed by this docs update.
+- [ ] **Track B vs Track A:** Review `research/4hr-mnq-400-forward-rebase-20261010` @ **`1c97764`**. **Do not deploy** `2f4f776`. No release was performed by this docs update.
 - [ ] **DEMO/box readiness:** Independent release audit: broker account, flatness/orders, live-off/demo/cap-one, effective watcher/deploy lock, Python pins, journal identity, rollback, exact SHA/CI, and permissions. **Explicit GO separately** before any build/restart/deployment/order action.
 - [ ] **Cleanup:** Review the classified candidates in `docs/repo-hygiene-deferred-removal-tracker-2026-10-10.md`; preserve archival hashes and confirm local usage/backup/restore before any deletion. Local Mac filesystem and VPS storage were **not inspected** in this docs update.
 

@@ -568,6 +568,22 @@ def _process_five_min_bar_locked(
             continue
         _mark_seen(lane_state, key)
 
+        # Optional future-only identity evidence. Separate from this frozen
+        # paper journal, trade keys and observer epoch; default OFF. Even a
+        # failed disk write must never change the candidate/risk/broker flow.
+        if strategy == FOUR_HR:
+            try:
+                from context.wide_stop_4hr_join_provenance import (
+                    maybe_record_five_min_provenance,
+                )
+
+                maybe_record_five_min_provenance(
+                    log_dir=log_dir, strategy=strategy, candidate=candidate,
+                    candidate_key=key, payload=payload, day=day,
+                )
+            except Exception:  # noqa: BLE001 — evidence-only, non-authoritative
+                logger.warning("4HR 5m join evidence skipped", exc_info=True)
+
         if decision is None or decision.decision != "TRADE" or decision.setup is None:
             failed = (
                 (decision.failed_gates or ["SIGNAL_GATE_REJECTED"])[0]

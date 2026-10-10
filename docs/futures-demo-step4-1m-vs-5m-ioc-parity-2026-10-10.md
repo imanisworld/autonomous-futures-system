@@ -2,7 +2,7 @@
 
 **Role:** source-only QA / feasibility (Cursor builder lane). **No merge, deploy, broker orders, wiring changes, or strategy-status edits.**
 
-**Current addendum (Oct 10; earlier feasibility analysis below preserved):** #1208–#1211 are **MERGED source-only**; no VPS or demo authority follows. [#1212](https://github.com/imanisworld/autonomous-futures-system/pull/1212) (default-OFF new 5m full-arm provenance) and [#1213](https://github.com/imanisworld/autonomous-futures-system/pull/1213) (pure offline 1m/5m identity matcher) are **OPEN drafts**, with overlapping source files and no independently approved deployment. #1213 exact-head tests passed 8,777 / 8 skipped. These additions permit only **future read-only setup identity comparison** after separate evidence-collection approval; they do **not** make the 1m route executable or prove entry/fill/stop/return parity. Historical status references and pre-merge instructions elsewhere in this dated report are source snapshots, not live status.
+**Current addendum (Oct 10; earlier feasibility analysis below preserved):** #1208–#1213 are **MERGED source-only**; no VPS or demo authority follows. #1212/#1213 record 5m setup identity and match it offline to 1m bars. They do **not** implement 1m fills or costs. Track B review target is `research/4hr-mnq-400-forward-rebase-20261010` @ `1c97764`. **Do not deploy `2f4f776`.** Historical status references below are source snapshots, not live status.
 
 
 
