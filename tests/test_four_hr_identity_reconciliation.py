@@ -181,7 +181,8 @@ def test_wrong_five_min_trading_date_fails_closed():
     five = _build()
     five["trading_date"] = "2026-06-01"
     result = reconcile_identity_only([_natural(five)], [five])
-    assert result["touch_classifications"][0]["reason"] == "FIVE_MIN_TRADING_DATE_MISMATCH"
+    # A changed trading date invalidates the canonical arm key first.
+    assert result["touch_classifications"][0]["reason"] == "FIVE_MIN_ARM_KEY_INCONSISTENT"
 
 
 def test_malformed_natural_and_five_rows_are_retained_not_crash():
