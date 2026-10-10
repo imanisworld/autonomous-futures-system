@@ -6,10 +6,10 @@ Read **only** this block + `AGENTS.md` + `docs/futures-research-resume-checkpoin
 
 | Item | Value |
 |---|---|
-| **GitHub `main`** | **`572cd13`** — **#1208–#1213** merged; **#1215** still open (not on `main`) |
-| **Track B branch** | `research/4hr-mnq-400-forward-rebase-20261010` includes **#1215** @ **`368b024`**. **`1c97764` is the reviewed parent, not the candidate.** Demo order stop is capped at **300** ticks / **$150**. Paper `wide_stop_4k` cell stays **400**. **No deploy.** |
-| **DO NOT deploy** | `research/4hr-mnq-400-forward-20261009` @ **`2f4f776`** (~157 commits behind `main`; no **#1208/#1209**) and this branch until an explicit GO |
-| **Open futures research PRs (this lane)** | **#1206**, **#1207**, **#1215** |
+| **GitHub `main`** | **`43385e0`** — **#1215** merged |
+| **Track B review SHA** | `research/4hr-mnq-400-forward-rebase-20261010` after `main` re-merge. Demo order stop is **300** ticks / **$150**. Paper `wide_stop_4k` stays **400**. **No deploy.** |
+| **DO NOT deploy** | `research/4hr-mnq-400-forward-20261009` @ **`2f4f776`** and this branch until Grok reviews the exact SHA and the operator gives GO |
+| **Open futures research PRs (this lane)** | **#1206**, **#1207**, **#1216** (Track B) |
 | **Daily tsmom prereg** | `research/equity-index-daily-tsmom-forward-20261010` @ **`3fc8709`** — pushed, **PLANNED**, paper/log only, no score before 40 round-turns, no deploy |
 | **Public resume** | `docs/futures-research-resume-checkpoint-2026-10-10.md` (+ Cursor + Claude options appendices) |
 | **Options ETF handoff** | Branch **`claude/options-time-exit-research-20261010`** **deleted** from GitHub (2026-10-10 cleanup); copy in **`/workspace/afs-shared/`** if needed — **unverified here** |
@@ -23,7 +23,7 @@ Read **only** this block + `AGENTS.md` + `docs/futures-research-resume-checkpoin
 
 **DO NOT REDO:** gzip 4HR cell reproduction; ORB/VWAP TF×window sweeps (baseline + trending + orb48); Grok PASS work on merged **#1208**/**#1209**; Sep decompositions listed below.
 
-**NEXT:** [#1216](https://github.com/imanisworld/autonomous-futures-system/pull/1216) is the Track B PR. Demo stays **300** ticks / **$150**; paper stays **400**. A 350-tick setup is refused on demo and admitted on paper. Merge **#1215**, then re-merge `main` and send Grok that SHA. Do not deploy. 1m arm fills/costs **not implemented**. **NOT done:** deploy, forward collection, DEMO-ready claim, tsmom score.
+**NEXT:** Grok reviews the Track B SHA on [#1216](https://github.com/imanisworld/autonomous-futures-system/pull/1216). Demo stays **300** ticks / **$150**; paper stays **400**. A 350-tick setup is refused on demo and admitted on paper. Do not deploy. 1m arm fills/costs **not implemented**. **NOT done:** deploy, forward collection, DEMO-ready claim, tsmom score.
 
 Prior chat context for this session is **closed**. Section below is coordination archive unless stale.
 
