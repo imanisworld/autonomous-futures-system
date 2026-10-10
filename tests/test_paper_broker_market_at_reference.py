@@ -68,16 +68,58 @@ def test_unknown_model_still_rejected() -> None:
         PaperBroker(entry_fill_model="unproved_guess")
 
 
-def test_research_fill_never_invokes_paper_mirror_hook(monkeypatch) -> None:
+def test_research_resolve_position_never_calls_after_exit(monkeypatch) -> None:
     from execution import paper_mirror_hook
 
-    def forbidden(*args, **kwargs):
-        raise AssertionError("offline research must not call a sandbox broker")
-
-    monkeypatch.setattr(paper_mirror_hook, "after_entry", forbidden)
+    exit_calls: list[object] = []
+    monkeypatch.setattr(
+        paper_mirror_hook,
+        "after_exit",
+        lambda fill, **kwargs: exit_calls.append(fill),
+    )
     broker = ResearchReferencePaperBroker(entry_fill_model="market_at_reference")
     fill = broker.execute_bracket(_order(), market_price=100.0)
     assert fill.result != "CANCELLED"
+    exit_calls.clear()
+    outcome = broker.resolve_position(NextBarOHLC(open=100.0, high=135.0, low=90.0))
+    assert outcome is not None
+    assert exit_calls == []
+
+
+def test_research_force_resolve_never_calls_after_exit(monkeypatch) -> None:
+    from execution import paper_mirror_hook
+
+    exit_calls: list[object] = []
+    monkeypatch.setattr(
+        paper_mirror_hook,
+        "after_exit",
+        lambda fill, **kwargs: exit_calls.append(fill),
+    )
+    broker = ResearchReferencePaperBroker(entry_fill_model="market_at_reference")
+    fill = broker.execute_bracket(_order(), market_price=100.0)
+    assert fill.result != "CANCELLED"
+    exit_calls.clear()
+    outcome = broker.force_resolve("WIN", 130.0)
+    assert outcome is not None
+    assert exit_calls == []
+
+
+def test_paper_broker_resolve_still_invokes_after_exit(monkeypatch) -> None:
+    from execution import paper_mirror_hook
+
+    exit_calls: list[object] = []
+    monkeypatch.setattr(
+        paper_mirror_hook,
+        "after_exit",
+        lambda fill, **kwargs: exit_calls.append(fill),
+    )
+    broker = PaperBroker(entry_fill_model="market")
+    fill = broker.execute_bracket(_order(), market_price=100.0)
+    assert fill.result != "CANCELLED"
+    exit_calls.clear()
+    outcome = broker.resolve_position(NextBarOHLC(open=100.0, high=135.0, low=90.0))
+    assert outcome is not None
+    assert len(exit_calls) == 1
 
 
 @pytest.mark.parametrize("requested_optimism", [None, False, True])
