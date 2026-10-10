@@ -9,6 +9,9 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 from typing import Any, Mapping, Sequence
+from zoneinfo import ZoneInfo
+
+ET = ZoneInfo("America/New_York")
 
 from context.wide_stop_4hr_join_provenance import SCHEMA, compare_with_1m_touch
 
@@ -26,8 +29,15 @@ def _dt(raw: object) -> datetime | None:
 def _touch_clock(touch: Mapping[str, Any]) -> tuple[datetime | None, str | None]:
     opened = _dt(touch.get("bar_ts"))
     decided = _dt(touch.get("decision_time"))
-    if opened is None or decided is None or decided != opened + timedelta(minutes=1):
+    if (
+        opened is None or decided is None or
+        opened.second != 0 or opened.microsecond != 0 or
+        decided != opened + timedelta(minutes=1)
+    ):
         return None, "INVALID_NATURAL_ONE_MIN_CLOCK"
+    arm = touch.get("arm_key")
+    if not isinstance(arm, str) or not arm or arm.split("|", 1)[0] != opened.astimezone(ET).date().isoformat():
+        return None, "NATURAL_TOUCH_ARM_DATE_MISMATCH"
     state = touch.get("source_state")
     if not isinstance(state, Mapping):
         return None, "ARM_AVAILABILITY_UNPROVEN"
@@ -48,8 +58,15 @@ def _five_clock(five: Mapping[str, Any]) -> str | None:
         return "FIVE_MIN_SOURCE_IDENTITY_UNPROVEN"
     opened = _dt(five.get("source_bar_ts"))
     decided = _dt(five.get("candidate_decision_at"))
-    if opened is None or decided is None or decided != opened + timedelta(minutes=5):
+    if (
+        opened is None or decided is None or
+        opened.second != 0 or opened.microsecond != 0 or
+        opened.astimezone(ET).minute % 5 != 0 or
+        decided != opened + timedelta(minutes=5)
+    ):
         return "FIVE_MIN_DECISION_CLOCK_UNPROVEN"
+    if five.get("trading_date") != opened.astimezone(ET).date().isoformat():
+        return "FIVE_MIN_TRADING_DATE_MISMATCH"
     if five.get("observation_only") is not True:
         return "FIVE_MIN_AUTHORITY_INCONSISTENT"
     if five.get("broker_authorized") is not False or five.get("execution_reachable") is not False:
@@ -114,6 +131,9 @@ def reconcile_identity_only(
                                 (five_decision - opened).total_seconds()
                             )
                             item["five_signal_after_one_min_touch"] = five_decision > opened
+                            item["after_one_min_decision_seconds"] = round(
+                                (five_decision - _dt(touch["decision_time"])).total_seconds()
+                            )
                             stop_one = touch.get("stop")
                             stop_five = five.get("planned_stop")
                             if (
