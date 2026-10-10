@@ -11,6 +11,7 @@ from math import isfinite
 
 from execution.broker_interface import BracketOrder, Fill
 from execution.paper_broker import PaperBroker
+from config.settings import guarded_hard_cap_refusal
 
 
 class ResearchReferencePaperBroker(PaperBroker):
@@ -49,6 +50,25 @@ class ResearchReferencePaperBroker(PaperBroker):
             force_market_entry=True,
             post_fill_validation_required=True,
         )
-        return super().execute_bracket(
+        # PaperBroker.execute_bracket invokes the optional Webull sandbox
+        # mirror hook. An offline research executor must NEVER call it.
+        # Preserve the same hard-cap refusal before reaching the shared,
+        # audited simulation implementation.
+        refusal = guarded_hard_cap_refusal(strict_order.contracts)
+        if refusal:
+            return Fill(
+                instrument=strict_order.instrument,
+                direction=strict_order.direction,
+                contracts=strict_order.contracts,
+                entry_price=strict_order.entry,
+                exit_price=None,
+                exit_reason=refusal,
+                result="CANCELLED",
+                pnl_ticks=None,
+                pnl_dollars=None,
+                no_fill_reason="MAX_CONTRACTS_HARD_CAP",
+                paper_order_id=paper_order_id,
+            )
+        return self._execute_bracket_impl(
             strict_order, market_price=reference, paper_order_id=paper_order_id
         )
