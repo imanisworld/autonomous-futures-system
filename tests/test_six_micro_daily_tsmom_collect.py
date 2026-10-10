@@ -12,7 +12,7 @@ from research.six_micro_daily_tsmom_collect import (
     prints_for_soonest,
     session_prints,
 )
-from sources.polygon_client import PolygonBar
+from sources.polygon_client import PolygonBar, PolygonError, front_contract
 
 
 def _bar(local: str, *, price: float = 100.0, ticker: str = "MNQU6") -> PolygonBar:
@@ -55,8 +55,8 @@ def test_gold_crude_and_bitcoin_are_not_in_the_scheduled_fetch():
 
 def test_listed_front_is_the_soonest_expiry_still_open():
     rows = [
-        {"ticker": "MGCZ6", "first_trade_date": "2025-12-01", "last_trade_date": "2026-12-28"},
-        {"ticker": "MGCV6", "first_trade_date": "2025-10-01", "last_trade_date": "2026-10-28"},
+        {"ticker": "MGCZ6", "product_code": "MGC", "first_trade_date": "2025-12-01", "last_trade_date": "2026-12-28"},
+        {"ticker": "MGCV6", "product_code": "MGC", "first_trade_date": "2025-10-01", "last_trade_date": "2026-10-28"},
     ]
     assert listed_front("MGC", rows, date(2026, 10, 9)) == "MGCV6"
 
@@ -68,7 +68,10 @@ def test_two_contracts_keep_the_sooner_expiry():
         _bar("2026-10-09T13:30:00", ticker="MGCV6", price=20),
         _bar("2026-10-09T19:45:00", ticker="MGCV6", price=30),
     ]
-    prints = prints_for_soonest("MGC", bars, start=date(2026, 6, 29), end=date(2026, 10, 9))
+    prints = prints_for_soonest("MGC", bars, start=date(2026, 6, 29), end=date(2026, 10, 9), listings=[
+        {"ticker": "MGCZ6", "product_code": "MGC", "first_trade_date": "2026-01-01", "last_trade_date": "2026-12-28"},
+        {"ticker": "MGCV6", "product_code": "MGC", "first_trade_date": "2026-01-01", "last_trade_date": "2026-10-28"},
+    ])
     assert len(prints) == 1
     assert prints[0].contract == "MGCV6"
 
@@ -86,3 +89,91 @@ def test_journal_under_research_evidence_is_refused(tmp_path):
 
     with pytest.raises(ValueError):
         PaperLedger(tmp_path / "research-evidence" / "journal")
+
+def test_listed_front_uses_true_last_trade_and_first_trade_date():
+    rows = [
+        {"ticker": "MGCZ6", "product_code": "MGC", "first_trade_date": "2026-01-01", "last_trade_date": "2026-11-01"},
+        {"ticker": "MGCV6", "product_code": "MGC", "first_trade_date": "2026-10-10", "last_trade_date": "2026-10-28"},
+    ]
+    # Although V is an earlier month code, it was not listed on October 9.
+    assert listed_front("MGC", rows, date(2026, 10, 9)) == "MGCZ6"
+    assert listed_front("MCL", rows, date(2026, 10, 9)) is None
+
+
+def test_listed_front_missing_bar_does_not_substitute_far_contract():
+    rows = [
+        {"ticker": "MGCV6", "product_code": "MGC", "first_trade_date": "2026-01-01", "last_trade_date": "2026-10-28"},
+        {"ticker": "MGCZ6", "product_code": "MGC", "first_trade_date": "2026-01-01", "last_trade_date": "2026-12-28"},
+    ]
+    only_far = [_bar("2026-10-09T13:30:00", ticker="MGCZ6"),
+                _bar("2026-10-09T19:45:00", ticker="MGCZ6")]
+    with pytest.raises(PolygonError, match="no complete"):
+        prints_for_soonest(
+            "MGC", only_far, start=date(2026, 10, 9),
+            end=date(2026, 10, 9), listings=rows,
+        )
+
+
+def test_six_micro_incremental_restarts(monkeypatch, tmp_path):
+    import research.six_micro_daily_tsmom_collect as module
+    from research.six_micro_daily_tsmom_paper import PaperLedger
+
+    monkeypatch.setattr(module, "completed_through", lambda _now: date(2026, 10, 15))
+    dates = [date(2026, 10, 8), date(2026, 10, 9),
+             date(2026, 10, 12), date(2026, 10, 13)]
+
+    class Fake:
+        def fetch_contracts(self, root):
+            return [{"ticker": f"{root}Z6", "product_code": root,
+                     "first_trade_date": "2026-01-01", "last_trade_date": "2026-12-18"}]
+
+        def fetch_bars(self, ticker, start, end, timeframe):
+            assert timeframe == 15
+            result = []
+            for day in dates:
+                if start <= day <= end:
+                    for hhmm, p in (("13:30", 100.0), ("19:45", 101.0)):
+                        result.append(_bar(f"{day.isoformat()}T{hhmm}:00",
+                                           price=p, ticker=ticker))
+            return result
+
+    fake = Fake()
+    for end, expected in ((date(2026, 10, 9), 2),
+                          (date(2026, 10, 12), 3),
+                          (date(2026, 10, 12), 3),
+                          (date(2026, 10, 13), 4)):
+        module.collect_scheduled(tmp_path, fake, start=dates[0], end=end)
+        module.collect_listed(tmp_path, fake, start=dates[0], end=end)
+        ledger = PaperLedger(tmp_path)  # simulates process restart
+        for root in ("MNQ", "MES", "M2K", "MGC", "MCL", "MBT"):
+            entries = ledger.state["closes"][root]
+            assert len(entries) == expected
+            assert len({item["session"] for item in entries}) == expected
+        assert ledger.round_turns == 0
+
+
+def test_scheduled_roll_fetches_old_contract_open(monkeypatch, tmp_path):
+    import research.six_micro_daily_tsmom_collect as module
+
+    monkeypatch.setattr(module, "completed_through", lambda _now: date(2026, 6, 15))
+    prior, switch, after = date(2026, 6, 10), date(2026, 6, 11), date(2026, 6, 12)
+    old = front_contract("MNQ", prior)
+    new = front_contract("MNQ", switch)
+    assert old != new
+
+    class Fake:
+        def __init__(self):
+            self.calls = []
+
+        def fetch_bars(self, ticker, start, end, timeframe):
+            self.calls.append((ticker, start, end, timeframe))
+            bars = []
+            for day in (prior, switch, after):
+                if start <= day <= end:
+                    for hhmm in ("13:30", "19:45"):
+                        bars.append(_bar(f"{day.isoformat()}T{hhmm}:00", ticker=ticker))
+            return bars
+
+    fake = Fake()
+    module.collect_scheduled(tmp_path, fake, start=prior, end=after)
+    assert (old, switch, switch, 15) in fake.calls
