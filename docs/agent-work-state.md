@@ -6,8 +6,8 @@ Read **only** this block + `AGENTS.md` + `docs/futures-research-resume-checkpoin
 
 | Item | Value |
 |---|---|
-| **This checkout** | `fix/timeframe-causal-buckets-research-20261010` @ **`f952caa`** (PR **#1211**, pushed) |
-| **Demo wiring branch (not merged)** | `research/4hr-mnq-400-forward-20261009` @ **`2f4f776`** — 4HR 400-tick forward, 3-2-2 shadow; **not pushed** last verified |
+| **This checkout** | `fix/timeframe-causal-buckets-research-20261010` @ **`866722f`** (PR **#1211**, pushed) |
+| **Demo wiring branch (not merged)** | `research/4hr-mnq-400-forward-20261009` @ **`2f4f776`** — 4HR 400-tick forward, 3-2-2 shadow |
 | **Public resume** | `docs/futures-research-resume-checkpoint-2026-10-10.md` (+ Cursor + Claude options appendices) |
 | **Options ETF handoff (separate branch)** | `claude/options-time-exit-research-20261010` @ **`a30f0a6`** — [handoff md](https://github.com/imanisworld/autonomous-futures-system/blob/claude/options-time-exit-research-20261010/docs/options-etf-expression-research-2026-10-10.md); **NOT merged**; OOS 9t −$384 per Claude; parity 41/41 **unverified re-run** |
 | **Saved 4HR benchmark** | `docs/research-evidence/T-2026-10-09-prereg-4hr-mnq-400-forward-2026-10-09-01/` (on **research** branch) |
