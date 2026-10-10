@@ -25,3 +25,11 @@ Any duplicate 1m arm or multiple 5m source candidates for one arm is **AMBIGUOUS
 4. Have independent Claude/Codex breaker review the provenance, completeness, 1m/5m timing and any evidence-availability races. Operator approval is still necessary before enabling any evidence producer or DEMO route.
 
 **Exact QA:** `pytest -q tests/test_four_hr_identity_reconciliation.py`, then full GitHub `pytest -q` on exact head. Existing #1212 remains the parent draft. This branch does not alter #1212 production-adjacent collector code.
+
+## 2026-10-10 source-schema breaker addition
+
+A saved 5m sidecar's `arm_key` is **not self-authenticating**. A reader that only compares the stored key to the 1m touch may accept a record whose `setup_bar_ts`, `four_am_bar_ts`, `direction` or `trigger` has subsequently changed. The read-only matcher now **reconstructs the canonical arm key from the independently recorded 5m fields** and refuses a disagreement with `FIVE_MIN_ARM_KEY_INCONSISTENT`. It also requires canonical source schema/kind/timeframe/strategy values. This checks internal evidence consistency; it is **not cryptographic provenance or external verification that the alert was natural**.
+
+An integration regression now obtains a real `TRIGGER_TOUCH` via `context.one_min_trigger.evaluate_armed_4hr_touch` using synthetic seeded 5m bars and an observation arm. It matches this genuine emitted schema to a constructed, valid 5m v2 sidecar and asserts only `MATCHED_IDENTITY_ONLY`, with both entry/outcome parity explicitly `UNPROVEN`. This test **does not count toward prospective natural-touch gates**.
+
+The new exact-head GitHub CI result is needed before reliance. Independent review and explicit authorization to start future-only collection remain separate blockers.
