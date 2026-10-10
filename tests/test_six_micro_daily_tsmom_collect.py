@@ -177,3 +177,48 @@ def test_scheduled_roll_fetches_old_contract_open(monkeypatch, tmp_path):
     fake = Fake()
     module.collect_scheduled(tmp_path, fake, start=prior, end=after)
     assert (old, switch, switch, 15) in fake.calls
+
+def test_reference_contract_pagination_is_read_only_and_complete():
+    from sources.polygon_client import PolygonFuturesClient
+
+    class Stub(PolygonFuturesClient):
+        def __init__(self):
+            super().__init__(api_key="test-only")
+            self.calls = []
+
+        def _get(self, _client, url, params=None):
+            self.calls.append((url, params))
+            if len(self.calls) == 1:
+                return {
+                    "status": "OK",
+                    "results": [{"product_code": "MGC", "ticker": "MGCV6",
+                                 "first_trade_date": "2026-01-01",
+                                 "last_trade_date": "2026-10-28"}],
+                    "next_url": "https://example.invalid/page2",
+                }
+            return {
+                "status": "OK",
+                "results": [{"product_code": "MGC", "ticker": "MGCZ6",
+                             "first_trade_date": "2026-01-01",
+                             "last_trade_date": "2026-12-28"}],
+            }
+
+    stub = Stub()
+    rows = stub.fetch_contracts("MGC")
+    assert {row["ticker"] for row in rows} == {"MGCV6", "MGCZ6"}
+    assert stub.calls[0][1]["product_code"] == "MGC"
+    assert stub.calls[1][1] is None
+
+
+def test_empty_reference_response_fails_closed():
+    from sources.polygon_client import PolygonFuturesClient
+
+    class Stub(PolygonFuturesClient):
+        def __init__(self):
+            super().__init__(api_key="test-only")
+
+        def _get(self, _client, url, params=None):
+            return {"status": "OK", "results": []}
+
+    with pytest.raises(PolygonError, match="no dated futures listings"):
+        Stub().fetch_contracts("MGC")
