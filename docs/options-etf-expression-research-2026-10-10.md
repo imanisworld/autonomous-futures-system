@@ -12,7 +12,8 @@ Companion: the ChatGPT futures checkpoint `docs/futures-research-resume-checkpoi
 1. **What's wrong with the current options lane (OPTIONS_PAPER_V1 / Epoch-3): the exits and the contracts, not mainly the direction.** Targets sit 0.1–0.3× the stop distance on the main intraday setups. That needs an 80–90% win rate to break even; observed is about 58%. Contracts are 45–75 DTE, so small underlying moves barely move the option while the full spread is paid.
 2. **What's wrong with 4HR Re-Trigger futures: the account can't absorb the intraday noise.** The direction is right by the close, but 20–40 point adverse swings stop out most trades at an account-sized stop.
 3. **A lead that fixes both: take the 4HR signal (MNQ→QQQ, MES→SPY), buy an ATM ~7DTE call or put, and hold to the close.** Defined risk (the premium), no stop. On 151 historical signals it made +$5.3k to +$5.9k, t ≈ 2.0–2.2, both halves positive. It is concentrated, and each trade costs about $450–520.
-4. **A tracker exists and passes parity.** `scripts/options_4hr_etf_forward.py` regenerates the 4HR signals from Polygon futures bars with the canonical state machine. It reproduces the audit population exactly: **41/41 signals, Jan–Jun 2026**. It prices each one as a QQQ/SPY option from Polygon minute bars.
+4. **First out-of-sample look (Jul 24 – Oct 9 2026): 9 trades, −$384.** Too small to decide, and not supportive. See §6.
+5. **A tracker exists and passes parity.** `scripts/options_4hr_etf_forward.py` regenerates the 4HR signals from Polygon futures bars with the canonical state machine. It reproduces the audit population exactly: **41/41 signals, Jan–Jun 2026**. It prices each one as a QQQ/SPY option from Polygon minute bars.
 
 ---
 
@@ -99,7 +100,21 @@ Polygon notes: `/v3/reference/options/contracts` with `as_of` + `expired` return
 ---
 
 ## 6. Pending at time of writing (filled in as runs finish)
-- **OUT-OF-SAMPLE:** tracker on **2026-07-24 → 2026-10-09** (after the audit corpus ended; never examined by any study). Result: _pending_.
+- **OUT-OF-SAMPLE (done): tracker on 2026-07-24 → 2026-10-09** (after the audit corpus ended; never examined by any study): **9 signals, 9 priced, 4 wins, −$384.46.**
+
+  | Date | Inst | Dir | Option | P&L |
+  |---|---|---|---|---:|
+  | 07-27 | MES | SHORT | SPY 260803 P746 | +395.13 |
+  | 07-28 | MES | LONG | SPY 260803 C739 | +71.70 |
+  | 07-31 | MES | SHORT | SPY 260807 P744 | −236.27 |
+  | 07-31 | MNQ | SHORT | QQQ 260806 P688 | −275.30 |
+  | 08-14 | MES | SHORT | SPY 260820 P778 | +43.70 |
+  | 08-28 | MNQ | LONG | QQQ 260903 C721 | −302.97 |
+  | 09-15 | MNQ | LONG | QQQ 260921 C708 | −212.30 |
+  | 09-24 | MES | LONG | SPY 260930 C765 | +142.15 |
+  | 09-30 | MNQ | LONG | QQQ 261006 C742 | −10.30 |
+
+  Read: n=9 cannot confirm or reject. The in-sample mean of about +$35/trade implies about +$315 expected here, against a standard error of about ±$700, so the miss is within noise. **It does not support the lead.** MES→SPY is +$416 and MNQ→QQQ is −$801, the same split as in-sample 2026 (SPY carried, QQQ lagged). The signal rate was about 3.6/month combined, lower than the historical ~6–7/month. Sep 15 and Sep 30 MNQ match the box wide-stop collector's live 4HR candidates (same dates and directions), an independent sanity check that the tracker sees what the box sees.
 - 1% OTM ~7DTE QQQ/SPY: _pending_.
 - Scanner 413-setup time-exit re-sim (own contract / ~7DTE ATM): _pending_.
 
