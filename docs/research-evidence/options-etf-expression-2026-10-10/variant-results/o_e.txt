@@ -1,0 +1,4 @@
+FAIL /v2/aggs/ticker/O:QQQ250402C00488000/range/1/minute/2025-03-27/2025-03-27 IncompleteRead(3866 bytes read)
+mnq_qqq_7d_otm1 Counter({'OK': 75, 'NO_PRICE': 4})
+mnq_qqq_7d_otm1          hs=$0.01 n=75 wins=37 total=$2,816 per=$38 t=1.63 H1=$1,976 H2=$840 maxDD=$1,390 top3=88% medCost=$337 worst=$-453 yrs={'2024': 334, '2025': 2746, '2026': -265}
+mnq_qqq_7d_otm1          hs=$0.03 n=75 wins=36 total=$2,516 per=$34 t=1.46 H1=$1,828 H2=$688 maxDD=$1,434 top3=97% medCost=$337 worst=$-457 yrs={'2024': 254, '2025': 2610, '2026': -349}

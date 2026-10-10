@@ -1,0 +1,9 @@
+FAIL /v2/aggs/ticker/O:QQQ250122P00513000/range/1/minute/2025-01-16/2025-01-16 IncompleteRead(3866 bytes read)
+FAIL /v2/aggs/ticker/O:QQQ250402C00488000/range/1/minute/2025-03-27/2025-03-27 IncompleteRead(3866 bytes read)
+FAIL /v2/aggs/ticker/O:QQQ250623C00537000/range/1/minute/2025-06-17/2025-06-17 IncompleteRead(3866 bytes read)
+FAIL /v2/aggs/ticker/O:QQQ251002C00600000/range/1/minute/2025-09-26/2025-09-26 IncompleteRead(3866 bytes read)
+FAIL /v2/aggs/ticker/O:QQQ260122P00618000/range/1/minute/2026-01-16/2026-01-16 IncompleteRead(3866 bytes read)
+FAIL /v2/aggs/ticker/O:QQQ260309P00604000/range/1/minute/2026-03-02/2026-03-02 IncompleteRead(3866 bytes read)
+mnq_qqq_7d_v5 Counter({'OK': 71, 'NO_PRICE': 8})
+mnq_qqq_7d_v5            hs=$0.01 n=71 wins=38 total=$815 per=$11 t=1.52 H1=$445 H2=$370 maxDD=$390 top3=86% medCost=$209 worst=$-114 yrs={'2024': 122, '2025': 695, '2026': -2}
+mnq_qqq_7d_v5            hs=$0.03 n=71 wins=36 total=$247 per=$3 t=0.46 H1=$165 H2=$82 maxDD=$454 top3=244% medCost=$209 worst=$-122 yrs={'2024': -38, '2025': 455, '2026': -170}

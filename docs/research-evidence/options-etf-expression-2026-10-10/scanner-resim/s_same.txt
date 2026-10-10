@@ -1,0 +1,44 @@
+FAIL /v2/aggs/ticker/O:SPY261120C00775000/range/1/minute/2026-09-17/2026-09-17 IncompleteRead(3866 bytes read)
+FAIL /v2/aggs/ticker/O:AAPL261120C00350000/range/1/minute/2026-09-17/2026-09-17 IncompleteRead(4090 bytes read)
+FAIL /v2/aggs/ticker/O:INTC261120C00115000/range/1/minute/2026-09-16/2026-09-16 IncompleteRead(4090 bytes read)
+FAIL /v2/aggs/ticker/O:AMZN261120C00265000/range/1/minute/2026-09-17/2026-09-17 IncompleteRead(3866 bytes read)
+FAIL /v2/aggs/ticker/O:INTC261120P00105000/range/1/minute/2026-09-21/2026-09-21 IncompleteRead(3866 bytes read)
+FAIL /v2/aggs/ticker/O:NVDA261120P00215000/range/1/minute/2026-09-22/2026-09-22 IncompleteRead(3866 bytes read)
+FAIL /v2/aggs/ticker/O:AAPL261120P00335000/range/1/minute/2026-09-22/2026-09-22 IncompleteRead(4090 bytes read)
+FAIL /v2/aggs/ticker/O:AAPL261120P00335000/range/1/minute/2026-09-22/2026-09-22 IncompleteRead(4090 bytes read)
+FAIL /v2/aggs/ticker/O:AMZN261120C00265000/range/1/minute/2026-09-24/2026-09-24 IncompleteRead(3866 bytes read)
+FAIL /v2/aggs/ticker/O:NVDA261120P00220000/range/1/minute/2026-09-25/2026-09-25 IncompleteRead(4090 bytes read)
+FAIL /v2/aggs/ticker/O:TLT261120P00079000/range/1/minute/2026-09-28/2026-09-28 IncompleteRead(4090 bytes read)
+FAIL /v2/aggs/ticker/O:AMZN261120C00265000/range/1/minute/2026-09-24/2026-09-24 IncompleteRead(4090 bytes read)
+FAIL /v2/aggs/ticker/O:SPY261120C00780000/range/1/minute/2026-09-25/2026-09-25 IncompleteRead(3866 bytes read)
+FAIL /v2/aggs/ticker/O:AAPL261120C00360000/range/1/minute/2026-09-28/2026-09-28 IncompleteRead(3866 bytes read)
+FAIL /v2/aggs/ticker/O:PLTR261120C00200000/range/1/minute/2026-09-30/2026-09-30 IncompleteRead(3866 bytes read)
+FAIL /v2/aggs/ticker/O:AMZN261120C00265000/range/1/minute/2026-10-02/2026-10-02 IncompleteRead(3866 bytes read)
+FAIL /v2/aggs/ticker/O:NFLX261120P00070000/range/1/minute/2026-10-02/2026-10-02 IncompleteRead(3866 bytes read)
+FAIL /v2/aggs/ticker/O:NFLX261120C00072500/range/1/minute/2026-10-05/2026-10-05 IncompleteRead(3866 bytes read)
+FAIL /v2/aggs/ticker/O:AAPL261120C00345000/range/1/minute/2026-10-02/2026-10-02 IncompleteRead(3866 bytes read)
+FAIL /v2/aggs/ticker/O:TLT261120P00077000/range/1/minute/2026-10-05/2026-10-05 IncompleteRead(4090 bytes read)
+FAIL /v2/aggs/ticker/O:INTC261120C00125000/range/1/minute/2026-10-08/2026-10-08 IncompleteRead(20474 bytes read)
+FAIL /v2/aggs/ticker/O:NFLX261120C00072500/range/1/minute/2026-10-06/2026-10-06 IncompleteRead(3866 bytes read)
+FAIL /v2/aggs/ticker/O:SPY261130P00770000/range/1/minute/2026-10-09/2026-10-09 IncompleteRead(3866 bytes read)
+FAIL /v2/aggs/ticker/O:SPY261130P00770000/range/1/minute/2026-10-09/2026-10-09 IncompleteRead(4090 bytes read)
+same Counter({'OK': 297, 'NO_ENTRY': 116}) days 2026-09-09 2026-10-07
+  ALL                                eod: n=296 wins= 92 total=$  -7,299 per=$ -24.7 t=-7.29 H1=$ -3,127 H2=$ -4,172 medPrem=$788
+  ALL                                d1 : n=290 wins=148 total=$     256 per=$   0.9 t= 0.09 H1=$    996 H2=$   -740 medPrem=$770
+  ALL                                d2 : n=288 wins=134 total=$   4,443 per=$  15.4 t= 1.10 H1=$  5,268 H2=$   -825 medPrem=$780
+  family=H1                          eod: n=150 wins= 47 total=$  -3,381 per=$ -22.5 t=-4.66 H1=$ -1,486 H2=$ -1,895 medPrem=$770
+  family=H1                          d1 : n=147 wins= 74 total=$  -1,426 per=$  -9.7 t=-0.81 H1=$ -1,515 H2=$     90 medPrem=$752
+  family=H1                          d2 : n=146 wins= 67 total=$  -1,443 per=$  -9.9 t=-0.64 H1=$ -1,364 H2=$    -79 medPrem=$758
+  family=212                         eod: n= 44 wins= 11 total=$    -928 per=$ -21.1 t=-3.11 H1=$   -207 H2=$   -721 medPrem=$724
+  family=212                         d1 : n= 43 wins= 23 total=$     123 per=$   2.9 t= 0.16 H1=$   -165 H2=$    289 medPrem=$695
+  family=212                         d2 : n= 44 wins= 23 total=$     898 per=$  20.4 t= 0.68 H1=$    465 H2=$    434 medPrem=$724
+  family=H4                          eod: n= 56 wins= 23 total=$  -1,014 per=$ -18.1 t=-2.66 H1=$   -437 H2=$   -577 medPrem=$845
+  family=H4                          d1 : n= 56 wins= 28 total=$   2,742 per=$  49.0 t= 1.48 H1=$  3,320 H2=$   -578 medPrem=$845
+  family=H4                          d2 : n= 55 wins= 29 total=$   6,507 per=$ 118.3 t= 2.42 H1=$  6,627 H2=$   -120 medPrem=$850
+  family=DAILY                       eod: n= 46 wins= 11 total=$  -1,976 per=$ -43.0 t=-4.10 H1=$ -1,094 H2=$   -882 medPrem=$789
+  family=DAILY                       d1 : n= 44 wins= 23 total=$  -1,184 per=$ -26.9 t=-1.24 H1=$   -760 H2=$   -425 medPrem=$768
+  family=DAILY                       d2 : n= 43 wins= 15 total=$  -1,519 per=$ -35.3 t=-1.24 H1=$   -719 H2=$   -801 medPrem=$785
+  LONG                               eod: n=176 wins= 46 total=$  -6,143 per=$ -34.9 t=-7.32 H1=$ -2,574 H2=$ -3,568 medPrem=$800
+  SHORT                              eod: n=120 wins= 46 total=$  -1,156 per=$  -9.6 t=-2.29 H1=$   -553 H2=$   -604 medPrem=$740
+  LONG                               d1 : n=173 wins= 81 total=$     290 per=$   1.7 t= 0.12 H1=$  2,324 H2=$ -2,034 medPrem=$792
+  SHORT                              d1 : n=117 wins= 67 total=$     -35 per=$  -0.3 t=-0.02 H1=$ -1,328 H2=$  1,294 medPrem=$727

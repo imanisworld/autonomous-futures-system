@@ -1,0 +1,12 @@
+FAIL /v2/aggs/ticker/O:SPY241008C00576000/range/1/minute/2024-10-02/2024-10-02 IncompleteRead(4090 bytes read)
+FAIL /v2/aggs/ticker/O:SPY241129P00595000/range/1/minute/2024-11-22/2024-11-22 IncompleteRead(24570 bytes read)
+FAIL /v2/aggs/ticker/O:SPY250213C00609000/range/1/minute/2025-02-07/2025-02-07 IncompleteRead(3866 bytes read)
+FAIL /v2/aggs/ticker/O:SPY250507P00563000/range/1/minute/2025-05-01/2025-05-01 IncompleteRead(3866 bytes read)
+FAIL /v2/aggs/ticker/O:SPY250527C00590000/range/1/minute/2025-05-19/2025-05-19 IncompleteRead(3866 bytes read)
+FAIL /v2/aggs/ticker/O:SPY250527C00590000/range/1/minute/2025-05-19/2025-05-19 IncompleteRead(3866 bytes read)
+FAIL /v2/aggs/ticker/O:SPY250804C00644000/range/1/minute/2025-07-29/2025-07-29 IncompleteRead(3866 bytes read)
+FAIL /v2/aggs/ticker/O:SPY250812C00629000/range/1/minute/2025-08-06/2025-08-06 IncompleteRead(4090 bytes read)
+FAIL /v2/aggs/ticker/O:SPY260203P00697000/range/1/minute/2026-01-28/2026-01-28 IncompleteRead(3866 bytes read)
+mes_spy_7d Counter({'OK': 73, 'NO_PRICE': 1})
+mes_spy_7d               hs=$0.01 n=73 wins=40 total=$2,281 per=$31 t=1.39 H1=$1,040 H2=$1,241 maxDD=$869 top3=111% medCost=$456 worst=$-278 yrs={'2024': -500, '2025': 958, '2026': 1823}
+mes_spy_7d               hs=$0.03 n=73 wins=40 total=$1,989 per=$27 t=1.21 H1=$896 H2=$1,093 maxDD=$935 top3=124% medCost=$456 worst=$-282 yrs={'2024': -576, '2025': 814, '2026': 1751}
