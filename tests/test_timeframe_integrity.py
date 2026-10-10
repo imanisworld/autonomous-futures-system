@@ -137,3 +137,28 @@ def test_session_last_eleven_hours_not_full_twelve_hour_bar():
     result = confirmed_session_bars(_bars(_et(2026, 3, 9, 18), 92), minutes=720)
     assert len(result.bars) == 1
     assert result.rejected == {"partial_or_gap": 1}
+
+
+def test_frozen_resampler_emits_partial_bucket_but_new_research_refuses_it():
+    # Diagnostic only: the sealed scorer is intentionally not modified.
+    from research.mgc_4h_wide_forward import resample_session
+
+    raw = _bars(_et(2026, 3, 9, 18), 20)
+    old = resample_session(raw, 240)
+    strict = confirmed_session_bars(raw, minutes=240)
+    assert len(old) == 2
+    assert old[-1]["volume"] == sum(x["volume"] for x in raw[-4:])
+    assert len(strict.bars) == 1
+    assert strict.rejected == {"partial_or_gap": 1}
+
+
+def test_frozen_resampler_cannot_identify_contract_mix_but_new_guard_can():
+    from research.mgc_4h_wide_forward import resample_session
+
+    raw = _bars(_et(2026, 3, 9, 18), 16, roll_at=8)
+    old = resample_session(raw, 240)
+    strict = confirmed_session_bars(raw, minutes=240)
+    assert len(old) == 1
+    assert "ticker" not in old[0]
+    assert strict.bars == ()
+    assert strict.rejected == {"contract_roll": 1}
