@@ -23,7 +23,7 @@ Read **only** this block + `AGENTS.md` + `docs/futures-research-resume-checkpoin
 
 **DO NOT REDO:** gzip 4HR cell reproduction; ORB/VWAP TF×window sweeps (baseline + trending + orb48); Grok PASS work on merged **#1208**/**#1209**; Sep decompositions listed below. Do not retune the six-micro daily rule. Do not rerun the failed month-end, cross-market momentum, or VIX tests (414 total). MNQ bars from 2026-06-29 through 2027-01-29 are scoring inputs only.
 
-**NEXT:** Grok reviews the six-micro paper registration on this branch (`3fc8709`, amended by `d5ed5d6`). Do not score it. Do not deploy it. Track B stays on **#1216**. 1m arm fills/costs **not implemented**. **NOT done:** deploy, forward collection on the box, DEMO-ready claim, tsmom score.
+**NEXT:** Grok reviews the six-micro paper registration on [#1218](https://github.com/imanisworld/autonomous-futures-system/pull/1218). Local warmup through **2026-10-09** is stored for MNQ, MES, and M2K only. MGC, MCL, and MBT are still unrecorded. Do not score. Do not deploy. Track B stays on **#1216**. 1m arm fills/costs **not implemented**. **NOT done:** deploy, box collection, DEMO-ready claim, tsmom score.
 
 Prior chat context for this session is **closed**. Section below is coordination archive unless stale.
 

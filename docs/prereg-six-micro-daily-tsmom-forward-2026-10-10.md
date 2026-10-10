@@ -78,11 +78,13 @@ Fail any one of those and the study is dead. There is no second look.
 
 ## 6. Paper ledger
 
-Collection code is `research/six_micro_daily_tsmom_paper.py`. It appends
-paper round-turns to a caller-chosen journal under `logs/` (gitignored). It
-does not import a broker, does not submit a demo order, and does not write
+Collection code is `research/six_micro_daily_tsmom_paper.py`. The local
+runner is `research/six_micro_daily_tsmom_collect.py`. It appends the paper
+journal under `logs/six-micro-daily-tsmom/` (gitignored). It does not import
+a broker, does not submit a demo order, and does not write
 `docs/research-evidence/`. The VPS does not run it until a separate deploy
-GO. This registration does not grant that GO.
+GO. This registration does not grant that GO. Gold, crude, and bitcoin are
+not fetched until a bar supplies a dated contract ticker.
 
 ## 7. Evidence boundary
 

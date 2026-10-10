@@ -1,0 +1,58 @@
+"""Session prints for the six-micro paper journal. No network."""
+from __future__ import annotations
+
+from datetime import date, datetime, timezone
+
+import pytest
+
+from research.six_micro_daily_tsmom_collect import (
+    UNSCHEDULED_ROOTS,
+    completed_through,
+    session_prints,
+)
+from sources.polygon_client import PolygonBar
+
+
+def _bar(local: str, *, price: float = 100.0, ticker: str = "MNQU6") -> PolygonBar:
+    ts = datetime.fromisoformat(local).replace(tzinfo=timezone.utc)
+    # Tests pass UTC stamps that are already the New York wall clock shifted.
+    # 13:30 UTC is 09:30 ET in October (EDT, UTC-4).
+    return PolygonBar(ts=ts, open=price, high=price, low=price, close=price + 1, volume=1, ticker=ticker)
+
+
+def test_completed_through_saturday_is_friday():
+    now = datetime(2026, 10, 10, 15, 0, tzinfo=timezone.utc)
+    assert completed_through(now) == date(2026, 10, 9)
+
+
+def test_session_print_uses_the_open_and_the_1545_close():
+    bars = [
+        _bar("2026-10-09T13:30:00"),
+        _bar("2026-10-09T19:45:00", price=10),
+    ]
+    prints = session_prints("MNQ", bars, start=date(2026, 6, 29), end=date(2026, 10, 9))
+    assert len(prints) == 1
+    assert prints[0].rth_open == bars[0].open
+    assert prints[0].session_close == bars[1].close
+    assert prints[0].contract == "MNQU6"
+
+
+def test_missing_open_is_not_stored():
+    bars = [_bar("2026-10-09T19:45:00")]
+    assert session_prints("MNQ", bars, start=date(2026, 6, 29), end=date(2026, 10, 9)) == []
+
+
+def test_missing_close_is_not_stored():
+    bars = [_bar("2026-10-09T13:30:00")]
+    assert session_prints("MNQ", bars, start=date(2026, 6, 29), end=date(2026, 10, 9)) == []
+
+
+def test_gold_crude_and_bitcoin_are_not_in_the_scheduled_fetch():
+    assert UNSCHEDULED_ROOTS == ("MGC", "MCL", "MBT")
+
+
+def test_journal_under_research_evidence_is_refused(tmp_path):
+    from research.six_micro_daily_tsmom_paper import PaperLedger
+
+    with pytest.raises(ValueError):
+        PaperLedger(tmp_path / "research-evidence" / "journal")
