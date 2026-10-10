@@ -21,6 +21,8 @@ broker = PaperBroker(entry_fill_model="market_at_reference", slippage_ticks=1)
 fill = broker.execute_bracket(order, market_price=next_bar.open)
 ```
 
+`ReplayEngine` now obtains the next same-instrument, same-timeframe bar's **open** with exact adjacent-bar timing for this strict model. Missing/gapped future bars cause a hard refusal; the research result must not silently fill. Pre-resolved 2-1-2 / 1-2-2 entries are explicitly excluded because they use an already-triggered position rather than a fresh market order. The replay calls post-fill validation for strict fills.
+
 The strict model is available in `SystemConfig` via `ENTRY_FILL_MODEL=market_at_reference` **only for isolated research**. The default remains the legacy `market` to reproduce frozen experiments; do not treat a default plan-price result as profitability evidence. Live routing, existing strategies, existing sealed cohorts, and risk policies are unchanged.
 
 ## Independent acceptance gates
