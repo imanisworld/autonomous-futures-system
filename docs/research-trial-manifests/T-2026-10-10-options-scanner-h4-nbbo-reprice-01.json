@@ -1,0 +1,13 @@
+{
+ "trial_id": "T-2026-10-10-options-scanner-h4-nbbo-reprice-01",
+ "variants": [
+  {
+   "id": "h4_atm_7dte_d1_nbbo_skip_over_300"
+  },
+  {
+   "id": "h4_atm_7dte_d1_nbbo_no_cap"
+  }
+ ],
+ "results_sha256": null,
+ "note": "Recorded after the fact: UNREGISTERED_ATTEMPT. Variant list reconstructed from the scripts and outputs that actually ran."
+}

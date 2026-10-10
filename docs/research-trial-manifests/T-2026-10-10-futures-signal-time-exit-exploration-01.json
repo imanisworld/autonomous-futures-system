@@ -1,0 +1,508 @@
+{
+ "trial_id": "T-2026-10-10-futures-signal-time-exit-exploration-01",
+ "variants": [
+  {
+   "id": "tstat_scan_vwap_hold_mnq_30m"
+  },
+  {
+   "id": "tstat_scan_vwap_hold_mnq_60m"
+  },
+  {
+   "id": "tstat_scan_vwap_hold_mnq_120m"
+  },
+  {
+   "id": "tstat_scan_vwap_hold_mnq_EOD"
+  },
+  {
+   "id": "tstat_scan_transition_mnq_30m"
+  },
+  {
+   "id": "tstat_scan_transition_mnq_60m"
+  },
+  {
+   "id": "tstat_scan_transition_mnq_120m"
+  },
+  {
+   "id": "tstat_scan_transition_mnq_EOD"
+  },
+  {
+   "id": "tstat_scan_orb_breakout_mnq_30m"
+  },
+  {
+   "id": "tstat_scan_orb_breakout_mnq_60m"
+  },
+  {
+   "id": "tstat_scan_orb_breakout_mnq_120m"
+  },
+  {
+   "id": "tstat_scan_orb_breakout_mnq_EOD"
+  },
+  {
+   "id": "tstat_scan_orb_breakout_inverse_mnq_30m"
+  },
+  {
+   "id": "tstat_scan_orb_breakout_inverse_mnq_60m"
+  },
+  {
+   "id": "tstat_scan_orb_breakout_inverse_mnq_120m"
+  },
+  {
+   "id": "tstat_scan_orb_breakout_inverse_mnq_EOD"
+  },
+  {
+   "id": "tstat_scan_orb_reclaim_mes_30m"
+  },
+  {
+   "id": "tstat_scan_orb_reclaim_mes_60m"
+  },
+  {
+   "id": "tstat_scan_orb_reclaim_mes_120m"
+  },
+  {
+   "id": "tstat_scan_orb_reclaim_mes_EOD"
+  },
+  {
+   "id": "tstat_scan_orb_reclaim_mnq_30m"
+  },
+  {
+   "id": "tstat_scan_orb_reclaim_mnq_60m"
+  },
+  {
+   "id": "tstat_scan_orb_reclaim_mnq_120m"
+  },
+  {
+   "id": "tstat_scan_orb_reclaim_mnq_EOD"
+  },
+  {
+   "id": "tstat_scan_transition_mes_audit_30m"
+  },
+  {
+   "id": "tstat_scan_transition_mes_audit_60m"
+  },
+  {
+   "id": "tstat_scan_transition_mes_audit_120m"
+  },
+  {
+   "id": "tstat_scan_transition_mes_audit_EOD"
+  },
+  {
+   "id": "tstat_scan_transition_mnq_audit_30m"
+  },
+  {
+   "id": "tstat_scan_transition_mnq_audit_60m"
+  },
+  {
+   "id": "tstat_scan_transition_mnq_audit_120m"
+  },
+  {
+   "id": "tstat_scan_transition_mnq_audit_EOD"
+  },
+  {
+   "id": "tstat_scan_4hr_mnq_30m"
+  },
+  {
+   "id": "tstat_scan_4hr_mnq_60m"
+  },
+  {
+   "id": "tstat_scan_4hr_mnq_120m"
+  },
+  {
+   "id": "tstat_scan_4hr_mnq_EOD"
+  },
+  {
+   "id": "tstat_scan_4hr_mes_30m"
+  },
+  {
+   "id": "tstat_scan_4hr_mes_60m"
+  },
+  {
+   "id": "tstat_scan_4hr_mes_120m"
+  },
+  {
+   "id": "tstat_scan_4hr_mes_EOD"
+  },
+  {
+   "id": "tstat_scan_322_mnq_30m"
+  },
+  {
+   "id": "tstat_scan_322_mnq_60m"
+  },
+  {
+   "id": "tstat_scan_322_mnq_120m"
+  },
+  {
+   "id": "tstat_scan_322_mnq_EOD"
+  },
+  {
+   "id": "tstat_scan_miyagi_mes_30m"
+  },
+  {
+   "id": "tstat_scan_miyagi_mes_60m"
+  },
+  {
+   "id": "tstat_scan_miyagi_mes_120m"
+  },
+  {
+   "id": "tstat_scan_miyagi_mes_EOD"
+  },
+  {
+   "id": "tstat_scan_miyagi_mnq_30m"
+  },
+  {
+   "id": "tstat_scan_miyagi_mnq_60m"
+  },
+  {
+   "id": "tstat_scan_miyagi_mnq_120m"
+  },
+  {
+   "id": "tstat_scan_miyagi_mnq_EOD"
+  },
+  {
+   "id": "orb_reclaim_mes_fade_30m_slip0_dedup0"
+  },
+  {
+   "id": "orb_reclaim_mes_fade_30m_slip0_dedup1"
+  },
+  {
+   "id": "orb_reclaim_mes_fade_30m_slip1_dedup0"
+  },
+  {
+   "id": "orb_reclaim_mes_fade_30m_slip1_dedup1"
+  },
+  {
+   "id": "orb_reclaim_mes_fade_30m_slip2_dedup0"
+  },
+  {
+   "id": "orb_reclaim_mes_fade_30m_slip2_dedup1"
+  },
+  {
+   "id": "orb_reclaim_mes_fade_60m_slip0_dedup0"
+  },
+  {
+   "id": "orb_reclaim_mes_fade_60m_slip0_dedup1"
+  },
+  {
+   "id": "orb_reclaim_mes_fade_60m_slip1_dedup0"
+  },
+  {
+   "id": "orb_reclaim_mes_fade_60m_slip1_dedup1"
+  },
+  {
+   "id": "orb_reclaim_mes_fade_60m_slip2_dedup0"
+  },
+  {
+   "id": "orb_reclaim_mes_fade_60m_slip2_dedup1"
+  },
+  {
+   "id": "transition_mes_audit_120m_stopnone_dedup0_slip1"
+  },
+  {
+   "id": "transition_mes_audit_120m_stopnone_dedup0_slip2"
+  },
+  {
+   "id": "transition_mes_audit_120m_stopnone_dedup1_slip1"
+  },
+  {
+   "id": "transition_mes_audit_120m_stopnone_dedup1_slip2"
+  },
+  {
+   "id": "transition_mes_audit_120m_stop15_dedup0_slip1"
+  },
+  {
+   "id": "transition_mes_audit_120m_stop15_dedup0_slip2"
+  },
+  {
+   "id": "transition_mes_audit_120m_stop15_dedup1_slip1"
+  },
+  {
+   "id": "transition_mes_audit_120m_stop15_dedup1_slip2"
+  },
+  {
+   "id": "transition_mes_audit_120m_stop10_dedup0_slip1"
+  },
+  {
+   "id": "transition_mes_audit_120m_stop10_dedup0_slip2"
+  },
+  {
+   "id": "transition_mes_audit_120m_stop10_dedup1_slip1"
+  },
+  {
+   "id": "transition_mes_audit_120m_stop10_dedup1_slip2"
+  },
+  {
+   "id": "transition_mes_audit_EOD_stopnone_dedup0_slip1"
+  },
+  {
+   "id": "transition_mes_audit_EOD_stopnone_dedup0_slip2"
+  },
+  {
+   "id": "transition_mes_audit_EOD_stopnone_dedup1_slip1"
+  },
+  {
+   "id": "transition_mes_audit_EOD_stopnone_dedup1_slip2"
+  },
+  {
+   "id": "transition_mes_audit_EOD_stop15_dedup0_slip1"
+  },
+  {
+   "id": "transition_mes_audit_EOD_stop15_dedup0_slip2"
+  },
+  {
+   "id": "transition_mes_audit_EOD_stop15_dedup1_slip1"
+  },
+  {
+   "id": "transition_mes_audit_EOD_stop15_dedup1_slip2"
+  },
+  {
+   "id": "transition_mes_audit_EOD_stop10_dedup0_slip1"
+  },
+  {
+   "id": "transition_mes_audit_EOD_stop10_dedup0_slip2"
+  },
+  {
+   "id": "transition_mes_audit_EOD_stop10_dedup1_slip1"
+  },
+  {
+   "id": "transition_mes_audit_EOD_stop10_dedup1_slip2"
+  },
+  {
+   "id": "transition_mnq_audit_120m_stopnone_dedup0_slip1"
+  },
+  {
+   "id": "transition_mnq_audit_120m_stopnone_dedup0_slip2"
+  },
+  {
+   "id": "transition_mnq_audit_120m_stopnone_dedup1_slip1"
+  },
+  {
+   "id": "transition_mnq_audit_120m_stopnone_dedup1_slip2"
+  },
+  {
+   "id": "transition_mnq_audit_120m_stop30_dedup0_slip1"
+  },
+  {
+   "id": "transition_mnq_audit_120m_stop30_dedup0_slip2"
+  },
+  {
+   "id": "transition_mnq_audit_120m_stop30_dedup1_slip1"
+  },
+  {
+   "id": "transition_mnq_audit_120m_stop30_dedup1_slip2"
+  },
+  {
+   "id": "transition_mnq_audit_120m_stop20_dedup0_slip1"
+  },
+  {
+   "id": "transition_mnq_audit_120m_stop20_dedup0_slip2"
+  },
+  {
+   "id": "transition_mnq_audit_120m_stop20_dedup1_slip1"
+  },
+  {
+   "id": "transition_mnq_audit_120m_stop20_dedup1_slip2"
+  },
+  {
+   "id": "transition_mnq_audit_EOD_stopnone_dedup0_slip1"
+  },
+  {
+   "id": "transition_mnq_audit_EOD_stopnone_dedup0_slip2"
+  },
+  {
+   "id": "transition_mnq_audit_EOD_stopnone_dedup1_slip1"
+  },
+  {
+   "id": "transition_mnq_audit_EOD_stopnone_dedup1_slip2"
+  },
+  {
+   "id": "transition_mnq_audit_EOD_stop30_dedup0_slip1"
+  },
+  {
+   "id": "transition_mnq_audit_EOD_stop30_dedup0_slip2"
+  },
+  {
+   "id": "transition_mnq_audit_EOD_stop30_dedup1_slip1"
+  },
+  {
+   "id": "transition_mnq_audit_EOD_stop30_dedup1_slip2"
+  },
+  {
+   "id": "transition_mnq_audit_EOD_stop20_dedup0_slip1"
+  },
+  {
+   "id": "transition_mnq_audit_EOD_stop20_dedup0_slip2"
+  },
+  {
+   "id": "transition_mnq_audit_EOD_stop20_dedup1_slip1"
+  },
+  {
+   "id": "transition_mnq_audit_EOD_stop20_dedup1_slip2"
+  },
+  {
+   "id": "transition_mnq_120m_stopnone_dedup0_slip1"
+  },
+  {
+   "id": "transition_mnq_120m_stopnone_dedup0_slip2"
+  },
+  {
+   "id": "transition_mnq_120m_stopnone_dedup1_slip1"
+  },
+  {
+   "id": "transition_mnq_120m_stopnone_dedup1_slip2"
+  },
+  {
+   "id": "transition_mnq_120m_stop30_dedup0_slip1"
+  },
+  {
+   "id": "transition_mnq_120m_stop30_dedup0_slip2"
+  },
+  {
+   "id": "transition_mnq_120m_stop30_dedup1_slip1"
+  },
+  {
+   "id": "transition_mnq_120m_stop30_dedup1_slip2"
+  },
+  {
+   "id": "transition_mnq_120m_stop20_dedup0_slip1"
+  },
+  {
+   "id": "transition_mnq_120m_stop20_dedup0_slip2"
+  },
+  {
+   "id": "transition_mnq_120m_stop20_dedup1_slip1"
+  },
+  {
+   "id": "transition_mnq_120m_stop20_dedup1_slip2"
+  },
+  {
+   "id": "transition_mnq_EOD_stopnone_dedup0_slip1"
+  },
+  {
+   "id": "transition_mnq_EOD_stopnone_dedup0_slip2"
+  },
+  {
+   "id": "transition_mnq_EOD_stopnone_dedup1_slip1"
+  },
+  {
+   "id": "transition_mnq_EOD_stopnone_dedup1_slip2"
+  },
+  {
+   "id": "transition_mnq_EOD_stop30_dedup0_slip1"
+  },
+  {
+   "id": "transition_mnq_EOD_stop30_dedup0_slip2"
+  },
+  {
+   "id": "transition_mnq_EOD_stop30_dedup1_slip1"
+  },
+  {
+   "id": "transition_mnq_EOD_stop30_dedup1_slip2"
+  },
+  {
+   "id": "transition_mnq_EOD_stop20_dedup0_slip1"
+  },
+  {
+   "id": "transition_mnq_EOD_stop20_dedup0_slip2"
+  },
+  {
+   "id": "transition_mnq_EOD_stop20_dedup1_slip1"
+  },
+  {
+   "id": "transition_mnq_EOD_stop20_dedup1_slip2"
+  },
+  {
+   "id": "4hr_mnq_120m_stopnone_dedup0_slip1"
+  },
+  {
+   "id": "4hr_mnq_120m_stopnone_dedup0_slip2"
+  },
+  {
+   "id": "4hr_mnq_120m_stopnone_dedup1_slip1"
+  },
+  {
+   "id": "4hr_mnq_120m_stopnone_dedup1_slip2"
+  },
+  {
+   "id": "4hr_mnq_120m_stop30_dedup0_slip1"
+  },
+  {
+   "id": "4hr_mnq_120m_stop30_dedup0_slip2"
+  },
+  {
+   "id": "4hr_mnq_120m_stop30_dedup1_slip1"
+  },
+  {
+   "id": "4hr_mnq_120m_stop30_dedup1_slip2"
+  },
+  {
+   "id": "4hr_mnq_120m_stop20_dedup0_slip1"
+  },
+  {
+   "id": "4hr_mnq_120m_stop20_dedup0_slip2"
+  },
+  {
+   "id": "4hr_mnq_120m_stop20_dedup1_slip1"
+  },
+  {
+   "id": "4hr_mnq_120m_stop20_dedup1_slip2"
+  },
+  {
+   "id": "4hr_mnq_EOD_stopnone_dedup0_slip1"
+  },
+  {
+   "id": "4hr_mnq_EOD_stopnone_dedup0_slip2"
+  },
+  {
+   "id": "4hr_mnq_EOD_stopnone_dedup1_slip1"
+  },
+  {
+   "id": "4hr_mnq_EOD_stopnone_dedup1_slip2"
+  },
+  {
+   "id": "4hr_mnq_EOD_stop30_dedup0_slip1"
+  },
+  {
+   "id": "4hr_mnq_EOD_stop30_dedup0_slip2"
+  },
+  {
+   "id": "4hr_mnq_EOD_stop30_dedup1_slip1"
+  },
+  {
+   "id": "4hr_mnq_EOD_stop30_dedup1_slip2"
+  },
+  {
+   "id": "4hr_mnq_EOD_stop20_dedup0_slip1"
+  },
+  {
+   "id": "4hr_mnq_EOD_stop20_dedup0_slip2"
+  },
+  {
+   "id": "4hr_mnq_EOD_stop20_dedup1_slip1"
+  },
+  {
+   "id": "4hr_mnq_EOD_stop20_dedup1_slip2"
+  },
+  {
+   "id": "4hr_mnq_EOD_stop20_slip3"
+  },
+  {
+   "id": "4hr_mnq_EOD_stop25_slip3"
+  },
+  {
+   "id": "4hr_mnq_EOD_stop30_slip3"
+  },
+  {
+   "id": "4hr_mnq_120m_stop20_slip3"
+  },
+  {
+   "id": "4hr_mes_EOD_none_slip2"
+  },
+  {
+   "id": "4hr_mes_EOD_stop10_slip2"
+  },
+  {
+   "id": "4hr_mes_EOD_stop15_slip2"
+  }
+ ],
+ "results_sha256": null,
+ "note": "Recorded after the fact: UNREGISTERED_ATTEMPT. Variant list reconstructed from the scripts and outputs that actually ran."
+}

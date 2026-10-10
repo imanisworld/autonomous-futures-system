@@ -1,0 +1,13 @@
+{
+ "trial_id": "T-2026-10-10-futures-signal-time-exit-exploration-01",
+ "disposition": "INVALID_EVIDENCE",
+ "status": "UNREGISTERED_ATTEMPT \u2014 exploratory, post-hoc, not ledger evidence; must not be cited for Inventory/handoff/promotion claims",
+ "summary": {
+  "mes_orb_reclaim_fade": "+$2.7k at 0 slip, ~half at 1 tick, negative at 2 ticks, ~0 deduped: dead",
+  "transition_time_exit": "halves flip: dead",
+  "4hr_mnq_eod_no_stop": "+$7.6k t 2.42 n 79",
+  "4hr_mnq_eod_stop20": "67/79 stopped; 2026 negative; top-3-month 128%"
+ },
+ "raw_files": {},
+ "write_up": "docs/options-etf-expression-research-2026-10-10.md"
+}

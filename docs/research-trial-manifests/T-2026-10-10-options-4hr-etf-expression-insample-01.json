@@ -1,0 +1,31 @@
+{
+ "trial_id": "T-2026-10-10-options-4hr-etf-expression-insample-01",
+ "variants": [
+  {
+   "id": "mnq_qqq_atm_0_1dte"
+  },
+  {
+   "id": "mnq_qqq_atm_7dte"
+  },
+  {
+   "id": "mnq_qqq_atm_7dte_debit5"
+  },
+  {
+   "id": "mes_spy_atm_7dte"
+  },
+  {
+   "id": "322_qqq_atm_7dte"
+  },
+  {
+   "id": "mnq_qqq_otm1_7dte"
+  },
+  {
+   "id": "mes_spy_otm1_7dte"
+  },
+  {
+   "id": "combined_qqq_spy_atm_7dte"
+  }
+ ],
+ "results_sha256": null,
+ "note": "Recorded after the fact: UNREGISTERED_ATTEMPT. Variant list reconstructed from the scripts and outputs that actually ran."
+}

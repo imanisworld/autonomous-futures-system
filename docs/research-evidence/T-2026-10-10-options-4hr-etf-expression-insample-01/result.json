@@ -1,0 +1,40 @@
+{
+ "trial_id": "T-2026-10-10-options-4hr-etf-expression-insample-01",
+ "disposition": "INVALID_EVIDENCE",
+ "status": "UNREGISTERED_ATTEMPT \u2014 exploratory, post-hoc, not ledger evidence; must not be cited for Inventory/handoff/promotion claims",
+ "summary": {
+  "combined_qqq_spy_atm_7dte": {
+   "n": 151,
+   "net_usd": "5339..5943",
+   "t": "1.97..2.20",
+   "h1": "+3079..3379",
+   "h2": "+2260..2564",
+   "top3_month_share": "87..95%"
+  },
+  "mnq_qqq_atm_7dte": {
+   "n": 78,
+   "net_usd": "3350..3662",
+   "by_year": "2024 +0.2k, 2025 +3.6k, 2026 -0.3/-0.4k"
+  },
+  "mes_spy_atm_7dte": {
+   "n": 73,
+   "net_usd": "1989..2281",
+   "by_year": "2024 -0.5k, 2025 +0.8/+1.0k, 2026 +1.8k"
+  },
+  "mnq_qqq_atm_7dte_debit5": "dead (two-leg spread cost)",
+  "322_qqq_atm_7dte": "H1 negative",
+  "otm1": "same shape, cheaper; no new edge"
+ },
+ "raw_files": {
+  "research/options-etf-expression-2026-10-10/raw/variant-results/res_322_qqq_7d.json": "c97f6d3a3c58c9a5a1aa89fb98360ee5e5d4c134af865458127e255207efa192",
+  "research/options-etf-expression-2026-10-10/raw/variant-results/res_mes_spy_7d.json": "a474c9c4d3e5ea5cbbd991cf86e605df8b68e81e1e13bfae400fc12129e99423",
+  "research/options-etf-expression-2026-10-10/raw/variant-results/res_mes_spy_7d_otm1.json": "c8a4e311616ed5ca2e3aee743b11e5fac3a87760a9c90205b563038ce6b510bb",
+  "research/options-etf-expression-2026-10-10/raw/variant-results/res_mnq_qqq_7d.json": "33af97dd1ab62f8bfc1b76b7b54278e08e3ca25a36551139c18f470ccbb4859c",
+  "research/options-etf-expression-2026-10-10/raw/variant-results/res_mnq_qqq_7d_otm1.json": "ed44282b27b5032c46ae6c619b727a97f042708cb8d79fb0c7bf7b987961f928",
+  "research/options-etf-expression-2026-10-10/raw/variant-results/res_mnq_qqq_7d_v5.json": "41e84180c6f039b931bd15a7b57f5f692b9a27a4ee0d04fb7c191e8851b91219",
+  "research/options-etf-expression-2026-10-10/raw/variant-results/results.json": "a406c7ebd2cba20a888128fbe7027eeea0b0695797c0303b274a936e45b3b75b",
+  "research/options-etf-expression-2026-10-10/raw/scratch-scripts/run.py": "ae152d601f36e24de9db1ef6769a6746972f6526b3722c8a48d269b6a35c77a0",
+  "research/options-etf-expression-2026-10-10/raw/scratch-scripts/opt_bt.py": "ba3cbae5627d29ebd47757c2dac9bd7e8e0fbf2f4fd2dff8f9187ef47698daa6"
+ },
+ "write_up": "docs/options-etf-expression-research-2026-10-10.md"
+}

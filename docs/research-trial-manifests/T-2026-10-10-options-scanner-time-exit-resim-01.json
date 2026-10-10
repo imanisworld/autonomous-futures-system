@@ -1,0 +1,121 @@
+{
+ "trial_id": "T-2026-10-10-options-scanner-time-exit-resim-01",
+ "variants": [
+  {
+   "id": "ALL_own_contract_eod"
+  },
+  {
+   "id": "ALL_own_contract_d1"
+  },
+  {
+   "id": "ALL_own_contract_d2"
+  },
+  {
+   "id": "ALL_atm_7dte_eod"
+  },
+  {
+   "id": "ALL_atm_7dte_d1"
+  },
+  {
+   "id": "ALL_atm_7dte_d2"
+  },
+  {
+   "id": "H1_own_contract_eod"
+  },
+  {
+   "id": "H1_own_contract_d1"
+  },
+  {
+   "id": "H1_own_contract_d2"
+  },
+  {
+   "id": "H1_atm_7dte_eod"
+  },
+  {
+   "id": "H1_atm_7dte_d1"
+  },
+  {
+   "id": "H1_atm_7dte_d2"
+  },
+  {
+   "id": "212_own_contract_eod"
+  },
+  {
+   "id": "212_own_contract_d1"
+  },
+  {
+   "id": "212_own_contract_d2"
+  },
+  {
+   "id": "212_atm_7dte_eod"
+  },
+  {
+   "id": "212_atm_7dte_d1"
+  },
+  {
+   "id": "212_atm_7dte_d2"
+  },
+  {
+   "id": "H4_own_contract_eod"
+  },
+  {
+   "id": "H4_own_contract_d1"
+  },
+  {
+   "id": "H4_own_contract_d2"
+  },
+  {
+   "id": "H4_atm_7dte_eod"
+  },
+  {
+   "id": "H4_atm_7dte_d1"
+  },
+  {
+   "id": "H4_atm_7dte_d2"
+  },
+  {
+   "id": "DAILY_own_contract_eod"
+  },
+  {
+   "id": "DAILY_own_contract_d1"
+  },
+  {
+   "id": "DAILY_own_contract_d2"
+  },
+  {
+   "id": "DAILY_atm_7dte_eod"
+  },
+  {
+   "id": "DAILY_atm_7dte_d1"
+  },
+  {
+   "id": "DAILY_atm_7dte_d2"
+  },
+  {
+   "id": "LONG_own_contract_eod"
+  },
+  {
+   "id": "LONG_own_contract_d1"
+  },
+  {
+   "id": "LONG_atm_7dte_eod"
+  },
+  {
+   "id": "LONG_atm_7dte_d1"
+  },
+  {
+   "id": "SHORT_own_contract_eod"
+  },
+  {
+   "id": "SHORT_own_contract_d1"
+  },
+  {
+   "id": "SHORT_atm_7dte_eod"
+  },
+  {
+   "id": "SHORT_atm_7dte_d1"
+  }
+ ],
+ "results_sha256": null,
+ "note": "Recorded after the fact: UNREGISTERED_ATTEMPT. Variant list reconstructed from the scripts and outputs that actually ran."
+}

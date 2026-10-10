@@ -1,4 +1,6 @@
-# Raw evidence for docs/options-etf-expression-research-2026-10-10.md
+# Raw exploratory outputs for docs/options-etf-expression-research-2026-10-10.md
+
+Not ledger-governed evidence (see `docs/research-trial-ledger.jsonl` UNREGISTERED_ATTEMPT lines dated 2026-10-10; per-trial `result.json` files pin these files by SHA-256). Moved here from `docs/research-evidence/` so the canonical evidence boundary stays clean.
 
 - `scratch-scripts/`: the session research scripts as run. They read a Polygon key from `$TMPDIR/pk`; the key is not stored here.
   - `run.py`: first QQQ 4HR test (0–1DTE and ~7DTE).

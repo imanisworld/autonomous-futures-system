@@ -1,7 +1,7 @@
 # Options research handoff — futures signals expressed as ETF options (2026-10-10)
 
 Author: Claude (auditor/breaker role), working the **options** side at operator request.
-Status: **RESEARCH ONLY / NOT PREREGISTERED / NOT A SYSTEM.** No merge, deploy, runtime change, broker action or real money. Every result below is post-hoc on already-exposed signals unless marked OUT-OF-SAMPLE.
+Status: **RESEARCH ONLY / NOT PREREGISTERED / NOT A SYSTEM.** Ledger: every study here is recorded as `UNREGISTERED_ATTEMPT` / `INVALID_EVIDENCE` (`docs/research-trial-ledger.jsonl`, trials `T-2026-10-10-options-4hr-etf-expression-insample-01`, `…-oos-look-01`, `T-2026-10-10-options-scanner-time-exit-resim-01`, `T-2026-10-10-options-scanner-h4-nbbo-reprice-01`, `T-2026-10-10-futures-signal-time-exit-exploration-01`). None of it may be cited as Inventory/handoff/promotion evidence. Raw scripts/results: `research/options-etf-expression-2026-10-10/`. No merge, deploy, runtime change, broker action or real money. Every result below is post-hoc on already-exposed signals unless marked OUT-OF-SAMPLE.
 
 Companion: the ChatGPT futures checkpoint `docs/futures-research-resume-checkpoint-2026-10-10.md` (PR #1211 branch). This file adds to it; it does not replace it.
 
@@ -149,7 +149,7 @@ Run the tracker after each session (paper only). DEMO or real options only after
 
 ## 8. H4 scanner idea: NBBO re-price and $300 skip (requested by Grok/QA, 2026-10-10) — **FAILS; drop it**
 
-Script: `scripts/options_h4_quote_reprice.py`. Evidence: `docs/research-evidence/options-h4-7dte-d1-quotes-2026-10-10/` (`trades.csv`, `trades.jsonl`, `summary.json`; uncapped comparison in `no-cap/`).
+Script: `scripts/options_h4_quote_reprice.py`. Evidence: `research/options-etf-expression-2026-10-10/h4-nbbo-reprice/` (`trades.csv`, `trades.jsonl`, `summary.json`; uncapped comparison in `no-cap/`).
 
 - Source DB: `private/trading-evidence-2026-10-09/options_scanner.sqlite` (not committed), SHA-256 `edca35da4ee6b111b57e0f26f5a1a72a001f51b6bbf5ca4e79b9f7fefe0ff4a8`.
 - Population: all 5 H4 setup types (2-2-2 rev/cont, 2-1-2 cont, 3-2-2 rev/cont), WIN/LOSS rows, first sighting per unique setup = **77 setups**, 2026-09-16 → 2026-10-07. The earlier VWAP re-sim priced 68 of these.

@@ -1,0 +1,20 @@
+{
+ "trial_id": "T-2026-10-10-options-4hr-etf-expression-oos-look-01",
+ "disposition": "INVALID_EVIDENCE",
+ "status": "UNREGISTERED_ATTEMPT \u2014 exploratory, post-hoc, not ledger evidence; must not be cited for Inventory/handoff/promotion claims",
+ "summary": {
+  "signals": 9,
+  "priced": 9,
+  "wins": 4,
+  "net_usd": -384.46,
+  "mes_spy_net": "+416",
+  "mnq_qqq_net": "-801"
+ },
+ "raw_files": {
+  "research/options-etf-expression-2026-10-10/raw/forward-tracker/trades_2026-07-24_2026-10-09.jsonl": "d9563b7b7e4be09afe358eb8e7edc778faf37b97888914ca329d2d34aeae2bcf",
+  "research/options-etf-expression-2026-10-10/raw/forward-tracker/oos.txt": "71ba4029f03e4bb02ba43184193db1a19d0ad23213dc9508cf81344f3518048a",
+  "research/options-etf-expression-2026-10-10/raw/forward-tracker/trades_2026-01-02_2026-06-26.jsonl": "bd67b614b166ace9e99fc5b9f6809024a1b0c4c1dd758735688a4a14d9237d1e",
+  "scripts/options_4hr_etf_forward.py": "9580a1733cd764e65f55f91b682410ebe6ca20b85f6a18364de6fac561f5d2a6"
+ },
+ "write_up": "docs/options-etf-expression-research-2026-10-10.md"
+}

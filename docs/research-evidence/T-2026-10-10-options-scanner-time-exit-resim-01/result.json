@@ -1,0 +1,32 @@
+{
+ "trial_id": "T-2026-10-10-options-scanner-time-exit-resim-01",
+ "disposition": "INVALID_EVIDENCE",
+ "status": "UNREGISTERED_ATTEMPT \u2014 exploratory, post-hoc, not ledger evidence; must not be cited for Inventory/handoff/promotion claims",
+ "summary": {
+  "same_day_exit": "loses in every family (t -2..-7)",
+  "H4_atm_7dte_d1": {
+   "n": 68,
+   "net_usd": 6097,
+   "t": 2.01,
+   "h1": 3839,
+   "h2": 2258
+  },
+  "H4_atm_7dte_d2": {
+   "n": 69,
+   "net_usd": 12589,
+   "t": 2.62,
+   "h2": 1714
+  },
+  "H1_and_DAILY": "negative at all exits",
+  "caveat": "one month, clustered days, best of ~34 cells"
+ },
+ "raw_files": {
+  "research/options-etf-expression-2026-10-10/raw/scanner-resim/scan_same.json": "bd493e6c62a7b34ad85fd43125c935361dfab80d3dc3eb85d8cd6e720a3177f6",
+  "research/options-etf-expression-2026-10-10/raw/scanner-resim/scan_wk.json": "d3e33692a66fb9cd50347748b8d9b63394d9afcd4ec39ba7e578334d3203356f",
+  "research/options-etf-expression-2026-10-10/raw/scanner-resim/s_same.txt": "842b3748d04c26ec4fcd8b69b09d5143d0fb5ba1b73ddb08d9128fc64bb7b40c",
+  "research/options-etf-expression-2026-10-10/raw/scanner-resim/s_wk.txt": "403c292ab68a215d977fa68f0d95285cea725e9b4489370da1f4046928f9ba5e",
+  "research/options-etf-expression-2026-10-10/raw/scratch-scripts/scan_resim.py": "03cc5b8e702af683eff307fe173759db2989cf3078148bcc0228057b6e9cf99f",
+  "research/options-etf-expression-2026-10-10/raw/scratch-scripts/polylib.py": "d4ada4b8fcd74dabf41827710f49209e09afd50138614cf5ce42bceb3728b38d"
+ },
+ "write_up": "docs/options-etf-expression-research-2026-10-10.md"
+}

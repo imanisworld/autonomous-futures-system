@@ -75,6 +75,11 @@
 
 ### Options / research
 - Follow `docs/options-current-state-handoff.md` and the research ledger, not this file.
+- **2026-10-10 exploratory options work: DONE / DO NOT REDO** (Claude; branch `claude/options-time-exit-research-20261010`, not merged). Five `UNREGISTERED_ATTEMPT` / `INVALID_EVIDENCE` ledger lines record what ran.
+  - **H4 scanner → ~7DTE, next-session exit:** dropped after the NBBO + $300-skip kill test.
+  - **Scanner same-day time exits:** lose in every family.
+  - **4HR futures → QQQ/SPY ~7DTE options:** post-hoc lead, then −$384 on the first 9 unexamined trades.
+  - **NEXT for that idea, only with operator GO:** a frozen forward prereg under the v2 bar (≥60 trades, ≥30 days, one look, hard end date), using `scripts/options_4hr_etf_forward.py`. Do not re-run these variants on the same data.
 - Active options stack #1152→#1154 and other research PRs remain separate from futures runtime authorization.
 
 ## Lane authorities

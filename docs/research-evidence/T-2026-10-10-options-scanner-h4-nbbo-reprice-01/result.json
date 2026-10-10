@@ -1,0 +1,36 @@
+{
+ "trial_id": "T-2026-10-10-options-scanner-h4-nbbo-reprice-01",
+ "disposition": "INVALID_EVIDENCE",
+ "status": "UNREGISTERED_ATTEMPT \u2014 exploratory, post-hoc, not ledger evidence; must not be cited for Inventory/handoff/promotion claims",
+ "summary": {
+  "skip_over_300": {
+   "traded": 36,
+   "skipped": 41,
+   "days": 13,
+   "net_usd": 952.2,
+   "t_trade": 0.84,
+   "t_day_clustered": 0.71,
+   "best_day_share": 1.252
+  },
+  "no_cap": {
+   "traded": 77,
+   "days": 19,
+   "net_usd": 5026.9,
+   "t_day_clustered": 1.29,
+   "h1": 4586.9,
+   "h2": 440.0,
+   "best_day_share": 0.632
+  },
+  "verdict": "DROP"
+ },
+ "raw_files": {
+  "research/options-etf-expression-2026-10-10/h4-nbbo-reprice/trades.csv": "6a21998c2fb7a73bcf228cf920d57d9870b1111c340344c1f2f945a4579bcd03",
+  "research/options-etf-expression-2026-10-10/h4-nbbo-reprice/trades.jsonl": "7f784c2d178e21e126306ffd3b6971f378738e06223d8a42f2bd65c19411c29c",
+  "research/options-etf-expression-2026-10-10/h4-nbbo-reprice/summary.json": "0028d24b7f667a10bc8263ec18406906fcb52d672d9a072bf10f9705bfc23d68",
+  "research/options-etf-expression-2026-10-10/h4-nbbo-reprice/no-cap/trades.csv": "9b2c0949d2e33b684dc86d64cf24e6c4379e391437a8a2f39b4dd3d50e3923e9",
+  "research/options-etf-expression-2026-10-10/h4-nbbo-reprice/no-cap/trades.jsonl": "a46c9c52d55a0b514a7f557c5d1e9299662d178f6d600e8b0ccff71bb18ed421",
+  "research/options-etf-expression-2026-10-10/h4-nbbo-reprice/no-cap/summary.json": "6c0de75d8475ea479462be954042265dc6df0bf8145bc575eec51a2cc21cb319",
+  "scripts/options_h4_quote_reprice.py": "c6a421fdf8c2e740dc6f605847d08ce06c93a6e79d6c73dfd39d33cfeb747299"
+ },
+ "write_up": "docs/options-etf-expression-research-2026-10-10.md"
+}

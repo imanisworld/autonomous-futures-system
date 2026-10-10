@@ -1,12 +1,32 @@
 # Options — Current State Handoff
 
-_As of 2026-10-08. The newest dated repository refresh below governs source state; the latest verified box-specific sections govern runtime state until a fresh local/provider or VPS check is performed. This is the single current-state authority for the options lane._
+_As of 2026-10-10. The newest dated repository refresh below governs source state; the latest verified box-specific sections govern runtime state until a fresh local/provider or VPS check is performed. This is the single current-state authority for the options lane._
 
 Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`; the read-only coverage evidence lane (observer, reducer, outcome study, after-close collector) is described in `docs/options-coverage-observer.md`. The observation-only **setup-capture** lifecycle (`WATCHING` → `TRIGGERED` / `MISSED_LATE`) is described in `docs/options-setup-capture-observer.md`.
 
 **2026-10-08 options audit (operator-supplied Claude report; not independently repeated here):** The source contains a Webull **sandbox-paper-only** order-submit adapter; the reported running scanner/manager do **not** import or invoke it. The actual order-ticket flow remains preview-only. Shared VPS `.env` was checked for the five confirmed sandbox config flags/credentials and they were absent, but options-service-specific environment sources were **not** fully verified. The pinned `options-122-prospective` release was reported as `db9bc7e2` and isolated from futures promotion. Reported options suite: **3,110 passed, 1 skipped, 5 failed** in a restricted scratch export; the failures were attributed to missing `.git`/blocked `.env` writes, not independently reproduced as source defects. Source security safeguards are not strategy edge or proof of deployed v0.2/journal integrity. **No repeat box-wide audit is queued; targeted runtime/journal verification is needed only if a later change requires it.**
 
-## Active source and edge-research update — 2026-10-08 (latest checkpoint)
+## Exploratory options research — 2026-10-10 (Claude; RESEARCH ONLY, no state change)
+
+**Decision: NO NEW TRADE / NO RULE CHANGE / NOTHING DEPLOYED. Options edge still NOT PROVEN.** This entry records exploratory work so it is not repeated. It does not change epochs, trial registrations, cohort boundaries, runtime, or Epoch-3 accounting.
+
+- **Ledger status:** all five studies are `UNREGISTERED_ATTEMPT` / `INVALID_EVIDENCE` in `docs/research-trial-ledger.jsonl` (2026-10-10). Per the evidence boundary, none may be cited as handoff, Inventory or promotion evidence. Write-up: `docs/options-etf-expression-research-2026-10-10.md`. Raw outputs: `research/options-etf-expression-2026-10-10/`.
+- **Descriptive diagnosis of the scanner journal**, from a private Oct 9 DB copy (sha256 `edca35da…f4a8`; 413 first-sighting unique WIN/LOSS setups). This is arithmetic on recorded rows, not a new result:
+  - On the intraday families, median target/stop is 0.1–0.3. That needs about an 80–90% win rate; observed is about 58%.
+  - Every selected contract was 45–75 DTE.
+  - Exit reasons: target_hit averaged +$15; stop_hit −$61; premium_stop −$168.
+- **Time-exit re-simulation** (`T-2026-10-10-options-scanner-time-exit-resim-01`): same-day-close exits lose in every family. The H4 family on ~7DTE ATM held one session was the only positive cell (one month, clustered days).
+- **Kill test** (`T-2026-10-10-options-scanner-h4-nbbo-reprice-01`, requested by Grok/QA): NBBO ask-entry/bid-exit with the $300 skip gives 36 traded / 41 skipped, +$952, day-clustered t 0.71, best day 125% of net. **Idea DROPPED.** No paper trial proposed.
+- **4HR futures signal → QQQ/SPY ~7DTE ATM options held to the close** (`T-2026-10-10-options-4hr-etf-expression-insample-01`, `…-oos-look-01`):
+  - In-sample: 151 trades, +$5.3–5.9k, t ≈ 2.0–2.2, post-hoc after about 8 variants.
+  - First unexamined window (2026-07-24 → 2026-10-09): 9 trades, **−$384**. Not supportive.
+  - Any further judgement requires a frozen forward prereg under Grok's v2 bar (≥60 trades, ≥30 days, one look, hard end date).
+- **Tooling on branch `claude/options-time-exit-research-20261010`** (not merged; paper/research only, no broker path):
+  - `scripts/options_4hr_etf_forward.py`: Polygon futures 5m → canonical `advance_4hr_retrigger` → ETF option pricing. Parity 41/41 vs the audit population, Jan–Jun 2026.
+  - `scripts/options_h4_quote_reprice.py`: NBBO re-price with a premium cap.
+- **Unchanged:** Epoch-3 frozen/advisory; the 212c floor-outcome `-02` trial still has eligible start UNSET; #1067/#1069 undeployed; SPXW OFF.
+
+## Active source and edge-research update — 2026-10-08 (prior checkpoint; still governs source/priority state)
 
 **Decision: RESEARCH ONLY / NO NEW TRADE. Trading edge NOT PROVEN.** This is a dated source-and-priority reconciliation. It supersedes older **open-work status** lines in the Oct. 8 checkpoint below, without altering historical evidence, strategy/epoch definitions, trial registrations, or runtime state. Current `main` inspected at `307fe56771031b44eeb8d0235224cf010616ce4a`; this is a source SHA, **not** the installed VPS release.
 
