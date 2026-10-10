@@ -28,6 +28,18 @@ This is a narrow *source-route* inspection, not a new strategy experiment or a r
 
 **New QA-only integration regression:** `tests/test_combined_execution_risk_qa.py::test_natural_1m_4hr_touch_cannot_place_demo_order_even_when_route_armed` exercises a real observer arm/touch under an explicitly armed DEMO selector and asserts **no 5m DEMO call, no risk, no fill, no broker authorization**. See draft PR #1210. This intentionally proves isolation, **not parity**.
 
+## Newly verified blocker: canonical join provenance is not currently logged on 5m candidate rows
+
+This is a **source-schema gap**, not merely a shortage of sample observations:
+
+- The natural 1m `TRIGGER_TOUCH.arm_key` encodes `trading_date|direction|trigger|setup_bar_ts|four_am_bar_ts` with `contract_check` supplied separately.
+- The 5m collector `_candidate_key()` instead encodes `strategy|entry_time|entry|stop|target`; the 5m audit builder `_base_audit()` carries the candidate key plus risk-audit fields but **does not preserve the originating 4AM and setup bar timestamps, dated contract or explicit arm_key**. The *in-memory* detector candidate **does contain** `candidate["state"]["setup_bar_ts"]`, `candidate["state"]["four_am_bar_ts"]` and `candidate["state"]["trigger"]`, but discards them before persistent audit.
+- Joining natural 1m and 5m evidence solely on `MNQ`, date, near timestamps, entry/trigger price or a winning outcome would therefore invent provenance. Existing historical outputs cannot be declared matched based on those fields alone.
+
+**Next bounded source task (Cursor; source-only, no broker):** propose an *additive, versioned, read-only evidence identity* for **future** 5m canonical candidate observations derived from `candidate["state"]`: normalized `strategy`, ET trading date, direction, structural trigger, `setup_bar_ts`, `four_am_bar_ts`, and explicit dated-contract identity with UNKNOWN/MISMATCH preserved. Include negative tests for wrong setup stamp, roll mismatch, duplicate bar, missing arm, and same-minute arm/publish race. No change to fill/execution, accounting identities, existing trial rows or old epoch. The agent must obtain review before changing frozen research producers. **Do not backfill fabricated keys** into archived 5m journals.
+
+Only after new natural evidence can be joined with full identity should a separate bounded *mechanism-parity* study be preregistered and executed. Until then, classify naturally recorded 1m touches and 5m outcomes **UNMATCHABLE** instead of comparing profitability.
+
 ## Evidence needed for a true 1m-vs-5m parity decision
 
 1. Use only *eligible, distinct, naturally received* `arm_key` touches from the valid post-Oct-4 observer epoch. Exclude `UNKNOWN` contract matches until separately reviewed and all `MISMATCH` records; preserve blocks, duplicates and no-arm cases as separate counts.
