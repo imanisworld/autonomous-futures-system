@@ -38,5 +38,4 @@ def test_interleaved_market_cannot_supply_another_markets_price() -> None:
 ])
 def test_missing_or_gapped_next_bar_is_not_a_fill(later) -> None:
     candles = [_bar("2026-06-02T09:30:00-04:00", open_price=99.0), *later]
-    with pytest.raises(ValueError, match="market_at_reference"):
-        _next_executable_market_reference(candles, 0)
+    assert _next_executable_market_reference(candles, 0) is None

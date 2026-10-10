@@ -371,6 +371,8 @@ class SystemConfig:
     # fills at the planned order.entry. Default "market" remains legacy for
     # frozen-result reproduction; do not treat it as honest-fill proof.
     entry_fill_model: str = "market"  # market | market_at_reference | ioc_limit | stop_market
+    # Round-turn commission subtracted from replay strict-reference P&L only.
+    research_commission_round_trip: float = 1.48
     # Per-root tolerance ticks for ioc_limit — read from the SAME env names the
     # live broker uses (ENTRY_SLIPPAGE_TOLERANCE_TICKS_<ROOT>, then the global);
     # unset roots fall back to the live box's values (MES=16, MNQ=32). NOTE the

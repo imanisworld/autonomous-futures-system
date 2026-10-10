@@ -75,9 +75,12 @@ def test_research_fill_never_invokes_paper_mirror_hook(monkeypatch) -> None:
         raise AssertionError("offline research must not call a sandbox broker")
 
     monkeypatch.setattr(paper_mirror_hook, "after_entry", forbidden)
+    monkeypatch.setattr(paper_mirror_hook, "after_exit", forbidden)
     broker = ResearchReferencePaperBroker(entry_fill_model="market_at_reference")
     fill = broker.execute_bracket(_order(), market_price=100.0)
     assert fill.result != "CANCELLED"
+    outcome = broker.resolve_position(NextBarOHLC(open=100.0, high=135.0, low=90.0))
+    assert outcome is not None
 
 
 @pytest.mark.parametrize("requested_optimism", [None, False, True])

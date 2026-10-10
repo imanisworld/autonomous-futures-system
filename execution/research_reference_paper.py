@@ -82,3 +82,9 @@ class ResearchReferencePaperBroker(PaperBroker):
         return self._execute_bracket_impl(
             strict_order, market_price=reference, paper_order_id=paper_order_id
         )
+
+    def resolve_position(self, next_bar):
+        return self._resolve_position_impl(next_bar)
+
+    def force_resolve(self, result: str, exit_price: float):
+        return self._force_resolve_impl(result, exit_price)
