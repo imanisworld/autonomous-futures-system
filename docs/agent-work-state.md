@@ -8,16 +8,19 @@ Read **only** this block + `AGENTS.md` + `docs/futures-research-resume-checkpoin
 |---|---|
 | **This checkout** | `fix/timeframe-causal-buckets-research-20261010` @ **`f952caa`** (PR **#1211**, pushed) |
 | **Demo wiring branch (not merged)** | `research/4hr-mnq-400-forward-20261009` @ **`2f4f776`** — 4HR 400-tick forward, 3-2-2 shadow; **not pushed** last verified |
-| **Public resume** | `docs/futures-research-resume-checkpoint-2026-10-10.md` (+ Cursor addendum at bottom) |
+| **Public resume** | `docs/futures-research-resume-checkpoint-2026-10-10.md` (+ Cursor + Claude options appendices) |
+| **Options ETF handoff (separate branch)** | `claude/options-time-exit-research-20261010` @ **`a30f0a6`** — [handoff md](https://github.com/imanisworld/autonomous-futures-system/blob/claude/options-time-exit-research-20261010/docs/options-etf-expression-research-2026-10-10.md); **NOT merged**; OOS 9t −$384 per Claude; parity 41/41 **unverified re-run** |
 | **Saved 4HR benchmark** | `docs/research-evidence/T-2026-10-09-prereg-4hr-mnq-400-forward-2026-10-09-01/` (on **research** branch) |
 | **Saved ORB/VWAP sweeps** | `docs/research-evidence/orb-vwap-tf-window-sweep-2026-10-10/` (on **research** branch) |
 | **Fill/R:R drafts** | #1208 / #1209 / #1210 — CI green on checkpoint heads; **not merged** |
-| **Forward 4HR start** | **2026-10-12** — not collected, not deployed |
-| **Verdict** | **NOT DEMO-READY** — best path = deploy reviewed 4HR branch + forward collection after operator GO |
+| **Forward 4HR start** | **2026-10-12** — Track B; not collected, not deployed |
+| **Step 4 parity doc** | `docs/futures-demo-step4-1m-vs-5m-ioc-parity-2026-10-10.md` |
+| **Track B readiness** | `docs/futures-track-b-forward-readiness-2026-10-10.md` |
+| **Verdict** | **NOT DEMO-READY** — Track B forward after reviewed deploy of **research** SHA; Track A 1m observer parallel |
 
 **DO NOT REDO:** gzip 4HR cell reproduction; ORB/VWAP TF×window sweeps (baseline + trending + orb48); #1208–#1210 CI read unless heads move; Sep decompositions listed below.
 
-**NEXT (operator):** independent review on open PRs; optional push/deploy **research** SHA for 4HR-only demo; no ORB/VWAP promotion from sweeps.
+**NEXT (operator):** #1210/#1211 review at exact heads; #1208/#1209 Grok AFS-0212/0213 fixes; review + **push** `research/4hr-mnq-400-forward-20261009`; VPS read-only pins; **explicit GO** before deploy/collection. **NEXT (Cursor):** commit/push checkpoint docs on #1211 when asked; no deploy.
 
 Prior chat context for this session is **closed**. Section below is coordination archive unless stale.
 
@@ -35,6 +38,8 @@ Prior chat context for this session is **closed**. Section below is coordination
 - **Hold:** MGC wide is a **blinded** distinct prospective trial; Miyagi lacks sample/engine, MES 4HR historically failed, and the already rejected UTC-timeframe momentum/ORB/VWAP variants are **DO NOT REDO**. Do not change the authoritative Strategy Inventory or `research-trial-ledger.jsonl` without an actual registered state/approved decision. Full numeric findings are in the operator's private ChatGPT Library handoff `/Futures Research/Futures Research Handoff - 2026-10-10.md`, not for this public repository.
 
 **Step 1 source fixes (open drafts, no independent reviewer approval):** #1208 strict next-executable-price research fill, #1209 actual-bracket R:R and protective stop direction, #1210 combined QA, #1211 explicit anchor and complete/cross-contract bar validation. Each passed Python CI on earlier exact heads; retrieve current head/CI/reviews before any review or merge. #1211 is a **new-study isolated helper**, not a change to the frozen MGC scorer. Method comparison and public-safe notes: `docs/futures-research-resume-checkpoint-2026-10-10.md` on #1211.
+
+**Step 4 DEMO parity report (2026-10-10):** `docs/futures-demo-step4-1m-vs-5m-ioc-parity-2026-10-10.md` — source-only. **Conclusion:** existing DEMO/paper wide-stop = **5m close IOC8**; primary historical lead = **1m pre-armed touch**; honest DEMO tests Track B unless/until approved wiring for Track C. VPS box check still **open**.
 
 **Step 4 existing DEMO scaffolding / blockers:**
 - A separate **guarded Tradovate DEMO** wide-stop route already exists in `context/wide_stop_execution.py` and an isolated paper ledger exists in `context/wide_stop_ledger_paper.py`; do not create a competing execution path. **VERIFIED SOURCE MISMATCH:** `webhook/runner.py` returns `ONE_MIN_CONTEXT` with `execution_reachable=False` before DecisionEngine/RiskEngine/broker for every eligible 1m alert; `context/wide_stop_execution.py::DEMO_ENTRY_EXECUTION_MODE` is `ioc_limit` with `FROZEN_MNQ_IOC_TICKS=8`, used as `BracketOrder.entry_execution_mode_override` by `context/wide_stop_demo_runtime_core.py`. The wide-stop collector is driven from completed 5m bars (`context/wide_stop_forward_collector.py`). Therefore the existing guarded DEMO order route is **NOT the 1m pre-armed trigger path**. Do not claim 1m historical pre-armed profits apply to this DEMO model. Before proposing any route change, obtain separate human approval + independent order-safety review; next task is source-only 1m-vs-5m parity/feasibility report, not order wiring. No new demo order is authorized.

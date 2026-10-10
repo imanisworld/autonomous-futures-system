@@ -108,10 +108,30 @@ Append-only. Complements the Grok appendix and the operator’s **private** Chat
 
 ### Unfinished before DEMO (Cursor scope)
 
-1. Independent review / operator GO on #1208–#1210 (and #1211 on its own merits) — no merge for profitability claims.
-2. **MNQ 4HR parity** and honest IOC forward path on the research branch (per coordination commit on this PR branch) before treating demo as validated.
-3. Push reviewed SHA and **explicit** controlled deploy if operator wants the 4HR-only wide-stop lane on box — not done in this workstream.
-4. Do **not** re-open gzip census, ORB/VWAP sweeps, or #1208/#1209 CI reads unless heads or corpora drift (see `docs/agent-work-state.md` on branch `research/4hr-mnq-400-forward-20261009`).
+1. Independent review / operator GO on #1208–#1210 (and #1211 on its own merits) — no merge for profitability claims. **#1208 / #1209:** Grok review fixes (operator: AFS-0212 / AFS-0213) still pending before fill-sensitive replays.
+2. **Step 4 parity (done 2026-10-10):** `docs/futures-demo-step4-1m-vs-5m-ioc-parity-2026-10-10.md` — guarded DEMO ≠ 1m pre-armed lead; forward/demo must label **5m IOC8 wide-stop** or complete 1m observer prereg first.
+3. **Track B readiness (done 2026-10-10):** `docs/futures-track-b-forward-readiness-2026-10-10.md` — deploy **research** SHA for **400-tick** forward; do not score E-2026-10-09 on 300-tick `main`.
+4. **MNQ 4HR parity** — research branch wiring matches Track B prereg; collection still blocked until gates in readiness doc.
+5. Push reviewed SHA and **explicit** controlled deploy if operator wants Track B on box — checklist in Track B readiness doc; not done in this workstream.
+6. Do **not** re-open gzip census, ORB/VWAP sweeps, or #1208/#1209 CI reads unless heads or corpora drift (see `docs/agent-work-state.md` on branch `research/4hr-mnq-400-forward-20261009`).
+
+## Appendix — Claude options ETF expression (2026-10-10)
+
+Append-only. **Separate lane** from futures DEMO work above; does **not** change Grok’s futures verdict or Strategy Inventory. Full narrative, tables, and pass/fail gates for paper: branch `claude/options-time-exit-research-20261010`, file [`docs/options-etf-expression-research-2026-10-10.md`](https://github.com/imanisworld/autonomous-futures-system/blob/claude/options-time-exit-research-20261010/docs/options-etf-expression-research-2026-10-10.md) (HEAD **`a30f0a6`** at Cursor verify). **Not merged** into `main` or #1211.
+
+**Verdict (options as profit system): NOT PROVEN / NOT DEMO-READY.** Aligns with Grok **Options V1 REJECT** on scanner geometry; adds a **hypothesis** that 4HR direction-to-close may be expressible as defined-risk QQQ/SPY ~7DTE held to session close — **not** validated for live/demo.
+
+**Reconciliation with futures lane (conceptual, not a combined strategy):**
+
+- Same underlying idea as gzip 4HR “hold to EOD without stop”: direction often works by the close while account-sized stops fail intraday noise (Claude §3a; Cursor 4HR cell on research branch).
+- **Futures forward path** on box remains **5m IOC wide-stop collector** / prereg on `research/4hr-mnq-400-forward-20261009` — **not** ETF options and **not** 1m pre-armed DEMO wiring.
+- **Options expression** is paper-only tracker `scripts/options_4hr_etf_forward.py` on the Claude branch (Polygon bars + canonical `advance_4hr_retrigger`); box has **no** enabled MNQ 4HR strategy in main engine per handoff §5.6.
+
+**Cursor verified this session (remote branch only):** handoff doc exists at cited SHA; tracker imports same state machine as `edge_decomposition_audit`; Claude-reported **parity Jan–Jun 2026: 41/41** and **OOS Jul 24–Oct 9 2026: 9 trades, −$384** are **not independently re-run here** — treat numbers as Claude evidence until a breaker re-executes.
+
+**Pending on Claude branch (§6):** 1% OTM ~7DTE QQQ/SPY; scanner 413-setup time-exit re-sim — update the linked doc when complete; do not promote from partial OOS.
+
+**Operator hygiene:** rotate **Polygon** API key if it was exposed in chat (Claude note); no broker action from this research.
 
 ### Explicit non-actions (Cursor)
 
