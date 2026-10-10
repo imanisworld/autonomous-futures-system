@@ -68,6 +68,18 @@ Prior chat context for this session is **closed**. Section below is coordination
 
 - **Next — FUTURES:** Decide package downgrades, memory pressure, and paper LONG disposition, then candidate nomination/review **separately**. Historical box proof is operator-supplied and must be freshness-checked at any later release GO, not endlessly rerun during source work. No runtime mutation authorized.
 
+## Prepared, not installed — Cursor Cloud maintenance (2026-10-09)
+
+- **Branch:** `ops/cursor-cloud-vps-maintenance`, draft PR #1206. Not installed. `main` stays `bd5ea24`.
+- **AFS-0194 NB3a — DONE:** recovery refuses when the base unit file hash changes (covered by `test_base_unit_edit_after_crash_is_not_reloaded`).
+- **AFS-0194 NB3b — FIXED THIS HEAD (pending Grok):** recovery now compares on-disk runtime drop-in bytes to the intent **before** approval consumption; refuses unexpected/changed runtime files even when loaded `DropInPaths` still look unchanged. FakeHost keeps loaded `DropInPaths` frozen until `daemon-reload` (systemd-accurate). Regression: `test_runtime_execstart_after_crash_is_not_reloaded` plus updated Environment= case.
+- **Tests:** `.venv/bin/python -m pytest tests/test_afs_maintenance.py -q` — 81 passed on this head. Mutation removing the on-disk runtime gate makes `test_runtime_execstart_after_crash_is_not_reloaded` fail. Prior `ef11bef1` / `32799045` checkpoint wrongly labelled all of NB3 complete — that is corrected here.
+- **Runtime:** No VPS read or write. Trading-data reconciliation remains blocked on VPS journals/DB/marks.
+- **DONE / DO NOT REDO:** AFS-0191 NB1/NB2; NB3a. Do not install from an agent session.
+- **#1207 (fixture-only review, 2026-10-09):** draft at `f7722697`. SOURCE OK FOR FIXTURES; live totals UNVERIFIED. Do not repeat the fixture review.
+- **#1071:** leave unchanged until VPS ledger arrives (`--db` / `--epoch` already available).
+- **NEXT:** Grok reviews only this NB3b delta on the new exact head. No installation, daemon-reload, MemoryMax change, SSH change, merge, deploy, or capital increase.
+
 > **Purpose:** compact resume checkpoint for agents. This file is coordination state only; it is **not** strategy-status, experiment, deployment, or runtime authority.
 >
 > **Authoritative records:** follow the source-of-truth table in `AGENTS.md`.
