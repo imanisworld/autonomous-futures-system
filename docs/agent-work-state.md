@@ -20,7 +20,7 @@ Read **only** this block + `AGENTS.md` + `docs/futures-research-resume-checkpoin
 
 **DO NOT REDO:** gzip 4HR cell reproduction; ORB/VWAP TF×window sweeps (baseline + trending + orb48); #1208–#1210 CI read unless heads move; Sep decompositions listed below.
 
-**NEXT (operator):** #1210/#1211 review at exact heads; #1208/#1209 Grok AFS-0212/0213 fixes; review + **push** `research/4hr-mnq-400-forward-20261009`; VPS read-only pins; **explicit GO** before deploy/collection. **NEXT (Cursor):** commit/push checkpoint docs on #1211 when asked; no deploy.
+**NEXT (operator):** Grok **re-confirm** #1208 @ `4c914134` (stop-first fixes likely AFS-0212/0213 already on branch); merge train #1208→#1209→#1210 when approved; **#1211** wait for GitHub **tests** green then merge; **explicit GO** before deploy research SHA; VPS read-only pins. **Independent review:** `docs/futures-pr-independent-review-2026-10-10.md`. **Research branch:** pushed @ `2f4f776`. **NOT done:** merge, deploy, forward collection.
 
 Prior chat context for this session is **closed**. Section below is coordination archive unless stale.
 
