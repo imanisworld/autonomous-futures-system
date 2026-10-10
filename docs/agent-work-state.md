@@ -18,7 +18,7 @@ Prior chat context for this lane is **closed**. Details below are archive unless
 ## SAVED — ORB/VWAP TF×window sweep (2026-10-10) — DONE / DO NOT REDO
 
 - **Copy:** `docs/research-evidence/orb-vwap-tf-window-sweep-2026-10-10/README.md` + `results.json`; runner `scripts/orb_vwap_tf_window_sweep.py`.
-- **Takeaway:** 10/15/30m × morning (9:40–11) / afternoon (1:30–4) NY, IOC — no strong ORB/VWAP lane; weak **10m ORB reclaim** only (+$19 morning / +$352 all NY). **15m** windows negative. **VWAP** all negative.
+- **Takeaway:** 10/15/30m × morning (9:40–11) / afternoon (1:30–4) NY, IOC — no strong ORB/VWAP lane; weak **10m ORB reclaim** only (+$19 morning / +$352 all NY) **without** trending. **Follow-up:** `FOLLOWUP-trending.md` + `results-trending.json` / `results-trending-orb48.json` — trending (± ORB 48t) kills the 10m reclaim flicker; still no demo lane.
 
 ## SAVED — what worked (2026-10-10) — DONE / DO NOT REDO
 

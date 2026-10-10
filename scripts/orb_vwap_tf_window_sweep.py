@@ -152,11 +152,37 @@ def summarize(resolved: list[dict]) -> dict:
     }
 
 
-def run_sweep(data_root: Path, ny_only: bool = True) -> dict:
+def _trending_at_bar(builder: StateBuilder, bars, idx: int) -> bool:
+    state = builder.state_at(idx)
+    if state is None:
+        return False
+    return builder.decision._score_market_condition(state) == "TRENDING"
+
+
+def run_sweep(
+    data_root: Path,
+    *,
+    ny_only: bool = True,
+    require_trending: bool = False,
+    mnq_orb_stop_ticks: int | None = None,
+) -> dict:
     config = load_config()
     config = dataclasses.replace(config, require_trending_condition=False)
+    if mnq_orb_stop_ticks is not None:
+        stops = dict(config.orb_stop_ticks or {})
+        stops["MNQ"] = int(mnq_orb_stop_ticks)
+        config = dataclasses.replace(config, orb_stop_ticks=stops)
     instrument = "MNQ"
-    out: dict = {"meta": {"instrument": instrument, "ny_only": ny_only, "fill": "ioc_limit"}, "cells": []}
+    out: dict = {
+        "meta": {
+            "instrument": instrument,
+            "ny_only": ny_only,
+            "fill": "ioc_limit",
+            "require_trending_filter": require_trending,
+            "mnq_orb_stop_ticks": mnq_orb_stop_ticks,
+        },
+        "cells": [],
+    }
 
     tf_loaders: dict[int, object] = {
         15: load_bars(data_root / CORPUS_15M, instrument),
@@ -169,6 +195,11 @@ def run_sweep(data_root: Path, ny_only: bool = True) -> dict:
         for strategy, predicate, campaign in STRATEGIES:
             lane = make_lane(strategy, predicate, campaign, tf, f"{strategy}_mnq_{tf}m")
             candidates = extract_predicate(lane, bars, builder)
+            if require_trending:
+                candidates = [
+                    c for c in candidates
+                    if _trending_at_bar(builder, bars, c.bar_idx)
+                ]
             bracket_rows = run_bracket_stage(
                 lane, bars, candidates,
                 fill_model="ioc_limit", slippage_ticks=1.0, tolerance_ticks=32.0,
@@ -217,8 +248,23 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data-root", type=Path, default=REPO / "data")
     parser.add_argument("--output", type=Path, default=REPO / "scripts/orb_vwap_tf_window_sweep_results.json")
+    parser.add_argument(
+        "--require-trending",
+        action="store_true",
+        help="Keep only bars where _score_market_condition is TRENDING",
+    )
+    parser.add_argument(
+        "--mnq-orb-stop-ticks",
+        type=int,
+        default=None,
+        help="Override config orb_stop_ticks for MNQ (breakout/reclaim stop offset)",
+    )
     args = parser.parse_args()
-    report = run_sweep(args.data_root)
+    report = run_sweep(
+        args.data_root,
+        require_trending=args.require_trending,
+        mnq_orb_stop_ticks=args.mnq_orb_stop_ticks,
+    )
     args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(report, indent=2))
 
