@@ -78,8 +78,8 @@ def test_two_contracts_keep_the_sooner_expiry():
 
 def test_expired_listing_is_not_used():
     rows = [
-        {"ticker": "MGCV6", "first_trade_date": "2025-10-01", "last_trade_date": "2026-09-28"},
-        {"ticker": "MGCZ6", "first_trade_date": "2025-12-01", "last_trade_date": "2026-12-28"},
+        {"ticker": "MGCV6", "product_code": "MGC", "first_trade_date": "2025-10-01", "last_trade_date": "2026-09-28"},
+        {"ticker": "MGCZ6", "product_code": "MGC", "first_trade_date": "2025-12-01", "last_trade_date": "2026-12-28"},
     ]
     assert listed_front("MGC", rows, date(2026, 10, 9)) == "MGCZ6"
 
