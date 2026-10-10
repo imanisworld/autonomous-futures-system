@@ -26,7 +26,7 @@ def _date(value: Any, label: str) -> date:
     if isinstance(value, date):
         return value
     if isinstance(value, str):
-        if not re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}", value):
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
             raise MNQSealViolation(f"{label}: invalid YYYY-MM-DD date")
         try:
             return date.fromisoformat(value)
