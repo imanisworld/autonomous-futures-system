@@ -20,7 +20,7 @@ Use `close_ts` (not `ts`) to prove a higher-timeframe signal was available to an
 
 `pytest -q tests/test_timeframe_integrity.py`
 
-The 28 focused tests cover supported periods, closed-bar timestamps, New York DST shifts, UTC-vs-session alignment, missing source intervals, incomplete last buckets, contract rolls, invalid price/source metadata, and the daily maintenance break. GitHub exact-head full CI and independent review are required before relying on the new path.
+The 30 focused tests cover supported periods, closed-bar timestamps, New York DST shifts, UTC-vs-session alignment, missing source intervals, incomplete last buckets, contract rolls, invalid price/source metadata, and the daily maintenance break. Two additional diagnostics deliberately compare the legacy frozen resampler against the new, strict path on synthetic incomplete/cross-contract candles; no live study data is opened. GitHub exact-head full CI and independent review are required before relying on the new path.
 
 This PR is **not** an edge discovery result or permission to trade. If the validation changes measured signals, the earlier unguarded result is not grandfathered into evidence.
 
