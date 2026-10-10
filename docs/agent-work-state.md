@@ -6,11 +6,11 @@ Read **only** this block + `AGENTS.md` + `docs/futures-research-resume-checkpoin
 
 | Item | Value |
 |---|---|
-| **GitHub `main`** | **`71e5f45`** — **#1208** + **#1209** + **#1211** (`e9c9a0e` PR head) merged |
-| **Open research PRs** | **#1210** integration R:R regression; **#1212** 4HR arm identity; **#1213** 1m/5m join fail-closed |
+| **GitHub `main`** | **`6d3078f`** — research stack **#1208–#1213** merged (latest: **#1213**) |
+| **Open futures research PRs (this lane)** | **#1206**, **#1207** (reports/docs); no open #1210–#1213 |
 | **Demo wiring branch (not merged)** | `research/4hr-mnq-400-forward-20261009` @ **`2f4f776`** — 4HR 400-tick forward, 3-2-2 shadow |
 | **Public resume** | `docs/futures-research-resume-checkpoint-2026-10-10.md` (+ Cursor + Claude options appendices) |
-| **Options ETF handoff (separate branch)** | `claude/options-time-exit-research-20261010` @ **`a30f0a6`** — [handoff md](https://github.com/imanisworld/autonomous-futures-system/blob/claude/options-time-exit-research-20261010/docs/options-etf-expression-research-2026-10-10.md); **NOT merged**; OOS 9t −$384 per Claude; parity 41/41 **unverified re-run** |
+| **Options ETF handoff** | Branch **`claude/options-time-exit-research-20261010`** **deleted** from GitHub (2026-10-10 cleanup); copy in **`/workspace/afs-shared/`** if needed — **unverified here** |
 | **Saved 4HR benchmark** | `docs/research-evidence/T-2026-10-09-prereg-4hr-mnq-400-forward-2026-10-09-01/` (on **research** branch) |
 | **Saved ORB/VWAP sweeps** | `docs/research-evidence/orb-vwap-tf-window-sweep-2026-10-10/` (on **research** branch) |
 | **Forward 4HR start** | **2026-10-12** — Track B; not collected, not deployed |
@@ -21,7 +21,7 @@ Read **only** this block + `AGENTS.md` + `docs/futures-research-resume-checkpoin
 
 **DO NOT REDO:** gzip 4HR cell reproduction; ORB/VWAP TF×window sweeps (baseline + trending + orb48); Grok PASS work on merged **#1208**/**#1209**; Sep decompositions listed below.
 
-**NEXT:** Independent review **#1210** / **#1212** / **#1213** before merge; **explicit GO** before deploy **research** SHA (`2f4f776` or successor); fresh VPS read-only pins at promote time. **Independent review (Oct 10):** `docs/futures-pr-independent-review-2026-10-10.md` (pre-#1208 merge; refresh after #1211). **NOT done:** deploy, forward collection, DEMO-ready claim.
+**NEXT:** **Explicit GO** before deploy **research** SHA (`2f4f776` or successor on `research/4hr-mnq-400-forward-20261009`); fresh VPS read-only pins + deployment-safety at promote time. Optional: refresh `docs/futures-pr-independent-review-2026-10-10.md` for post-#1213 `main`. **NOT done:** deploy, forward collection, DEMO-ready claim.
 
 Prior chat context for this session is **closed**. Section below is coordination archive unless stale.
 

@@ -8,7 +8,7 @@
 
 - [x] Grok sign-off on #1208 / #1209 (merged on `main` @ `a675a8d`)
 - [x] **#1211** merged on `main` @ `71e5f45`
-- [ ] Merge **#1210** / **#1212** / **#1213** (or explicit abandon with SHA recorded)
+- [x] **#1210** @ `7d766b2` → **`465abc2`**; **#1212** @ `9df1a09` → **`05363a4`**; **#1213** @ `730ef53` → **`6d3078f`**
 - [ ] Track B decision: research SHA deployed **or** forward prereg explicitly paused with SHA frozen in checkpoint
 - [ ] Claude options handoff merged/archived on GitHub (`claude/options-time-exit-research-20261010` @ `a30f0a6` or successor)
 - [ ] Any open PR you still care about is **merged, closed, or copied** to `main`/checkpoint docs
