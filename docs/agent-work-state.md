@@ -6,10 +6,10 @@ Read **only** this block + `AGENTS.md` + `docs/futures-research-resume-checkpoin
 
 | Item | Value |
 |---|---|
-| **GitHub `main`** | **`572cd13`** — **#1208–#1213** merged; **#1215** pending (AFS-0234/0235 mutant tests) |
-| **Track B** | PR **#1216** @ **`0bb04c7`** — exact 300-tick demo stop reaches the broker. **No deploy.** |
+| **GitHub `main`** | **`43385e0`** — **#1215** merged |
+| **Track B** | PR **#1216** @ **`3e4f59a`**. Demo stop **300** ticks / **$150**. Paper `wide_stop_4k` stays **400**. That review is not this branch. **No deploy.** |
 | **DO NOT deploy** | `research/4hr-mnq-400-forward-20261009` @ **`2f4f776`** (~157 commits behind `main`; no **#1208/#1209**) |
-| **Open futures research PRs (this lane)** | **#1206**, **#1207**, **#1215** |
+| **Open futures research PRs (this lane)** | **#1206**, **#1207**, **#1216** |
 | **Public resume** | `docs/futures-research-resume-checkpoint-2026-10-10.md` (+ Cursor + Claude options appendices) |
 | **Options ETF handoff** | Branch **`claude/options-time-exit-research-20261010`** **deleted** from GitHub (2026-10-10 cleanup); copy in **`/workspace/afs-shared/`** if needed — **unverified here** |
 | **Saved 4HR benchmark** | `docs/research-evidence/T-2026-10-09-prereg-4hr-mnq-400-forward-2026-10-09-01/` (on **research** branch) |
@@ -23,7 +23,7 @@ Read **only** this block + `AGENTS.md` + `docs/futures-research-resume-checkpoin
 
 **DO NOT REDO:** gzip 4HR cell reproduction; ORB/VWAP TF×window sweeps (baseline + trending + orb48); Grok PASS work on merged **#1208**/**#1209**; Sep decompositions listed below. Do not retune the six-micro daily rule. Do not rerun the failed month-end, cross-market momentum, or VIX tests (414 total). MNQ bars from 2026-06-29 through 2027-01-29 are scoring inputs only.
 
-**NEXT:** Grok reviews #1216 at **`0bb04c7`** and the six-micro paper registration. Do not deploy. Do not score either study. 1m arm fills/costs **not implemented**. **NOT done:** deploy, forward collection on the box, DEMO-ready claim, tsmom score.
+**NEXT:** Grok reviews the six-micro paper registration on this branch (`3fc8709`, amended by `d5ed5d6`). Do not score it. Do not deploy it. Track B stays on **#1216**. 1m arm fills/costs **not implemented**. **NOT done:** deploy, forward collection on the box, DEMO-ready claim, tsmom score.
 
 Prior chat context for this session is **closed**. Section below is coordination archive unless stale.
 
