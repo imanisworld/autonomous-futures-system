@@ -66,3 +66,15 @@ def test_legacy_model_still_reproduces_planned_fill() -> None:
 def test_unknown_model_still_rejected() -> None:
     with pytest.raises(ValueError, match="unknown entry_fill_model"):
         PaperBroker(entry_fill_model="unproved_guess")
+
+
+def test_research_fill_never_invokes_paper_mirror_hook(monkeypatch) -> None:
+    from execution import paper_mirror_hook
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("offline research must not call a sandbox broker")
+
+    monkeypatch.setattr(paper_mirror_hook, "after_entry", forbidden)
+    broker = ResearchReferencePaperBroker(entry_fill_model="market_at_reference")
+    fill = broker.execute_bracket(_order(), market_price=100.0)
+    assert fill.result != "CANCELLED"
