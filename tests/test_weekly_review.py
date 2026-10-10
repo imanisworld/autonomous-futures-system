@@ -133,3 +133,88 @@ def test_main_failsoft_writes_artifact_no_webhook(tmp_path, monkeypatch, capsys)
     assert data["week"] == "2026-W26"
     assert data["approved_trades"] == 4
     assert "no webhook configured" in capsys.readouterr().out
+
+
+def test_your_limits_lines_render_both_systems_in_plain_english():
+    from scripts.weekly_review import your_limits_lines
+
+    fut = {"trades": 12, "wins": 5, "losses": 7, "net_usd": -40.5, "max_drawdown_usd": 210.0}
+    opt = {"closed": 4, "wins": 1, "losses": 3, "pnl_usd": -300.0, "max_drawdown_usd": 320.0}
+    lines = your_limits_lines({
+        "futures": {"account": fut, "per_market": {**fut, "trades": 0}, "every_signal": fut},
+        "options": {"account": opt, "per_ticker": opt, "no_limit": opt},
+    })
+    text = "\n".join(lines)
+    assert "Whole account: 12 trades, 5 won, 7 lost, -$40.50, deepest drop $210" in text
+    assert "Each market separately: no trades" in text
+    assert "**Your limits · options, what-if** (at most 3 new paper trades a day)" in text
+    assert your_limits_lines(None) == [] and your_limits_lines({}) == []
+
+
+def test_collect_your_limits_is_fail_soft(tmp_path):
+    from datetime import date as _date
+
+    from scripts.weekly_review import collect_your_limits, your_limits_lines
+
+    got = collect_your_limits(tmp_path, tmp_path / "missing.sqlite", _date(2026, 9, 28), _date(2026, 10, 4))
+    assert got["futures"]["account"]["trades"] == 0          # no journals: empty, not an error
+    assert "not found" in got["options"]["unavailable"]      # missing data is said, not shown as "no trades"
+    assert "not shown — options database not found" in "\n".join(your_limits_lines(got))
+
+
+def test_collect_your_limits_skips_futures_for_a_week_with_no_trading_days_yet(tmp_path):
+    from datetime import date as _date, timedelta as _td
+
+    from scripts.weekly_review import collect_your_limits
+
+    monday = _date.today() + _td(days=14 - _date.today().weekday())
+    got = collect_your_limits(tmp_path, tmp_path / "missing.sqlite", monday, monday + _td(days=6))
+    assert "futures" not in got
+
+
+def test_your_limits_lines_show_running_total_coverage_and_tie_range():
+    from scripts.weekly_review import your_limits_lines
+
+    fut = {"trades": 4, "wins": 1, "losses": 3, "net_usd": -50.0, "max_drawdown_usd": 80.0,
+           "priced": 3, "unpriced": 1}
+    opt = {"closed": 4, "wins": 1, "losses": 3, "pnl_usd": -144.0, "max_drawdown_usd": 347.0,
+           "same_scan_ties": 1, "pnl_range_usd": [-834.0, -144.0]}
+    text = "\n".join(your_limits_lines({
+        "futures": {"account": fut, "per_market": fut, "every_signal": fut},
+        "futures_total": {"account": fut, "per_market": fut, "every_signal": fut},
+        "futures_since": "2026-09-23",
+        "options": {"account": opt, "per_ticker": opt, "no_limit": {**opt, "pnl_range_usd": None}},
+    }))
+    assert "**Your limits · futures, what-if**" in text and "the bot's own limit is unchanged" in text
+    assert "Running total since Sep 23:" in text
+    assert "(dollars cover 3 of 4 trades; 1 could not be priced)" in text
+    assert "-$834.00 to -$144.00 depending on which same-time trade is taken" in text
+
+
+def test_your_limits_futures_unavailable_is_said_not_dropped():
+    from scripts.weekly_review import your_limits_lines
+
+    text = "\n".join(your_limits_lines({"futures": {"unavailable": "futures limits could not be computed"}}))
+    assert "**Your limits · futures**: not shown — futures limits could not be computed" in text
+
+
+def test_k35_k36_weekly_guards_show_unavailable_when_a_calculation_fails(tmp_path, monkeypatch):
+    from datetime import date as _date
+
+    from ops import options_daily_pnl_report as odp
+    from ops import shadow_daily_pnl_report as sdp
+    from scripts.weekly_review import collect_your_limits, your_limits_lines
+
+    def boom(*a, **k):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(sdp, "capped_report", boom)
+    monkeypatch.setattr(odp, "load_rows", boom)
+    db = tmp_path / "options.sqlite"
+    db.write_bytes(b"")
+    got = collect_your_limits(tmp_path, db, _date(2026, 9, 28), _date(2026, 10, 4))
+    assert got["futures"] == {"unavailable": "futures limits could not be computed"}
+    assert got["options"] == {"unavailable": "options limits could not be computed"}
+    text = "\n".join(your_limits_lines(got))
+    assert "futures**: not shown — futures limits could not be computed" in text
+    assert "options**: not shown — options limits could not be computed" in text
