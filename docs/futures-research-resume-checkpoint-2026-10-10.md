@@ -81,3 +81,38 @@ Log-only shadow tracking of the daily trend rule and the FOMC follow rule (no or
 
 ### Untested
 Options volatility selling (needs more than a month of option quotes); carry/roll yield; longer-history multi-market trend.
+
+## Appendix — Cursor research addendum (2026-10-10)
+
+Append-only. Complements the Grok appendix and the operator’s **private** ChatGPT Library handoff (`/Futures Research/Futures Research Handoff - 2026-10-10.md`). This section does **not** duplicate private journals, account P&L, or per-trade tables. Numeric detail for repo-local artifacts lives only under `docs/research-evidence/` paths cited below.
+
+### What was verified (this lane, source-only)
+
+- **Fill / R:R correctness drafts:** [#1208](https://github.com/imanisworld/autonomous-futures-system/pull/1208), [#1209](https://github.com/imanisworld/autonomous-futures-system/pull/1209), [#1210](https://github.com/imanisworld/autonomous-futures-system/pull/1210) — exact-head CI green at the heads recorded in the table above; **not merged, not deployed**.
+- **`market_condition` / TRENDING:** Pine bucket logic reconstructed in `scripts/pine_market_condition.py`; runtime trusts Pine `TRENDING` / `RANGE_BOUND` verbatim in `strategy/signal_engine.py` (`_score_market_condition`); production `require_trending_condition` blocks non-`TRENDING` before setups (322 exempt, 4HR not). Replay labels carry `RECONSTRUCTED_UNVALIDATED_INIT` for ATR-dependent buckets — parity spot-check still open.
+- **ORB / VWAP in inventory corpus:** Under **IOC @ decision close**, ORB reclaim/breakout and VWAP hold remain negative in both `TRENDING` and `RANGE_BOUND` on the committed candidate artifact; losses align with **written bracket geometry**, not a missing trending gate alone.
+- **Supply / demand:** No runtime detector — `research/sd_zone_round4/` is research-only; validation prereg exists, blind window not scored.
+
+### Saved public artifacts (do not re-run unless paths change)
+
+| Artifact | Branch / note |
+|---|---|
+| MNQ 4HR 400-tick historical benchmark + forward prereg wiring | `research/4hr-mnq-400-forward-20261009` (not merged); `docs/research-evidence/T-2026-10-09-prereg-4hr-mnq-400-forward-2026-10-09-01/` |
+| ORB/VWAP 10m·15m·30m × NY windows 09:40–11:00 & 13:30–16:00, IOC | `docs/research-evidence/orb-vwap-tf-window-sweep-2026-10-10/` (`README.md`, `results.json`) |
+| Same sweep + **TRENDING** filter; + **TRENDING** and MNQ ORB stop 48t | `FOLLOWUP-trending.md`, `results-trending.json`, `results-trending-orb48.json` in that folder |
+| Runner | `scripts/orb_vwap_tf_window_sweep.py` (`--require-trending`, `--mnq-orb-stop-ticks`) |
+
+**ORB/VWAP sweep verdict (IOC, NY-only):** No demo-ready lane from timeframe + clock window alone. A weak **10m ORB reclaim** slice without trending does **not** survive the trending filter; wider ORB stops do not flip requested windows positive. **15m** (audit-aligned) stays negative in those windows. **VWAP** negative all cells with very low fill rate.
+
+**4HR cell (separate from ORB/VWAP):** Historical benchmark on consumed artifact dates is saved in the evidence folder above; forward collection spec is **APPROVED** for sessions from **2026-10-12** — still **not collected**, **not deployed**. Demo wiring on the research branch shadows 3-2-2 fills.
+
+### Unfinished before DEMO (Cursor scope)
+
+1. Independent review / operator GO on #1208–#1210 (and #1211 on its own merits) — no merge for profitability claims.
+2. **MNQ 4HR parity** and honest IOC forward path on the research branch (per coordination commit on this PR branch) before treating demo as validated.
+3. Push reviewed SHA and **explicit** controlled deploy if operator wants the 4HR-only wide-stop lane on box — not done in this workstream.
+4. Do **not** re-open gzip census, ORB/VWAP sweeps, or #1208/#1209 CI reads unless heads or corpora drift (see `docs/agent-work-state.md` on branch `research/4hr-mnq-400-forward-20261009`).
+
+### Explicit non-actions (Cursor)
+
+No merge, deploy, VPS change, broker order, demo/live activation, strategy-status edit, or sealed MGC forward peek.
