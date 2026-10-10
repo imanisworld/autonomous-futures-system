@@ -95,10 +95,15 @@ def _strict_research_commission_round_trip(config) -> float:
     return float(getattr(config, "research_commission_round_trip", 1.48) or 0.0)
 
 
-def _strict_net_pnl(gross: float | None, commission: float) -> float | None:
-    if gross is None or commission <= 0:
+def _strict_net_pnl(
+    gross: float | None,
+    commission_per_contract: float,
+    contracts: int = 1,
+) -> float | None:
+    if gross is None or commission_per_contract <= 0:
         return gross
-    return round(float(gross) - commission, 2)
+    qty = max(int(contracts or 1), 1)
+    return round(float(gross) - (commission_per_contract * qty), 2)
 
 _DEFAULT_HTF_FILES = {
     "1D": "data/htf/CME_MINI_MNQ1!_1D.jsonl",
@@ -361,7 +366,11 @@ class ReplayEngine:
                     # SAME paper_order_id already minted on that row (#327/
                     # #332's exact-identity join).
                     _carry_gross = _carry_fill.pnl_dollars
-                    _carry_net = _strict_net_pnl(_carry_gross, strict_commission_rt)
+                    _carry_net = _strict_net_pnl(
+                        _carry_gross,
+                        strict_commission_rt,
+                        _carry_fill.contracts,
+                    )
                     journal.log_outcome(
                         instrument=_carry_fill.instrument,
                         session=_carried.get("session") or "",
@@ -383,14 +392,18 @@ class ReplayEngine:
                             "historical_signal_bar_ts": _carried.get("historical_signal_bar_ts"),
                             "historical_entry_bar_ts": _carried.get("historical_entry_bar_ts"),
                             "historical_resolution_bar_ts": _fc.timestamp,
-                            **(
-                                {
-                                    "gross_pnl_dollars": _carry_gross,
-                                    "commission_round_trip": strict_commission_rt,
-                                }
-                                if strict_commission_rt
-                                else {}
-                            ),
+                                **(
+                                    {
+                                        "gross_pnl_dollars": _carry_gross,
+                                        "commission_round_trip": strict_commission_rt,
+                                        "commission_dollars": round(
+                                            strict_commission_rt * max(int(_carry_fill.contracts or 1), 1),
+                                            2,
+                                        ),
+                                    }
+                                    if strict_commission_rt
+                                    else {}
+                                ),
                         },
                     )
                     # Mirror the engine's own NORMAL same-day resolve path
@@ -737,7 +750,11 @@ class ReplayEngine:
                     )
                     resolved_fill.exit_reason = _pre["exit_reason"]
                     _pre_gross = resolved_fill.pnl_dollars
-                    _pre_net = _strict_net_pnl(_pre_gross, strict_commission_rt)
+                    _pre_net = _strict_net_pnl(
+                        _pre_gross,
+                        strict_commission_rt,
+                        resolved_fill.contracts,
+                    )
                     journal.log_outcome(
                         instrument=resolved_fill.instrument,
                         session=state.session,
@@ -1001,7 +1018,11 @@ class ReplayEngine:
                         fill = broker.cancel_pending_entry("ENTRY_NO_NEXT_BAR")
                     if fill is not None:
                         _fill_gross = fill.pnl_dollars
-                        _fill_net = _strict_net_pnl(_fill_gross, strict_commission_rt)
+                        _fill_net = _strict_net_pnl(
+                            _fill_gross,
+                            strict_commission_rt,
+                            fill.contracts,
+                        )
                         journal.log_outcome(
                             instrument=fill.instrument,
                             session=state.session,
@@ -1025,6 +1046,10 @@ class ReplayEngine:
                                     {
                                         "gross_pnl_dollars": _fill_gross,
                                         "commission_round_trip": strict_commission_rt,
+                                        "commission_dollars": round(
+                                            strict_commission_rt * max(int(fill.contracts or 1), 1),
+                                            2,
+                                        ),
                                     }
                                     if strict_commission_rt
                                     else {}
