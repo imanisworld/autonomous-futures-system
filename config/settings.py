@@ -365,8 +365,14 @@ class SystemConfig:
     # Limit-IOC capped at entry ± tolerance; unmarketable → CANCELLED /
     # ENTRY_NOT_FILLED, no trade counted. "stop_market" arms a causal next-bar
     # stop entry using NextBarOHLC.open for gaps; missing next-bar open fails
-    # closed. Default "market" = zero behavior change.
-    entry_fill_model: str = "market"  # market | ioc_limit | stop_market
+    # closed. "market_at_reference" is a strict research market fill: callers
+    # must supply a positive, finite, causally available execution price
+    # (historical next-bar open), then adverse slippage is applied. It never
+    # fills at the planned order.entry. Default "market" remains legacy for
+    # frozen-result reproduction; do not treat it as honest-fill proof.
+    entry_fill_model: str = "market"  # market | market_at_reference | ioc_limit | stop_market
+    # Round-turn commission subtracted from replay strict-reference P&L only.
+    research_commission_round_trip: float = 1.48
     # Per-root tolerance ticks for ioc_limit — read from the SAME env names the
     # live broker uses (ENTRY_SLIPPAGE_TOLERANCE_TICKS_<ROOT>, then the global);
     # unset roots fall back to the live box's values (MES=16, MNQ=32). NOTE the
@@ -1238,9 +1244,9 @@ def _validate_config(config: SystemConfig) -> None:
         raise ConfigError(
             "exit_mode must be one of: static, runner_shadow, runner_live."
         )
-    if config.entry_fill_model not in {"market", "ioc_limit", "stop_market"}:
+    if config.entry_fill_model not in {"market", "market_at_reference", "ioc_limit", "stop_market"}:
         raise ConfigError(
-            "entry_fill_model must be one of: market, ioc_limit, stop_market."
+            "entry_fill_model must be one of: market, market_at_reference, ioc_limit, stop_market."
         )
     if config.max_staleness_seconds < 1:
         raise ConfigError("max_staleness_seconds must be >= 1.")

@@ -89,6 +89,7 @@ def cmd_run(root: Path, args: argparse.Namespace) -> int:
         path,
         write_evidence=not args.no_write_evidence,
         evidence_dir=Path(args.evidence_dir) if args.evidence_dir else None,
+        evaluation_partition=args.partition,
     )
     if args.json:
         print(json.dumps(report.to_dict(), indent=2, sort_keys=True))
@@ -125,6 +126,18 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--json", action="store_true")
     run.add_argument("--no-write-evidence", action="store_true")
     run.add_argument("--evidence-dir", type=str, default=None)
+    run.add_argument(
+        "--partition",
+        type=str,
+        default=None,
+        choices=["development", "validation", "untouched_oos"],
+        help=(
+            "Active chronological evaluation partition. Mandatory when "
+            "chronological_partitions are declared; must not contradict the "
+            "spec's evaluation_partition. untouched_oos is once-only per "
+            "exact approved trial_id."
+        ),
+    )
     run.set_defaults(func=cmd_run)
 
     return parser

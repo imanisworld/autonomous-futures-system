@@ -47,17 +47,36 @@ _require_exact_sha() {
 }
 
 build_release() {
-  deploy_lock_acquire "$LOCK_DIR" "build $REF" "$0" "$FORCE_LOCK" || exit 1
-  trap "deploy_lock_release '$LOCK_DIR' '$DEPLOY_LOCK_OWNER'" EXIT
+  # U11: a release is built only for an exact, merged SHA with current live
+  # GitHub CI proof. Obtain the audit artifact first (public API, no token):
+  #   python3 -m ops.release_ci_proof fetch --sha <sha> --out <proof.json>
+  if [[ -z "${RELEASE_CI_PROOF:-}" || ! -f "${RELEASE_CI_PROOF}" ]]; then
+    echo "build refused: set RELEASE_CI_PROOF to the exact-SHA CI proof file (ops.release_ci_proof fetch)" >&2
+    exit 65
+  fi
+  local ci_proof box_python
+  ci_proof="$(cd "$(dirname "$RELEASE_CI_PROOF")" && pwd)/$(basename "$RELEASE_CI_PROOF")"
+  box_python="${AFS_BOX_PYTHON:-python3.13}"
+  if [[ ! "$box_python" =~ ^[A-Za-z0-9_./-]+$ ]]; then
+    echo "build refused: AFS_BOX_PYTHON contains unsupported characters: $box_python" >&2
+    exit 67
+  fi
 
-  git fetch -q origin
+  # Refresh canonical main and prove the exact release commit is merged into it.
+  # It need not be the current tip: sanctioned releases intentionally allow an
+  # older reviewed SHA after it is reachable from main, avoiding ride-alongs.
+  git fetch -q origin '+refs/heads/main:refs/remotes/origin/main'
   local sha short work archive manifest
   sha="$(git rev-parse "$REF^{commit}")"
+  if ! git merge-base --is-ancestor "$sha" origin/main; then
+    echo "build refused: release SHA $sha is not merged into origin/main" >&2
+    exit 66
+  fi
   short="${sha:0:12}"
   work="$(mktemp -d "/tmp/afs-release-${short}.XXXX")"
-  archive="/tmp/afs-release-${short}.tgz"
+  archive="$(mktemp "/tmp/afs-release-${short}.XXXX")"
   manifest="$work/release_manifest.json"
-  trap "git worktree remove -f '$work' >/dev/null 2>&1 || true; rm -f '$archive'; deploy_lock_release '$LOCK_DIR' '$DEPLOY_LOCK_OWNER'" EXIT
+  trap "git worktree remove -f '$work' >/dev/null 2>&1 || true; rm -f '$archive'" EXIT
 
   git worktree add --detach "$work" "$sha" >/dev/null
   (
@@ -66,6 +85,13 @@ build_release() {
     # Running the release's own ops modules must not create one, here or in
     # the tarball built from this worktree.
     export PYTHONDONTWRITEBYTECODE=1
+    # Use the candidate release's own verifier. Saved JSON is not authority:
+    # verify-live re-queries GitHub and requires the newest required run IDs
+    # to match this exact SHA before any connection to the futures box.
+    python3 -m ops.release_ci_proof verify-live --sha "$sha" --proof "$ci_proof"
+    python3 -m ops.dependency_lock check-python
+    python3 -m ops.dependency_lock check-requirements \
+      --lock requirements.lock --requirements requirements.txt
     RELEASE_BRANCH=main python3 -m ops.release_manifest \
       --repo-root . --output release_manifest.json
     # The check reports UNPINNED (exit 1) without a fingerprint pin (#1056).
@@ -75,16 +101,38 @@ build_release() {
     tar czf "$archive" --exclude=.git .
   )
 
-  remote "mkdir -p '$RELEASES' '$SHARED/logs' '$SHARED/data' '$SHARED/backups' '$SHARED/candidate-logs'"
+  # Local source/CI/dependency proof passed. Only now touch the box-side lock.
+  deploy_lock_acquire "$LOCK_DIR" "build $REF" "$0" "$FORCE_LOCK" || exit 1
+  trap "deploy_lock_release '$LOCK_DIR' '$DEPLOY_LOCK_OWNER'" EXIT
+  trap "git worktree remove -f '$work' >/dev/null 2>&1 || true; rm -f '$archive'; deploy_lock_release '$LOCK_DIR' '$DEPLOY_LOCK_OWNER'" EXIT
+  remote "mkdir -p '$RELEASES' '$SHARED/logs' '$SHARED/data' '$SHARED/backups' '$SHARED/candidate-logs' '$SHARED/release-complete'"
   scp -q "$archive" "$BOX:/tmp/afs-release-${short}.tgz"
   remote "
     set -e
+    box_python='$box_python'
+    if ! command -v \"\$box_python\" >/dev/null 2>&1; then
+      echo \"build refused: box python interpreter not found: \$box_python\" >&2
+      exit 67
+    fi
+    box_python_version=\$(\"\$box_python\" -c 'import sys; print(sys.version_info.major, sys.version_info.minor, sep=chr(46))')
+    if [ \"\$box_python_version\" != \"3.13\" ]; then
+      echo \"build refused: box python interpreter \$box_python is \$box_python_version; expected 3.13\" >&2
+      exit 67
+    fi
     test ! -e '$RELEASES/$sha' || { echo 'release already exists: $sha'; exit 2; }
+    rm -f '$SHARED/release-complete/$sha' '$SHARED/release-complete/$sha.tmp'
     mkdir '$RELEASES/$sha'
     tar xzf '/tmp/afs-release-${short}.tgz' -C '$RELEASES/$sha'
-    python3 -m venv '$RELEASES/$sha/.venv'
-    '$RELEASES/$sha/.venv/bin/pip' install -q --requirement '$RELEASES/$sha/requirements.txt'
+    PYTHONDONTWRITEBYTECODE=1 PYTHONPATH='$RELEASES/$sha' \"\$box_python\" -m ops.dependency_lock check-python
+    \"\$box_python\" -m venv '$RELEASES/$sha/.venv'
+    # U11: install ONLY the exact production lock, no dependency resolution;
+    # then prove the venv is complete and identical to the lock.
+    '$RELEASES/$sha/.venv/bin/pip' install -q --no-deps --requirement '$RELEASES/$sha/requirements.lock'
+    '$RELEASES/$sha/.venv/bin/pip' check
     '$RELEASES/$sha/.venv/bin/pip' freeze > '$SHARED/release-${sha}-dependencies.txt'
+    PYTHONDONTWRITEBYTECODE=1 PYTHONPATH='$RELEASES/$sha' '$RELEASES/$sha/.venv/bin/python' \
+      -m ops.dependency_lock check-freeze --lock '$RELEASES/$sha/requirements.lock' \
+      --freeze '$SHARED/release-${sha}-dependencies.txt'
     # Root ignores the a-w below; without this, the check writes the
     # __pycache__ it refuses into the release.
     built_fp=\$(PYTHONDONTWRITEBYTECODE=1 '$RELEASES/$sha/.venv/bin/python' -c \"import json;print(json.load(open('$RELEASES/$sha/release_manifest.json'))['fingerprint_sha256'])\")
@@ -92,6 +140,10 @@ build_release() {
     PYTHONDONTWRITEBYTECODE=1 PYTHONPATH='$RELEASES/$sha' '$RELEASES/$sha/.venv/bin/python' \
       -m ops.release_integrity --repo-root '$RELEASES/$sha'
     chmod -R a-w '$RELEASES/$sha'
+    # A release directory can exist after a failed box-side install/check.
+    # Publish completion only after every dependency/integrity check succeeds.
+    printf '%s\n' \"\$built_fp\" > '$SHARED/release-complete/$sha.tmp'
+    mv -f '$SHARED/release-complete/$sha.tmp' '$SHARED/release-complete/$sha'
     rm -f '/tmp/afs-release-${short}.tgz'
   "
   echo "$sha"
@@ -114,6 +166,10 @@ verify_release() {
   remote "
     set -e
     test -d '$RELEASES/$sha'
+    test -f '$SHARED/release-complete/$sha' || { echo 'release incomplete: $sha'; exit 3; }
+    complete_fp=\$(cat '$SHARED/release-complete/$sha')
+    release_fp=\$('$RELEASES/$sha/.venv/bin/python' -c \"import json;print(json.load(open('$RELEASES/$sha/release_manifest.json'))['fingerprint_sha256'])\")
+    test "\$complete_fp" = "\$release_fp" || { echo 'release completion fingerprint mismatch: $sha'; exit 3; }
     test -f '$SHARED/.env'
     candidate_env='$SHARED/candidate-env-$sha'
     cleanup_candidate() {
@@ -215,18 +271,72 @@ _promote_gate_check() {
 }
 
 promote_release() {
+  # A build can sit on disk after CI changes. Re-prove the exact SHA immediately
+  # before promotion; stale saved JSON, a newer failing/running required check,
+  # or a SHA no longer reachable from canonical main all block before box lock.
+  if [[ -z "${RELEASE_CI_PROOF:-}" || ! -f "${RELEASE_CI_PROOF}" ]]; then
+    echo "promotion refused: set RELEASE_CI_PROOF to the exact-SHA CI proof file" >&2
+    exit 65
+  fi
+  local sha="$REF" ci_proof
+  ci_proof="$(cd "$(dirname "$RELEASE_CI_PROOF")" && pwd)/$(basename "$RELEASE_CI_PROOF")"
+  git fetch -q origin '+refs/heads/main:refs/remotes/origin/main'
+  if ! git merge-base --is-ancestor "$sha" origin/main; then
+    echo "promotion refused: release SHA $sha is not merged into origin/main" >&2
+    exit 66
+  fi
+  PYTHONDONTWRITEBYTECODE=1 python3 -m ops.release_ci_proof verify-live \
+    --sha "$sha" --proof "$ci_proof"
+
   deploy_lock_acquire "$LOCK_DIR" "promote $REF" "$0" "$FORCE_LOCK" || exit 1
   trap "deploy_lock_release '$LOCK_DIR' '$DEPLOY_LOCK_OWNER'" EXIT
 
-  local sha="$REF"
   _promote_gate_check "$sha" || exit 1
 
   remote "
     set -e
     test -d '$RELEASES/$sha'
-    test -f '$SHARED/.env'
+    test -f '$SHARED/release-complete/$sha' || { echo 'release incomplete: $sha'; exit 3; }
+    complete_fp=\$(cat '$SHARED/release-complete/$sha')
     fp=\$('$RELEASES/$sha/.venv/bin/python' -c \"import json;print(json.load(open('$RELEASES/$sha/release_manifest.json'))['fingerprint_sha256'])\")
+    test "\$complete_fp" = "\$fp" || { echo 'release completion fingerprint mismatch: $sha'; exit 3; }
+    test -f '$SHARED/.env'
+    # A missing history file must never fail after the active release switches.
+    # This is a mandatory read-only gate before .env, symlink or service writes.
+    test -f '$SHARED/release_history.txt' || {
+      echo 'promotion refused: release_history.txt missing before activation' >&2
+      exit 1
+    }
     risk_sha=\$('$RELEASES/$sha/.venv/bin/python' -c \"import json;print(json.load(open('$RELEASES/$sha/release_manifest.json'))['risk_rules_sha256'])\")
+    # Read-only watcher destination/source preflight BEFORE .env, symlink or service mutation.
+    watcher_preflight_enabled=0
+    if systemctl cat afs-watcher.service >/dev/null 2>&1; then
+      watcher_pre_src='$RELEASES/$sha/ops/afs_watcher'
+      watcher_pre_dest=\$(systemctl show afs-watcher.service -p WorkingDirectory --value)
+      if test -z \"\$watcher_pre_dest\"; then
+        echo 'release refused: watcher WorkingDirectory is empty' >&2
+        exit 1
+      fi
+      case \"\$watcher_pre_dest\" in
+        /*) ;;
+        *) echo 'release refused: watcher WorkingDirectory is not absolute' >&2; exit 1 ;;
+      esac
+      watcher_shared_root=\$(realpath -e -- '$SHARED') || exit 1
+      watcher_pre_dest=\$(realpath -e -- \"\$watcher_pre_dest\") || exit 1
+      case \"\$watcher_pre_dest\" in
+        \"\$watcher_shared_root\"/*) ;;
+        *) echo 'release refused: watcher WorkingDirectory outside shared root' >&2; exit 1 ;;
+      esac
+      test -d \"\$watcher_pre_dest\" || exit 1
+      for watcher_file in watcher.py watcher_memory_guard.py run_ro.sh supervisor.sh bootstrap_tmp_state.sh; do
+        test -f \"\$watcher_pre_src/\$watcher_file\" || exit 1
+        test ! -L \"\$watcher_pre_dest/\$watcher_file\" || exit 1
+      done
+      for watcher_file in bounded_log_pipe.py watcher_triage.py discord_card.py plain_english.py; do
+        test ! -L \"\$watcher_pre_dest/\$watcher_file\" || exit 1
+      done
+      watcher_preflight_enabled=1
+    fi
     sed -i '/^EXPECTED_RELEASE_FINGERPRINT=/d;/^EXPECTED_LIVE_BRANCH=/d;/^EXPECTED_LIVE_COMMIT=/d;/^EXPECTED_RISK_RULES_SHA256=/d' '$SHARED/.env'
     printf 'EXPECTED_RELEASE_FINGERPRINT=%s\nEXPECTED_LIVE_BRANCH=main\nEXPECTED_LIVE_COMMIT=%s\nEXPECTED_RISK_RULES_SHA256=%s\n' \
       \"\$fp\" '$sha' \"\$risk_sha\" >> '$SHARED/.env'
@@ -284,34 +394,38 @@ promote_release() {
     # continues running its /tmp copy until restart, so these copies cannot
     # mutate the currently executing watcher mid-tick. Secrets/backups in the
     # shared directory are untouched.
-    if systemctl cat afs-watcher.service >/dev/null 2>&1; then
+    if test \"\$watcher_preflight_enabled\" = 1; then
       watcher_src='$CURRENT/ops/afs_watcher'
-      watcher_dest=\$(systemctl show afs-watcher.service -p WorkingDirectory --value)
-      test -n "\$watcher_dest"
-      test -d "\$watcher_dest"
+      # Use the exact resolved destination approved before the release changed.
+      # Never reinterpret the raw $SHARED spelling or systemd WorkingDirectory
+      # after .env, symlink and futures service mutations.
+      watcher_dest=\"\$watcher_pre_dest\"
+      test -d \"\$watcher_dest\" || exit 1
       for watcher_file in watcher.py watcher_memory_guard.py run_ro.sh supervisor.sh bootstrap_tmp_state.sh; do
-        test -f "\$watcher_src/\$watcher_file"
-        cp -f "\$watcher_src/\$watcher_file" "\$watcher_dest/\$watcher_file"
-        cmp -s "\$watcher_src/\$watcher_file" "\$watcher_dest/\$watcher_file"
+        test -f \"\$watcher_src/\$watcher_file\"
+        cp -f \"\$watcher_src/\$watcher_file\" \"\$watcher_dest/\$watcher_file\"
+        cmp -s \"\$watcher_src/\$watcher_file\" \"\$watcher_dest/\$watcher_file\"
       done
-      if test -f "\$watcher_src/bounded_log_pipe.py"; then
-        cp -f "\$watcher_src/bounded_log_pipe.py" "\$watcher_dest/bounded_log_pipe.py"
-        cmp -s "\$watcher_src/bounded_log_pipe.py" "\$watcher_dest/bounded_log_pipe.py"
+      if test -f \"\$watcher_src/bounded_log_pipe.py\"; then
+        cp -f \"\$watcher_src/bounded_log_pipe.py\" \"\$watcher_dest/bounded_log_pipe.py\"
+        cmp -s \"\$watcher_src/bounded_log_pipe.py\" \"\$watcher_dest/bounded_log_pipe.py\"
       fi
-      if test -f "\$watcher_src/watcher_triage.py"; then
-        cp -f "\$watcher_src/watcher_triage.py" "\$watcher_dest/watcher_triage.py"
-        cmp -s "\$watcher_src/watcher_triage.py" "\$watcher_dest/watcher_triage.py"
+      if test -f \"\$watcher_src/watcher_triage.py\"; then
+        cp -f \"\$watcher_src/watcher_triage.py\" \"\$watcher_dest/watcher_triage.py\"
+        cmp -s \"\$watcher_src/watcher_triage.py\" \"\$watcher_dest/watcher_triage.py\"
       else
-        rm -f "\$watcher_dest/watcher_triage.py"
+        rm -f \"\$watcher_dest/watcher_triage.py\"
       fi
       # Display helpers the watcher imports fail-open (cards, plain-English wording).
       for helper_file in discord_card.py plain_english.py; do
         if test -f "$CURRENT/notifications/\$helper_file"; then
-          cp -f "$CURRENT/notifications/\$helper_file" "\$watcher_dest/\$helper_file"
-          cmp -s "$CURRENT/notifications/\$helper_file" "\$watcher_dest/\$helper_file"
+          cp -f "$CURRENT/notifications/\$helper_file" \"\$watcher_dest/\$helper_file\"
+          cmp -s "$CURRENT/notifications/\$helper_file" \"\$watcher_dest/\$helper_file\"
         fi
       done
-      chmod 700 "\$watcher_dest"/*.sh
+      for watcher_file in run_ro.sh supervisor.sh bootstrap_tmp_state.sh; do
+        chmod 700 \"\$watcher_dest/\$watcher_file\"
+      done
       systemctl restart afs-watcher.service
       sleep 2
       systemctl is-active afs-watcher.service
@@ -332,6 +446,35 @@ rollback_release() {
     prev_fp=\$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[\"fingerprint_sha256\"])' \"\$manifest\")
     prev_commit=\$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[\"repo\"][\"commit\"])' \"\$manifest\")
     prev_risk=\$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[\"risk_rules_sha256\"])' \"\$manifest\")
+    # Read-only watcher destination/source preflight BEFORE .env, symlink or service mutation.
+    watcher_preflight_enabled=0
+    if systemctl cat afs-watcher.service >/dev/null 2>&1; then
+      watcher_pre_src=\"\$previous/ops/afs_watcher\"
+      watcher_pre_dest=\$(systemctl show afs-watcher.service -p WorkingDirectory --value)
+      if test -z \"\$watcher_pre_dest\"; then
+        echo 'release refused: watcher WorkingDirectory is empty' >&2
+        exit 1
+      fi
+      case \"\$watcher_pre_dest\" in
+        /*) ;;
+        *) echo 'release refused: watcher WorkingDirectory is not absolute' >&2; exit 1 ;;
+      esac
+      watcher_shared_root=\$(realpath -e -- '$SHARED') || exit 1
+      watcher_pre_dest=\$(realpath -e -- \"\$watcher_pre_dest\") || exit 1
+      case \"\$watcher_pre_dest\" in
+        \"\$watcher_shared_root\"/*) ;;
+        *) echo 'release refused: watcher WorkingDirectory outside shared root' >&2; exit 1 ;;
+      esac
+      test -d \"\$watcher_pre_dest\" || exit 1
+      for watcher_file in watcher.py watcher_memory_guard.py run_ro.sh supervisor.sh bootstrap_tmp_state.sh; do
+        test -f \"\$watcher_pre_src/\$watcher_file\" || exit 1
+        test ! -L \"\$watcher_pre_dest/\$watcher_file\" || exit 1
+      done
+      for watcher_file in bounded_log_pipe.py watcher_triage.py discord_card.py plain_english.py; do
+        test ! -L \"\$watcher_pre_dest/\$watcher_file\" || exit 1
+      done
+      watcher_preflight_enabled=1
+    fi
     sed -i '/^EXPECTED_RELEASE_FINGERPRINT=/d;/^EXPECTED_LIVE_BRANCH=/d;/^EXPECTED_LIVE_COMMIT=/d;/^EXPECTED_RISK_RULES_SHA256=/d' '$SHARED/.env'
     printf 'EXPECTED_RELEASE_FINGERPRINT=%s\nEXPECTED_LIVE_BRANCH=main\nEXPECTED_LIVE_COMMIT=%s\nEXPECTED_RISK_RULES_SHA256=%s\n' \
       \"\$prev_fp\" \"\$prev_commit\" \"\$prev_risk\" >> '$SHARED/.env'
@@ -355,34 +498,38 @@ rollback_release() {
       -m ops.release_integrity --repo-root '$CURRENT'
     # Rollback changes the same release pins/link as promotion. Restore the
     # persistent watcher source from that verified release before re-arming it.
-    if systemctl cat afs-watcher.service >/dev/null 2>&1; then
+    if test \"\$watcher_preflight_enabled\" = 1; then
       watcher_src='$CURRENT/ops/afs_watcher'
-      watcher_dest=\$(systemctl show afs-watcher.service -p WorkingDirectory --value)
-      test -n "\$watcher_dest"
-      test -d "\$watcher_dest"
+      # Use the exact resolved destination approved before the release changed.
+      # Never reinterpret the raw $SHARED spelling or systemd WorkingDirectory
+      # after .env, symlink and futures service mutations.
+      watcher_dest=\"\$watcher_pre_dest\"
+      test -d \"\$watcher_dest\" || exit 1
       for watcher_file in watcher.py watcher_memory_guard.py run_ro.sh supervisor.sh bootstrap_tmp_state.sh; do
-        test -f "\$watcher_src/\$watcher_file"
-        cp -f "\$watcher_src/\$watcher_file" "\$watcher_dest/\$watcher_file"
-        cmp -s "\$watcher_src/\$watcher_file" "\$watcher_dest/\$watcher_file"
+        test -f \"\$watcher_src/\$watcher_file\"
+        cp -f \"\$watcher_src/\$watcher_file\" \"\$watcher_dest/\$watcher_file\"
+        cmp -s \"\$watcher_src/\$watcher_file\" \"\$watcher_dest/\$watcher_file\"
       done
-      if test -f "\$watcher_src/bounded_log_pipe.py"; then
-        cp -f "\$watcher_src/bounded_log_pipe.py" "\$watcher_dest/bounded_log_pipe.py"
-        cmp -s "\$watcher_src/bounded_log_pipe.py" "\$watcher_dest/bounded_log_pipe.py"
+      if test -f \"\$watcher_src/bounded_log_pipe.py\"; then
+        cp -f \"\$watcher_src/bounded_log_pipe.py\" \"\$watcher_dest/bounded_log_pipe.py\"
+        cmp -s \"\$watcher_src/bounded_log_pipe.py\" \"\$watcher_dest/bounded_log_pipe.py\"
       fi
-      if test -f "\$watcher_src/watcher_triage.py"; then
-        cp -f "\$watcher_src/watcher_triage.py" "\$watcher_dest/watcher_triage.py"
-        cmp -s "\$watcher_src/watcher_triage.py" "\$watcher_dest/watcher_triage.py"
+      if test -f \"\$watcher_src/watcher_triage.py\"; then
+        cp -f \"\$watcher_src/watcher_triage.py\" \"\$watcher_dest/watcher_triage.py\"
+        cmp -s \"\$watcher_src/watcher_triage.py\" \"\$watcher_dest/watcher_triage.py\"
       else
-        rm -f "\$watcher_dest/watcher_triage.py"
+        rm -f \"\$watcher_dest/watcher_triage.py\"
       fi
       # Display helpers the watcher imports fail-open (cards, plain-English wording).
       for helper_file in discord_card.py plain_english.py; do
         if test -f "$CURRENT/notifications/\$helper_file"; then
-          cp -f "$CURRENT/notifications/\$helper_file" "\$watcher_dest/\$helper_file"
-          cmp -s "$CURRENT/notifications/\$helper_file" "\$watcher_dest/\$helper_file"
+          cp -f "$CURRENT/notifications/\$helper_file" \"\$watcher_dest/\$helper_file\"
+          cmp -s "$CURRENT/notifications/\$helper_file" \"\$watcher_dest/\$helper_file\"
         fi
       done
-      chmod 700 "\$watcher_dest"/*.sh
+      for watcher_file in run_ro.sh supervisor.sh bootstrap_tmp_state.sh; do
+        chmod 700 \"\$watcher_dest/\$watcher_file\"
+      done
       systemctl restart afs-watcher.service
       sleep 2
       systemctl is-active afs-watcher.service

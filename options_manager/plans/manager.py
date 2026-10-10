@@ -15,6 +15,7 @@ from options_manager.levels import LevelFinderInputs, find_targets
 from .base import (
     ContractPlanSnapshot,
     ConvictionBand,
+    ObservationRatingSnapshot,
     PlanObservation,
     PlanPolicy,
     PlanStatus,
@@ -224,6 +225,12 @@ def _contract_material_key(plan: Optional[ContractPlanSnapshot]) -> object:
     )
 
 
+def _observation_rating_key(plan: Optional[ObservationRatingSnapshot]) -> object:
+    if plan is None:
+        return None
+    return (float(plan.rating), tuple(plan.components))
+
+
 def _risk_material_key(plan: Optional[RiskPlanSnapshot]) -> object:
     """Return risk-policy facts that merit a user-facing plan update.
 
@@ -270,6 +277,8 @@ def _material_changes(
         reasons.append("risk_plan_changed")
     if previous.blocking_reasons != current.blocking_reasons:
         reasons.append("blocking_reasons_changed")
+    # Observation rating is telemetry only. A rating change must never become a
+    # material plan change or user-facing trade call.
     return tuple(reasons)
 
 
@@ -286,6 +295,8 @@ def update_trade_thesis(
     """
 
     policy.validate()
+    if observation.observation_rating is not None:
+        observation.observation_rating.validate()
 
     if observation.direction not in ("CALL", "PUT"):
         raise ValueError("direction must be CALL or PUT")
@@ -354,6 +365,11 @@ def update_trade_thesis(
         if observation.risk_plan is not None
         else previous.risk_plan if previous is not None else None
     )
+    observation_rating = (
+        observation.observation_rating
+        if observation.observation_rating is not None
+        else previous.observation_rating if previous is not None else None
+    )
 
     current = TradePlanSnapshot(
         ticker=observation.ticker.strip().upper(),
@@ -381,6 +397,7 @@ def update_trade_thesis(
         signa_repeat_count=signa_repeat_count,
         last_signa_fingerprint=last_signa_fingerprint,
         latest_signa=latest_signa,
+        observation_rating=observation_rating,
         source_references=_append_sources(previous, observation),
         contract_plan=contract_plan,
         risk_plan=risk_plan,
@@ -388,7 +405,14 @@ def update_trade_thesis(
 
     material_reasons = _material_changes(previous, current)
     should_emit = bool(material_reasons)
-    telemetry_only = not should_emit and (signa_changed or signa_repeated)
+    observation_rating_changed = (
+        previous is not None
+        and _observation_rating_key(previous.observation_rating)
+        != _observation_rating_key(current.observation_rating)
+    )
+    telemetry_only = not should_emit and (
+        signa_changed or signa_repeated or observation_rating_changed
+    )
 
     return PlanUpdate(
         snapshot=current,

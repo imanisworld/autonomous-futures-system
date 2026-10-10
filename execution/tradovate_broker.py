@@ -37,6 +37,7 @@ from execution.broker_interface import (
     Position,
 )
 from execution.no_fill_taxonomy import classify_no_fill_reason, classify_provider_failure
+from config.futures_contracts import UnsupportedContractError, contract_economics, contract_root
 from execution.post_fill_validation import validate_post_fill
 from notifications import plain_english as _pe
 
@@ -64,9 +65,10 @@ def _front_month_symbol(root: str, today: date, roll_days: int = _ROLL_DAYS) -> 
 
     Returns the nearest quarterly contract whose expiration is more than
     `roll_days` away — i.e. it rolls OFF a contract once inside its roll window.
-    Returns None for non-quarterly roots so the caller falls back to /suggest.
+    Returns None when no explicit dated-contract policy exists; execution callers
+    must fail closed rather than substitute a nearest suggestion.
     """
-    root = root.replace("1!", "").upper()
+    root = _broker_root(root)
     if root not in ("MES", "MNQ", "MYM", "M2K", "ES", "NQ", "YM", "RTY"):
         return None
     candidates = [(yr, mo) for yr in (today.year, today.year + 1) for mo in (3, 6, 9, 12)]
@@ -95,13 +97,26 @@ class AuthResult:
     def ok(self) -> bool:
         return self.status == AUTH_HEALTHY
 
-# Per-instrument tick specs
-_TICK_SIZE: dict[str, float] = {
-    "MES": 0.25, "ES": 0.25, "MNQ": 0.25, "NQ": 0.25, "MGC": 0.10, "MCL": 0.01,
-}
-_TICK_VALUE: dict[str, float] = {
-    "MES": 1.25, "ES": 12.50, "MNQ": 0.50, "NQ": 5.00, "MGC": 1.00, "MCL": 1.00,
-}
+# Roots this broker module carried tick metadata for before U7. The VALUES come
+# only from config/futures_contracts.py; this set adds no instrument. An unknown
+# root never inherits another contract's units: it raises (fail closed).
+_BROKER_ECONOMICS_ROOTS = frozenset({"MES", "ES", "MNQ", "NQ", "MGC", "MCL"})
+
+
+def _broker_root(instrument: str) -> str:
+    """Exact broker root: canonical root or that root with one trailing `1!` only."""
+    symbol = str(instrument or "").upper()
+    if symbol.endswith("1!"):
+        symbol = symbol[:-2]
+    return symbol
+
+
+def _broker_economics(instrument: str) -> tuple[float, float]:
+    """(tick size, tick value) from canonical metadata; raises on unknown roots."""
+    root = _broker_root(instrument)
+    if root not in _BROKER_ECONOMICS_ROOTS:
+        raise UnsupportedContractError(f"no broker contract metadata for {instrument!r}")
+    return contract_economics(root)
 
 
 def _round_to_tick(price: float, instrument: str) -> float:
@@ -116,10 +131,7 @@ def _round_to_tick(price: float, instrument: str) -> float:
     safety net has to flatten — the repeated "NAKED POSITION … STOP" alerts.
     Round to the nearest tick so the bracket children are accepted.
     """
-    root = instrument.replace("1!", "").upper()
-    tick = _TICK_SIZE.get(root, 0.25)
-    if tick <= 0:
-        return float(price)
+    tick, _ = _broker_economics(instrument)
     return round(round(float(price) / tick) * tick, 4)
 
 
@@ -136,13 +148,18 @@ def _rr_preserving_entry_cap(order: BracketOrder, instrument: str) -> float:
     stop = float(order.stop)
     target = float(order.target)
     boundary = (target + minimum_rr * stop) / (1.0 + minimum_rr)
-    root = instrument.replace("1!", "").upper()
-    tick = _TICK_SIZE.get(root, 0.25)
-    if tick <= 0:
-        return boundary
+    tick, _ = _broker_economics(instrument)
     ticks = boundary / tick
     snapped = math.floor(ticks + 1e-9) if order.direction == "LONG" else math.ceil(ticks - 1e-9)
     return round(snapped * tick, 4)
+
+
+def _contract_identity_enforced() -> bool:
+    """Unset/false = observe only; any other value enforces fail-closed identity."""
+    raw = os.getenv("CONTRACT_IDENTITY_GUARD_ENFORCED")
+    if raw is None or raw.strip().lower() in ("", "false", "0", "no"):
+        return False
+    return True
 
 
 def _runner_live_enabled() -> bool:
@@ -171,7 +188,7 @@ def _entry_slippage_tolerance_ticks(instrument: str = "") -> float:
     The two only disagree when the env is genuinely unset; the deployed box sets
     both roots explicitly, so live and replay resolve identically there.
     """
-    root = (instrument or "").replace("1!", "").upper()
+    root = _broker_root(instrument)
     raw = os.getenv(f"ENTRY_SLIPPAGE_TOLERANCE_TICKS_{root}") if root else None
     if raw is None:
         raw = os.getenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS", "0")
@@ -979,8 +996,12 @@ class TradovateBroker(BrokerInterface):
         on Sept 11 must re-resolve to MNQZ6, not keep routing to the expiring
         contract.
         """
-        root = instrument.replace("1!", "").upper()
+        root = _broker_root(instrument)
         desired = _front_month_symbol(root, self._trading_date())
+        if desired is None:
+            raise ValueError(
+                f"no exact dated-contract policy for {root}; nearest-suggestion fallback refused"
+            )
         cached_id = self._contract_cache.get(root)
         if cached_id is not None:
             if self._contract_roll_key.get(root) == desired:
@@ -998,8 +1019,8 @@ class TradovateBroker(BrokerInterface):
         # that exact symbol is mandatory. Never substitute the nearest expiry when
         # the expected dated contract is absent: exact-contract routing is a
         # safety invariant, so an unresolved expected symbol must fail closed.
-        # Roots without a computed dated-symbol rule retain the legacy nearest
-        # suggestion behavior until they receive their own explicit roll policy.
+        # A missing dated-symbol policy was already refused above; this lookup
+        # only verifies the exact expected symbol and never chooses "nearest".
 
         last_exc: Exception = RuntimeError("no attempts made")
         for attempt in range(3):
@@ -1007,28 +1028,21 @@ class TradovateBroker(BrokerInterface):
                 results = self._get(f"/contract/suggest?t={root}&l=8")
                 if isinstance(results, list) and results:
                     chosen = None
-                    if desired:
-                        for r in results:
-                            if str(r.get("name", "")).upper() == desired:
-                                chosen = r
-                                break
+                    for r in results:
+                        if str(r.get("name", "")).upper() == desired:
+                            chosen = r
+                            break
                     if chosen is None:
-                        if desired:
-                            names = [str(r.get("name")) for r in results]
-                            logger.error(
-                                "Contract routing BLOCKED: expected exact front month %s "
-                                "for %s but /contract/suggest returned %s — refusing to "
-                                "substitute another expiry.",
-                                desired, root, names,
-                            )
-                            raise ValueError(
-                                f"exact contract {desired} not found for {root}; "
-                                f"suggestions={names}"
-                            )
-                        # No dated-symbol policy exists for this root yet. Preserve
-                        # the legacy nearest suggestion until one is explicitly
-                        # defined rather than inventing a roll rule here.
-                        chosen = results[0]
+                        names = [str(r.get("name")) for r in results]
+                        logger.error(
+                            "Contract routing BLOCKED: expected exact front month %s "
+                            "for %s but /contract/suggest returned %s — refusing to "
+                            "substitute another expiry.",
+                            desired, root, names,
+                        )
+                        raise ValueError(
+                            f"exact contract {desired} not found for {root}; suggestions={names}"
+                        )
                     self._contract_cache[root] = int(chosen["id"])
                     self._contract_symbol_cache[root] = str(chosen.get("name") or root)
                     self._contract_roll_key[root] = desired
@@ -1066,24 +1080,48 @@ class TradovateBroker(BrokerInterface):
     def is_live(self) -> bool:
         return self.config.env == "live"
 
-    def _observe_contract_identity(self, order: BracketOrder, routed_symbol: str) -> None:
-        """Log alert-hint vs routed contract. Never raises, never blocks."""
-        try:
-            from execution.contract_identity import MATCH, compare
+    def _contract_identity_gate(self, order: BracketOrder, routed_symbol: str) -> dict:
+        """Compare alert contract identity with the exact routed contract.
 
+        Observe by default. When CONTRACT_IDENTITY_GUARD_ENFORCED is enabled,
+        anything except an exact MATCH blocks before an order body is built.
+        """
+        from execution.contract_identity import MATCH, UNNORMALIZABLE, compare
+
+        enforced = _contract_identity_enforced()
+        try:
             verdict = compare(
-                getattr(order, "contract_hint", None), routed_symbol, context_date=self._trading_date()
+                getattr(order, "contract_hint", None),
+                routed_symbol,
+                context_date=self._trading_date(),
             )
-            log = logger.info if verdict.status == MATCH else logger.warning
-            log(
-                "CONTRACT_IDENTITY observe: status=%s alert=%s routed=%s (normalized %s vs %s) "
-                "instrument=%s strategy=%s — not enforced",
-                verdict.status, verdict.hint, verdict.routed,
-                verdict.hint_normalized, verdict.routed_normalized,
-                order.instrument, order.strategy,
-            )
-        except Exception:  # noqa: BLE001 - observation must never affect submission
-            logger.warning("CONTRACT_IDENTITY observe failed", exc_info=True)
+            status, hint = verdict.status, verdict.hint
+            hint_norm, routed_norm = verdict.hint_normalized, verdict.routed_normalized
+        except Exception:
+            logger.warning("CONTRACT_IDENTITY compare failed", exc_info=True)
+            status, hint, hint_norm, routed_norm = UNNORMALIZABLE, None, None, None
+        log = logger.info if status == MATCH else logger.warning
+        log(
+            "CONTRACT_IDENTITY %s: status=%s alert=%s routed=%s (normalized %s vs %s) "
+            "instrument=%s strategy=%s — %s",
+            "enforced" if enforced else "observe",
+            status,
+            hint,
+            routed_symbol,
+            hint_norm,
+            routed_norm,
+            order.instrument,
+            order.strategy,
+            ("blocked" if status != MATCH else "allowed") if enforced else "not enforced",
+        )
+        return {
+            "status": status,
+            "hint": hint,
+            "hint_normalized": hint_norm,
+            "routed_normalized": routed_norm,
+            "enforced": enforced,
+            "blocked": enforced and status != MATCH,
+        }
 
     def execute_bracket(self, order: BracketOrder) -> Fill:
         """Place entry market order with attached stop and target (OSO bracket)."""
@@ -1107,6 +1145,12 @@ class TradovateBroker(BrokerInterface):
                 pnl_dollars=None,
                 no_fill_reason="MAX_CONTRACTS_HARD_CAP",
             )
+        try:
+            _broker_economics(order.instrument)
+        except UnsupportedContractError as exc:
+            # U7: refuse before auth, contract lookup or any broker request.
+            logger.error("BLOCKED Tradovate order: %s", exc)
+            return self._cancelled_fill(order, "CONTRACT_METADATA_UNSUPPORTED")
         try:
             # ── Safety: TRADOVATE_ENV=live requires explicit LIVE_TRADING_ENABLED=true ──
             if self.config.env == "live":
@@ -1170,14 +1214,35 @@ class TradovateBroker(BrokerInterface):
                     exc,
                 )
                 return self._cancelled_fill(order, "CONTRACT_RESOLUTION_FAILED")
-            root = order.instrument.replace("1!", "").upper()
-            # Tradovate placeOSO needs the specific contract symbol (e.g. MESM6),
-            # NOT the root (MES) — the root is rejected with UnknownReason.
-            contract_symbol = self._contract_symbol_cache.get(root, root)
-            # #960 / design #966: compare the alert's asserted dated contract with
-            # the routed one. OBSERVE ONLY — the verdict is logged, the order
-            # proceeds unchanged. Enforcement is a separate, later change.
-            self._observe_contract_identity(order, contract_symbol)
+            root = _broker_root(order.instrument)
+            # Never route by root or "nearest" suggestion. The resolved symbol must
+            # be exactly the dated front month selected by the roll policy.
+            contract_symbol = self._contract_symbol_cache.get(root)
+            desired_symbol = _front_month_symbol(root, self._trading_date())
+            if (
+                not contract_symbol
+                or desired_symbol is None
+                or str(contract_symbol).upper() != desired_symbol
+            ):
+                logger.error(
+                    "BLOCKED Tradovate order: routed contract %r is not exact front month %r for %s",
+                    contract_symbol,
+                    desired_symbol,
+                    root,
+                )
+                return self._cancelled_fill(order, "CONTRACT_IDENTITY_UNRESOLVED")
+            identity = self._contract_identity_gate(order, contract_symbol)
+            if identity["blocked"]:
+                return self._cancelled_fill(order, identity["status"])
+            identity_audit = {
+                "routed_contract": contract_symbol,
+                "routed_contract_id": contract_id,
+                "expected_front_month": desired_symbol,
+                **{
+                    k: identity[k]
+                    for k in ("status", "hint", "hint_normalized", "routed_normalized", "enforced")
+                },
+            }
             action = "Buy" if order.direction == "LONG" else "Sell"
             close_action = "Sell" if order.direction == "LONG" else "Buy"
             qty = max(1, int(order.contracts or 1))
@@ -1202,7 +1267,7 @@ class TradovateBroker(BrokerInterface):
             # unfilled, sidestepping the IOC-limit no-fill bottleneck this proof
             # mode exists to test.
             runner_live = _runner_live_enabled() or getattr(order, "force_runner_exit", False)
-            tick = _TICK_SIZE.get(root, 0.25)
+            tick, _ = _broker_economics(root)
             entry_leg = {"orderType": "Market"}
             limit_px = None
 
@@ -1621,6 +1686,7 @@ class TradovateBroker(BrokerInterface):
                 execution_audit = {"post_fill_validation": validation.to_dict()}
                 if not validation.accepted:
                     return self._handle_invalid_post_fill(order, qty, execution_audit)
+            execution_audit = {**(execution_audit or {}), "contract_identity": identity_audit}
             return Fill(
                 instrument=order.instrument,
                 direction=order.direction,
@@ -1853,9 +1919,14 @@ class TradovateBroker(BrokerInterface):
                 entry = pos.get("netPrice") or pos.get("avgPrice") or 0.0
                 # contractId is an integer — look up the name from the contract cache
                 contract_id = pos.get("contractId")
-                instrument = self._contract_id_to_name(contract_id) or (
-                    self._last_position.instrument if self._last_position else "MES"
-                )
+                instrument = self._contract_id_to_name(contract_id)
+                if instrument is None:
+                    logger.error(
+                        "Tradovate position contract id=%r has no provable supported root",
+                        contract_id,
+                    )
+                    cached = self._last_position if (self._last_position and self._last_position.open) else None
+                    return False, cached
                 p = Position(
                     instrument=instrument,
                     direction=direction,
@@ -1881,19 +1952,16 @@ class TradovateBroker(BrokerInterface):
         return position
 
     def _contract_id_to_name(self, contract_id: int | None) -> str | None:
-        """Reverse-lookup contract name from ID. Falls back to None."""
+        """Reverse-lookup a broker contract id through the canonical symbol parser."""
         if contract_id is None:
             return None
         try:
             data = self._get(f"/contract/item?id={contract_id}")
             name = data.get("name", "") or data.get("root", "")
-            # Strip expiry suffix — e.g. "MESM26" → "MES"
-            for root in ("MES", "ES", "MNQ", "NQ", "MGC", "MCL"):
-                if str(name).upper().startswith(root):
-                    return root
+            root = contract_root(name)
+            return root if root in _BROKER_ECONOMICS_ROOTS else None
         except Exception:
-            pass
-        return None
+            return None
 
     def _cancel_working_orders(self) -> int:
         """Cancel every Working/Pending order on the account, one by one.
@@ -2015,7 +2083,7 @@ class TradovateBroker(BrokerInterface):
              bracket children only arm on entry fill), then one final position
              read to classify the outcome.
         """
-        root = order.instrument.replace("1!", "").upper()
+        root = _broker_root(order.instrument)
 
         status = self._entry_status(
             order_id,
@@ -2041,7 +2109,7 @@ class TradovateBroker(BrokerInterface):
 
         confirmed, position = self.get_position_snapshot()
         if confirmed and position is not None and (
-            position.instrument.replace("1!", "").upper().startswith(root)
+            contract_root(position.instrument) == root
             and position.direction == order.direction
         ):
             logger.warning(
@@ -2067,7 +2135,7 @@ class TradovateBroker(BrokerInterface):
         time.sleep(self._ENTRY_CONFIRM_DELAY)
         confirmed, position = self.get_position_snapshot()
         if confirmed and position is not None and (
-            position.instrument.replace("1!", "").upper().startswith(root)
+            contract_root(position.instrument) == root
             and position.direction == order.direction
         ):
             return "filled"
@@ -2173,8 +2241,14 @@ class TradovateBroker(BrokerInterface):
             logger.warning("replace_stop: no resting stop order id — cannot trail safely")
             return False
 
-        root = (pos.instrument or "").replace("1!", "").upper()
-        new_stop = _round_to_tick(float(new_stop_price), root)
+        try:
+            new_stop = _round_to_tick(float(new_stop_price), pos.instrument)
+        except UnsupportedContractError:
+            logger.error(
+                "replace_stop: no contract metadata for %s — not trailing",
+                pos.instrument,
+            )
+            return False
         cur = float(pos.stop)
         # Never loosen — the whole point of a runner trail is a monotonic stop.
         if pos.direction == "LONG" and new_stop <= cur:
@@ -2450,16 +2524,19 @@ class TradovateBroker(BrokerInterface):
         exit_price = flat.get("close_fill_price")
         pnl_ticks = pnl_dollars = None
         if confirmed and exit_price is not None:
-            root = order.instrument.replace("1!", "").upper()
-            tick = _TICK_SIZE.get(root, 0.25)
-            value = _TICK_VALUE.get(root, 1.25)
-            signed = (
-                float(exit_price) - actual_entry
-                if order.direction == "LONG"
-                else actual_entry - float(exit_price)
-            )
-            pnl_ticks = signed / tick
-            pnl_dollars = round(pnl_ticks * value * qty, 2)
+            try:
+                tick, value = _broker_economics(order.instrument)
+            except UnsupportedContractError:
+                # Unknown units: leave P&L unknown rather than fabricate it.
+                logger.error("auto-flatten P&L unknown: no contract metadata for %s", order.instrument)
+            else:
+                signed = (
+                    float(exit_price) - actual_entry
+                    if order.direction == "LONG"
+                    else actual_entry - float(exit_price)
+                )
+                pnl_ticks = signed / tick
+                pnl_dollars = round(pnl_ticks * value * qty, 2)
         return Fill(
             instrument=order.instrument,
             direction=order.direction,
@@ -2609,8 +2686,7 @@ class TradovateBroker(BrokerInterface):
             # overlapping orders that grabs an unrelated entry and fabricates wins
             # (the 30208.75-on-two-trades bug).
             instrument = last.instrument
-            tick_size = _TICK_SIZE.get(instrument, 0.25)
-            tick_value = _TICK_VALUE.get(instrument, 1.25)
+            tick_size, tick_value = _broker_economics(instrument)
             tol = tick_size * 2
             # Use /fill/list (reliably carries `price`; /order/list often omits the
             # limit price). Match the EXIT fill to our journaled target/stop — never
@@ -2843,7 +2919,7 @@ class TradovateBroker(BrokerInterface):
         try:
             if not self._authenticate():
                 return {"ok": False, "error": "not_authenticated"}
-            root = instrument.replace("1!", "").upper()
+            root = _broker_root(instrument)
 
             # Resolve contract name for display
             symbol = root

@@ -239,17 +239,18 @@ def test_rerolled_symbol_reaches_the_order_payload(monkeypatch):
     assert [body["symbol"] for body in bodies] == ["MNQU6", "MNQZ6"]
 
 
-def test_non_quarterly_root_stays_cached(monkeypatch):
-    # _front_month_symbol returns None for MCL on every date; None == None keeps
-    # the old resolve-once behavior — no per-lookup HTTP call for those roots.
+def test_root_without_dated_contract_policy_is_never_routable(monkeypatch):
+    # U8: MCL has no dated front-month policy (_front_month_symbol -> None). The
+    # legacy "nearest /contract/suggest result" was an ambiguous front month; it
+    # must fail closed without even asking Tradovate for suggestions.
     b = _broker(monkeypatch)
     calls: list[str] = []
     monkeypatch.setattr(b, "_get", lambda path, **k: calls.append(path) or [{"id": 5, "name": "MCLV6"}])
     monkeypatch.setattr(TradovateBroker, "_trading_date", staticmethod(lambda: date(2026, 9, 9)))
-    assert b._find_contract_id("MCL") == 5
-    monkeypatch.setattr(TradovateBroker, "_trading_date", staticmethod(lambda: date(2026, 9, 11)))
-    assert b._find_contract_id("MCL") == 5
-    assert len(calls) == 1
+    with pytest.raises(ValueError, match="nearest-suggestion fallback refused"):
+        b._find_contract_id("MCL")
+    assert calls == []
+    assert "MCL" not in b._contract_cache
 
 
 def test_back_month_prohibited_classifies_liquidation_only():

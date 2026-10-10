@@ -35,6 +35,9 @@ _ET = ZoneInfo("America/New_York")
 # this is a skew tolerance, not a risk policy knob.
 _ALERT_FUTURE_TOLERANCE_SECONDS = 5.0
 
+# Float-comparison tolerance for min R:R only (not a policy loosening).
+_RR_EPS = 1e-9
+
 
 def _parse_hhmm(value: str) -> _time:
     hour, minute = value.split(":", 1)
@@ -199,6 +202,7 @@ class RiskEngine:
             self._check_bracket_completeness,
             self._check_direction,
             self._check_entry_stop_target_distinct,  # structural check before computed R:R
+            self._check_bracket_direction,  # wrong-side stop/target invalid even in runner mode
             self._check_rr_ratio,
             self._check_min_confluence_grade,
             self._check_min_target_distance,
@@ -1034,6 +1038,43 @@ class RiskEngine:
             )
         return None
 
+    def _check_bracket_direction(
+        self, setup: TradeSetup, daily_state: DailyState
+    ) -> Optional[RiskResult]:
+        """Reject wrong-side protective stops even when fixed-target R:R is exempt.
+
+        Runner mode discards the fixed target, so only stop direction is
+        structural for runners. Fixed-target trades require both prices to
+        be on their protective/reward sides before any ratio is checked.
+        """
+        if setup.direction == "LONG":
+            if setup.stop >= setup.entry:
+                return RiskResult(
+                    result="REJECTED",
+                    failed_rule="stop_wrong_side",
+                    reason="LONG stop must be strictly below executable entry.",
+                )
+            if not getattr(self.config, "runner_mode", False) and setup.target <= setup.entry:
+                return RiskResult(
+                    result="REJECTED",
+                    failed_rule="target_wrong_side",
+                    reason="LONG fixed target must be strictly above executable entry.",
+                )
+        elif setup.direction == "SHORT":
+            if setup.stop <= setup.entry:
+                return RiskResult(
+                    result="REJECTED",
+                    failed_rule="stop_wrong_side",
+                    reason="SHORT stop must be strictly above executable entry.",
+                )
+            if not getattr(self.config, "runner_mode", False) and setup.target >= setup.entry:
+                return RiskResult(
+                    result="REJECTED",
+                    failed_rule="target_wrong_side",
+                    reason="SHORT fixed target must be strictly below executable entry.",
+                )
+        return None
+
     def _check_rr_ratio(
         self, setup: TradeSetup, daily_state: DailyState
     ) -> Optional[RiskResult]:
@@ -1046,13 +1087,42 @@ class RiskEngine:
         """
         if getattr(self.config, "runner_mode", False):
             return None
-        if setup.rr_ratio < self.config.min_rr_ratio:
+
+        # The signal's rr_ratio is descriptive and can become stale when
+        # entry/stop/target geometry is re-anchored. Never admit a bracket
+        # based only on that claim; recompute from the submitted prices.
+        try:
+            reported_rr = float(setup.rr_ratio)
+        except (TypeError, ValueError, OverflowError):
+            reported_rr = float("nan")
+        if setup.direction == "LONG":
+            actual_risk = setup.entry - setup.stop
+            actual_reward = setup.target - setup.entry
+        elif setup.direction == "SHORT":
+            actual_risk = setup.stop - setup.entry
+            actual_reward = setup.entry - setup.target
+        else:
+            actual_risk = 0.0
+            actual_reward = 0.0
+        actual_rr = (
+            actual_reward / actual_risk
+            if actual_risk > 0
+            else float("nan")
+        )
+        min_rr = float(self.config.min_rr_ratio)
+        rr_floor = min_rr - _RR_EPS
+        if (
+            not math.isfinite(reported_rr)
+            or not math.isfinite(actual_rr)
+            or reported_rr < rr_floor
+            or actual_rr < rr_floor
+        ):
             return RiskResult(
                 result="REJECTED",
                 failed_rule="rr_below_minimum",
                 reason=(
-                    f"R:R ratio {setup.rr_ratio:.2f} is below minimum "
-                    f"{self.config.min_rr_ratio:.2f}"
+                    f"Claimed R:R {reported_rr:.2f}, actual bracket R:R "
+                    f"{actual_rr:.2f}; minimum {min_rr:.2f}"
                 ),
             )
         return None

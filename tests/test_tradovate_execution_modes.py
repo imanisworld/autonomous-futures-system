@@ -35,6 +35,8 @@ from execution.tradovate_broker import (
     TradovateBroker,
     TradovateConfig,
 )
+from execution.tradovate_broker import _front_month_symbol
+from tests.contract_stub import bind_exact_contract
 
 
 @pytest.fixture(autouse=True)
@@ -69,7 +71,7 @@ def _broker(monkeypatch, env: str = "demo"):
     b = TradovateBroker(config=TradovateConfig.from_env())
     monkeypatch.setattr(b, "get_account_balance", lambda: 50_000.0)
     monkeypatch.setattr(b, "_authenticate", lambda: True)
-    monkeypatch.setattr(b, "_find_contract_id", lambda inst: 123)
+    monkeypatch.setattr(b, "_find_contract_id", bind_exact_contract(b, 123))
     monkeypatch.setattr(supervisor, "tradovate_order_ready", lambda: True)
     b._account_id = 999
     return b
@@ -112,11 +114,12 @@ def test_default_payload_semantically_unchanged(monkeypatch):
     b = _broker(monkeypatch)
     cap = _capture_body(monkeypatch, b)
     b.execute_bracket(_long_order())
+    # U8: the exact dated front month is routed, never the bare root.
     assert cap["body"] == {
         "accountSpec": "x",
         "accountId": 999,
         "action": "Buy",
-        "symbol": "MES",
+        "symbol": _front_month_symbol("MES", b._trading_date()),
         "orderQty": 1,
         "orderType": "Market",
         "isAutomated": True,

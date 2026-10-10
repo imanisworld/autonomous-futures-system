@@ -55,6 +55,9 @@ Before changes affecting futures execution, risk, broker routing, fills, strateg
 ## Options safety
 
 - Options changes must preserve the existing human-confirmation and execution restrictions unless explicitly authorized.
+- Read-only broker/account/market-data access may be used for research, contract discovery, liquidity screening, position/context awareness, and advisory output when the operator has connected or otherwise authorized that data source.
+- Connecting Robinhood, Webull, or another broker/data source grants **data access only**. It does not grant order, cancel, replace, exercise, assignment-management, or position-closing authority.
+- Candidate contract discovery must preserve the current options risk/DTE/liquidity policy unless the operator explicitly approves a separate research hypothesis. A discovered contract is not an approved trade.
 - A change that creates or broadens an options broker/order/execution path is a hard stop for independent review.
 
 ## Deployment
@@ -80,18 +83,23 @@ Agent-specific VPS accounts are intentionally separated. Do not reuse identities
 
 ## Research agent roles
 
-Lock these roles. Do not invent a parallel research automation layer.
+Lock these roles. Do not invent a parallel research automation layer. The purpose is to keep agents complementary instead of having every tool repeat the same audit.
 
 | Role | Owner | Allowed | Forbidden |
 |---|---|---|---|
-| Research + bounded read-only triage | Grok (when used) | External research; market/context discovery; narrow repo/runtime inspection; PR/diff review; log/status analysis; defect/gap identification; documentation/checkpoint proposals; proposing small implementation changes for independent review | Deploying/restarting services; mutating runtime/env/broker/risk/execution state; independently launching experiments; changing strategy status; promoting/merging safety-sensitive changes; maintaining a competing inventory or queue |
-| Repository-aware mechanical work | Cursor | Running *already registered* trials/replays; producing reproducible artifacts under the trial ledger / experiment-spec chain | Autonomously inventing or launching new strategy experiments; continuous variant search; promotion |
-| Independent breaker / QA | Claude and/or Codex | Implementation review, execution-safety review, live/replay parity, lookahead / optimistic-fill checks, spec-vs-code match | Being the primary experiment generator; silently updating strategy status |
-| Reconciliation and next-test decisions | ChatGPT + operator (human) | Resolve contradictory evidence; decide whether another experiment is justified; approve inventory classification changes; approve progression | Autopromotion to live; agent-only status edits without operator acknowledgment |
+| Research / edge + contract discovery | Grok (when used) | External research; market/context discovery; identify missed or underused setups; futures and options contract discovery/comparison; liquidity/DTE/spread/context screening from operator-authorized read-only broker/account/market data (including connected Robinhood/Webull when available); narrow repo/runtime inspection; first-pass PR/diff triage; log/status analysis; research-relevant defect/gap identification; hypothesis development; propose bounded experiments for ChatGPT/operator approval and preregistration, with frozen parameters and pass/fail criteria; documentation/checkpoint proposals; small implementation proposals for independent review | Deploying/restarting services; mutating runtime/env/broker/risk/execution/order state; placing/canceling/replacing/exercising orders; autonomously launching or iterating experiments; continuous parameter search; changing strategy status; promoting/merging safety-sensitive changes; maintaining a competing inventory or queue |
+| Builder / mechanical experiment runner | Cursor | Implement operator-approved/spec-defined changes; fix proven defects; run already registered and approved trials and replays; produce reproducible artifacts under the trial ledger / experiment-spec chain; surface existing advisory/telemetry data | Autonomously inventing strategy hypotheses; continuous variant search/tuning; changing strategy status; promotion; live execution |
+| Independent breaker / QA | Claude and/or Codex | Try to falsify Grok/Cursor work; implementation review; execution-safety review; live/replay parity; lookahead / optimistic-fill checks; leakage/overfit/statistical sanity checks; spec-vs-code match | Being the primary experiment generator; silently updating strategy status; promoting because a test passed |
+| System lead / reconciliation + approvals | ChatGPT + operator (human) | Maintain the work split; reconcile contradictory evidence; choose which proposed experiment is worth registering; approve experiment contracts; accept/reject implementation; approve inventory classification changes; approve progression | Autopromotion to live; treating one agent's output as sufficient proof without required independent checks |
+| Forward evidence collector | Production paper/demo/observer lanes | Collect frozen prospective evidence and journal outcomes under the approved epoch/config | Research, tuning, changing its own parameters, changing strategy status, or expanding execution authority |
 
-No agent autonomously invents and launches new strategy experiments. No agent promotes anything to live execution. Prefer continuing already-defined campaigns and registered trials over restarting completed audits or building an "experiment selector."
+Research flow: **Grok proposes → ChatGPT/operator approve/register → Cursor runs/builds → Claude/Codex attacks → ChatGPT/operator decide.**
 
-External Grok (or other off-repo) research loops are unverified until explicitly inventoried; their absence does **not** authorize a new autonomous loop.
+Grok may aggressively search for edge and candidate contracts, but a hypothesis or discovered contract is **advisory/research only** until it enters the approved experiment/execution path. Read-only account linkage is context, not execution permission.
+
+No agent autonomously launches an unapproved experiment or promotes anything to live execution. Prefer continuing already-defined campaigns and registered trials over restarting completed audits or building an "experiment selector." New experiments are allowed only when they answer a material unresolved question, are approved by ChatGPT/operator, and are preregistered before scoring.
+
+External Grok (or other off-repo) research loops are unverified until explicitly inventoried; their absence does **not** authorize a new autonomous research or execution loop.
 
 ## Strategy / evidence source of truth
 
@@ -114,3 +122,15 @@ For substantial work, report:
 - tests/checks run and their results,
 - remaining uncertainty or blockers,
 - exact next action when one is required.
+
+## Options evidence / progression contract
+
+These are stable options-lane rules; volatile PR/SHA status belongs in `docs/options-current-state-handoff.md`, not here.
+
+- The canonical options evidence path is prospective: capture → canonical signal → plan/contract/risk validation → outcome → fitness/research.
+- A realised/scorable options outcome must preserve canonical provenance and be tied to the registered strategy epoch/scope. A retrospective observation, late/missed trigger, gap-through miss, data-blocked row, unregistered epoch, or other counterfactual row cannot be relabelled into a prospective catch or realised trade result.
+- A FROZEN epoch is only a locked definition. It is not forward-proof readiness, paper readiness, or execution authority.
+- Progression order is: merged/reviewed source → separately verified observer/runtime posture → proof-ready registered epoch → prospective forward evidence → paper automation only if evidence supports it. Do not skip stages because alerts, previews, or backtests look good.
+- Options readiness audits must distinguish **ready to collect forward proof** from **ready for paper automation**.
+- Modernization/cleanup must classify artifacts before deletion and preserve replay-required or historical evidence. Simplify implementation, not safeguards.
+

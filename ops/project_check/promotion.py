@@ -31,6 +31,17 @@ evidence. It:
     own `stated_classification` (subject to the caps above overriding it
     downward) or left REQUIRES_OPERATOR_CLASSIFICATION
 
+U5: the packet must list canonical evidence bundles
+(`"canonical_evidence": {"bundles": ["docs/research-evidence/<trial_id>"]}`)
+that classify PROMOTION_QUALITY under ops/evidence_identity.py. Execution
+accounting, per-fill quantities, instrument, research result, entry fill
+model and causal timing are then derived from those bundles and replace the
+packet values. Quantity proof must cover every canonical entry attempt; a
+cancellation/no-fill without canonical quantity evidence blocks promotion.
+A contradicting packet value is also a blocker. Facts the bundles
+cannot prove (identity parity, lookahead, runtime parity) remain attested. Any
+blocker sets the effective classification to BLOCKED_BY_HARD_CAP.
+
 Evidence facts file schema (JSON), all keys optional -- anything omitted is
 reported UNKNOWN, never guessed:
 
@@ -78,7 +89,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ops.project_check.canonical_promotion_evidence import (
+    FLOAT_TOLERANCE,
+    RATE_TOLERANCE,
+    contradictions,
+    derive_canonical_facts,
+)
 from ops.project_check.runtime import runtime_snapshot
+from ops.project_check.daily import STRATEGY_NAME_ALIASES, _normalize as _normalize_strategy_name
 
 VALID_CLASSIFICATIONS = {
     "VALIDATED",
@@ -89,6 +107,8 @@ VALID_CLASSIFICATIONS = {
     "WAIT",
 }
 UNKNOWN = "UNKNOWN"
+POSITIVE_CLASSIFICATIONS = frozenset({"VALIDATED", "PROMISING BUT UNPROVEN"})
+HARD_CAP_CLASSIFICATION = "BLOCKED_BY_HARD_CAP"
 
 
 def _now_iso() -> str:
@@ -340,8 +360,9 @@ def _safety_caps(
     runtime_parity: dict[str, Any],
     execution_context_claimed: dict[str, Any],
     stated_classification: str | None,
+    canonical_blockers: list[str] | None = None,
 ) -> dict[str, Any]:
-    blockers: list[str] = []
+    blockers: list[str] = list(canonical_blockers or [])
     warnings: list[str] = []
 
     fills = execution.get("fills")
@@ -419,11 +440,14 @@ def _safety_caps(
     capped = bool(blockers)
     effective = stated_classification
     override_reason = None
-    if capped and stated_classification == "VALIDATED":
-        effective = "PROMISING BUT UNPROVEN"
+    # U5: no positive classification survives a hard cap. Previously only
+    # VALIDATED was downgraded (to PROMISING BUT UNPROVEN), so a stated
+    # PROMISING BUT UNPROVEN rode through parity/lookahead/evidence blockers.
+    if capped and stated_classification in POSITIVE_CLASSIFICATIONS:
+        effective = HARD_CAP_CLASSIFICATION
         override_reason = (
-            "stated_classification was VALIDATED but one or more hard safety caps triggered; "
-            "downgraded automatically -- see blockers"
+            f"stated_classification was {stated_classification} but one or more hard "
+            "safety caps triggered; blocked automatically -- see blockers"
         )
     if stated_classification is None:
         effective = "REQUIRES_OPERATOR_CLASSIFICATION"
@@ -443,6 +467,194 @@ def _safety_caps(
         "override_reason": override_reason,
     }
 
+
+def resolve_strategy_identity(name: Any) -> str | None:
+    """Resolve a promotion target to a canonical strategy identity.
+
+    Confirmed repo-owned aliases (``STRATEGY_NAME_ALIASES``) normalize to their
+    canonical key. Any other non-empty string is treated literally and can pass
+    only if it exactly equals the canonical evidence strategy_identity. Nothing
+    is fuzzily matched or inferred from packet text.
+    """
+    if not isinstance(name, str) or not name.strip():
+        return None
+    return STRATEGY_NAME_ALIASES.get(_normalize_strategy_name(name), name.strip())
+
+
+def _bind_strategy_identity(
+    strategy: str,
+    *,
+    packet_strategy: Any,
+    derived: dict[str, Any],
+) -> tuple[dict[str, Any], list[str]]:
+    """The promotion target must be the strategy the canonical rows prove."""
+    blockers: list[str] = []
+    target = resolve_strategy_identity(strategy)
+    canonical = derived.get("strategy_identity")
+    if target is None:
+        blockers.append("promotion target strategy is empty")
+    elif canonical is None:
+        blockers.append("canonical evidence has no single strategy_identity to bind")
+    elif target != canonical:
+        blockers.append(
+            f"promotion target strategy {strategy!r} (resolved {target!r}) does not match "
+            f"canonical evidence strategy_identity {canonical!r}"
+        )
+    if packet_strategy not in (None, ""):
+        packet_target = resolve_strategy_identity(packet_strategy)
+        if packet_target != target:
+            blockers.append(
+                f"evidence packet strategy {packet_strategy!r} contradicts promotion target "
+                f"{strategy!r}"
+            )
+    binding = {
+        "requested": strategy,
+        "resolved": target,
+        "canonical_strategy_identity": canonical,
+        "packet_strategy": packet_strategy,
+        "bound": not blockers,
+    }
+    return binding, blockers
+
+
+def _apply_canonical_facts(
+    derived: dict[str, Any],
+    *,
+    execution: dict[str, Any],
+    identity_parity: dict[str, Any],
+    research_result: dict[str, Any],
+    execution_context_claimed: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], list[str]]:
+    """Replace author-supplied facts with canonical ones; contradictions block."""
+    blockers: list[str] = []
+    derived_execution = derived["execution"]
+    blockers.extend(contradictions(execution, derived_execution, prefix="execution"))
+    blockers.extend(
+        contradictions(research_result, {"net_pnl": derived["research_result"]["net_pnl"]},
+                       prefix="research_result", tolerance=FLOAT_TOLERANCE)
+    )
+    blockers.extend(
+        contradictions(
+            research_result,
+            {
+                key: derived["research_result"][key]
+                for key in ("win_rate", "profit_factor", "sample")
+                if derived["research_result"][key] is not None
+            },
+            prefix="research_result",
+            tolerance=RATE_TOLERANCE,
+        )
+    )
+
+    parity = dict(identity_parity)
+    if parity.get("causal_data_availability") is False:
+        blockers.append(
+            "supplied identity_parity.causal_data_availability=false contradicts canonical "
+            "row timing; resolve before promotion"
+        )
+    else:
+        parity["causal_data_availability"] = derived["causal_data_availability"]
+
+    instruments = derived["instruments"]
+    claimed_instrument = execution_context_claimed.get("instrument")
+    if len(instruments) != 1:
+        blockers.append(
+            f"canonical evidence spans instruments {instruments}; promotion proof must be "
+            "for exactly one instrument"
+        )
+    elif claimed_instrument not in (None, "") and str(claimed_instrument).strip().upper() != instruments[0]:
+        blockers.append(
+            f"claimed instrument {claimed_instrument!r} contradicts canonical evidence "
+            f"instrument {instruments[0]!r}"
+        )
+    evidence_model = derived.get("entry_fill_model")
+    claimed_model = execution_context_claimed.get("entry_fill_model")
+    if not evidence_model:
+        blockers.append("canonical bundles disagree on (or omit) the entry_fill_model assumption")
+    elif claimed_model not in (None, "") and str(claimed_model) != evidence_model:
+        blockers.append(
+            f"claimed entry_fill_model {claimed_model!r} contradicts the canonical evidence "
+            f"execution assumption {evidence_model!r}"
+        )
+    merged_execution = dict(execution)
+    merged_execution.update(derived_execution)
+    merged_research = dict(research_result)
+    merged_research.update(derived["research_result"])
+    return merged_execution, parity, merged_research, blockers
+
+
+def _check_canonical_quantity(
+    derived: dict[str, Any],
+    *,
+    execution_context_claimed: dict[str, Any],
+) -> dict[str, Any]:
+    """Quantity proof from canonical FILLED rows (one observed quantity per fill)."""
+    problems: list[str] = []
+    claimed_raw = execution_context_claimed.get("contract_qty")
+    claimed = (
+        claimed_raw
+        if isinstance(claimed_raw, int) and not isinstance(claimed_raw, bool) and claimed_raw > 0
+        else None
+    )
+    if claimed is None:
+        problems.append("execution_context_claimed.contract_qty must be a positive integer")
+    quantities = derived["filled_contract_quantities"]
+    attempts = (derived.get("execution") or {}).get("entry_attempts")
+    if not isinstance(attempts, int) or isinstance(attempts, bool) or attempts <= 0:
+        problems.append("canonical execution.entry_attempts must be a positive integer")
+    if not quantities:
+        problems.append("canonical evidence has no FILLED rows to prove contract quantity")
+    elif isinstance(attempts, int) and not isinstance(attempts, bool) and len(quantities) != attempts:
+        problems.append(
+            "canonical quantity coverage is incomplete: "
+            f"{len(quantities)} observed quantities for {attempts} entry attempts; "
+            "every entry attempt, including cancellations/no-fills, requires quantity proof"
+        )
+    if claimed is not None and quantities and any(q != claimed for q in quantities):
+        problems.append(
+            f"canonical filled contract quantities {sorted(set(quantities))} do not all "
+            f"match claimed contract_qty {claimed}"
+        )
+    return {
+        "source": "canonical_evidence",
+        "observed_contract_quantities": quantities,
+        "claimed_contract_qty": claimed_raw,
+        "verified": not problems,
+        "problems": problems,
+    }
+
+
+def _check_fault_injection(root: Path, supplied: Any, derived: dict[str, Any] | None) -> dict[str, Any]:
+    """Exact-SHA FI proof for the code SHA derived from canonical evidence."""
+    from ops.fault_injection_gate import load_manifest, verify_manifest
+
+    manifest_ref = supplied.get("manifest") if isinstance(supplied, dict) else None
+    manifest = None
+    path_blocker = None
+    if isinstance(manifest_ref, str) and manifest_ref.strip():
+        candidate = Path(manifest_ref)
+        candidate = candidate if candidate.is_absolute() else root / candidate
+        try:
+            resolved = candidate.resolve()
+            resolved.relative_to(root.resolve())
+        except (OSError, ValueError):
+            path_blocker = "fault-injection manifest must resolve inside the repository root"
+        else:
+            manifest = load_manifest(resolved)
+    code_sha = (derived or {}).get("code_sha")
+    blockers: list[str] = []
+    if path_blocker:
+        blockers.append(f"fault-injection proof: {path_blocker}")
+    blockers.extend(
+        f"fault-injection proof: {problem}"
+        for problem in verify_manifest(root, manifest, code_sha=code_sha)
+    )
+    return {
+        "manifest": manifest_ref,
+        "code_sha": code_sha,
+        "verified": not blockers,
+        "blockers": blockers,
+    }
 
 def build_promotion_report(
     *,
@@ -467,12 +679,38 @@ def build_promotion_report(
     execution_context_claimed = evidence.get("execution_context_claimed") or {}
     stated_classification = evidence.get("stated_classification")
 
+    canonical = derive_canonical_facts(root, evidence.get("canonical_evidence"))
+    canonical_blockers = list(canonical["blockers"])
+    derived = canonical.get("derived")
+    fault_injection = _check_fault_injection(root, evidence.get("fault_injection"), derived)
+    canonical_blockers.extend(fault_injection["blockers"])
+    if derived is not None:
+        execution, identity_parity, research_result, extra = _apply_canonical_facts(
+            derived,
+            execution=execution,
+            identity_parity=identity_parity,
+            research_result=research_result,
+            execution_context_claimed=execution_context_claimed,
+        )
+        canonical_blockers.extend(extra)
+        strategy_binding, binding_blockers = _bind_strategy_identity(
+            strategy, packet_strategy=evidence.get("strategy"), derived=derived
+        )
+        canonical_blockers.extend(binding_blockers)
+    else:
+        strategy_binding = {"requested": strategy, "bound": False}
+
     accounting = _check_accounting_identities(execution)
     execution_context = _execution_context_check(repo_root=root, claimed=execution_context_claimed)
-    quantity_evidence = _check_quantity_evidence(
-        execution=execution,
-        execution_context_claimed=execution_context_claimed,
-    )
+    if derived is not None:
+        quantity_evidence = _check_canonical_quantity(
+            derived, execution_context_claimed=execution_context_claimed
+        )
+    else:
+        quantity_evidence = _check_quantity_evidence(
+            execution=execution,
+            execution_context_claimed=execution_context_claimed,
+        )
     caps = _safety_caps(
         identity_parity=identity_parity,
         accounting=accounting,
@@ -482,6 +720,7 @@ def build_promotion_report(
         runtime_parity=runtime_parity,
         execution_context_claimed=execution_context_claimed,
         stated_classification=stated_classification,
+        canonical_blockers=canonical_blockers,
     )
 
     evidence_supplied = bool(evidence)
@@ -499,6 +738,7 @@ def build_promotion_report(
         "routine": "promotion-proof-gate",
         "generated_at": _now_iso(),
         "strategy": strategy,
+        "strategy_identity_binding": strategy_binding,
         "evidence_path": str(evidence_path) if evidence_path else None,
         "evidence_load_error": evidence_error,
         "evidence_supplied": evidence_supplied,
@@ -522,6 +762,8 @@ def build_promotion_report(
         "paper_forward_evidence": paper_forward_evidence,
         "execution_context": execution_context,
         "quantity_evidence": quantity_evidence,
+        "canonical_evidence": canonical,
+        "fault_injection": fault_injection,
         "classification": caps,
         "notes": evidence.get("notes"),
         "forbidden_actions_reminder": (

@@ -23,3 +23,17 @@ Follow `AGENTS.md` as the repository-wide operating contract.
 ## Session closeout
 
 Before reporting completion, verify the result from source and, when applicable, from the VPS runtime. State unverified items explicitly.
+
+## Options breaker baseline
+
+For options reviews, the current-state authority remains `docs/options-current-state-handoff.md`. In addition to execution-safety checks, verify the canonical evidence boundary when relevant:
+
+- signal identity/provenance cannot be rewritten after the fact;
+- registered epoch scope (setup, timeframe, universe/ticker, data source, effective dates) must match exactly;
+- late/missed/gap/data-blocked/unregistered/counterfactual rows cannot contribute realised/scorable outcomes;
+- chronology and source evidence must remain internally possible and fail closed when incomplete;
+- a FROZEN epoch or green alert/risk pipeline is not enough to declare paper readiness;
+- `READY FOR PAPER` requires the repository's current readiness contract plus prospective forward evidence under the frozen registered epoch. Otherwise use HOLD or the narrower forward-proof/preview classification.
+
+When a change only moves ancestry or documentation and the reviewed code blobs are byte-identical, explicitly verify that fact rather than repeating the entire semantic audit.
+

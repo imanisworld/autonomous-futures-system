@@ -1,8 +1,147 @@
 # Options — Current State Handoff
 
-_As of 2026-10-05. The newest dated repository refresh below governs source state; the latest verified box-specific sections govern runtime state until a fresh local/provider or VPS check is performed. This is the single current-state authority for the options lane._
+_As of 2026-10-08. The newest dated repository refresh below governs source state; the latest verified box-specific sections govern runtime state until a fresh local/provider or VPS check is performed. This is the single current-state authority for the options lane._
 
-Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`; the read-only coverage evidence lane (observer, reducer, outcome study, after-close collector) is described in `docs/options-coverage-observer.md`.
+Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`; the read-only coverage evidence lane (observer, reducer, outcome study, after-close collector) is described in `docs/options-coverage-observer.md`. The observation-only **setup-capture** lifecycle (`WATCHING` → `TRIGGERED` / `MISSED_LATE`) is described in `docs/options-setup-capture-observer.md`.
+
+**2026-10-08 options audit (operator-supplied Claude report; not independently repeated here):** The source contains a Webull **sandbox-paper-only** order-submit adapter; the reported running scanner/manager do **not** import or invoke it. The actual order-ticket flow remains preview-only. Shared VPS `.env` was checked for the five confirmed sandbox config flags/credentials and they were absent, but options-service-specific environment sources were **not** fully verified. The pinned `options-122-prospective` release was reported as `db9bc7e2` and isolated from futures promotion. Reported options suite: **3,110 passed, 1 skipped, 5 failed** in a restricted scratch export; the failures were attributed to missing `.git`/blocked `.env` writes, not independently reproduced as source defects. Source security safeguards are not strategy edge or proof of deployed v0.2/journal integrity. **No repeat box-wide audit is queued; targeted runtime/journal verification is needed only if a later change requires it.**
+
+## Active source and edge-research update — 2026-10-08 (latest checkpoint)
+
+**Decision: RESEARCH ONLY / NO NEW TRADE. Trading edge NOT PROVEN.** This is a dated source-and-priority reconciliation. It supersedes older **open-work status** lines in the Oct. 8 checkpoint below, without altering historical evidence, strategy/epoch definitions, trial registrations, or runtime state. Current `main` inspected at `307fe56771031b44eeb8d0235224cf010616ce4a`; this is a source SHA, **not** the installed VPS release.
+
+- **#1177 part 2 / #1198 — MERGED SOURCE ONLY:** dedicated read-only `options_122/122-IEX-E1` canonical adapter and adversarial tests merged as `307fe567` on Oct. 8. #1186 producer stamp (part 1) was already merged. Canonical admission requires exact stamped history, raw first-break tape replay, mandatory delayed SIP confirmation and explicit trusted quote freshness; legacy/#1145 evidence is never silently relabeled. **No collector pin, raw-file/journal census, real evidence admission, fitness promotion, option trading or Day 1 is proven by this merge.**
+- **#1184 — ISSUE CLOSED / FURTHER WORK DEFERRED:** standalone defensive verifier is still **DRAFT / UNMERGED PR #1199** (reported exact-head CI and handoff successful; independent review/merge still separate). It must not be treated as independent proof of durable approval storage, authenticated human principals, or an ability to grant trading authority. No preapproved human principal, runtime integration or executable authority. Reopen security integration only before storing/reloading/acting upon approval history, with explicit operator authorization.
+- **#1154 OPEN / PARKED; #1167 AUDIT ONLY:** source completion of #1198 resolves the missing adapter *implementation* dependency, **not** producer/deployed release provenance, raw journals, trusted quote-policy inputs, rollback rehearsal, forward proof decisions or OOS/stop-target readiness. Do not remove compatibility code or simplify live collectors prematurely.
+- **#1071 OPEN / UNMERGED:** an older read-only epoch P&L auditor exists in PR #1071, behind the current repository and **not on main**; it has a Sept. 29 cohort result, not a fresh Oct. 7/8 reconciliation. Reuse/reconcile it rather than creating another P&L analytics system. Its existing checks do not replace new exact-head CI/review/merge approval.
+- **Current paper data is NOT independently reconciled:** the Oct. 7 daily numbers directly below are operator-supplied and do not establish current-epoch expectancy. All-time results mix cohorts. Existing daily report can substitute zero for missing P&L; a structural WIN may have negative option P&L when ASK entry / BID exit and spreads are considered. Commissions are excluded from recorded paper dollars.
+
+**Ordered research work (do not tune first):**
+
+1. **BLOCKED ON AUTHORIZED READ-ONLY DATA:** obtain a consistent, source-identified `options_scanner.sqlite` snapshot plus the actual Oct. 7 EOD report/marks/diagnostics. Confirm provenance, effective scanner release, epoch boundary (both time and shadow ID), ACTIVE entries, closes, option `pnl_dollars`, and unresolved/invalid records. No Mac/root access or real ledger was verified in this update.
+2. **THEN:** reconcile closed financial P&L vs structural WIN/LOSS and daily paper report; exclude OPEN, unpriced, entry-consumed, rejected and COUNTERFACTUAL from priced ACTIVE totals. Keep cross-epoch data separate. Make missing prices, commissions and quote coverage explicit, not zero or simulated fills.
+3. **THEN:** apply existing `alert_ranker/v1_diagnostics.py` and contract-mark/context records only to available *pre-entry* features: setup/timeframe, first sight, remaining reward/stop, spread and contract liquidity, DTE/theta, market SPY/QQQ/GEX. Compare losses descriptively without hindsight-selected thresholds or unsupported causation.
+4. **NEXT RESEARCH DESIGN:** only after accounting, preregister the exact future setup/factor question and an untouched forward population. Do not reopen/rerun the closed 59-episode one-look (coverage gain only) or approve/backfill `-02` before its explicit gates.
+5. **DEFERRED:** modernization/unused tooling review after the proof/readiness blockers are understood; #1184 approval infrastructure only when real use is proposed.
+
+**Boundaries:** futures release-candidate/VPS root checks remain separate. No code/PR merge, deploy, build, service restart, collector repin, journaling mutation, strategy change, paper/live order, forward-evidence start, or trading-approval activation is authorized by this document. **FUTURES HOLD · OPTIONS HOLD.**
+
+## Options paper-collection readout — 2026-10-07 UTC (operator-supplied, not independently reconciled)
+
+**Engineering verdict: collection PASS; trading-edge verdict: NOT PROVEN / HOLD.** This is a read-only daily reporting snapshot, not a new strategy trial, a broker statement, or authority to change rules, promote code, or deploy. Validate against `paper_collection_eod_2026-10-07.json` and canonical DB/journal before any formal statistical inference.
+
+- **Paper outcomes:** 0 opened, 2 closed (1 win / 1 loss), net **-$231** that day; 1 position still open. Lifetime 25 closed, 9 wins / 16 losses, cumulative **-$1,716** (simple 36% close win rate; small, nonrandom sample; no expectancy conclusion).
+- **Filtered what-if cohort, not executable fills:** 28 hypothetical closes, 14 wins / 14 losses, cumulative **-$1,021**. Not comparable to actual paper P&L without matched populations, execution assumptions and cost modeling. 37 entries already had target consumed; 2 refused as late with insufficient remaining reward.
+- **Collection telemetry:** 3,162 scanner rows, 64 shadow-journal rows, 0 alerts, DB OK, no paper-collection data blockers reported, collector status 1 fresh / 1 off-session. Zero alerts alone does not prove an alert-delivery fault; inspect eligibility and routing before inferring one.
+- **Journal statuses, not option P&L:** 35 target consumed at entry; 11 Win; 9 Open; 7 Loss; 2 Stop consumed at entry (64 total). Do not add these to paper closes or represent them as filled-trade results.
+- **Execution assumptions:** paper only, one contract; simulated entry at ask / exit at bid; commissions excluded. No strategy rule change is justified by this card alone.
+- **Research queue (separate from operational deployment):** reconcile P&L and open-position status from canonical ledger; examine winners versus losers by pre-entry setup, timeliness/reward remaining, contract liquidity/spread, theta, and SPY/QQQ/GEX context; retain the exact cohort and avoid outcome-selected filters. This is investigation, not tuning or permission to trade.
+
+**Cleanup gate:** #1167 remains audit-only until #1154 is merged and stable. Map callers, authority, live services, historical replay and rollback before removing compatibility paths, duplicate validators, collectors or dated docs. Keep all original journal/JSON evidence unchanged; simplify only after tests and independent review.
+
+## Earlier work-queue verification — 2026-10-08 (superseded source status)
+
+This check updates workflow status without changing the frozen evidence, the current checkpoint's strategy definitions, or operational state. #1188 was merged as `f8e4257e2b9481f4b670b24e7602634e9cf47649`; the 2026-10-08 checkpoint immediately below is now on main.
+
+- **#1183 / #1176 — MERGED / DONE.** Grok PASS on exact reviewed head `82a2d91411169b6923e26c8c79287757b81b6d37`; CI and Agent Handoff Check passed; merged as `8675cd43e0ecb9340614117e1afec0595c881cc6`. The canonical history-backed TRIGGERED-catch verifier and history/summary chronology fix are now on main. #1184's independent authority-history hardening remains mandatory before runtime authority wiring.
+- **#1177 / #1186 part 1 — MERGED (SOURCE ONLY) / RUNTIME HOLD.** #1186 received operator-reported independent Grok PASS on exact source head `51d64274e7cc42cae6e8f6a6b7b4f0a27af97ed6`, with green CI and Agent Handoff Check; squash-merged as `0d02a8bd019b6a164e14ec2965b7e7ce95eee25e`. The canonical producer-stamp B1 tests cover prior/duplicate ARMED rejection, immutable stamp through lifecycle and SOURCE_DRIFT. **This is not a collector deployment or forward-evidence admission.** B2 fresh-partition rollback is documented but has no root box rehearsal; current collector pin, live journal duplicate/out-of-order ARMED census, and legacy journal compatibility remain UNVERIFIED. #1177's read-only adapter (part 2) remains unfinished; no legacy relabeling or #1145 alias.
+- **#1184 — OPEN / security prerequisite.** Design direction is an authenticated, append-only event history anchored by an independently trusted durable latest head, with strict evaluator identity and approval provenance. Approved human identities have **not** been supplied (none preapproved); storage, reading `execution_authority` as authority, and fitness runtime wiring stay blocked until design and tests pass.
+- **#1154 — OPEN / PARKED.** #1183/#1176 is already source-merged; final readiness reconciliation still waits for #1177's separate read-only canonical adapter (part 2), complete producer provenance, and approved evidence/runtime prerequisites. Preserve both 2026-10-07 and 2026-10-08 checkpoints. No proof-ready or paper-ready claim without exact provenance.
+- **#1167 — OPEN / deferred cleanup.** Modernization and dead-code audit follow readiness reconciliation; no speculative removal of active paths.
+- **Futures boundary (separate):** #1190 deployment plan merged as `e3c84a78ad89a0a014b157915788f6cd0dd8bbed` (docs only; Grok PASS AFS-0174); #1194 watcher pre-mutation guard merged as `168e74207f508ba8bba3ab391d43620d9666947e` (Grok PASS AFS-0168, source only). #1196 release-history preflight received Grok PASS at `a3535c7` (AFS-0178) and was source-merged as `a602501c`; this is not VPS deployment or release authorization. The next buildable release SHA remains **UNSET**, and B1/B5/B6/B8 root VPS proof, evidence-window choices and rollback remain outstanding. No merge, plan or source PASS is a release/build/promote GO.
+
+**Gates:** Exact-head CI and independent Grok PASS before a code merge, then separate operator approval. No new build, promotion, install, restart, timer activation, live execution, or forward-proof Day 1 is authorized by this documentation update.
+
+### #1177 implementation handoff — design only (2026-10-08)
+
+The read-only source audit and twelve-case regression matrix are recorded in [#1177 comment 6050751629](https://github.com/imanisworld/autonomous-futures-system/issues/1177#issuecomment-6050751629). This is a specification, **not implementation or admission of real evidence**.
+
+- **Part 1, after #1183 merged:** versioned, forward-only canonical binding on *new* dedicated 1-2-2 ARMED/RESOLUTION/RECONCILIATION rows, with exact strategy/epoch, 30m family/universe, explicit structure-close and pattern identity, registry hash, literal arm/IEX/SIP sources, collector identity and raw provenance. Incomplete identity fails closed; legacy rows are never stamped or rewritten.
+- **Part 2:** a separate, read-only adapter for those stamped rows; IEX reversal is only provisional. Verified prospective catches require history-backed pre-arming, timely usable option capture, matching delayed SIP confirmation and final canonical registry verification. No #1145-to-E1 aliases or inferred historical identity.
+- **Regression coverage:** valid confirmed catch; false provisional; SIP-only reversal missed by IEX; continuation-first; pending/no break; blocked/disagreeing SIP; late or unusable capture; legacy exclusion; exact producer/source/family/timeframe/universe/hash/close rejection; duplicate/illegal history/drift rejection; and no strategy/runtime mutation.
+- **Gate:** #1183/#1176 is merged. #1154 remains parked until #1177 parts 1 and 2 have the exact producer contract, exact-head CI, independent Grok review and operator approval. No collector deployment, timer activation, proof window or trading authority.
+
+## Earlier options-system checkpoint — 2026-10-08 (superseded open-work status)
+
+This section is the active source-state checkpoint for the canonical options evidence stack. It supersedes the 2026-10-07 checkpoint below, which remains provenance and must not be replayed over this state. Merge gate for every options PR: exact-head CI green **and** a Grok PASS on that exact head; Claude reviews are QA only and do not satisfy the gate.
+
+### DONE / DO NOT REDO
+
+- #1145–#1150: unchanged from the 2026-10-07 checkpoint below.
+- #1151 merged as `8da0a98`: canonical prospective signal + outcome evidence. Non-catches are counterfactual-only; epoch membership is exact (ticker/universe, data source, timeframe, family, effective window); unknown or mismatched scope fails closed as unregistered.
+- #1153 merged as `5cd239b`: alert model on canonical state + setup research scaffold. Research admits only TRIGGERED prospective catches; a repeated `signal_id` excludes every copy as `duplicate_signal`.
+- #1152 merged as `58606b4`: revoke-only strategy fitness kill-switch (Grok PASS on `3ad4051`). Fitness counts only registry-verified TRIGGERED prospective catches judged under the epoch's own definition; execution authority exists only with validated human-grant history and is refused in FAIL_CANDIDATE/SUSPENDED/RETIRED; the evaluator only revokes. Not runtime-wired.
+- #1169 merged as `aa77079`: agent audits synced with the canonical forward-proof contract.
+- Do not reimplement #1151 provenance, chronology, counterfactual, or epoch-scope rules downstream.
+
+### OPEN / NEXT
+
+1. **#1183 / #1176 — MERGED** as `8675cd43e0ecb9340614117e1afec0595c881cc6`: canonical verifier requires history-backed TRIGGERED catch and history/summary chronology. #1152/#1153 downstream guards remain defense in depth; this item is no longer an implementation blocker.
+2. **#1177 / #1186 part 1 — source MERGED:** #1186 merged `0d02a8bd` after Grok PASS was reported on exact reviewed head `51d6427`. Its B1 code and regression tests are source-complete; no new collector runtime was activated. B2 fresh-partition rollback is only a design until Ops checks existing journal/pin and completes an approved rehearsal. #1177 part 2, the forward-only read-only canonical adapter, is still unfinished. #1145 is **not** the E1 producer. No E1 fitness/research evidence admission yet.
+3. **#1184**: tamper-evident / append-only authority history, including timestamp ordering and evaluator-name lookalikes. An independent reviewer recommended handling it separately from already-merged #1152; **that recommendation was not an operator ruling**. The operator has not approved a human-grant allowlist. It remains a hard safety prerequisite before code stores authority state, acts on its flag, or wires fitness into runtime.
+4. **#1154** (readiness + docs reconciliation) stays parked. #1183/#1176 has merged, but #1177 parts 1 and 2 have not completed all review/provenance gates. Readiness requires exact strategy/epoch/definition/window/release/producer evidence and can say at most READY TO START FORWARD PROOF, **not** READY FOR PAPER or authority to start proof/trading.
+5. **#1167**: options modernization / dead-code audit, after #1154.
+6. Runtime observer/timer install and forward proof remain separate operator-approved phases after the code stack is complete.
+
+### Runtime / proof boundary
+
+- No setup-capture timer install, observer install, or new options deployment is authorized by this checkpoint.
+- No forward-proof window is started; options Day 1 is not declared.
+- `122-IEX-E1` is not proof/trading ready: its producer binding (#1177 / #1186) and OOS reference/stop-target/runner operator decisions are incomplete; the last reported fitness state was COLLECTING / `no_oos_reference` and must not be presumed newly verified. FROZEN is not READY or execution authority.
+- Fitness is not runtime-wired; it can only revoke authority, and authority exists only through a recorded human grant. #1184 must land before authority state is persisted or acted on.
+
+## Options-system checkpoint — 2026-10-07 (provenance; superseded by 2026-10-08 above)
+
+This was the active source-state checkpoint on 2026-10-07. It is kept as provenance and must not be replayed over the 2026-10-08 state.
+
+### DONE / DO NOT REDO
+
+- #1145 merged as `ae8c897`: observation-only setup capture. Historical Oct. 5 late SPY observations remain misses; do not backfill them as catches.
+- #1146 merged as `445393f`: scanner access gate. `/setup-capture` remains private and public health/status output redacted.
+- #1147 merged as `53dda44`: read-only observer status and release-pin template. Status reads remain non-mutating.
+- #1148 merged as `e86c55c`: contract-quality fail-closed gate.
+- #1149 merged as `ee815535`: canonical planned-risk authority.
+- #1150 merged as `f556751d`: hash-pinned, observation-only strategy-epoch registry.
+- #1151 fixed authority injection, missed-signal trade laundering, malformed inputs, provenance relabelling, impossible chronology, and forged/mismatched epoch labels. Non-catches are counterfactual-only and cannot contribute realised/scorable trade results.
+- #1151 was reconciled again with current `main` `f35b976` via merge commit `3a69fd3`; the new main delta was disjoint from #1151 files.
+- Do not reimplement #1151 provenance, chronology, counterfactual, or epoch-scope rules in #1152/#1153.
+
+### OPEN / NEXT
+
+1. #1151 is the active merge gate. Fresh CI and CodeQL must pass on the post-sync exact head, then the exact-head review requirement must be reconciled before merge.
+2. #1152 remains downstream until #1151 merges. Sync once, reuse the saved fixture-only compatibility patch, address only still-reproducing fitness findings, then test/CI/review/merge.
+3. #1153 follows the same pattern, preserving no-look-ahead/no-result-selection and canonical scope/provenance.
+4. #1154 is the final readiness + documentation reconciliation point. Preserve this checkpoint; refresh current GitHub facts rather than replaying stale text.
+5. Runtime observer/timer install and forward proof remain separate operator-approved phases after the code stack is complete.
+
+### Runtime / proof boundary
+
+- No setup-capture timer install or new options deployment is authorized by this checkpoint.
+- The release-pin template exists, but effective runtime remains unverified until a separate approved box action.
+- Public INDEX/SPX real-time-vs-delayed entitlement remains unverified.
+- `122-IEX-E1` is not proof/trading ready; FROZEN is not equivalent to READY or execution authority.
+- Final #1151 source matching intentionally does not infer a mapping between current #1145 source labels and the registry source labels.
+
+
+
+## Repository refresh — 2026-10-06 (setup-capture observer v0.2; not deployed)
+
+**Capture plumbing only. Not a strategy change, not a scoring model, not SPXW enablement, not a watchlist expansion of `OPTIONS_PAPER_V1`, not merge/deploy authority.**
+
+Oct. 5 SPY shadow records 9925 (`2026-10-05T14:16:45Z`) and 9933 (`14:31:45Z`) were `H1_222_CONTINUATION` LONG/CALL, trigger `770.0768`, invalidation `769.17`, geometry `AHEAD`, lane `COUNTERFACTUAL`. They are **not** prospective catches. Do not rewrite that history.
+
+What landed in source on `cursor/options-setup-capture-observer-0010`:
+
+- Oneshot JSONL collector (122 timer pattern), **not** a scanner APScheduler job. Arms two-sided pending 2-2 (all four 2U/2D combos) from completed Public bars **before** the next RTH open. Watch window starts at that open; AH Fri 16:06 and premarket are ignored.
+- Structure key `ticker|timeframe|structure_close_ts|pattern` (levels are attributes / fingerprint; bar revision → `SOURCE_DRIFT`); direction added at TRIGGERED. 9925/9933 link to one key. Existing shadow rows are not altered.
+- IEX first-boundary for equities; capture lag measured against the **SIP-reconciled** cross. IEX miss + SIP hit = `MISSED_LATE`. Opening gap-through is `GAP_THROUGH_OPEN`.
+- Full next 1H candle including 15:30/12:30 stubs as watch candles (the 960 s H1 observer only ever sees the first 30m bar of the current hour).
+- SPX on the watcher's own list via Public INDEX 1m bars (bar resolution, fail-closed delayed). Never `OPTIONS_SCANNER_WATCHLIST`. SPXW stays OFF.
+- Journal absolute path `/root/afs-shared/logs/options_setup_capture.jsonl`. 122 `WorkingDirectory` is the unpinned checkout; flagged.
+
+Out of scope (flagged): `POST /webhook/alert` has no ticker allowlist; `GET /shadow-journal` 200s from outside IPs (auth gate unverified).
+
+Merge, options-scanner deploy, and any execution-flag change still require explicit operator approval.
 
 
 ## Repository refresh — 2026-10-05 (forward `-02` re-registration + floor-eligible companion + blind-window prep; not run)
@@ -127,7 +266,7 @@ The narrow provider-mapping correction on exact head `d7a546c789c6ff6e23713357fe
 
 ## Research / agent governance
 
-Repository-wide research roles are locked in `AGENTS.md` and apply to the options lane as well: Grok (when used) proposes outside research/hypotheses; Cursor performs repository-aware mechanical work on already-defined trials; Claude/Codex act as independent breaker/QA; ChatGPT + operator reconcile conflicting evidence and approve status/progression decisions.
+Repository-wide research roles are locked in `AGENTS.md` and apply to the options lane as well: Grok owns research/edge discovery and read-only contract discovery/comparison (including operator-authorized Robinhood/Webull account/market context when available); Cursor implements approved changes and runs already registered and approved trials; Claude/Codex act as independent breaker/QA; ChatGPT + operator choose which hypotheses are worth registering, reconcile conflicting evidence, and approve status/progression decisions. Broker/account linkage remains data context only and does not grant Grok or any other agent order authority.
 
 This file remains the **options current-state authority**. Do not create a parallel options strategy inventory, experiment selector, or agent-maintained status file. Agents may read this file and propose updates, but must not silently maintain competing current-state truth. Existing frozen cohorts, forward boundaries, one-look rules, and evidence contracts remain controlling unless an explicitly reviewed options change replaces them.
 

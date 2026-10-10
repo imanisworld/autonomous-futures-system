@@ -86,7 +86,9 @@ def test_accounting_identity_mismatch_is_a_blocker(tmp_path: Path) -> None:
     assert report["accounting_identities"]["identity_fills"]["holds"] is False
     blockers = report["classification"]["blockers"]
     assert any("accounting identity" in b for b in blockers)
-    assert report["classification"]["effective_classification"] == "PROMISING BUT UNPROVEN"
+    # U5: a hard cap blocks every positive classification (VALIDATED is no
+    # longer merely downgraded to PROMISING BUT UNPROVEN).
+    assert report["classification"]["effective_classification"] == "BLOCKED_BY_HARD_CAP"
     assert report["classification"]["override_reason"] is not None
 
 
@@ -186,7 +188,8 @@ def test_gate_fails_when_blockers_exist_even_if_classification_is_promising(tmp_
     report = build_promotion_report(strategy="x", repo_root=tmp_path, evidence_path=evidence)
     assert report["ok"] is False
     assert report["gate_pass"] is False
-    assert report["classification"]["effective_classification"] == "PROMISING BUT UNPROVEN"
+    # U5: PROMISING BUT UNPROVEN must not survive a hard blocker.
+    assert report["classification"]["effective_classification"] == "BLOCKED_BY_HARD_CAP"
 
 
 def test_claimed_tolerance_requires_instrument(tmp_path: Path, monkeypatch) -> None:
@@ -336,10 +339,18 @@ def test_complete_required_proof_can_pass(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS_MES", "16")
     monkeypatch.setenv("ENTRY_FILL_MODEL", "ioc_limit")
     monkeypatch.setenv("MAX_CONTRACTS_HARD_CAP", "1")
-    evidence = _write_evidence(tmp_path, _complete_promotion_evidence())
-    report = build_promotion_report(strategy="x", repo_root=tmp_path, evidence_path=evidence)
+    from tests.canonical_bundle_helpers import make_fi_manifest, make_promotion_bundle
+
+    bundle, code_sha = make_promotion_bundle(tmp_path)
+    payload = _complete_promotion_evidence()
+    payload.pop("execution")  # derived from the canonical bundle (U5)
+    payload["canonical_evidence"] = {"bundles": [bundle]}
+    payload["fault_injection"] = {"manifest": make_fi_manifest(tmp_path, code_sha)}
+    evidence = _write_evidence(tmp_path, payload)
+    report = build_promotion_report(strategy="example", repo_root=tmp_path, evidence_path=evidence)
     assert report["gate_pass"] is True, report["classification"]["blockers"]
     assert report["promotion_eligible"] is True
+    assert report["execution"]["fills"] == 40
 
 
 @pytest.mark.parametrize(

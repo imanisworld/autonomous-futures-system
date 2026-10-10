@@ -18,6 +18,7 @@ from options_manager.context import MarketContextInputs
 from options_manager.contracts import ContractConstraintsInputs
 from options_manager.levels import LevelFinderInputs
 from options_manager.plans import (
+    ObservationRatingSnapshot,
     SignaObservation,
     StructuralLevel,
     update_trade_thesis_from_authorities,
@@ -252,6 +253,27 @@ def test_opposed_signa_is_telemetry_only_and_does_not_change_promotion():
     assert result.plan_update.snapshot.actionable is True
     assert result.plan_update.snapshot.signa_event_count == 1
 
+
+
+def test_high_observation_rating_cannot_validate_invalid_canonical_proof():
+    row = replace(_row(), market_context_inputs=_market_context(qqq_trend="neutral"))
+    result = _evaluate(
+        row=row,
+        observation_rating=ObservationRatingSnapshot(
+            rating=100.0,
+            components=(
+                ("strat_htf", 100.0),
+                ("market_alignment", 100.0),
+                ("signa", 100.0),
+                ("gex", 100.0),
+                ("level_quality", 100.0),
+            ),
+        ),
+    )
+
+    assert result.valid is False
+    assert result.plan_update is None
+    assert "spy_qqq_not_aligned" in result.blocking_reasons
 
 def test_manual_market_context_override_is_rejected_even_if_scanner_triggers():
     row = replace(_row(), market_context=replace(_row().market_context, confirmed=True))

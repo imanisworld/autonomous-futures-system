@@ -167,6 +167,25 @@ def _conviction_text(snapshot: TradePlanSnapshot) -> str:
     )
 
 
+def _observation_rating_lines(snapshot: TradePlanSnapshot) -> list[str]:
+    rating = snapshot.observation_rating
+    if rating is None:
+        return []
+    components = " | ".join(
+        f"{name}={value:.1f}" for name, value in rating.components
+    )
+    lines = [
+        (
+            "Observation rating: "
+            f"{rating.rating:.1f}/100 "
+            "(OBSERVATIONAL ONLY; trade authority=NO)"
+        )
+    ]
+    if components:
+        lines.append("Observation components: " + components)
+    return lines
+
+
 def _contract_lines(snapshot: TradePlanSnapshot) -> list[str]:
     contract = snapshot.contract_plan
     if contract is None:
@@ -243,6 +262,7 @@ def _body(snapshot: TradePlanSnapshot, update: PlanUpdate, kind: PlanUpdateKind)
         f"R:R T1: {_format_number(snapshot.rr_1)}",
         f"R:R T2: {_format_number(snapshot.rr_2)}",
         f"Conviction: {_conviction_text(snapshot)}",
+        *_observation_rating_lines(snapshot),
         *_contract_lines(snapshot),
         *_risk_lines(snapshot),
     ]

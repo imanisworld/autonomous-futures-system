@@ -34,6 +34,195 @@ def test_atomic_release_script_parses_with_bash():
     subprocess.run(["bash", "-n", str(SCRIPT)], check=True)
 
 
+def test_atomic_release_script_is_executable_in_git():
+    mode = subprocess.run(
+        ["git", "ls-files", "-s", str(SCRIPT)],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.split()[0]
+    assert mode == "100755"
+
+
+def test_box_build_uses_explicit_python313_interpreter():
+    text = SCRIPT.read_text()
+    build = text.split("build_release() {", 1)[1].split("verify_release() {", 1)[0]
+
+    assert 'box_python="${AFS_BOX_PYTHON:-python3.13}"' in build
+    # Inside the double-quoted remote "..." string every inner quote must be
+    # escaped (\"), or the local shell ends the string early (2026-10-08 build).
+    assert 'command -v \\"\\$box_python\\"' in build
+    assert "box_python_version=" in build
+    assert 'if [ \\"\\$box_python_version\\" != \\"3.13\\" ]; then' in build
+    assert "expected 3.13" in build
+    remote_build = build.split('remote "', 1)[1]
+    assert remote_build.index('command -v \\"\\$box_python\\"') < remote_build.index("mkdir '$RELEASES/$sha'")
+    assert remote_build.index('box_python_version=') < remote_build.index("mkdir '$RELEASES/$sha'")
+    assert (
+        "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH='$RELEASES/$sha' "
+        '\\"\\$box_python\\" -m ops.dependency_lock check-python'
+    ) in build
+    assert '\\"\\$box_python\\" -m venv \'$RELEASES/$sha/.venv\'' in build
+    assert "python3 -m venv '$RELEASES/$sha/.venv'" not in build
+
+
+# Sample values for the locals the remote "..." blocks interpolate. Rendering
+# only expands variables (no block holds an unescaped command substitution),
+# so the stubbed remote() below never touches a box.
+_REMOTE_RENDER_PREAMBLE = """
+RELEASES=/r SHARED=/s CURRENT=/c SERVICE=futures-bot ROOT=/w LOCK_DIR=/s/deploy.lock
+REF=7c930274179f7c76749f75b35adb14fbb9255e54 sha=7c930274179f7c76749f75b35adb14fbb9255e54
+short=7c930274179f box_python=python3.13 unit=afs-candidate-7c930274179f port=12345
+fingerprint=f00d candidate_overrides='--setenv=EXIT_MODE=static' BOX=box
+remote() { printf '%s' "$1"; }
+"""
+
+
+def _remote_blocks():
+    """(function, first line, lines) for every multi-line remote "..." block."""
+    lines = SCRIPT.read_text().splitlines()
+    blocks, func, start = [], None, None
+    for i, line in enumerate(lines):
+        m = re.match(r"^(\w+)\(\) \{$", line)
+        if m:
+            func = m.group(1)
+        if line == '  remote "':
+            start = i
+        elif start is not None and line.startswith('  "'):
+            # Close the string bare; a trailing redirect/|| is local-only.
+            blocks.append((func, start + 1, lines[start:i] + ['  "']))
+            start = None
+    return blocks
+
+
+def test_every_remote_block_renders_to_a_script_bash_can_parse():
+    blocks = _remote_blocks()
+    funcs = {func for func, _, _ in blocks}
+    assert {"build_release", "verify_release", "promote_release", "rollback_release"} <= funcs
+    assert len(blocks) >= 6
+    rendered_by_func = {}
+    for func, lineno, block in blocks:
+        render = subprocess.run(
+            ["bash", "-c", _REMOTE_RENDER_PREAMBLE + "\n".join(block)],
+            capture_output=True,
+            text=True,
+        )
+        # A broken-out quote shows up locally as a stray command or error.
+        assert render.returncode == 0 and render.stderr == "", (func, lineno, render.stderr)
+        parsed = subprocess.run(["bash", "-n"], input=render.stdout, capture_output=True, text=True)
+        assert parsed.returncode == 0, (func, lineno, parsed.stderr)
+        rendered_by_func.setdefault(func, []).append(render.stdout)
+
+    build = "\n".join(rendered_by_func["build_release"])
+    assert 'if ! command -v "$box_python" >/dev/null 2>&1; then' in build
+    assert 'box_python_version=$("$box_python" -c \'import sys;' in build
+    assert 'if [ "$box_python_version" != "3.13" ]; then' in build
+    assert 'echo "build refused: box python interpreter $box_python is $box_python_version; expected 3.13" >&2' in build
+    assert '"$box_python" -m venv \'/r/7c930274179f7c76749f75b35adb14fbb9255e54/.venv\'' in build
+    assert "printf '%s\\n' \"$built_fp\" > '/s/release-complete/" in build
+
+
+def test_missing_release_history_fails_before_any_promotion_mutation(tmp_path):
+    """Rendered remote promote must refuse absent history without touching state."""
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    environment = shared / ".env"
+    environment.write_text("INITIAL\n")
+    history = shared / "release_history.txt"
+    current_next = tmp_path / "current.next"
+    reboot_marker = tmp_path / "service-restarted"
+    sentinel = tmp_path / "proof-pin-mutated"
+    prefix = _REMOTE_RENDER_PREAMBLE.replace("SHARED=/s", f"SHARED={shared}")
+
+    promote_blocks = [
+        block for func, _, block in _remote_blocks()
+        if func == "promote_release"
+    ]
+    assert len(promote_blocks) == 1
+    rendered = subprocess.run(
+        ["bash", "-c", prefix + "\n".join(promote_blocks[0])],
+        capture_output=True, text=True, check=True,
+    ).stdout
+    gate = rendered.index("# A missing history file must never fail")
+    before = rendered.index("test -f '" + str(shared) + "/.env'")
+    mutation = rendered.index("sed -i '/^EXPECTED_RELEASE_FINGERPRINT")
+    link_change = rendered.index("mv -Tf")
+    service_change = rendered.index("systemctl restart")
+    assert before < gate < mutation < link_change < service_change
+    assert "test -f '" + str(history) + "'" in rendered[gate:mutation]
+
+    # Execute the *rendered* guard inside a scratch fake box with canary
+    # mutations only AFTER it. A refusal must leave all canaries untouched.
+    stop = rendered.index("risk_sha=", gate)
+    guard = rendered[gate:stop]
+    assert "exit 1" in guard
+
+    fake_mutations = (
+        f"printf 'CORRUPTED\\n' >> '{environment}'\n"
+        f"touch '{sentinel}'\n"
+        f"ln -s '{shared}' '{current_next}'\n"
+        f"touch '{reboot_marker}'\n"
+    )
+    def attempt():
+        return subprocess.run(
+            ["bash", "-c", "set -e\n" + guard + fake_mutations],
+            capture_output=True, text=True,
+        )
+
+    no_history = attempt()
+    assert no_history.returncode != 0
+    assert "release_history.txt missing" in no_history.stderr
+    assert environment.read_text() == "INITIAL\n"
+    assert not sentinel.exists() and not current_next.exists()
+    assert not reboot_marker.exists()
+    history.mkdir()  # a directory must not count as a regular history file
+    directory_history = attempt()
+    assert directory_history.returncode != 0
+    assert environment.read_text() == "INITIAL\n"
+    assert not sentinel.exists() and not current_next.exists()
+    assert not reboot_marker.exists()
+    history.rmdir()
+    history.write_text("prior known-good release\n")
+    good = attempt()
+    assert good.returncode == 0, good.stderr
+    assert environment.read_text() == "INITIAL\nCORRUPTED\n"
+    assert sentinel.exists() and current_next.is_symlink()
+    assert reboot_marker.exists()
+
+
+def test_half_built_release_cannot_verify_or_promote():
+    text = SCRIPT.read_text()
+    build = text.split("build_release() {", 1)[1].split("verify_release() {", 1)[0]
+    verify = text.split("verify_release() {", 1)[1].split(
+        "# Decides whether", 1
+    )[0]
+    promote = text.split("promote_release() {", 1)[1].split("rollback_release() {", 1)[0]
+
+    marker = "$SHARED/release-complete/$sha"
+    assert marker in build and marker in verify and marker in promote
+
+    # Completion is published only after box-side dependency and integrity
+    # checks have succeeded. A failed build may leave a directory, but no
+    # completion proof.
+    marker_publish = build.index("mv -f '$SHARED/release-complete/$sha.tmp'")
+    assert marker_publish > build.index("/pip' check")
+    assert marker_publish > build.index("-m ops.dependency_lock check-freeze")
+    assert marker_publish > build.index("-m ops.release_integrity --repo-root '$RELEASES/$sha'")
+
+    # Verify refuses before it starts a candidate, and promote refuses before
+    # it mutates .env / symlinks / systemd.
+    verify_gate = verify.index("test -f '$SHARED/release-complete/$sha'")
+    assert verify_gate < verify.index("systemd-run --unit='$unit'")
+
+    promote_gate = promote.index("test -f '$SHARED/release-complete/$sha'")
+    assert promote_gate < promote.index("sed -i '/^EXPECTED_RELEASE_FINGERPRINT=")
+    assert promote_gate < promote.index("ln -s '$RELEASES/$sha' '$CURRENT.next'")
+
+    # Marker is bound to the release manifest fingerprint, not mere existence.
+    assert 'test "\\$complete_fp" = "\\$release_fp"' in verify
+    assert 'test "\\$complete_fp" = "\\$fp"' in promote
+
+
 def test_release_actions_reject_moving_refs_and_require_exact_sha():
     repo_root = SCRIPT.parent.parent.resolve()
     env = os.environ.copy()
@@ -131,9 +320,9 @@ def test_promote_and_rollback_rearm_readonly_watcher_after_release_verification(
         assert "watcher_src='$CURRENT/ops/afs_watcher'" in block
         assert "systemctl show afs-watcher.service -p WorkingDirectory --value" in block
         assert "watcher_memory_guard.py run_ro.sh supervisor.sh bootstrap_tmp_state.sh" in block
-        assert 'if test -f "\$watcher_src/bounded_log_pipe.py"; then' in block
-        assert 'cp -f "\$watcher_src/bounded_log_pipe.py" "\$watcher_dest/bounded_log_pipe.py"' in block
-        assert 'cmp -s "\$watcher_src/bounded_log_pipe.py" "\$watcher_dest/bounded_log_pipe.py"' in block
+        assert r'if test -f \"\$watcher_src/bounded_log_pipe.py\"; then' in block
+        assert r'cp -f \"\$watcher_src/bounded_log_pipe.py\" \"\$watcher_dest/bounded_log_pipe.py\"' in block
+        assert r'cmp -s \"\$watcher_src/bounded_log_pipe.py\" \"\$watcher_dest/bounded_log_pipe.py\"' in block
         assert "cmp -s" in block
         assert "watcher_triage.py" in block
         assert "systemctl restart afs-watcher.service" in block
@@ -142,6 +331,126 @@ def test_promote_and_rollback_rearm_readonly_watcher_after_release_verification(
         sync_at = block.index("watcher_src='$CURRENT/ops/afs_watcher'")
         restart_at = block.index("systemctl restart afs-watcher.service")
         assert integrity_at < sync_at < restart_at
+
+
+
+def test_watcher_rearm_reuses_same_preflight_resolved_destination():
+    """Both paths use the early canonical path, not a late raw path check."""
+    for func, _, block in _remote_blocks():
+        if func not in ("promote_release", "rollback_release"):
+            continue
+        rendered = subprocess.run(
+            ["bash", "-c", _REMOTE_RENDER_PREAMBLE + "\n".join(block)],
+            capture_output=True, text=True, check=True,
+        ).stdout
+        pre = rendered.index("watcher_pre_dest=$(systemctl show")
+        activated = rendered.index("sed -i '/^EXPECTED_RELEASE_FINGERPRINT")
+        post = rendered.index('watcher_dest="$watcher_pre_dest"')
+        assert pre < activated < post
+        assert 'watcher_shared_root=$(realpath -e --' in rendered[pre:activated]
+        assert 'watcher_pre_dest=$(realpath -e -- "$watcher_pre_dest")' in rendered[pre:activated]
+        assert 'if test "$watcher_preflight_enabled" = 1; then' in rendered[activated:post]
+        assert 'watcher_dest=$(systemctl show' not in rendered[activated:]
+        assert "case \"$watcher_dest\" in" not in rendered[activated:]
+        assert 'chmod 700 "$watcher_dest/$watcher_file"' in rendered
+        assert 'chmod 700 "$watcher_dest"/*.sh' not in rendered
+
+
+def test_watcher_preflight_blocks_release_mutation_for_untrusted_paths(tmp_path):
+    """Execute rendered preflight in a fake box with a mutation canary."""
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    approved = shared / "watcher"
+    approved.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (shared / "escaped").symlink_to(outside, target_is_directory=True)
+    shared_alias = tmp_path / "shared-alias"
+    shared_alias.symlink_to(shared, target_is_directory=True)
+    watcher_alias = tmp_path / "watcher-alias"
+    watcher_alias.symlink_to(approved, target_is_directory=True)
+    releases = tmp_path / "releases"
+    release = releases / ("7c930274179f7c76749f75b35adb14fbb9255e54")
+    prior = tmp_path / "prior-release"
+    for root in (release, prior):
+        src = root / "ops" / "afs_watcher"
+        src.mkdir(parents=True)
+        for name in ("watcher.py", "watcher_memory_guard.py", "run_ro.sh",
+                     "supervisor.sh", "bootstrap_tmp_state.sh"):
+            (src / name).write_text("safe")
+    prem = (_REMOTE_RENDER_PREAMBLE.replace("SHARED=/s", f"SHARED={shared}")
+            .replace("RELEASES=/r", f"RELEASES={releases}"))
+
+    for func, _, block in _remote_blocks():
+        if func not in ("promote_release", "rollback_release"):
+            continue
+        rendered = subprocess.run(
+            ["bash", "-c", prem + "\n".join(block)],
+            capture_output=True, text=True, check=True,
+        ).stdout
+        preflight_at = rendered.index(
+            "# Read-only watcher destination/source preflight BEFORE"
+        )
+        edit_at = rendered.index("sed -i '/^EXPECTED_RELEASE_FINGERPRINT")
+        assert preflight_at < edit_at
+        assert edit_at < rendered.index("mv -Tf")
+        assert edit_at < rendered.index("systemctl restart", edit_at)
+        assert 'chmod 700 "$watcher_dest/$watcher_file"' in rendered
+        assert 'chmod 700 "$watcher_dest"/*.sh' not in rendered
+        guard = rendered[preflight_at:edit_at]
+        marker = tmp_path / (func + "-mutation-canary")
+
+        def try_path(dest):
+            marker.unlink(missing_ok=True)
+            prog = (
+                "set -e\n"
+                "previous=\"$PREVIOUS_RELEASE\"\n"
+                "systemctl() {\n"
+                "  if [ \"$1\" = cat ]; then return 0; fi\n"
+                "  if [ \"$1\" = show ]; then printf '%s\\n' \"$WATCHER_DIRECTORY\"; return 0; fi\n"
+                "  return 99\n"
+                "}\n"
+                + guard
+                + '\nprintf "MUTATED\\n" > "$MUTATION_CANARY"\n'
+            )
+            res = subprocess.run(
+                ["bash", "-c", prog], capture_output=True, text=True,
+                env={**os.environ, "PREVIOUS_RELEASE": str(prior),
+                     "WATCHER_DIRECTORY": dest, "MUTATION_CANARY": str(marker)},
+            )
+            return res
+
+        for bad in ("", "/", "relative", str(outside), str(shared / "escaped")):
+            res = try_path(bad)
+            assert res.returncode != 0, (func, bad, res.stdout, res.stderr)
+            assert not marker.exists(), (func, bad)
+        for good_path in (str(approved), str(approved) + "/",
+                          str(watcher_alias), str(watcher_alias) + "/"):
+            good = try_path(good_path)
+            assert good.returncode == 0, (func, good_path, good.stdout, good.stderr)
+            assert marker.read_text() == "MUTATED\n"
+        # $SHARED may itself be a symlink or carry a trailing slash.
+        for root_form in (str(shared_alias), str(shared_alias) + "/",
+                          str(shared) + "/"):
+            marker.unlink(missing_ok=True)
+            alt_guard = guard.replace(str(shared), root_form)
+            prog = (
+                'set -e\nprevious="$PREVIOUS_RELEASE"\n'
+                'systemctl() {\n'
+                '  if [ "$1" = cat ]; then return 0; fi\n'
+                '  if [ "$1" = show ]; then printf "%s\\n" "$WATCHER_DIRECTORY"; return 0; fi\n'
+                '  return 99\n}\n'
+                + alt_guard
+                + '\nprintf "MUTATED\\n" > "$MUTATION_CANARY"\n'
+            )
+            check = subprocess.run(
+                ["bash", "-c", prog], capture_output=True, text=True,
+                env={**os.environ, "PREVIOUS_RELEASE": str(prior),
+                     "WATCHER_DIRECTORY": str(watcher_alias) + "/",
+                     "MUTATION_CANARY": str(marker)},
+            )
+            assert check.returncode == 0, (func, root_form, check.stdout, check.stderr)
+            assert marker.read_text() == "MUTATED\n"
 
 
 def test_rollback_restores_previous_release_proof_pins_and_verifies_integrity():
@@ -172,12 +481,18 @@ def _render_remote_command(action: str) -> tuple[int, str]:
     repo_root = SCRIPT.parent.parent.resolve()
     env = os.environ.copy()
     env["AFS_BOX"] = "unused"
+    # promote now has a local exact-SHA CI/ancestry preflight before any box
+    # contact. This helper is testing remote quoting only, so stub that local
+    # preflight while leaving the remote command under test unchanged.
+    env["RELEASE_CI_PROOF"] = str(SCRIPT.resolve())
     proc = subprocess.run(
         [
             "bash",
             "-c",
             f'''source "{SCRIPT.resolve()}"
 REF={"a" * 40}
+git() {{ return 0; }}
+python3() {{ return 0; }}
 deploy_lock_acquire() {{ DEPLOY_LOCK_OWNER=stub; return 0; }}
 deploy_lock_release() {{ return 0; }}
 _promote_gate_check() {{ return 0; }}
@@ -232,7 +547,10 @@ def test_promote_appends_durable_release_history_after_verification():
     assert "release_history.txt" in promote
     # Recorded only after activation and the post-activation integrity check
     # pass, so the file lists releases that came up, never attempts.
-    assert promote.index("release_history.txt") > promote.index(
+    # The early read-only existence guard deliberately mentions the file
+    # before activation. The *actual history append* stays after integrity.
+    append_at = promote.index("    hist='$SHARED/release_history.txt'")
+    assert append_at > promote.index(
         "-m ops.release_integrity --repo-root '$CURRENT'"
     )
     # Same rules as the afs-deploy.sh append: deduped, atomic, append-only.
@@ -243,7 +561,7 @@ def test_promote_appends_durable_release_history_after_verification():
     assert "'%s %s %s\\n' '$sha'" in promote
     assert "date -u +%Y-%m-%dT%H:%M:%SZ" in promote
     # Nothing in the durable-history update block may delete or rewrite rows.
-    history_tail = promote.split("release_history.txt", 1)[1]
+    history_tail = promote[append_at:]
     history_block = history_tail.split(
         "# The watcher runs from a persistent shared source directory", 1
     )[0]

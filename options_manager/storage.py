@@ -48,6 +48,7 @@ from .order_ticket import PreparedOrderTicket
 from .plans.base import (
     ContractPlanSnapshot,
     ConvictionBand,
+    ObservationRatingSnapshot,
     PlanStatus,
     RiskPlanSnapshot,
     SignaObservation,
@@ -408,6 +409,15 @@ def _signa_to_payload(signa: Optional[SignaObservation]) -> Optional[dict]:
     }
 
 
+def _observation_rating_to_payload(plan: ObservationRatingSnapshot) -> dict:
+    return {
+        "rating": plan.rating,
+        "components": [list(item) for item in plan.components],
+        "observation_only": True,
+        "trade_authority": False,
+    }
+
+
 def _contract_plan_to_payload(plan: ContractPlanSnapshot) -> dict:
     return {
         "expiration": plan.expiration,
@@ -479,6 +489,10 @@ def _snapshot_to_payload(snapshot: TradePlanSnapshot) -> dict:
     }
     # Omit absent new fields so snapshots written before this extension keep
     # their exact canonical JSON/hash and remain readable after upgrade.
+    if snapshot.observation_rating is not None:
+        payload["observation_rating"] = _observation_rating_to_payload(
+            snapshot.observation_rating
+        )
     if snapshot.contract_plan is not None:
         payload["contract_plan"] = _contract_plan_to_payload(snapshot.contract_plan)
     if snapshot.risk_plan is not None:
@@ -490,8 +504,23 @@ def _snapshot_from_payload(payload: dict) -> TradePlanSnapshot:
     signa_payload = payload.get("latest_signa")
     latest_signa = SignaObservation(**signa_payload) if signa_payload is not None else None
     fingerprint = payload.get("last_signa_fingerprint")
+    observation_rating_payload = payload.get("observation_rating")
     contract_payload = payload.get("contract_plan")
     risk_payload = payload.get("risk_plan")
+    observation_rating = None
+    if isinstance(observation_rating_payload, dict):
+        if observation_rating_payload.get("observation_only") is not True:
+            raise ValueError("stored observation rating must be observation_only")
+        if observation_rating_payload.get("trade_authority") is not False:
+            raise ValueError("stored observation rating must not have trade authority")
+        observation_rating = ObservationRatingSnapshot(
+            rating=float(observation_rating_payload["rating"]),
+            components=tuple(
+                (str(item[0]), float(item[1]))
+                for item in observation_rating_payload.get("components", ())
+            ),
+        )
+        observation_rating.validate()
     contract_plan = (
         ContractPlanSnapshot(**contract_payload)
         if isinstance(contract_payload, dict)
@@ -531,6 +560,7 @@ def _snapshot_from_payload(payload: dict) -> TradePlanSnapshot:
         signa_repeat_count=int(payload.get("signa_repeat_count", 0)),
         last_signa_fingerprint=tuple(fingerprint) if fingerprint is not None else None,
         latest_signa=latest_signa,
+        observation_rating=observation_rating,
         source_references=tuple(payload.get("source_references") or ()),
         contract_plan=contract_plan,
         risk_plan=risk_plan,
