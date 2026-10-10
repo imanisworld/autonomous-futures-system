@@ -1046,13 +1046,41 @@ class RiskEngine:
         """
         if getattr(self.config, "runner_mode", False):
             return None
-        if setup.rr_ratio < self.config.min_rr_ratio:
+
+        # The signal's rr_ratio is descriptive and can become stale when
+        # entry/stop/target geometry is re-anchored. Never admit a bracket
+        # based only on that claim; recompute from the submitted prices.
+        try:
+            reported_rr = float(setup.rr_ratio)
+        except (TypeError, ValueError, OverflowError):
+            reported_rr = float("nan")
+        if setup.direction == "LONG":
+            actual_risk = setup.entry - setup.stop
+            actual_reward = setup.target - setup.entry
+        elif setup.direction == "SHORT":
+            actual_risk = setup.stop - setup.entry
+            actual_reward = setup.entry - setup.target
+        else:
+            actual_risk = 0.0
+            actual_reward = 0.0
+        actual_rr = (
+            actual_reward / actual_risk
+            if actual_risk > 0
+            else float("nan")
+        )
+        min_rr = float(self.config.min_rr_ratio)
+        if (
+            not math.isfinite(reported_rr)
+            or not math.isfinite(actual_rr)
+            or reported_rr < min_rr
+            or actual_rr < min_rr
+        ):
             return RiskResult(
                 result="REJECTED",
                 failed_rule="rr_below_minimum",
                 reason=(
-                    f"R:R ratio {setup.rr_ratio:.2f} is below minimum "
-                    f"{self.config.min_rr_ratio:.2f}"
+                    f"Claimed R:R {reported_rr:.2f}, actual bracket R:R "
+                    f"{actual_rr:.2f}; minimum {min_rr:.2f}"
                 ),
             )
         return None
