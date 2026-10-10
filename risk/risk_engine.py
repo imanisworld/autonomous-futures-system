@@ -199,6 +199,7 @@ class RiskEngine:
             self._check_bracket_completeness,
             self._check_direction,
             self._check_entry_stop_target_distinct,  # structural check before computed R:R
+            self._check_bracket_direction,  # wrong-side stop/target invalid even in runner mode
             self._check_rr_ratio,
             self._check_min_confluence_grade,
             self._check_min_target_distance,
@@ -1032,6 +1033,43 @@ class RiskEngine:
                 failed_rule="incomplete_bracket",
                 reason=f"Bracket order is incomplete. Missing, zero or non-finite: {missing}",
             )
+        return None
+
+    def _check_bracket_direction(
+        self, setup: TradeSetup, daily_state: DailyState
+    ) -> Optional[RiskResult]:
+        """Reject wrong-side protective stops even when fixed-target R:R is exempt.
+
+        Runner mode discards the fixed target, so only stop direction is
+        structural for runners. Fixed-target trades require both prices to
+        be on their protective/reward sides before any ratio is checked.
+        """
+        if setup.direction == "LONG":
+            if setup.stop >= setup.entry:
+                return RiskResult(
+                    result="REJECTED",
+                    failed_rule="stop_wrong_side",
+                    reason="LONG stop must be strictly below executable entry.",
+                )
+            if not getattr(self.config, "runner_mode", False) and setup.target <= setup.entry:
+                return RiskResult(
+                    result="REJECTED",
+                    failed_rule="target_wrong_side",
+                    reason="LONG fixed target must be strictly above executable entry.",
+                )
+        elif setup.direction == "SHORT":
+            if setup.stop <= setup.entry:
+                return RiskResult(
+                    result="REJECTED",
+                    failed_rule="stop_wrong_side",
+                    reason="SHORT stop must be strictly above executable entry.",
+                )
+            if not getattr(self.config, "runner_mode", False) and setup.target >= setup.entry:
+                return RiskResult(
+                    result="REJECTED",
+                    failed_rule="target_wrong_side",
+                    reason="SHORT fixed target must be strictly below executable entry.",
+                )
         return None
 
     def _check_rr_ratio(
