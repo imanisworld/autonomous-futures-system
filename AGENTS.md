@@ -24,6 +24,14 @@ This repository powers AFSVP futures/options research, paper/demo execution, evi
 - Claude command equivalents live under `.claude/commands/`.
 
 
+## MNQ historical-data seal — mandatory for every agent and research tool
+
+**Binding operator restriction (2026-10-10):** No MNQ backtest, exploratory market-data screen, parameter test, optimization, strategy selection, follow-up grid or post-hoc validation may fetch, load, query, inspect or score **MNQ sessions settling 2026-06-29 or later**. The last eligible **complete historical CME trading session** is **2026-06-26**; June 27–28 is not a license to use Sunday evening bars belonging to the sealed June 29 session. This applies to all dated MNQ contracts, continuous/root variants, derived MNQ aggregates, Massive/Polygon vendor APIs, private local files, agents, and in-chat SQL. Do not create an `MNQU6` 2026 Q3 screen or query beyond the seal and later try to filter it out. **Fail closed before fetch AND before scoring** if an MNQ requested endpoint/window/row includes or ambiguously crosses the boundary. Use `research/mnq_backtest_seal.py` helper and its tests for new Python research where applicable; its existence alone does **not** enforce external SQL/API use, so agents must also bound those queries themselves.
+
+**Forward-only exception:** Continue previously approved, preregistered prospective observation/scoring under its own seal, separate from all exploratory research, only in the authorized trial process and at the prescribed look. **Do not access these post-seal bars to discover/tune a strategy.** Do not peek at or relabel the 4HR forward holdout. If a historical dataset already contains post-seal MNQ, quarantine the **entire exploratory result and strategy-selection conclusion** as `CONTAMINATED_POST_SEAL`; do not present it as independent evidence or "repair" it by removing a few rows after observing results. Preserve raw provenance and disclose the incident.
+
+**Known breach:** ChatGPT's two 2026-10-10 exploratory MNQ screens used post-seal 2026 Q3 data. Both are invalid for candidate promotion, including their apparent losing conclusions. The operator's count of experiments is **424**, but invalid screens do not become valid evidence because they were counted. See `docs/mnq-research-seal-incident-2026-10-10.md` and the private Library reports. No further unregistered MNQ testing from the sealed period.
+
 ## Resume / duplicate-work prevention
 
 This section is mandatory for Grok and every other agent. It does not expand any agent's authority. Grok's compact bootstrap is `GROK.md`; if it conflicts with this file, `AGENTS.md` wins.
