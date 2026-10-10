@@ -1,0 +1,372 @@
+"""Write completed sessions into the six-micro paper journal.
+
+Nasdaq, S&P, and Russell use the scheduled quarterly front. Gold, crude, and
+bitcoin use the exchange listing that expires soonest and is still open that
+day. That is the dated ticker on the bar. It is not the highest-volume
+contract. This does not place an order and does not score the study.
+"""
+from __future__ import annotations
+
+import argparse
+from dataclasses import dataclass, replace
+from datetime import date, datetime, time, timedelta
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+from dotenv import load_dotenv
+
+from research.six_micro_daily_tsmom_paper import (
+    PaperLedger,
+    SCHEDULED_ROOTS,
+    SessionPrint,
+)
+from sources.polygon_client import PolygonBar, PolygonError, PolygonFuturesClient, contract_schedule
+
+_MONTHS = {
+    "F": 1, "G": 2, "H": 3, "J": 4, "K": 5, "M": 6,
+    "N": 7, "Q": 8, "U": 9, "V": 10, "X": 11, "Z": 12,
+}
+_ROOT_MONTHS = {
+    "MGC": "GJMQVZ",
+    "MCL": "FGHJKMNQUVXZ",
+    "MBT": "FGHJKMNQUVXZ",
+}
+
+ET = ZoneInfo("America/New_York")
+RTH_OPEN = time(9, 30)
+RTH_LAST_BAR = time(15, 45)
+WARMUP_START = date(2026, 6, 29)
+UNSCHEDULED_ROOTS = ("MGC", "MCL", "MBT")
+
+
+@dataclass(frozen=True)
+class CollectResult:
+    sessions: dict[str, int]
+    round_turns: int
+    skipped_roots: tuple[str, ...]
+
+
+def completed_through(now: datetime) -> date:
+    """Last weekday whose 16:00 New York close has already happened."""
+    local = now.astimezone(ET)
+    day = local.date()
+    if local.weekday() >= 5 or local.time() < time(16, 0):
+        day -= timedelta(days=1)
+    while day.weekday() >= 5:
+        day -= timedelta(days=1)
+    return day
+
+
+def session_prints(
+    root: str,
+    bars: list[PolygonBar],
+    *,
+    start: date,
+    end: date,
+) -> list[SessionPrint]:
+    """One print per day that has both the 09:30 open and the 15:45 bar."""
+    by_day: dict[date, list[PolygonBar]] = {}
+    for bar in bars:
+        local = bar.ts.astimezone(ET)
+        session = local.date()
+        if session < start or session > end or local.weekday() >= 5:
+            continue
+        if local.time() < RTH_OPEN or local.time() > RTH_LAST_BAR:
+            continue
+        by_day.setdefault(session, []).append(bar)
+
+    prints: list[SessionPrint] = []
+    for session in sorted(by_day):
+        day_bars = sorted(by_day[session], key=lambda bar: bar.ts)
+        opening = next((bar for bar in day_bars if bar.ts.astimezone(ET).time() == RTH_OPEN), None)
+        closing = next((bar for bar in day_bars if bar.ts.astimezone(ET).time() == RTH_LAST_BAR), None)
+        if opening is None or closing is None:
+            continue
+        if opening.ticker.strip().upper() != closing.ticker.strip().upper():
+            continue
+        prints.append(
+            SessionPrint(
+                session=session,
+                root=root,
+                contract=opening.ticker.strip().upper(),
+                rth_open=float(opening.open),
+                session_close=float(closing.close),
+            )
+        )
+    return prints
+
+
+def _as_date(value: object) -> date | None:
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except (TypeError, ValueError):
+        return None
+
+
+def _month_key(root: str, ticker: str) -> tuple[int, int]:
+    suffix = ticker[len(root):]
+    if len(suffix) != 2 or suffix[0] not in _MONTHS or not suffix[1].isdigit():
+        return (9999, 99)
+    return (2020 + int(suffix[1]), _MONTHS[suffix[0]])
+
+
+def listed_front(root: str, rows: list[dict], day: date) -> str | None:
+    """Nearest actual last-trade date, limited to listed active outrights."""
+    candidates: list[tuple[date, str]] = []
+    for row in rows:
+        ticker = str(row.get("ticker") or "").upper()
+        first = _as_date(row.get("first_trade_date"))
+        last = _as_date(row.get("last_trade_date"))
+        if (
+            row.get("product_code") != root
+            or not ticker.startswith(root)
+            or _month_key(root, ticker) == (9999, 99)
+            or first is None
+            or last is None
+            or first > last
+        ):
+            continue
+        if first <= day <= last:
+            candidates.append((last, ticker))
+    if not candidates:
+        return None
+    return min(candidates)[1]
+
+def candidate_tickers(root: str, start: date, end: date) -> list[str]:
+    """Dated tickers whose expiry month can cover the window. Not a volume rank."""
+    allowed = _ROOT_MONTHS[root]
+    cursor = date(start.year, start.month, 1) - timedelta(days=1)
+    cursor = date(cursor.year, cursor.month, 1)
+    stop = end + timedelta(days=70)
+    tickers: list[str] = []
+    while cursor <= stop:
+        code = "FGHJKMNQUVXZ"[cursor.month - 1]
+        if code in allowed:
+            tickers.append(f"{root}{code}{cursor.year % 10}")
+        if cursor.month == 12:
+            cursor = date(cursor.year + 1, 1, 1)
+        else:
+            cursor = date(cursor.year, cursor.month + 1, 1)
+    return tickers
+
+
+def prints_for_soonest(
+    root: str,
+    bars: list[PolygonBar],
+    *,
+    start: date,
+    end: date,
+    listings: list[dict],
+) -> list[SessionPrint]:
+    """Never substitute a later expiry when the listed front lacks an open."""
+    by_ticker: dict[str, list[PolygonBar]] = {}
+    for bar in bars:
+        by_ticker.setdefault(bar.ticker.strip().upper(), []).append(bar)
+    by_day: dict[date, dict[str, SessionPrint]] = {}
+    for ticker_bars in by_ticker.values():
+        for print_ in session_prints(root, ticker_bars, start=start, end=end):
+            by_day.setdefault(print_.session, {})[print_.contract] = print_
+    selected: list[SessionPrint] = []
+    for day in sorted(by_day):
+        ticker = listed_front(root, listings, day)
+        if ticker is None:
+            raise PolygonError(f"{root} has bars but no valid listing for {day}")
+        print_ = by_day[day].get(ticker)
+        if print_ is None:
+            raise PolygonError(f"{root} listed front {ticker} has no complete {day} bar")
+        selected.append(print_)
+    return selected
+
+def _with_roll_open(
+    prints: list[SessionPrint],
+    bars: list[PolygonBar],
+    roll_opens: dict[tuple[str, date], float] | None = None,
+) -> list[SessionPrint]:
+    out: list[SessionPrint] = []
+    previous: SessionPrint | None = None
+    for print_ in prints:
+        if previous is not None and previous.contract != print_.contract:
+            old_open = (roll_opens or {}).get((previous.contract, print_.session))
+            if old_open is None:
+                old_open = next(
+                    (
+                        bar.open
+                        for bar in bars
+                        if bar.ticker.strip().upper() == previous.contract
+                        and bar.ts.astimezone(ET).date() == print_.session
+                        and bar.ts.astimezone(ET).time() == RTH_OPEN
+                    ),
+                    None,
+                )
+            if old_open is not None:
+                print_ = replace(print_, roll_exit_open=float(old_open))
+        out.append(print_)
+        previous = print_
+    return out
+
+
+def _fetch_start(ledger: PaperLedger, root: str, start: date, end: date) -> date | None:
+    if ledger.bare_close_count(root):
+        return start
+    stored = ledger.stored_sessions(root)
+    if not stored:
+        return start
+    nxt = max(stored)
+    if nxt >= end:
+        return None
+    return nxt
+
+
+def _store_prints(ledger: PaperLedger, root: str, prints: list[SessionPrint]) -> int:
+    if ledger.bare_close_count(root):
+        ledger.mark_preregistration(root, prints)
+    stored = ledger.stored_sessions(root)
+    for print_ in prints:
+        if print_.session in stored:
+            continue
+        if stored and print_.session < max(stored):
+            raise RuntimeError(f"{root} historical backfill cannot reorder an admitted session")
+        events = ledger.on_session(print_)
+        if any(row.get("kind") in {"ROLL_PRICE_MISSING", "FRONT_MISMATCH"} for row in events):
+            raise RuntimeError(f"{root} session {print_.session} blocked by missing roll/front")
+        stored.add(print_.session)
+    return len(ledger.state["closes"].get(root, []))
+
+def collect_listed(
+    journal_dir: Path,
+    client,
+    *,
+    start: date = WARMUP_START,
+    end: date,
+) -> dict[str, int]:
+    """Collect MGC/MCL/MBT only from verified contract listings and prices."""
+    if end > completed_through(datetime.now(ET)):
+        raise ValueError("refusing a session that has not closed")
+    ledger = PaperLedger(journal_dir)
+    counts: dict[str, int] = {}
+    for root in UNSCHEDULED_ROOTS:
+        fetch_from = _fetch_start(ledger, root, start, end)
+        if fetch_from is None:
+            counts[root] = len(ledger.state["closes"].get(root, []))
+            continue
+        listings = client.fetch_contracts(root)
+        bars: list[PolygonBar] = []
+        candidates: set[str] = set()
+        for row in listings:
+            ticker = str(row.get("ticker") or "").upper()
+            first = _as_date(row.get("first_trade_date"))
+            last = _as_date(row.get("last_trade_date"))
+            if (
+                row.get("product_code") != root
+                or not ticker.startswith(root)
+                or _month_key(root, ticker) == (9999, 99)
+                or first is None
+                or last is None
+                or first > last
+                or first > end
+                or last < fetch_from
+            ):
+                continue
+            candidates.add(ticker)
+            bars.extend(client.fetch_bars(
+                ticker, max(fetch_from, first), min(end, last), 15
+            ))
+        if not candidates:
+            raise PolygonError(f"{root} has no eligible dated contract metadata")
+        prints = _with_roll_open(
+            prints_for_soonest(
+                root, bars, start=fetch_from, end=end, listings=listings
+            ),
+            bars,
+        )
+        counts[root] = _store_prints(ledger, root, prints)
+    return counts
+
+def collect_scheduled(
+    journal_dir: Path,
+    client,
+    *,
+    start: date = WARMUP_START,
+    end: date,
+) -> CollectResult:
+    """Record scheduled roots through ``end``. Entries stay closed before 2026-10-12."""
+    if end > completed_through(datetime.now(ET)):
+        raise ValueError("refusing a session that has not closed")
+    ledger = PaperLedger(journal_dir)
+    counts: dict[str, int] = {}
+    for root in SCHEDULED_ROOTS:
+        fetch_from = _fetch_start(ledger, root, start, end)
+        if fetch_from is None:
+            counts[root] = len(ledger.state["closes"].get(root, []))
+            continue
+        bars: list[PolygonBar] = []
+        roll_opens: dict[tuple[str, date], float] = {}
+        segments = contract_schedule(root, fetch_from, end)
+        for index, (ticker, seg_start, seg_end) in enumerate(segments):
+            bars.extend(client.fetch_bars(ticker, seg_start, seg_end, 15))
+            if index > 0:
+                old_ticker = segments[index - 1][0]
+                old_day = client.fetch_bars(old_ticker, seg_start, seg_start, 15)
+                roll_open = next(
+                    (
+                        float(bar.open)
+                        for bar in old_day
+                        if bar.ticker.strip().upper() == old_ticker
+                        and bar.ts.astimezone(ET).date() == seg_start
+                        and bar.ts.astimezone(ET).time() == RTH_OPEN
+                    ),
+                    None,
+                )
+                if roll_open is not None:
+                    roll_opens[(old_ticker, seg_start)] = roll_open
+        prints = _with_roll_open(
+            session_prints(root, bars, start=fetch_from, end=end),
+            bars,
+            roll_opens=roll_opens,
+        )
+        counts[root] = _store_prints(ledger, root, prints)
+    return CollectResult(
+        sessions=counts,
+        round_turns=ledger.round_turns,
+        skipped_roots=(),
+    )
+
+
+def _repo_root() -> Path:
+    here = Path(__file__).resolve()
+    for candidate in here.parents:
+        if (candidate / ".env").exists() and (candidate / "research").is_dir():
+            return candidate
+    return here.parents[1]
+
+
+def main(argv: list[str] | None = None) -> None:
+    root = _repo_root()
+    load_dotenv(root / ".env")
+    parser = argparse.ArgumentParser(description="Record completed six-micro sessions.")
+    parser.add_argument("--journal", type=Path, default=root / "logs" / "six-micro-daily-tsmom")
+    args = parser.parse_args(argv)
+    end = completed_through(datetime.now(ET))
+    journal = args.journal
+    client = PolygonFuturesClient(min_request_interval=13.0)
+    scheduled = collect_scheduled(journal, client, end=end)
+    listed = collect_listed(journal, client, end=end)
+    ledger = PaperLedger(journal)
+    sessions = {**scheduled.sessions, **listed}
+    pre_registration = {
+        name: sum(
+            1 for row in rows
+            if isinstance(row, dict) and row.get("pre_registration") is True
+        )
+        for name, rows in ledger.state["closes"].items()
+    }
+    print(
+        f"recorded through {end.isoformat()} "
+        f"sessions={sessions} "
+        f"pre_registration={pre_registration} "
+        f"scoring_round_turns={ledger.scoring_round_turns}"
+    )
+
+
+if __name__ == "__main__":
+    main()

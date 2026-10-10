@@ -256,6 +256,44 @@ class PolygonFuturesClient:
         bars.sort(key=lambda b: b.ts)
         return bars
 
+    def fetch_contracts(self, product_code: str) -> List[dict]:
+        """Read-only listing metadata for a futures product, including trade dates.
+
+        Returns all pages, not just currently-trading contract bars. Callers
+        must fail closed when a dated contract lacks listing evidence.
+        """
+        if not self.configured:
+            raise PolygonError("POLYGON_API_KEY not configured")
+        product = product_code.strip().upper()
+        if not product:
+            raise PolygonError("futures product code is required")
+        url = f"{self.base_url}/futures/v1/contracts"
+        params: Optional[dict] = {
+            "product_code": product,
+            "type": "single",
+            "limit": 1000,
+        }
+        rows: List[dict] = []
+        close_client = self._client is None
+        client = self._client or httpx.Client()
+        try:
+            while url:
+                payload = self._get(client, url, params=params)
+                if payload.get("status") != "OK" or not isinstance(payload.get("results"), list):
+                    raise PolygonError(f"invalid futures listing response for {product}")
+                rows.extend(
+                    row for row in payload["results"]
+                    if isinstance(row, dict) and row.get("product_code") == product
+                )
+                url = payload.get("next_url") or ""
+                params = None
+        finally:
+            if close_client:
+                client.close()
+        if not rows:
+            raise PolygonError(f"no dated futures listings returned for {product}")
+        return rows
+
     def fetch_continuous(
         self,
         symbol: str,
