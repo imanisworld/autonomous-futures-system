@@ -1,8 +1,9 @@
 """Fail-closed execution selector for the wide-stop evidence campaign.
 
 Paper collection is unconditional and always runs. Tradovate demo is an
-explicit, proof-pinned lane that runs ADDITIVELY alongside paper for 4HR
-Re-Trigger and 60M 3-2-2 only. Daily 2-2 is never demo-eligible here.
+explicit, proof-pinned lane that runs ADDITIVELY alongside paper. The only
+fill is 4HR Re-Trigger. 3-2-2 and Miyagi are shadow only. Daily 2-2 is
+never demo-eligible here.
 
 The demo lane carries its own LANE-LOCAL execution permission so it never
 depends on — and can never be enabled by — the box-wide ``SCHEDULE_MODE``.

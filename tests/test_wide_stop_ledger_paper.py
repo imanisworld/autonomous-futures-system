@@ -148,7 +148,8 @@ def test_miyagi_is_shadow_only_and_cannot_fill():
     assert lane.role("MNQ", MIYAGI) == "shadow_only"
     assert not lane.is_fill_eligible("MNQ", MIYAGI)
     assert lane.is_fill_eligible("MNQ", FOUR_HR)
-    assert lane.is_fill_eligible("MNQ", THREE_TWO_TWO)
+    assert lane.role("MNQ", THREE_TWO_TWO) == "shadow_only"
+    assert not lane.is_fill_eligible("MNQ", THREE_TWO_TWO)
 
 
 @pytest.mark.parametrize("instrument,strategy", [

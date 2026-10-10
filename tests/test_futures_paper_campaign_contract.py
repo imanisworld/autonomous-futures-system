@@ -20,7 +20,8 @@ def test_4hr_and_322_capital_contracts_are_pinned():
     # Historical journal identifier only; actual forward capital is capped at $5k.
     assert three_two_two.starting_balance == 5_000.0
     assert three_two_two.max_stop_ticks == 600.0
-    assert wide.role("MNQ", "strat_322_first_live") == "fill_eligible"
+    assert wide.role("MNQ", "strat_322_first_live") == "shadow_only"
+    assert not wide.is_fill_eligible("MNQ", "strat_322_first_live")
 
 
 def test_miyagi_remains_shadow_only():

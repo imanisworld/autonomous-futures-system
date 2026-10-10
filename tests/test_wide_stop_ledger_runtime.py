@@ -176,6 +176,14 @@ def test_the_shadow_member_is_journaled_but_never_filled(tmp_path):
     assert "fill_status" not in audit
 
 
+def test_322_written_bracket_is_shadow_and_cannot_fill(tmp_path):
+    """The written 3-2-2 bracket is a loser. The lane must not order it."""
+    audit = _observe(tmp_path, setup=_setup(THREE_TWO_TWO, stop_ticks=472.0, rr=0.24))
+    assert audit["role"] == "shadow_only"
+    assert audit["lane_result"] == "SHADOW_ONLY_NOT_FILLED"
+    assert "fill_status" not in audit
+
+
 def test_an_invalid_at_fill_outcome_is_counted_not_blended(tmp_path):
     """§6: a fill landing outside its own bracket is its own line.
 

@@ -66,8 +66,51 @@ def arm_fixture(monkeypatch, bars: list[dict]) -> SimpleNamespace:
     )
 
 
-def run_fixture_bar(config, tmp_path, monkeypatch, bars: list[dict], broker) -> list[dict]:
+def force_4hr_candidate(monkeypatch) -> None:
+    """The demo and paper lanes only fill 4HR. Fault fixtures submit that cell.
+
+    Prices sit on the canonical fixture close (104.5) so the paper IOC fill
+    is marketable. 50 points is 200 ticks, inside the 400-tick cap, at R:R 1.4.
+    """
+    from datetime import datetime, timezone
+
+    from risk.risk_engine import TradeSetup
+
+    target = "strat_4hr_retrigger"
+    entry_time = datetime(2026, 6, 15, 14, 5, tzinfo=timezone.utc)
+    candidate = {
+        "direction": "LONG",
+        "entry": 104.5,
+        "stop": 54.5,
+        "target": 174.5,
+        "entry_time": entry_time,
+        "strategy": target,
+    }
+
+    def _setup():
+        return TradeSetup(
+            direction="LONG", entry=104.5, stop=54.5, target=174.5,
+            rr_ratio=1.4, strategy=target, instrument="MNQ", session="new_york",
+            contracts=1, confluence_grade="B", entry_time=entry_time,
+        )
+
+    def fake_eval(*, strategy: str, **kwargs):
+        if strategy != target:
+            return None, None, None, None
+        decision = SimpleNamespace(
+            decision="TRADE", setup=_setup(), failed_gates=[], reason="ok",
+        )
+        return decision, object(), dict(candidate), None
+
+    import context.wide_stop_forward_collector as collector
+    monkeypatch.setattr(collector, "_evaluate_canonical_candidate", fake_eval)
+    monkeypatch.setattr(collector, "_trade_setup", lambda state, out: _setup())
+
+
+def run_fixture_bar(config, tmp_path, monkeypatch, bars: list[dict], broker, *, force: bool = True) -> list[dict]:
     import context.wide_stop_demo_runtime as demo
+    if force:
+        force_4hr_candidate(monkeypatch)
     payload = arm_fixture(monkeypatch, bars)
     return demo.process_demo_five_min_bar(
         payload=payload, cfg=fixture_cfg(config), bars_5m=bars, log_dir=tmp_path,
