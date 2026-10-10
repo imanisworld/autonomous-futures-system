@@ -7,7 +7,7 @@ Read **only** this block + `AGENTS.md` + `docs/futures-research-resume-checkpoin
 | Item | Value |
 |---|---|
 | **GitHub `main`** | **`572cd13`** — **#1208–#1213** merged; **#1215** pending (AFS-0234/0235 mutant tests) |
-| **Track B deploy candidate** | `research/4hr-mnq-400-forward-rebase-20261010` @ **`1c97764`** — Grok review before deploy |
+| **Track B** | PR **#1216** @ **`0bb04c7`** — exact 300-tick demo stop reaches the broker. **No deploy.** |
 | **DO NOT deploy** | `research/4hr-mnq-400-forward-20261009` @ **`2f4f776`** (~157 commits behind `main`; no **#1208/#1209**) |
 | **Open futures research PRs (this lane)** | **#1206**, **#1207**, **#1215** |
 | **Public resume** | `docs/futures-research-resume-checkpoint-2026-10-10.md` (+ Cursor + Claude options appendices) |
@@ -19,11 +19,11 @@ Read **only** this block + `AGENTS.md` + `docs/futures-research-resume-checkpoin
 | **Track B readiness** | `docs/futures-track-b-forward-readiness-2026-10-10.md` |
 | **Deferred cleanup list** | `docs/repo-hygiene-deferred-removal-tracker-2026-10-10.md` (classify only; delete at end) |
 | **Verdict** | **NOT DEMO-READY** — Track B forward after reviewed deploy of **research** SHA; Track A 1m observer parallel |
-| **New forward prereg (unscored)** | `research/equity-index-daily-tsmom-forward-20261010` — `docs/prereg-equity-index-daily-tsmom-forward-2026-10-10.md` — trial `T-2026-10-10-prereg-equity-index-daily-tsmom-forward-2026-10-10-01`. MES/MNQ/M2K/MYM daily 60-session sign, next 09:30 ET open, 20-session max hold. First eligible entry **2026-10-12**. **PLANNED only. Do not score. Do not backfill.** |
+| **Daily tsmom** | AFS-0242 replacement `docs/prereg-six-micro-daily-tsmom-forward-2026-10-10.md` — trial `T-2026-10-10-prereg-six-micro-daily-tsmom-forward-2026-10-10-01`. Roots **MNQ, MES, M2K, MGC, MCL, MBT**. MYM dropped. Paper ledger `research/six_micro_daily_tsmom_paper.py`. Four-market trial superseded, never scored. **No demo route. Do not score. Do not deploy.** |
 
-**DO NOT REDO:** gzip 4HR cell reproduction; ORB/VWAP TF×window sweeps (baseline + trending + orb48); Grok PASS work on merged **#1208**/**#1209**; Sep decompositions listed below. Do not retune or historically score the 2026-10-10 daily time-series momentum prereg.
+**DO NOT REDO:** gzip 4HR cell reproduction; ORB/VWAP TF×window sweeps (baseline + trending + orb48); Grok PASS work on merged **#1208**/**#1209**; Sep decompositions listed below. Do not retune the six-micro daily rule. Do not rerun the failed month-end, cross-market momentum, or VIX tests (414 total). MNQ bars from 2026-06-29 through 2027-01-29 are scoring inputs only.
 
-**NEXT:** Merge **#1215**; Grok review **`1c97764`**; merge mutant tests to `main` then re-merge `main` into rebase branch if needed; **explicit GO** before Track B deploy (never **`2f4f776`**). 1m arm fills/costs **not implemented**. Daily tsmom stays unscored until the forward window can complete a look. **NOT done:** deploy, forward collection, DEMO-ready claim, tsmom score.
+**NEXT:** Grok reviews #1216 at **`0bb04c7`** and the six-micro paper registration. Do not deploy. Do not score either study. 1m arm fills/costs **not implemented**. **NOT done:** deploy, forward collection on the box, DEMO-ready claim, tsmom score.
 
 Prior chat context for this session is **closed**. Section below is coordination archive unless stale.
 

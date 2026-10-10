@@ -1,5 +1,7 @@
 # Equity-index daily time-series momentum — forward preregistration (2026-10-10)
 
+> **SUPERSEDED before any score (2026-10-10, AFS-0242).** No round-turn was collected under this four-market text. The replacement is `docs/prereg-six-micro-daily-tsmom-forward-2026-10-10.md`, trial `T-2026-10-10-prereg-six-micro-daily-tsmom-forward-2026-10-10-01`. Do not score this file.
+
 trial_id: T-2026-10-10-prereg-equity-index-daily-tsmom-forward-2026-10-10-01
 
 **RESEARCH / LOG ONLY. NO EXECUTION AUTHORITY.** This document freezes one
