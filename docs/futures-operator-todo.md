@@ -4,6 +4,18 @@
 
 **Objective:** Establish genuinely executable positive expectancy, not merely green CI. Historical #1208–#1211 engineering corrections are now **merged source-only**; do not restart their old reviews/tests unless relevant code changed. The older Oct 8 operational sections remain historical context, with their release/box safety requirements **still open**.
 
+**Five evidence gates (preserved from open docs-only PR #1201; PR disposition remains separate):**
+
+| Gate | Current result | What still counts as proof |
+|---|---|---|
+| **Net expectancy** | **NOT PROVEN** | Eligible actual fills net of commission/slippage and rejected/no-fill opportunities, under a frozen strategy specification |
+| **Repeatability** | **INCOMPLETE** | Adequate forward/independent sample, chronology, bounded concentration, acceptable drawdown, stated stop criteria |
+| **Executable entry** | **SOURCE-CHECKED, UNPROVEN ON BOX** | Causal bar/trigger availability, realistically timed limit/IOC entries, gap and ambiguous same-bar assumptions, genuine fill evidence |
+| **Risk admissibility** | **SOURCE GUARDS PRESENT; RUNTIME UNVERIFIED** | Actual position/stop/daily-loss/cap/kill-switch constraints, not relaxations chosen to make a backtest green |
+| **Replay/DEMO parity** | **NOT ESTABLISHED** | Exact signal, timestamp, source contract, bracket, fill policy and journal reconciliation on the same frozen candidate SHA |
+
+**Do not treat a positive synthetic, historical, or observer-only result as passing these gates.** Any rejected or aborted experiment keeps its original evidence ID; do not reopen it just to retune.
+
 - [x] **Evidence triage:** Keep MNQ broad 4HR pre-armed historical lead and 60M 3-2-2 comparator; keep ORB/VWAP and other rejected cells closed (see Strategy Inventory and trial ledger). No freshly validated profitable strategy.
 - [x] **Engineering source work:** #1208, #1209, #1210, #1211 merged. **No automatic deployment or strategy enablement.**
 - [ ] **Independent breaker review:** #1212 optional future-only, **OFF** 5m full-arm provenance; #1213 stacked/overlapping offline identity matcher. Read both exact-head diffs and check whether #1212 has new CI after `9df1a09`; #1213 `2e5c2fa` previously passed 8,777/8 skipped. Avoid merging duplicate shared files twice or promoting a partial revision.
