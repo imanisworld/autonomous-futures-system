@@ -256,6 +256,33 @@ class PolygonFuturesClient:
         bars.sort(key=lambda b: b.ts)
         return bars
 
+    def fetch_contract_listings(self, root: str, tickers: list[str]) -> list[dict]:
+        """Listing rows for specific dated tickers.
+
+        One page per ticker. This does not follow ``next_url`` and does not
+        walk a product's full contract inventory.
+        """
+        if not self.configured:
+            raise PolygonError("POLYGON_API_KEY not configured")
+        rows: list[dict] = []
+        close_client = self._client is None
+        client = self._client or httpx.Client()
+        try:
+            for ticker in tickers:
+                payload = self._get(
+                    client,
+                    f"{self.base_url}/futures/v1/contracts",
+                    params={"product_code": root, "ticker": ticker, "limit": 100},
+                )
+                wanted = ticker.strip().upper()
+                for row in payload.get("results") or []:
+                    if str(row.get("ticker") or "").strip().upper() == wanted:
+                        rows.append(row)
+        finally:
+            if close_client:
+                client.close()
+        return rows
+
     def fetch_continuous(
         self,
         symbol: str,

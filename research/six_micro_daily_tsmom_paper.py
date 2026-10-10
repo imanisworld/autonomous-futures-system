@@ -122,7 +122,12 @@ class PaperLedger:
             raise ValueError(f"{root} is not one of the six frozen micros")
         if not bar.contract.strip():
             raise ValueError("dated contract ticker is required")
+        events: list[dict] = []
+        closes: list = self.state["closes"].setdefault(root, [])
+        if bar.session in self.stored_sessions(root):
+            return []
         if root in SCHEDULED_ROOTS and not self._scheduled_front_ok(bar, root):
+            self._record_close(closes, bar)
             event = {
                 "trial_id": TRIAL_ID,
                 "kind": "FRONT_MISMATCH",
@@ -130,21 +135,11 @@ class PaperLedger:
                 "session": bar.session.isoformat(),
                 "contract": bar.contract,
             }
-            self._append(event)
-            self._save()
-            return [event]
-
-        events: list[dict] = []
-        closes: list = self.state["closes"].setdefault(root, [])
-        if bar.session in self.stored_sessions(root):
-            return []
+            events.append(event)
+            self._save(events)
+            return events
         if bar.session <= PRE_REGISTRATION_THROUGH:
-            closes.append({
-                "session": bar.session.isoformat(),
-                "close": float(bar.session_close),
-                "pre_registration": True,
-                "counts_toward_forty": False,
-            })
+            self._record_close(closes, bar)
             event = {
                 "trial_id": TRIAL_ID,
                 "kind": "PRE_REGISTRATION",
@@ -158,19 +153,32 @@ class PaperLedger:
             return events
         position = self.state["positions"].get(root)
         exited_today = False
-        if isinstance(position, dict) and position["contract"] != bar.contract:
-            if bar.roll_exit_open is None:
+        if isinstance(position, dict) and (
+            position["contract"] != bar.contract or position.get("roll_price_missing")
+        ):
+            if bar.roll_exit_open is None and not position.get("roll_price_missing"):
+                position["roll_price_missing"] = True
+                self.state["positions"][root] = position
                 event = {
                     "trial_id": TRIAL_ID,
                     "kind": "ROLL_PRICE_MISSING",
                     "root": root,
                     "session": bar.session.isoformat(),
+                    "contract": position["contract"],
                 }
                 events.append(event)
-                self._append(event)
-                self._save()
+                self._record_close(closes, bar)
+                self._save(events)
                 return events
-            events.append(self._exit(root, position, bar.session, float(bar.roll_exit_open)))
+            if bar.roll_exit_open is None:
+                exit_open = float(bar.rth_open)
+                exit_price_source = "next_session_open"
+            else:
+                exit_open = float(bar.roll_exit_open)
+                exit_price_source = "old_contract_open"
+            events.append(
+                self._exit(root, position, bar.session, exit_open, exit_price_source)
+            )
             position = None
             exited_today = True
         elif isinstance(position, dict):
@@ -211,14 +219,18 @@ class PaperLedger:
                 "side": side,
             })
 
+        self._record_close(closes, bar)
+        self._save(events)
+        return events
+
+    def _record_close(self, closes: list, bar: SessionPrint) -> None:
+        pre_registration = bar.session <= PRE_REGISTRATION_THROUGH
         closes.append({
             "session": bar.session.isoformat(),
             "close": float(bar.session_close),
-            "pre_registration": False,
-            "counts_toward_forty": True,
+            "pre_registration": pre_registration,
+            "counts_toward_forty": not pre_registration,
         })
-        self._save(events)
-        return events
 
     def stored_sessions(self, root: str) -> set[date]:
         found: set[date] = set()
@@ -275,7 +287,14 @@ class PaperLedger:
             return False
         return bar.contract.strip().upper() == expected
 
-    def _exit(self, root: str, position: dict, session: date, exit_open: float) -> dict:
+    def _exit(
+        self,
+        root: str,
+        position: dict,
+        session: date,
+        exit_open: float,
+        exit_price_source: str | None = None,
+    ) -> dict:
         side = int(position["side"])
         pnl = paper_pnl(root, side, float(position["entry_open"]), exit_open)
         self.state["positions"][root] = None
@@ -295,6 +314,8 @@ class PaperLedger:
             "counts_toward_forty": counts,
             "round_turns": self.state["round_turns"],
         }
+        if exit_price_source:
+            event["exit_price_source"] = exit_price_source
         self._append(event)
         return event
 

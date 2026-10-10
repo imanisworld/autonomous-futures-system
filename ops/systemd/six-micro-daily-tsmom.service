@@ -7,6 +7,8 @@ Wants=network-online.target
 Type=oneshot
 # Fail closed until 10-release.conf pins an exact reviewed SHA.
 # This unit does not place orders.
+# afs-paper must already exist on the box. This unit does not create it.
+User=afs-paper
 ExecStart=/bin/false
 Restart=no
 NoNewPrivileges=true

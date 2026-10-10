@@ -8,12 +8,14 @@ contract. This does not place an order and does not score the study.
 from __future__ import annotations
 
 import argparse
+import json
+import os
+import re
+import subprocess
 from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
-
-from dotenv import load_dotenv
 
 from research.six_micro_daily_tsmom_paper import (
     PaperLedger,
@@ -22,10 +24,6 @@ from research.six_micro_daily_tsmom_paper import (
 )
 from sources.polygon_client import PolygonBar, PolygonError, PolygonFuturesClient, contract_schedule
 
-_MONTHS = {
-    "F": 1, "G": 2, "H": 3, "J": 4, "K": 5, "M": 6,
-    "N": 7, "Q": 8, "U": 9, "V": 10, "X": 11, "Z": 12,
-}
 _ROOT_MONTHS = {
     "MGC": "GJMQVZ",
     "MCL": "FGHJKMNQUVXZ",
@@ -37,6 +35,8 @@ RTH_OPEN = time(9, 30)
 RTH_LAST_BAR = time(15, 45)
 WARMUP_START = date(2026, 6, 29)
 UNSCHEDULED_ROOTS = ("MGC", "MCL", "MBT")
+_POLYGON_ENV_KEYS = frozenset({"POLYGON_API_KEY", "POLYGON_BASE_URL"})
+_FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
 
 
 @dataclass(frozen=True)
@@ -103,25 +103,23 @@ def _as_date(value: object) -> date | None:
         return None
 
 
-def _month_key(root: str, ticker: str) -> tuple[int, int]:
-    suffix = ticker[len(root):]
-    if len(suffix) != 2 or suffix[0] not in _MONTHS or not suffix[1].isdigit():
-        return (9999, 99)
-    return (2020 + int(suffix[1]), _MONTHS[suffix[0]])
-
-
 def listed_front(root: str, rows: list[dict], day: date) -> str | None:
-    """Soonest listed expiry that is already trading and has not expired."""
-    candidates: list[tuple[tuple[int, int], str]] = []
+    """Soonest last-trade date that is already trading and has not expired.
+
+    Month-code order is not the front. Two listings can disagree with it.
+    """
+    root_name = root.strip().upper()
+    candidates: list[tuple[date, str]] = []
     for row in rows:
-        ticker = str(row.get("ticker") or "")
-        month = _month_key(root, ticker)
+        ticker = str(row.get("ticker") or "").strip().upper()
+        if not ticker.startswith(root_name):
+            continue
         first = _as_date(row.get("first_trade_date"))
         last = _as_date(row.get("last_trade_date"))
-        if month == (9999, 99) or first is None or last is None:
+        if first is None or last is None:
             continue
         if first <= day <= last:
-            candidates.append((month, ticker))
+            candidates.append((last, ticker))
     if not candidates:
         return None
     candidates.sort()
@@ -146,25 +144,34 @@ def candidate_tickers(root: str, start: date, end: date) -> list[str]:
     return tickers
 
 
-def prints_for_soonest(
+def prints_for_listed_front(
     root: str,
     bars: list[PolygonBar],
+    rows: list[dict],
     *,
     start: date,
     end: date,
 ) -> list[SessionPrint]:
-    """One print per day: the soonest expiry that has both session prices."""
+    """One print per day from listed_front, not from the month code."""
     by_ticker: dict[str, list[PolygonBar]] = {}
     for bar in bars:
         by_ticker.setdefault(bar.ticker.strip().upper(), []).append(bar)
-    by_day: dict[date, list[SessionPrint]] = {}
-    for ticker_bars in by_ticker.values():
-        for print_ in session_prints(root, ticker_bars, start=start, end=end):
-            by_day.setdefault(print_.session, []).append(print_)
-    return [
-        min(by_day[day], key=lambda print_: _month_key(root, print_.contract))
-        for day in sorted(by_day)
-    ]
+    printed: dict[str, dict[date, SessionPrint]] = {}
+    for ticker, ticker_bars in by_ticker.items():
+        printed[ticker] = {
+            item.session: item
+            for item in session_prints(root, ticker_bars, start=start, end=end)
+        }
+    days = sorted({day for by_day in printed.values() for day in by_day})
+    chosen: list[SessionPrint] = []
+    for day in days:
+        ticker = listed_front(root, rows, day)
+        if ticker is None:
+            continue
+        print_ = printed.get(ticker, {}).get(day)
+        if print_ is not None:
+            chosen.append(print_)
+    return chosen
 
 
 def _with_roll_open(prints: list[SessionPrint], bars: list[PolygonBar]) -> list[SessionPrint]:
@@ -218,8 +225,15 @@ def collect_listed(
     *,
     start: date = WARMUP_START,
     end: date,
+    listings: dict[str, list[dict]] | None = None,
 ) -> dict[str, int]:
-    """Record gold, crude, and bitcoin through ``end`` without touching stored roots."""
+    """Record gold, crude, and bitcoin through ``end`` without touching stored roots.
+
+    The day's contract is ``listed_front`` (soonest last-trade date). Candidate
+    month codes only decide which tickers to download. ``listings`` injects
+    those rows in tests. Production asks the client for those tickers only
+    and does not page a whole product inventory.
+    """
     if end > completed_through(datetime.now(ET)):
         raise ValueError("refusing a session that has not closed")
     ledger = PaperLedger(journal_dir)
@@ -229,14 +243,20 @@ def collect_listed(
         if fetch_from is None:
             counts[root] = len(ledger.state["closes"].get(root, []))
             continue
+        tickers = candidate_tickers(root, fetch_from, end)
         bars: list[PolygonBar] = []
-        for ticker in candidate_tickers(root, fetch_from, end):
+        for ticker in tickers:
             try:
                 bars.extend(client.fetch_bars(ticker, fetch_from, end, 15))
             except PolygonError:
                 continue
+        rows = (
+            list(listings.get(root, []))
+            if listings is not None
+            else client.fetch_contract_listings(root, tickers)
+        )
         prints = _with_roll_open(
-            prints_for_soonest(root, bars, start=fetch_from, end=end),
+            prints_for_listed_front(root, bars, rows, start=fetch_from, end=end),
             bars,
         )
         counts[root] = _store_prints(ledger, root, prints)
@@ -276,19 +296,87 @@ def collect_scheduled(
 
 
 def _repo_root() -> Path:
-    here = Path(__file__).resolve()
-    for candidate in here.parents:
-        if (candidate / ".env").exists() and (candidate / "research").is_dir():
-            return candidate
-    return here.parents[1]
+    return Path(__file__).resolve().parents[1]
+
+
+def running_code_sha(repo: Path | None = None) -> str:
+    """Identity of the code that is actually running.
+
+    A built release has ``release_manifest.json``. The immutable release
+    directory is named with the same commit and has no ``.git``. A checkout
+    falls through to ``git rev-parse HEAD``.
+    """
+    root = repo or _repo_root()
+    manifest = root / "release_manifest.json"
+    if manifest.is_file():
+        try:
+            payload = json.loads(manifest.read_text(encoding="utf-8"))
+            commit = str(payload["repo"]["commit"]).strip().lower()
+        except (OSError, json.JSONDecodeError, KeyError, TypeError, AttributeError):
+            commit = ""
+        if _FULL_SHA.fullmatch(commit):
+            return commit
+    resolved = root.resolve()
+    if resolved.parent.name == "afs-releases" and _FULL_SHA.fullmatch(resolved.name.lower()):
+        return resolved.name.lower()
+    try:
+        out = subprocess.check_output(
+            ["git", "-C", str(root), "rev-parse", "HEAD"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip().lower()
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+        return ""
+    return out if _FULL_SHA.fullmatch(out) else ""
+
+
+def verify_release_sha(repo: Path | None = None) -> str:
+    """Exit non-zero unless ``AFS_RELEASE_SHA`` is the running commit."""
+    expected = os.environ.get("AFS_RELEASE_SHA", "").strip().lower()
+    running = running_code_sha(repo)
+    if not expected or not running or expected != running:
+        raise SystemExit("release SHA pin failed")
+    return running
+
+
+def load_polygon_env(path: Path) -> None:
+    """Load a Polygon-only env file. Refuse the shared broker env."""
+    if path.name == ".env" or not path.is_file():
+        raise SystemExit("env file is not polygon-only")
+    keys: dict[str, str] = {}
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export "):].strip()
+        key, sep, value = line.partition("=")
+        key = key.strip()
+        if not sep or key not in _POLYGON_ENV_KEYS:
+            raise SystemExit("env file is not polygon-only")
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+            value = value[1:-1]
+        keys[key] = value
+    if "POLYGON_API_KEY" not in keys:
+        raise SystemExit("env file is not polygon-only")
+    for key, value in keys.items():
+        os.environ[key] = value
 
 
 def main(argv: list[str] | None = None) -> None:
     root = _repo_root()
-    load_dotenv(root / ".env")
     parser = argparse.ArgumentParser(description="Record completed six-micro sessions.")
+    parser.add_argument("--env-file", type=Path)
     parser.add_argument("--journal", type=Path, default=root / "logs" / "six-micro-daily-tsmom")
+    parser.add_argument("--verify-sha", action="store_true")
     args = parser.parse_args(argv)
+    verify_release_sha(root)
+    if args.verify_sha:
+        return
+    if args.env_file is None:
+        raise SystemExit("env file is not polygon-only")
+    load_polygon_env(args.env_file)
     end = completed_through(datetime.now(ET))
     journal = args.journal
     client = PolygonFuturesClient(min_request_interval=13.0)

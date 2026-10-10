@@ -1,10 +1,16 @@
-# Replace @RELEASE_SHA@ with the exact SHA Grok reviewed.
-# The box drop-in is not installed by the registration commit.
+# Replace @RELEASE_SHA@ with the exact 40-character SHA Grok reviewed.
+# The box drop-in is not installed by this commit.
+# The host account afs-paper must already exist. This file does not create it.
+# The journal directory must be writable by afs-paper.
+# EnvironmentFile is Polygon-only. Do not point it at /root/afs-shared/.env.
 [Service]
+User=afs-paper
 WorkingDirectory=/root/afs-releases/@RELEASE_SHA@
 Environment=PYTHONPATH=/root/afs-releases/@RELEASE_SHA@
 Environment=PYTHONDONTWRITEBYTECODE=1
-EnvironmentFile=/root/afs-shared/.env
+Environment=AFS_RELEASE_SHA=@RELEASE_SHA@
+EnvironmentFile=/root/afs-shared/six-micro-polygon.env
+ExecStartPre=/root/afs-releases/@RELEASE_SHA@/.venv/bin/python -m research.six_micro_daily_tsmom_collect --verify-sha
 ExecStart=
-ExecStart=/root/afs-releases/@RELEASE_SHA@/.venv/bin/python -m research.six_micro_daily_tsmom_collect --journal /root/afs-shared/logs/six-micro-daily-tsmom
+ExecStart=/root/afs-releases/@RELEASE_SHA@/.venv/bin/python -m research.six_micro_daily_tsmom_collect --env-file /root/afs-shared/six-micro-polygon.env --journal /root/afs-shared/logs/six-micro-daily-tsmom
 ReadWritePaths=/root/afs-shared/logs

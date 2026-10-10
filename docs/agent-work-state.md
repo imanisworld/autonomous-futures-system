@@ -22,7 +22,7 @@ Read **only** this block + `AGENTS.md` + `docs/futures-research-resume-checkpoin
 
 **DO NOT REDO:** gzip 4HR cell reproduction; ORB/VWAP TF×window sweeps (baseline + trending + orb48); Grok PASS work on merged **#1208**/**#1209**; Sep decompositions listed below. Do not retune the six-micro daily rule. Do not rerun the failed month-end, cross-market momentum, or VIX tests (414 total). MNQ bars from 2026-06-29 through 2027-01-29 are scoring inputs only.
 
-**NEXT:** Grok reviews this commit before the six-micro timer is installed. Sessions through **2026-10-09** are marked pre-registration and do not count toward the 40. Scoring starts **2026-10-12**. The weekday 17:10 ET job is `ops/systemd/six-micro-daily-tsmom.timer` and is **not installed**. Do not score. Do not deploy. 1m arm fills/costs **not implemented**. **NOT done:** VPS install, Monday's session, DEMO-ready claim, tsmom score.
+**NEXT:** Grok reviews the AFS-0254 commit on #1218 before the six-micro timer is installed. The pin is that reviewed SHA (`AFS_RELEASE_SHA`), not a hardcoded `f0cfd39`. Sessions through **2026-10-09** are pre-registration and do not count toward the 40. Scoring starts **2026-10-12**. The weekday job is **17:10 America/New_York** (`ops/systemd/six-micro-daily-tsmom.timer`) and is **not installed**. The service user is `afs-paper` with a Polygon-only env file. Do not load `/root/afs-shared/.env`. Do not score. Do not deploy. 1m arm fills/costs **not implemented**. **NOT done:** VPS install, Monday's session, DEMO-ready claim, tsmom score.
 
 Prior chat context for this session is **closed**. Section below is coordination archive unless stale.
 

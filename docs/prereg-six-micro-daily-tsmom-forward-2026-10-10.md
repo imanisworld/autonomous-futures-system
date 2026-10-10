@@ -62,9 +62,9 @@ Fail any one of those and the study is dead. There is no second look.
 
 - Dollar conversion uses `config.futures_contracts.tick_size` and `tick_value` only. No handwritten tick table.
 - Commission is $1.48 per side. Slippage is 2 ticks adverse on the entry fill and 2 ticks adverse on the exit fill.
-- MNQ, MES, and M2K must match `sources.polygon_client.front_contract(root, session_date, roll_days=8)`. Any other ticker is not a fill.
-- MGC, MCL, and MBT use the dated ticker on the bar. That ticker is the listed outright whose last trade date is the soonest date still on or after the session. There is no volume-front choice in this ledger.
-- A contract change exits on the old contract's 09:30 open. If that price is missing, the position stays unresolved and that session is not a round-turn.
+- MNQ, MES, and M2K must match `sources.polygon_client.front_contract(root, session_date, roll_days=8)`. Any other ticker is not a fill. A front-month mismatch still stores that session's close once and journals `FRONT_MISMATCH`. It does not open. Replaying a stored session does not append another journal line. The stored close keeps the 60-session lookback on the session calendar.
+- MGC, MCL, and MBT use the dated ticker on the bar. That ticker is the listed outright whose last trade date is the soonest date still on or after the session (`listed_front`). Month-code order is not the front. There is no volume-front choice in this ledger.
+- A contract change exits on the old contract's 09:30 open. If that price is missing, the session close is still stored, `ROLL_PRICE_MISSING` is journaled once, and the position exits on the next session: at the old contract's 09:30 open when that price is available, otherwise at that next session's 09:30 open. The missing-price session is not itself a round-turn. Replaying a stored session does not append another journal line.
 - Missing open or close: no fill and no substituted bar.
 
 ## 5. What counts
@@ -88,8 +88,13 @@ the same runner and the listed nearest expiry, not a volume ranking.
 
 The daily job is `ops/systemd/six-micro-daily-tsmom.timer`, weekdays at
 17:10 America/New_York, after the 16:00 close. The service does not run
-until a drop-in pins the reviewed release SHA. Installing that drop-in is a
-separate deploy GO. This commit does not install it and does not start it.
+until a drop-in pins the reviewed release SHA. Startup exits non-zero when
+the running code is not that SHA. The process user is `afs-paper`, which
+must already exist on the box. Its env file is
+`/root/afs-shared/six-micro-polygon.env` and may contain only Polygon
+settings. It must not be `/root/afs-shared/.env`. Installing that drop-in
+is a separate deploy GO. This commit does not install it, does not create
+the user or the env file, and does not start it.
 
 ## 7. Evidence boundary
 
