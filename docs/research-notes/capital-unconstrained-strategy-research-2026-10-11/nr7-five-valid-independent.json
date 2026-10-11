@@ -1,0 +1,279 @@
+{
+  "frozen_exploratory_spec": {
+    "trial": "AFS-NR7ID-MNQ-EXPLORATORY-2026-10-11",
+    "evidence_class": "exploratory_historical_pre_seal_not_forward_validation",
+    "signal_source": "ChartArt NR7ID Pine (vault Narrow-Range-Inside-Day-Breakout-Strategy.md)",
+    "signal_rules": {
+      "nr7": "range < range[1..6]",
+      "inside_day": "high < high[1] and low > low[1]",
+      "bullish": "open < close",
+      "sma": "SMA(close,14) rising vs prior session",
+      "direction": "long_only"
+    },
+    "entry": "Next RTH session first 15m bar open + 1 adverse tick",
+    "stop": "Signal-day RTH low; 15m stop-first; gap through stop at open - 1 tick",
+    "exit": "Pine: strategy.close(long, when=open<close). Causal: bullish day confirmed at session close; fill at next RTH session first 15m open - 1 adverse tick",
+    "costs": {
+      "commission_rt_usd": 1.48,
+      "slippage_ticks": 1.0
+    },
+    "population": "All NR7ID signals with protective stop below next-session entry; invalid geometry excluded",
+    "positioning": "One contract, non-overlapping (skip signal if already in trade)",
+    "data_end_inclusive": "2026-06-26",
+    "seal": "No bar dates >= 2026-06-29"
+  },
+  "corpus": "data/replay_polygon_v2/MNQ",
+  "daily_rth_sessions": 447,
+  "window": "2024-10-01..2026-06-26",
+  "calendar_audit": {
+    "full_rth_sessions": 425,
+    "short_or_holiday_sessions": 22,
+    "short_session_examples": [
+      {
+        "day": "2024-11-28",
+        "bars": 14,
+        "last_bar_et": "12:45:00",
+        "note": "Thanksgiving (short)"
+      },
+      {
+        "day": "2024-11-29",
+        "bars": 15,
+        "last_bar_et": "13:00:00",
+        "note": null
+      },
+      {
+        "day": "2024-12-24",
+        "bars": 15,
+        "last_bar_et": "13:00:00",
+        "note": null
+      },
+      {
+        "day": "2025-01-16",
+        "bars": 26,
+        "last_bar_et": "16:00:00",
+        "note": null
+      },
+      {
+        "day": "2025-01-20",
+        "bars": 14,
+        "last_bar_et": "12:45:00",
+        "note": "MLK (short)"
+      },
+      {
+        "day": "2025-01-23",
+        "bars": 25,
+        "last_bar_et": "16:00:00",
+        "note": null
+      },
+      {
+        "day": "2025-01-30",
+        "bars": 26,
+        "last_bar_et": "15:45:00",
+        "note": null
+      },
+      {
+        "day": "2025-02-13",
+        "bars": 24,
+        "last_bar_et": "16:00:00",
+        "note": null
+      },
+      {
+        "day": "2025-02-17",
+        "bars": 14,
+        "last_bar_et": "12:45:00",
+        "note": null
+      },
+      {
+        "day": "2025-05-26",
+        "bars": 14,
+        "last_bar_et": "12:45:00",
+        "note": null
+      },
+      {
+        "day": "2025-06-19",
+        "bars": 14,
+        "last_bar_et": "12:45:00",
+        "note": "Juneteenth (short)"
+      },
+      {
+        "day": "2025-07-03",
+        "bars": 15,
+        "last_bar_et": "13:00:00",
+        "note": null
+      },
+      {
+        "day": "2025-07-04",
+        "bars": 14,
+        "last_bar_et": "12:45:00",
+        "note": null
+      },
+      {
+        "day": "2025-09-01",
+        "bars": 14,
+        "last_bar_et": "12:45:00",
+        "note": null
+      },
+      {
+        "day": "2025-11-27",
+        "bars": 14,
+        "last_bar_et": "12:45:00",
+        "note": null
+      },
+      {
+        "day": "2025-11-28",
+        "bars": 15,
+        "last_bar_et": "13:00:00",
+        "note": null
+      },
+      {
+        "day": "2025-12-24",
+        "bars": 15,
+        "last_bar_et": "13:00:00",
+        "note": null
+      },
+      {
+        "day": "2026-01-19",
+        "bars": 14,
+        "last_bar_et": "12:45:00",
+        "note": null
+      },
+      {
+        "day": "2026-02-16",
+        "bars": 14,
+        "last_bar_et": "12:45:00",
+        "note": null
+      },
+      {
+        "day": "2026-03-06",
+        "bars": 25,
+        "last_bar_et": "16:00:00",
+        "note": null
+      },
+      {
+        "day": "2026-05-25",
+        "bars": 14,
+        "last_bar_et": "12:45:00",
+        "note": null
+      },
+      {
+        "day": "2026-06-19",
+        "bars": 14,
+        "last_bar_et": "12:45:00",
+        "note": "Juneteenth (short)"
+      }
+    ],
+    "short_session_total_listed": 22
+  },
+  "signal_count": 7,
+  "invalid_stop_geometry": 2,
+  "valid_stop_signals": 5,
+  "trades_skipped_overlap": 0,
+  "skipped_overlap_signal_days": [],
+  "position_model": "independent_per_signal",
+  "reference_prior_run": {
+    "signals": 7,
+    "valid_stops": 5,
+    "invalid_stops": 2,
+    "matches": true
+  },
+  "valid_trade_count": 5,
+  "net_usd": -1139.9,
+  "win_rate": 0.2,
+  "profit_factor": 0.061,
+  "expectancy_usd_per_trade": -227.98,
+  "max_drawdown_usd_on_cumulative_pnl": 1139.9,
+  "worst_trade_usd": -604.98,
+  "best_trade_usd": 74.52,
+  "largest_structural_stop_usd": 600.5,
+  "chronological_halves_net": {
+    "first_half": -229.46,
+    "second_half": -910.44
+  },
+  "concentration": {
+    "largest_winner_share_of_net": 0.065,
+    "top3_winners_share_of_net": 0.065
+  },
+  "benchmark_full_window_buy_hold_usd": 18195.54,
+  "benchmark_exposure_matched": {
+    "net_usd": -862.3,
+    "sessions_in_market": 8,
+    "description": "Long MNQ each RTH session from entry day through exit day (daily open-to-close chain)"
+  },
+  "exit_reason_counts": {
+    "PINE_BULLISH_NEXT_OPEN": 2,
+    "STOP_HIT": 2,
+    "STOP_GAP": 1
+  },
+  "trades": [
+    {
+      "signal_day": "2024-11-22",
+      "entry_day": "2024-11-25",
+      "exit_day": "2024-11-27",
+      "pnl_usd": -161.98,
+      "stop_usd": 588.5,
+      "stop_ticks": 1177.0,
+      "exit_reason": "PINE_BULLISH_NEXT_OPEN"
+    },
+    {
+      "signal_day": "2024-11-26",
+      "entry_day": "2024-11-27",
+      "exit_day": "2024-11-27",
+      "pnl_usd": -67.48,
+      "stop_usd": 65.5,
+      "stop_ticks": 131.0,
+      "exit_reason": "STOP_HIT"
+    },
+    {
+      "signal_day": "2025-06-06",
+      "entry_day": "2025-06-09",
+      "exit_day": "2025-06-10",
+      "pnl_usd": 74.52,
+      "stop_usd": 153.5,
+      "stop_ticks": 307.0,
+      "exit_reason": "PINE_BULLISH_NEXT_OPEN"
+    },
+    {
+      "signal_day": "2025-11-11",
+      "entry_day": "2025-11-12",
+      "exit_day": "2025-11-13",
+      "pnl_usd": -604.98,
+      "stop_usd": 600.5,
+      "stop_ticks": 1201.0,
+      "exit_reason": "STOP_GAP"
+    },
+    {
+      "signal_day": "2026-06-19",
+      "entry_day": "2026-06-22",
+      "exit_day": "2026-06-22",
+      "pnl_usd": -379.98,
+      "stop_usd": 378.0,
+      "stop_ticks": 756.0,
+      "exit_reason": "STOP_HIT"
+    }
+  ],
+  "invalid_signal_days": [
+    "2025-02-10",
+    "2026-04-27"
+  ],
+  "capital_requirements": {
+    "per_trade_structural_stop_usd": {
+      "min": 65.5,
+      "median": 378.0,
+      "max": 600.5
+    },
+    "per_trade_mae_usd_observed": {
+      "max": 989.5
+    },
+    "suggested_capital_1pct_risk_on_max_stop": 60050.0,
+    "suggested_capital_2pct_risk_on_max_stop": 30025.0,
+    "suggested_capital_1pct_risk_on_median_stop": 37800.0,
+    "suggested_capital_2pct_risk_on_median_stop": 18900.0,
+    "suggested_capital_1pct_risk_on_max_mae": 98950.0,
+    "suggested_capital_2pct_risk_on_max_mae": 49475.0,
+    "illustrative_mnq_micro_margin_usd": "UNVERIFIED \u2014 broker/day-trading margin often ~$50\u2013$200 micro; overnight higher",
+    "gap_slippage_note": "STOP_GAP exits use open - 1 tick; entry + stop path uses 15m lows"
+  },
+  "verdict": "INSUFFICIENT_EVIDENCE",
+  "exploratory_performance": "FAIL (exploratory economics on available sample)",
+  "verdict_note": "n=5 executed trades from 5 valid-stop signals (credible sample gate is 20+)."
+}

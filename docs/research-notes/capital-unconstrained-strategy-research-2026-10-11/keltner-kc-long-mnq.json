@@ -1,0 +1,45 @@
+{
+  "frozen_spec": {
+    "trial": "AFS-KELTNER-KC-LONG-MNQ-EXPLORATORY-2026-10-11",
+    "vault": "Hybrid-Keltner-Channel-EMA-Based-Trading-System-with-ATR-Risk-Management.md",
+    "chosen_leg": "Long_KC only (reversal); Short_KC and Trend legs excluded",
+    "economic_reason": "Isolated Keltner mean-reversion long is fully specified in Pine with ATR bracket; mixing trend+reversal in one book creates opposing signals on the same symbol.",
+    "timeframe": "60m RTH bars aggregated from 15m corpus",
+    "entry": "ta.crossunder(close, lowerKC) confirmed at bar close; fill next 60m open + 1 tick",
+    "exit_signal": "ta.crossover(close, emaBasis) confirmed at bar close; fill next 60m open - 1 tick",
+    "stop": "entry_reference_close - 1.5*ATR(20) at entry bar",
+    "target": "entry_reference_close + 3.0*ATR(20) at entry bar",
+    "intrabar": "15m path stop-first; pessimistic stop-before-target if both touched",
+    "costs": {
+      "commission_rt": 1.48,
+      "slippage_ticks": 1.0
+    },
+    "data_end": "2026-06-26"
+  },
+  "bars_60m": 3512,
+  "trade_count": 61,
+  "net_usd": -2022.44,
+  "profit_factor": 0.863,
+  "expectancy_usd": -33.15,
+  "win_rate": 0.344,
+  "max_drawdown_usd": 4474.24,
+  "worst_trade_usd": -674.89,
+  "best_trade_usd": 2014.31,
+  "max_stop_usd": 1005.64,
+  "max_mae_usd": 989.5,
+  "h1_net": -1397.84,
+  "h2_net": -624.6,
+  "top3_winner_share_of_net": 1.932,
+  "benchmark_full_bh_usd": 18195.54,
+  "exit_reasons": {
+    "STOP_HIT": 38,
+    "KC_MIDLINE_NEXT_OPEN": 17,
+    "TARGET_HIT": 4,
+    "STOP_GAP": 2
+  },
+  "capital_1pct_max_stop": 100564.44,
+  "capital_2pct_max_stop": 50282.22,
+  "capital_5pct_max_stop": 20112.89,
+  "capital_1pct_max_mae": 98950.0,
+  "verdict": "FAIL"
+}

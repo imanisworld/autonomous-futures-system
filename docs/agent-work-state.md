@@ -20,13 +20,14 @@ Read **only** this block + `AGENTS.md` unless drift is detected. Private numeric
 | **Options ETF research** | **`origin/claude/options-time-exit-research-20261010`** @ **`9973f7e`** — **unmerged**; not on `main`. Prior “branch deleted” note was **wrong**; optional copy in **`/workspace/afs-shared/`** — unverified here. |
 | **Saved 4HR benchmark** | `docs/research-notes/4hr-mnq-400-historical-benchmark-2026-10-10/` (on **`main`** via #1216) |
 | **Saved ORB/VWAP sweeps** | `docs/research-notes/orb-vwap-tf-window-sweep-2026-10-10/` (on **`main`** via #1216) |
+| **Vault NR7 + Keltner exploratory** | **`T-2026-10-11-exploratory-nr7-keltner-capital-unconstrained-01`** — closed **RESEARCH_ONLY** / **FAIL**; artifacts `docs/research-notes/capital-unconstrained-strategy-research-2026-10-11/` + ledger evidence dir |
 | **Forward 4HR start** | **2026-10-12** — forward fills **not collected** yet; requires read-only box proof before counting (see **NEXT**) |
 | **Step 4 parity doc** | `docs/futures-demo-step4-1m-vs-5m-ioc-parity-2026-10-10.md` |
 | **Track B readiness** | `docs/futures-track-b-forward-readiness-2026-10-10.md` (§2 updated 2026-10-11; §4.3 box gates still apply) |
 | **Deferred cleanup list** | `docs/repo-hygiene-deferred-removal-tracker-2026-10-10.md` (classify only; delete at end) |
 | **Unreviewed later branch** | **`fix/mnq-seal-research-guard-20261010`** / **#1217** — on origin, **not** in this HOLD |
 
-**DO NOT REDO:** gzip 4HR cell reproduction; ORB/VWAP TF×window sweeps (baseline + trending + orb48); Grok PASS work on merged **#1208**/**#1209**; Sep decompositions listed below.
+**DO NOT REDO:** gzip 4HR cell reproduction; ORB/VWAP TF×window sweeps (baseline + trending + orb48); Grok PASS work on merged **#1208**/**#1209**; Sep decompositions listed below; **NR7ID + Keltner KC-long** capital-unconstrained exploratory (`T-2026-10-11-exploratory-nr7-keltner-capital-unconstrained-01`).
 
 **NEXT:** (1) **2026-10-12:** Track B read-only box proof (flat account, wide-stop journals, §4.3 pins) before counting forward fills. (2) **Mon 2026-10-12 17:10 ET:** first **scheduled** six-micro collect (timer armed). (3) Wide-stop **`94a71bd`** — **no `futures-bot` restart** unless drift proven; global promote to **`f8d4845`** remains a **separate** GO if ever desired.
 
