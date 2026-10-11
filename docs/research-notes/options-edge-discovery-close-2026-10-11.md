@@ -30,7 +30,7 @@ The existing collector was reported unchanged. Historical 101 entry snapshots re
 
 ## Next research question — not started or approved
 
-**Open hypothesis:** Can a *multi-day / multi-week equity relative-strength or directional-persistence* entry create enough **net long-option payoff**, after executable quotes, spread, carry/decay, IV changes, and exit costs, to justify a trade?
+**Open hypothesis:** Can a *multi-day / multi-week equity directional-persistence* entry create enough **net long-option payoff**, after executable quotes, spread, carry/decay, IV changes, and exit costs, to justify a trade?
 
 This has **no completed options test** and **no approved experiment or collection change**. Do not silently reuse the separate futures six-micro daily time-series momentum rule (60-session signal held until flip/20 sessions; scheduled forward scoring from 2026-10-12). The futures rule is a different instrument, population, and execution model. Previously failed equity-index overnight/20-day filter and month-end/cross-market/VIX tests remain historical exclusions.
 
