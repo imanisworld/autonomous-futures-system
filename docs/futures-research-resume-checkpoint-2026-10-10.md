@@ -10,16 +10,17 @@ The goal is a consistently positive-expectancy futures strategy under causal sig
 
 **Current strategy verdict: NOT PROVEN / NOT DEMO-READY.** Recent exploratory intraday momentum, reversal, divergence, gap, breakout, and fixed-time hypotheses did not survive extra periods, concentration checks, or proper higher-timeframe anchoring. Do not tune repeatedly on the same rejected data to produce a green backtest.
 
-## Source-only corrective work (open draft PRs, verified 2026-10-10)
+## Source-only corrective work — **MERGED** to `main` 2026-10-10 (updated 2026-10-11)
 
-| PR | Scope | Exact-head CI at checkpoint | Remaining |
+| PR | Scope | Merge status | Remaining |
 |---|---|---|---|
-| [#1208](https://github.com/imanisworld/autonomous-futures-system/pull/1208) | Fail-closed next-executable-reference research fills, conservative ambiguous-bar ordering, isolated from hash-pinned canonical broker | 8,664 passed, 8 skipped | Independent review; operator approval before merge |
-| [#1209](https://github.com/imanisworld/autonomous-futures-system/pull/1209) | Actual-bracket R:R, structural stop-direction validation incl. runner exemption | 8,665 passed, 8 skipped | Independent review; no risk-floor change |
-| [#1210](https://github.com/imanisworld/autonomous-futures-system/pull/1210) | Combined regression of fill and risk correctness | 8,688 passed, 8 skipped | Independent review; QA-only |
-| [#1211](https://github.com/imanisworld/autonomous-futures-system/pull/1211) | Isolated complete-bar, gap, DST and dated-contract provenance validation across 5m/15m/30m/60m/4H/12H | 8,677 passed, 8 skipped | Independent review; not wired to frozen trials |
+| [#1208](https://github.com/imanisworld/autonomous-futures-system/pull/1208) | Fail-closed next-executable-reference research fills | **Merged** | Post-merge breaker on `58d4cd6`; fill-sensitive replays only after AFS-0212/0213 reconciled |
+| [#1209](https://github.com/imanisworld/autonomous-futures-system/pull/1209) | Actual-bracket R:R, stop-direction validation | **Merged** | Same |
+| [#1210](https://github.com/imanisworld/autonomous-futures-system/pull/1210) | Combined fill + R:R QA | **Merged** | QA-only; no profitability claim |
+| [#1211](https://github.com/imanisworld/autonomous-futures-system/pull/1211) | Timeframe integrity helper (new studies) | **Merged** | Not wired to frozen MGC scorer |
+| [#1216](https://github.com/imanisworld/autonomous-futures-system/pull/1216) | 400-tick paper / 300-tick demo wide-stop | **Merged** `58d4cd6` | **No second deploy**; box SHA proof still required |
 
-These CI numbers refer to the **tested heads before this documentation-only checkpoint**. Recheck exact head after changes. Do not assume Grok/Cursor independent testing is complete merely because the operator said they were running it.
+Exact-head CI was green on merge heads. **Merged ≠ demo-ready.** Independent review of deployed tree is separate from merge authority.
 
 ## Root causes now evidenced
 
@@ -104,16 +105,15 @@ Append-only. Complements the Grok appendix and the operator’s **private** Chat
 
 **ORB/VWAP sweep verdict (IOC, NY-only):** No demo-ready lane from timeframe + clock window alone. A weak **10m ORB reclaim** slice without trending does **not** survive the trending filter; wider ORB stops do not flip requested windows positive. **15m** (audit-aligned) stays negative in those windows. **VWAP** negative all cells with very low fill rate.
 
-**4HR cell (separate from ORB/VWAP):** Historical benchmark on consumed artifact dates is saved in the evidence folder above; forward collection spec is **APPROVED** for sessions from **2026-10-12** — still **not collected**, **not deployed**. Demo wiring on the research branch shadows 3-2-2 fills.
+**4HR cell (separate from ORB/VWAP):** Historical benchmark saved on **`main`**; forward spec **APPROVED**; first eligible session **2026-10-12** — fills **not collected** yet. **`main` #1216** carries 400-tick paper + 3-2-2 shadow on `wide_stop_4k`.
 
 ### Unfinished before DEMO (Cursor scope)
 
-1. Independent review / operator GO on #1208–#1210 (and #1211 on its own merits) — no merge for profitability claims. **#1208 / #1209:** Grok review fixes (operator: AFS-0212 / AFS-0213) still pending before fill-sensitive replays.
-2. **Step 4 parity (done 2026-10-10):** `docs/futures-demo-step4-1m-vs-5m-ioc-parity-2026-10-10.md` — guarded DEMO ≠ 1m pre-armed lead; forward/demo must label **5m IOC8 wide-stop** or complete 1m observer prereg first.
-3. **Track B readiness (done 2026-10-10):** `docs/futures-track-b-forward-readiness-2026-10-10.md` — deploy **research** SHA for **400-tick** forward; do not score E-2026-10-09 on 300-tick `main`.
-4. **MNQ 4HR parity** — research branch wiring matches Track B prereg; collection still blocked until gates in readiness doc.
-5. Push reviewed SHA and **explicit** controlled deploy if operator wants Track B on box — checklist in Track B readiness doc; not done in this workstream.
-6. Do **not** re-open gzip census, ORB/VWAP sweeps, or #1208/#1209 CI reads unless heads or corpora drift (see `docs/agent-work-state.md` on branch `research/4hr-mnq-400-forward-20261009`).
+1. **Post-merge breaker** on **`58d4cd6`** / box SHA — not a merge blocker. **AFS-0212 / AFS-0213:** reconcile before fill-sensitive replays.
+2. **Step 4 parity (done):** `docs/futures-demo-step4-1m-vs-5m-ioc-parity-2026-10-10.md` — label **5m IOC8** vs 1m pre-armed lead.
+3. **Track B (updated):** `docs/futures-track-b-forward-readiness-2026-10-10.md` — **400-tick paper on `main`**; promoted **`94a71bd`** tree-identical; **no second deploy**; **2026-10-12** read-only box proof before counting fills.
+4. **1m observer prereg** — parallel Track A; calendar gates not satisfied by Oct 10.
+5. Do **not** re-open gzip census, ORB/VWAP sweeps, or pre-merge CI unless corpora/SHA drift.
 
 ## Appendix — Claude options ETF expression (2026-10-10)
 
@@ -124,7 +124,7 @@ Append-only. **Separate lane** from futures DEMO work above; does **not** change
 **Reconciliation with futures lane (conceptual, not a combined strategy):**
 
 - Same underlying idea as gzip 4HR “hold to EOD without stop”: direction often works by the close while account-sized stops fail intraday noise (Claude §3a; Cursor 4HR cell on research branch).
-- **Futures forward path** on box remains **5m IOC wide-stop collector** / prereg on `research/4hr-mnq-400-forward-20261009` — **not** ETF options and **not** 1m pre-armed DEMO wiring.
+- **Futures forward path** on box remains **5m IOC wide-stop collector** / prereg **E-2026-10-09** on deployed SHA matching **`main` #1216** — **not** ETF options and **not** 1m pre-armed DEMO wiring.
 - **Options expression** is paper-only tracker `scripts/options_4hr_etf_forward.py` on the Claude branch (Polygon bars + canonical `advance_4hr_retrigger`); box has **no** enabled MNQ 4HR strategy in main engine per handoff §5.6.
 
 **Cursor verified this session (remote branch only):** handoff doc exists at cited SHA; tracker imports same state machine as `edge_decomposition_audit`; Claude-reported **parity Jan–Jun 2026: 41/41** and **OOS Jul 24–Oct 9 2026: 9 trades, −$384** are **not independently re-run here** — treat numbers as Claude evidence until a breaker re-executes.

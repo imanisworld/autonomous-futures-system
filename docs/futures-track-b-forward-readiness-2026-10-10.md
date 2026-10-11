@@ -25,17 +25,16 @@ This document is a **pre-deploy / pre-collection checklist**. It does **not** au
 
 ---
 
-## 2. Source branch vs what runs on the box today
+## 2. Source vs box (updated 2026-10-11 after **#1216** on `main`)
 
-| Item | Deployed / `main` family (typical) | `research/4hr-mnq-400-forward-20261009` @ **`2f4f776`** |
+| Item | **`main` @ `58d4cd6` (#1216)** | Legacy `research/4hr-mnq-400-forward-20261009` @ **`2f4f776`** (superseded for deploy) |
 |---|---|---|
-| `wide_stop_4k` stop cap | **300** ticks (`context/wide_stop_ledger_paper.py`) | **400** ticks |
-| 3-2-2 fills | Still eligible in collector loop | **Disabled** — shadow only |
-| Forward prereg + spec | Not on current #1211 branch | Present on research branch |
-| Saved benchmark artifact | Referenced from checkpoint | `docs/research-notes/4hr-mnq-400-historical-benchmark-2026-10-10/` |
-| ORB/VWAP sweeps | — | Same branch (DO NOT REDO) |
+| `wide_stop_4k` stop cap | **400** ticks paper; **300** ticks max on Tradovate demo orders | **400** ticks paper (same intent) |
+| 3-2-2 / Miyagi | **Shadow only** on `wide_stop_4k` ledger | Shadow-only variant on old branch |
+| Forward prereg + spec | On **`main`**: `docs/research-experiment-specs/E-2026-10-09-4hr-mnq-400-forward-01.json` | Same spec lineage |
+| Saved benchmark / sweeps | `docs/research-notes/4hr-mnq-400-historical-benchmark-2026-10-10/`, `orb-vwap-tf-window-sweep-2026-10-10/` | DO NOT REDO |
 
-**Gap:** Forward trial **E-2026-10-09-*** requires **400-tick** lane code. Deploying **`main` or #1211 without the research branch ledger change** would score the **wrong cell** (300-tick baseline in experiment spec).
+**Deploy gap (2026-10-11):** The **400-tick paper cell is on `main`**. Promoted release **`94a71bd`** is **tree-identical** to `58d4cd6`. A **separate research-branch deploy is not required** for stop-cap scoring **if** the box SHA matches and journals prove collection. **Do not** redeploy without operator GO (`docs/agent-work-state.md`).
 
 ---
 
@@ -47,8 +46,8 @@ Track A — Mechanism (no orders)
   Continues on current box when flags pinned; does NOT prove profitability.
 
 Track B — Executable forward (paper + optional guarded DEMO)
-  5m IOC8 wide_stop_4k @ 400 ticks after reviewed deploy of research SHA
-  Scores prereg E-2026-10-09-* only.
+  5m IOC8 wide_stop_4k @ 400 ticks paper (demo orders capped 300) on deployed SHA matching `main` #1216
+  Scores prereg E-2026-10-09-* only from 2026-10-12 sessions onward.
 
 Do not conflate A and B in reports or Grok handoffs.
 ```
@@ -59,16 +58,16 @@ Do not conflate A and B in reports or Grok handoffs.
 
 ### 4.1 Source / review (step 1)
 
-- [ ] **#1208 / #1209:** Grok **AFS-0212 / AFS-0213** fixes merged (operator-owned) before trusting fill-sensitive audits.
-- [ ] **#1210 / #1211:** Independent review at **exact heads**; CI green (last verified: #1211 green on PR head).
-- [ ] **Research branch:** Review diff `fix/timeframe-causal-buckets-research-20261010..research/4hr-mnq-400-forward-20261009` — focus `wide_stop_ledger_paper.py`, `wide_stop_ledger_offline_expectation.py`, experiment spec, 3-2-2 shadow change — not ORB/VWAP sweep reruns.
+- [x] **#1208–#1211:** Merged to **`main`** 2026-10-10 (exact-head CI green on merge heads). Independent breaker sign-off on **deployed tree `58d4cd6`** still operator/breaker-owned.
+- [x] **#1216:** Merged — 400-tick paper + 300-tick demo cap on `main`.
+- [ ] **Fill-sensitive replays:** Only after operator confirms Grok **AFS-0212 / AFS-0213** items (if any) on merged code — do not assume post-merge replay done here.
 
 ### 4.2 Deploy (explicit operator GO only)
 
-- [ ] Nominate **exact SHA** from `research/4hr-mnq-400-forward-20261009` (or a merge commit that includes it unchanged).
-- [ ] Controlled release: deploy lock, integrity, rollback pointer, **no** `--force-lock` without stale proof.
+- [x] **One promote recorded:** release **`94a71bd`** @ 2026-10-10T15:45:33Z; tree equals **`58d4cd6`**. **No second deploy/restart** unless SHA/posture drift is proven.
+- [ ] **Read-only box proof** (2026-10-12 session open): deployed SHA, rollback pointer, deploy lock, demo/live pins, flat account, collector + journals — see §4.3.
 - [ ] **Do not reset** shared wide-stop epoch `2026-09-09T04:21:04Z` for cleanup (Daily 2-2 / ledger continuity — see Strategy Inventory).
-- [ ] Post-deploy: deployed SHA matches reviewed SHA; `WIDE_STOP_LEDGER_MODE=paper_sim`; `FIVE_MIN_FEED_ENABLED=true`; journals writing.
+- [ ] If drift found: nominate **exact reviewed SHA** only; controlled release with lock/integrity; post-check `WIDE_STOP_LEDGER_MODE=paper_sim`, `FIVE_MIN_FEED_ENABLED=true`, journals writing.
 
 ### 4.3 Runtime pins (read-only box proof — **unverified in Cursor session**)
 
@@ -94,14 +93,12 @@ Do not conflate A and B in reports or Grok handoffs.
 
 ---
 
-## 6. Suggested operator sequence (“next” after step 4)
+## 6. Suggested operator sequence (2026-10-11)
 
-1. **You:** Finish #1210 / #1211 review; queue #1208 / #1209 Grok fixes.
-2. **You:** Review research branch @ `2f4f776` (400-tick + 4HR-only fills) — approve or reject for deploy candidate.
-3. **Push** `research/4hr-mnq-400-forward-20261009` to origin if not already (checkpoint last said unpushed).
-4. **Commit/push** checkpoint docs on #1211 (`step4` parity + this file + work-state) so agents share one URL.
-5. **Restricted VPS read-only pass** (B1/B5/B6, journals, deployed SHA) — see `docs/futures-operator-todo.md`.
-6. **Separate GO** to deploy exact research SHA → forward collection begins scoring Track B from **2026-10-12** onward.
+1. **Read-only VPS pass** before **2026-10-12** RTH — deployed SHA `94a71bd`/`58d4cd6`, posture pins, 5m feed, wide-stop collector/journals (`docs/futures-operator-todo.md`, `/futures-deployment-safety-audit`).
+2. **No redeploy** unless drift proven — HOLD per `docs/agent-work-state.md`.
+3. **Score Track B** only from **2026-10-12** sessions; label **paper 400t** vs **demo 300t** separately.
+4. **Post-merge breaker** (optional): review **`58d4cd6`** mechanism/DEMO isolation — not a redeploy prerequisite if box SHA already matches.
 
 ---
 

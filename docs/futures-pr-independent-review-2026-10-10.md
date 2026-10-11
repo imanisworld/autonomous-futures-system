@@ -1,5 +1,7 @@
 # Independent PR review — #1208–#1211 + research deploy candidate (2026-10-10)
 
+**Superseded for workflow status (2026-10-11):** #1208–#1211 and #1216 are **merged** on `main` @ `58d4cd6`. Use `docs/agent-work-state.md` START HERE for current deploy/HOLD and Track B collection. This file remains **historical review evidence** for the PR heads below.
+
 **Reviewer role:** Cursor (breaker-style, read-only). **Not** operator merge/deploy authorization.
 
 **Exact heads reviewed:**

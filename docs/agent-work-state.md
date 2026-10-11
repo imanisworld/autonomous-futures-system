@@ -1,29 +1,33 @@
 # Agent Work State
 
-## START HERE — session closed (2026-10-10, context cleared)
+## START HERE — git refresh 2026-10-11; box last read 2026-10-10T15:52Z (HOLD)
 
-Read **only** this block + `AGENTS.md` + `docs/futures-research-resume-checkpoint-2026-10-10.md` unless drift is detected. Private numeric handoff: ChatGPT Library `/Futures Research/Futures Research Handoff - 2026-10-10.md`.
+Read **only** this block + `AGENTS.md` unless drift is detected. Private numeric handoff: ChatGPT Library `/Futures Research/Futures Research Handoff - 2026-10-10.md`.
 
 | Item | Value |
 |---|---|
-| **GitHub `main`** | **`43385e0`** — **#1215** merged |
-| **Track B review SHA** | `research/4hr-mnq-400-forward-rebase-20261010` after `main` re-merge. Demo order stop is **300** ticks / **$150**. Paper `wide_stop_4k` stays **400**. **No deploy.** |
-| **DO NOT deploy** | `research/4hr-mnq-400-forward-20261009` @ **`2f4f776`** and this branch until Grok reviews the exact SHA and the operator gives GO |
-| **Open futures research PRs (this lane)** | **#1206**, **#1207**, **#1216** (Track B) |
-| **Daily tsmom prereg** | `research/equity-index-daily-tsmom-forward-20261010` @ **`3fc8709`** — pushed, **PLANNED**, paper/log only, no score before 40 round-turns, no deploy |
+| **GitHub `main`** | **`58d4cd6a297604b6013d19cc1687daae8c55d62b`** — **#1216** squash-merged 2026-10-10T15:43:06Z. **`origin/main` = local `main`** verified 2026-10-11 (no new commits). |
+| **Merged on `main` (Oct 10)** | **#1208** research reference fills · **#1209** actual bracket R:R · **#1210** combined QA · **#1211** timeframe integrity helper · **#1216** 400-tick paper + 300-tick demo cap. Independent breaker sign-off on merged heads is **not re-run here**. |
+| **Recorded branch** | `research/4hr-mnq-400-forward-rebase-20261010` @ **`94a71bd`**. Remote branch **deleted** after merge. Local branch remains. Its tree **equals** `58d4cd6`. |
+| **Deployed release** | **`94a71bdbb975b53f21a81b7084482ea3c5270ceb`**. Promoted 2026-10-10T15:45:33Z **before** #1216 merge; tree **equals** `58d4cd6`. **Do not deploy or restart again.** Box **UNVERIFIED** after 2026-10-10T15:52Z. |
+| **Verdict** | **HOLD.** Live trading off, Tradovate demo, 1 contract, account flat (checkpoint claim), demo stop cap **300**, paper `wide_stop_4k` **400** on **`main`**, rollback pointer `c44d32bc`. Wide-stop demo lane was **already armed** at promote. Operator GO required for any further runtime action. |
+| **DO NOT deploy** | `2f4f776`, any second promote of #1216, or redeploy “to pick up” #1208–#1211 (already on `main` at `58d4cd6`). Do not roll back unless separate operator GO. |
+| **Track B / E-2026-10-09** | Spec **`docs/research-experiment-specs/E-2026-10-09-4hr-mnq-400-forward-01.json`** is **APPROVED**; first eligible session **2026-10-12**. **`main` now matches the 400-tick paper cell** (#1216); separate research-branch deploy is **not required for stop cap** if box SHA matches `94a71bd`/`58d4cd6`. **`docs/futures-track-b-forward-readiness-2026-10-10.md` §2** (300-tick on `main`) is **stale** — use this table. |
+| **Daily tsmom prereg** | **#1218** open · branch `research/equity-index-daily-tsmom-forward-20261010` @ **`5ef8a1e`** — **PLANNED**, log only, no score before 40 round-turns, **no deploy** |
+| **Open futures PRs (not HOLD deploy)** | **#1217** (draft) MNQ seal guard · **#1219** (draft) six-micro paper cleanup · **#1214** (draft) handoff docs |
 | **Public resume** | `docs/futures-research-resume-checkpoint-2026-10-10.md` (+ Cursor + Claude options appendices) |
-| **Options ETF handoff** | Branch **`claude/options-time-exit-research-20261010`** **deleted** from GitHub (2026-10-10 cleanup); copy in **`/workspace/afs-shared/`** if needed — **unverified here** |
-| **Saved 4HR benchmark** | `docs/research-notes/4hr-mnq-400-historical-benchmark-2026-10-10/` (on **research** branch) |
-| **Saved ORB/VWAP sweeps** | `docs/research-notes/orb-vwap-tf-window-sweep-2026-10-10/` (on **research** branch) |
-| **Forward 4HR start** | **2026-10-12** — Track B; not collected, not deployed |
+| **Options ETF research** | **`origin/claude/options-time-exit-research-20261010`** @ **`9973f7e`** — **unmerged**; not on `main`. Prior “branch deleted” note was **wrong**; optional copy in **`/workspace/afs-shared/`** — unverified here. |
+| **Saved 4HR benchmark** | `docs/research-notes/4hr-mnq-400-historical-benchmark-2026-10-10/` (on **`main`** via #1216) |
+| **Saved ORB/VWAP sweeps** | `docs/research-notes/orb-vwap-tf-window-sweep-2026-10-10/` (on **`main`** via #1216) |
+| **Forward 4HR start** | **2026-10-12** — forward fills **not collected** yet; requires read-only box proof before counting (see **NEXT**) |
 | **Step 4 parity doc** | `docs/futures-demo-step4-1m-vs-5m-ioc-parity-2026-10-10.md` |
-| **Track B readiness** | `docs/futures-track-b-forward-readiness-2026-10-10.md` |
+| **Track B readiness** | `docs/futures-track-b-forward-readiness-2026-10-10.md` (§2 updated 2026-10-11; §4.3 box gates still apply) |
 | **Deferred cleanup list** | `docs/repo-hygiene-deferred-removal-tracker-2026-10-10.md` (classify only; delete at end) |
-| **Verdict** | **NOT DEMO-READY** — Track B forward after reviewed deploy of **research** SHA; Track A 1m observer parallel |
+| **Unreviewed later branch** | **`fix/mnq-seal-research-guard-20261010`** / **#1217** — on origin, **not** in this HOLD |
 
 **DO NOT REDO:** gzip 4HR cell reproduction; ORB/VWAP TF×window sweeps (baseline + trending + orb48); Grok PASS work on merged **#1208**/**#1209**; Sep decompositions listed below.
 
-**NEXT:** Grok reviews the Track B SHA on [#1216](https://github.com/imanisworld/autonomous-futures-system/pull/1216). Demo stays **300** ticks / **$150**; paper stays **400**. A 350-tick setup is refused on demo and admitted on paper. Do not deploy. 1m arm fills/costs **not implemented**. **NOT done:** deploy, forward collection, DEMO-ready claim, tsmom score.
+**NEXT:** (1) **2026-10-12 session open:** read-only VPS checklist — deployed SHA `94a71bd`/`58d4cd6`, demo/live pins, flat account, 5m feed + wide-stop collector/journal append, separate **paper 400t** vs **demo 300t** labels; 1m observer counts. No deploy/restart. (2) Operator confirms promoted release stays up. (3) Count Track B fills only from **2026-10-12** onward. 1m arm DEMO wiring **not implemented**.
 
 Prior chat context for this session is **closed**. Section below is coordination archive unless stale.
 
@@ -36,11 +40,11 @@ Prior chat context for this session is **closed**. Section below is coordination
 - The previously broken 4HR natural-1m observer was **repaired** and had a canonical evidence epoch independently documented as started **2026-10-04T21:30:05Z**, release `c44d32b`; do **not** rebuild it or backfill the invalid Sep 18–Oct 4 interval. Current runtime state/event count as of Oct 10 is **UNVERIFIED here**, because the Mac connector was offline. See `docs/4hr-natural-1m-observation-epoch-2026-10-01.md`.
 
 **Step 2 results / Step 3 lead (evidence-only, not a new Inventory verdict):**
-- **Primary:** MNQ **4HR Re-Trigger — broad pre-armed trigger**, not the post-hoc 4H-2→2 treatment. The corrected pre-armed historical fills retain a positive net sign across chronological halves and adverse ticks, with a larger sample than 3-2-2. Risk stop cap and 2R global minimum exclude most trades; *this is not a justification to loosen account safety*. The existing isolated `wide_stop_4k` paper cell is **300 ticks / 1.0 R:R / 8-tick completed-5m IOC**, which is not identical to 1m pre-armed execution. Its valid IOC fill participation is low. Do not pretend this established 1m DEMO edge.
+- **Primary:** MNQ **4HR Re-Trigger — broad pre-armed trigger**, not the post-hoc 4H-2→2 treatment. The corrected pre-armed historical fills retain a positive net sign across chronological halves and adverse ticks, with a larger sample than 3-2-2. Risk stop cap and 2R global minimum exclude most trades; *this is not a justification to loosen account safety*. On **`main` after #1216**, the isolated `wide_stop_4k` **paper** cell is **400 ticks / 1.0 R:R / 8-tick completed-5m IOC** (demo orders capped at **300**), which is not identical to 1m pre-armed execution. Its valid IOC fill participation is low. Do not pretend this established 1m DEMO edge.
 - **Comparator:** MNQ **60M 3-2-2 First Live**; corrected historical sample is smaller (32 terminal, no stop hits) and cannot be called validated; its preregistered forward 1m touch proof is still required.
 - **Hold:** MGC wide is a **blinded** distinct prospective trial; Miyagi lacks sample/engine, MES 4HR historically failed, and the already rejected UTC-timeframe momentum/ORB/VWAP variants are **DO NOT REDO**. Do not change the authoritative Strategy Inventory or `research-trial-ledger.jsonl` without an actual registered state/approved decision. Full numeric findings are in the operator's private ChatGPT Library handoff `/Futures Research/Futures Research Handoff - 2026-10-10.md`, not for this public repository.
 
-**Step 1 source fixes (open drafts, no independent reviewer approval):** #1208 strict next-executable-price research fill, #1209 actual-bracket R:R and protective stop direction, #1210 combined QA, #1211 explicit anchor and complete/cross-contract bar validation. Each passed Python CI on earlier exact heads; retrieve current head/CI/reviews before any review or merge. #1211 is a **new-study isolated helper**, not a change to the frozen MGC scorer. Method comparison and public-safe notes: `docs/futures-research-resume-checkpoint-2026-10-10.md` on #1211.
+**Step 1 source fixes — MERGED to `main` 2026-10-10 (DO NOT re-merge):** #1208 strict next-executable-price research fill, #1209 actual-bracket R:R and protective stop direction, #1210 combined QA, #1211 explicit anchor and complete/cross-contract bar validation. Exact-head CI was green on merge heads; **independent breaker PASS on deployed tree is not recorded here.** #1211 remains a **new-study isolated helper**, not wired to the frozen MGC scorer. Method comparison: `docs/futures-research-resume-checkpoint-2026-10-10.md`.
 
 **Step 4 DEMO parity report (2026-10-10):** `docs/futures-demo-step4-1m-vs-5m-ioc-parity-2026-10-10.md` — source-only. **Conclusion:** existing DEMO/paper wide-stop = **5m close IOC8**; primary historical lead = **1m pre-armed touch**; honest DEMO tests Track B unless/until approved wiring for Track C. VPS box check still **open**.
 
@@ -52,7 +56,7 @@ Prior chat context for this session is **closed**. Section below is coordination
 **Agent next tasks without duplication:**
 - **Grok (research):** identify *unexamined* causal 4HR failure conditions or truly distinct strategy ideas; do not rerun closed grids or tune exhausted same-fold samples. Provide prereg hypothesis only; no orders or config edits.
 - **Cursor (builder/test runner):** inspect the existing 4HR paper-vs-natural-1m DEMO route, then produce the **smallest source-only QA/parity change** that closes a demonstrated defect; respect existing observer/ledger names and frozen epochs. Run focused + exact-head full CI. Do not deploy.
-- **Claude/Codex (independent breaker):** review #1208–#1211 and the mechanism/DEMO path, attack stop-first, timestamp alignment, order-route isolation, gap stops, risk arithmetic, intrabar lookahead. Independent PASS/FAIL, not a fresh duplicate test suite.
+- **Claude/Codex (independent breaker):** post-merge review of **`58d4cd6`** (#1208–#1211 + #1216) and the mechanism/DEMO path; attack stop-first, timestamp alignment, order-route isolation, gap stops, risk arithmetic, intrabar lookahead. Independent PASS/FAIL on **deployed** tree, not a fresh duplicate test suite.
 - **ChatGPT/operator (lead):** reconcile verified agent reports by exact SHA, nominate one narrowly defined **approved/preregistered** new analysis only if genuinely unresolved, choose a viable position-risk/margin budget based on documented stops, and withhold DEMO progression until both profitability and mechanism proof are established.
 
 **DONE criterion for this step:** Preserve state, proofs, blockers, and agent owners; don't restart full repo audit. **Current status: NOT DEMO-READY; no net-positive forward proof in this session.**

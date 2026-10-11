@@ -9,11 +9,13 @@
 - [x] Grok sign-off on #1208 / #1209 (merged on `main` @ `a675a8d`)
 - [x] **#1211** merged on `main` @ `71e5f45`
 - [x] **#1210** @ `7d766b2` → **`465abc2`**; **#1212** @ `9df1a09` → **`05363a4`**; **#1213** @ `730ef53` → **`6d3078f`**
-- [ ] Track B decision: research SHA deployed **or** forward prereg explicitly paused with SHA frozen in checkpoint
+- [x] Track B **400-tick paper cell on `main` (#1216)**; one promote **`94a71bd`** tree-identical to `58d4cd6` — **no second deploy**; forward scoring from **2026-10-12** after box read (2026-10-11)
 - [ ] Claude options handoff merged/archived on GitHub (`claude/options-time-exit-research-20261010` @ `a30f0a6` or successor)
 - [ ] Any open PR you still care about is **merged, closed, or copied** to `main`/checkpoint docs
 
-**Snapshot:** Mac checkout @ `8c57d84` (#1211); ~105 remote branch refs; ~**1.3 GB** `private/`; ~**2.3 GB** ignored `data/replay*`.
+**Snapshot:** Mac checkout @ `58d4cd6` (`main`, 2026-10-11); ~105 remote branch refs; ~**1.3 GB** `private/` (partial cleanup below); ~**2.3 GB** ignored `data/replay*`.
+
+**2026-10-11 cleanup performed (local Mac, this session):** deleted merged futures scratch branches (see §4); removed `private/research-notes-2026-10-10`, `private/prune-review`, `private/cross_market_grid_2026_09_23`, `private/grid_2026_09_21` (~**272 MB**). **Not deleted:** `private/trading-evidence-*`, replay corpora, external worktrees (#1218 tsmom worktree kept).
 
 ---
 
@@ -75,11 +77,13 @@ Not in git; tests may expect paths under `data/replay*`, `data/htf/`, etc. (see 
 
 | Branch | PR / state (2026-10-10) | Deferred action | Block until |
 |---|---|---|---|
-| `fix/timeframe-causal-buckets-research-20261010` | #1211 OPEN | **KEEP** → delete local after merge to `main` | PR merged |
-| `research/4hr-mnq-400-forward-20261009` | no PR; on origin | **KEEP** → delete after deploy or abandon recorded | Track B GO + deploy or explicit cancel |
-| `fix/strict-paper-reference-fills-20261009` | #1208 OPEN | remote only after merge | #1208 merged |
-| `fix/rr-verify-actual-bracket-20261009` | #1209 OPEN | remote only after merge | #1209 merged |
-| `test/combined-execution-risk-20261010` | #1210 OPEN | remote only after merge | #1210 merged |
+| `fix/timeframe-causal-buckets-research-20261010` | #1211 **MERGED** | **DONE** delete local when present | — |
+| `research/4hr-mnq-400-forward-20261009` | superseded by #1216 on `main` | **DONE** delete **local** 2026-10-11; **KEEP `origin/`** until Phase 2 archive | — |
+| `research/4hr-mnq-400-forward-rebase-20261010` | #1216 **MERGED** | **DONE** delete local 2026-10-11 | — |
+| `fix/strict-paper-reference-fills-20261009` | #1208 **MERGED** | delete local/remote when GitHub auto-deleted | — |
+| `fix/rr-verify-actual-bracket-20261009` | #1209 **MERGED** | same | — |
+| `test/combined-execution-risk-20261010` | #1210 **MERGED** | same | — |
+| `feat/4hr-5m-join-provenance-v2-20261010`, `fix/4hr-join-mutant-tests-20261010`, `pr-1210`, `pr-1212`, `pr-1213`, `test/4hr-evidence-join-reconcile-20261010` | merged into #1216 lineage | **DONE** delete local 2026-10-11 | — |
 | `claude/options-time-exit-research-20261010` | pushed; no PR | **KEEP** until options lane archived | Handoff merged or waived |
 | `claude/capped-session-reporting` | #1207 OPEN | delete after close | #1207 |
 | `ops/cursor-cloud-vps-maintenance` | #1206 OPEN | delete after close | #1206 |
@@ -120,9 +124,9 @@ These look like “old research” but are **authoritative or DO NOT REDO**:
 
 | Artifact | Location |
 |---|---|
-| 4HR benchmark + forward prereg | `research/4hr-mnq-400-forward-20261009` branch |
-| ORB/VWAP sweep results | `docs/research-notes/orb-vwap-tf-window-sweep-2026-10-10/` (on research branch) |
-| Futures checkpoints (2026-10-10) | #1211 branch docs |
+| 4HR benchmark + forward prereg | **`main`** @ #1216 + `docs/research-experiment-specs/E-2026-10-09-4hr-mnq-400-forward-01.json` |
+| ORB/VWAP sweep results | `docs/research-notes/orb-vwap-tf-window-sweep-2026-10-10/` on **`main`** |
+| Futures checkpoints (2026-10-10) | `docs/futures-*-2026-10-10.md`, `docs/agent-work-state.md` on **`main`** |
 | Claude options handoff | `claude/options-time-exit-research-20261010` |
 | Strategy inventory / trial ledger | `docs/strategy-rules/Strategy_Inventory.md`, `docs/research-trial-ledger.jsonl` |
 
