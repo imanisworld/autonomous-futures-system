@@ -15,7 +15,7 @@
 
 **Snapshot:** Mac checkout @ `58d4cd6` (`main`, 2026-10-11); ~105 remote branch refs; ~**1.3 GB** `private/` (partial cleanup below); ~**2.3 GB** ignored `data/replay*`.
 
-**2026-10-11 cleanup performed (local Mac, this session):** deleted merged futures scratch branches (see §4); removed `private/research-notes-2026-10-10`, `private/prune-review`, `private/cross_market_grid_2026_09_23`, `private/grid_2026_09_21` (~**272 MB**). **Not deleted:** `private/trading-evidence-*`, replay corpora, external worktrees (#1218 tsmom worktree kept).
+**2026-10-11 cleanup performed (local Mac):** merged futures branches (§4); `private/research-notes-2026-10-10`, `prune-review`, `cross_market_grid_2026_09_23`, `grid_2026_09_21` (~272 MB); **`private/trading-evidence-2026-10-09`**, **`mes598-proof`**, **`profitability-review-2026-10-08`** (~**956 MB**); **`data/cross_market_2026_09_23`** (~**573 MB**). **Kept:** replay corpora (§2), worktrees, `paper-card-899`, `webull-proof`.
 
 ---
 

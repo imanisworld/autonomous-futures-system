@@ -1,15 +1,16 @@
 # Agent Work State
 
-## START HERE — git refresh 2026-10-11; box last read 2026-10-10T15:52Z (HOLD)
+## START HERE — git `5995da6`; box read-only 2026-10-11 ~14:05Z (HOLD)
 
 Read **only** this block + `AGENTS.md` unless drift is detected. Private numeric handoff: ChatGPT Library `/Futures Research/Futures Research Handoff - 2026-10-10.md`.
 
 | Item | Value |
 |---|---|
-| **GitHub `main`** | **`58d4cd6a297604b6013d19cc1687daae8c55d62b`** — **#1216** squash-merged 2026-10-10T15:43:06Z. **`origin/main` = local `main`** verified 2026-10-11 (no new commits). |
+| **GitHub `main`** | **`5995da6`** (docs checkpoint refresh) on **`origin/main`**; runtime release **`94a71bd`** tree-identical to **`58d4cd6`** (#1216). |
 | **Merged on `main` (Oct 10)** | **#1208** research reference fills · **#1209** actual bracket R:R · **#1210** combined QA · **#1211** timeframe integrity helper · **#1216** 400-tick paper + 300-tick demo cap. Independent breaker sign-off on merged heads is **not re-run here**. |
 | **Recorded branch** | `research/4hr-mnq-400-forward-rebase-20261010` @ **`94a71bd`**. Remote branch **deleted** after merge. Local branch remains. Its tree **equals** `58d4cd6`. |
-| **Deployed release** | **`94a71bdbb975b53f21a81b7084482ea3c5270ceb`**. Promoted 2026-10-10T15:45:33Z **before** #1216 merge; tree **equals** `58d4cd6`. **Do not deploy or restart again.** Box **UNVERIFIED** after 2026-10-10T15:52Z. |
+| **Deployed release** | **`94a71bd`** — symlink **`/root/autonomous-futures-system` → `/root/afs-releases/94a71bd…`** (**match YES**, read 2026-10-11). **Do not deploy or restart again.** Docs-only **`5995da6`** is **not** on the box. |
+| **Box read (2026-10-11)** | **`futures-bot` active**; **`LIVE_TRADING_ENABLED=false`**, **`TRADOVATE_ENV=demo`**, **`MAX_CONTRACTS_HARD_CAP=1`**, **`FIVE_MIN_FEED_ENABLED=true`**, **`WIDE_STOP_LEDGER_MODE=paper_sim`**; **`WIDE_STOP_DEMO_EXECUTION_ENABLED=true`**; 1m **`ONE_MIN_TRIGGER_ENABLED` + `ONE_MIN_4HR_OBSERVER_ENABLED=true`**; **`has_open_position=false`**; live preflight **disarmed** (`heartbeat_fresh` check false — note for Monday); **no deploy lock file**; API **:8000** `/health` OK. Daily journal files through **2026-10-09** (Sunday 2026-10-11 — market closed). |
 | **Verdict** | **HOLD.** Live trading off, Tradovate demo, 1 contract, account flat (checkpoint claim), demo stop cap **300**, paper `wide_stop_4k` **400** on **`main`**, rollback pointer `c44d32bc`. Wide-stop demo lane was **already armed** at promote. Operator GO required for any further runtime action. |
 | **DO NOT deploy** | `2f4f776`, any second promote of #1216, or redeploy “to pick up” #1208–#1211 (already on `main` at `58d4cd6`). Do not roll back unless separate operator GO. |
 | **Track B / E-2026-10-09** | Spec **`docs/research-experiment-specs/E-2026-10-09-4hr-mnq-400-forward-01.json`** is **APPROVED**; first eligible session **2026-10-12**. **`main` now matches the 400-tick paper cell** (#1216); separate research-branch deploy is **not required for stop cap** if box SHA matches `94a71bd`/`58d4cd6`. **`docs/futures-track-b-forward-readiness-2026-10-10.md` §2** (300-tick on `main`) is **stale** — use this table. |
