@@ -1,12 +1,12 @@
 # Agent Work State
 
-## START HERE — git `02fb53c`; box six-micro + timer 2026-10-11 ~14:50Z (HOLD wide-stop)
+## START HERE — git `119c28d`; box six-micro + timer 2026-10-11 ~14:50Z (HOLD wide-stop)
 
 Read **only** this block + `AGENTS.md` unless drift is detected. Private numeric handoff: ChatGPT Library `/Futures Research/Futures Research Handoff - 2026-10-10.md`.
 
 | Item | Value |
 |---|---|
-| **GitHub `main`** | **`02fb53c`** on **`origin/main`** (**#1218** merge **`f8d4845`** + merge checkpoint docs). **`futures-bot` live symlink** still **`94a71bd`** ≡ **`58d4cd6`** (#1216) — **no global promote / no restart** 2026-10-11. |
+| **GitHub `main`** | Local **`119c28d`** (NR7/Keltner trial **`75015af`**/**`a10668e`** + checkpoint); **`origin/main`** was **`02fb53c`** at last fetch — **push unverified**. **`futures-bot` live symlink** still **`94a71bd`** ≡ **`58d4cd6`** (#1216) — **no global promote / no restart** 2026-10-11. |
 | **Merged on `main` (Oct 10)** | **#1208** research reference fills · **#1209** actual bracket R:R · **#1210** combined QA · **#1211** timeframe integrity helper · **#1216** 400-tick paper + 300-tick demo cap. Independent breaker sign-off on merged heads is **not re-run here**. |
 | **Recorded branch** | `research/4hr-mnq-400-forward-rebase-20261010` @ **`94a71bd`**. Remote branch **deleted** after merge. Local branch remains. Its tree **equals** `58d4cd6`. |
 | **Deployed release** | **`94a71bd`** — symlink **`/root/autonomous-futures-system` → `/root/afs-releases/94a71bd…`**; **`EXPECTED_LIVE_COMMIT=94a71bd…`** (**match YES**, re-read 2026-10-11 post-install). **Do not `futures-bot` restart** without drift proof. Side release **`f8d4845…`** built+verified on box for six-micro only (not live symlink). |
