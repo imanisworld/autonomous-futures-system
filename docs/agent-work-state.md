@@ -1,12 +1,12 @@
 # Agent Work State
 
-## START HERE — git `12931dc`; box six-micro + timer 2026-10-11 ~14:50Z (HOLD wide-stop)
+## START HERE — source `4d56333` / #1222 merged; box checkpoint remains 2026-10-11 ~14:50Z (HOLD wide-stop)
 
 Read **only** this block + `AGENTS.md` unless drift is detected. Private numeric handoff: ChatGPT Library `/Futures Research/Futures Research Handoff - 2026-10-10.md`.
 
 | Item | Value |
 |---|---|
-| **GitHub `main`** | **`12931dc`** on **`origin/main`** (includes NR7/Keltner trial **`75015af`**/**`a10668e`**). **`futures-bot` live symlink** still **`94a71bd`** ≡ **`58d4cd6`** (#1216) — **no global promote / no restart** 2026-10-11. |
+| **GitHub `main` (source, 2026-10-11)** | **`4d563332757a28ccf39928634101bab34044f2cc`** (merged options research-only #1222; NR7/Keltner earlier at `75015af`/`a10668e`). Most recent *reported* `futures-bot` deployed symlink still **`94a71bd`** (#1216); **not re-read for this docs update**. No global promote/restart. |
 | **Merged on `main` (Oct 10)** | **#1208** research reference fills · **#1209** actual bracket R:R · **#1210** combined QA · **#1211** timeframe integrity helper · **#1216** 400-tick paper + 300-tick demo cap. Independent breaker sign-off on merged heads is **not re-run here**. |
 | **Recorded branch** | `research/4hr-mnq-400-forward-rebase-20261010` @ **`94a71bd`**. Remote branch **deleted** after merge. Local branch remains. Its tree **equals** `58d4cd6`. |
 | **Deployed release** | **`94a71bd`** — symlink **`/root/autonomous-futures-system` → `/root/afs-releases/94a71bd…`**; **`EXPECTED_LIVE_COMMIT=94a71bd…`** (**match YES**, re-read 2026-10-11 post-install). **Do not `futures-bot` restart** without drift proof. Side release **`f8d4845…`** built+verified on box for six-micro only (not live symlink). |
@@ -18,6 +18,7 @@ Read **only** this block + `AGENTS.md` unless drift is detected. Private numeric
 | **Open futures PRs (not HOLD deploy)** | **#1217** (draft) MNQ seal guard · **#1219** (draft) six-micro paper cleanup · **#1214** (draft) handoff docs |
 | **Public resume** | `docs/futures-research-resume-checkpoint-2026-10-10.md` (+ Cursor + Claude options appendices) |
 | **Options ETF research** | Remote **`claude/options-time-exit-research-20261010`** **deleted 2026-10-11** (operator GO; contained trade files). Not on `main`. |
+| **Options edge screen / #1222** | **SOURCE MERGED / QA PASS** at `4d56333` (2026-10-11): 66 names / 110 sessions, pullback + failed-break **KEEP FOR RESEARCH**, compression **REJECT**. No approved options-profitability trial; no deployment. Details: `docs/options-current-state-handoff.md` and `docs/research-notes/options-underlying-edge-2026-10-11/`. 1-2-2 SIP underlying reconciliation done (443 separate rows), **101 entry quotes / no option exits**; prospective exit spec design only. **No further strategy research.** |
 | **Saved 4HR benchmark** | `docs/research-notes/4hr-mnq-400-historical-benchmark-2026-10-10/` (on **`main`** via #1216) |
 | **Saved ORB/VWAP sweeps** | `docs/research-notes/orb-vwap-tf-window-sweep-2026-10-10/` (on **`main`** via #1216) |
 | **Vault NR7 + Keltner exploratory** | **`T-2026-10-11-exploratory-nr7-keltner-capital-unconstrained-01`** — closed **RESEARCH_ONLY** / **FAIL**; artifacts `docs/research-notes/capital-unconstrained-strategy-research-2026-10-11/` + ledger evidence dir |
@@ -29,7 +30,7 @@ Read **only** this block + `AGENTS.md` unless drift is detected. Private numeric
 
 **DO NOT REDO:** gzip 4HR cell reproduction; ORB/VWAP TF×window sweeps (baseline + trending + orb48); Grok PASS work on merged **#1208**/**#1209**; Sep decompositions listed below; **NR7ID + Keltner KC-long** capital-unconstrained exploratory (`T-2026-10-11-exploratory-nr7-keltner-capital-unconstrained-01`).
 
-**NEXT:** (1) **Builder/VPS:** confirm **`six-micro-daily-tsmom.timer`** enabled+active after operator **TIMER ON** GO (**unverified** from Mac this turn). (2) **2026-10-12 ~17:17 ET:** operator Track B check; **17:10 ET** first scheduled six-micro collect. (3) **2026-10-19:** Polygon check (operator). (4) Wide-stop live symlink stays **`94a71bd`** — no global promote to **`f8d4845`**.
+**OPTIONS STOP:** #1222 QA + merge complete; do not re-run the 66-name screen or start an options trial. New strategy research is HOLD; Options Paper V1 current-epoch accounting is a separate unresolved workstream. **NEXT (futures only):** (1) **Builder/VPS:** confirm **`six-micro-daily-tsmom.timer`** enabled+active after operator **TIMER ON** GO (**unverified** from Mac this turn). (2) **2026-10-12 ~17:17 ET:** operator Track B check; **17:10 ET** first scheduled six-micro collect. (3) **2026-10-19:** Polygon check (operator). (4) Wide-stop live symlink stays **`94a71bd`** — no global promote to **`f8d4845`**.
 
 Prior chat context for this session is **closed**. Section below is coordination archive unless stale.
 
