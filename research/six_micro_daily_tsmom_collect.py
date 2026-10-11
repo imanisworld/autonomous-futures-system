@@ -151,8 +151,12 @@ def prints_for_listed_front(
     *,
     start: date,
     end: date,
-) -> list[SessionPrint]:
-    """One print per day from listed_front, not from the month code."""
+) -> tuple[list[SessionPrint], list[tuple[date, str]]]:
+    """Prints from listed_front, plus days whose listed front has no complete bar.
+
+    A missing front bar is not replaced by another contract. A day with bars
+    but no valid listing still fails closed.
+    """
     by_ticker: dict[str, list[PolygonBar]] = {}
     for bar in bars:
         by_ticker.setdefault(bar.ticker.strip().upper(), []).append(bar)
@@ -164,14 +168,17 @@ def prints_for_listed_front(
         }
     days = sorted({day for by_day in printed.values() for day in by_day})
     chosen: list[SessionPrint] = []
+    missing: list[tuple[date, str]] = []
     for day in days:
         ticker = listed_front(root, rows, day)
         if ticker is None:
-            continue
+            raise PolygonError(f"{root} has bars but no valid listing for {day}")
         print_ = printed.get(ticker, {}).get(day)
-        if print_ is not None:
-            chosen.append(print_)
-    return chosen
+        if print_ is None:
+            missing.append((day, ticker))
+            continue
+        chosen.append(print_)
+    return chosen, missing
 
 
 def _with_roll_open(prints: list[SessionPrint], bars: list[PolygonBar]) -> list[SessionPrint]:
@@ -255,10 +262,12 @@ def collect_listed(
             if listings is not None
             else client.fetch_contract_listings(root, tickers)
         )
-        prints = _with_roll_open(
-            prints_for_listed_front(root, bars, rows, start=fetch_from, end=end),
-            bars,
+        chosen, missing = prints_for_listed_front(
+            root, bars, rows, start=fetch_from, end=end,
         )
+        for session, ticker in missing:
+            ledger.note_front_bar_missing(root, session, ticker)
+        prints = _with_roll_open(chosen, bars)
         counts[root] = _store_prints(ledger, root, prints)
     return counts
 

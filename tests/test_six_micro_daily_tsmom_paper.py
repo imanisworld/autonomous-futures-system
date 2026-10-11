@@ -103,8 +103,10 @@ def test_ineligible_session_does_not_open_and_exact_front_is_required(tmp_path: 
         session_close=201.0,
     )) == []
     assert not any(row["kind"] == "OPEN" for row in early)
+    wrong_front = "MNQH6"
+    assert front_contract("MNQ", FIRST_ELIGIBLE) != wrong_front
     mismatch = ledger.on_session(SessionPrint(
-        session=FIRST_ELIGIBLE, root="MNQ", contract="MNQ_NOT_FRONT",
+        session=FIRST_ELIGIBLE, root="MNQ", contract=wrong_front,
         rth_open=202.0, session_close=203.0,
     ))
     assert mismatch[0]["kind"] == "FRONT_MISMATCH"
@@ -170,10 +172,12 @@ def test_front_mismatch_stores_the_close_once(tmp_path: Path):
     ledger = PaperLedger(tmp_path)
     _warmup(ledger, "MNQ", _scheduled("MNQ"))
     before = len(ledger.state["closes"]["MNQ"])
+    wrong_front = "MNQH6"
+    assert front_contract("MNQ", FIRST_ELIGIBLE) != wrong_front
     bar = SessionPrint(
         session=FIRST_ELIGIBLE,
         root="MNQ",
-        contract="MNQ_NOT_FRONT",
+        contract=wrong_front,
         rth_open=202.0,
         session_close=203.0,
     )
@@ -313,3 +317,36 @@ def test_exit_before_first_eligible_does_not_count(tmp_path: Path):
     event = ledger._exit("MNQ", later_entry, date(2026, 10, 9), 110.0)
     assert ledger.round_turns == 0
     assert event["counts_toward_forty"] is False
+
+
+def test_contract_must_match_root(tmp_path: Path):
+    ledger = PaperLedger(tmp_path)
+    with pytest.raises(ValueError, match="contract mismatch"):
+        ledger.on_session(SessionPrint(
+            session=FIRST_ELIGIBLE,
+            root="MNQ",
+            contract="MESZ6",
+            rth_open=1.0,
+            session_close=1.0,
+        ))
+    assert "MNQ" not in ledger.state["closes"]
+
+
+def test_out_of_order_session_is_refused(tmp_path: Path):
+    ledger = PaperLedger(tmp_path)
+    ledger.on_session(SessionPrint(
+        session=date(2026, 10, 9),
+        root="MGC",
+        contract="MGCZ6",
+        rth_open=1.0,
+        session_close=1.0,
+    ))
+    with pytest.raises(ValueError, match="out-of-order"):
+        ledger.on_session(SessionPrint(
+            session=date(2026, 10, 8),
+            root="MGC",
+            contract="MGCZ6",
+            rth_open=1.0,
+            session_close=1.0,
+        ))
+    assert ledger.stored_sessions("MGC") == {date(2026, 10, 9)}

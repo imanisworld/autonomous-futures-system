@@ -13,7 +13,7 @@ from datetime import date
 from pathlib import Path
 from typing import Optional
 
-from config.futures_contracts import tick_size, tick_value
+from config.futures_contracts import contract_root, tick_size, tick_value
 from sources.polygon_client import PolygonError, front_contract
 
 TRIAL_ID = "T-2026-10-10-prereg-six-micro-daily-tsmom-forward-2026-10-10-01"
@@ -122,10 +122,15 @@ class PaperLedger:
             raise ValueError(f"{root} is not one of the six frozen micros")
         if not bar.contract.strip():
             raise ValueError("dated contract ticker is required")
+        if contract_root(bar.contract) != root:
+            raise ValueError(f"{root} contract mismatch: {bar.contract}")
         events: list[dict] = []
         closes: list = self.state["closes"].setdefault(root, [])
-        if bar.session in self.stored_sessions(root):
+        admitted = self.stored_sessions(root)
+        if bar.session in admitted:
             return []
+        if admitted and bar.session < max(admitted):
+            raise ValueError(f"{root} refuses out-of-order session {bar.session}")
         if root in SCHEDULED_ROOTS and not self._scheduled_front_ok(bar, root):
             self._record_close(closes, bar)
             event = {
@@ -222,6 +227,30 @@ class PaperLedger:
         self._record_close(closes, bar)
         self._save(events)
         return events
+
+    def note_front_bar_missing(self, root: str, session: date, contract: str) -> None:
+        """Journal one missing listed-front bar. No close, no fill, no substitute."""
+        root_name = root.strip().upper()
+        if root_name not in ROOTS:
+            raise ValueError(f"{root_name} is not one of the six frozen micros")
+        ticker = contract.strip().upper()
+        if contract_root(ticker) != root_name:
+            raise ValueError(f"{root_name} contract mismatch: {contract}")
+        missing = self.state.setdefault("front_bar_missing", {})
+        seen = {str(item) for item in missing.get(root_name, [])}
+        key = session.isoformat()
+        if key in seen or session in self.stored_sessions(root_name):
+            return
+        event = {
+            "trial_id": TRIAL_ID,
+            "kind": "FRONT_BAR_MISSING",
+            "root": root_name,
+            "session": key,
+            "contract": ticker,
+        }
+        seen.add(key)
+        missing[root_name] = sorted(seen)
+        self._save([event])
 
     def _record_close(self, closes: list, bar: SessionPrint) -> None:
         pre_registration = bar.session <= PRE_REGISTRATION_THROUGH
