@@ -1,0 +1,27 @@
+{
+  "trial_id": "T-2026-10-11-exploratory-nr7-keltner-capital-unconstrained-01",
+  "recorded_at": "2026-10-11T19:10:00Z",
+  "evidence_class": "exploratory_historical_pre_seal",
+  "verdict_summary": "Both variants FAIL economics; NR7 also INSUFFICIENT_EVIDENCE (n=5). No promotion.",
+  "variants": {
+    "nr7_inside_day": {
+      "valid_trades": 5,
+      "net_usd": -1139.9,
+      "profit_factor": 0.061,
+      "expectancy_usd": -227.98,
+      "max_drawdown_usd": 1139.9,
+      "verdict": "INSUFFICIENT_EVIDENCE"
+    },
+    "keltner_kc_long": {
+      "trade_count": 61,
+      "net_usd": -2022.44,
+      "profit_factor": 0.863,
+      "expectancy_usd": -33.15,
+      "max_drawdown_usd": 4474.24,
+      "verdict": "FAIL"
+    }
+  },
+  "lead_in_repo_unchanged": "MNQ 4HR Re-Trigger AWAITING FORWARD EVIDENCE (Track B E-2026-10-09)",
+  "artifact_notes": "Full JSON under docs/research-notes/capital-unconstrained-strategy-research-2026-10-11/",
+  "disposition": "RESEARCH_ONLY"
+}
