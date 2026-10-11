@@ -228,6 +228,30 @@ class PaperLedger:
         self._save(events)
         return events
 
+    def note_front_bar_missing(self, root: str, session: date, contract: str) -> None:
+        """Journal one missing listed-front bar. No close, no fill, no substitute."""
+        root_name = root.strip().upper()
+        if root_name not in ROOTS:
+            raise ValueError(f"{root_name} is not one of the six frozen micros")
+        ticker = contract.strip().upper()
+        if contract_root(ticker) != root_name:
+            raise ValueError(f"{root_name} contract mismatch: {contract}")
+        missing = self.state.setdefault("front_bar_missing", {})
+        seen = {str(item) for item in missing.get(root_name, [])}
+        key = session.isoformat()
+        if key in seen or session in self.stored_sessions(root_name):
+            return
+        event = {
+            "trial_id": TRIAL_ID,
+            "kind": "FRONT_BAR_MISSING",
+            "root": root_name,
+            "session": key,
+            "contract": ticker,
+        }
+        seen.add(key)
+        missing[root_name] = sorted(seen)
+        self._save([event])
+
     def _record_close(self, closes: list, bar: SessionPrint) -> None:
         pre_registration = bar.session <= PRE_REGISTRATION_THROUGH
         closes.append({

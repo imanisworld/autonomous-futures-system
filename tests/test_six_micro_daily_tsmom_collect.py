@@ -82,9 +82,10 @@ def test_two_contracts_keep_the_sooner_expiry():
         {"ticker": "MGCZ6", "first_trade_date": "2025-12-01", "last_trade_date": "2026-12-28"},
         {"ticker": "MGCV6", "first_trade_date": "2025-10-01", "last_trade_date": "2026-10-28"},
     ]
-    prints = prints_for_listed_front(
+    prints, missing = prints_for_listed_front(
         "MGC", bars, rows, start=date(2026, 6, 29), end=date(2026, 10, 9),
     )
+    assert missing == []
     assert len(prints) == 1
     assert prints[0].contract == "MGCV6"
 
@@ -187,21 +188,59 @@ def test_missing_listing_raises_instead_of_skipping():
         )
 
 
-def test_listed_front_without_a_complete_bar_raises():
-    bars = [
-        _bar("2026-10-09T13:30:00", ticker="MGCV6", price=20),
-        _bar("2026-10-09T19:45:00", ticker="MGCV6", price=30),
-        _bar("2026-10-09T13:30:00", ticker="MGCZ6", price=50),
-    ]
+def test_missing_front_bar_is_skipped_and_the_next_day_continues(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "research.six_micro_daily_tsmom_collect.completed_through",
+        lambda _now: date(2026, 10, 14),
+    )
     rows = [
         {"ticker": "MGCZ6", "first_trade_date": "2025-12-01", "last_trade_date": "2026-10-20"},
         {"ticker": "MGCV6", "first_trade_date": "2025-10-01", "last_trade_date": "2026-11-20"},
     ]
-    assert listed_front("MGC", rows, date(2026, 10, 9)) == "MGCZ6"
-    with pytest.raises(PolygonError, match="no complete"):
-        prints_for_listed_front(
-            "MGC", bars, rows, start=date(2026, 10, 9), end=date(2026, 10, 9),
-        )
+    assert listed_front("MGC", rows, date(2026, 10, 13)) == "MGCZ6"
+
+    class Client:
+        def fetch_bars(self, ticker, _start, _end, _minutes):
+            if ticker == "MGCV6":
+                return [
+                    _bar("2026-10-13T13:30:00", ticker="MGCV6", price=20),
+                    _bar("2026-10-13T19:45:00", ticker="MGCV6", price=30),
+                ]
+            if ticker == "MGCZ6":
+                return [
+                    _bar("2026-10-14T13:30:00", ticker="MGCZ6", price=50),
+                    _bar("2026-10-14T19:45:00", ticker="MGCZ6", price=60),
+                ]
+            return []
+
+        def fetch_contract_listings(self, *_args, **_kwargs):
+            raise AssertionError("listings are injected")
+
+    counts = collect_listed(
+        tmp_path,
+        Client(),
+        start=date(2026, 10, 13),
+        end=date(2026, 10, 14),
+        listings={"MGC": rows},
+    )
+    assert set(counts) == {"MGC", "MCL", "MBT"}
+    ledger = PaperLedger(tmp_path)
+    assert date(2026, 10, 13) not in ledger.stored_sessions("MGC")
+    stored = ledger.state["closes"]["MGC"]
+    assert len(stored) == 1
+    assert stored[0]["session"] == "2026-10-14"
+    assert stored[0]["close"] == 61.0
+    lines = [
+        json.loads(line)
+        for line in (tmp_path / "round_turns.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    missing = [row for row in lines if row["kind"] == "FRONT_BAR_MISSING"]
+    assert len(missing) == 1
+    assert missing[0]["session"] == "2026-10-13"
+    assert missing[0]["contract"] == "MGCZ6"
+    assert missing[0]["root"] == "MGC"
+    assert "pnl" not in missing[0]
+    assert not any(row.get("contract") == "MGCV6" for row in lines if row["kind"] != "FRONT_BAR_MISSING")
 
 
 def test_missing_roll_does_not_halt_the_collector(tmp_path, monkeypatch):
@@ -217,14 +256,14 @@ def test_missing_roll_does_not_halt_the_collector(tmp_path, monkeypatch):
         ledger.on_session(SessionPrint(
             session=session,
             root="MGC",
-            contract="MGCZ6",
+            contract="MGCV6",
             rth_open=close,
             session_close=close,
         ))
     opened = ledger.on_session(SessionPrint(
         session=FIRST_ELIGIBLE,
         root="MGC",
-        contract="MGCZ6",
+        contract="MGCV6",
         rth_open=2000.0,
         session_close=2001.0,
     ))
@@ -232,17 +271,17 @@ def test_missing_roll_does_not_halt_the_collector(tmp_path, monkeypatch):
 
     class Client:
         def fetch_bars(self, ticker, _start, _end, _minutes):
+            if ticker == "MGCV6":
+                return [
+                    _bar("2026-10-12T13:30:00", ticker="MGCV6", price=2000),
+                    _bar("2026-10-12T19:45:00", ticker="MGCV6", price=2001),
+                ]
             if ticker == "MGCZ6":
                 return [
-                    _bar("2026-10-12T13:30:00", ticker="MGCZ6", price=2000),
-                    _bar("2026-10-12T19:45:00", ticker="MGCZ6", price=2001),
-                ]
-            if ticker == "MGCG7":
-                return [
-                    _bar("2026-10-13T13:30:00", ticker="MGCG7", price=2100),
-                    _bar("2026-10-13T19:45:00", ticker="MGCG7", price=2101),
-                    _bar("2026-10-14T13:30:00", ticker="MGCG7", price=2050),
-                    _bar("2026-10-14T19:45:00", ticker="MGCG7", price=2051),
+                    _bar("2026-10-13T13:30:00", ticker="MGCZ6", price=2100),
+                    _bar("2026-10-13T19:45:00", ticker="MGCZ6", price=2101),
+                    _bar("2026-10-14T13:30:00", ticker="MGCZ6", price=2050),
+                    _bar("2026-10-14T19:45:00", ticker="MGCZ6", price=2051),
                 ]
             return []
 
@@ -252,14 +291,14 @@ def test_missing_roll_does_not_halt_the_collector(tmp_path, monkeypatch):
     listings = {
         "MGC": [
             {
-                "ticker": "MGCZ6",
+                "ticker": "MGCV6",
                 "first_trade_date": "2026-01-01",
                 "last_trade_date": "2026-10-12",
             },
             {
-                "ticker": "MGCG7",
+                "ticker": "MGCZ6",
                 "first_trade_date": "2026-10-13",
-                "last_trade_date": "2027-02-24",
+                "last_trade_date": "2026-12-28",
             },
         ],
     }
