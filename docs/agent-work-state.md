@@ -1,12 +1,12 @@
 # Agent Work State
 
-## START HERE — git `07105a0`; box read-only 2026-10-11 ~14:05Z (HOLD)
+## START HERE — git `f8d4845`; box read-only 2026-10-11 ~14:05Z (HOLD)
 
 Read **only** this block + `AGENTS.md` unless drift is detected. Private numeric handoff: ChatGPT Library `/Futures Research/Futures Research Handoff - 2026-10-10.md`.
 
 | Item | Value |
 |---|---|
-| **GitHub `main`** | **`07105a0`** on **`origin/main`** (docs-only after **`896549b`**); runtime release **`94a71bd`** tree-identical to **`58d4cd6`** (#1216). **`#1218` code not merged yet.** |
+| **GitHub `main`** | **`f8d4845`** on **`origin/main`** — **#1218 merged** 2026-10-11 (six-micro daily TSMOM; branch head was **`e510dc4`**). Runtime release **`94a71bd`** tree-identical to **`58d4cd6`** (#1216). **Six-micro code not on box until promote.** |
 | **Merged on `main` (Oct 10)** | **#1208** research reference fills · **#1209** actual bracket R:R · **#1210** combined QA · **#1211** timeframe integrity helper · **#1216** 400-tick paper + 300-tick demo cap. Independent breaker sign-off on merged heads is **not re-run here**. |
 | **Recorded branch** | `research/4hr-mnq-400-forward-rebase-20261010` @ **`94a71bd`**. Remote branch **deleted** after merge. Local branch remains. Its tree **equals** `58d4cd6`. |
 | **Deployed release** | **`94a71bd`** — symlink **`/root/autonomous-futures-system` → `/root/afs-releases/94a71bd…`** (**match YES**, read 2026-10-11). **Do not deploy or restart again.** Docs-only commits after **`94a71bd`** (incl. **`896549b`**) are **not** on the box. |
@@ -14,7 +14,7 @@ Read **only** this block + `AGENTS.md` unless drift is detected. Private numeric
 | **Verdict** | **HOLD.** Live trading off, Tradovate demo, 1 contract, account flat (checkpoint claim), demo stop cap **300**, paper `wide_stop_4k` **400** on **`main`**, rollback pointer `c44d32bc`. Wide-stop demo lane was **already armed** at promote. Operator GO required for any further runtime action. |
 | **DO NOT deploy** | `2f4f776`, any second promote of #1216, or redeploy “to pick up” #1208–#1211 (already on `main` at `58d4cd6`). Do not roll back unless separate operator GO. |
 | **Track B / E-2026-10-09** | Spec **`docs/research-experiment-specs/E-2026-10-09-4hr-mnq-400-forward-01.json`** is **APPROVED**; first eligible session **2026-10-12**. **`main` matches the 400-tick paper cell** (#1216); box SHA **`94a71bd`**/**`58d4cd6`** if symlink proof holds. See **`docs/futures-track-b-forward-readiness-2026-10-10.md`**. |
-| **Daily tsmom / AFS-0256** | **#1218** · head **`e510dc4`** (**rechecked 2026-10-11**, unchanged). **Grok PASS (AFS-0256, operator):** CI green; manifest **`repo.commit`** SHA pin (not folder name); **26/28** mutants caught (**2** low-risk misses noted). Trial **`T-2026-10-10-prereg-six-micro-daily-tsmom-forward-2026-10-10-01`**: ledger **PLANNED** + **RUNNING** (missed-roll → **next-session 09:30 open**, recorded pre-score). **Merge-ready at `e510dc4`** — recheck head immediately before merge; **`main`** is **`07105a0`** (two doc commits since PR base). **Not on box.** **No score** before 40 round-turns. **Install (operator, not timer yet):** `afs-paper` user exists; **`/root/afs-shared/six-micro-polygon.env`** Polygon-only; release tree **readable** by `afs-paper`; promote **`e510dc4`** (or merge SHA) + drop-in pin; **`--verify-sha`** as `afs-paper`. **Timer `17:10` America/New_York** = **separate GO** (see prereg deploy checklist). |
+| **Daily tsmom / AFS-0256** | **#1218 MERGED** → **`f8d4845`** (pre-merge head **`e510dc4`**, CI rechecked immediately before merge). **Grok PASS (AFS-0256):** manifest **`repo.commit`** SHA pin; **26/28** mutants. Trial **`T-2026-10-10-prereg-six-micro-daily-tsmom-forward-2026-10-10-01`**: **RUNNING** (missed-roll → **next-session 09:30 open**, pre-score). **Not on box.** **No score** before 40 round-turns. **NEXT — install prep (no timer):** `afs-paper`, **`/root/afs-shared/six-micro-polygon.env`**, release **readable**, **promote `f8d4845`**, drop-in pin, **`--verify-sha`**. **Timer 17:10 ET** = **separate GO** (`docs/prereg-six-micro-daily-tsmom-forward-2026-10-10.md` §6). |
 | **Open futures PRs (not HOLD deploy)** | **#1217** (draft) MNQ seal guard · **#1219** (draft) six-micro paper cleanup · **#1214** (draft) handoff docs |
 | **Public resume** | `docs/futures-research-resume-checkpoint-2026-10-10.md` (+ Cursor + Claude options appendices) |
 | **Options ETF research** | **`origin/claude/options-time-exit-research-20261010`** @ **`9973f7e`** — **unmerged**; not on `main`. Prior “branch deleted” note was **wrong**; optional copy in **`/workspace/afs-shared/`** — unverified here. |
@@ -28,7 +28,7 @@ Read **only** this block + `AGENTS.md` unless drift is detected. Private numeric
 
 **DO NOT REDO:** gzip 4HR cell reproduction; ORB/VWAP TF×window sweeps (baseline + trending + orb48); Grok PASS work on merged **#1208**/**#1209**; Sep decompositions listed below.
 
-**NEXT:** (1) **Merge #1218** only after fresh **`e510dc4`** head + CI recheck (Grok AFS-0256 done). (2) **Promote** merged six-micro code SHA; **prep install** (afs-paper, polygon env, release perms, **`release_manifest.json`** pin) — **no timer enable** without explicit GO. (3) **2026-10-12:** Track B read-only box proof; six-micro collection starts only after promote + timer GO (**17:10 ET** weekdays). Wide-stop **`94a71bd`** deploy unchanged — **no second futures-bot restart** unless drift proven.
+**NEXT:** (1) **Promote `f8d4845`** + **install prep** (afs-paper, polygon env, release perms, pin, **`--verify-sha`**) — **no timer enable** without explicit GO. (2) **2026-10-12:** Track B read-only box proof; six-micro **17:10 ET** collection only after promote + timer GO. Wide-stop **`94a71bd`** unchanged — **no second futures-bot restart** unless drift proven.
 
 Prior chat context for this session is **closed**. Section below is coordination archive unless stale.
 
