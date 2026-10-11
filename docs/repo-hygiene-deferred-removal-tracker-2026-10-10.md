@@ -15,7 +15,7 @@
 
 **Snapshot:** Mac checkout @ `58d4cd6` (`main`, 2026-10-11); ~105 remote branch refs; ~**1.3 GB** `private/` (partial cleanup below); ~**2.3 GB** ignored `data/replay*`.
 
-**2026-10-11 cleanup performed (local Mac):** merged futures branches (§4); `private/research-notes-2026-10-10`, `prune-review`, `cross_market_grid_2026_09_23`, `grid_2026_09_21` (~272 MB); **`private/trading-evidence-2026-10-09`**, **`mes598-proof`**, **`profitability-review-2026-10-08`** (~**956 MB**); **`data/cross_market_2026_09_23`** (~**573 MB**). **Kept:** replay corpora (§2), worktrees, `paper-card-899`, `webull-proof`.
+**2026-10-11 cleanup performed (local Mac):** merged futures branches (§4); `private/research-notes-2026-10-10`, `prune-review`, `cross_market_grid_2026_09_23`, `grid_2026_09_21` (~272 MB); **`private/trading-evidence-2026-10-09`**, **`mes598-proof`**, **`profitability-review-2026-10-08`** (~**956 MB**); **`data/cross_market_2026_09_23`** (~**573 MB**). **Operator 2026-10-11:** **RETAIN** all **`data/replay_corpus_*`** and **`data/replay_polygon*`** (~**1.7 GB**) for **offline replay / fill-sensitive reruns**; not required for CI, #1218, or forward box collection. **Also kept:** git worktrees (`private/wt-*`, `.worktrees/tsmom-0254`), `paper-card-899`, `webull-proof`.
 
 ---
 
