@@ -1,8 +1,23 @@
 # Options — Next Actions
 
-_Priorities refreshed 2026-10-08; older checked items below are dated history, not fresh runtime proof. Operational checklist only. The authoritative options status remains `docs/options-current-state-handoff.md`. This file does not authorize strategy, cohort, collection, deployment or trading changes._
+_Options research priorities refreshed 2026-10-11. Earlier October 8 queue is preserved below as dated history, not an active instruction list. Options authority: `docs/options-current-state-handoff.md`. Documentation alone authorizes no experiment, collector modification, deploy, risk-rule change or trade._
 
-## Current focus — prove or reject the trading edge (2026-10-08)
+## Current focus — October 11 research CLOSED / no proven edge
+
+**Decision: NO PROVEN OPTIONS EDGE. NO NEW TRADE.** Full record and evidence limits: `docs/research-notes/options-edge-discovery-close-2026-10-11.md`. All figures from the operator-supplied Cursor readouts unless source evidence is explicitly verified below.
+
+- [x] **Actual V1 paper P&L and Signa v2 diagnostic:** 26 closed ACTIVE option entries/exits, **−$1,536** using ask-in/bid-out excluding commissions; do not mix COUNTERFACTUAL. Signa v2 is present, but its small-sample confirmation rule did not qualify as a trade gate. The old Oct 7 card and old #1071 P&L tasks are historical accounting checkpoints, not the current blocker.
+- [x] **1-2-2 SIP status corrected:** All **443** resolutions have separate final reconciliation rows despite original `PENDING_DELAYED_SIP` labels. **99** of 101 option entry quotes SIP-confirmed, 2 negative latency; no option exit bids and no measured option P&L. Historical entry snapshots stay **unscored**; existing collector unchanged.
+- [x] **66-symbol intraday strategy-discovery round CLOSED:** HTF pullback **HOLD RESEARCH / flat**; failed-break reclaim **REJECT**; compression-expansion **HOLD RESEARCH / flat**. No family goes to options testing or further retuning. One earlier baseline performed worse but also lost; there is **no positive option expectancy** or untouched validation.
+- [x] **Price-data readiness was resolved for this closed test:** local/gitignored Polygon 5-minute archive, 66 symbols, 110 sessions (Apr 1–Sep 8, 2026), sealed Sep 9–15 untouched. Archive is already outcome-examined, so do not reuse any of it as a pristine OOS sample or relaunch the completed run.
+- [ ] **Only if separately authorized:** freeze a prospective post-SIP-actionable option entry plus stop/target/time-exit and continuing bid capture **for new 1-2-2 observations**, before the next new trial captures. No historical backfill, no broker order, no collector changes under this doc update.
+- [ ] **Research question only, UNSTARTED:** multi-day/multi-week **equity** directional persistence *with long-option economics*, separate from the ongoing futures six-micro momentum trial. Confirm existing research coverage and data length / genuinely untouched validation before preregistering a bounded experiment. Existing 110 sessions were deemed too short; do not immediately run another backtest or buy data.
+- [ ] **Maintenance / deployment:** parked until there is a distinct proven need and operator GO. No package modernization, scanner expansion, cleanup, runtime audit, broker route testing, or test construction solely to keep work moving.
+
+**Stop condition:** Without a predeclared measurable options hypothesis, causal option bid path, realistic cost model, unconsumed independent validation and operator GO, **WAIT**. Do not start another experiment to fill a report.
+
+## Historical focus — 2026-10-08 (superseded; do not execute as current queue)
+
 
 **Main question:** Do current-cohort options setups have repeatable positive *option* P&L after executable entry/exit pricing and costs? **NOT PROVEN.** Do not equate successful code/CI, more signals or structural target hits with profitability.
 
