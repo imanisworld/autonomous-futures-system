@@ -1,0 +1,10 @@
+[Unit]
+Description=Weekday forward-lanes proof after NY close collectors
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 17:25:00 America/New_York
+Persistent=true
+Unit=afs-forward-lanes-daily-proof.service
+
+[Install]
+WantedBy=timers.target

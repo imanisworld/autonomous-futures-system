@@ -1,0 +1,10 @@
+[Unit]
+Description=Read-only forward-lanes daily proof (Track B, six-micro, options 122)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Installed copy under afs-shared so it runs before the next live promote picks it up.
+ExecStart=/usr/bin/python3 /root/afs-shared/ops/forward_lanes_daily_proof.py
+Restart=no

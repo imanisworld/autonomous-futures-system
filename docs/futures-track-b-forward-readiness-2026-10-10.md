@@ -99,6 +99,7 @@ Do not conflate A and B in reports or Grok handoffs.
 2. **No redeploy** unless drift proven — HOLD per `docs/agent-work-state.md`.
 3. **Score Track B** only from **2026-10-12** sessions; label **paper 400t** vs **demo 300t** separately.
 4. **Post-merge breaker** (optional): review **`58d4cd6`** mechanism/DEMO isolation — not a redeploy prerequisite if box SHA already matches.
+5. **Automated weekday proof (VPS):** `afs-forward-lanes-daily-proof.timer` runs **Mon–Fri 17:25 America/New_York** (after six-micro **17:10**). Read-only JSON append log: `/root/afs-shared/logs/forward_lanes_daily_proof.jsonl`. Source: `ops/forward_lanes_daily_proof.py` (installed copy under `/root/afs-shared/ops/`).
 
 ---
 
