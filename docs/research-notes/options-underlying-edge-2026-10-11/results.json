@@ -1,0 +1,3487 @@
+{
+  "source_sha": "52906d41c41889c31e84685723e335c58b92ee6d",
+  "definition": {
+    "version": "underlying-edge-v1-2026-10-11",
+    "newly_specified": [
+      "htf pullback length 2..6 closes against the prior-session direction",
+      "trigger must occur within 6 completed bars or the setup expires",
+      "failed-break failure window is 6 completed bars after the break close",
+      "compression is one strictly narrower inside bar; direction is the mother bar",
+      "maximum hold is the same regular session; no overnight",
+      "gap through the frozen stop, or an open already through +1R, is a missed entry"
+    ],
+    "reused": [
+      "66-symbol CORE+EXPANDED universe",
+      "ns-v0.1 PDH, PDL, and 30-minute opening-range levels",
+      "ong-v0.1 next-bar-open entry, $0.01 adverse entry and stop slippage, stop-first",
+      "nyse_session_for regular-session calendar"
+    ],
+    "baseline": "matched no-trigger: next open after the setup reference, setup direction, pre-entry stop distance placed from the baseline fill",
+    "promising_rule_frozen_before_outcomes": "minimum 30 eligible episodes, 10 sessions, 5 symbols, valid causal test, and conditional 1R-before-stop above the matched baseline with stop-first under 50%"
+  },
+  "dataset": {
+    "provider": "alpaca_sip_5min_raw",
+    "window": [
+      "2026-04-01",
+      "2026-09-08"
+    ],
+    "symbols_requested": 66,
+    "symbols_with_bars": 66,
+    "symbols_missing": {},
+    "incomplete_regular_sessions": 0,
+    "bar_counts": {
+      "AAPL": 22321,
+      "ABNB": 11182,
+      "AMD": 22273,
+      "AMZN": 22224,
+      "ARM": 19917,
+      "AVGO": 22385,
+      "BA": 15783,
+      "BAC": 15907,
+      "C": 13213,
+      "CAT": 14528,
+      "COIN": 21052,
+      "COP": 12648,
+      "COST": 13091,
+      "CRM": 18257,
+      "CVX": 16013,
+      "DIA": 17423,
+      "DIS": 13961,
+      "EEM": 13727,
+      "F": 18793,
+      "FXI": 15743,
+      "GE": 14162,
+      "GLD": 22007,
+      "GM": 11667,
+      "GOOGL": 22394,
+      "GS": 13245,
+      "HD": 13352,
+      "HOOD": 22136,
+      "HYG": 10617,
+      "IBIT": 22545,
+      "INTC": 22653,
+      "IWM": 22173,
+      "JPM": 15842,
+      "KWEB": 17113,
+      "LLY": 14962,
+      "META": 22271,
+      "MS": 11569,
+      "MSFT": 22583,
+      "MU": 22650,
+      "NFLX": 22218,
+      "NKE": 20832,
+      "NVDA": 22656,
+      "ORCL": 22394,
+      "OXY": 18374,
+      "PFE": 20070,
+      "PLTR": 22510,
+      "QCOM": 19167,
+      "QQQ": 22653,
+      "RIVN": 20323,
+      "SCHW": 11321,
+      "SLV": 22511,
+      "SMCI": 22392,
+      "SMH": 21285,
+      "SOFI": 22517,
+      "SPY": 22637,
+      "TLT": 20369,
+      "TSLA": 22655,
+      "TSM": 22315,
+      "UBER": 18582,
+      "UNH": 17451,
+      "WFC": 12549,
+      "WMT": 18219,
+      "XBI": 13890,
+      "XLE": 20081,
+      "XLF": 17043,
+      "XLK": 17217,
+      "XOM": 17506
+    }
+  },
+  "summaries": {
+    "htf_pullback": {
+      "family": "htf_pullback",
+      "eligible_episodes": 7237,
+      "symbols": 66,
+      "sessions": 110,
+      "observed_trigger_pct": 14.4,
+      "actionable_trigger_pct": 14.4,
+      "missed_entry_pct": 0.0,
+      "missed_reasons": {},
+      "no_trigger": 6198,
+      "no_trigger_reasons": {
+        "INVALIDATED": 5778,
+        "EXPIRED": 420
+      },
+      "executed": 1039,
+      "r1_before_stop_pct": 46.4,
+      "r2_before_stop_pct": 0.9,
+      "stop_first_pct": 44.1,
+      "eod_pct": 9.5,
+      "median_mae_r": 0.827,
+      "median_mfe_r": 0.914,
+      "median_hold_bars": 9.0,
+      "baseline_comparability": {
+        "strategy_executed_with_risk": 1039,
+        "baseline_executed_with_risk": 6791,
+        "paired_executed": 1023,
+        "median_strategy_risk_price": 0.83,
+        "median_baseline_risk_price": 0.135,
+        "median_paired_strategy_over_baseline_risk": 4.179,
+        "same_absolute_stop_distance": false
+      },
+      "baseline_executed": 6791,
+      "baseline_r1_before_stop_pct": 29.5,
+      "baseline_r2_before_stop_pct": 14.5,
+      "baseline_stop_first_pct": 70.5,
+      "r1_minus_baseline_pp": 16.9,
+      "per_opportunity_strategy_r1_pct": 6.7,
+      "per_opportunity_baseline_r1_pct": 27.6,
+      "regimes": {
+        "prior_down": {
+          "eligible": 3569,
+          "executed": 480,
+          "r1_before_stop_pct": 48.8,
+          "stop_first_pct": 42.1
+        },
+        "prior_up": {
+          "eligible": 3668,
+          "executed": 559,
+          "r1_before_stop_pct": 44.4,
+          "stop_first_pct": 45.8
+        }
+      },
+      "by_level": {},
+      "by_symbol": {
+        "AAPL": {
+          "eligible": 110,
+          "executed": 12,
+          "r1_before_stop_pct": 58.3,
+          "stop_first_pct": 33.3
+        },
+        "ABNB": {
+          "eligible": 110,
+          "executed": 15,
+          "r1_before_stop_pct": 40.0,
+          "stop_first_pct": 46.7
+        },
+        "AMD": {
+          "eligible": 110,
+          "executed": 11,
+          "r1_before_stop_pct": 54.5,
+          "stop_first_pct": 45.5
+        },
+        "AMZN": {
+          "eligible": 110,
+          "executed": 14,
+          "r1_before_stop_pct": 42.9,
+          "stop_first_pct": 57.1
+        },
+        "ARM": {
+          "eligible": 110,
+          "executed": 21,
+          "r1_before_stop_pct": 57.1,
+          "stop_first_pct": 28.6
+        },
+        "AVGO": {
+          "eligible": 109,
+          "executed": 14,
+          "r1_before_stop_pct": 21.4,
+          "stop_first_pct": 71.4
+        },
+        "BA": {
+          "eligible": 110,
+          "executed": 18,
+          "r1_before_stop_pct": 38.9,
+          "stop_first_pct": 50.0
+        },
+        "BAC": {
+          "eligible": 109,
+          "executed": 13,
+          "r1_before_stop_pct": 7.7,
+          "stop_first_pct": 84.6
+        },
+        "C": {
+          "eligible": 110,
+          "executed": 14,
+          "r1_before_stop_pct": 57.1,
+          "stop_first_pct": 35.7
+        },
+        "CAT": {
+          "eligible": 110,
+          "executed": 19,
+          "r1_before_stop_pct": 63.2,
+          "stop_first_pct": 36.8
+        },
+        "COIN": {
+          "eligible": 110,
+          "executed": 14,
+          "r1_before_stop_pct": 35.7,
+          "stop_first_pct": 64.3
+        },
+        "COP": {
+          "eligible": 109,
+          "executed": 26,
+          "r1_before_stop_pct": 61.5,
+          "stop_first_pct": 30.8
+        },
+        "COST": {
+          "eligible": 110,
+          "executed": 16,
+          "r1_before_stop_pct": 31.2,
+          "stop_first_pct": 62.5
+        },
+        "CRM": {
+          "eligible": 110,
+          "executed": 18,
+          "r1_before_stop_pct": 55.6,
+          "stop_first_pct": 44.4
+        },
+        "CVX": {
+          "eligible": 110,
+          "executed": 18,
+          "r1_before_stop_pct": 44.4,
+          "stop_first_pct": 55.6
+        },
+        "DIA": {
+          "eligible": 110,
+          "executed": 15,
+          "r1_before_stop_pct": 33.3,
+          "stop_first_pct": 26.7
+        },
+        "DIS": {
+          "eligible": 110,
+          "executed": 9,
+          "r1_before_stop_pct": 33.3,
+          "stop_first_pct": 44.4
+        },
+        "EEM": {
+          "eligible": 110,
+          "executed": 15,
+          "r1_before_stop_pct": 26.7,
+          "stop_first_pct": 60.0
+        },
+        "F": {
+          "eligible": 109,
+          "executed": 20,
+          "r1_before_stop_pct": 45.0,
+          "stop_first_pct": 55.0
+        },
+        "FXI": {
+          "eligible": 109,
+          "executed": 23,
+          "r1_before_stop_pct": 39.1,
+          "stop_first_pct": 39.1
+        },
+        "GE": {
+          "eligible": 110,
+          "executed": 20,
+          "r1_before_stop_pct": 80.0,
+          "stop_first_pct": 15.0
+        },
+        "GLD": {
+          "eligible": 110,
+          "executed": 15,
+          "r1_before_stop_pct": 53.3,
+          "stop_first_pct": 46.7
+        },
+        "GM": {
+          "eligible": 110,
+          "executed": 15,
+          "r1_before_stop_pct": 40.0,
+          "stop_first_pct": 46.7
+        },
+        "GOOGL": {
+          "eligible": 110,
+          "executed": 24,
+          "r1_before_stop_pct": 66.7,
+          "stop_first_pct": 29.2
+        },
+        "GS": {
+          "eligible": 110,
+          "executed": 14,
+          "r1_before_stop_pct": 57.1,
+          "stop_first_pct": 28.6
+        },
+        "HD": {
+          "eligible": 110,
+          "executed": 15,
+          "r1_before_stop_pct": 40.0,
+          "stop_first_pct": 60.0
+        },
+        "HOOD": {
+          "eligible": 110,
+          "executed": 18,
+          "r1_before_stop_pct": 44.4,
+          "stop_first_pct": 44.4
+        },
+        "HYG": {
+          "eligible": 106,
+          "executed": 16,
+          "r1_before_stop_pct": 31.2,
+          "stop_first_pct": 43.8
+        },
+        "IBIT": {
+          "eligible": 110,
+          "executed": 17,
+          "r1_before_stop_pct": 82.4,
+          "stop_first_pct": 11.8
+        },
+        "INTC": {
+          "eligible": 110,
+          "executed": 13,
+          "r1_before_stop_pct": 53.8,
+          "stop_first_pct": 38.5
+        },
+        "IWM": {
+          "eligible": 110,
+          "executed": 12,
+          "r1_before_stop_pct": 25.0,
+          "stop_first_pct": 75.0
+        },
+        "JPM": {
+          "eligible": 110,
+          "executed": 12,
+          "r1_before_stop_pct": 50.0,
+          "stop_first_pct": 41.7
+        },
+        "KWEB": {
+          "eligible": 108,
+          "executed": 25,
+          "r1_before_stop_pct": 40.0,
+          "stop_first_pct": 44.0
+        },
+        "LLY": {
+          "eligible": 110,
+          "executed": 13,
+          "r1_before_stop_pct": 23.1,
+          "stop_first_pct": 69.2
+        },
+        "META": {
+          "eligible": 110,
+          "executed": 14,
+          "r1_before_stop_pct": 64.3,
+          "stop_first_pct": 35.7
+        },
+        "MS": {
+          "eligible": 110,
+          "executed": 8,
+          "r1_before_stop_pct": 75.0,
+          "stop_first_pct": 25.0
+        },
+        "MSFT": {
+          "eligible": 110,
+          "executed": 19,
+          "r1_before_stop_pct": 68.4,
+          "stop_first_pct": 31.6
+        },
+        "MU": {
+          "eligible": 110,
+          "executed": 11,
+          "r1_before_stop_pct": 54.5,
+          "stop_first_pct": 27.3
+        },
+        "NFLX": {
+          "eligible": 110,
+          "executed": 25,
+          "r1_before_stop_pct": 68.0,
+          "stop_first_pct": 32.0
+        },
+        "NKE": {
+          "eligible": 110,
+          "executed": 13,
+          "r1_before_stop_pct": 15.4,
+          "stop_first_pct": 76.9
+        },
+        "NVDA": {
+          "eligible": 109,
+          "executed": 10,
+          "r1_before_stop_pct": 40.0,
+          "stop_first_pct": 60.0
+        },
+        "ORCL": {
+          "eligible": 110,
+          "executed": 9,
+          "r1_before_stop_pct": 22.2,
+          "stop_first_pct": 55.6
+        },
+        "OXY": {
+          "eligible": 109,
+          "executed": 17,
+          "r1_before_stop_pct": 41.2,
+          "stop_first_pct": 41.2
+        },
+        "PFE": {
+          "eligible": 110,
+          "executed": 22,
+          "r1_before_stop_pct": 45.5,
+          "stop_first_pct": 36.4
+        },
+        "PLTR": {
+          "eligible": 110,
+          "executed": 11,
+          "r1_before_stop_pct": 45.5,
+          "stop_first_pct": 45.5
+        },
+        "QCOM": {
+          "eligible": 110,
+          "executed": 14,
+          "r1_before_stop_pct": 50.0,
+          "stop_first_pct": 28.6
+        },
+        "QQQ": {
+          "eligible": 110,
+          "executed": 15,
+          "r1_before_stop_pct": 53.3,
+          "stop_first_pct": 40.0
+        },
+        "RIVN": {
+          "eligible": 110,
+          "executed": 11,
+          "r1_before_stop_pct": 45.5,
+          "stop_first_pct": 54.5
+        },
+        "SCHW": {
+          "eligible": 110,
+          "executed": 19,
+          "r1_before_stop_pct": 36.8,
+          "stop_first_pct": 52.6
+        },
+        "SLV": {
+          "eligible": 110,
+          "executed": 19,
+          "r1_before_stop_pct": 47.4,
+          "stop_first_pct": 42.1
+        },
+        "SMCI": {
+          "eligible": 110,
+          "executed": 14,
+          "r1_before_stop_pct": 50.0,
+          "stop_first_pct": 42.9
+        },
+        "SMH": {
+          "eligible": 110,
+          "executed": 18,
+          "r1_before_stop_pct": 33.3,
+          "stop_first_pct": 55.6
+        },
+        "SOFI": {
+          "eligible": 109,
+          "executed": 17,
+          "r1_before_stop_pct": 29.4,
+          "stop_first_pct": 52.9
+        },
+        "SPY": {
+          "eligible": 110,
+          "executed": 15,
+          "r1_before_stop_pct": 46.7,
+          "stop_first_pct": 40.0
+        },
+        "TLT": {
+          "eligible": 108,
+          "executed": 12,
+          "r1_before_stop_pct": 41.7,
+          "stop_first_pct": 58.3
+        },
+        "TSLA": {
+          "eligible": 109,
+          "executed": 20,
+          "r1_before_stop_pct": 35.0,
+          "stop_first_pct": 60.0
+        },
+        "TSM": {
+          "eligible": 109,
+          "executed": 12,
+          "r1_before_stop_pct": 33.3,
+          "stop_first_pct": 66.7
+        },
+        "UBER": {
+          "eligible": 110,
+          "executed": 20,
+          "r1_before_stop_pct": 60.0,
+          "stop_first_pct": 35.0
+        },
+        "UNH": {
+          "eligible": 110,
+          "executed": 11,
+          "r1_before_stop_pct": 63.6,
+          "stop_first_pct": 36.4
+        },
+        "WFC": {
+          "eligible": 109,
+          "executed": 15,
+          "r1_before_stop_pct": 53.3,
+          "stop_first_pct": 6.7
+        },
+        "WMT": {
+          "eligible": 110,
+          "executed": 19,
+          "r1_before_stop_pct": 36.8,
+          "stop_first_pct": 47.4
+        },
+        "XBI": {
+          "eligible": 110,
+          "executed": 13,
+          "r1_before_stop_pct": 61.5,
+          "stop_first_pct": 38.5
+        },
+        "XLE": {
+          "eligible": 109,
+          "executed": 18,
+          "r1_before_stop_pct": 33.3,
+          "stop_first_pct": 50.0
+        },
+        "XLF": {
+          "eligible": 108,
+          "executed": 12,
+          "r1_before_stop_pct": 25.0,
+          "stop_first_pct": 41.7
+        },
+        "XLK": {
+          "eligible": 110,
+          "executed": 12,
+          "r1_before_stop_pct": 50.0,
+          "stop_first_pct": 33.3
+        },
+        "XOM": {
+          "eligible": 109,
+          "executed": 20,
+          "r1_before_stop_pct": 45.0,
+          "stop_first_pct": 50.0
+        }
+      },
+      "by_session": {
+        "2026-04-01": {
+          "eligible": 66,
+          "executed": 10,
+          "r1_before_stop_pct": 60.0,
+          "stop_first_pct": 40.0
+        },
+        "2026-04-02": {
+          "eligible": 65,
+          "executed": 3,
+          "r1_before_stop_pct": 66.7,
+          "stop_first_pct": 0.0
+        },
+        "2026-04-06": {
+          "eligible": 66,
+          "executed": 6,
+          "r1_before_stop_pct": 16.7,
+          "stop_first_pct": 83.3
+        },
+        "2026-04-07": {
+          "eligible": 65,
+          "executed": 19,
+          "r1_before_stop_pct": 36.8,
+          "stop_first_pct": 57.9
+        },
+        "2026-04-08": {
+          "eligible": 66,
+          "executed": 9,
+          "r1_before_stop_pct": 55.6,
+          "stop_first_pct": 22.2
+        },
+        "2026-04-09": {
+          "eligible": 66,
+          "executed": 6,
+          "r1_before_stop_pct": 50.0,
+          "stop_first_pct": 33.3
+        },
+        "2026-04-10": {
+          "eligible": 66,
+          "executed": 13,
+          "r1_before_stop_pct": 30.8,
+          "stop_first_pct": 69.2
+        },
+        "2026-04-13": {
+          "eligible": 66,
+          "executed": 9,
+          "r1_before_stop_pct": 44.4,
+          "stop_first_pct": 55.6
+        },
+        "2026-04-14": {
+          "eligible": 66,
+          "executed": 12,
+          "r1_before_stop_pct": 41.7,
+          "stop_first_pct": 41.7
+        },
+        "2026-04-15": {
+          "eligible": 66,
+          "executed": 6,
+          "r1_before_stop_pct": 50.0,
+          "stop_first_pct": 50.0
+        },
+        "2026-04-16": {
+          "eligible": 66,
+          "executed": 16,
+          "r1_before_stop_pct": 68.8,
+          "stop_first_pct": 31.2
+        },
+        "2026-04-17": {
+          "eligible": 66,
+          "executed": 6,
+          "r1_before_stop_pct": 33.3,
+          "stop_first_pct": 66.7
+        },
+        "2026-04-20": {
+          "eligible": 64,
+          "executed": 15,
+          "r1_before_stop_pct": 26.7,
+          "stop_first_pct": 73.3
+        },
+        "2026-04-21": {
+          "eligible": 66,
+          "executed": 5,
+          "r1_before_stop_pct": 60.0,
+          "stop_first_pct": 40.0
+        },
+        "2026-04-22": {
+          "eligible": 66,
+          "executed": 15,
+          "r1_before_stop_pct": 66.7,
+          "stop_first_pct": 13.3
+        },
+        "2026-04-23": {
+          "eligible": 66,
+          "executed": 15,
+          "r1_before_stop_pct": 66.7,
+          "stop_first_pct": 33.3
+        },
+        "2026-04-24": {
+          "eligible": 66,
+          "executed": 10,
+          "r1_before_stop_pct": 0.0,
+          "stop_first_pct": 90.0
+        },
+        "2026-04-27": {
+          "eligible": 65,
+          "executed": 13,
+          "r1_before_stop_pct": 46.2,
+          "stop_first_pct": 38.5
+        },
+        "2026-04-28": {
+          "eligible": 66,
+          "executed": 10,
+          "r1_before_stop_pct": 50.0,
+          "stop_first_pct": 40.0
+        },
+        "2026-04-29": {
+          "eligible": 65,
+          "executed": 10,
+          "r1_before_stop_pct": 70.0,
+          "stop_first_pct": 10.0
+        },
+        "2026-04-30": {
+          "eligible": 66,
+          "executed": 9,
+          "r1_before_stop_pct": 66.7,
+          "stop_first_pct": 33.3
+        },
+        "2026-05-01": {
+          "eligible": 66,
+          "executed": 10,
+          "r1_before_stop_pct": 30.0,
+          "stop_first_pct": 70.0
+        },
+        "2026-05-04": {
+          "eligible": 66,
+          "executed": 15,
+          "r1_before_stop_pct": 53.3,
+          "stop_first_pct": 40.0
+        },
+        "2026-05-05": {
+          "eligible": 66,
+          "executed": 6,
+          "r1_before_stop_pct": 16.7,
+          "stop_first_pct": 83.3
+        },
+        "2026-05-06": {
+          "eligible": 66,
+          "executed": 5,
+          "r1_before_stop_pct": 80.0,
+          "stop_first_pct": 20.0
+        },
+        "2026-05-07": {
+          "eligible": 66,
+          "executed": 7,
+          "r1_before_stop_pct": 14.3,
+          "stop_first_pct": 85.7
+        },
+        "2026-05-08": {
+          "eligible": 66,
+          "executed": 6,
+          "r1_before_stop_pct": 16.7,
+          "stop_first_pct": 83.3
+        },
+        "2026-05-11": {
+          "eligible": 66,
+          "executed": 9,
+          "r1_before_stop_pct": 44.4,
+          "stop_first_pct": 11.1
+        },
+        "2026-05-12": {
+          "eligible": 66,
+          "executed": 3,
+          "r1_before_stop_pct": 33.3,
+          "stop_first_pct": 66.7
+        },
+        "2026-05-13": {
+          "eligible": 66,
+          "executed": 7,
+          "r1_before_stop_pct": 71.4,
+          "stop_first_pct": 28.6
+        },
+        "2026-05-14": {
+          "eligible": 66,
+          "executed": 12,
+          "r1_before_stop_pct": 33.3,
+          "stop_first_pct": 58.3
+        },
+        "2026-05-15": {
+          "eligible": 66,
+          "executed": 10,
+          "r1_before_stop_pct": 80.0,
+          "stop_first_pct": 20.0
+        },
+        "2026-05-18": {
+          "eligible": 66,
+          "executed": 11,
+          "r1_before_stop_pct": 36.4,
+          "stop_first_pct": 36.4
+        },
+        "2026-05-19": {
+          "eligible": 66,
+          "executed": 7,
+          "r1_before_stop_pct": 28.6,
+          "stop_first_pct": 71.4
+        },
+        "2026-05-20": {
+          "eligible": 65,
+          "executed": 7,
+          "r1_before_stop_pct": 42.9,
+          "stop_first_pct": 14.3
+        },
+        "2026-05-21": {
+          "eligible": 66,
+          "executed": 13,
+          "r1_before_stop_pct": 53.8,
+          "stop_first_pct": 46.2
+        },
+        "2026-05-22": {
+          "eligible": 66,
+          "executed": 11,
+          "r1_before_stop_pct": 45.5,
+          "stop_first_pct": 9.1
+        },
+        "2026-05-26": {
+          "eligible": 66,
+          "executed": 13,
+          "r1_before_stop_pct": 46.2,
+          "stop_first_pct": 15.4
+        },
+        "2026-05-27": {
+          "eligible": 66,
+          "executed": 3,
+          "r1_before_stop_pct": 33.3,
+          "stop_first_pct": 33.3
+        },
+        "2026-05-28": {
+          "eligible": 66,
+          "executed": 8,
+          "r1_before_stop_pct": 37.5,
+          "stop_first_pct": 37.5
+        },
+        "2026-05-29": {
+          "eligible": 66,
+          "executed": 7,
+          "r1_before_stop_pct": 57.1,
+          "stop_first_pct": 42.9
+        },
+        "2026-06-01": {
+          "eligible": 66,
+          "executed": 7,
+          "r1_before_stop_pct": 57.1,
+          "stop_first_pct": 42.9
+        },
+        "2026-06-02": {
+          "eligible": 66,
+          "executed": 4,
+          "r1_before_stop_pct": 75.0,
+          "stop_first_pct": 25.0
+        },
+        "2026-06-03": {
+          "eligible": 66,
+          "executed": 9,
+          "r1_before_stop_pct": 55.6,
+          "stop_first_pct": 33.3
+        },
+        "2026-06-04": {
+          "eligible": 66,
+          "executed": 17,
+          "r1_before_stop_pct": 58.8,
+          "stop_first_pct": 23.5
+        },
+        "2026-06-05": {
+          "eligible": 65,
+          "executed": 18,
+          "r1_before_stop_pct": 38.9,
+          "stop_first_pct": 55.6
+        },
+        "2026-06-08": {
+          "eligible": 66,
+          "executed": 6,
+          "r1_before_stop_pct": 33.3,
+          "stop_first_pct": 33.3
+        },
+        "2026-06-09": {
+          "eligible": 66,
+          "executed": 12,
+          "r1_before_stop_pct": 50.0,
+          "stop_first_pct": 41.7
+        },
+        "2026-06-10": {
+          "eligible": 65,
+          "executed": 11,
+          "r1_before_stop_pct": 72.7,
+          "stop_first_pct": 18.2
+        },
+        "2026-06-11": {
+          "eligible": 66,
+          "executed": 8,
+          "r1_before_stop_pct": 12.5,
+          "stop_first_pct": 87.5
+        },
+        "2026-06-12": {
+          "eligible": 66,
+          "executed": 24,
+          "r1_before_stop_pct": 20.8,
+          "stop_first_pct": 45.8
+        },
+        "2026-06-15": {
+          "eligible": 66,
+          "executed": 11,
+          "r1_before_stop_pct": 54.5,
+          "stop_first_pct": 45.5
+        },
+        "2026-06-16": {
+          "eligible": 66,
+          "executed": 4,
+          "r1_before_stop_pct": 50.0,
+          "stop_first_pct": 50.0
+        },
+        "2026-06-17": {
+          "eligible": 65,
+          "executed": 7,
+          "r1_before_stop_pct": 42.9,
+          "stop_first_pct": 57.1
+        },
+        "2026-06-18": {
+          "eligible": 66,
+          "executed": 9,
+          "r1_before_stop_pct": 44.4,
+          "stop_first_pct": 44.4
+        },
+        "2026-06-22": {
+          "eligible": 66,
+          "executed": 7,
+          "r1_before_stop_pct": 42.9,
+          "stop_first_pct": 28.6
+        },
+        "2026-06-23": {
+          "eligible": 66,
+          "executed": 11,
+          "r1_before_stop_pct": 63.6,
+          "stop_first_pct": 36.4
+        },
+        "2026-06-24": {
+          "eligible": 66,
+          "executed": 14,
+          "r1_before_stop_pct": 35.7,
+          "stop_first_pct": 64.3
+        },
+        "2026-06-25": {
+          "eligible": 65,
+          "executed": 7,
+          "r1_before_stop_pct": 42.9,
+          "stop_first_pct": 57.1
+        },
+        "2026-06-26": {
+          "eligible": 66,
+          "executed": 8,
+          "r1_before_stop_pct": 75.0,
+          "stop_first_pct": 0.0
+        },
+        "2026-06-29": {
+          "eligible": 66,
+          "executed": 11,
+          "r1_before_stop_pct": 27.3,
+          "stop_first_pct": 63.6
+        },
+        "2026-06-30": {
+          "eligible": 65,
+          "executed": 11,
+          "r1_before_stop_pct": 54.5,
+          "stop_first_pct": 36.4
+        },
+        "2026-07-01": {
+          "eligible": 65,
+          "executed": 11,
+          "r1_before_stop_pct": 36.4,
+          "stop_first_pct": 63.6
+        },
+        "2026-07-02": {
+          "eligible": 66,
+          "executed": 16,
+          "r1_before_stop_pct": 81.2,
+          "stop_first_pct": 18.8
+        },
+        "2026-07-06": {
+          "eligible": 66,
+          "executed": 14,
+          "r1_before_stop_pct": 42.9,
+          "stop_first_pct": 35.7
+        },
+        "2026-07-07": {
+          "eligible": 66,
+          "executed": 4,
+          "r1_before_stop_pct": 50.0,
+          "stop_first_pct": 25.0
+        },
+        "2026-07-08": {
+          "eligible": 65,
+          "executed": 21,
+          "r1_before_stop_pct": 19.0,
+          "stop_first_pct": 76.2
+        },
+        "2026-07-09": {
+          "eligible": 66,
+          "executed": 8,
+          "r1_before_stop_pct": 37.5,
+          "stop_first_pct": 37.5
+        },
+        "2026-07-10": {
+          "eligible": 66,
+          "executed": 6,
+          "r1_before_stop_pct": 0.0,
+          "stop_first_pct": 66.7
+        },
+        "2026-07-13": {
+          "eligible": 65,
+          "executed": 9,
+          "r1_before_stop_pct": 55.6,
+          "stop_first_pct": 44.4
+        },
+        "2026-07-14": {
+          "eligible": 66,
+          "executed": 6,
+          "r1_before_stop_pct": 66.7,
+          "stop_first_pct": 16.7
+        },
+        "2026-07-15": {
+          "eligible": 65,
+          "executed": 14,
+          "r1_before_stop_pct": 71.4,
+          "stop_first_pct": 21.4
+        },
+        "2026-07-16": {
+          "eligible": 66,
+          "executed": 8,
+          "r1_before_stop_pct": 62.5,
+          "stop_first_pct": 37.5
+        },
+        "2026-07-17": {
+          "eligible": 66,
+          "executed": 6,
+          "r1_before_stop_pct": 16.7,
+          "stop_first_pct": 83.3
+        },
+        "2026-07-20": {
+          "eligible": 65,
+          "executed": 3,
+          "r1_before_stop_pct": 33.3,
+          "stop_first_pct": 66.7
+        },
+        "2026-07-21": {
+          "eligible": 66,
+          "executed": 8,
+          "r1_before_stop_pct": 12.5,
+          "stop_first_pct": 50.0
+        },
+        "2026-07-22": {
+          "eligible": 66,
+          "executed": 4,
+          "r1_before_stop_pct": 50.0,
+          "stop_first_pct": 50.0
+        },
+        "2026-07-23": {
+          "eligible": 66,
+          "executed": 12,
+          "r1_before_stop_pct": 50.0,
+          "stop_first_pct": 41.7
+        },
+        "2026-07-24": {
+          "eligible": 66,
+          "executed": 8,
+          "r1_before_stop_pct": 25.0,
+          "stop_first_pct": 62.5
+        },
+        "2026-07-27": {
+          "eligible": 65,
+          "executed": 13,
+          "r1_before_stop_pct": 69.2,
+          "stop_first_pct": 23.1
+        },
+        "2026-07-28": {
+          "eligible": 65,
+          "executed": 10,
+          "r1_before_stop_pct": 50.0,
+          "stop_first_pct": 50.0
+        },
+        "2026-07-29": {
+          "eligible": 66,
+          "executed": 10,
+          "r1_before_stop_pct": 60.0,
+          "stop_first_pct": 40.0
+        },
+        "2026-07-30": {
+          "eligible": 66,
+          "executed": 7,
+          "r1_before_stop_pct": 28.6,
+          "stop_first_pct": 57.1
+        },
+        "2026-07-31": {
+          "eligible": 66,
+          "executed": 7,
+          "r1_before_stop_pct": 71.4,
+          "stop_first_pct": 28.6
+        },
+        "2026-08-03": {
+          "eligible": 66,
+          "executed": 8,
+          "r1_before_stop_pct": 62.5,
+          "stop_first_pct": 37.5
+        },
+        "2026-08-04": {
+          "eligible": 66,
+          "executed": 13,
+          "r1_before_stop_pct": 84.6,
+          "stop_first_pct": 7.7
+        },
+        "2026-08-05": {
+          "eligible": 66,
+          "executed": 8,
+          "r1_before_stop_pct": 25.0,
+          "stop_first_pct": 75.0
+        },
+        "2026-08-06": {
+          "eligible": 66,
+          "executed": 6,
+          "r1_before_stop_pct": 83.3,
+          "stop_first_pct": 16.7
+        },
+        "2026-08-07": {
+          "eligible": 65,
+          "executed": 7,
+          "r1_before_stop_pct": 28.6,
+          "stop_first_pct": 42.9
+        },
+        "2026-08-10": {
+          "eligible": 65,
+          "executed": 10,
+          "r1_before_stop_pct": 60.0,
+          "stop_first_pct": 30.0
+        },
+        "2026-08-11": {
+          "eligible": 66,
+          "executed": 12,
+          "r1_before_stop_pct": 33.3,
+          "stop_first_pct": 58.3
+        },
+        "2026-08-12": {
+          "eligible": 65,
+          "executed": 3,
+          "r1_before_stop_pct": 0.0,
+          "stop_first_pct": 33.3
+        },
+        "2026-08-13": {
+          "eligible": 66,
+          "executed": 8,
+          "r1_before_stop_pct": 75.0,
+          "stop_first_pct": 25.0
+        },
+        "2026-08-14": {
+          "eligible": 66,
+          "executed": 7,
+          "r1_before_stop_pct": 28.6,
+          "stop_first_pct": 42.9
+        },
+        "2026-08-17": {
+          "eligible": 66,
+          "executed": 12,
+          "r1_before_stop_pct": 58.3,
+          "stop_first_pct": 33.3
+        },
+        "2026-08-18": {
+          "eligible": 66,
+          "executed": 6,
+          "r1_before_stop_pct": 33.3,
+          "stop_first_pct": 66.7
+        },
+        "2026-08-19": {
+          "eligible": 66,
+          "executed": 6,
+          "r1_before_stop_pct": 16.7,
+          "stop_first_pct": 66.7
+        },
+        "2026-08-20": {
+          "eligible": 66,
+          "executed": 8,
+          "r1_before_stop_pct": 37.5,
+          "stop_first_pct": 62.5
+        },
+        "2026-08-21": {
+          "eligible": 65,
+          "executed": 13,
+          "r1_before_stop_pct": 46.2,
+          "stop_first_pct": 46.2
+        },
+        "2026-08-24": {
+          "eligible": 66,
+          "executed": 12,
+          "r1_before_stop_pct": 50.0,
+          "stop_first_pct": 50.0
+        },
+        "2026-08-25": {
+          "eligible": 66,
+          "executed": 4,
+          "r1_before_stop_pct": 25.0,
+          "stop_first_pct": 75.0
+        },
+        "2026-08-26": {
+          "eligible": 66,
+          "executed": 4,
+          "r1_before_stop_pct": 25.0,
+          "stop_first_pct": 50.0
+        },
+        "2026-08-27": {
+          "eligible": 66,
+          "executed": 15,
+          "r1_before_stop_pct": 40.0,
+          "stop_first_pct": 46.7
+        },
+        "2026-08-28": {
+          "eligible": 66,
+          "executed": 6,
+          "r1_before_stop_pct": 16.7,
+          "stop_first_pct": 83.3
+        },
+        "2026-08-31": {
+          "eligible": 66,
+          "executed": 14,
+          "r1_before_stop_pct": 28.6,
+          "stop_first_pct": 64.3
+        },
+        "2026-09-01": {
+          "eligible": 66,
+          "executed": 7,
+          "r1_before_stop_pct": 28.6,
+          "stop_first_pct": 71.4
+        },
+        "2026-09-02": {
+          "eligible": 66,
+          "executed": 12,
+          "r1_before_stop_pct": 41.7,
+          "stop_first_pct": 58.3
+        },
+        "2026-09-03": {
+          "eligible": 66,
+          "executed": 13,
+          "r1_before_stop_pct": 76.9,
+          "stop_first_pct": 23.1
+        },
+        "2026-09-04": {
+          "eligible": 66,
+          "executed": 5,
+          "r1_before_stop_pct": 40.0,
+          "stop_first_pct": 60.0
+        },
+        "2026-09-08": {
+          "eligible": 66,
+          "executed": 12,
+          "r1_before_stop_pct": 66.7,
+          "stop_first_pct": 33.3
+        }
+      },
+      "exclusions": {
+        "flat_prior_session": 23
+      },
+      "verdict": "PROMISING BUT UNPROVEN"
+    },
+    "failed_break": {
+      "family": "failed_break",
+      "eligible_episodes": 11944,
+      "symbols": 66,
+      "sessions": 110,
+      "observed_trigger_pct": 59.0,
+      "actionable_trigger_pct": 58.6,
+      "missed_entry_pct": 0.4,
+      "missed_reasons": {
+        "NO_NEXT_BAR": 42,
+        "GAP_THROUGH_STOP": 1,
+        "MOVED_BEYOND_ENTRY": 1
+      },
+      "no_trigger": 4899,
+      "no_trigger_reasons": {
+        "EXPIRED": 4899
+      },
+      "executed": 7001,
+      "r1_before_stop_pct": 44.3,
+      "r2_before_stop_pct": 2.6,
+      "stop_first_pct": 49.6,
+      "eod_pct": 6.1,
+      "median_mae_r": 0.987,
+      "median_mfe_r": 0.842,
+      "median_hold_bars": 4.0,
+      "baseline_comparability": {
+        "strategy_executed_with_risk": 7001,
+        "baseline_executed_with_risk": 11418,
+        "paired_executed": 6677,
+        "median_strategy_risk_price": 0.6,
+        "median_baseline_risk_price": 0.155,
+        "median_paired_strategy_over_baseline_risk": 3.682,
+        "same_absolute_stop_distance": false
+      },
+      "baseline_executed": 11418,
+      "baseline_r1_before_stop_pct": 33.8,
+      "baseline_r2_before_stop_pct": 13.5,
+      "baseline_stop_first_pct": 65.8,
+      "r1_minus_baseline_pp": 10.5,
+      "per_opportunity_strategy_r1_pct": 26.0,
+      "per_opportunity_baseline_r1_pct": 32.3,
+      "regimes": {
+        "prior_down": {
+          "eligible": 5915,
+          "executed": 3393,
+          "r1_before_stop_pct": 44.2,
+          "stop_first_pct": 50.5
+        },
+        "prior_flat": {
+          "eligible": 32,
+          "executed": 18,
+          "r1_before_stop_pct": 38.9,
+          "stop_first_pct": 38.9
+        },
+        "prior_up": {
+          "eligible": 5997,
+          "executed": 3590,
+          "r1_before_stop_pct": 44.5,
+          "stop_first_pct": 48.9
+        }
+      },
+      "by_level": {
+        "ORB_HIGH": {
+          "eligible": 3802,
+          "executed": 2206,
+          "r1_before_stop_pct": 44.7,
+          "stop_first_pct": 50.7
+        },
+        "ORB_LOW": {
+          "eligible": 3654,
+          "executed": 2202,
+          "r1_before_stop_pct": 43.9,
+          "stop_first_pct": 48.9
+        },
+        "PDH": {
+          "eligible": 2334,
+          "executed": 1307,
+          "r1_before_stop_pct": 44.9,
+          "stop_first_pct": 49.3
+        },
+        "PDL": {
+          "eligible": 2154,
+          "executed": 1286,
+          "r1_before_stop_pct": 43.8,
+          "stop_first_pct": 49.3
+        }
+      },
+      "by_symbol": {
+        "AAPL": {
+          "eligible": 179,
+          "executed": 100,
+          "r1_before_stop_pct": 52.0,
+          "stop_first_pct": 47.0
+        },
+        "ABNB": {
+          "eligible": 177,
+          "executed": 100,
+          "r1_before_stop_pct": 44.0,
+          "stop_first_pct": 50.0
+        },
+        "AMD": {
+          "eligible": 169,
+          "executed": 107,
+          "r1_before_stop_pct": 51.4,
+          "stop_first_pct": 44.9
+        },
+        "AMZN": {
+          "eligible": 179,
+          "executed": 104,
+          "r1_before_stop_pct": 46.2,
+          "stop_first_pct": 50.0
+        },
+        "ARM": {
+          "eligible": 176,
+          "executed": 103,
+          "r1_before_stop_pct": 47.6,
+          "stop_first_pct": 45.6
+        },
+        "AVGO": {
+          "eligible": 174,
+          "executed": 116,
+          "r1_before_stop_pct": 50.0,
+          "stop_first_pct": 44.0
+        },
+        "BA": {
+          "eligible": 196,
+          "executed": 106,
+          "r1_before_stop_pct": 46.2,
+          "stop_first_pct": 47.2
+        },
+        "BAC": {
+          "eligible": 179,
+          "executed": 104,
+          "r1_before_stop_pct": 38.5,
+          "stop_first_pct": 55.8
+        },
+        "C": {
+          "eligible": 177,
+          "executed": 116,
+          "r1_before_stop_pct": 48.3,
+          "stop_first_pct": 42.2
+        },
+        "CAT": {
+          "eligible": 176,
+          "executed": 111,
+          "r1_before_stop_pct": 48.6,
+          "stop_first_pct": 43.2
+        },
+        "COIN": {
+          "eligible": 194,
+          "executed": 119,
+          "r1_before_stop_pct": 44.5,
+          "stop_first_pct": 50.4
+        },
+        "COP": {
+          "eligible": 176,
+          "executed": 118,
+          "r1_before_stop_pct": 46.6,
+          "stop_first_pct": 50.0
+        },
+        "COST": {
+          "eligible": 179,
+          "executed": 101,
+          "r1_before_stop_pct": 54.5,
+          "stop_first_pct": 42.6
+        },
+        "CRM": {
+          "eligible": 164,
+          "executed": 96,
+          "r1_before_stop_pct": 42.7,
+          "stop_first_pct": 51.0
+        },
+        "CVX": {
+          "eligible": 175,
+          "executed": 111,
+          "r1_before_stop_pct": 27.9,
+          "stop_first_pct": 68.5
+        },
+        "DIA": {
+          "eligible": 188,
+          "executed": 113,
+          "r1_before_stop_pct": 43.4,
+          "stop_first_pct": 50.4
+        },
+        "DIS": {
+          "eligible": 174,
+          "executed": 93,
+          "r1_before_stop_pct": 46.2,
+          "stop_first_pct": 51.6
+        },
+        "EEM": {
+          "eligible": 198,
+          "executed": 122,
+          "r1_before_stop_pct": 40.2,
+          "stop_first_pct": 49.2
+        },
+        "F": {
+          "eligible": 179,
+          "executed": 100,
+          "r1_before_stop_pct": 32.0,
+          "stop_first_pct": 55.0
+        },
+        "FXI": {
+          "eligible": 163,
+          "executed": 96,
+          "r1_before_stop_pct": 33.3,
+          "stop_first_pct": 55.2
+        },
+        "GE": {
+          "eligible": 182,
+          "executed": 110,
+          "r1_before_stop_pct": 49.1,
+          "stop_first_pct": 44.5
+        },
+        "GLD": {
+          "eligible": 195,
+          "executed": 113,
+          "r1_before_stop_pct": 49.6,
+          "stop_first_pct": 47.8
+        },
+        "GM": {
+          "eligible": 186,
+          "executed": 100,
+          "r1_before_stop_pct": 43.0,
+          "stop_first_pct": 53.0
+        },
+        "GOOGL": {
+          "eligible": 187,
+          "executed": 106,
+          "r1_before_stop_pct": 44.3,
+          "stop_first_pct": 53.8
+        },
+        "GS": {
+          "eligible": 178,
+          "executed": 107,
+          "r1_before_stop_pct": 43.0,
+          "stop_first_pct": 51.4
+        },
+        "HD": {
+          "eligible": 178,
+          "executed": 100,
+          "r1_before_stop_pct": 46.0,
+          "stop_first_pct": 48.0
+        },
+        "HOOD": {
+          "eligible": 167,
+          "executed": 106,
+          "r1_before_stop_pct": 41.5,
+          "stop_first_pct": 53.8
+        },
+        "HYG": {
+          "eligible": 192,
+          "executed": 104,
+          "r1_before_stop_pct": 33.7,
+          "stop_first_pct": 50.0
+        },
+        "IBIT": {
+          "eligible": 198,
+          "executed": 111,
+          "r1_before_stop_pct": 36.9,
+          "stop_first_pct": 55.0
+        },
+        "INTC": {
+          "eligible": 179,
+          "executed": 109,
+          "r1_before_stop_pct": 48.6,
+          "stop_first_pct": 45.9
+        },
+        "IWM": {
+          "eligible": 202,
+          "executed": 115,
+          "r1_before_stop_pct": 40.0,
+          "stop_first_pct": 53.9
+        },
+        "JPM": {
+          "eligible": 179,
+          "executed": 97,
+          "r1_before_stop_pct": 47.4,
+          "stop_first_pct": 48.5
+        },
+        "KWEB": {
+          "eligible": 162,
+          "executed": 102,
+          "r1_before_stop_pct": 42.2,
+          "stop_first_pct": 46.1
+        },
+        "LLY": {
+          "eligible": 156,
+          "executed": 87,
+          "r1_before_stop_pct": 51.7,
+          "stop_first_pct": 39.1
+        },
+        "META": {
+          "eligible": 181,
+          "executed": 106,
+          "r1_before_stop_pct": 52.8,
+          "stop_first_pct": 39.6
+        },
+        "MS": {
+          "eligible": 172,
+          "executed": 106,
+          "r1_before_stop_pct": 53.8,
+          "stop_first_pct": 37.7
+        },
+        "MSFT": {
+          "eligible": 159,
+          "executed": 99,
+          "r1_before_stop_pct": 48.5,
+          "stop_first_pct": 50.5
+        },
+        "MU": {
+          "eligible": 172,
+          "executed": 108,
+          "r1_before_stop_pct": 50.9,
+          "stop_first_pct": 43.5
+        },
+        "NFLX": {
+          "eligible": 168,
+          "executed": 88,
+          "r1_before_stop_pct": 44.3,
+          "stop_first_pct": 52.3
+        },
+        "NKE": {
+          "eligible": 172,
+          "executed": 87,
+          "r1_before_stop_pct": 42.5,
+          "stop_first_pct": 49.4
+        },
+        "NVDA": {
+          "eligible": 195,
+          "executed": 104,
+          "r1_before_stop_pct": 54.8,
+          "stop_first_pct": 41.3
+        },
+        "ORCL": {
+          "eligible": 164,
+          "executed": 98,
+          "r1_before_stop_pct": 53.1,
+          "stop_first_pct": 43.9
+        },
+        "OXY": {
+          "eligible": 179,
+          "executed": 94,
+          "r1_before_stop_pct": 37.2,
+          "stop_first_pct": 51.1
+        },
+        "PFE": {
+          "eligible": 182,
+          "executed": 109,
+          "r1_before_stop_pct": 49.5,
+          "stop_first_pct": 42.2
+        },
+        "PLTR": {
+          "eligible": 173,
+          "executed": 107,
+          "r1_before_stop_pct": 50.5,
+          "stop_first_pct": 47.7
+        },
+        "QCOM": {
+          "eligible": 182,
+          "executed": 111,
+          "r1_before_stop_pct": 51.4,
+          "stop_first_pct": 43.2
+        },
+        "QQQ": {
+          "eligible": 212,
+          "executed": 116,
+          "r1_before_stop_pct": 50.9,
+          "stop_first_pct": 45.7
+        },
+        "RIVN": {
+          "eligible": 179,
+          "executed": 107,
+          "r1_before_stop_pct": 28.0,
+          "stop_first_pct": 61.7
+        },
+        "SCHW": {
+          "eligible": 183,
+          "executed": 96,
+          "r1_before_stop_pct": 52.1,
+          "stop_first_pct": 42.7
+        },
+        "SLV": {
+          "eligible": 192,
+          "executed": 117,
+          "r1_before_stop_pct": 35.0,
+          "stop_first_pct": 52.1
+        },
+        "SMCI": {
+          "eligible": 175,
+          "executed": 108,
+          "r1_before_stop_pct": 45.4,
+          "stop_first_pct": 50.0
+        },
+        "SMH": {
+          "eligible": 191,
+          "executed": 114,
+          "r1_before_stop_pct": 42.1,
+          "stop_first_pct": 45.6
+        },
+        "SOFI": {
+          "eligible": 174,
+          "executed": 103,
+          "r1_before_stop_pct": 34.0,
+          "stop_first_pct": 60.2
+        },
+        "SPY": {
+          "eligible": 218,
+          "executed": 119,
+          "r1_before_stop_pct": 40.3,
+          "stop_first_pct": 55.5
+        },
+        "TLT": {
+          "eligible": 216,
+          "executed": 121,
+          "r1_before_stop_pct": 33.1,
+          "stop_first_pct": 59.5
+        },
+        "TSLA": {
+          "eligible": 175,
+          "executed": 95,
+          "r1_before_stop_pct": 36.8,
+          "stop_first_pct": 57.9
+        },
+        "TSM": {
+          "eligible": 174,
+          "executed": 110,
+          "r1_before_stop_pct": 43.6,
+          "stop_first_pct": 52.7
+        },
+        "UBER": {
+          "eligible": 182,
+          "executed": 105,
+          "r1_before_stop_pct": 45.7,
+          "stop_first_pct": 50.5
+        },
+        "UNH": {
+          "eligible": 167,
+          "executed": 95,
+          "r1_before_stop_pct": 49.5,
+          "stop_first_pct": 44.2
+        },
+        "WFC": {
+          "eligible": 169,
+          "executed": 83,
+          "r1_before_stop_pct": 42.2,
+          "stop_first_pct": 50.6
+        },
+        "WMT": {
+          "eligible": 183,
+          "executed": 117,
+          "r1_before_stop_pct": 36.8,
+          "stop_first_pct": 57.3
+        },
+        "XBI": {
+          "eligible": 177,
+          "executed": 111,
+          "r1_before_stop_pct": 43.2,
+          "stop_first_pct": 55.0
+        },
+        "XLE": {
+          "eligible": 178,
+          "executed": 108,
+          "r1_before_stop_pct": 41.7,
+          "stop_first_pct": 53.7
+        },
+        "XLF": {
+          "eligible": 202,
+          "executed": 122,
+          "r1_before_stop_pct": 42.6,
+          "stop_first_pct": 50.8
+        },
+        "XLK": {
+          "eligible": 204,
+          "executed": 125,
+          "r1_before_stop_pct": 48.8,
+          "stop_first_pct": 48.8
+        },
+        "XOM": {
+          "eligible": 181,
+          "executed": 109,
+          "r1_before_stop_pct": 45.9,
+          "stop_first_pct": 50.5
+        }
+      },
+      "by_session": {
+        "2026-04-01": {
+          "eligible": 93,
+          "executed": 52,
+          "r1_before_stop_pct": 38.5,
+          "stop_first_pct": 50.0
+        },
+        "2026-04-02": {
+          "eligible": 104,
+          "executed": 42,
+          "r1_before_stop_pct": 59.5,
+          "stop_first_pct": 35.7
+        },
+        "2026-04-06": {
+          "eligible": 97,
+          "executed": 73,
+          "r1_before_stop_pct": 37.0,
+          "stop_first_pct": 42.5
+        },
+        "2026-04-07": {
+          "eligible": 147,
+          "executed": 89,
+          "r1_before_stop_pct": 44.9,
+          "stop_first_pct": 52.8
+        },
+        "2026-04-08": {
+          "eligible": 73,
+          "executed": 37,
+          "r1_before_stop_pct": 32.4,
+          "stop_first_pct": 62.2
+        },
+        "2026-04-09": {
+          "eligible": 131,
+          "executed": 60,
+          "r1_before_stop_pct": 51.7,
+          "stop_first_pct": 48.3
+        },
+        "2026-04-10": {
+          "eligible": 100,
+          "executed": 58,
+          "r1_before_stop_pct": 41.4,
+          "stop_first_pct": 50.0
+        },
+        "2026-04-13": {
+          "eligible": 121,
+          "executed": 64,
+          "r1_before_stop_pct": 42.2,
+          "stop_first_pct": 56.2
+        },
+        "2026-04-14": {
+          "eligible": 80,
+          "executed": 46,
+          "r1_before_stop_pct": 37.0,
+          "stop_first_pct": 56.5
+        },
+        "2026-04-15": {
+          "eligible": 114,
+          "executed": 77,
+          "r1_before_stop_pct": 42.9,
+          "stop_first_pct": 50.6
+        },
+        "2026-04-16": {
+          "eligible": 103,
+          "executed": 56,
+          "r1_before_stop_pct": 42.9,
+          "stop_first_pct": 48.2
+        },
+        "2026-04-17": {
+          "eligible": 101,
+          "executed": 53,
+          "r1_before_stop_pct": 45.3,
+          "stop_first_pct": 49.1
+        },
+        "2026-04-20": {
+          "eligible": 109,
+          "executed": 80,
+          "r1_before_stop_pct": 48.8,
+          "stop_first_pct": 41.2
+        },
+        "2026-04-21": {
+          "eligible": 133,
+          "executed": 81,
+          "r1_before_stop_pct": 55.6,
+          "stop_first_pct": 37.0
+        },
+        "2026-04-22": {
+          "eligible": 108,
+          "executed": 64,
+          "r1_before_stop_pct": 29.7,
+          "stop_first_pct": 68.8
+        },
+        "2026-04-23": {
+          "eligible": 139,
+          "executed": 76,
+          "r1_before_stop_pct": 47.4,
+          "stop_first_pct": 40.8
+        },
+        "2026-04-24": {
+          "eligible": 101,
+          "executed": 59,
+          "r1_before_stop_pct": 44.1,
+          "stop_first_pct": 52.5
+        },
+        "2026-04-27": {
+          "eligible": 106,
+          "executed": 67,
+          "r1_before_stop_pct": 47.8,
+          "stop_first_pct": 44.8
+        },
+        "2026-04-28": {
+          "eligible": 102,
+          "executed": 60,
+          "r1_before_stop_pct": 43.3,
+          "stop_first_pct": 55.0
+        },
+        "2026-04-29": {
+          "eligible": 110,
+          "executed": 57,
+          "r1_before_stop_pct": 59.6,
+          "stop_first_pct": 36.8
+        },
+        "2026-04-30": {
+          "eligible": 117,
+          "executed": 59,
+          "r1_before_stop_pct": 37.3,
+          "stop_first_pct": 59.3
+        },
+        "2026-05-01": {
+          "eligible": 104,
+          "executed": 67,
+          "r1_before_stop_pct": 46.3,
+          "stop_first_pct": 43.3
+        },
+        "2026-05-04": {
+          "eligible": 118,
+          "executed": 72,
+          "r1_before_stop_pct": 41.7,
+          "stop_first_pct": 50.0
+        },
+        "2026-05-05": {
+          "eligible": 104,
+          "executed": 79,
+          "r1_before_stop_pct": 44.3,
+          "stop_first_pct": 50.6
+        },
+        "2026-05-06": {
+          "eligible": 92,
+          "executed": 57,
+          "r1_before_stop_pct": 59.6,
+          "stop_first_pct": 35.1
+        },
+        "2026-05-07": {
+          "eligible": 129,
+          "executed": 78,
+          "r1_before_stop_pct": 46.2,
+          "stop_first_pct": 53.8
+        },
+        "2026-05-08": {
+          "eligible": 103,
+          "executed": 62,
+          "r1_before_stop_pct": 46.8,
+          "stop_first_pct": 51.6
+        },
+        "2026-05-11": {
+          "eligible": 108,
+          "executed": 67,
+          "r1_before_stop_pct": 47.8,
+          "stop_first_pct": 44.8
+        },
+        "2026-05-12": {
+          "eligible": 116,
+          "executed": 61,
+          "r1_before_stop_pct": 37.7,
+          "stop_first_pct": 60.7
+        },
+        "2026-05-13": {
+          "eligible": 103,
+          "executed": 50,
+          "r1_before_stop_pct": 40.0,
+          "stop_first_pct": 54.0
+        },
+        "2026-05-14": {
+          "eligible": 105,
+          "executed": 67,
+          "r1_before_stop_pct": 40.3,
+          "stop_first_pct": 50.7
+        },
+        "2026-05-15": {
+          "eligible": 90,
+          "executed": 64,
+          "r1_before_stop_pct": 53.1,
+          "stop_first_pct": 45.3
+        },
+        "2026-05-18": {
+          "eligible": 119,
+          "executed": 81,
+          "r1_before_stop_pct": 39.5,
+          "stop_first_pct": 54.3
+        },
+        "2026-05-19": {
+          "eligible": 129,
+          "executed": 61,
+          "r1_before_stop_pct": 50.8,
+          "stop_first_pct": 45.9
+        },
+        "2026-05-20": {
+          "eligible": 122,
+          "executed": 60,
+          "r1_before_stop_pct": 40.0,
+          "stop_first_pct": 56.7
+        },
+        "2026-05-21": {
+          "eligible": 127,
+          "executed": 76,
+          "r1_before_stop_pct": 53.9,
+          "stop_first_pct": 44.7
+        },
+        "2026-05-22": {
+          "eligible": 97,
+          "executed": 54,
+          "r1_before_stop_pct": 59.3,
+          "stop_first_pct": 37.0
+        },
+        "2026-05-26": {
+          "eligible": 113,
+          "executed": 67,
+          "r1_before_stop_pct": 41.8,
+          "stop_first_pct": 47.8
+        },
+        "2026-05-27": {
+          "eligible": 101,
+          "executed": 67,
+          "r1_before_stop_pct": 40.3,
+          "stop_first_pct": 47.8
+        },
+        "2026-05-28": {
+          "eligible": 119,
+          "executed": 63,
+          "r1_before_stop_pct": 36.5,
+          "stop_first_pct": 50.8
+        },
+        "2026-05-29": {
+          "eligible": 109,
+          "executed": 55,
+          "r1_before_stop_pct": 40.0,
+          "stop_first_pct": 47.3
+        },
+        "2026-06-01": {
+          "eligible": 108,
+          "executed": 69,
+          "r1_before_stop_pct": 42.0,
+          "stop_first_pct": 53.6
+        },
+        "2026-06-02": {
+          "eligible": 109,
+          "executed": 62,
+          "r1_before_stop_pct": 43.5,
+          "stop_first_pct": 54.8
+        },
+        "2026-06-03": {
+          "eligible": 103,
+          "executed": 49,
+          "r1_before_stop_pct": 44.9,
+          "stop_first_pct": 51.0
+        },
+        "2026-06-04": {
+          "eligible": 116,
+          "executed": 67,
+          "r1_before_stop_pct": 46.3,
+          "stop_first_pct": 47.8
+        },
+        "2026-06-05": {
+          "eligible": 108,
+          "executed": 58,
+          "r1_before_stop_pct": 25.9,
+          "stop_first_pct": 72.4
+        },
+        "2026-06-08": {
+          "eligible": 87,
+          "executed": 58,
+          "r1_before_stop_pct": 51.7,
+          "stop_first_pct": 44.8
+        },
+        "2026-06-09": {
+          "eligible": 146,
+          "executed": 77,
+          "r1_before_stop_pct": 50.6,
+          "stop_first_pct": 48.1
+        },
+        "2026-06-10": {
+          "eligible": 110,
+          "executed": 73,
+          "r1_before_stop_pct": 31.5,
+          "stop_first_pct": 64.4
+        },
+        "2026-06-11": {
+          "eligible": 139,
+          "executed": 82,
+          "r1_before_stop_pct": 52.4,
+          "stop_first_pct": 43.9
+        },
+        "2026-06-12": {
+          "eligible": 90,
+          "executed": 60,
+          "r1_before_stop_pct": 41.7,
+          "stop_first_pct": 48.3
+        },
+        "2026-06-15": {
+          "eligible": 89,
+          "executed": 51,
+          "r1_before_stop_pct": 47.1,
+          "stop_first_pct": 47.1
+        },
+        "2026-06-16": {
+          "eligible": 116,
+          "executed": 59,
+          "r1_before_stop_pct": 44.1,
+          "stop_first_pct": 52.5
+        },
+        "2026-06-17": {
+          "eligible": 155,
+          "executed": 96,
+          "r1_before_stop_pct": 50.0,
+          "stop_first_pct": 45.8
+        },
+        "2026-06-18": {
+          "eligible": 86,
+          "executed": 53,
+          "r1_before_stop_pct": 35.8,
+          "stop_first_pct": 64.2
+        },
+        "2026-06-22": {
+          "eligible": 103,
+          "executed": 60,
+          "r1_before_stop_pct": 51.7,
+          "stop_first_pct": 43.3
+        },
+        "2026-06-23": {
+          "eligible": 100,
+          "executed": 65,
+          "r1_before_stop_pct": 49.2,
+          "stop_first_pct": 44.6
+        },
+        "2026-06-24": {
+          "eligible": 114,
+          "executed": 72,
+          "r1_before_stop_pct": 45.8,
+          "stop_first_pct": 51.4
+        },
+        "2026-06-25": {
+          "eligible": 107,
+          "executed": 58,
+          "r1_before_stop_pct": 48.3,
+          "stop_first_pct": 41.4
+        },
+        "2026-06-26": {
+          "eligible": 111,
+          "executed": 58,
+          "r1_before_stop_pct": 36.2,
+          "stop_first_pct": 60.3
+        },
+        "2026-06-29": {
+          "eligible": 144,
+          "executed": 86,
+          "r1_before_stop_pct": 53.5,
+          "stop_first_pct": 34.9
+        },
+        "2026-06-30": {
+          "eligible": 102,
+          "executed": 69,
+          "r1_before_stop_pct": 43.5,
+          "stop_first_pct": 50.7
+        },
+        "2026-07-01": {
+          "eligible": 120,
+          "executed": 58,
+          "r1_before_stop_pct": 43.1,
+          "stop_first_pct": 55.2
+        },
+        "2026-07-02": {
+          "eligible": 123,
+          "executed": 68,
+          "r1_before_stop_pct": 39.7,
+          "stop_first_pct": 60.3
+        },
+        "2026-07-06": {
+          "eligible": 89,
+          "executed": 57,
+          "r1_before_stop_pct": 42.1,
+          "stop_first_pct": 56.1
+        },
+        "2026-07-07": {
+          "eligible": 100,
+          "executed": 57,
+          "r1_before_stop_pct": 42.1,
+          "stop_first_pct": 47.4
+        },
+        "2026-07-08": {
+          "eligible": 99,
+          "executed": 64,
+          "r1_before_stop_pct": 34.4,
+          "stop_first_pct": 54.7
+        },
+        "2026-07-09": {
+          "eligible": 96,
+          "executed": 59,
+          "r1_before_stop_pct": 35.6,
+          "stop_first_pct": 55.9
+        },
+        "2026-07-10": {
+          "eligible": 106,
+          "executed": 69,
+          "r1_before_stop_pct": 42.0,
+          "stop_first_pct": 46.4
+        },
+        "2026-07-13": {
+          "eligible": 107,
+          "executed": 67,
+          "r1_before_stop_pct": 46.3,
+          "stop_first_pct": 44.8
+        },
+        "2026-07-14": {
+          "eligible": 113,
+          "executed": 73,
+          "r1_before_stop_pct": 46.6,
+          "stop_first_pct": 42.5
+        },
+        "2026-07-15": {
+          "eligible": 117,
+          "executed": 54,
+          "r1_before_stop_pct": 33.3,
+          "stop_first_pct": 63.0
+        },
+        "2026-07-16": {
+          "eligible": 120,
+          "executed": 75,
+          "r1_before_stop_pct": 40.0,
+          "stop_first_pct": 50.7
+        },
+        "2026-07-17": {
+          "eligible": 104,
+          "executed": 66,
+          "r1_before_stop_pct": 42.4,
+          "stop_first_pct": 53.0
+        },
+        "2026-07-20": {
+          "eligible": 105,
+          "executed": 63,
+          "r1_before_stop_pct": 46.0,
+          "stop_first_pct": 50.8
+        },
+        "2026-07-21": {
+          "eligible": 99,
+          "executed": 56,
+          "r1_before_stop_pct": 33.9,
+          "stop_first_pct": 58.9
+        },
+        "2026-07-22": {
+          "eligible": 96,
+          "executed": 56,
+          "r1_before_stop_pct": 42.9,
+          "stop_first_pct": 51.8
+        },
+        "2026-07-23": {
+          "eligible": 92,
+          "executed": 44,
+          "r1_before_stop_pct": 34.1,
+          "stop_first_pct": 61.4
+        },
+        "2026-07-24": {
+          "eligible": 121,
+          "executed": 62,
+          "r1_before_stop_pct": 43.5,
+          "stop_first_pct": 51.6
+        },
+        "2026-07-27": {
+          "eligible": 107,
+          "executed": 52,
+          "r1_before_stop_pct": 46.2,
+          "stop_first_pct": 40.4
+        },
+        "2026-07-28": {
+          "eligible": 107,
+          "executed": 64,
+          "r1_before_stop_pct": 46.9,
+          "stop_first_pct": 48.4
+        },
+        "2026-07-29": {
+          "eligible": 139,
+          "executed": 81,
+          "r1_before_stop_pct": 49.4,
+          "stop_first_pct": 45.7
+        },
+        "2026-07-30": {
+          "eligible": 103,
+          "executed": 62,
+          "r1_before_stop_pct": 40.3,
+          "stop_first_pct": 53.2
+        },
+        "2026-07-31": {
+          "eligible": 116,
+          "executed": 68,
+          "r1_before_stop_pct": 50.0,
+          "stop_first_pct": 36.8
+        },
+        "2026-08-03": {
+          "eligible": 90,
+          "executed": 41,
+          "r1_before_stop_pct": 39.0,
+          "stop_first_pct": 53.7
+        },
+        "2026-08-04": {
+          "eligible": 94,
+          "executed": 56,
+          "r1_before_stop_pct": 32.1,
+          "stop_first_pct": 66.1
+        },
+        "2026-08-05": {
+          "eligible": 102,
+          "executed": 67,
+          "r1_before_stop_pct": 53.7,
+          "stop_first_pct": 41.8
+        },
+        "2026-08-06": {
+          "eligible": 109,
+          "executed": 59,
+          "r1_before_stop_pct": 42.4,
+          "stop_first_pct": 55.9
+        },
+        "2026-08-07": {
+          "eligible": 113,
+          "executed": 62,
+          "r1_before_stop_pct": 54.8,
+          "stop_first_pct": 32.3
+        },
+        "2026-08-10": {
+          "eligible": 112,
+          "executed": 61,
+          "r1_before_stop_pct": 44.3,
+          "stop_first_pct": 50.8
+        },
+        "2026-08-11": {
+          "eligible": 116,
+          "executed": 72,
+          "r1_before_stop_pct": 51.4,
+          "stop_first_pct": 47.2
+        },
+        "2026-08-12": {
+          "eligible": 105,
+          "executed": 70,
+          "r1_before_stop_pct": 30.0,
+          "stop_first_pct": 64.3
+        },
+        "2026-08-13": {
+          "eligible": 122,
+          "executed": 70,
+          "r1_before_stop_pct": 54.3,
+          "stop_first_pct": 41.4
+        },
+        "2026-08-14": {
+          "eligible": 89,
+          "executed": 58,
+          "r1_before_stop_pct": 41.4,
+          "stop_first_pct": 51.7
+        },
+        "2026-08-17": {
+          "eligible": 114,
+          "executed": 67,
+          "r1_before_stop_pct": 34.3,
+          "stop_first_pct": 56.7
+        },
+        "2026-08-18": {
+          "eligible": 97,
+          "executed": 57,
+          "r1_before_stop_pct": 45.6,
+          "stop_first_pct": 52.6
+        },
+        "2026-08-19": {
+          "eligible": 127,
+          "executed": 67,
+          "r1_before_stop_pct": 49.3,
+          "stop_first_pct": 46.3
+        },
+        "2026-08-20": {
+          "eligible": 104,
+          "executed": 66,
+          "r1_before_stop_pct": 40.9,
+          "stop_first_pct": 53.0
+        },
+        "2026-08-21": {
+          "eligible": 108,
+          "executed": 69,
+          "r1_before_stop_pct": 53.6,
+          "stop_first_pct": 40.6
+        },
+        "2026-08-24": {
+          "eligible": 85,
+          "executed": 49,
+          "r1_before_stop_pct": 44.9,
+          "stop_first_pct": 51.0
+        },
+        "2026-08-25": {
+          "eligible": 91,
+          "executed": 53,
+          "r1_before_stop_pct": 45.3,
+          "stop_first_pct": 50.9
+        },
+        "2026-08-26": {
+          "eligible": 100,
+          "executed": 62,
+          "r1_before_stop_pct": 37.1,
+          "stop_first_pct": 45.2
+        },
+        "2026-08-27": {
+          "eligible": 98,
+          "executed": 71,
+          "r1_before_stop_pct": 42.3,
+          "stop_first_pct": 45.1
+        },
+        "2026-08-28": {
+          "eligible": 120,
+          "executed": 71,
+          "r1_before_stop_pct": 47.9,
+          "stop_first_pct": 45.1
+        },
+        "2026-08-31": {
+          "eligible": 83,
+          "executed": 52,
+          "r1_before_stop_pct": 40.4,
+          "stop_first_pct": 51.9
+        },
+        "2026-09-01": {
+          "eligible": 129,
+          "executed": 76,
+          "r1_before_stop_pct": 43.4,
+          "stop_first_pct": 51.3
+        },
+        "2026-09-02": {
+          "eligible": 111,
+          "executed": 64,
+          "r1_before_stop_pct": 45.3,
+          "stop_first_pct": 45.3
+        },
+        "2026-09-03": {
+          "eligible": 112,
+          "executed": 63,
+          "r1_before_stop_pct": 42.9,
+          "stop_first_pct": 54.0
+        },
+        "2026-09-04": {
+          "eligible": 90,
+          "executed": 55,
+          "r1_before_stop_pct": 56.4,
+          "stop_first_pct": 41.8
+        },
+        "2026-09-08": {
+          "eligible": 104,
+          "executed": 68,
+          "r1_before_stop_pct": 45.6,
+          "stop_first_pct": 48.5
+        }
+      },
+      "exclusions": {},
+      "verdict": "PROMISING BUT UNPROVEN"
+    },
+    "compression_expansion": {
+      "family": "compression_expansion",
+      "eligible_episodes": 7260,
+      "symbols": 66,
+      "sessions": 110,
+      "observed_trigger_pct": 36.7,
+      "actionable_trigger_pct": 36.7,
+      "missed_entry_pct": 0.0,
+      "missed_reasons": {},
+      "no_trigger": 4595,
+      "no_trigger_reasons": {
+        "INVALIDATED": 3657,
+        "EXPIRED": 938
+      },
+      "executed": 2665,
+      "r1_before_stop_pct": 41.3,
+      "r2_before_stop_pct": 0.5,
+      "stop_first_pct": 41.3,
+      "eod_pct": 17.4,
+      "median_mae_r": 0.751,
+      "median_mfe_r": 0.756,
+      "median_hold_bars": 13.0,
+      "baseline_comparability": {
+        "strategy_executed_with_risk": 2665,
+        "baseline_executed_with_risk": 7237,
+        "paired_executed": 2661,
+        "median_strategy_risk_price": 1.32,
+        "median_baseline_risk_price": 0.515,
+        "median_paired_strategy_over_baseline_risk": 1.986,
+        "same_absolute_stop_distance": false
+      },
+      "baseline_executed": 7237,
+      "baseline_r1_before_stop_pct": 42.7,
+      "baseline_r2_before_stop_pct": 7.2,
+      "baseline_stop_first_pct": 55.1,
+      "r1_minus_baseline_pp": -1.4,
+      "per_opportunity_strategy_r1_pct": 15.2,
+      "per_opportunity_baseline_r1_pct": 42.6,
+      "regimes": {
+        "mother_down": {
+          "eligible": 3666,
+          "executed": 1301,
+          "r1_before_stop_pct": 39.8,
+          "stop_first_pct": 42.7
+        },
+        "mother_up": {
+          "eligible": 3594,
+          "executed": 1364,
+          "r1_before_stop_pct": 42.7,
+          "stop_first_pct": 40.0
+        }
+      },
+      "by_level": {},
+      "by_symbol": {
+        "AAPL": {
+          "eligible": 110,
+          "executed": 41,
+          "r1_before_stop_pct": 36.6,
+          "stop_first_pct": 39.0
+        },
+        "ABNB": {
+          "eligible": 110,
+          "executed": 42,
+          "r1_before_stop_pct": 33.3,
+          "stop_first_pct": 38.1
+        },
+        "AMD": {
+          "eligible": 110,
+          "executed": 38,
+          "r1_before_stop_pct": 42.1,
+          "stop_first_pct": 39.5
+        },
+        "AMZN": {
+          "eligible": 110,
+          "executed": 36,
+          "r1_before_stop_pct": 36.1,
+          "stop_first_pct": 36.1
+        },
+        "ARM": {
+          "eligible": 110,
+          "executed": 44,
+          "r1_before_stop_pct": 31.8,
+          "stop_first_pct": 56.8
+        },
+        "AVGO": {
+          "eligible": 110,
+          "executed": 33,
+          "r1_before_stop_pct": 27.3,
+          "stop_first_pct": 36.4
+        },
+        "BA": {
+          "eligible": 110,
+          "executed": 44,
+          "r1_before_stop_pct": 43.2,
+          "stop_first_pct": 29.5
+        },
+        "BAC": {
+          "eligible": 110,
+          "executed": 33,
+          "r1_before_stop_pct": 45.5,
+          "stop_first_pct": 39.4
+        },
+        "C": {
+          "eligible": 110,
+          "executed": 41,
+          "r1_before_stop_pct": 36.6,
+          "stop_first_pct": 41.5
+        },
+        "CAT": {
+          "eligible": 110,
+          "executed": 44,
+          "r1_before_stop_pct": 43.2,
+          "stop_first_pct": 45.5
+        },
+        "COIN": {
+          "eligible": 110,
+          "executed": 47,
+          "r1_before_stop_pct": 55.3,
+          "stop_first_pct": 36.2
+        },
+        "COP": {
+          "eligible": 110,
+          "executed": 39,
+          "r1_before_stop_pct": 51.3,
+          "stop_first_pct": 30.8
+        },
+        "COST": {
+          "eligible": 110,
+          "executed": 28,
+          "r1_before_stop_pct": 28.6,
+          "stop_first_pct": 42.9
+        },
+        "CRM": {
+          "eligible": 110,
+          "executed": 39,
+          "r1_before_stop_pct": 43.6,
+          "stop_first_pct": 38.5
+        },
+        "CVX": {
+          "eligible": 110,
+          "executed": 35,
+          "r1_before_stop_pct": 34.3,
+          "stop_first_pct": 45.7
+        },
+        "DIA": {
+          "eligible": 110,
+          "executed": 39,
+          "r1_before_stop_pct": 38.5,
+          "stop_first_pct": 46.2
+        },
+        "DIS": {
+          "eligible": 110,
+          "executed": 43,
+          "r1_before_stop_pct": 46.5,
+          "stop_first_pct": 27.9
+        },
+        "EEM": {
+          "eligible": 110,
+          "executed": 41,
+          "r1_before_stop_pct": 46.3,
+          "stop_first_pct": 48.8
+        },
+        "F": {
+          "eligible": 110,
+          "executed": 46,
+          "r1_before_stop_pct": 32.6,
+          "stop_first_pct": 32.6
+        },
+        "FXI": {
+          "eligible": 110,
+          "executed": 47,
+          "r1_before_stop_pct": 46.8,
+          "stop_first_pct": 36.2
+        },
+        "GE": {
+          "eligible": 110,
+          "executed": 42,
+          "r1_before_stop_pct": 35.7,
+          "stop_first_pct": 47.6
+        },
+        "GLD": {
+          "eligible": 110,
+          "executed": 45,
+          "r1_before_stop_pct": 37.8,
+          "stop_first_pct": 55.6
+        },
+        "GM": {
+          "eligible": 110,
+          "executed": 47,
+          "r1_before_stop_pct": 34.0,
+          "stop_first_pct": 42.6
+        },
+        "GOOGL": {
+          "eligible": 110,
+          "executed": 36,
+          "r1_before_stop_pct": 50.0,
+          "stop_first_pct": 38.9
+        },
+        "GS": {
+          "eligible": 110,
+          "executed": 35,
+          "r1_before_stop_pct": 45.7,
+          "stop_first_pct": 42.9
+        },
+        "HD": {
+          "eligible": 110,
+          "executed": 39,
+          "r1_before_stop_pct": 46.2,
+          "stop_first_pct": 46.2
+        },
+        "HOOD": {
+          "eligible": 110,
+          "executed": 45,
+          "r1_before_stop_pct": 37.8,
+          "stop_first_pct": 51.1
+        },
+        "HYG": {
+          "eligible": 110,
+          "executed": 40,
+          "r1_before_stop_pct": 32.5,
+          "stop_first_pct": 40.0
+        },
+        "IBIT": {
+          "eligible": 110,
+          "executed": 39,
+          "r1_before_stop_pct": 48.7,
+          "stop_first_pct": 46.2
+        },
+        "INTC": {
+          "eligible": 110,
+          "executed": 47,
+          "r1_before_stop_pct": 40.4,
+          "stop_first_pct": 48.9
+        },
+        "IWM": {
+          "eligible": 110,
+          "executed": 42,
+          "r1_before_stop_pct": 47.6,
+          "stop_first_pct": 45.2
+        },
+        "JPM": {
+          "eligible": 110,
+          "executed": 32,
+          "r1_before_stop_pct": 50.0,
+          "stop_first_pct": 21.9
+        },
+        "KWEB": {
+          "eligible": 110,
+          "executed": 46,
+          "r1_before_stop_pct": 32.6,
+          "stop_first_pct": 39.1
+        },
+        "LLY": {
+          "eligible": 110,
+          "executed": 39,
+          "r1_before_stop_pct": 41.0,
+          "stop_first_pct": 28.2
+        },
+        "META": {
+          "eligible": 110,
+          "executed": 38,
+          "r1_before_stop_pct": 44.7,
+          "stop_first_pct": 47.4
+        },
+        "MS": {
+          "eligible": 110,
+          "executed": 35,
+          "r1_before_stop_pct": 37.1,
+          "stop_first_pct": 42.9
+        },
+        "MSFT": {
+          "eligible": 110,
+          "executed": 41,
+          "r1_before_stop_pct": 51.2,
+          "stop_first_pct": 31.7
+        },
+        "MU": {
+          "eligible": 110,
+          "executed": 44,
+          "r1_before_stop_pct": 40.9,
+          "stop_first_pct": 45.5
+        },
+        "NFLX": {
+          "eligible": 110,
+          "executed": 45,
+          "r1_before_stop_pct": 42.2,
+          "stop_first_pct": 37.8
+        },
+        "NKE": {
+          "eligible": 110,
+          "executed": 40,
+          "r1_before_stop_pct": 42.5,
+          "stop_first_pct": 47.5
+        },
+        "NVDA": {
+          "eligible": 110,
+          "executed": 44,
+          "r1_before_stop_pct": 45.5,
+          "stop_first_pct": 43.2
+        },
+        "ORCL": {
+          "eligible": 110,
+          "executed": 49,
+          "r1_before_stop_pct": 46.9,
+          "stop_first_pct": 36.7
+        },
+        "OXY": {
+          "eligible": 110,
+          "executed": 44,
+          "r1_before_stop_pct": 47.7,
+          "stop_first_pct": 25.0
+        },
+        "PFE": {
+          "eligible": 110,
+          "executed": 45,
+          "r1_before_stop_pct": 35.6,
+          "stop_first_pct": 40.0
+        },
+        "PLTR": {
+          "eligible": 110,
+          "executed": 35,
+          "r1_before_stop_pct": 51.4,
+          "stop_first_pct": 31.4
+        },
+        "QCOM": {
+          "eligible": 110,
+          "executed": 43,
+          "r1_before_stop_pct": 25.6,
+          "stop_first_pct": 58.1
+        },
+        "QQQ": {
+          "eligible": 110,
+          "executed": 46,
+          "r1_before_stop_pct": 41.3,
+          "stop_first_pct": 50.0
+        },
+        "RIVN": {
+          "eligible": 110,
+          "executed": 44,
+          "r1_before_stop_pct": 47.7,
+          "stop_first_pct": 34.1
+        },
+        "SCHW": {
+          "eligible": 110,
+          "executed": 37,
+          "r1_before_stop_pct": 29.7,
+          "stop_first_pct": 45.9
+        },
+        "SLV": {
+          "eligible": 110,
+          "executed": 46,
+          "r1_before_stop_pct": 52.2,
+          "stop_first_pct": 45.7
+        },
+        "SMCI": {
+          "eligible": 110,
+          "executed": 39,
+          "r1_before_stop_pct": 51.3,
+          "stop_first_pct": 35.9
+        },
+        "SMH": {
+          "eligible": 110,
+          "executed": 36,
+          "r1_before_stop_pct": 52.8,
+          "stop_first_pct": 38.9
+        },
+        "SOFI": {
+          "eligible": 110,
+          "executed": 50,
+          "r1_before_stop_pct": 40.0,
+          "stop_first_pct": 38.0
+        },
+        "SPY": {
+          "eligible": 110,
+          "executed": 39,
+          "r1_before_stop_pct": 43.6,
+          "stop_first_pct": 51.3
+        },
+        "TLT": {
+          "eligible": 110,
+          "executed": 36,
+          "r1_before_stop_pct": 36.1,
+          "stop_first_pct": 52.8
+        },
+        "TSLA": {
+          "eligible": 110,
+          "executed": 38,
+          "r1_before_stop_pct": 44.7,
+          "stop_first_pct": 44.7
+        },
+        "TSM": {
+          "eligible": 110,
+          "executed": 37,
+          "r1_before_stop_pct": 45.9,
+          "stop_first_pct": 40.5
+        },
+        "UBER": {
+          "eligible": 110,
+          "executed": 39,
+          "r1_before_stop_pct": 33.3,
+          "stop_first_pct": 53.8
+        },
+        "UNH": {
+          "eligible": 110,
+          "executed": 42,
+          "r1_before_stop_pct": 28.6,
+          "stop_first_pct": 47.6
+        },
+        "WFC": {
+          "eligible": 110,
+          "executed": 34,
+          "r1_before_stop_pct": 38.2,
+          "stop_first_pct": 41.2
+        },
+        "WMT": {
+          "eligible": 110,
+          "executed": 40,
+          "r1_before_stop_pct": 42.5,
+          "stop_first_pct": 25.0
+        },
+        "XBI": {
+          "eligible": 110,
+          "executed": 39,
+          "r1_before_stop_pct": 41.0,
+          "stop_first_pct": 35.9
+        },
+        "XLE": {
+          "eligible": 110,
+          "executed": 34,
+          "r1_before_stop_pct": 44.1,
+          "stop_first_pct": 32.4
+        },
+        "XLF": {
+          "eligible": 110,
+          "executed": 33,
+          "r1_before_stop_pct": 48.5,
+          "stop_first_pct": 33.3
+        },
+        "XLK": {
+          "eligible": 110,
+          "executed": 36,
+          "r1_before_stop_pct": 38.9,
+          "stop_first_pct": 50.0
+        },
+        "XOM": {
+          "eligible": 110,
+          "executed": 43,
+          "r1_before_stop_pct": 32.6,
+          "stop_first_pct": 51.2
+        }
+      },
+      "by_session": {
+        "2026-04-01": {
+          "eligible": 66,
+          "executed": 19,
+          "r1_before_stop_pct": 63.2,
+          "stop_first_pct": 15.8
+        },
+        "2026-04-02": {
+          "eligible": 66,
+          "executed": 31,
+          "r1_before_stop_pct": 77.4,
+          "stop_first_pct": 19.4
+        },
+        "2026-04-06": {
+          "eligible": 66,
+          "executed": 17,
+          "r1_before_stop_pct": 29.4,
+          "stop_first_pct": 29.4
+        },
+        "2026-04-07": {
+          "eligible": 66,
+          "executed": 27,
+          "r1_before_stop_pct": 40.7,
+          "stop_first_pct": 55.6
+        },
+        "2026-04-08": {
+          "eligible": 66,
+          "executed": 26,
+          "r1_before_stop_pct": 57.7,
+          "stop_first_pct": 30.8
+        },
+        "2026-04-09": {
+          "eligible": 66,
+          "executed": 19,
+          "r1_before_stop_pct": 21.1,
+          "stop_first_pct": 68.4
+        },
+        "2026-04-10": {
+          "eligible": 66,
+          "executed": 33,
+          "r1_before_stop_pct": 36.4,
+          "stop_first_pct": 33.3
+        },
+        "2026-04-13": {
+          "eligible": 66,
+          "executed": 24,
+          "r1_before_stop_pct": 66.7,
+          "stop_first_pct": 33.3
+        },
+        "2026-04-14": {
+          "eligible": 66,
+          "executed": 23,
+          "r1_before_stop_pct": 47.8,
+          "stop_first_pct": 47.8
+        },
+        "2026-04-15": {
+          "eligible": 66,
+          "executed": 24,
+          "r1_before_stop_pct": 33.3,
+          "stop_first_pct": 37.5
+        },
+        "2026-04-16": {
+          "eligible": 66,
+          "executed": 31,
+          "r1_before_stop_pct": 25.8,
+          "stop_first_pct": 45.2
+        },
+        "2026-04-17": {
+          "eligible": 66,
+          "executed": 20,
+          "r1_before_stop_pct": 65.0,
+          "stop_first_pct": 30.0
+        },
+        "2026-04-20": {
+          "eligible": 66,
+          "executed": 27,
+          "r1_before_stop_pct": 33.3,
+          "stop_first_pct": 40.7
+        },
+        "2026-04-21": {
+          "eligible": 66,
+          "executed": 26,
+          "r1_before_stop_pct": 38.5,
+          "stop_first_pct": 61.5
+        },
+        "2026-04-22": {
+          "eligible": 66,
+          "executed": 30,
+          "r1_before_stop_pct": 30.0,
+          "stop_first_pct": 50.0
+        },
+        "2026-04-23": {
+          "eligible": 66,
+          "executed": 22,
+          "r1_before_stop_pct": 36.4,
+          "stop_first_pct": 45.5
+        },
+        "2026-04-24": {
+          "eligible": 66,
+          "executed": 23,
+          "r1_before_stop_pct": 21.7,
+          "stop_first_pct": 52.2
+        },
+        "2026-04-27": {
+          "eligible": 66,
+          "executed": 14,
+          "r1_before_stop_pct": 35.7,
+          "stop_first_pct": 42.9
+        },
+        "2026-04-28": {
+          "eligible": 66,
+          "executed": 21,
+          "r1_before_stop_pct": 19.0,
+          "stop_first_pct": 52.4
+        },
+        "2026-04-29": {
+          "eligible": 66,
+          "executed": 22,
+          "r1_before_stop_pct": 50.0,
+          "stop_first_pct": 27.3
+        },
+        "2026-04-30": {
+          "eligible": 66,
+          "executed": 25,
+          "r1_before_stop_pct": 56.0,
+          "stop_first_pct": 32.0
+        },
+        "2026-05-01": {
+          "eligible": 66,
+          "executed": 19,
+          "r1_before_stop_pct": 36.8,
+          "stop_first_pct": 42.1
+        },
+        "2026-05-04": {
+          "eligible": 66,
+          "executed": 30,
+          "r1_before_stop_pct": 30.0,
+          "stop_first_pct": 53.3
+        },
+        "2026-05-05": {
+          "eligible": 66,
+          "executed": 28,
+          "r1_before_stop_pct": 35.7,
+          "stop_first_pct": 39.3
+        },
+        "2026-05-06": {
+          "eligible": 66,
+          "executed": 24,
+          "r1_before_stop_pct": 45.8,
+          "stop_first_pct": 50.0
+        },
+        "2026-05-07": {
+          "eligible": 66,
+          "executed": 27,
+          "r1_before_stop_pct": 37.0,
+          "stop_first_pct": 48.1
+        },
+        "2026-05-08": {
+          "eligible": 66,
+          "executed": 21,
+          "r1_before_stop_pct": 47.6,
+          "stop_first_pct": 42.9
+        },
+        "2026-05-11": {
+          "eligible": 66,
+          "executed": 21,
+          "r1_before_stop_pct": 33.3,
+          "stop_first_pct": 42.9
+        },
+        "2026-05-12": {
+          "eligible": 66,
+          "executed": 31,
+          "r1_before_stop_pct": 58.1,
+          "stop_first_pct": 32.3
+        },
+        "2026-05-13": {
+          "eligible": 66,
+          "executed": 29,
+          "r1_before_stop_pct": 44.8,
+          "stop_first_pct": 44.8
+        },
+        "2026-05-14": {
+          "eligible": 66,
+          "executed": 20,
+          "r1_before_stop_pct": 35.0,
+          "stop_first_pct": 60.0
+        },
+        "2026-05-15": {
+          "eligible": 66,
+          "executed": 22,
+          "r1_before_stop_pct": 36.4,
+          "stop_first_pct": 45.5
+        },
+        "2026-05-18": {
+          "eligible": 66,
+          "executed": 22,
+          "r1_before_stop_pct": 40.9,
+          "stop_first_pct": 40.9
+        },
+        "2026-05-19": {
+          "eligible": 66,
+          "executed": 17,
+          "r1_before_stop_pct": 47.1,
+          "stop_first_pct": 47.1
+        },
+        "2026-05-20": {
+          "eligible": 66,
+          "executed": 28,
+          "r1_before_stop_pct": 53.6,
+          "stop_first_pct": 28.6
+        },
+        "2026-05-21": {
+          "eligible": 66,
+          "executed": 26,
+          "r1_before_stop_pct": 42.3,
+          "stop_first_pct": 46.2
+        },
+        "2026-05-22": {
+          "eligible": 66,
+          "executed": 27,
+          "r1_before_stop_pct": 48.1,
+          "stop_first_pct": 51.9
+        },
+        "2026-05-26": {
+          "eligible": 66,
+          "executed": 21,
+          "r1_before_stop_pct": 42.9,
+          "stop_first_pct": 33.3
+        },
+        "2026-05-27": {
+          "eligible": 66,
+          "executed": 17,
+          "r1_before_stop_pct": 5.9,
+          "stop_first_pct": 29.4
+        },
+        "2026-05-28": {
+          "eligible": 66,
+          "executed": 25,
+          "r1_before_stop_pct": 72.0,
+          "stop_first_pct": 28.0
+        },
+        "2026-05-29": {
+          "eligible": 66,
+          "executed": 27,
+          "r1_before_stop_pct": 51.9,
+          "stop_first_pct": 29.6
+        },
+        "2026-06-01": {
+          "eligible": 66,
+          "executed": 24,
+          "r1_before_stop_pct": 50.0,
+          "stop_first_pct": 33.3
+        },
+        "2026-06-02": {
+          "eligible": 66,
+          "executed": 23,
+          "r1_before_stop_pct": 39.1,
+          "stop_first_pct": 47.8
+        },
+        "2026-06-03": {
+          "eligible": 66,
+          "executed": 25,
+          "r1_before_stop_pct": 24.0,
+          "stop_first_pct": 44.0
+        },
+        "2026-06-04": {
+          "eligible": 66,
+          "executed": 29,
+          "r1_before_stop_pct": 62.1,
+          "stop_first_pct": 31.0
+        },
+        "2026-06-05": {
+          "eligible": 66,
+          "executed": 27,
+          "r1_before_stop_pct": 51.9,
+          "stop_first_pct": 40.7
+        },
+        "2026-06-08": {
+          "eligible": 66,
+          "executed": 20,
+          "r1_before_stop_pct": 30.0,
+          "stop_first_pct": 45.0
+        },
+        "2026-06-09": {
+          "eligible": 66,
+          "executed": 26,
+          "r1_before_stop_pct": 65.4,
+          "stop_first_pct": 34.6
+        },
+        "2026-06-10": {
+          "eligible": 66,
+          "executed": 23,
+          "r1_before_stop_pct": 39.1,
+          "stop_first_pct": 56.5
+        },
+        "2026-06-11": {
+          "eligible": 66,
+          "executed": 18,
+          "r1_before_stop_pct": 27.8,
+          "stop_first_pct": 66.7
+        },
+        "2026-06-12": {
+          "eligible": 66,
+          "executed": 24,
+          "r1_before_stop_pct": 37.5,
+          "stop_first_pct": 45.8
+        },
+        "2026-06-15": {
+          "eligible": 66,
+          "executed": 18,
+          "r1_before_stop_pct": 38.9,
+          "stop_first_pct": 38.9
+        },
+        "2026-06-16": {
+          "eligible": 66,
+          "executed": 26,
+          "r1_before_stop_pct": 30.8,
+          "stop_first_pct": 61.5
+        },
+        "2026-06-17": {
+          "eligible": 66,
+          "executed": 23,
+          "r1_before_stop_pct": 47.8,
+          "stop_first_pct": 52.2
+        },
+        "2026-06-18": {
+          "eligible": 66,
+          "executed": 23,
+          "r1_before_stop_pct": 43.5,
+          "stop_first_pct": 34.8
+        },
+        "2026-06-22": {
+          "eligible": 66,
+          "executed": 23,
+          "r1_before_stop_pct": 39.1,
+          "stop_first_pct": 39.1
+        },
+        "2026-06-23": {
+          "eligible": 66,
+          "executed": 29,
+          "r1_before_stop_pct": 6.9,
+          "stop_first_pct": 62.1
+        },
+        "2026-06-24": {
+          "eligible": 66,
+          "executed": 24,
+          "r1_before_stop_pct": 50.0,
+          "stop_first_pct": 20.8
+        },
+        "2026-06-25": {
+          "eligible": 66,
+          "executed": 34,
+          "r1_before_stop_pct": 29.4,
+          "stop_first_pct": 58.8
+        },
+        "2026-06-26": {
+          "eligible": 66,
+          "executed": 28,
+          "r1_before_stop_pct": 57.1,
+          "stop_first_pct": 28.6
+        },
+        "2026-06-29": {
+          "eligible": 66,
+          "executed": 32,
+          "r1_before_stop_pct": 40.6,
+          "stop_first_pct": 53.1
+        },
+        "2026-06-30": {
+          "eligible": 66,
+          "executed": 26,
+          "r1_before_stop_pct": 50.0,
+          "stop_first_pct": 34.6
+        },
+        "2026-07-01": {
+          "eligible": 66,
+          "executed": 27,
+          "r1_before_stop_pct": 44.4,
+          "stop_first_pct": 40.7
+        },
+        "2026-07-02": {
+          "eligible": 66,
+          "executed": 22,
+          "r1_before_stop_pct": 45.5,
+          "stop_first_pct": 40.9
+        },
+        "2026-07-06": {
+          "eligible": 66,
+          "executed": 24,
+          "r1_before_stop_pct": 58.3,
+          "stop_first_pct": 25.0
+        },
+        "2026-07-07": {
+          "eligible": 66,
+          "executed": 18,
+          "r1_before_stop_pct": 33.3,
+          "stop_first_pct": 50.0
+        },
+        "2026-07-08": {
+          "eligible": 66,
+          "executed": 12,
+          "r1_before_stop_pct": 50.0,
+          "stop_first_pct": 33.3
+        },
+        "2026-07-09": {
+          "eligible": 66,
+          "executed": 24,
+          "r1_before_stop_pct": 45.8,
+          "stop_first_pct": 29.2
+        },
+        "2026-07-10": {
+          "eligible": 66,
+          "executed": 21,
+          "r1_before_stop_pct": 28.6,
+          "stop_first_pct": 42.9
+        },
+        "2026-07-13": {
+          "eligible": 66,
+          "executed": 24,
+          "r1_before_stop_pct": 41.7,
+          "stop_first_pct": 37.5
+        },
+        "2026-07-14": {
+          "eligible": 66,
+          "executed": 32,
+          "r1_before_stop_pct": 34.4,
+          "stop_first_pct": 53.1
+        },
+        "2026-07-15": {
+          "eligible": 66,
+          "executed": 24,
+          "r1_before_stop_pct": 50.0,
+          "stop_first_pct": 29.2
+        },
+        "2026-07-16": {
+          "eligible": 66,
+          "executed": 33,
+          "r1_before_stop_pct": 36.4,
+          "stop_first_pct": 42.4
+        },
+        "2026-07-17": {
+          "eligible": 66,
+          "executed": 27,
+          "r1_before_stop_pct": 59.3,
+          "stop_first_pct": 25.9
+        },
+        "2026-07-20": {
+          "eligible": 66,
+          "executed": 29,
+          "r1_before_stop_pct": 55.2,
+          "stop_first_pct": 34.5
+        },
+        "2026-07-21": {
+          "eligible": 66,
+          "executed": 24,
+          "r1_before_stop_pct": 45.8,
+          "stop_first_pct": 33.3
+        },
+        "2026-07-22": {
+          "eligible": 66,
+          "executed": 19,
+          "r1_before_stop_pct": 21.1,
+          "stop_first_pct": 47.4
+        },
+        "2026-07-23": {
+          "eligible": 66,
+          "executed": 26,
+          "r1_before_stop_pct": 50.0,
+          "stop_first_pct": 26.9
+        },
+        "2026-07-24": {
+          "eligible": 66,
+          "executed": 32,
+          "r1_before_stop_pct": 31.2,
+          "stop_first_pct": 46.9
+        },
+        "2026-07-27": {
+          "eligible": 66,
+          "executed": 23,
+          "r1_before_stop_pct": 73.9,
+          "stop_first_pct": 8.7
+        },
+        "2026-07-28": {
+          "eligible": 66,
+          "executed": 31,
+          "r1_before_stop_pct": 38.7,
+          "stop_first_pct": 45.2
+        },
+        "2026-07-29": {
+          "eligible": 66,
+          "executed": 31,
+          "r1_before_stop_pct": 48.4,
+          "stop_first_pct": 38.7
+        },
+        "2026-07-30": {
+          "eligible": 66,
+          "executed": 23,
+          "r1_before_stop_pct": 39.1,
+          "stop_first_pct": 43.5
+        },
+        "2026-07-31": {
+          "eligible": 66,
+          "executed": 25,
+          "r1_before_stop_pct": 52.0,
+          "stop_first_pct": 40.0
+        },
+        "2026-08-03": {
+          "eligible": 66,
+          "executed": 31,
+          "r1_before_stop_pct": 45.2,
+          "stop_first_pct": 35.5
+        },
+        "2026-08-04": {
+          "eligible": 66,
+          "executed": 23,
+          "r1_before_stop_pct": 52.2,
+          "stop_first_pct": 26.1
+        },
+        "2026-08-05": {
+          "eligible": 66,
+          "executed": 31,
+          "r1_before_stop_pct": 41.9,
+          "stop_first_pct": 35.5
+        },
+        "2026-08-06": {
+          "eligible": 66,
+          "executed": 20,
+          "r1_before_stop_pct": 35.0,
+          "stop_first_pct": 20.0
+        },
+        "2026-08-07": {
+          "eligible": 66,
+          "executed": 27,
+          "r1_before_stop_pct": 29.6,
+          "stop_first_pct": 48.1
+        },
+        "2026-08-10": {
+          "eligible": 66,
+          "executed": 31,
+          "r1_before_stop_pct": 51.6,
+          "stop_first_pct": 35.5
+        },
+        "2026-08-11": {
+          "eligible": 66,
+          "executed": 16,
+          "r1_before_stop_pct": 18.8,
+          "stop_first_pct": 43.8
+        },
+        "2026-08-12": {
+          "eligible": 66,
+          "executed": 29,
+          "r1_before_stop_pct": 20.7,
+          "stop_first_pct": 31.0
+        },
+        "2026-08-13": {
+          "eligible": 66,
+          "executed": 27,
+          "r1_before_stop_pct": 48.1,
+          "stop_first_pct": 37.0
+        },
+        "2026-08-14": {
+          "eligible": 66,
+          "executed": 21,
+          "r1_before_stop_pct": 33.3,
+          "stop_first_pct": 42.9
+        },
+        "2026-08-17": {
+          "eligible": 66,
+          "executed": 24,
+          "r1_before_stop_pct": 45.8,
+          "stop_first_pct": 33.3
+        },
+        "2026-08-18": {
+          "eligible": 66,
+          "executed": 19,
+          "r1_before_stop_pct": 42.1,
+          "stop_first_pct": 36.8
+        },
+        "2026-08-19": {
+          "eligible": 66,
+          "executed": 20,
+          "r1_before_stop_pct": 30.0,
+          "stop_first_pct": 65.0
+        },
+        "2026-08-20": {
+          "eligible": 66,
+          "executed": 17,
+          "r1_before_stop_pct": 23.5,
+          "stop_first_pct": 64.7
+        },
+        "2026-08-21": {
+          "eligible": 66,
+          "executed": 23,
+          "r1_before_stop_pct": 30.4,
+          "stop_first_pct": 43.5
+        },
+        "2026-08-24": {
+          "eligible": 66,
+          "executed": 25,
+          "r1_before_stop_pct": 36.0,
+          "stop_first_pct": 44.0
+        },
+        "2026-08-25": {
+          "eligible": 66,
+          "executed": 22,
+          "r1_before_stop_pct": 22.7,
+          "stop_first_pct": 54.5
+        },
+        "2026-08-26": {
+          "eligible": 66,
+          "executed": 23,
+          "r1_before_stop_pct": 34.8,
+          "stop_first_pct": 47.8
+        },
+        "2026-08-27": {
+          "eligible": 66,
+          "executed": 21,
+          "r1_before_stop_pct": 19.0,
+          "stop_first_pct": 66.7
+        },
+        "2026-08-28": {
+          "eligible": 66,
+          "executed": 21,
+          "r1_before_stop_pct": 33.3,
+          "stop_first_pct": 38.1
+        },
+        "2026-08-31": {
+          "eligible": 66,
+          "executed": 21,
+          "r1_before_stop_pct": 33.3,
+          "stop_first_pct": 47.6
+        },
+        "2026-09-01": {
+          "eligible": 66,
+          "executed": 24,
+          "r1_before_stop_pct": 37.5,
+          "stop_first_pct": 50.0
+        },
+        "2026-09-02": {
+          "eligible": 66,
+          "executed": 21,
+          "r1_before_stop_pct": 38.1,
+          "stop_first_pct": 38.1
+        },
+        "2026-09-03": {
+          "eligible": 66,
+          "executed": 24,
+          "r1_before_stop_pct": 33.3,
+          "stop_first_pct": 66.7
+        },
+        "2026-09-04": {
+          "eligible": 66,
+          "executed": 22,
+          "r1_before_stop_pct": 45.5,
+          "stop_first_pct": 22.7
+        },
+        "2026-09-08": {
+          "eligible": 66,
+          "executed": 20,
+          "r1_before_stop_pct": 30.0,
+          "stop_first_pct": 45.0
+        }
+      },
+      "exclusions": {},
+      "verdict": "REJECT"
+    }
+  }
+}
