@@ -16,7 +16,7 @@
       "ong-v0.1 next-bar-open entry, $0.01 adverse entry and stop slippage, stop-first",
       "nyse_session_for regular-session calendar"
     ],
-    "baseline": "matched no-trigger: next open after the setup reference, setup direction, same frozen stop price",
+    "baseline": "matched no-trigger: next open after the setup reference, setup direction, pre-entry stop distance placed from the baseline fill",
     "promising_rule_frozen_before_outcomes": "minimum 30 eligible episodes, 10 sessions, 5 symbols, valid causal test, and conditional 1R-before-stop above the matched baseline with stop-first under 50%"
   },
   "dataset": {

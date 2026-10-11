@@ -79,7 +79,7 @@ RULES = {
         "ong-v0.1 next-bar-open entry, $0.01 adverse entry and stop slippage, stop-first",
         "nyse_session_for regular-session calendar",
     ],
-    "baseline": "matched no-trigger: next open after the setup reference, setup direction, same frozen stop price",
+    "baseline": "matched no-trigger: next open after the setup reference, setup direction, pre-entry stop distance placed from the baseline fill",
     "promising_rule_frozen_before_outcomes": (
         "minimum 30 eligible episodes, 10 sessions, 5 symbols, valid causal test, "
         "and conditional 1R-before-stop above the matched baseline with stop-first under 50%"
@@ -134,10 +134,11 @@ def walk(
 ) -> dict:
     """Score one entry.
 
-    Strategy risk is the distance from the actual fill to the frozen stop
-    price. Baseline risk is that same pre-entry distance, measured from the
-    baseline fill. A gap through the structural stop, or an open already
-    through the pre-entry +1R level, is a miss rather than a fill.
+    The strategy keeps the structural stop price. Its R is the distance from
+    the strategy fill to that price. The baseline keeps the pre-entry distance
+    from the decision close to the structural stop and places a new stop at
+    the baseline fill minus that distance. A gap through the structural stop,
+    or an open already through the pre-entry +1R level, is a miss.
     """
     if entry_i >= len(bars):
         return {"class": "MISSED", "reason": "NO_NEXT_BAR"}

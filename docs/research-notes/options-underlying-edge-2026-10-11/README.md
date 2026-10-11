@@ -12,7 +12,9 @@ Operator decision after the screen:
 
 Neither kept family qualifies for an options-profitability trial. Compression is closed.
 
-The scorer's mechanical label remains `PROMISING BUT UNPROVEN` for the two kept families because conditional 1R beat the baseline and stop-first stayed under 50%. That label is not a tradeable-edge verdict. The 1R comparison uses different absolute stop distances, so it does not establish superior risk-adjusted expectancy.
+The scorer's mechanical label remains `PROMISING BUT UNPROVEN` for the two kept families because conditional 1R beat the baseline and stop-first stayed under 50%. That label is not a tradeable-edge verdict. The 1R comparison does not establish superior risk-adjusted expectancy.
+
+The baseline does not reuse the strategy stop price. Both entries start from the structural stop known when the decision bar closes. The strategy keeps that price, so strategy R is the distance from the strategy fill to it. The baseline keeps the pre-entry distance from the decision close to that structural stop, then places a new stop price at the baseline fill minus that distance. A gap through the structural stop is still a missed entry. This wording replaces the earlier "same frozen stop price" description. The episode counts and rates are unchanged.
 
 On setups where both entries filled, median strategy risk divided by median paired baseline risk was:
 
@@ -22,7 +24,7 @@ On setups where both entries filled, median strategy risk divided by median pair
 | Failed-break reclaim | 6,677 | $0.60 | $0.155 | 3.682 |
 | Compression → expansion | 2,661 | $1.32 | $0.515 | 1.986 |
 
-Strategy risk is the distance from the post-trigger fill to the frozen stop. Baseline risk is the pre-entry distance known at the setup close, measured from the baseline fill.
+Those dollar risks are the two distances above: strategy fill to the structural stop, and the pre-entry distance used to place the baseline stop.
 
 Reproduce the table from the saved episode rows without refetching:
 
