@@ -17,7 +17,7 @@ Read **only** this block + `AGENTS.md` unless drift is detected. Private numeric
 | **Daily tsmom / AFS-0256** | **#1218 MERGED** **`f8d4845`**. Operator **2026-10-11:** code matches reviewed **`e510dc4`** (docs-only delta) — **release good**. **TIMER ON — operator GO** (builder): `systemctl enable --now six-micro-daily-tsmom.timer`; weekdays **17:10 America/New_York**; pin **`f8d4845`** in `10-release.conf`; **no `futures-bot` restart**. Prior box read reported timer enabled — **re-verify after GO** (unverified this turn). Trial **`T-2026-10-10-prereg-six-micro-daily-tsmom-forward-2026-10-10-01`**: **RUNNING**; scorable from **2026-10-12**; **40** round-turn gate. |
 | **Open futures PRs (not HOLD deploy)** | **#1217** (draft) MNQ seal guard · **#1219** (draft) six-micro paper cleanup · **#1214** (draft) handoff docs |
 | **Public resume** | `docs/futures-research-resume-checkpoint-2026-10-10.md` (+ Cursor + Claude options appendices) |
-| **Options ETF research** | Remote **`claude/options-time-exit-research-20261010`** **deleted 2026-10-11** (operator GO; contained trade files). Not on `main`. |
+| **Options research (2026-10-11 operator closeout)** | **NO PROVEN EDGE / NO TRADING GO.** Polygon 66-symbol intraday screen CLOSED: pullback HOLD, failed-break REJECT, compression HOLD (no retuning or options trials). 1-2-2: 443 SIP resolutions already reconciled; 99 confirmed entry snapshots / **zero exit bids**; existing collector unchanged. Signa observational; V1 26 closed ACTIVE / −$1,536 before commissions. Long-horizon **equity options** idea UNSTARTED, separate from ongoing six-micro futures trial. Authority: `docs/options-current-state-handoff.md`; detail: `docs/research-notes/options-edge-discovery-close-2026-10-11.md`. |\n| **Options ETF research** | Remote **`claude/options-time-exit-research-20261010`** **deleted 2026-10-11** (operator GO; contained trade files). Not on `main`. |
 | **Saved 4HR benchmark** | `docs/research-notes/4hr-mnq-400-historical-benchmark-2026-10-10/` (on **`main`** via #1216) |
 | **Saved ORB/VWAP sweeps** | `docs/research-notes/orb-vwap-tf-window-sweep-2026-10-10/` (on **`main`** via #1216) |
 | **Vault NR7 + Keltner exploratory** | **`T-2026-10-11-exploratory-nr7-keltner-capital-unconstrained-01`** — closed **RESEARCH_ONLY** / **FAIL**; artifacts `docs/research-notes/capital-unconstrained-strategy-research-2026-10-11/` + ledger evidence dir |
@@ -139,7 +139,9 @@ Prior chat context for this session is **closed**. Section below is coordination
 - Release/archive branch deletion still requires current supersession/recoverability proof; do not mass-delete release refs.
 
 ### Options / research
-- Follow `docs/options-current-state-handoff.md` and the research ledger, not this file.
+- **2026-10-11 closeout:** NO PROVEN OPTIONS EDGE. Three Polygon intraday families closed to options trials; only existing 1-2-2 observation continues unchanged. This status supersedes the 2026-10-08 `Next — OPTIONS` research-priority wording above (historical provenance only). Do not restart V1 loss postmortems, Signa gates, sampled-price pattern research, or the consumed 110-session Polygon screen by default.
+- **Unstarted / no GO:** distinct multi-day equity-long-option payoff question; the separate futures six-micro daily forward trial does not answer it. No new test, collector, data purchase, trading rule, deployment or broker action authorized.
+- Follow `docs/options-current-state-handoff.md`, `docs/options-next-actions.md`, and the research ledger; this file remains coordination-only.
 - Active options stack #1152→#1154 and other research PRs remain separate from futures runtime authorization.
 
 ## Lane authorities
