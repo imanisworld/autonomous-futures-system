@@ -167,10 +167,11 @@ def prints_for_listed_front(
     for day in days:
         ticker = listed_front(root, rows, day)
         if ticker is None:
-            continue
+            raise PolygonError(f"{root} has bars but no valid listing for {day}")
         print_ = printed.get(ticker, {}).get(day)
-        if print_ is not None:
-            chosen.append(print_)
+        if print_ is None:
+            raise PolygonError(f"{root} listed front {ticker} has no complete {day} bar")
+        chosen.append(print_)
     return chosen
 
 
