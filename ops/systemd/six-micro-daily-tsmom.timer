@@ -1,0 +1,10 @@
+[Unit]
+Description=Record the six-micro paper journal after the New York close
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 17:10:00 America/New_York
+Persistent=true
+Unit=six-micro-daily-tsmom.service
+
+[Install]
+WantedBy=timers.target

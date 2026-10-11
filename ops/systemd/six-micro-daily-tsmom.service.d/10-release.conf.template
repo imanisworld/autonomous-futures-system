@@ -1,0 +1,21 @@
+# Replace @RELEASE_SHA@ with the exact 40-character SHA Grok reviewed.
+# The box drop-in is not installed by this commit.
+# The host account afs-paper must already exist. This file does not create it.
+# After promote, the release tree must be readable by afs-paper (for example
+# chmod -R a+rX /root/afs-releases/@RELEASE_SHA@ or equivalent ACL). Root-only
+# 0700 on the release directory will make ExecStartPre fail even when the SHA
+# pin is correct.
+# ExecStartPre checks release_manifest.json repo.commit, not the folder name.
+# The journal directory must be writable by afs-paper.
+# EnvironmentFile is Polygon-only. Do not point it at /root/afs-shared/.env.
+[Service]
+User=afs-paper
+WorkingDirectory=/root/afs-releases/@RELEASE_SHA@
+Environment=PYTHONPATH=/root/afs-releases/@RELEASE_SHA@
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=AFS_RELEASE_SHA=@RELEASE_SHA@
+EnvironmentFile=/root/afs-shared/six-micro-polygon.env
+ExecStartPre=/root/afs-releases/@RELEASE_SHA@/.venv/bin/python -m research.six_micro_daily_tsmom_collect --verify-sha
+ExecStart=
+ExecStart=/root/afs-releases/@RELEASE_SHA@/.venv/bin/python -m research.six_micro_daily_tsmom_collect --env-file /root/afs-shared/six-micro-polygon.env --journal /root/afs-shared/logs/six-micro-daily-tsmom
+ReadWritePaths=/root/afs-shared/logs
