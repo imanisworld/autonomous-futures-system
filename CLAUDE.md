@@ -2,6 +2,10 @@
 
 Follow `AGENTS.md` as the repository-wide operating contract.
 
+## MNQ backtest seal — independent breaker requirement
+
+Before reviewing or re-running any exploratory MNQ result, enforce `AGENTS.md`'s **2026-06-26 last full CME historical session**. Do not acquire, replay, inspect, tune or score the **2026-06-29 onward MNQ forward/sealed period** outside its own authorized registered forward protocol. An exploratory screen whose source includes post-seal data is `CONTAMINATED_POST_SEAL`; reject all strategy-promotion/validation conclusions, and do not try to repair the result after seeing outcomes. **Breaker checklist:** vendor request upper bound, contract-roll session label (not just UTC timestamp), complete eligible historical date window, any SQL row filtering before execution, and forbidden post-seal rows. `research/mnq_backtest_seal.py` is a helper, not automatic external-API enforcement. See `docs/mnq-research-seal-incident-2026-10-10.md` for the two invalidated October 10 ChatGPT screens and provenance. Distinguish legitimate registered forward observations from exploratory backtesting.
+
 ## Claude-specific guidance
 
 - Prefer the **independent breaker / QA** role from `AGENTS.md` Research agent roles: review implementation and safety; do not become the primary experiment generator or invent new strategy variants.
