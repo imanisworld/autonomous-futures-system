@@ -1,6 +1,6 @@
 # Capital-unconstrained strategy research — handoff (2026-10-11)
 
-**Status: REPORTED RESULTS / SOURCE-ONLY RECORD.** This page preserves the October 11 research report. The NR7/Keltner scripts and preserved JSON outputs are now present on `main` and can be inspected; the raw MNQ corpus was not independently rerun in this GitHub session, so the numerical results remain preserved evidence rather than a fresh reproduction. No strategy is promoted, and nothing in this record authorizes an order, risk-cap change, merge, deploy, or forward-outcome read.
+**Status: MIXED-PROVENANCE RESEARCH RECORD / SOURCE ONLY.** This page preserves the October 11 research report while separating repository-backed evidence from reported-only figures. The committed 5-trade NR7 diagnostic and Keltner result can be inspected on `main`; the Donchian figures and separate 4-trade one-position NR7 figures have no committed result artifact on current `main` and therefore remain **reported-only, not repository evidence**. The raw MNQ corpus was not rerun here. No strategy is promoted, and nothing in this record authorizes an order, risk-cap change, merge, deploy, or forward-outcome read.
 
 ## Decision and exact scope
 
@@ -8,20 +8,20 @@ Remove the historical **$1,500 account-size assumption from exploratory strategy
 
 Research MNQ history is limited to **pre-2026-06-29** observations. This record neither uses nor scores sealed forward results. Track B reported running `94a71bd` is left unchanged (runtime independently unverified).
 
-## Candidate closure (operator-supplied results)
+## Candidate closure and provenance
 
-| Candidate | Reported sample | Reported net / PF | Interpretation |
-|---|---:|---:|---|
-| Donchian daily 20/10 | 14 trades | +$767.28 / 1.044 | **Reject**: second half −$2,362.86; historical trade-equity DD $10,490.88, winner concentration and material underperformance vs B&H |
-| ChartArt NR7 + inside day (one-position executable) | 4 trades | −$1,072.42 / 0.065 | **Deprioritize**: tiny sample; both halves negative |
-| ChartArt NR7 + inside day (independent signals, allows overlap) | 5 trades | −$1,139.90 / 0.061 | **Exploratory diagnostic only**: includes an overlapping 2024-11-26 opportunity; do not conflate with single-position execution |
-| Vault Keltner *long reversal only* (60m RTH) | 61 trades | −$2,022.44 / 0.863 | **Reject this frozen leg**: both halves negative; DD $4,474.24 |
+| Candidate | Sample | Net / PF | Repository evidence status | Interpretation |
+|---|---:|---:|---|---|
+| Donchian daily 20/10 | 14 trades | +$767.28 / 1.044 | **REPORTED ONLY** — no committed result artifact found on current `main` | Reported reject: second half −$2,362.86, historical trade-equity DD $10,490.88, winner concentration and material underperformance vs B&H. Do not use as ledger/Inventory evidence without preserved provenance. |
+| ChartArt NR7 + inside day (one-position executable) | 4 trades | −$1,072.42 / 0.065 | **REPORTED ONLY** — no committed 4-trade result artifact found on current `main` | Reported deprioritize: tiny sample, both halves negative. Keep separate from the canonical 5-trade diagnostic. |
+| ChartArt NR7 + inside day (independent-signals diagnostic) | 5 trades | −$1,139.90 / 0.061 | **COMMITTED / RESEARCH_ONLY** — `nr7-five-valid-independent.json` + canonical ledger result | Exploratory diagnostic only. Its embedded positioning labels are internally inconsistent; do not treat it as the one-position executable result. |
+| Vault Keltner *long reversal only* (60m RTH) | 61 trades | −$2,022.44 / 0.863 | **COMMITTED / RESEARCH_ONLY** — `keltner-kc-long-mnq.json` + canonical ledger result | Reject this frozen leg: both halves negative; DD $4,474.24. Other Keltner components were not tested. |
 
 NR7 rules reported: strict NR7 among previous six days, inside day, bullish close, rising SMA14; next RTH open entry; stop at signal-day low; confirmed bullish-session exit at next RTH open; 15m stop-first and costs. Seven raw signals, two invalid stop-geometry cases. Reported maximum structural stop **$600.50** and maximum MAE **$989.50** need trade-by-trade attribution before anyone interprets exposure; they are not evidence of a capped worst possible loss.
 
 Keltner rules reported: 20 EMA and 1.5 ATR channel, long reversal below lower band, middle-band exit, 1.5 ATR stop and 3 ATR target; causal next-bar execution. Other Keltner components were **not tested** and cannot inherit this verdict.
 
-**Reproducibility boundary:** Current `main` now contains the NR7/Keltner scripts and preserved JSON outputs, so their bytes can be inspected without rerunning the studies. The canonical ledger result uses the **5-trade independent-per-signal NR7 diagnostic**; that file's embedded prose also says "non-overlapping", which is internally inconsistent with `position_model: independent_per_signal` and with the separate 4-trade one-position executable result reported above. Therefore the 5-trade result must remain labeled **independent-signals diagnostic**, not executable single-position evidence. Do not rewrite the preserved result artifact or its ledger hash; preserve the contradiction and use the 4-trade result only when discussing one-position execution.
+**Reproducibility boundary:** Current `main` contains the 5-trade NR7/Keltner scripts and preserved JSON outputs, so those bytes can be inspected without rerunning the studies. The canonical ledger result uses the **5-trade independent-per-signal NR7 diagnostic**; that file's embedded prose also says "non-overlapping", which is internally inconsistent with `position_model: independent_per_signal`. The separate 4-trade one-position result is reported in this handoff but has no committed result artifact on current `main`. Therefore the 5-trade result remains **independent-signals diagnostic**, while the 4-trade figure remains reported-only. Do not rewrite the preserved 5-trade artifact or its ledger hash.
 
 **Repository chronology correction (append-only ledger preserved):** three October 11 ledger `recorded_at` values do not match the GitHub UTC commit times that actually added them. The six-micro `RUNNING` row says `2026-10-11T18:30:00Z`, while commit `e510dc44` was created at **2026-10-11T14:10:27Z**. NR7/Keltner `PLANNED` says `19:05:00Z`, while commit `75015af6` was created at **15:04:04Z**; `COMPLETED` says `19:10:00Z`, while commit `a10668e4` was created at **15:04:20Z**. The ledger is append-only, so those historical bytes are not rewritten. For repository chronology, use the GitHub commit times; the ledger timestamps are retained only as originally recorded metadata.
 
