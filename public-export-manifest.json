@@ -1,0 +1,169 @@
+{
+  "schema_version": 2,
+  "source": {
+    "repository": "imanisworld/autonomous-futures-system",
+    "ref": "62818f82210b1fc5a2680492e85c5f2ad1acab76",
+    "generated_on": "2026-09-25",
+    "review_updated_on": "2026-09-26"
+  },
+  "policy": {
+    "default": "REVIEW",
+    "rule": "No matched KEEP path is publishable until public-candidate verification passes. PRIVATE paths are excluded by default. REVIEW paths fail closed until individually dispositioned."
+  },
+  "keep": {
+    "exact": [
+      ".gitignore",
+      ".python-version",
+      "CODE_OF_CONDUCT.md",
+      "LICENSE",
+      "decision_output.schema.json",
+      "main.py",
+      "market_state.schema.json",
+      "requirements-alpaca.txt",
+      "requirements-dev.txt",
+      "requirements.lock",
+      "requirements.txt",
+      "CONTRIBUTING.md",
+      ".github/CODEOWNERS",
+      ".github/ISSUE_TEMPLATE/bug_report.yml",
+      ".github/ISSUE_TEMPLATE/config.yml",
+      ".github/ISSUE_TEMPLATE/documentation.yml",
+      ".github/dependabot.yml",
+      ".github/pull_request_template.md",
+      ".github/workflows/ci.yml",
+      "config/.gitkeep",
+      "config/__init__.py",
+      "config/futures_contracts.py",
+      "config/notification_routes.yaml"
+    ],
+    "prefixes": [
+      "adaptive/",
+      "agent/",
+      "alert_ranker/",
+      "context/",
+      "execution/",
+      "integrations/",
+      "journal/",
+      "notifications/",
+      "options_companion/",
+      "options_manager/",
+      "quotes/",
+      "replay/",
+      "risk/",
+      "sources/",
+      "stocks_advisory/",
+      "strategy/",
+      "tradingview/",
+      "webhook/",
+      "tests/",
+      "interactive-course/",
+      "share/learning/"
+    ],
+    "exclusions_from_keep": [
+      "tests/fixtures/"
+    ]
+  },
+  "review": {
+    "exact": [
+      ".env.example",
+      ".env.local.example",
+      "README.md",
+      "SECURITY.md"
+    ],
+    "prefixes": []
+  },
+  "private": {
+    "exact": [
+      "CHANGELOG.md",
+      "RUNBOOK.md",
+      "risk_rules.yaml",
+      "config/cross_instrument_observation.json",
+      "config/forward_evidence_campaign.json",
+      "config/settings.py"
+    ],
+    "prefixes": [
+      ".agents/",
+      ".claude/",
+      "data/",
+      "deploy/",
+      "docs/",
+      "logs/",
+      "ops/",
+      "research/",
+      "scripts/",
+      "site/",
+      "tests/fixtures/"
+    ],
+    "rationale": {
+      ".agents/": "agent prompts may encode operational/strategy assumptions; reintroduce only after public-safe review",
+      ".claude/": "agent commands may encode operational/strategy assumptions; reintroduce only after public-safe review",
+      "data/": "research/runtime/evidence datasets are private by default",
+      "deploy/": "deployment topology and service configuration are private by default",
+      "docs/": "historical audit, handoff, runtime, strategy, and operational documentation is private by default",
+      "logs/": "runtime evidence is private",
+      "ops/": "operational and box-management tooling is private by default",
+      "research/": "strategy research and evidence are private by default",
+      "scripts/": "mixed research/ops/admin tooling; selectively reintroduce only after review",
+      "site/": "current site tree contains deployment topology, internal paths, host/routing details, and operational security assumptions; exclude from clean export until separately sanitized",
+      "tests/fixtures/": "fixtures include operator-exported and market/research datasets; exclude by default rather than republish source data",
+      "CHANGELOG.md": "historical operational and strategy details; clean export should start with a public changelog",
+      "RUNBOOK.md": "operator/runtime procedures require a public-safe rewrite",
+      "risk_rules.yaml": "contains current strategy/risk policy and evidence commentary; private strategy material by policy",
+      "config/settings.py": "contains extensive current deployment/research policy and historical evidence commentary; requires a public-safe configuration boundary before inclusion",
+      "config/cross_instrument_observation.json": "active research campaign design and detector inventory",
+      "config/forward_evidence_campaign.json": "active forward-evidence campaign design and experiment parameters"
+    }
+  },
+  "publication_gates": [
+    "apply public-safe overrides for remaining REVIEW exact files",
+    "run secret scan on exported tree",
+    "run public-operational-detail scan on exported tree",
+    "run tests against candidate and document missing private-only dependencies",
+    "verify no private/runtime evidence was copied",
+    "independent review of candidate tree",
+    "create new repository from candidate tree with no inherited refs/history",
+    "configure rulesets/branch protection before normal development"
+  ],
+  "overrides": {
+    "README.md": "public-candidate-overrides/README.md",
+    "SECURITY.md": "public-candidate-overrides/SECURITY.md",
+    ".env.example": "public-candidate-overrides/.env.example",
+    ".env.local.example": "public-candidate-overrides/.env.local.example"
+  },
+  "review_disposition": {
+    "verified_keep": [
+      "CONTRIBUTING.md",
+      ".github/**",
+      "config/.gitkeep",
+      "config/__init__.py",
+      "config/futures_contracts.py",
+      "config/notification_routes.yaml",
+      "interactive-course/**",
+      "share/learning/**"
+    ],
+    "verified_private_or_exclude": [
+      "CHANGELOG.md",
+      "RUNBOOK.md",
+      "risk_rules.yaml",
+      "config/settings.py",
+      "config/cross_instrument_observation.json",
+      "config/forward_evidence_campaign.json",
+      "site/**",
+      "tests/fixtures/**"
+    ],
+    "sanitized_by_existing_override": [
+      ".env.example",
+      ".env.local.example",
+      "README.md",
+      "SECURITY.md"
+    ],
+    "notes": [
+      "GitHub CI uses read-only contents permission and no repository secrets.",
+      "Notification routes contain environment-variable names only, not destination URLs.",
+      "Futures contract metadata is sourced public contract-unit information and grants no execution eligibility.",
+      "Course content is paper/simulation oriented and does not require broker credentials.",
+      "Current site README exposes nginx web-root, host routing, localhost ports, webhook path/auth design, and internal audit references; site is therefore excluded wholesale pending a separate sanitized public-site export.",
+      "C14 fixture documentation identifies operator TradingView exports copied verbatim; all fixtures remain excluded by default."
+    ]
+  }
+}
