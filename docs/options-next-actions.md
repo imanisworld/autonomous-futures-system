@@ -2,14 +2,15 @@
 
 _Research priorities reconciled 2026-10-11 through merged #1222. The 2026-10-08 checklist below is historical/contextual; unfinished existing-accounting items do not authorize new research. Authoritative options state: `docs/options-current-state-handoff.md`. This file has no collection, deployment, broker, cohort, or trading authority._
 
-## Current options decisions — 2026-10-11
+## Current options decisions — 2026-10-11 (hygiene pointers 2026-10-13)
 
 - [x] **#1222 source-only MERGED** to `main` as `4d563332757a28ccf39928634101bab34044f2cc`. Exact-head CI, independent episode recomputation, and independent `verify_results.py` execution PASS. Artifacts: `docs/research-notes/options-underlying-edge-2026-10-11/`. No deploy.
-- [x] **Completed 66-symbol underlying edge screen:** Pullback **KEEP FOR RESEARCH** (7,237 eligible; 1,039 actionable; 46.4% conditional 1R; 0.9% 2R). Failed-break reclaim **KEEP FOR RESEARCH** (11,944; 7,001 actionable; 44.3% 1R; 2.6% 2R). Compression **REJECT** (7,260; 2,665 actionable; 41.3% 1R; 0.5% 2R). Structural research only; baseline R differs from strategy R, so **no risk-adjusted or option-P&L claim**. Do not rerun, optimize, or unseal the Sep 9–15 holdout.
+- [x] **Completed 66-symbol underlying edge screen (Alpaca SIP / #1222):** Pullback **KEEP FOR RESEARCH** (7,237 eligible; 1,039 actionable; 46.4% conditional 1R; 0.9% 2R). Failed-break reclaim **KEEP FOR RESEARCH** (11,944; 7,001 actionable; 44.3% 1R; 2.6% 2R). Compression **REJECT** (7,260; 2,665 actionable; 41.3% 1R; 0.5% 2R). Structural research only; baseline R differs from strategy R, so **no risk-adjusted or option-P&L claim**. Do not rerun, optimize, or unseal the Sep 9–15 holdout.
+- [x] **Separate Polygon 5m closeout note preserved:** `docs/research-notes/options-edge-discovery-close-2026-10-11.md` (operator-supplied; distinct population from #1222). Close stale docs PR **#1225** after reuse — do not merge it as a rewrite of the #1224 handoff.
 - [x] **1-2-2 SIP status explained (operator-reported):** 443 `RESOLUTION` rows carry immutable `PENDING_DELAYED_SIP` labels, but **443 separate `RECONCILIATION` rows exist** (221 continuation-first, 85 no break, 135 same reversal, 2 negative latency). Entry snapshots **101**; option exit bid/ask, prices and option P&L **missing**. No historical exit reconstruction.
 - [x] **Prospective-only exit measurement spec recorded (not implemented):** `ox-exit-122-v1-2026-10-11` in current-state handoff. Requires a separate operator decision before any collector changes, new measurement epoch, or test.
 - [ ] **Separate unresolved options question, not strategy discovery:** reconcile the current `OPTIONS_PAPER_V1` ACTIVE epoch ledger, real option marks and costs from existing read-only evidence if the operator reopens that accounting task. Use existing #1071 code only after rechecking current-source applicability; don't confuse structural outcomes with priced option closes.
-- [ ] **Do not start an options-profitability trial or further strategy research.** Pullback and failed-break remain research-only; compression is closed. Retain collector and risk policy unchanged.
+- [ ] **Do not start an options-profitability trial or further strategy research.** Pullback and failed-break remain research-only; compression is closed. Multi-day equity directional-persistence long-option economics is **UNSTARTED** and is **not** the futures six-micro trial. Retain collector and risk policy unchanged.
 
 **Stop point:** #1222 is complete; no new implementation, data service, trading gate, deployment, or strategy screening. Existing futures Track B/other approved collectors remain separate and unchanged.
 

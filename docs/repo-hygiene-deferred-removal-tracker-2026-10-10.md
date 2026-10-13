@@ -10,12 +10,16 @@
 - [x] **#1211** merged on `main` @ `71e5f45`
 - [x] **#1210** @ `7d766b2` → **`465abc2`**; **#1212** @ `9df1a09` → **`05363a4`**; **#1213** @ `730ef53` → **`6d3078f`**
 - [x] Track B **400-tick paper cell on `main` (#1216)**; one promote **`94a71bd`** tree-identical to `58d4cd6` — **no second deploy**; forward scoring from **2026-10-12** after box read (2026-10-11)
-- [ ] Claude options handoff merged/archived on GitHub (`claude/options-time-exit-research-20261010` @ `a30f0a6` or successor)
-- [ ] Any open PR you still care about is **merged, closed, or copied** to `main`/checkpoint docs
+- [x] Claude options research remote **`claude/options-time-exit-research-20261010` deleted 2026-10-11** (operator GO). Local Mac worktree residual still **UNVERIFIED** this cloud session.
+- [ ] Docs PRs **#1214** / **#1225** closed after content reuse (`docs/repo-hygiene-audit-2026-10-13.md`); other open PRs you still care about are merged, closed, or copied
+- [ ] `ops/post-cap-shadow-report-20261005` @ **`b862c794`** archive-tagged then remote-deleted (classification **ARCHIVE**; unique scripts never on `main`; superseded conceptually by merged #1137)
+- [ ] Mac worktree/stash/untracked census re-verified on the Mac (SSH stash = **PRESERVE**)
 
-**Snapshot:** Mac checkout @ `58d4cd6` (`main`, 2026-10-11); ~105 remote branch refs; ~**1.3 GB** `private/` (partial cleanup below); ~**2.3 GB** ignored `data/replay*`.
+**Snapshot:** GitHub `main` verified **2026-10-13** @ **`c215060`**; 68 remote branch refs and **23** open PRs including draft #1226 at review (previous 22-PR count excluded this new draft). Mac disk sizes below are **historical 2026-10-10/11 census**, not re-measured in the 2026-10-13 cloud pass.
 
 **2026-10-11 cleanup performed (local Mac):** merged futures branches (§4); `private/research-notes-2026-10-10`, `prune-review`, `cross_market_grid_2026_09_23`, `grid_2026_09_21` (~272 MB); **`private/trading-evidence-2026-10-09`**, **`mes598-proof`**, **`profitability-review-2026-10-08`** (~**956 MB**); **`data/cross_market_2026_09_23`** (~**573 MB**). **Operator 2026-10-11:** **RETAIN** all **`data/replay_corpus_*`** and **`data/replay_polygon*`** (~**1.7 GB**) for **offline replay / fill-sensitive reruns**; not required for CI, #1218, or forward box collection. **Also kept:** git worktrees (`private/wt-*`, `.worktrees/tsmom-0254`), `paper-card-899`, `webull-proof`.
+
+**2026-10-13 cloud classification (no deletes):** see `docs/repo-hygiene-audit-2026-10-13.md`. Do **not** update `docs/BRANCH_ARCHIVE_INDEX.md` until an archive tag + deletion actually completes.
 
 ---
 
@@ -85,6 +89,7 @@ Not in git; tests may expect paths under `data/replay*`, `data/htf/`, etc. (see 
 | `test/combined-execution-risk-20261010` | #1210 **MERGED** | same | — |
 | `feat/4hr-5m-join-provenance-v2-20261010`, `fix/4hr-join-mutant-tests-20261010`, `pr-1210`, `pr-1212`, `pr-1213`, `test/4hr-evidence-join-reconcile-20261010` | merged into #1216 lineage | **DONE** delete local 2026-10-11 | — |
 | `claude/options-time-exit-research-20261010` | pushed; no PR | **KEEP** until options lane archived | Handoff merged or waived |
+| `ops/post-cap-shadow-report-20261005` | #1135 CLOSED superseded; tip **`b862c794`**; unique shadow-report scripts **not** on `main` | **ARCHIVE** then delete remote after annotated tag | Operator GO + tag peel proof; see 2026-10-13 hygiene audit |
 | `claude/capped-session-reporting` | #1207 OPEN | delete after close | #1207 |
 | `ops/cursor-cloud-vps-maintenance` | #1206 OPEN | delete after close | #1206 |
 | `cursor/options-scanner-universe-expand-5735` | #1067 OPEN (parked) | delete local + worktree when PR closed | Operator |

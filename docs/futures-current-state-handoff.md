@@ -4,6 +4,21 @@
 
 _As of 2026-09-24 (runtime and current decisions: see the 2026-09-24 blocks in `docs/futures-current-status-2026-09-22.md`, then the reconciliation note below). This is the long futures handoff. Historical audit docs remain evidence records._
 
+## Runtime safety refresh — 2026-10-13
+
+Repository source is `c215060999fc57489b11de8a8e2e2651bd2f79e1`. Cursor/Cloud Agent's same-day restricted read-only box check reported the following current runtime state; this review did not independently replay the VPS commands:
+
+- Active service release / working directory: `94a71bdbb975b53f21a81b7084482ea3c5270ceb`; `futures-bot` active; `NRestarts=0` since the 2026-10-10 promote.
+- Effective posture proved: `LIVE_TRADING_ENABLED=false`, Tradovate DEMO, hard contract cap `1`, account pin match, broker flat, zero working orders, deploy lock absent.
+- **Release integrity: FAIL.** The immutable release contains an extra `scripts/__pycache__/options_122_prospective_collect.cpython-313.pyc`.
+- Overall execution-safety verdict: **BLOCKED — SAFETY DRIFT** until release integrity is restored and re-proven.
+- Do **not** repair the active release by deleting/editing files inside `/root/afs-releases`; `AGENTS.md` explicitly forbids in-place edits to immutable releases. Recovery must use the sanctioned deploy-lock / immutable-release process under separate operator authorization, followed by fresh post-recovery proof.
+- Track B remains Polygon-independent. The `wide_stop_4k` forward lane had **0 fills** in the reported box read and its recorded state was last dated 2026-09-30; whether eligible October 12 onward session/journal records were collected is **UNVERIFIED**. Zero fills do not establish a healthy collection process.
+- Six-micro timer/journal evidence remains **UNVERIFIED** via the current restricted read-only path. An authorized **read-only** journal/timer census is still required before the Polygon keep/retire decision due 2026-10-18. This census and the Track B collection check can happen while release integrity is blocked; any timer/service mutation requires separate operator GO.
+- No deploy, restart, new DEMO start, live activation, or execution-path change is authorized while the integrity failure remains.
+
+Current operator sequence and cleanup decisions live in `docs/futures-operator-todo.md`; agent resume state lives in `docs/agent-work-state.md`. Older runtime sections below are provenance only.
+
 ## Release `c44d32b` deployed; 4HR natural-1m canonical epoch started — 2026-10-04
 
 - Deployed futures release: `c44d32bc4961e56fae5c5f88a976eb6783341638`, promoted 2026-10-04 21:29:09Z via `scripts/atomic_release.sh` build → verify → promote under explicit operator GO. Rollback target `489b55b91b6303c195c8e84bfcbf05ef32d1ab04` (`current.previous`).
