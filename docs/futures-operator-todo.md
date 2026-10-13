@@ -14,7 +14,7 @@
 - [ ] **Reported release-integrity anomaly:** a separate runtime audit reported an extra `scripts/__pycache__/options_122_prospective_collect.cpython-313.pyc` under release `94a71bd…`. Re-check through Runtime Drift Audit before any runtime mutation; do not repair/delete/redeploy from this research-docs lane.
 - [ ] **#1217 MNQ seal guard:** important concept, but current branch is far behind `main`. Reconcile/review before merge; meanwhile the existing June 29 seal remains mandatory for exploratory MNQ work.
 - [ ] **#1221 Signa observer fix:** keep separate from outcome scoring. Rebase/review before merge; Signa context remains observer evidence only.
-- [ ] **Docs cleanup:** #1214 is an old, heavily diverged docs refresh. Current useful TODO/work-state/cleanup guidance is being preserved in #1220; close #1214 as superseded after confirming no unique current fact is lost.
+- [x] **Docs cleanup:** #1214 closed unmerged on 2026-10-13 as superseded after its useful current TODO/work-state/cleanup guidance was re-reviewed and preserved in #1220. Closing the PR did not delete its branch/worktree or any evidence.
 - [ ] **Options docs:** #1225 remains a separate options-lane reconciliation and must be rebased/reviewed on its own. Do not fold options strategy decisions into this futures TODO.
 
 **Deployment/runtime boundary:** no build, promote, restart, service edit, broker action, paper/DEMO/live enablement, journal reset, or strategy promotion is authorized by completing this checklist.
