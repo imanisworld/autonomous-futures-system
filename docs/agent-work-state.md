@@ -1,36 +1,29 @@
 # Agent Work State
 
-## START HERE — source `4d56333` / #1222 merged; box checkpoint remains 2026-10-11 ~14:50Z (HOLD wide-stop)
+## START HERE — GitHub source refresh 2026-10-13; runtime remains separately verified
 
-Read **only** this block + `AGENTS.md` unless drift is detected. Private numeric handoff: ChatGPT Library `/Futures Research/Futures Research Handoff - 2026-10-10.md`.
+Read **only** this block + `AGENTS.md` unless the requested lane needs its authority file. This block is source/research coordination, **not live runtime proof**. Historical numeric handoff remains in ChatGPT Library `/Futures Research/Futures Research Handoff - 2026-10-10.md`.
 
-| Item | Value |
+| Item | Current source/research state |
 |---|---|
-| **GitHub `main` (source, 2026-10-11)** | **`4d563332757a28ccf39928634101bab34044f2cc`** (merged options research-only #1222; NR7/Keltner earlier at `75015af`/`a10668e`). Most recent *reported* `futures-bot` deployed symlink still **`94a71bd`** (#1216); **not re-read for this docs update**. No global promote/restart. |
-| **Merged on `main` (Oct 10)** | **#1208** research reference fills · **#1209** actual bracket R:R · **#1210** combined QA · **#1211** timeframe integrity helper · **#1216** 400-tick paper + 300-tick demo cap. Independent breaker sign-off on merged heads is **not re-run here**. |
-| **Recorded branch** | `research/4hr-mnq-400-forward-rebase-20261010` @ **`94a71bd`**. Remote branch **deleted** after merge. Local branch remains. Its tree **equals** `58d4cd6`. |
-| **Deployed release** | **`94a71bd`** — symlink **`/root/autonomous-futures-system` → `/root/afs-releases/94a71bd…`**; **`EXPECTED_LIVE_COMMIT=94a71bd…`** (**match YES**, re-read 2026-10-11 post-install). **Do not `futures-bot` restart** without drift proof. Side release **`f8d4845…`** built+verified on box for six-micro only (not live symlink). |
-| **Box read (2026-10-11)** | **`futures-bot` active** (same PID epoch since 2026-10-10 promote; **`NRestarts=0`**); posture pins present (**`LIVE_TRADING_ENABLED=false`**, demo, cap **1**, wide-stop + 5m + 1m observer — values not re-printed); **no deploy lock**; **:8000** `/health` OK. **Six-micro:** **`afs-paper`**, **`six-micro-polygon.env`**, pin **`f8d4845…`**, **`--verify-sha` PASS**; **`six-micro-daily-tsmom.timer` enabled** — next **Mon 2026-10-12 17:10 America/New_York** (21:10 UTC). Journal **`/root/afs-shared/logs/six-micro-daily-tsmom/`** (install smoke run wrote warmup lines; scorable from **2026-10-12** per prereg). Account flat / Monday journal gates **still open**. |
-| **Verdict** | **HOLD.** Live trading off, Tradovate demo, 1 contract, account flat (checkpoint claim), demo stop cap **300**, paper `wide_stop_4k` **400** on **`main`**, rollback pointer `c44d32bc`. Wide-stop demo lane was **already armed** at promote. Operator GO required for any further runtime action. |
-| **DO NOT deploy** | `2f4f776`, any second promote of #1216, or redeploy “to pick up” #1208–#1211 (already on `main` at `58d4cd6`). Do not roll back unless separate operator GO. |
-| **Track B / E-2026-10-09** | Spec **`docs/research-experiment-specs/E-2026-10-09-4hr-mnq-400-forward-01.json`** is **APPROVED**; first eligible session **2026-10-12**. **`main` matches the 400-tick paper cell** (#1216); box SHA **`94a71bd`**/**`58d4cd6`** if symlink proof holds. See **`docs/futures-track-b-forward-readiness-2026-10-10.md`**. |
-| **Daily tsmom / AFS-0256** | **#1218 MERGED** **`f8d4845`**. Operator **2026-10-11:** code matches reviewed **`e510dc4`** (docs-only delta) — **release good**. **TIMER ON — operator GO** (builder): `systemctl enable --now six-micro-daily-tsmom.timer`; weekdays **17:10 America/New_York**; pin **`f8d4845`** in `10-release.conf`; **no `futures-bot` restart**. Prior box read reported timer enabled — **re-verify after GO** (unverified this turn). Trial **`T-2026-10-10-prereg-six-micro-daily-tsmom-forward-2026-10-10-01`**: **RUNNING**; scorable from **2026-10-12**; **40** round-turn gate. |
-| **Open futures PRs (not HOLD deploy)** | **#1217** (draft) MNQ seal guard · **#1219** (draft) six-micro paper cleanup · **#1214** (draft) handoff docs |
-| **Public resume** | `docs/futures-research-resume-checkpoint-2026-10-10.md` (+ Cursor + Claude options appendices) |
-| **Options ETF research** | Remote **`claude/options-time-exit-research-20261010`** **deleted 2026-10-11** (operator GO; contained trade files). Not on `main`. |
-| **Options edge screen / #1222** | **SOURCE MERGED / QA PASS** at `4d56333` (2026-10-11): 66 names / 110 sessions, pullback + failed-break **KEEP FOR RESEARCH**, compression **REJECT**. No approved options-profitability trial; no deployment. Details: `docs/options-current-state-handoff.md` and `docs/research-notes/options-underlying-edge-2026-10-11/`. 1-2-2 SIP underlying reconciliation done (443 separate rows), **101 entry quotes / no option exits**; prospective exit spec design only. **No further strategy research.** |
-| **Saved 4HR benchmark** | `docs/research-notes/4hr-mnq-400-historical-benchmark-2026-10-10/` (on **`main`** via #1216) |
-| **Saved ORB/VWAP sweeps** | `docs/research-notes/orb-vwap-tf-window-sweep-2026-10-10/` (on **`main`** via #1216) |
-| **Vault NR7 + Keltner exploratory** | **`T-2026-10-11-exploratory-nr7-keltner-capital-unconstrained-01`** — closed **RESEARCH_ONLY** / **FAIL**; artifacts `docs/research-notes/capital-unconstrained-strategy-research-2026-10-11/` + ledger evidence dir |
-| **Forward 4HR start** | **2026-10-12** — forward fills **not collected** yet; requires read-only box proof before counting (see **NEXT**) |
-| **Step 4 parity doc** | `docs/futures-demo-step4-1m-vs-5m-ioc-parity-2026-10-10.md` |
-| **Track B readiness** | `docs/futures-track-b-forward-readiness-2026-10-10.md` (§2 updated 2026-10-11; §4.3 box gates still apply) |
-| **Deferred cleanup list** | `docs/repo-hygiene-deferred-removal-tracker-2026-10-10.md` (classify only; delete at end) |
-| **Unreviewed later branch** | **`fix/mnq-seal-research-guard-20261010`** / **#1217** — on origin, **not** in this HOLD |
+| **GitHub `main` at this refresh** | **`c215060999fc57489b11de8a8e2e2651bd2f79e1`**. Fetch again before acting; docs PR #1220 is ahead of this SHA and not merged. |
+| **Last repo-documented runtime checkpoint** | 2026-10-11: futures release reported as **`94a71bd`**, live trading off, Tradovate DEMO, cap one. **Stale for present-tense runtime claims until re-read.** No restart/deploy is authorized by this document. |
+| **Track B / 4HR forward** | Spec `E-2026-10-09-4hr-mnq-400-forward-01` is **APPROVED**; eligible sessions start 2026-10-12. Current source contract: **400-tick / $200 paper**, guarded **300-tick / $150 DEMO**. Repository state does **not** prove eligible fills were collected or scored. |
+| **Six-micro daily TSMOM** | Trial `T-2026-10-10-prereg-six-micro-daily-tsmom-forward-2026-10-10-01` is **RUNNING** in the ledger; first eligible session 2026-10-12; one look at 40 combined round-turns. Actual post-eligibility collection is **UNVERIFIED here**. Collector depends on Polygon; operator plans access end 2026-10-18. |
+| **NR7 / Keltner exploratory** | Trial closed **RESEARCH_ONLY**. Keltner frozen leg = FAIL. Canonical NR7 = 5-trade diagnostic / insufficient evidence; its positioning labels are contradictory. Separate 4-trade executable and Donchian figures are **reported-only** unless provenance is later preserved. Do not rerun/tune. |
+| **#1220** | Current docs/research-integrity reconciliation. CI/handoff were green on prior exact head; this broader docs refresh requires fresh exact-head CI + independent review before merge. |
+| **#1217** | MNQ post-seal research guard remains open and important, but its branch is substantially behind `main`; reconcile/review before merge. The June 29 seal remains mandatory regardless. |
+| **#1221** | Signa futures snapshot causal-read fix remains open; observer/context only, not outcome authority. Rebase/review separately. |
+| **#1214** | **CLOSED UNMERGED 2026-10-13 as superseded.** Its useful current TODO/work-state/cleanup guidance was re-reviewed and preserved in #1220. Branch/local deletion was not authorized. |
+| **#1219** | Closed unmerged. Do not keep listing it as active work. |
+| **#1225** | Separate options research-closeout docs PR; keep options decisions in the options lane and rebase/review there. |
+| **Runtime anomaly to re-check** | Separate audit reported an extra Python bytecode file under release `94a71bd…`. Treat as a Runtime Drift Audit item; do not mutate the box from research reconciliation. |
+| **Current operator TODO** | `docs/futures-operator-todo.md` current 2026-10-13 section. |
+| **Cleanup tracker** | `docs/repo-hygiene-deferred-removal-tracker-2026-10-10.md`; local sizes/worktrees are historical snapshots until the Mac is re-read. No bulk deletion script. |
 
-**DO NOT REDO:** gzip 4HR cell reproduction; ORB/VWAP TF×window sweeps (baseline + trending + orb48); Grok PASS work on merged **#1208**/**#1209**; Sep decompositions listed below; **NR7ID + Keltner KC-long** capital-unconstrained exploratory (`T-2026-10-11-exploratory-nr7-keltner-capital-unconstrained-01`).
+**DO NOT REDO:** closed ORB/VWAP sweeps; Sep 7 decomposition; corrected 4HR pre-armed historical work; corrected 3-2-2 EOD rerun; NR7/Keltner exploratory; completed 59-episode options coverage study. Failed/retired evidence stays failed/retired unless a genuinely new preregistered population exists.
 
-**OPTIONS STOP:** #1222 QA + merge complete; do not re-run the 66-name screen or start an options trial. New strategy research is HOLD; Options Paper V1 current-epoch accounting is a separate unresolved workstream. **NEXT (futures only):** (1) **Builder/VPS:** confirm **`six-micro-daily-tsmom.timer`** enabled+active after operator **TIMER ON** GO (**unverified** from Mac this turn). (2) **2026-10-12 ~17:17 ET:** operator Track B check; **17:10 ET** first scheduled six-micro collect. (3) **2026-10-19:** Polygon check (operator). (4) Wide-stop live symlink stays **`94a71bd`** — no global promote to **`f8d4845`**.
+**NEXT:** (1) finish #1220 exact-head CI + independent review; (2) if current forward status is needed, perform **read-only** Track B and six-micro evidence checks without scoring early or changing runtime; (3) decide six-micro data continuity before 2026-10-18 without new spend; (4) reconcile #1217/#1221 separately. #1214 is already closed as superseded. No new research lane, deploy, restart, broker action, or promotion follows from this checkpoint.
 
 Prior chat context for this session is **closed**. Section below is coordination archive unless stale.
 
