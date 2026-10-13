@@ -120,7 +120,7 @@
 
 ## 5. Runtime-safety reconciliation after the source-only hygiene pass
 
-A later same-day restricted read-only box check superseded the earlier "runtime unavailable" assumption for the futures lane:
+A later same-day Cursor/Cloud Agent restricted read-only box check superseded the earlier "runtime unavailable" assumption for the futures lane; this docs review did not independently replay the VPS commands:
 
 - Active futures release: `94a71bdbb975b53f21a81b7084482ea3c5270ceb`; service active; no restart drift observed.
 - Live execution off; Tradovate DEMO; hard cap 1; account pin match; broker flat; no working orders; deploy lock absent.
