@@ -4,16 +4,23 @@
 
 **Objective:** Establish genuinely executable positive expectancy, not merely green CI. Historical #1208–#1211/#1215/#1216 engineering corrections are **merged source-only** on `main` @ **`c215060`**. Do not restart their old reviews unless relevant code changed.
 
-### NEXT WHEN AT COMPUTER (blocks deploy/restart) — 2026-10-13 ~12:10Z
+### CURRENT BLOCKER — release integrity drift (blocks deploy/restart)
 
-**Verdict: BLOCKED — SAFETY DRIFT.** Cloud Agent VPS read-only allowlist proved release integrity **FAIL** on live release `94a71bdbb975b53f21a81b7084482ea3c5270ceb`. Cloud SSH **cannot** mutate (Grok audit allowlist DENIED `rm` / cleanup). Operator must run this on a privileged box shell, then ask an agent to re-run allowlisted `release`:
+**Verdict: BLOCKED — SAFETY DRIFT.** Fresh read-only VPS proof found release-integrity **FAIL** on live release `94a71bdbb975b53f21a81b7084482ea3c5270ceb` because of an extra bytecode file:
 
-```bash
-rm -f /root/afs-releases/94a71bdbb975b53f21a81b7084482ea3c5270ceb/scripts/__pycache__/options_122_prospective_collect.cpython-313.pyc
-rmdir /root/afs-releases/94a71bdbb975b53f21a81b7084482ea3c5270ceb/scripts/__pycache__ 2>/dev/null || true
-```
+`scripts/__pycache__/options_122_prospective_collect.cpython-313.pyc`
 
-No `futures-bot` restart required for that cleanup alone. Do **not** deploy or restart while integrity FAIL remains.
+**Do not remove that file in place.** `AGENTS.md` explicitly forbids editing any directory under `/root/afs-releases` in place. A direct `rm` would make the integrity check green by mutating the supposedly immutable release and would bypass the release model.
+
+Smallest safe ordering:
+
+1. Leave the already-running process untouched while the integrity failure is contained by the current HOLD.
+2. Reconfirm the exact failure read-only immediately before any recovery action.
+3. Under a separate explicit operator GO, use the sanctioned immutable-release / deploy-lock process to move away from or reconstruct the affected release. Do not invent an ad-hoc repair path.
+4. Re-run release integrity plus deployed SHA/service/posture/broker/journal checks after recovery.
+5. Only after integrity is **PASS** may deployment/restart/new DEMO/execution-path progression be considered.
+
+No deploy/restart/live/new DEMO action is authorized by this TODO.
 
 **Also proven same read (do not redo unless drift):** `futures-bot` active on `94a71bd…`, `NRestarts=0`; `LIVE_TRADING_ENABLED=false`, `TRADOVATE_ENV=demo`, hard cap `1`, account pin match; broker flat / no working orders; deploy lock absent. Track B `wide_stop_4k` lane still **0 fills**, state last **2026-09-30**. Six-micro timer/journals **UNVERIFIED** via current allowlist.
 
@@ -29,12 +36,12 @@ No `futures-bot` restart required for that cleanup alone. Do **not** deploy or r
 
 **Do not treat a positive synthetic, historical, or observer-only result as passing these gates.**
 
-- [ ] **Integrity cleanup (above):** remove stray `__pycache__` `.pyc` on `94a71bd…`; recheck `release` → PASS.
+- [ ] **Integrity recovery:** no in-place release-tree edit. Choose and explicitly authorize a sanctioned immutable-release recovery under the deploy lock; then re-prove `release` → PASS plus post-recovery SHA/service/posture/broker/journal integrity.
 - [x] **Engineering source work:** #1208–#1213, #1215, #1216 merged. **No automatic deployment.**
 - [x] **Track B paper cell on `main`:** one promote **`94a71bd`** (tree ≡ `58d4cd6`) — **no second deploy** without new GO.
 - [x] **Partial box proof 2026-10-13:** SHA/pins/broker flat/orders via cloud allowlist (integrity FAIL still blocks progression).
 - [ ] **Polygon / six-micro (deadline 2026-10-18):** journal/timer census still needs a path beyond current allowlist; retire timer/env if unique evidence unproven; **do not** replace with another paid feed. Plan: `docs/repo-hygiene-audit-2026-10-13.md`.
-- [ ] **Docs:** #1220 exact-head CI green (`e0b525f6`) — independent review then merge GO; close **#1214** / **#1225** after reuse; candidate-close **#1201**.
+- [ ] **Docs:** #1220 is clean/mergeable at `e0b525f6` with tests+handoff SUCCESS — independent review remains before any merge GO. #1226 is the active hygiene consolidation PR; after its review, close **#1214** / **#1225** if their useful content is fully preserved, and review candidate-close **#1201**.
 - [ ] **Cleanup deletes:** classification only until operator GO — `docs/repo-hygiene-deferred-removal-tracker-2026-10-10.md`. Preserve SSH stash; archive-tag before deleting `ops/post-cap-shadow-report-20261005`.
 
 **Sources of truth:** Strategy verdict = `docs/strategy-rules/Strategy_Inventory.md`; experiment history = `docs/research-trial-ledger.jsonl`; runtime = independently verified box/broker; agent handoff = `docs/agent-work-state.md` START HERE.
