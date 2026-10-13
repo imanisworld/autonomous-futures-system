@@ -6,6 +6,19 @@ This document is a **pre-deploy / pre-collection checklist**. It does **not** au
 
 ---
 
+## 0. Safety refresh — 2026-10-13
+
+Fresh restricted read-only runtime proof found:
+
+- active futures release `94a71bdbb975b53f21a81b7084482ea3c5270ceb`; service active; no restart drift observed;
+- live execution off, Tradovate DEMO, hard cap 1, account pin match, broker flat, zero working orders, deploy lock absent;
+- **release integrity FAIL** because the immutable release contains extra `scripts/__pycache__/options_122_prospective_collect.cpython-313.pyc`;
+- Track B `wide_stop_4k` still has **0 fills** and recorded state last dated **2026-09-30**.
+
+Therefore Track B is **not cleared for progression or forward-fill counting** from this checkpoint. Do not repair the release by deleting files inside `/root/afs-releases`; immutable-release recovery must use the sanctioned deploy-lock path under separate operator authorization, then pass fresh post-recovery proof.
+
+---
+
 ## 1. What Track B measures
 
 | Field | Frozen contract |
@@ -65,15 +78,17 @@ Do not conflate A and B in reports or Grok handoffs.
 ### 4.2 Deploy (explicit operator GO only)
 
 - [x] **One promote recorded:** release **`94a71bd`** @ 2026-10-10T15:45:33Z; tree equals **`58d4cd6`**. **No second deploy/restart** unless SHA/posture drift is proven.
-- [ ] **Read-only box proof** (2026-10-12 session open): deployed SHA, rollback pointer, deploy lock, demo/live pins, flat account, collector + journals — see §4.3.
+- [x] **Partial read-only box proof (2026-10-13):** deployed SHA/service identity, deploy lock absent, demo/live pins, cap 1, account pin, broker flat, zero working orders. **Release integrity FAIL** and Track B journal/state is stale/0 fills, so progression remains blocked — see §4.3.
 - [ ] **Do not reset** shared wide-stop epoch `2026-09-09T04:21:04Z` for cleanup (Daily 2-2 / ledger continuity — see Strategy Inventory).
 - [ ] If drift found: nominate **exact reviewed SHA** only; controlled release with lock/integrity; post-check `WIDE_STOP_LEDGER_MODE=paper_sim`, `FIVE_MIN_FEED_ENABLED=true`, journals writing.
 
-### 4.3 Runtime pins (read-only box proof — **unverified in Cursor session**)
+### 4.3 Runtime pins / integrity (read-only box proof — **partial 2026-10-13**)
 
-- [ ] `LIVE_TRADING_ENABLED=false`, `TRADOVATE_ENV=demo`, `MAX_CONTRACTS_HARD_CAP=1`
-- [ ] Wide-stop demo route: if used, proof-pinned `WIDE_STOP_LEDGER_EXECUTION_ROUTE` + `WIDE_STOP_DEMO_EXECUTION_*` (additive to paper; see `wide_stop_execution.py`)
-- [ ] 1m observer flags if Track A continues: `ONE_MIN_TRIGGER_ENABLED`, `ONE_MIN_4HR_OBSERVER_ENABLED`, matching proof pins per prereg
+- [x] `LIVE_TRADING_ENABLED=false`, `TRADOVATE_ENV=demo`, `MAX_CONTRACTS_HARD_CAP=1`
+- [x] Account pin match; broker flat; zero working orders; deploy lock absent
+- [ ] **Release integrity PASS** — currently FAIL on extra `.pyc` inside immutable release `94a71bd…`; no in-place repair
+- [ ] Wide-stop demo route: if used, re-prove `WIDE_STOP_LEDGER_EXECUTION_ROUTE` + `WIDE_STOP_DEMO_EXECUTION_*` after integrity recovery (additive to paper; see `wide_stop_execution.py`)
+- [ ] 1m observer flags if Track A continues: re-prove `ONE_MIN_TRIGGER_ENABLED`, `ONE_MIN_4HR_OBSERVER_ENABLED`, matching proof pins per prereg
 
 ### 4.4 Scoring discipline
 
@@ -93,16 +108,16 @@ Do not conflate A and B in reports or Grok handoffs.
 
 ---
 
-## 6. Suggested operator sequence (2026-10-11)
+## 6. Suggested operator sequence (updated 2026-10-13)
 
-1. **Read-only VPS pass** before **2026-10-12** RTH — deployed SHA `94a71bd`/`58d4cd6`, posture pins, 5m feed, wide-stop collector/journals (`docs/futures-operator-todo.md`, `/futures-deployment-safety-audit`).
-2. **No redeploy** unless drift proven — HOLD per `docs/agent-work-state.md`.
-3. **Score Track B** only from **2026-10-12** sessions; label **paper 400t** vs **demo 300t** separately.
-4. **Post-merge breaker** (optional): review **`58d4cd6`** mechanism/DEMO isolation — not a redeploy prerequisite if box SHA already matches.
-5. **Automated weekday proof (VPS):** `afs-forward-lanes-daily-proof.timer` runs **Mon–Fri 17:25 America/New_York** (after six-micro **17:10**). Read-only JSON append log: `/root/afs-shared/logs/forward_lanes_daily_proof.jsonl`. Source: `ops/forward_lanes_daily_proof.py` (installed copy under `/root/afs-shared/ops/`).
+1. **Contain the verified integrity drift:** leave the running process untouched; do not edit `/root/afs-releases` in place.
+2. Under separate operator authorization, use the sanctioned immutable-release/deploy-lock recovery path; then re-run release integrity and the full runtime/broker/journal proof.
+3. Only after integrity is **PASS**, verify Track B journal progression from the 2026-10-12 eligible start. The current fresh read shows **0 fills** and stale state dated 2026-09-30.
+4. Count only eligible forward fills that are causally produced after all required gates are proven; keep paper 400t and demo 300t results separate.
+5. Do not redeploy merely because `main` is ahead. Any future candidate/restart remains a separate operator GO.
+6. Keep the automated weekday proof as supporting evidence only; it cannot override a failed release-integrity gate.
 
 ---
-
 ## 7. References
 
 | Doc | Role |
