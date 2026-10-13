@@ -4,7 +4,7 @@
 
 **Policy:** Follow `docs/BRANCH_ARCHIVE_INDEX.md` and `AGENTS.md` — classify first; tag/archive remote branches before delete; never delete VPS-referenced `release/*` without operator ruling.
 
-**GitHub-only refresh — 2026-10-13:** the local Mac sizes/worktree rows below are historical 2026-10-11 snapshots unless explicitly marked otherwise. Current GitHub review shows #1214 is heavily diverged and is a supersession candidate, #1219 is closed unmerged, #1220 is the current research/docs reconciliation, #1217 and #1221 remain separate source PRs, and #1225 is separate options documentation. Do not translate GitHub state into local deletion authority.
+**GitHub-only refresh — 2026-10-13:** the local Mac sizes/worktree rows below are historical 2026-10-11 snapshots unless explicitly marked otherwise. #1214 was closed unmerged as superseded after its useful current guidance was preserved in #1220; #1219 is also closed unmerged. #1220 is the current research/docs reconciliation; #1217 and #1221 remain separate source PRs; #1225 is separate options documentation. Do not translate GitHub state into local deletion authority.
 
 **Remove only after ALL gates (edit when done):**
 
@@ -144,7 +144,7 @@ The prior version published copy/paste `git worktree remove --force` and `rm -rf
 4. Present the operator an exact **per-path** deletion proposal with bytes, purpose, provenance/backup, reason, and rollback/recovery path. Delete only separately approved items.
 5. Keep release refs, canonical evidence, trial manifests/results, and any unique local-only evidence until explicit supersession/recoverability is proven.
 
-**Current GitHub docs cleanup candidate:** #1214 may be closed as superseded once its useful current guidance is confirmed present in #1220/current `main`. Closing a PR does not authorize deleting its branch or local worktree.
+**GitHub docs cleanup:** #1214 was **closed unmerged 2026-10-13 as superseded** after its useful current guidance was preserved in #1220. Its branch/local worktree/evidence were not deleted; any later removal still requires the per-path proof above.
 
 ---
 
