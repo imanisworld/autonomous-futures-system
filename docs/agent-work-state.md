@@ -14,7 +14,7 @@ Read **only** this block + `AGENTS.md` unless the requested lane needs its autho
 | **#1220** | Current docs/research-integrity reconciliation. CI/handoff were green on prior exact head; this broader docs refresh requires fresh exact-head CI + independent review before merge. |
 | **#1217** | MNQ post-seal research guard remains open and important, but its branch is substantially behind `main`; reconcile/review before merge. The June 29 seal remains mandatory regardless. |
 | **#1221** | Signa futures snapshot causal-read fix remains open; observer/context only, not outcome authority. Rebase/review separately. |
-| **#1214** | Old futures docs-refresh PR is heavily diverged and is a **supersession candidate** after its still-useful current guidance is preserved in #1220. |
+| **#1214** | **CLOSED UNMERGED 2026-10-13 as superseded.** Its useful current TODO/work-state/cleanup guidance was re-reviewed and preserved in #1220. Branch/local deletion was not authorized. |
 | **#1219** | Closed unmerged. Do not keep listing it as active work. |
 | **#1225** | Separate options research-closeout docs PR; keep options decisions in the options lane and rebase/review there. |
 | **Runtime anomaly to re-check** | Separate audit reported an extra Python bytecode file under release `94a71bd…`. Treat as a Runtime Drift Audit item; do not mutate the box from research reconciliation. |
@@ -23,7 +23,7 @@ Read **only** this block + `AGENTS.md` unless the requested lane needs its autho
 
 **DO NOT REDO:** closed ORB/VWAP sweeps; Sep 7 decomposition; corrected 4HR pre-armed historical work; corrected 3-2-2 EOD rerun; NR7/Keltner exploratory; completed 59-episode options coverage study. Failed/retired evidence stays failed/retired unless a genuinely new preregistered population exists.
 
-**NEXT:** (1) finish #1220 exact-head CI + independent review; (2) if current forward status is needed, perform **read-only** Track B and six-micro evidence checks without scoring early or changing runtime; (3) decide six-micro data continuity before 2026-10-18 without new spend; (4) reconcile #1217/#1221 separately; (5) retire stale docs PR #1214 once supersession is confirmed. No new research lane, deploy, restart, broker action, or promotion follows from this checkpoint.
+**NEXT:** (1) finish #1220 exact-head CI + independent review; (2) if current forward status is needed, perform **read-only** Track B and six-micro evidence checks without scoring early or changing runtime; (3) decide six-micro data continuity before 2026-10-18 without new spend; (4) reconcile #1217/#1221 separately. #1214 is already closed as superseded. No new research lane, deploy, restart, broker action, or promotion follows from this checkpoint.
 
 Prior chat context for this session is **closed**. Section below is coordination archive unless stale.
 
