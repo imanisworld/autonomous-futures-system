@@ -22,7 +22,7 @@ Smallest safe ordering:
 
 No deploy/restart/live/new DEMO action is authorized by this TODO.
 
-**Also proven same read (do not redo unless drift):** `futures-bot` active on `94a71bd…`, `NRestarts=0`; `LIVE_TRADING_ENABLED=false`, `TRADOVATE_ENV=demo`, hard cap `1`, account pin match; broker flat / no working orders; deploy lock absent. Track B `wide_stop_4k` lane still **0 fills**, state last **2026-09-30**. Six-micro timer/journals **UNVERIFIED** via current allowlist.
+**Cursor-reported point-in-time read (2026-10-13; repeat only where fresh proof is necessary):** `futures-bot` active on `94a71bd…`, `NRestarts=0`; `LIVE_TRADING_ENABLED=false`, `TRADOVATE_ENV=demo`, hard cap `1`, account pin match; broker flat / no working orders; deploy lock absent. Track B `wide_stop_4k` lane **0 fills**, state last **2026-09-30**; October 12 onward collection/session records remain **UNVERIFIED**. Six-micro timer/journals are also **UNVERIFIED** via the current allowlist.
 
 **Five evidence gates (preserved from open docs-only PR #1201 / reused from stale #1214; PR disposition remains separate):**
 
@@ -40,8 +40,9 @@ No deploy/restart/live/new DEMO action is authorized by this TODO.
 - [x] **Engineering source work:** #1208–#1213, #1215, #1216 merged. **No automatic deployment.**
 - [x] **Track B paper cell on `main`:** one promote **`94a71bd`** (tree ≡ `58d4cd6`) — **no second deploy** without new GO.
 - [x] **Partial box proof 2026-10-13:** SHA/pins/broker flat/orders via cloud allowlist (integrity FAIL still blocks progression).
-- [ ] **Polygon / six-micro (deadline 2026-10-18):** journal/timer census still needs a path beyond current allowlist; retire timer/env if unique evidence unproven; **do not** replace with another paid feed. Plan: `docs/repo-hygiene-audit-2026-10-13.md`.
-- [ ] **Docs:** #1220 is clean/mergeable at `e0b525f6` with tests+handoff SUCCESS — independent review remains before any merge GO. #1226 is the active hygiene consolidation PR; after its review, close **#1214** / **#1225** if their useful content is fully preserved, and review candidate-close **#1201**.
+- [ ] **Track B forward collection:** read-only census of October 12 onward session/journal rows, timestamps and collector status. A zero-fill report with a September 30 state date cannot confirm October collection. Keep trial frozen; no backfill/restart without separate GO.
+- [ ] **Polygon / six-micro (deadline 2026-10-18):** separate authorized **read-only** journal/timer census (eligible sessions, scored round-turns, gaps and roll issues). This can proceed while release integrity is blocked. Preserve evidence; decide explicitly whether to retire the timer before canceling Polygon. No replacement feed or timer/env mutation without separate GO. Plan: `docs/repo-hygiene-audit-2026-10-13.md`.
+- [ ] **Docs:** #1220 is **OPEN** at last checked `e0b525f6` (mergeability/CI are snapshot-only); independent review remains. #1226 is the active docs consolidation PR; verify its **latest exact-head CI + handoff-fields** and independent review before any merge GO. After unique-content proof, consider closing overlapping #1214/#1225 and candidate-close #1201; do not auto-close.
 - [ ] **Cleanup deletes:** classification only until operator GO — `docs/repo-hygiene-deferred-removal-tracker-2026-10-10.md`. Preserve SSH stash; archive-tag before deleting `ops/post-cap-shadow-report-20261005`.
 
 **Sources of truth:** Strategy verdict = `docs/strategy-rules/Strategy_Inventory.md`; experiment history = `docs/research-trial-ledger.jsonl`; runtime = independently verified box/broker; agent handoff = `docs/agent-work-state.md` START HERE.
