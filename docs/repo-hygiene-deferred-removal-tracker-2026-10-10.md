@@ -4,13 +4,15 @@
 
 **Policy:** Follow `docs/BRANCH_ARCHIVE_INDEX.md` and `AGENTS.md` — classify first; tag/archive remote branches before delete; never delete VPS-referenced `release/*` without operator ruling.
 
+**GitHub-only refresh — 2026-10-13:** the local Mac sizes/worktree rows below are historical 2026-10-11 snapshots unless explicitly marked otherwise. Current GitHub review shows #1214 is heavily diverged and is a supersession candidate, #1219 is closed unmerged, #1220 is the current research/docs reconciliation, #1217 and #1221 remain separate source PRs, and #1225 is separate options documentation. Do not translate GitHub state into local deletion authority.
+
 **Remove only after ALL gates (edit when done):**
 
 - [x] Grok sign-off on #1208 / #1209 (merged on `main` @ `a675a8d`)
 - [x] **#1211** merged on `main` @ `71e5f45`
 - [x] **#1210** @ `7d766b2` → **`465abc2`**; **#1212** @ `9df1a09` → **`05363a4`**; **#1213** @ `730ef53` → **`6d3078f`**
 - [x] Track B **400-tick paper cell on `main` (#1216)**; one promote **`94a71bd`** tree-identical to `58d4cd6` — **no second deploy**; forward scoring from **2026-10-12** after box read (2026-10-11)
-- [ ] Claude options handoff merged/archived on GitHub (`claude/options-time-exit-research-20261010` @ `a30f0a6` or successor)
+- [x] Remote `claude/options-time-exit-research-20261010` branch reported deleted 2026-10-11; any surviving local worktree/copy is a **local-only** cleanup question and must be verified on the Mac before removal
 - [ ] Any open PR you still care about is **merged, closed, or copied** to `main`/checkpoint docs
 
 **Snapshot:** Mac checkout @ `58d4cd6` (`main`, 2026-10-11); ~105 remote branch refs; ~**1.3 GB** `private/` (partial cleanup below); ~**2.3 GB** ignored `data/replay*`.
@@ -132,30 +134,17 @@ These look like “old research” but are **authoritative or DO NOT REDO**:
 
 ---
 
-## 7. End-of-campaign removal script (draft — run manually)
+## 7. End-of-campaign cleanup procedure — review only
 
-**Only after Section gates are checked.**
+The prior version published copy/paste `git worktree remove --force` and `rm -rf` commands. Those batch commands are removed because this document does not have current Mac filesystem proof and should not turn a stale inventory into destructive instructions.
 
-```bash
-# Example — adjust paths; review each line before running.
+1. On the authorized Mac, re-read `git worktree list --porcelain`, `git status --short` for every candidate worktree, current branches/remotes, actual path sizes, and any active process references.
+2. For each Git ref/worktree candidate, record the exact SHA plus a recoverable `origin` ref or verified `archive/*` tag, and prove there are no unique changes. Prefer normal clean worktree removal; do not default to forced removal.
+3. For `private/*` and ignored replay corpora, prove ownership, downstream references, regeneration/backup status, and whether any open experiment or review still needs the original bytes.
+4. Present the operator an exact **per-path** deletion proposal with bytes, purpose, provenance/backup, reason, and rollback/recovery path. Delete only separately approved items.
+5. Keep release refs, canonical evidence, trial manifests/results, and any unique local-only evidence until explicit supersession/recoverability is proven.
 
-# Worktrees
-git worktree remove private/wt-options-exits --force
-git worktree remove private/wt-capped --force
-git worktree remove ../afs-wt-1067 --force
-git worktree remove ../afs-wt-1069 --force
-git worktree remove ../afs-cursor-cloud-maintenance --force
-git worktree remove ../afs-options-1111 --force
-
-# Merged local branches
-git branch -d docs/212c-1134-prep-checkpoint docs/post-c44d32b-epoch-docs-20261004 research/options-212c-forward-prep-20261004
-
-# Private disk (irreversible)
-rm -rf private/trading-evidence-2026-10-09 private/cross_market_grid_2026_09_23 private/mes598-proof
-
-# Optional replay corpora
-# rm -rf data/cross_market_2026_09_23 data/replay_polygon_5m ...
-```
+**Current GitHub docs cleanup candidate:** #1214 may be closed as superseded once its useful current guidance is confirmed present in #1220/current `main`. Closing a PR does not authorize deleting its branch or local worktree.
 
 ---
 
