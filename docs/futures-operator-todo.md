@@ -6,7 +6,7 @@
 
 ### CURRENT BLOCKER — release integrity drift (blocks deploy/restart)
 
-**Verdict: BLOCKED — SAFETY DRIFT.** Fresh read-only VPS proof found release-integrity **FAIL** on live release `94a71bdbb975b53f21a81b7084482ea3c5270ceb` because of an extra bytecode file:
+**Verdict: BLOCKED — SAFETY DRIFT.** Cursor/Cloud Agent's restricted read-only VPS check reported release-integrity **FAIL** on live release `94a71bdbb975b53f21a81b7084482ea3c5270ceb` because of an extra bytecode file:
 
 `scripts/__pycache__/options_122_prospective_collect.cpython-313.pyc`
 
