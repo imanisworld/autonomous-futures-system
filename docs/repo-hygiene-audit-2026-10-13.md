@@ -23,7 +23,7 @@
 
 ### Six-micro collector — unique evidence?
 
-- **Prereg / ledger:** `T-2026-10-10-prereg-six-micro-daily-tsmom-forward-2026-10-10-01` is **RUNNING**; first eligible session **2026-10-12**; gate **40** combined round-turns; paper-only; Polygon-dated fronts for MNQ/MES/M2K; listed-front for MGC/MCL/MBT.
+- **Prereg / ledger:** `T-2026-10-10-prereg-six-micro-daily-tsmom-forward-2026-10-10-01` is recorded **RUNNING**; first eligible session **2026-10-12**; gate **40** combined round-turns; paper-only. Actual session collection and completed round-turn counts are **UNVERIFIED**. Polygon-dated fronts apply to MNQ/MES/M2K; listed-front to MGC/MCL/MBT.
 - **Unique by design:** six-root daily TSMOM paper journal under `logs/six-micro-daily-tsmom/` — not the MNQ wide-stop Track B path.
 - **Useful / proven this session:** **UNVERIFIED.** This environment has no authorized VPS journal read. Checkpoint claimed timer enabled and smoke warmup before 2026-10-12; scorable value after first sessions is not proven here.
 - **Recommendation:** Treat six-micro as **retirement candidate if Oct 18 box journals show no path to unique scorable round-turns** (empty/warmup-only, persistent `FRONT_MISMATCH` / missing bars without recoverable fills, or operator waives the trial). Do **not** replace Polygon with another paid feed. Preserve journals + prereg/ledger as HISTORICAL_EVIDENCE. Stopping the timer/env requires **explicit operator GO** (not done by this audit).
@@ -127,12 +127,12 @@ A later same-day restricted read-only box check superseded the earlier "runtime 
 - **Release integrity FAIL:** extra `scripts/__pycache__/options_122_prospective_collect.cpython-313.pyc` exists inside the immutable release.
 - Safety verdict therefore becomes **BLOCKED — SAFETY DRIFT**, not merely UNVERIFIED.
 - Do **not** delete the bytecode file in place. `AGENTS.md` forbids editing `/root/afs-releases` directly. Any recovery must use the sanctioned immutable-release/deploy-lock path under separate operator authorization, then re-prove release integrity and runtime/broker/journal state.
-- Six-micro timer/journals remain UNVERIFIED and still require a separate census before the 2026-10-18 Polygon decision.
+- Six-micro timer/journals remain UNVERIFIED and need a separate authorized **read-only** census before the 2026-10-18 Polygon decision. This census need not wait for release recovery. Likewise Track B's **0 fills / 2026-09-30 last state** does not prove October 12 onward session collection; check continuity separately.
 
-This safety finding does not change the branch/worktree/PR cleanup classifications above; it only changes operator ordering. Runtime integrity recovery comes before any deploy/restart or Polygon/timer mutation.
+This safety finding does not change the branch/worktree/PR cleanup classifications above; it only changes operator ordering. Runtime integrity recovery comes before any deploy/restart or Polygon/timer mutation; authorized **read-only** Track B and six-micro collection checks may proceed in parallel.
 
 ---
 
 ## 6. Smallest next operator action
 
-**First:** choose a sanctioned immutable-release recovery for the verified integrity failure; do not edit the active release tree in place. After integrity rechecks PASS, perform the six-micro timer/journal census and make the Polygon GO/NO-GO decision by 2026-10-18. Documentation cleanup may continue source-only in parallel, but no deploy/restart/timer/env mutation should jump ahead of the safety gate.
+**Next, in parallel where authorized:** (a) confirm the reported integrity failure and choose a sanctioned immutable-release recovery with separate operator GO; never edit the release tree in place, and no deploy/restart until integrity PASS. (b) Obtain **read-only** six-micro timer/journal and Track B October 12 onward collection censuses. Decide Polygon GO/NO-GO by 2026-10-18 without treating inaccessible evidence as poor performance. No timer/env mutation without explicit GO.
