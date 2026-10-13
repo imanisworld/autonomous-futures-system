@@ -2,7 +2,7 @@
 
 ## START HERE — source `c215060`; box proof 2026-10-13 → **BLOCKED — SAFETY DRIFT**
 
-Read **only** this block + `AGENTS.md` unless drift is detected. Private numeric handoff: ChatGPT Library `/Futures Research/Futures Research Handoff - 2026-10-10.md`. Hygiene evidence: `docs/repo-hygiene-audit-2026-10-13.md`. Exact cleanup command: `docs/futures-operator-todo.md` CURRENT.
+Read **only** this block + `AGENTS.md` unless drift is detected. Private numeric handoff: ChatGPT Library `/Futures Research/Futures Research Handoff - 2026-10-10.md`. Hygiene evidence: `docs/repo-hygiene-audit-2026-10-13.md`. Recovery safety steps: `docs/futures-operator-todo.md` CURRENT (no direct release-tree edits).
 
 | Item | Value |
 |---|---|
@@ -11,14 +11,14 @@ Read **only** this block + `AGENTS.md` unless drift is detected. Private numeric
 | **Release integrity** | **FAIL** — extra `scripts/__pycache__/options_122_prospective_collect.cpython-313.pyc` inside immutable release `94a71bd…`. This is verified drift. **Do not delete/edit inside `/root/afs-releases` in place**; `AGENTS.md` forbids that recovery shortcut. |
 | **Pins / broker (same read)** | live **off**, demo, cap **1**, account pin match; flat; **no** working orders; deploy lock absent. |
 | **Verdict** | **BLOCKED — SAFETY DRIFT** (integrity FAIL). Deploy/restart/new DEMO/live blocked until `release` rechecks PASS. |
-| **Track B** | Spec APPROVED from 2026-10-12; lane `wide_stop_4k` still **0 fills**, state last **2026-09-30** (stale). Polygon-independent. |
+| **Track B** | Spec APPROVED from 2026-10-12; reported `wide_stop_4k` **0 fills**, state last **2026-09-30** (stale). October 12 onward session/journal coverage **UNVERIFIED**; zero fills alone is not collection proof. Polygon-independent. |
 | **Six-micro / Polygon** | Timer/journals **UNVERIFIED** via current allowlist. Deadline **2026-10-18**. Do not stop without GO. |
 | **#1220** | Head **`e0b525f6`**, clean/mergeable against `main`, tests+handoff SUCCESS — needs independent review (docs-only). |
 | **DO NOT deploy** | Anything while integrity FAIL; also `2f4f776`, second #1216 promote, global promote of `f8d4845`. |
 
 **DO NOT REDO:** gzip 4HR; ORB/VWAP; #1208/#1209; NR7/Keltner; #1222; Mac cleanup already recorded.
 
-**OPTIONS STOP.** **NEXT:** preserve the running process and do **not** mutate the immutable release tree. The first operator decision is the sanctioned integrity-recovery path under the deploy lock (controlled rollback/rebuild/promote or another repo-approved recovery), with fresh pre/post proof. Only after release integrity returns PASS should progression continue to the six-micro journal census → Polygon GO/NO-GO by Oct 18.
+**OPTIONS STOP.** **NEXT:** preserve the running process and do **not** mutate the immutable release tree. The first operator decision is the sanctioned integrity-recovery path under the deploy lock (controlled rollback/rebuild/promote or another repo-approved recovery), with fresh pre/post proof. Release integrity must PASS before any deploy/restart or other runtime mutation. Independently perform the **read-only** Track B and six-micro journal/timer censuses now if authorized; use those findings for a separate Polygon GO/NO-GO by Oct 18. Do not change either collector without explicit GO.
 
 Prior chat context for this session is **closed**. Section below is coordination archive unless stale.
 
