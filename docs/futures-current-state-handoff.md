@@ -6,7 +6,7 @@ _As of 2026-09-24 (runtime and current decisions: see the 2026-09-24 blocks in `
 
 ## Runtime safety refresh — 2026-10-13
 
-Repository source is `c215060999fc57489b11de8a8e2e2651bd2f79e1`. Fresh read-only box proof for the active futures runtime established the following current state:
+Repository source is `c215060999fc57489b11de8a8e2e2651bd2f79e1`. Cursor/Cloud Agent's same-day restricted read-only box check reported the following current runtime state; this review did not independently replay the VPS commands:
 
 - Active service release / working directory: `94a71bdbb975b53f21a81b7084482ea3c5270ceb`; `futures-bot` active; `NRestarts=0` since the 2026-10-10 promote.
 - Effective posture proved: `LIVE_TRADING_ENABLED=false`, Tradovate DEMO, hard contract cap `1`, account pin match, broker flat, zero working orders, deploy lock absent.
