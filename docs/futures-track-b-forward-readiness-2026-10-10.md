@@ -112,10 +112,11 @@ Do not conflate A and B in reports or Grok handoffs.
 
 1. **Contain the verified integrity drift:** leave the running process untouched; do not edit `/root/afs-releases` in place.
 2. Under separate operator authorization, use the sanctioned immutable-release/deploy-lock recovery path; then re-run release integrity and the full runtime/broker/journal proof.
-3. Only after integrity is **PASS**, verify Track B journal progression from the 2026-10-12 eligible start. The current fresh read shows **0 fills** and stale state dated 2026-09-30.
-4. Count only eligible forward fills that are causally produced after all required gates are proven; keep paper 400t and demo 300t results separate.
-5. Do not redeploy merely because `main` is ahead. Any future candidate/restart remains a separate operator GO.
-6. Keep the automated weekday proof as supporting evidence only; it cannot override a failed release-integrity gate.
+3. **Read-only, independently of recovery:** inspect Track B session/journal progression from its 2026-10-12 eligible start. The reported box read shows **0 fills** and last state 2026-09-30; check whether October 12 onward session records exist and whether no-setup days write heartbeat evidence. Do not backfill or reset.
+4. **Scoring/progression gate:** only after integrity **PASS** and all independent preregistration/proof gates are satisfied may eligible forward fills be assessed. Do not infer real fills or readiness from source code alone.
+5. Count only eligible forward fills that are causally produced under the frozen contract; keep paper 400t and demo 300t results separate.
+6. Do not redeploy merely because `main` is ahead. Any future candidate/restart remains a separate operator GO.
+7. Keep the automated weekday proof as supporting evidence only; it cannot override a failed release-integrity gate.
 
 ---
 ## 7. References
