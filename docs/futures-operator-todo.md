@@ -1,5 +1,32 @@
 # Futures Operator TODO
 
+## CURRENT — 2026-10-13 (docs hygiene; NOT trading authority)
+
+**Objective:** Establish genuinely executable positive expectancy, not merely green CI. Historical #1208–#1211/#1215/#1216 engineering corrections are **merged source-only** on `main` @ **`c215060`**. Do not restart their old reviews unless relevant code changed. Older Oct 8 operational sections remain historical context; release/box safety requirements **still open** until freshly proven.
+
+**Five evidence gates (preserved from open docs-only PR #1201 / reused from stale #1214; PR disposition remains separate):**
+
+| Gate | Current result | What still counts as proof |
+|---|---|---|
+| **Net expectancy** | **NOT PROVEN** | Eligible actual fills net of commission/slippage and rejected/no-fill opportunities, under a frozen strategy specification |
+| **Repeatability** | **INCOMPLETE** | Adequate forward/independent sample, chronology, bounded concentration, acceptable drawdown, stated stop criteria |
+| **Executable entry** | **SOURCE-CHECKED, UNPROVEN ON BOX** | Causal bar/trigger availability, realistically timed limit/IOC entries, gap and ambiguous same-bar assumptions, genuine fill evidence |
+| **Risk admissibility** | **SOURCE GUARDS PRESENT; RUNTIME UNVERIFIED** | Actual position/stop/daily-loss/cap/kill-switch constraints, not relaxations chosen to make a backtest green |
+| **Replay/DEMO parity** | **NOT ESTABLISHED** | Exact signal, timestamp, source contract, bracket, fill policy and journal reconciliation on the same frozen candidate SHA |
+
+**Do not treat a positive synthetic, historical, or observer-only result as passing these gates.**
+
+- [x] **Engineering source work:** #1208–#1213, #1215, #1216 merged. **No automatic deployment.**
+- [x] **Track B paper cell on `main`:** one promote **`94a71bd`** (tree ≡ `58d4cd6`) — **no second deploy** without new GO.
+- [ ] **Fresh box proof** before counting Track B fills (deployed SHA, journals, live-off/demo/cap-1). Last recorded read: 2026-10-11.
+- [ ] **Polygon / six-micro (deadline 2026-10-18):** read-only journal census; retire timer/env if unique evidence unproven; **do not** replace with another paid feed; MNQ Track B is Polygon-independent. Plan: `docs/repo-hygiene-audit-2026-10-13.md`.
+- [ ] **Docs PR cleanup:** close **#1214** / **#1225** after useful content is reused (this hygiene docs PR); candidate-close **#1201** once five gates are confirmed superseded here.
+- [ ] **Cleanup deletes:** classification only until operator GO — `docs/repo-hygiene-deferred-removal-tracker-2026-10-10.md`. Preserve SSH stash; archive-tag before deleting `ops/post-cap-shadow-report-20261005`.
+
+**Sources of truth:** Strategy verdict = `docs/strategy-rules/Strategy_Inventory.md`; experiment history = `docs/research-trial-ledger.jsonl`; runtime = independently verified box/broker; agent handoff = `docs/agent-work-state.md` START HERE.
+
+---
+
 ## Operator checklist — 2026-10-08 (completion requires operator verification)
 
 **Priority:** Resolve Grok's actual blockers first. Do not deploy merely to finish this checklist.
