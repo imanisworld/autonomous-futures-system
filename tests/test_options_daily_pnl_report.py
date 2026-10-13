@@ -16,15 +16,16 @@ def _db(tmp_path, journal, blocks=(), scans=()):
     path = tmp_path / "options_scanner.sqlite"
     conn = sqlite3.connect(path)
     conn.execute(
-        "CREATE TABLE options_shadow_journal (id INTEGER PRIMARY KEY, timestamp TEXT, status TEXT, "
-        "selected_contract_json TEXT, outcome_json TEXT)"
+        "CREATE TABLE options_shadow_journal (id INTEGER PRIMARY KEY, timestamp TEXT, ticker TEXT DEFAULT 'SPY', "
+        "status TEXT, selected_contract_json TEXT, outcome_json TEXT)"
     )
     conn.execute("CREATE TABLE options_episode_blocks (blocked_at TEXT, reason TEXT)")
     conn.execute("CREATE TABLE scans (timestamp TEXT, alert_sent INTEGER)")
-    for ts, status, contract, outcome in journal:
+    for ts, status, contract, outcome, *ticker in journal:
         conn.execute(
-            "INSERT INTO options_shadow_journal (timestamp, status, selected_contract_json, outcome_json) VALUES (?,?,?,?)",
-            (ts, status, json.dumps(contract, sort_keys=True), json.dumps(outcome)),
+            "INSERT INTO options_shadow_journal (timestamp, ticker, status, selected_contract_json, outcome_json)"
+            " VALUES (?,?,?,?,?)",
+            (ts, ticker[0] if ticker else "SPY", status, json.dumps(contract, sort_keys=True), json.dumps(outcome)),
         )
     conn.executemany("INSERT INTO options_episode_blocks VALUES (?,?)", blocks)
     conn.executemany("INSERT INTO scans VALUES (?,?)", scans)
@@ -80,3 +81,78 @@ def test_main_writes_files(tmp_path, capsys):
     assert odp.main(["--db", str(path), "--log-dir", str(tmp_path), "--day", "2026-09-23"]) == 0
     assert json.loads((tmp_path / "options_daily_pnl_latest.json").read_text())["paper_all_time"]["open"] == 1
     assert "Options paper P&L" in capsys.readouterr().out
+
+
+# ── your limits: at most 3 new paper trades a day ────────────────────────
+def _won(ts, ticker, pnl, resolved):
+    return (ts, "WIN" if pnl > 0 else "LOSS", {}, {"pnl_dollars": pnl, "resolved_at": resolved}, ticker)
+
+
+def test_daily_cap_keeps_first_three_entries_account_wide_and_per_ticker(tmp_path):
+    path = _db(tmp_path, [
+        _won("2026-09-23T14:00:00+00:00", "SPY", 100.0, "2026-09-23T15:00:00-04:00"),
+        _won("2026-09-23T14:05:00+00:00", "SPY", -40.0, "2026-09-23T14:00:00-04:00"),
+        _won("2026-09-23T14:10:00+00:00", "IWM", -30.0, "2026-09-23T13:00:00-04:00"),
+        _won("2026-09-23T14:15:00+00:00", "JPM", -200.0, "2026-09-23T15:30:00-04:00"),   # 4th of the day
+        _won("2026-09-23T14:20:00+00:00", "SPY", 10.0, "2026-09-23T15:45:00-04:00"),     # 3rd SPY: kept per ticker
+        _won("2026-09-23T14:25:00+00:00", "SPY", 77.0, "2026-09-23T15:50:00-04:00"),     # 4th SPY: out everywhere
+        ("2026-09-23T14:30:00+00:00", "WIN", CF, {"pnl_dollars": 999.0, "resolved_at": "2026-09-23T15:00:00-04:00"}, "SPY"),
+        _won("2026-09-24T14:00:00+00:00", "JPM", 5.0, "2026-09-24T15:00:00-04:00"),      # next day: new count
+    ])
+    rep = odp.build_report(odp.load_rows(path, DAY), DAY)
+    c = rep["capped"]
+    assert c["opened_today"] == 6 and c["left_out_today"] == {"account": 3, "per_ticker": 1}
+    assert c["today"]["account"] == {"closed": 3, "wins": 1, "losses": 2, "pnl_usd": 30.0, "max_drawdown_usd": 70.0,
+                                     "same_scan_ties": 0, "pnl_range_usd": [30.0, 30.0]}
+    assert c["today"]["per_ticker"]["pnl_usd"] == round(100 - 40 - 30 - 200 + 10, 2)
+    assert c["today"]["no_limit"]["pnl_usd"] == rep["paper"]["pnl_usd"] == round(100 - 40 - 30 - 200 + 10 + 77, 2)
+    assert c["all_time"]["account"]["closed"] == 4                       # what-if row never counted
+    text = odp.format_digest(rep)
+    assert "**Your limits (what-if)** — at most 3 new paper trades a day" in text
+    assert "depending on which same-time trade" not in text
+    assert "Today: 6 opened · left out by the limit: 3 (whole account), 1 (per ticker)" in text
+    assert "All time, whole account: 4 closed, 2 won, 2 lost, +$35" in text
+
+
+def test_daily_cap_counts_open_trades_and_skips_consumed_and_cancelled(tmp_path):
+    path = _db(tmp_path, [
+        ("2026-09-23T14:00:00+00:00", "TARGET_CONSUMED_AT_ENTRY", {}, {}, "SPY"),
+        ("2026-09-23T14:01:00+00:00", "CANCELLED", {}, {}, "SPY"),
+        ("2026-09-23T14:02:00+00:00", "OPEN", {}, {}, "SPY"),
+        ("2026-09-23T14:03:00+00:00", "OPEN", {}, {}, "IWM"),
+        ("2026-09-23T14:04:00+00:00", "OPEN", {}, {}, "JPM"),
+        _won("2026-09-23T14:05:00+00:00", "BAC", 50.0, "2026-09-23T15:00:00-04:00"),      # 4th real entry
+    ])
+    c = odp.build_report(odp.load_rows(path, DAY), DAY)["capped"]
+    assert c["opened_today"] == 4 and c["left_out_today"]["account"] == 1
+    assert c["all_time"]["account"]["closed"] == 0 and c["all_time"]["no_limit"]["pnl_usd"] == 50.0
+
+
+def test_same_scan_tie_reports_the_range_of_equally_valid_picks(tmp_path):
+    ts = "2026-09-23T14:16:51.714421+00:00"     # one scan, four trades, three slots
+    path = _db(tmp_path, [
+        _won(ts, "SPY", 100.0, "2026-09-23T15:00:00-04:00"),
+        _won(ts, "IWM", -40.0, "2026-09-23T15:00:00-04:00"),
+        _won(ts, "JPM", -30.0, "2026-09-23T15:00:00-04:00"),
+        _won(ts, "BAC", -200.0, "2026-09-23T15:00:00-04:00"),
+        _won("2026-09-23T15:00:00+00:00", "SPY", 9.0, "2026-09-23T15:30:00-04:00"),   # later scan: never tied
+    ])
+    rep = odp.build_report(odp.load_rows(path, DAY), DAY)
+    acct = rep["capped"]["all_time"]["account"]
+    assert acct["pnl_usd"] == 30.0                                   # id order keeps SPY, IWM, JPM
+    assert acct["same_scan_ties"] == 1 and acct["pnl_range_usd"] == [-270.0, 30.0]
+    assert rep["capped"]["all_time"]["per_ticker"]["same_scan_ties"] == 0
+    text = odp.format_digest(rep)
+    assert "All time, whole account: 3 closed, 1 won, 2 lost, +$30" in text
+    assert "-$270 to +$30 depending on which same-time trade is taken" in text
+    assert "the limit's pick among them is arbitrary" in text
+    week = odp.capped_period([r for r in odp.load_rows(path, DAY)["journal"] if not r["counterfactual"]],
+                             DAY, DAY)
+    assert week["account"]["pnl_range_usd"] == [-270.0, 30.0]
+
+
+def test_same_scan_tie_with_equal_outcomes_is_not_flagged(tmp_path):
+    ts = "2026-09-23T14:16:51+00:00"
+    path = _db(tmp_path, [_won(ts, t, 10.0, "2026-09-23T15:00:00-04:00") for t in ("SPY", "IWM", "JPM", "BAC")])
+    acct = odp.build_report(odp.load_rows(path, DAY), DAY)["capped"]["all_time"]["account"]
+    assert acct["same_scan_ties"] == 0 and acct["pnl_range_usd"] == [30.0, 30.0]
