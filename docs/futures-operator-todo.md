@@ -2,6 +2,8 @@
 
 ## CURRENT — 2026-10-13 (docs hygiene; NOT trading authority)
 
+**Read-only commands to run:** `docs/operator-command-reference.md` (Mac, GitHub, authorized VPS, Polygon, Track B, release integrity). This reference does not authorize remediation or runtime mutation.
+
 **Objective:** Establish genuinely executable positive expectancy, not merely green CI. Historical #1208–#1211/#1215/#1216 engineering corrections are **merged source-only** on `main` @ **`c215060`**. Do not restart their old reviews unless relevant code changed.
 
 ### CURRENT BLOCKER — release integrity drift (blocks deploy/restart)
