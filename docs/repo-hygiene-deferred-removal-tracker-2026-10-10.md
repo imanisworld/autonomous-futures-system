@@ -15,7 +15,7 @@
 - [ ] `ops/post-cap-shadow-report-20261005` @ **`b862c794`** archive-tagged then remote-deleted (classification **ARCHIVE**; unique scripts never on `main`; superseded conceptually by merged #1137)
 - [ ] Mac worktree/stash/untracked census re-verified on the Mac (SSH stash = **PRESERVE**)
 
-**Snapshot:** GitHub `main` verified **2026-10-13** @ **`c215060`**; remote heads ≈ **67**; open PRs **22**. Mac disk sizes below are **historical 2026-10-10/11 census**, not re-measured in the 2026-10-13 cloud pass.
+**Snapshot:** GitHub `main` verified **2026-10-13** @ **`c215060`**; 68 remote branch refs and **23** open PRs including draft #1226 at review (previous 22-PR count excluded this new draft). Mac disk sizes below are **historical 2026-10-10/11 census**, not re-measured in the 2026-10-13 cloud pass.
 
 **2026-10-11 cleanup performed (local Mac):** merged futures branches (§4); `private/research-notes-2026-10-10`, `prune-review`, `cross_market_grid_2026_09_23`, `grid_2026_09_21` (~272 MB); **`private/trading-evidence-2026-10-09`**, **`mes598-proof`**, **`profitability-review-2026-10-08`** (~**956 MB**); **`data/cross_market_2026_09_23`** (~**573 MB**). **Operator 2026-10-11:** **RETAIN** all **`data/replay_corpus_*`** and **`data/replay_polygon*`** (~**1.7 GB**) for **offline replay / fill-sensitive reruns**; not required for CI, #1218, or forward box collection. **Also kept:** git worktrees (`private/wt-*`, `.worktrees/tsmom-0254`), `paper-card-899`, `webull-proof`.
 
