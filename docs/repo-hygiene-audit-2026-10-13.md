@@ -46,7 +46,7 @@
 
 ### Current open PR census (this session)
 
-- **22 open PRs** (19 draft, 3 ready: #1154, #1140, #1037).
+- **23 open PRs** (20 draft, 3 ready: #1154, #1140, #1037), including this hygiene PR #1226.
 - Exact-head CI on `main` `c215060` green (see above).
 - Branch protection API details: **403** to this integration — protection existence **UNVERIFIED** beyond observed required CI behavior on pushes/PRs.
 
@@ -58,7 +58,7 @@
 | **#1225** `docs/options-research-closure-20261011` | draft, **dirty** | Overlaps #1224 (already merged) on options handoff/next-actions/`agent-work-state`. Unique durable artifact: `docs/research-notes/options-edge-discovery-close-2026-10-11.md` (Polygon 5m closeout; **absent on `main`**). Rewriting `#1222` Alpaca table into Polygon framing would conflict with merged #1224. | **CLOSE unmerged after** closeout note + short authority pointers land (this audit). Prefer pointers over replacing #1224 text. |
 | **#1201** | draft docs-only | Five gates already reused into operator TODO via #1214 content | **CANDIDATE CLOSE** after reviewer confirms supersession |
 | **#1203 / #1204** | draft docs | Stale deployment-status snapshots vs later checkpoints | **KEEP/REVIEW** — do not mass-close without owner check |
-| **#1220** | draft, conflict | Inventory/research evidence handoff | Separate research lane — not this cleanup |
+| **#1220** | draft, **clean/mergeable** at `e0b525f6`; tests+handoff SUCCESS | Inventory/research evidence handoff | Separate research lane — independent review before any merge GO; no longer a conflict blocker |
 
 **This docs branch** is the controlled place for mechanically proven stale SHA/PR/task corrections that #1214/#1225 no longer cover. **Do not merge without operator GO.**
 
@@ -118,6 +118,21 @@
 
 ---
 
-## 5. Smallest next operator action
+## 5. Runtime-safety reconciliation after the source-only hygiene pass
 
-**Approve or reject six-micro / Polygon retirement after one authorized read-only journal census** (or explicitly waive the trial), then close stale docs PRs #1214/#1225 once this correction PR’s content is accepted — still without merging unless separately authorized.
+A later same-day restricted read-only box check superseded the earlier "runtime unavailable" assumption for the futures lane:
+
+- Active futures release: `94a71bdbb975b53f21a81b7084482ea3c5270ceb`; service active; no restart drift observed.
+- Live execution off; Tradovate DEMO; hard cap 1; account pin match; broker flat; no working orders; deploy lock absent.
+- **Release integrity FAIL:** extra `scripts/__pycache__/options_122_prospective_collect.cpython-313.pyc` exists inside the immutable release.
+- Safety verdict therefore becomes **BLOCKED — SAFETY DRIFT**, not merely UNVERIFIED.
+- Do **not** delete the bytecode file in place. `AGENTS.md` forbids editing `/root/afs-releases` directly. Any recovery must use the sanctioned immutable-release/deploy-lock path under separate operator authorization, then re-prove release integrity and runtime/broker/journal state.
+- Six-micro timer/journals remain UNVERIFIED and still require a separate census before the 2026-10-18 Polygon decision.
+
+This safety finding does not change the branch/worktree/PR cleanup classifications above; it only changes operator ordering. Runtime integrity recovery comes before any deploy/restart or Polygon/timer mutation.
+
+---
+
+## 6. Smallest next operator action
+
+**First:** choose a sanctioned immutable-release recovery for the verified integrity failure; do not edit the active release tree in place. After integrity rechecks PASS, perform the six-micro timer/journal census and make the Polygon GO/NO-GO decision by 2026-10-18. Documentation cleanup may continue source-only in parallel, but no deploy/restart/timer/env mutation should jump ahead of the safety gate.
