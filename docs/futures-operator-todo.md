@@ -1,5 +1,26 @@
 # Futures Operator TODO
 
+## CURRENT — 2026-10-13 (supersedes action queues below; historical detail retained)
+
+**Goal:** preserve clean forward evidence and close current source/documentation blockers without opening another research lane. Strategy verdict authority remains `docs/strategy-rules/Strategy_Inventory.md`; trial state remains `docs/research-trial-ledger.jsonl`; runtime claims require fresh box evidence. **No proof, no run.**
+
+- [x] **Track B contract in source:** merged #1216 establishes the isolated 4HR forward **paper** cell at **400 ticks / $200** and keeps guarded **DEMO** orders capped at **300 ticks / $150**. Historical 300-tick paper evidence stays historical.
+- [x] **NR7/Keltner exploratory trial closed:** canonical trial is **RESEARCH_ONLY**. Keltner failed; the 5-trade NR7 result is insufficient and diagnostic only. Do not rerun or tune either population.
+- [x] **Six-micro registration:** #1218 merged; ledger state is **RUNNING** with first eligible session 2026-10-12 and a single look at 40 combined round-turns. Repository state alone does not prove that scheduled collection actually occurred.
+- [x] **#1220 source/docs checks:** branch is based on current `main`; exact-head CI and handoff checks passed before this broader docs refresh. This refresh moves the head, so require fresh exact-head CI again.
+- [ ] **#1220 independent review:** review the final exact head after these docs updates. Merge only if the reviewer is clean and all required checks are green.
+- [ ] **Forward evidence read-only check:** when operator wants the current state, verify Track B journal/evidence from eligible sessions and six-micro scheduled collection without changing services, parameters, epochs, or scoring rules. Do not infer fills from source code or old box checkpoints.
+- [ ] **Polygon continuity before 2026-10-18:** six-micro collection imports the Polygon futures client. Existing access is planned to end 2026-10-18. Use already-owned data or a proven cost-neutral replacement only if one exists; otherwise pause/accept loss of future six-micro coverage. Do not renew or buy data merely to rescue the trial.
+- [ ] **Reported release-integrity anomaly:** a separate runtime audit reported an extra `scripts/__pycache__/options_122_prospective_collect.cpython-313.pyc` under release `94a71bd…`. Re-check through Runtime Drift Audit before any runtime mutation; do not repair/delete/redeploy from this research-docs lane.
+- [ ] **#1217 MNQ seal guard:** important concept, but current branch is far behind `main`. Reconcile/review before merge; meanwhile the existing June 29 seal remains mandatory for exploratory MNQ work.
+- [ ] **#1221 Signa observer fix:** keep separate from outcome scoring. Rebase/review before merge; Signa context remains observer evidence only.
+- [ ] **Docs cleanup:** #1214 is an old, heavily diverged docs refresh. Current useful TODO/work-state/cleanup guidance is being preserved in #1220; close #1214 as superseded after confirming no unique current fact is lost.
+- [ ] **Options docs:** #1225 remains a separate options-lane reconciliation and must be rebased/reviewed on its own. Do not fold options strategy decisions into this futures TODO.
+
+**Deployment/runtime boundary:** no build, promote, restart, service edit, broker action, paper/DEMO/live enablement, journal reset, or strategy promotion is authorized by completing this checklist.
+
+---
+
 ## Operator checklist — 2026-10-08 (completion requires operator verification)
 
 **Priority:** Resolve Grok's actual blockers first. Do not deploy merely to finish this checklist.
