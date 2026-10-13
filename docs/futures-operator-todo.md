@@ -2,7 +2,20 @@
 
 ## CURRENT — 2026-10-13 (docs hygiene; NOT trading authority)
 
-**Objective:** Establish genuinely executable positive expectancy, not merely green CI. Historical #1208–#1211/#1215/#1216 engineering corrections are **merged source-only** on `main` @ **`c215060`**. Do not restart their old reviews unless relevant code changed. Older Oct 8 operational sections remain historical context; release/box safety requirements **still open** until freshly proven.
+**Objective:** Establish genuinely executable positive expectancy, not merely green CI. Historical #1208–#1211/#1215/#1216 engineering corrections are **merged source-only** on `main` @ **`c215060`**. Do not restart their old reviews unless relevant code changed.
+
+### NEXT WHEN AT COMPUTER (blocks deploy/restart) — 2026-10-13 ~12:10Z
+
+**Verdict: BLOCKED — SAFETY DRIFT.** Cloud Agent VPS read-only allowlist proved release integrity **FAIL** on live release `94a71bdbb975b53f21a81b7084482ea3c5270ceb`. Cloud SSH **cannot** mutate (Grok audit allowlist DENIED `rm` / cleanup). Operator must run this on a privileged box shell, then ask an agent to re-run allowlisted `release`:
+
+```bash
+rm -f /root/afs-releases/94a71bdbb975b53f21a81b7084482ea3c5270ceb/scripts/__pycache__/options_122_prospective_collect.cpython-313.pyc
+rmdir /root/afs-releases/94a71bdbb975b53f21a81b7084482ea3c5270ceb/scripts/__pycache__ 2>/dev/null || true
+```
+
+No `futures-bot` restart required for that cleanup alone. Do **not** deploy or restart while integrity FAIL remains.
+
+**Also proven same read (do not redo unless drift):** `futures-bot` active on `94a71bd…`, `NRestarts=0`; `LIVE_TRADING_ENABLED=false`, `TRADOVATE_ENV=demo`, hard cap `1`, account pin match; broker flat / no working orders; deploy lock absent. Track B `wide_stop_4k` lane still **0 fills**, state last **2026-09-30**. Six-micro timer/journals **UNVERIFIED** via current allowlist.
 
 **Five evidence gates (preserved from open docs-only PR #1201 / reused from stale #1214; PR disposition remains separate):**
 
@@ -11,16 +24,17 @@
 | **Net expectancy** | **NOT PROVEN** | Eligible actual fills net of commission/slippage and rejected/no-fill opportunities, under a frozen strategy specification |
 | **Repeatability** | **INCOMPLETE** | Adequate forward/independent sample, chronology, bounded concentration, acceptable drawdown, stated stop criteria |
 | **Executable entry** | **SOURCE-CHECKED, UNPROVEN ON BOX** | Causal bar/trigger availability, realistically timed limit/IOC entries, gap and ambiguous same-bar assumptions, genuine fill evidence |
-| **Risk admissibility** | **SOURCE GUARDS PRESENT; RUNTIME UNVERIFIED** | Actual position/stop/daily-loss/cap/kill-switch constraints, not relaxations chosen to make a backtest green |
+| **Risk admissibility** | **SOURCE GUARDS PRESENT; RUNTIME PARTLY PROVEN** | Pins/flat/orders proven 2026-10-13 allowlist read; release integrity still FAIL |
 | **Replay/DEMO parity** | **NOT ESTABLISHED** | Exact signal, timestamp, source contract, bracket, fill policy and journal reconciliation on the same frozen candidate SHA |
 
 **Do not treat a positive synthetic, historical, or observer-only result as passing these gates.**
 
+- [ ] **Integrity cleanup (above):** remove stray `__pycache__` `.pyc` on `94a71bd…`; recheck `release` → PASS.
 - [x] **Engineering source work:** #1208–#1213, #1215, #1216 merged. **No automatic deployment.**
 - [x] **Track B paper cell on `main`:** one promote **`94a71bd`** (tree ≡ `58d4cd6`) — **no second deploy** without new GO.
-- [ ] **Fresh box proof** before counting Track B fills (deployed SHA, journals, live-off/demo/cap-1). Last recorded read: 2026-10-11.
-- [ ] **Polygon / six-micro (deadline 2026-10-18):** read-only journal census; retire timer/env if unique evidence unproven; **do not** replace with another paid feed; MNQ Track B is Polygon-independent. Plan: `docs/repo-hygiene-audit-2026-10-13.md`.
-- [ ] **Docs PR cleanup:** close **#1214** / **#1225** after useful content is reused (this hygiene docs PR); candidate-close **#1201** once five gates are confirmed superseded here.
+- [x] **Partial box proof 2026-10-13:** SHA/pins/broker flat/orders via cloud allowlist (integrity FAIL still blocks progression).
+- [ ] **Polygon / six-micro (deadline 2026-10-18):** journal/timer census still needs a path beyond current allowlist; retire timer/env if unique evidence unproven; **do not** replace with another paid feed. Plan: `docs/repo-hygiene-audit-2026-10-13.md`.
+- [ ] **Docs:** #1220 exact-head CI green (`e0b525f6`) — independent review then merge GO; close **#1214** / **#1225** after reuse; candidate-close **#1201**.
 - [ ] **Cleanup deletes:** classification only until operator GO — `docs/repo-hygiene-deferred-removal-tracker-2026-10-10.md`. Preserve SSH stash; archive-tag before deleting `ops/post-cap-shadow-report-20261005`.
 
 **Sources of truth:** Strategy verdict = `docs/strategy-rules/Strategy_Inventory.md`; experiment history = `docs/research-trial-ledger.jsonl`; runtime = independently verified box/broker; agent handoff = `docs/agent-work-state.md` START HERE.

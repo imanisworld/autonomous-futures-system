@@ -1,30 +1,24 @@
 # Agent Work State
 
-## START HERE — source `c215060` (2026-10-13 hygiene pass); box checkpoint remains 2026-10-11 ~14:50Z unless re-proven (HOLD)
+## START HERE — source `c215060`; box allowlist 2026-10-13 → **BLOCKED — SAFETY DRIFT**
 
-Read **only** this block + `AGENTS.md` unless drift is detected. Private numeric handoff: ChatGPT Library `/Futures Research/Futures Research Handoff - 2026-10-10.md`. Hygiene evidence: `docs/repo-hygiene-audit-2026-10-13.md`.
+Read **only** this block + `AGENTS.md` unless drift is detected. Private numeric handoff: ChatGPT Library `/Futures Research/Futures Research Handoff - 2026-10-10.md`. Hygiene evidence: `docs/repo-hygiene-audit-2026-10-13.md`. Exact cleanup command: `docs/futures-operator-todo.md` CURRENT.
 
 | Item | Value |
 |---|---|
-| **GitHub `main` (source, verified 2026-10-13)** | **`c215060999fc57489b11de8a8e2e2651bd2f79e1`** — includes #1222 options research notes, #1224 options reconcile, **#1223** six-micro admission/skip-missing-bar. Exact-head CI on this SHA: **tests + CodeQL SUCCESS** (this session). Prior START HERE SHA `4d56333` is **stale**. |
-| **Merged Oct 10–11 (selected)** | **#1208–#1211**, **#1215**, **#1216** (400-tick paper / 300-tick demo), **#1218** six-micro collector, **#1222–#1224**. Independent breaker on deployed tree **not re-run here**. |
-| **Deployed release (last box read 2026-10-11; not re-read 2026-10-13)** | **`94a71bd`** futures-bot symlink ≡ **`58d4cd6`** tree. Side release **`f8d4845…`** six-micro only. **No** global promote / **no** `futures-bot` restart from this docs pass. |
-| **Box read** | **STALE relative to calendar:** last authorized read 2026-10-11 claimed timer enabled, health OK, live-off/demo/cap-1. **2026-10-13 cloud session did not re-verify VPS.** Account flat / journal gates remain **open until re-proven**. |
-| **Verdict** | **HOLD.** Live trading off. Operator GO required for any runtime action. |
-| **DO NOT deploy** | `2f4f776`, second promote of #1216, global promote of `f8d4845` onto futures-bot, or any Polygon/timer change without explicit GO. |
-| **Track B / E-2026-10-09** | Spec **APPROVED**; first eligible session **2026-10-12**. Path is **wide-stop / Tradovate — independent of Polygon**. Forward fills still need fresh box proof before scoring. |
-| **Daily tsmom / Polygon** | Trial **RUNNING** (`T-2026-10-10-prereg-six-micro-daily-tsmom-forward-2026-10-10-01`). **Unique useful evidence UNPROVEN this session** (no journal census). **Deadline 2026-10-18:** retire timer/env if value unproven — plan in hygiene audit; **do not stop services without GO**. Do not replace with another paid feed. |
-| **Docs PRs to close after reuse (not merge-as-is)** | **#1214** (stale START HERE; reuse five-gate TODO + safer cleanup wording). **#1225** (overlaps #1224; reuse Polygon closeout note). See hygiene audit. |
-| **Open futures code PRs (not deploy)** | **#1217** (draft) MNQ seal guard. **#1219 CLOSED** (do not treat as open). |
-| **Open PR count (2026-10-13)** | **22** open (19 draft / 3 ready: #1154, #1140, #1037). Remote heads ≈ **67**. |
-| **Options** | #1222 Alpaca SIP screen on `main`; separate operator-supplied Polygon 5m closeout preserved at `docs/research-notes/options-edge-discovery-close-2026-10-11.md`. **No** options-profitability trial. Authority: `docs/options-current-state-handoff.md`. |
-| **#1184 security** | Issue **CLOSED/deferred**; unresolved durable-store + human-allowlist requirements remain via draft **#1199** + options handoff. Not “done.” |
-| **Hygiene / archive** | Classify-only: `docs/repo-hygiene-deferred-removal-tracker-2026-10-10.md` + `docs/repo-hygiene-audit-2026-10-13.md`. `ops/post-cap-shadow-report-20261005` @ **`b862c794`** = **ARCHIVE** after tag (superseded by #1137; unique scripts never on `main`). **SSH stash PRESERVE.** Mac worktrees/stashes **UNVERIFIED**. |
-| **Public resume / Track B / deferred cleanup** | Unchanged paths on `main`; do not invent parallel status docs. |
+| **GitHub `main` (source)** | **`c215060999fc57489b11de8a8e2e2651bd2f79e1`**. Exact-head CI green this campaign. |
+| **Deployed release (allowlist 2026-10-13)** | WorkingDirectory **`/root/afs-releases/94a71bdbb975…`**; `futures-bot` active, `NRestarts=0` since 2026-10-10. |
+| **Release integrity** | **FAIL** — extra `scripts/__pycache__/options_122_prospective_collect.cpython-313.pyc`. Cloud Agent key **cannot** `rm` (allowlist DENIED). |
+| **Pins / broker (same read)** | live **off**, demo, cap **1**, account pin match; flat; **no** working orders; deploy lock absent. |
+| **Verdict** | **BLOCKED — SAFETY DRIFT** (integrity FAIL). Deploy/restart/new DEMO/live blocked until `release` rechecks PASS. |
+| **Track B** | Spec APPROVED from 2026-10-12; lane `wide_stop_4k` still **0 fills**, state last **2026-09-30** (stale). Polygon-independent. |
+| **Six-micro / Polygon** | Timer/journals **UNVERIFIED** via current allowlist. Deadline **2026-10-18**. Do not stop without GO. |
+| **#1220** | Head **`e0b525f6`** on `main`, MERGEABLE, tests+handoff SUCCESS — needs independent review (docs-only). |
+| **DO NOT deploy** | Anything while integrity FAIL; also `2f4f776`, second #1216 promote, global promote of `f8d4845`. |
 
-**DO NOT REDO:** gzip 4HR cell; ORB/VWAP sweeps; merged #1208/#1209 Grok PASS; Sep decompositions; NR7/Keltner exploratory; #1222 screen; completed Mac cleanup already recorded in the deferred tracker.
+**DO NOT REDO:** gzip 4HR; ORB/VWAP; #1208/#1209; NR7/Keltner; #1222; Mac cleanup already recorded.
 
-**OPTIONS STOP:** no new options strategy research. **NEXT (smallest):** operator read-only six-micro journal census → **GO/NO-GO on Polygon/six-micro by 2026-10-18**; then close stale #1214/#1225 after this docs correction is accepted. Wide-stop symlink stays **`94a71bd`**.
+**OPTIONS STOP.** **NEXT (when at computer):** run the exact `rm`/`rmdir` in `docs/futures-operator-todo.md` CURRENT, then have an agent re-run allowlisted `release`. After PASS: six-micro census → Polygon GO/NO-GO by Oct 18.
 
 Prior chat context for this session is **closed**. Section below is coordination archive unless stale.
 
