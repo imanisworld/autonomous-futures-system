@@ -132,6 +132,13 @@ class SignaClient:
                 return None
         return replace(signal, client_cached=True)
 
+    def cached_signal(self, symbol: str, timeframe: str = "1d") -> SignaSignal | None:
+        """Return a fresh cached signal without a network call."""
+        symbol = (symbol or "").strip().upper()
+        if not symbol:
+            return None
+        return self._cached(symbol, str(timeframe or "1d"))
+
     def _store(self, signal: SignaSignal, timeframe: str) -> None:
         if self.cache_ttl_seconds <= 0 or not signal.ok:
             return

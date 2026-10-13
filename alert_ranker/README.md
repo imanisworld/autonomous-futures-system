@@ -19,9 +19,15 @@ PUBLIC_STALE_QUOTE_SECONDS=900
 OPTIONS_SCANNER_PORT=8010
 OPTIONS_SCANNER_SQLITE_PATH=logs/options_scanner.sqlite
 OPTIONS_SCANNER_DISCORD_WEBHOOK_URL=
-OPTIONS_SCANNER_WATCHLIST=AAPL,MSFT,NVDA,TSLA,SPY,QQQ
+OPTIONS_SCANNER_WATCHLIST=SPY,QQQ,IWM,NVDA,TSLA,AAPL,MSFT,AMZN,META,GOOGL,AMD,AVGO,PLTR,NFLX,JPM,BAC,COIN,HOOD,TLT,GLD,SLV,IBIT,SMH,ORCL,CRM,MU,QCOM,ARM,TSM,SMCI,INTC,SOFI,RIVN,UBER,ABNB,DIS,WMT,COST,HD,NKE,BA,CAT,GE,F,GM,XOM,CVX,OXY,COP,C,WFC,GS,MS,SCHW,LLY,UNH,PFE,XLF,XLK,XLE,XBI,HYG,EEM,FXI,DIA,KWEB
 OPTIONS_SCANNER_INTERVAL_MINUTES=5
 ```
+
+The default watchlist (when `OPTIONS_SCANNER_WATCHLIST` is unset) is defined once in
+`alert_ranker/universe.py` and scanned in tier order: CORE, then EXPANDED, then
+CONDITIONAL (`KWEB`). Expanding the universe does not change Strat, GEX, Signa,
+risk, DTE, liquidity, or alert thresholds — illiquid contracts (including KWEB)
+still fail the existing V1 quality gates.
 
 ### Causal bar context (PR C, off by default)
 
