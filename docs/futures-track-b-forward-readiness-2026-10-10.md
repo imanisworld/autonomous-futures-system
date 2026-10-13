@@ -8,7 +8,7 @@ This document is a **pre-deploy / pre-collection checklist**. It does **not** au
 
 ## 0. Safety refresh — 2026-10-13
 
-Fresh restricted read-only runtime proof found:
+Cursor/Cloud Agent's same-day restricted read-only runtime check reported:
 
 - active futures release `94a71bdbb975b53f21a81b7084482ea3c5270ceb`; service active; no restart drift observed;
 - live execution off, Tradovate DEMO, hard cap 1, account pin match, broker flat, zero working orders, deploy lock absent;
