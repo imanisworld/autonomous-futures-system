@@ -28,6 +28,18 @@ Historical dated notes and old/closed PRs are provenance only. They do not overr
 
 **DO NOT REDO:** 66-symbol 2026-04-01–09-08 screen, frozen definitions, episode verifier, sealed 2026-09-09–15 cohort, or the 443-row SIP reconciliation. Do not restart a general audit, optimize these strategy thresholds, retest rejected compression, or infer options P&L from underlying hits.
 
+**Polygon cross-check (provenance; does not change the table above):** `docs/research-notes/options-polygon-edge-2026-10-11/` re-scores the same frozen families on adjusted Polygon 5m bars for the same window, with exit-R added. That window had already been seen, so this is not an independent sample. Hit rates match within about half a point.
+
+Per-setup expectancy:
+
+| Family | Strategy R per setup | Same-stop baseline R per setup |
+|---|---:|---:|
+| Pullback | +0.003 | −0.205 |
+| Failed-break | −0.016 | −0.140 |
+| Compression | +0.001 | −0.045 |
+
+All three were negative in 2026-08-14..09-08. An uncommitted 2026-10-11 closeout recorded an operator verdict of pullback HOLD (flat), failed-break **REJECT**, and compression HOLD (flat). That disagrees with the table above for failed-break and compression. It was not confirmed again in this update, so the table stays as written until the operator reconciles them.
+
 **Remaining independently gated work:** Existing `OPTIONS_PAPER_V1` current-epoch ledger/mark accounting remains a **separate** unresolved question from this completed discovery screen (see `docs/options-next-actions.md` and older #1071 provenance). If an operator later approves a prospective option-exit measurement, first freeze evidence, quote/fill rules, and epoch; implement only with separate review and rollout authority. **Present instruction: no additional strategy research or trial.**
 
 ## Active source and edge-research update — 2026-10-08 (historical checkpoint; superseded for options edge research)

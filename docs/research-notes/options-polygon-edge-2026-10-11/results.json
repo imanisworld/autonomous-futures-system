@@ -1,0 +1,464 @@
+{
+  "definition": {
+    "version": "underlying-edge-v1-2026-10-11",
+    "newly_specified": [
+      "htf pullback length 2..6 closes against the prior-session direction",
+      "trigger must occur within 6 completed bars or the setup expires",
+      "failed-break failure window is 6 completed bars after the break close",
+      "compression is one strictly narrower inside bar; direction is the mother bar",
+      "maximum hold is the same regular session; no overnight",
+      "gap through the frozen stop, or an open already through +1R, is a missed entry"
+    ],
+    "reused": [
+      "66-symbol CORE+EXPANDED universe",
+      "ns-v0.1 PDH, PDL, and 30-minute opening-range levels",
+      "ong-v0.1 next-bar-open entry, $0.01 adverse entry and stop slippage, stop-first",
+      "nyse_session_for regular-session calendar"
+    ],
+    "baseline": "matched no-trigger: next open after the setup reference, setup direction, pre-entry stop distance placed from the baseline fill",
+    "promising_rule_frozen_before_outcomes": "minimum 30 eligible episodes, 10 sessions, 5 symbols, valid causal test, and conditional 1R-before-stop above the matched baseline with stop-first under 50%"
+  },
+  "dataset": {
+    "provider": "polygon_adjusted_5min",
+    "path": "data/options_research_polygon_5m_20260401_20260908",
+    "window": [
+      "2026-04-01",
+      "2026-09-08"
+    ],
+    "adjusted": true,
+    "symbols": 66,
+    "incomplete_regular_sessions": 0,
+    "prior_session_note": "The file starts 2026-04-01, so families that need the prior day do not score that first session.",
+    "scanner_overlap_not_validation": [
+      "2026-08-14",
+      "2026-09-08"
+    ],
+    "sealed_week_excluded": [
+      "2026-09-09",
+      "2026-09-15"
+    ],
+    "alpaca_screen_already_saw_this_window": true
+  },
+  "families": {
+    "htf_pullback": {
+      "verdict": "TEST FURTHER",
+      "registered_mechanical_label": "PROMISING BUT UNPROVEN",
+      "eligible_episodes": 7171,
+      "observed_trigger_pct": 14.3,
+      "actionable_trigger_pct": 14.3,
+      "missed_entry_pct": 0.0,
+      "missed_reasons": {},
+      "no_trigger": 6142,
+      "no_trigger_reasons": {
+        "INVALIDATED": 5725,
+        "EXPIRED": 417
+      },
+      "executed": 1029,
+      "r1_before_stop_pct": 46.0,
+      "r2_before_stop_pct": 0.8,
+      "stop_first_pct": 44.3,
+      "eod_pct": 9.7,
+      "median_mae_r": 0.827,
+      "median_mfe_r": 0.904,
+      "median_hold_bars": 9.0,
+      "baseline_r1_before_stop_pct": 29.5,
+      "baseline_r2_before_stop_pct": 14.5,
+      "baseline_stop_first_pct": 70.5,
+      "r1_minus_baseline_pp": 16.5,
+      "baseline_comparability": {
+        "strategy_executed_with_risk": 1029,
+        "baseline_executed_with_risk": 6728,
+        "paired_executed": 1013,
+        "median_strategy_risk_price": 0.84,
+        "median_baseline_risk_price": 0.135,
+        "median_paired_strategy_over_baseline_risk": 4.179,
+        "same_absolute_stop_distance": false
+      },
+      "exclusions": {
+        "flat_prior_session": 23
+      },
+      "regimes": {
+        "prior_down": {
+          "eligible": 3560,
+          "executed": 480,
+          "r1_before_stop_pct": 48.3,
+          "stop_first_pct": 42.5
+        },
+        "prior_up": {
+          "eligible": 3611,
+          "executed": 549,
+          "r1_before_stop_pct": 43.9,
+          "stop_first_pct": 45.9
+        }
+      },
+      "by_level": {},
+      "expectancy": {
+        "full": {
+          "eligible": 7171,
+          "executed": 1029,
+          "symbols": 66,
+          "sessions": 109,
+          "strategy_expectancy_r": 0.0236,
+          "baseline_expectancy_r": -0.2643,
+          "strategy_per_setup_r": 0.0034,
+          "baseline_per_setup_r": -0.248,
+          "same_stop_baseline_per_setup_r": -0.2047,
+          "strategy_gap_aware_r": 0.0235,
+          "mean_dollar_per_share": 0.0613,
+          "symbol_equal_weight_r": 0.0066,
+          "symbols_with_positive_mean": 0.5
+        },
+        "before_scanner_overlap": {
+          "eligible": 6050,
+          "executed": 871,
+          "symbols": 66,
+          "sessions": 92,
+          "strategy_expectancy_r": 0.0425,
+          "baseline_expectancy_r": -0.2666,
+          "strategy_per_setup_r": 0.0061,
+          "baseline_per_setup_r": -0.2508,
+          "same_stop_baseline_per_setup_r": -0.2062,
+          "strategy_gap_aware_r": 0.0425,
+          "mean_dollar_per_share": 0.0642,
+          "symbol_equal_weight_r": 0.027,
+          "symbols_with_positive_mean": 0.515
+        },
+        "scanner_overlap_not_validation": {
+          "eligible": 1121,
+          "executed": 158,
+          "symbols": 62,
+          "sessions": 17,
+          "strategy_expectancy_r": -0.0809,
+          "baseline_expectancy_r": -0.2519,
+          "strategy_per_setup_r": -0.0114,
+          "baseline_per_setup_r": -0.2328,
+          "same_stop_baseline_per_setup_r": -0.1967,
+          "strategy_gap_aware_r": -0.0811,
+          "mean_dollar_per_share": 0.0452,
+          "symbol_equal_weight_r": -0.0675,
+          "symbols_with_positive_mean": 0.371
+        },
+        "single_names": {
+          "eligible": 5329,
+          "executed": 761,
+          "symbols": 49,
+          "sessions": 109,
+          "strategy_expectancy_r": 0.0303,
+          "baseline_expectancy_r": -0.2318,
+          "strategy_per_setup_r": 0.0043,
+          "baseline_per_setup_r": -0.2157,
+          "same_stop_baseline_per_setup_r": -0.1889,
+          "strategy_gap_aware_r": 0.0302,
+          "mean_dollar_per_share": 0.1027,
+          "symbol_equal_weight_r": 0.0115,
+          "symbols_with_positive_mean": 0.469
+        },
+        "etf_cluster": {
+          "eligible": 1842,
+          "executed": 268,
+          "symbols": 17,
+          "sessions": 95,
+          "strategy_expectancy_r": 0.0045,
+          "baseline_expectancy_r": -0.3556,
+          "strategy_per_setup_r": 0.0007,
+          "baseline_per_setup_r": -0.3415,
+          "same_stop_baseline_per_setup_r": -0.2505,
+          "strategy_gap_aware_r": 0.0044,
+          "mean_dollar_per_share": -0.0563,
+          "symbol_equal_weight_r": -0.0073,
+          "symbols_with_positive_mean": 0.588
+        }
+      }
+    },
+    "failed_break": {
+      "verdict": "REJECT",
+      "registered_mechanical_label": "PROMISING BUT UNPROVEN",
+      "eligible_episodes": 11850,
+      "observed_trigger_pct": 59.0,
+      "actionable_trigger_pct": 58.6,
+      "missed_entry_pct": 0.4,
+      "missed_reasons": {
+        "NO_NEXT_BAR": 43,
+        "GAP_THROUGH_STOP": 1,
+        "MOVED_BEYOND_ENTRY": 1
+      },
+      "no_trigger": 4855,
+      "no_trigger_reasons": {
+        "EXPIRED": 4855
+      },
+      "executed": 6950,
+      "r1_before_stop_pct": 44.4,
+      "r2_before_stop_pct": 2.6,
+      "stop_first_pct": 49.6,
+      "eod_pct": 6.0,
+      "median_mae_r": 0.987,
+      "median_mfe_r": 0.841,
+      "median_hold_bars": 4.0,
+      "baseline_r1_before_stop_pct": 33.9,
+      "baseline_r2_before_stop_pct": 13.5,
+      "baseline_stop_first_pct": 65.8,
+      "r1_minus_baseline_pp": 10.5,
+      "baseline_comparability": {
+        "strategy_executed_with_risk": 6950,
+        "baseline_executed_with_risk": 11327,
+        "paired_executed": 6629,
+        "median_strategy_risk_price": 0.6,
+        "median_baseline_risk_price": 0.155,
+        "median_paired_strategy_over_baseline_risk": 3.687,
+        "same_absolute_stop_distance": false
+      },
+      "exclusions": {},
+      "regimes": {
+        "prior_down": {
+          "eligible": 5904,
+          "executed": 3394,
+          "r1_before_stop_pct": 44.3,
+          "stop_first_pct": 50.4
+        },
+        "prior_flat": {
+          "eligible": 32,
+          "executed": 15,
+          "r1_before_stop_pct": 26.7,
+          "stop_first_pct": 46.7
+        },
+        "prior_up": {
+          "eligible": 5914,
+          "executed": 3541,
+          "r1_before_stop_pct": 44.5,
+          "stop_first_pct": 48.9
+        }
+      },
+      "by_level": {
+        "ORB_HIGH": {
+          "eligible": 3765,
+          "executed": 2186,
+          "r1_before_stop_pct": 44.8,
+          "stop_first_pct": 50.6
+        },
+        "ORB_LOW": {
+          "eligible": 3626,
+          "executed": 2184,
+          "r1_before_stop_pct": 43.8,
+          "stop_first_pct": 49.1
+        },
+        "PDH": {
+          "eligible": 2313,
+          "executed": 1295,
+          "r1_before_stop_pct": 45.0,
+          "stop_first_pct": 49.1
+        },
+        "PDL": {
+          "eligible": 2146,
+          "executed": 1285,
+          "r1_before_stop_pct": 43.9,
+          "stop_first_pct": 49.3
+        }
+      },
+      "expectancy": {
+        "full": {
+          "eligible": 11850,
+          "executed": 6950,
+          "symbols": 66,
+          "sessions": 109,
+          "strategy_expectancy_r": -0.0273,
+          "baseline_expectancy_r": -0.1841,
+          "strategy_per_setup_r": -0.016,
+          "baseline_per_setup_r": -0.176,
+          "same_stop_baseline_per_setup_r": -0.1403,
+          "strategy_gap_aware_r": -0.0274,
+          "mean_dollar_per_share": 0.0563,
+          "symbol_equal_weight_r": -0.0269,
+          "symbols_with_positive_mean": 0.439
+        },
+        "before_scanner_overlap": {
+          "eligible": 10088,
+          "executed": 5882,
+          "symbols": 66,
+          "sessions": 92,
+          "strategy_expectancy_r": -0.0285,
+          "baseline_expectancy_r": -0.1792,
+          "strategy_per_setup_r": -0.0166,
+          "baseline_per_setup_r": -0.1712,
+          "same_stop_baseline_per_setup_r": -0.1327,
+          "strategy_gap_aware_r": -0.0285,
+          "mean_dollar_per_share": 0.064,
+          "symbol_equal_weight_r": -0.0285,
+          "symbols_with_positive_mean": 0.424
+        },
+        "scanner_overlap_not_validation": {
+          "eligible": 1762,
+          "executed": 1068,
+          "symbols": 66,
+          "sessions": 17,
+          "strategy_expectancy_r": -0.0211,
+          "baseline_expectancy_r": -0.2119,
+          "strategy_per_setup_r": -0.0128,
+          "baseline_per_setup_r": -0.2031,
+          "same_stop_baseline_per_setup_r": -0.1843,
+          "strategy_gap_aware_r": -0.0211,
+          "mean_dollar_per_share": 0.0138,
+          "symbol_equal_weight_r": -0.0195,
+          "symbols_with_positive_mean": 0.47
+        },
+        "single_names": {
+          "eligible": 8586,
+          "executed": 5029,
+          "symbols": 49,
+          "sessions": 109,
+          "strategy_expectancy_r": -0.0106,
+          "baseline_expectancy_r": -0.1649,
+          "strategy_per_setup_r": -0.0062,
+          "baseline_per_setup_r": -0.1564,
+          "same_stop_baseline_per_setup_r": -0.1244,
+          "strategy_gap_aware_r": -0.0106,
+          "mean_dollar_per_share": 0.0695,
+          "symbol_equal_weight_r": -0.0109,
+          "symbols_with_positive_mean": 0.51
+        },
+        "etf_cluster": {
+          "eligible": 3264,
+          "executed": 1921,
+          "symbols": 17,
+          "sessions": 109,
+          "strategy_expectancy_r": -0.0711,
+          "baseline_expectancy_r": -0.2333,
+          "strategy_per_setup_r": -0.0419,
+          "baseline_per_setup_r": -0.2276,
+          "same_stop_baseline_per_setup_r": -0.1824,
+          "strategy_gap_aware_r": -0.0711,
+          "mean_dollar_per_share": 0.0218,
+          "symbol_equal_weight_r": -0.0729,
+          "symbols_with_positive_mean": 0.235
+        }
+      }
+    },
+    "compression_expansion": {
+      "verdict": "TEST FURTHER",
+      "registered_mechanical_label": "REJECT",
+      "eligible_episodes": 7260,
+      "observed_trigger_pct": 36.6,
+      "actionable_trigger_pct": 36.6,
+      "missed_entry_pct": 0.0,
+      "missed_reasons": {},
+      "no_trigger": 4601,
+      "no_trigger_reasons": {
+        "INVALIDATED": 3656,
+        "EXPIRED": 945
+      },
+      "executed": 2659,
+      "r1_before_stop_pct": 41.3,
+      "r2_before_stop_pct": 0.5,
+      "stop_first_pct": 41.1,
+      "eod_pct": 17.6,
+      "median_mae_r": 0.751,
+      "median_mfe_r": 0.763,
+      "median_hold_bars": 13.0,
+      "baseline_r1_before_stop_pct": 42.7,
+      "baseline_r2_before_stop_pct": 7.1,
+      "baseline_stop_first_pct": 55.1,
+      "r1_minus_baseline_pp": -1.4,
+      "baseline_comparability": {
+        "strategy_executed_with_risk": 2659,
+        "baseline_executed_with_risk": 7237,
+        "paired_executed": 2655,
+        "median_strategy_risk_price": 1.32,
+        "median_baseline_risk_price": 0.515,
+        "median_paired_strategy_over_baseline_risk": 1.979,
+        "same_absolute_stop_distance": false
+      },
+      "exclusions": {},
+      "regimes": {
+        "mother_down": {
+          "eligible": 3666,
+          "executed": 1297,
+          "r1_before_stop_pct": 39.8,
+          "stop_first_pct": 42.2
+        },
+        "mother_up": {
+          "eligible": 3594,
+          "executed": 1362,
+          "r1_before_stop_pct": 42.8,
+          "stop_first_pct": 40.0
+        }
+      },
+      "by_level": {},
+      "expectancy": {
+        "full": {
+          "eligible": 7260,
+          "executed": 2659,
+          "symbols": 66,
+          "sessions": 110,
+          "strategy_expectancy_r": 0.0027,
+          "baseline_expectancy_r": -0.0532,
+          "strategy_per_setup_r": 0.001,
+          "baseline_per_setup_r": -0.0531,
+          "same_stop_baseline_per_setup_r": -0.0448,
+          "strategy_gap_aware_r": 0.0027,
+          "mean_dollar_per_share": -0.0242,
+          "symbol_equal_weight_r": 0.0027,
+          "symbols_with_positive_mean": 0.47
+        },
+        "before_scanner_overlap": {
+          "eligible": 6138,
+          "executed": 2296,
+          "symbols": 66,
+          "sessions": 93,
+          "strategy_expectancy_r": 0.0239,
+          "baseline_expectancy_r": -0.0438,
+          "strategy_per_setup_r": 0.009,
+          "baseline_per_setup_r": -0.0436,
+          "same_stop_baseline_per_setup_r": -0.034,
+          "strategy_gap_aware_r": 0.0239,
+          "mean_dollar_per_share": 0.0294,
+          "symbol_equal_weight_r": 0.0251,
+          "symbols_with_positive_mean": 0.53
+        },
+        "scanner_overlap_not_validation": {
+          "eligible": 1122,
+          "executed": 363,
+          "symbols": 66,
+          "sessions": 17,
+          "strategy_expectancy_r": -0.1315,
+          "baseline_expectancy_r": -0.1048,
+          "strategy_per_setup_r": -0.0426,
+          "baseline_per_setup_r": -0.1046,
+          "same_stop_baseline_per_setup_r": -0.1041,
+          "strategy_gap_aware_r": -0.1315,
+          "mean_dollar_per_share": -0.3629,
+          "symbol_equal_weight_r": -0.1583,
+          "symbols_with_positive_mean": 0.303
+        },
+        "single_names": {
+          "eligible": 5390,
+          "executed": 1975,
+          "symbols": 49,
+          "sessions": 110,
+          "strategy_expectancy_r": 0.0086,
+          "baseline_expectancy_r": -0.0316,
+          "strategy_per_setup_r": 0.0032,
+          "baseline_per_setup_r": -0.0314,
+          "same_stop_baseline_per_setup_r": -0.0283,
+          "strategy_gap_aware_r": 0.0086,
+          "mean_dollar_per_share": -0.0161,
+          "symbol_equal_weight_r": 0.008,
+          "symbols_with_positive_mean": 0.469
+        },
+        "etf_cluster": {
+          "eligible": 1870,
+          "executed": 684,
+          "symbols": 17,
+          "sessions": 110,
+          "strategy_expectancy_r": -0.0144,
+          "baseline_expectancy_r": -0.1156,
+          "strategy_per_setup_r": -0.0053,
+          "baseline_per_setup_r": -0.1154,
+          "same_stop_baseline_per_setup_r": -0.0925,
+          "strategy_gap_aware_r": -0.0145,
+          "mean_dollar_per_share": -0.0475,
+          "symbol_equal_weight_r": -0.0125,
+          "symbols_with_positive_mean": 0.471
+        }
+      }
+    }
+  }
+}
