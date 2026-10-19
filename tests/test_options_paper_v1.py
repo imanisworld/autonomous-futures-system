@@ -184,7 +184,18 @@ def test_aggregate_risk_cap_blocks_candidate():
     assert reason == "aggregate_risk_cap_exceeded:1025.00"
 
 
-def test_triggered_scanner_replaces_fake_2099_with_current_chain_and_journals_marks(tmp_path):
+def test_triggered_scanner_replaces_fake_2099_with_current_chain_and_journals_marks(tmp_path, monkeypatch):
+    # Production captures evidence with a wall-clock timestamp. Keep this
+    # historical fixture's replay clock aligned with its frozen decision date;
+    # otherwise the October 30 expiry eventually falls below V1's 14-DTE gate.
+    from alert_ranker import scanner_legacy
+
+    class FixtureDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return NOW.astimezone(tz) if tz is not None else NOW.replace(tzinfo=None)
+
+    monkeypatch.setattr(scanner_legacy, "datetime", FixtureDatetime)
     config = cfg(tmp_path)
     storage = ScanStorage(config.sqlite_path)
     market = V1Market()
