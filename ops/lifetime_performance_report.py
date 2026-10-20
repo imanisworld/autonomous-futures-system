@@ -332,15 +332,52 @@ def build_report(journal_dir: Path, options_db: Path, options_epochs: Path,
     }
 
 
+
+def format_human(report: dict) -> str:
+    """One compact private operator readout; incomplete dollars never look final."""
+    def dollars(t: dict) -> str:
+        value = t["complete_pnl_usd"]
+        if value is None:
+            return (f"INCOMPLETE (priced subset ${t['priced_subtotal_usd']:+,.2f}; "
+                    f"{t['unpriced_closed']} unpriced closed)")
+        return f"${value:+,.2f} ({t['priced_closed']} priced closed)"
+
+    lines = ["LIFETIME PAPER EVIDENCE · READ ONLY",
+             "Supplied-file history coverage: NOT YET INDEPENDENTLY VERIFIED",
+             "Futures approved journal outcomes (not broker account balance):"]
+    for ticker, totals in report["futures"]["paper_by_ticker"].items():
+        lines.append(f"  {ticker}: {dollars(totals)}")
+        changes = report["futures"]["paper_by_ticker_and_change"][ticker]
+        for change, segment in changes.items():
+            lines.append(f"    {change}: {dollars(segment)}")
+    lines.append("Options ACTIVE paper marks (ASK entry / BID exit; commissions excluded):")
+    for ticker, totals in report["options"]["active_by_ticker"].items():
+        lines.append(f"  {ticker}: {dollars(totals)}")
+        for epoch, segment in report["options"]["active_by_ticker_and_epoch"][ticker].items():
+            lines.append(f"    {epoch}: {dollars(segment)}")
+    lines.append("Futures shadow/observer data: separate hypothetical ticks, NOT account dollars")
+    for ticker, item in report["futures"]["shadow_observations_by_ticker"].items():
+        lines.append(f"  {ticker}: {item['pnl_ticks_priced_subtotal']:+,.1f} recorded ticks "
+                     f"({item['resolved_with_ticks']} resolved with ticks)")
+    lines.append("Reconciliation: "
+                 f"futures {report['futures']['identity_problems']}; "
+                 f"options unclassified {report['options']['unknown_lane_excluded']}, "
+                 f"epoch conflicts {report['options']['epoch_boundary_conflicts']}")
+    lines.append("Do not interpret these data as verified since-inception performance, "
+                 "broker-realized P&L, or a causal strategy improvement.")
+    return "\\n".join(lines)
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--journal-dir", type=Path, required=True, help="complete COPY of futures journal files")
     p.add_argument("--options-db", type=Path, required=True, help="consistent read-only COPY of options scanner SQLite")
     p.add_argument("--options-epochs", type=Path, default=Path("docs/options_v1_evidence_epoch.json"))
     p.add_argument("--futures-changes", type=Path, help="optional independently verified change-boundary JSON")
+    p.add_argument("--text", action="store_true", help="human-readable private operator summary")
     args = p.parse_args(argv)
     report = build_report(args.journal_dir, args.options_db, args.options_epochs, args.futures_changes)
-    print(json.dumps(report, indent=2, sort_keys=True))
+    print(format_human(report) if args.text else json.dumps(report, indent=2, sort_keys=True))
     # Partial/unreconciled input refuses a success status; JSON remains available for triage.
     ok = (report["parse_complete"] and report["futures"]["reconciled_within_supplied_journals"]
           and report["futures"]["paper_trade_lifetime"]["pnl_complete"]
