@@ -1,5 +1,19 @@
 # Options — Next Actions
 
+## CURRENT source-only accounting checkpoint — 2026-10-19/20
+
+- [x] #1234 + #1235 merged to `main`: read-only gross ASK-entry/BID-exit option accounting by ticker/known evidence epoch; price/contract arithmetic and missing-data safeguards. No VPS install, runtime or collector change.
+- [ ] The V1 code path models **buy-to-open cash/debit options**. Actual historical DB opening-side records and any conflicting/short entries remain UNVERIFIED. Unstamped rows remain an assumption, not independently verified buy-to-open proof.
+- [ ] Snapshot the ACTIVE options SQLite ledger consistently, with WAL, and verify source host/version, opening-side, ID+timestamp epoch boundaries, observed option bid/ask marks, contracts, missing closes, net costs, and competing counterfactual rows. Keep confidential amounts private. Separate structural signal performance from executable option P&L.
+- [ ] Cross-check existing `ops/options_daily_pnl_report.py`, `alert_ranker/account_equity.py`, `alert_ranker/v1_diagnostics.py` and #1071 current-epoch study. The daily all-time `pnl_dollars or 0` is a convenience figure, **not** proven complete net P&L.
+- [ ] Explain ACTIVE paper losses with already recorded diagnostic fields; no trial launch, retrospective exit fabrication or strategy/cost optimization on sealed data.
+- [ ] One read-only on-box validation of options collector mode, scan errors/SQLite locks, epoch and Discord delivery. Release-integrity HOLD prohibits installation, restart or cutover.
+- [ ] Reconcile conflicting options research docs in unmerged #1230, #1225 and hygiene #1226 **before** changing authoritative research verdicts. No automatic reclassification.
+
+**Stop:** Produce privately reviewed, per-ticker current-epoch gross totals with coverage caveats or one explicit missing-data blocker list. Do not expand scanner universe, SPXW execution, start another paper trial or alter risk rules without separate approval.
+
+## Historical research decisions and pending work (2026-10-11; preserved)
+
 _Research priorities reconciled 2026-10-11 through merged #1222. The 2026-10-08 checklist below is historical/contextual; unfinished existing-accounting items do not authorize new research. Authoritative options state: `docs/options-current-state-handoff.md`. This file has no collection, deployment, broker, cohort, or trading authority._
 
 ## Current options decisions — 2026-10-11
