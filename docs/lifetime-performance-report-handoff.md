@@ -145,3 +145,5 @@ independent review confirms no execution path; ready for operator to run
 against explicitly authorized, consistent offline evidence copies.
 **Current financial figures: UNKNOWN; no production journal or SQLite data was
 read for this PR.**
+
+AFS-0308 review: changes pending; do not merge.
