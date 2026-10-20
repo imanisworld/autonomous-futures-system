@@ -59,6 +59,8 @@ The original review had **23 open PRs**. A subsequent GitHub check found **25** 
 | `alert_ranker/v1_diagnostics.py` | Options source row diagnostics and fee/slippage stress scenarios | Actual broker fee schedule, independent full-population costs | Preserve as sensitivity/why-loss explanations, not canonical realized net |
 | PR #1207 (draft) | Proposed day/night session cap in three reporters | A validated merged reporting policy | Review overlap/authority; no opportunistic merge |
 
+**Session/day boundary:** `ops/shadow_daily_pnl_report.py` groups by `candidate_day` and may read resolved rows from later UTC journal files; `ops/options_daily_pnl_report.py` groups option opens/closes by `America/New_York` and `resolved_at`. Treat their same-labeled calendar dates and day/night categories as different populations until UTC/ET/DST normalization and unique trade/episode identity are proved. The still-draft #1207 must not silently combine them.
+
 **Actual coverage discrepancies:** The weekly review's option loader queries retired `options_companion` rather than `options_shadow_journal`; `options_daily_pnl_report.py` coerces missing P&L to zero in its all-time/daily summaries. Neither historical channel is an authoritative lifetime profit figure. Existing weekly health/errors data have no complete drop-in replacement; do not disable a failed sender until those fields and delivery receipts are preserved.
 
 ## Source-only release-integrity review
