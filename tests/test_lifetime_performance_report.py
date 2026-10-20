@@ -62,8 +62,8 @@ def _journal_fixture(tmp_path):
          "shadow_outcome": {"result": "WIN", "pnl_ticks": 12}},
     ]
     later = [
-        {"type": "OUTCOME", "outcome": {"paper_order_id": "a", "result": "WIN", "entry_price": 20000, "exit_price": 20060, "contracts": 1, "pnl_dollars": 120}},
-        {"type": "OUTCOME", "outcome": {"paper_order_id": "b", "result": "LOSS", "entry_price": 5000, "exit_price": 4994, "contracts": 1, "pnl_dollars": -30}},
+        {"type": "OUTCOME", "account_mode": "PAPER", "outcome": {"paper_order_id": "a", "result": "WIN", "entry_price": 20000, "exit_price": 20060, "contracts": 1, "pnl_dollars": 120}},
+        {"type": "OUTCOME", "account_mode": "PAPER", "outcome": {"paper_order_id": "b", "result": "LOSS", "entry_price": 5000, "exit_price": 4994, "contracts": 1, "pnl_dollars": -30}},
         {"type": "SHADOW_OUTCOME", "instrument": "MGC", "candidate_key": "c",
          "strategy": "shadow", "evidence_epoch": "e1",
          "shadow_outcome": {"result": "LOSS", "pnl_ticks": -5}},
@@ -354,6 +354,7 @@ def test_unverified_mode_makes_only_affected_futures_ticker_incomplete():
         tick = 0.25
         recorded = 0.50 if ticker == "MNQ" else 1.25
         return {"type": "OUTCOME", "ts": "2026-09-16T14:00:00Z",
+                "account_mode": "DEMO" if ticker == "MES" else "PAPER",
                 "outcome": {"paper_order_id": order_id, "result": "WIN",
                             "entry_price": 20000, "exit_price": 20000 + tick,
                             "contracts": 1, "pnl_dollars": recorded}}
@@ -415,3 +416,46 @@ def test_human_report_marks_unverified_ticker_incomplete(tmp_path):
     assert "MNQ: INCOMPLETE" in rendered
     assert "1 unverified paper/demo mode" in rendered
     assert "MES: $-30.00" in rendered
+
+
+def test_live_close_is_excluded_even_when_entry_says_paper():
+    trade = {"decision": "TRADE", "paper_order_id": "L", "instrument": "MES",
+             "account_mode": "PAPER", "risk_check": {"result": "APPROVED"},
+             "setup": {"direction": "LONG", "contracts": 1}}
+    live_close = {"type": "OUTCOME", "account_mode": "LIVE",
+                  "outcome": {"paper_order_id": "L", "result": "WIN",
+                              "entry_price": 5000, "exit_price": 5001,
+                              "contracts": 1, "pnl_dollars": 5}}
+    report = rep.futures_report([trade, live_close])
+    assert report["explicit_live_rows_excluded_from_paper"] == 1
+    assert report["paper_trade_lifetime"]["records"] == 0
+    assert report["paper_by_ticker"] == {}
+
+    # Nested CLOSE evidence must not override the outer envelope's LIVE mode.
+    nested = {"type": "OUTCOME", "account_mode": "PAPER",
+              "outcome": {**live_close["outcome"], "account_mode": "LIVE"}}
+    assert rep.futures_report([trade, nested])["explicit_live_rows_excluded_from_paper"] == 1
+
+
+def test_close_mode_missing_or_conflicting_marks_ticker_incomplete():
+    trade = {"decision": "TRADE", "paper_order_id": "C", "instrument": "MNQ",
+             "account_mode": "PAPER", "risk_check": {"result": "APPROVED"},
+             "setup": {"direction": "LONG", "contracts": 1}}
+    exit_payload = {"paper_order_id": "C", "result": "WIN", "entry_price": 20000,
+                    "exit_price": 20010, "contracts": 1, "pnl_dollars": 20}
+    for close in (
+        {"type": "OUTCOME", "outcome": exit_payload},
+        {"type": "OUTCOME", "account_mode": "DEMO", "outcome": exit_payload},
+        {"type": "OUTCOME", "account_mode": "PAPER",
+         "outcome": {**exit_payload, "account_mode": "DEMO"}},
+    ):
+        result = rep.futures_report([trade, close])["paper_by_ticker"]["MNQ"]
+        assert result["priced_subtotal_usd"] == 20
+        assert result["complete_pnl_usd"] is None
+        assert result["unverified_execution_mode_rows"] == 1
+
+    proved_close = {"type": "OUTCOME", "account_mode": "PAPER",
+                    "outcome": exit_payload}
+    proved = rep.futures_report([trade, proved_close])["paper_by_ticker"]["MNQ"]
+    assert proved["complete_pnl_usd"] == 20
+    assert proved["unverified_execution_mode_rows"] == 0
