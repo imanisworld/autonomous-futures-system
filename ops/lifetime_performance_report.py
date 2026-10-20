@@ -93,6 +93,23 @@ def _options_reprice(selected: dict, outcome: dict) -> float | None:
     return round((exit_ - entry) * 100 * int(count), 2)
 
 
+def _gross_closed_trade_drawdown(rows: list[dict]) -> float | None:
+    """Peak-to-trough gross closed-outcome curve, not account-equity drawdown."""
+    if not rows:
+        return 0.0
+    timed = [(_time(row.get("closed_at_utc")), _money(row.get("pnl_usd"))) for row in rows]
+    if any(stamp is None or pnl is None for stamp, pnl in timed):
+        return None
+    if len({stamp for stamp, _ in timed}) != len(timed):
+        return None  # unknown intratimestamp order must not alter drawdown
+    balance = peak = max_drawdown = 0.0
+    for _, pnl in sorted(timed, key=lambda item: item[0]):
+        balance += pnl
+        peak = max(peak, balance)
+        max_drawdown = max(max_drawdown, peak - balance)
+    return round(max_drawdown, 2)
+
+
 def _totals(rows: list[dict], *, closed: frozenset[str] = CLOSED) -> dict:
     finished = [r for r in rows if r["status"] not in {"OPEN", "PENDING", "NO_FILL", "REJECTED", *NON_OUTCOMES}]
     amounts = [_money(r.get("pnl_usd")) for r in finished]
@@ -100,6 +117,13 @@ def _totals(rows: list[dict], *, closed: frozenset[str] = CLOSED) -> dict:
     missing = len(amounts) - len(prices)
     missing_recorded = sum(_money(row.get("recorded_pnl_usd")) is None for row in finished)
     mismatch = sum(abs(_money(row["pnl_usd"]) - _money(row["recorded_pnl_usd"])) > 0.011 for row in finished if _money(row.get("pnl_usd")) is not None and _money(row.get("recorded_pnl_usd")) is not None)
+    complete = not (missing or mismatch or missing_recorded)
+    entry_stamps = [_time(row.get("ts")) for row in rows]
+    entry_span = None if not rows or any(stamp is None for stamp in entry_stamps) else {
+        "first_utc": min(entry_stamps).isoformat(),
+        "last_utc": max(entry_stamps).isoformat(),
+        "distinct_utc_dates": len({stamp.date() for stamp in entry_stamps}),
+    }
     return {
         "records": len(rows),
         "closed": len(finished),
@@ -110,6 +134,11 @@ def _totals(rows: list[dict], *, closed: frozenset[str] = CLOSED) -> dict:
         "financial_wins": sum(p > 0 for p in prices),
         "financial_losses": sum(p < 0 for p in prices),
         "financial_breakeven": sum(p == 0 for p in prices),
+        "gross_avg_per_closed_usd": round(sum(prices) / len(prices), 2) if complete and prices else None,
+        "priced_win_rate_percent": round(100 * sum(p > 0 for p in prices) / len(prices), 2) if complete and prices else None,
+        "realized_gross_closed_trade_max_drawdown_usd": _gross_closed_trade_drawdown(finished) if complete else None,
+        "entry_utc_span": entry_span,
+        "sample_note": "DESCRIPTIVE_ONLY_FURTHER_MULTIMONTH_EVIDENCE_NEEDED",
         "priced_subtotal_usd": round(sum(prices), 2),
         "complete_pnl_usd": round(sum(prices), 2) if not (missing or mismatch or missing_recorded) else None,
         "pnl_complete": not (missing or mismatch or missing_recorded),
