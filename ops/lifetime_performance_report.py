@@ -226,7 +226,8 @@ def futures_report(journal_rows: list[dict], *, changes: list[dict] | None = Non
             "ticker": ticker,
             "strategy": str(setup.get("strategy") or "UNSPECIFIED"),
             "status": result,
-            "pnl_usd": exit_.get("pnl_dollars") if result in FUTURES_RESOLVED else None,
+            "pnl_usd": _futures_reprice(trade, exit_) if result not in ("OPEN", "PENDING", "NO_FILL") else None,
+            "recorded_pnl_usd": exit_.get("pnl_dollars"),
             "ts": trade.get("ts"),
         }
         item["change_period"] = _futures_segment(item, changes)
