@@ -32,6 +32,10 @@ python -m ops.lifetime_performance_report \
   > /private/path/lifetime-performance.json
 ```
 
+Add `--text` to print an operator-friendly ticker/epoch breakdown instead of JSON.
+Missing priced closes are shown as **INCOMPLETE** with a separately labeled
+priced subtotal. The optional text output remains private/offline.
+
 The command has no Discord, network, or broker calls and writes **only to
 stdout** (shell redirection shown is operator-owned). Return code 2 marks
 partial/unreconciled input; inspect the JSON and do not call it a trusted total.
