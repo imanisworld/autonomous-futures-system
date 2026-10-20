@@ -249,7 +249,7 @@ def futures_report(journal_rows: list[dict], *, changes: list[dict] | None = Non
         if row.get("type") == "OUTCOME":
             out = _obj(row.get("outcome"))
             oid = out.get("paper_order_id")
-            outcomes[str(oid) if oid else ""].append(out)
+            outcomes[str(oid) if oid else ""].append({**out, "_journal_close_event_utc": row.get("ts")})
         if row.get("type") == "SHADOW_OUTCOME":
             cid = row.get("candidate_key") or row.get("candidate_id")
             if not cid:
@@ -290,6 +290,7 @@ def futures_report(journal_rows: list[dict], *, changes: list[dict] | None = Non
             "pnl_usd": _futures_reprice(trade, exit_) if result not in ("OPEN", "PENDING", "NO_FILL") else None,
             "recorded_pnl_usd": exit_.get("pnl_dollars"),
             "ts": trade.get("ts"),
+            "closed_at_utc": exit_.get("resolved_at") or exit_.get("_journal_close_event_utc"),
         }
         item["change_period"] = _futures_segment(item, changes)
         clean.append(item)
@@ -433,6 +434,8 @@ def options_report(db_path: Path, registry: Path) -> dict:
             "pnl_usd": _options_reprice(selected, out) if open_side != "SELL_TO_OPEN" else None,
             "recorded_pnl_usd": out.get("pnl_dollars"),
             "opening_side_provenance": open_side,
+            "ts": ts,
+            "closed_at_utc": out.get("resolved_at"),
         })
     return {
         "lifetime_active": _totals(active),
