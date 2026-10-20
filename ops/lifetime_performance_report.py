@@ -231,7 +231,7 @@ def futures_report(journal_rows: list[dict], *, changes: list[dict] | None = Non
         item = {
             "ticker": ticker,
             "strategy": str(setup.get("strategy") or "UNSPECIFIED"),
-            "status": result,
+            "status": "NO_FILL" if result == "CANCELLED" and exit_.get("no_fill_reason") and exit_.get("exit_price") is None else result,
             "pnl_usd": _futures_reprice(trade, exit_) if result not in ("OPEN", "PENDING", "NO_FILL") else None,
             "recorded_pnl_usd": exit_.get("pnl_dollars"),
             "ts": trade.get("ts"),
