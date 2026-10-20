@@ -339,7 +339,8 @@ def options_report(db_path: Path, registry: Path) -> dict:
             "ticker": str(ticker or "UNKNOWN"),
             "epoch": epoch,
             "status": str(status or "OPEN").upper(),
-            "pnl_usd": out.get("pnl_dollars"),
+            "pnl_usd": _options_reprice(selected, out),
+            "recorded_pnl_usd": out.get("pnl_dollars"),
         })
     return {
         "lifetime_active": _totals(active),
