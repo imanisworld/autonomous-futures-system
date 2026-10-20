@@ -96,7 +96,7 @@ def _options_reprice(selected: dict, outcome: dict) -> float | None:
 def _gross_closed_trade_drawdown(rows: list[dict]) -> float | None:
     """Peak-to-trough gross closed-outcome curve, not account-equity drawdown."""
     if not rows:
-        return 0.0
+        return None  # no closed trades is no observed drawdown evidence
     timed = [(_time(row.get("closed_at_utc")), _money(row.get("pnl_usd"))) for row in rows]
     if any(stamp is None or pnl is None for stamp, pnl in timed):
         return None
