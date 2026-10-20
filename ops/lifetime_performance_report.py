@@ -117,7 +117,13 @@ def _totals(rows: list[dict], *, closed: frozenset[str] = CLOSED) -> dict:
     missing = len(amounts) - len(prices)
     missing_recorded = sum(_money(row.get("recorded_pnl_usd")) is None for row in finished)
     mismatch = sum(abs(_money(row["pnl_usd"]) - _money(row["recorded_pnl_usd"])) > 0.011 for row in finished if _money(row.get("pnl_usd")) is not None and _money(row.get("recorded_pnl_usd")) is not None)
-    complete = not (missing or mismatch or missing_recorded)
+    # An unstamped futures execution cannot be counted as verified paper/demo,
+    # even when its exit prices and the recorded gross dollars agree.
+    unverified_mode_rows = sum(
+        "execution_mode" in row and row["execution_mode"] not in ("PAPER", "DEMO")
+        for row in rows
+    )
+    complete = not (missing or mismatch or missing_recorded or unverified_mode_rows)
     entry_stamps = [_time(row.get("ts")) for row in rows]
     entry_span = None if not rows or any(stamp is None for stamp in entry_stamps) else {
         "first_utc": min(entry_stamps).isoformat(),
@@ -140,11 +146,12 @@ def _totals(rows: list[dict], *, closed: frozenset[str] = CLOSED) -> dict:
         "entry_utc_span": entry_span,
         "sample_note": "DESCRIPTIVE_ONLY_FURTHER_MULTIMONTH_EVIDENCE_NEEDED",
         "priced_subtotal_usd": round(sum(prices), 2),
-        "complete_pnl_usd": round(sum(prices), 2) if not (missing or mismatch or missing_recorded) else None,
-        "pnl_complete": not (missing or mismatch or missing_recorded),
+        "complete_pnl_usd": round(sum(prices), 2) if complete else None,
+        "pnl_complete": complete,
         "model": "independent_gross_from_exit_and_entry_prices",
         "recorded_pnl_discrepancies": mismatch,
         "recorded_pnl_missing": missing_recorded,
+        "unverified_execution_mode_rows": unverified_mode_rows,
         "fees_included": False,
         "net_after_fees_usd": None,
     }
@@ -503,7 +510,8 @@ def format_human(report: dict) -> str:
             return (f"INCOMPLETE (gross priced subset ${t['priced_subtotal_usd']:+,.2f}; "
                     f"{t['unpriced_closed']} unpriced, "
                     f"{t['recorded_pnl_discrepancies']} price-vs-journal mismatches, "
-                    f"{t['recorded_pnl_missing']} missing recorded P&L)")
+                    f"{t['recorded_pnl_missing']} missing recorded P&L, "
+                    f"{t['unverified_execution_mode_rows']} unverified paper/demo mode)")
         return f"${value:+,.2f} ({t['priced_closed']} priced closed)"
 
     def comparison(t: dict) -> str:
