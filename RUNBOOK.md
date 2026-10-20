@@ -2,6 +2,8 @@
 
 Operational procedures for running, debugging, and maintaining the system.
 
+**Quick, copy/paste read-only checks:** [Operator command reference](docs/operator-command-reference.md) (Mac, GitHub, approved VPS, Polygon/six-micro, Track B, integrity). The commands below include older start/configuration procedures; they are **not** authorization to start/restart/deploy or edit a live release. Follow `AGENTS.md` and the current `docs/futures-operator-todo.md` gates.
+
 ---
 
 ## 1. Starting the System

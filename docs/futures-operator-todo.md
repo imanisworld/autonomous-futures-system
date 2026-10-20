@@ -1,5 +1,57 @@
 # Futures Operator TODO
 
+## CURRENT — 2026-10-13 (docs hygiene; NOT trading authority)
+
+**Read-only commands to run:** `docs/operator-command-reference.md` (Mac, GitHub, authorized VPS, Polygon, Track B, release integrity). This reference does not authorize remediation or runtime mutation.
+
+**Objective:** Establish genuinely executable positive expectancy, not merely green CI. Historical #1208–#1211/#1215/#1216 engineering corrections are **merged source-only** on `main` @ **`c215060`**. Do not restart their old reviews unless relevant code changed.
+
+### CURRENT BLOCKER — release integrity drift (blocks deploy/restart)
+
+**Verdict: BLOCKED — SAFETY DRIFT.** Cursor/Cloud Agent's restricted read-only VPS check reported release-integrity **FAIL** on live release `94a71bdbb975b53f21a81b7084482ea3c5270ceb` because of an extra bytecode file:
+
+`scripts/__pycache__/options_122_prospective_collect.cpython-313.pyc`
+
+**Do not remove that file in place.** `AGENTS.md` explicitly forbids editing any directory under `/root/afs-releases` in place. A direct `rm` would make the integrity check green by mutating the supposedly immutable release and would bypass the release model.
+
+Smallest safe ordering:
+
+1. Leave the already-running process untouched while the integrity failure is contained by the current HOLD.
+2. Reconfirm the exact failure read-only immediately before any recovery action.
+3. Under a separate explicit operator GO, use the sanctioned immutable-release / deploy-lock process to move away from or reconstruct the affected release. Do not invent an ad-hoc repair path.
+4. Re-run release integrity plus deployed SHA/service/posture/broker/journal checks after recovery.
+5. Only after integrity is **PASS** may deployment/restart/new DEMO/execution-path progression be considered.
+
+No deploy/restart/live/new DEMO action is authorized by this TODO.
+
+**Cursor-reported point-in-time read (2026-10-13; repeat only where fresh proof is necessary):** `futures-bot` active on `94a71bd…`, `NRestarts=0`; `LIVE_TRADING_ENABLED=false`, `TRADOVATE_ENV=demo`, hard cap `1`, account pin match; broker flat / no working orders; deploy lock absent. Track B `wide_stop_4k` lane **0 fills**, state last **2026-09-30**. Both Track B and six-micro were later verified read-only on 2026-10-19 (see the checklist below).
+
+**Five evidence gates (preserved from open docs-only PR #1201 / reused from stale #1214; PR disposition remains separate):**
+
+| Gate | Current result | What still counts as proof |
+|---|---|---|
+| **Net expectancy** | **NOT PROVEN** | Eligible actual fills net of commission/slippage and rejected/no-fill opportunities, under a frozen strategy specification |
+| **Repeatability** | **INCOMPLETE** | Adequate forward/independent sample, chronology, bounded concentration, acceptable drawdown, stated stop criteria |
+| **Executable entry** | **SOURCE-CHECKED, UNPROVEN ON BOX** | Causal bar/trigger availability, realistically timed limit/IOC entries, gap and ambiguous same-bar assumptions, genuine fill evidence |
+| **Risk admissibility** | **SOURCE GUARDS PRESENT; RUNTIME PARTLY PROVEN** | Pins/flat/orders proven 2026-10-13 allowlist read; release integrity still FAIL |
+| **Replay/DEMO parity** | **NOT ESTABLISHED** | Exact signal, timestamp, source contract, bracket, fill policy and journal reconciliation on the same frozen candidate SHA |
+
+**Do not treat a positive synthetic, historical, or observer-only result as passing these gates.**
+
+- [ ] **Integrity recovery:** no in-place release-tree edit. Choose and explicitly authorize a sanctioned immutable-release recovery under the deploy lock; then re-prove `release` → PASS plus post-recovery SHA/service/posture/broker/journal integrity.
+- [x] **Engineering source work:** #1208–#1213, #1215, #1216 merged. **No automatic deployment.**
+- [x] **Track B paper cell on `main`:** one promote **`94a71bd`** (tree ≡ `58d4cd6`) — **no second deploy** without new GO.
+- [x] **Partial box proof 2026-10-13:** SHA/pins/broker flat/orders via cloud allowlist (integrity FAIL still blocks progression).
+- [x] **Track B forward collection (read-only, 2026-10-19 00:06Z):** collector ran every session 2026-10-12..10-16; the 4HR setup was `INVALIDATED` each day, so there were no candidates and no fills. It is collecting. Keep the trial frozen. Polygon cancellation does not affect it. Evidence: `docs/repo-hygiene-audit-2026-10-13.md` §1.
+- [x] **Polygon / six-micro census (read-only, 2026-10-19 00:06Z):** 5 positions open since 2026-10-12, **0 / 40** round-turns, MGC never fills. **Recommendation: CANCEL Polygon, RETIRE six-micro.**
+- [x] **Six-micro retired / Polygon cancelled (2026-10-19, operator GO):** the operator ran `systemctl disable --now six-micro-daily-tsmom.timer` on the box. Output: `disabled` / `inactive` / `0 timers listed`. The timer is also missing from the `afs-ro` timer list at 00:25Z. Journal sha256 values are unchanged, and the env file and release tree were not touched. Polygon subscription cancelled (operator-reported). Ledger: `ABORTED` / `NOT_RUN` appended for `T-2026-10-10-prereg-six-micro-daily-tsmom-forward-2026-10-10-01` (operator-withdrawn, 0 round-turns, not a strategy FAIL). Release-integrity recovery remains separate.
+- [ ] **Docs:** #1220 is **OPEN** at last checked `e0b525f6` (mergeability/CI are snapshot-only); independent review remains. #1226 is the active docs consolidation PR; verify its **latest exact-head CI + handoff-fields** and independent review before any merge GO. After unique-content proof, consider closing overlapping #1214/#1225 and candidate-close #1201; do not auto-close.
+- [ ] **Cleanup deletes:** classification only until operator GO — `docs/repo-hygiene-deferred-removal-tracker-2026-10-10.md`. Preserve SSH stash; archive-tag before deleting `ops/post-cap-shadow-report-20261005`.
+
+**Sources of truth:** Strategy verdict = `docs/strategy-rules/Strategy_Inventory.md`; experiment history = `docs/research-trial-ledger.jsonl`; runtime = independently verified box/broker; agent handoff = `docs/agent-work-state.md` START HERE.
+
+---
+
 ## Operator checklist — 2026-10-08 (completion requires operator verification)
 
 **Priority:** Resolve Grok's actual blockers first. Do not deploy merely to finish this checklist.
