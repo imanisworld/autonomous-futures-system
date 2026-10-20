@@ -73,6 +73,26 @@ def _futures_reprice(trade: dict, outcome: dict) -> float | None:
     return round((exit_ - entry) * sign * (value / tick) * int(count), 2)
 
 
+
+def _options_reprice(selected: dict, outcome: dict) -> float | None:
+    """V1 bought-option gross: entry ask, exit bid, 100-share contracts."""
+    entry = next((_money(selected[k]) for k in ("option_mark", "entry_quote", "option_ask")
+                  if selected.get(k) is not None), None)
+    exit_ = next((_money(outcome[k]) for k in ("exit_mark", "option_bid_at_resolution",
+                                              "exit_premium", "exit_price")
+                  if outcome.get(k) is not None), None)
+    count = _money(selected.get("contracts", selected.get("quantity")))
+    multiplier = _money(selected.get("contract_multiplier", 100))
+    close_count = _money(outcome.get("quantity", outcome.get("contracts")))
+    if entry is None or entry <= 0 or exit_ is None or exit_ < 0:
+        return None
+    if count is None or count < 1 or count != int(count) or multiplier != 100:
+        return None
+    if close_count is not None and close_count != count:
+        return None
+    return round((exit_ - entry) * 100 * int(count), 2)
+
+
 def _totals(rows: list[dict], *, closed: frozenset[str] = CLOSED) -> dict:
     finished = [r for r in rows if r["status"] not in {"OPEN", "PENDING", "NO_FILL", "REJECTED", *NON_OUTCOMES}]
     amounts = [_money(r.get("pnl_usd")) for r in finished]
