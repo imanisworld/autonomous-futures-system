@@ -56,8 +56,9 @@ snapshot. No VPS actions are approved by this document.
   treat shadow outcomes as fills. Existing day-specific
   `ops/shadow_daily_pnl_report.py` remains the source of its defined
   commission/slippage assumptions.
-- Options: records from `options_shadow_journal`, using its recorded
-  `pnl_dollars` and source cohort boundaries from
+- Options: records from `options_shadow_journal`, independently repriced
+  from recorded entry option ask, exit bid and contract quantity (100-share listed
+  option multiplier), cross-checked against stored `pnl_dollars`; boundaries from
   `docs/options_v1_evidence_epoch.json`. Those boundaries are the same
   id-plus-timestamp rules specified by unmerged PR #1071. The new lifetime
   reader does **not** merge or supersede that PR's current-epoch
