@@ -409,7 +409,7 @@ def test_legacy_overnight_watch_is_not_registered_even_when_its_log_exists(tmp_p
 def test_retired_companion_daily_is_not_registered_even_if_old_log_exists(tmp_path):
     """Disabled companion reporting must never make a healthy census look DEAD."""
     (tmp_path / "companion_daily.log").write_text(
-        "2026-09-23T00:00:00+00:00 historical report\\n"
+        "2026-09-23T00:00:00+00:00 historical report\n"
     )
     census = build_census(tmp_path, NOW)
     names = {row["name"] for row in census["collectors"]}
