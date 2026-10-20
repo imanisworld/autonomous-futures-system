@@ -2253,12 +2253,21 @@ def capture_snapshot(reason: str, tick: dict, findings: Findings) -> Path:
     return d
 
 
+# Presentation-only noise control. The guard's WARN/BLOCKED findings and its
+# critical-memory state are untouched; only Discord recovery is delayed until
+# consecutive healthy watcher checks confirm an actual recovery.
+MEMORY_RECOVERY_CONFIRM_TICKS = 3
+
+
 def handle_memory_warning(state: dict, findings: Findings, tick: dict) -> None:
     warning = next((row for row in findings.warns() if row["key"] == "memory_warning"), None)
     if warning is None:
         previous = state.get("memory_warning") or {}
         if previous.get("active"):
-            log("memory WARNING cleared after derived headroom returned healthy")
+            previous["clear_streak"] = previous.get("clear_streak", 0) + 1
+            if previous["clear_streak"] < MEMORY_RECOVERY_CONFIRM_TICKS:
+                return
+            log("memory WARNING recovery confirmed by consecutive healthy checks")
             notify(
                 state, MEMORY_WARNING_ROUTE,
                 _memory_discord_text("RECOVERED", "memory_warning", previous, tick),
@@ -2268,6 +2277,7 @@ def handle_memory_warning(state: dict, findings: Findings, tick: dict) -> None:
         return
     current = state.get("memory_warning") or {}
     if current.get("active"):
+        current.pop("clear_streak", None)
         return
     snap = capture_snapshot("WARNING_memory", tick, findings)
     state["memory_warning"] = {
@@ -2300,7 +2310,10 @@ def handle_memory_fixed_warnings(state: dict, findings: Findings, tick: dict) ->
     present = {row["key"]: row for row in findings.warns() if row["key"] in MEM_FIXED_WARNING_KEYS}
     for key in list(active):
         if key not in present and active[key].get("active"):
-            log(f"memory WARNING cleared: {key}")
+            active[key]["clear_streak"] = active[key].get("clear_streak", 0) + 1
+            if active[key]["clear_streak"] < MEMORY_RECOVERY_CONFIRM_TICKS:
+                continue
+            log(f"memory WARNING recovery confirmed: {key}")
             notify(
                 state, MEMORY_WARNING_ROUTE,
                 _memory_discord_text("RECOVERED", key, active[key], tick),
@@ -2309,6 +2322,7 @@ def handle_memory_fixed_warnings(state: dict, findings: Findings, tick: dict) ->
             active[key] = {"active": False}
     for key, warning in present.items():
         if (active.get(key) or {}).get("active"):
+            active[key].pop("clear_streak", None)
             continue
         snap = capture_snapshot(f"WARNING_{key}", tick, findings)
         active[key] = {"active": True, "first_utc": iso(now_utc()), "snapshot": str(snap), "summary": warning["summary"]}
