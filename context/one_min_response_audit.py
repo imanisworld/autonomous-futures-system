@@ -11,6 +11,8 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from context.bar_history import _parse_dt
+
 
 RECORD_TYPE = "ONE_MIN_OBSERVER_RESPONSE_AUDIT"
 
@@ -20,13 +22,15 @@ def _event_day(payload: Any) -> date:
     if isinstance(raw, datetime):
         dt = raw
     else:
-        try:
-            dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
-        except (TypeError, ValueError):
+        # TradingView webhooks may send Unix seconds or milliseconds.
+        # datetime.fromisoformat("1792072500") interprets the leading digits
+        # as year 1792 instead of the 2026-10-15 Unix time.
+        dt = _parse_dt(str(raw or ""))
+        if dt is None:
             return datetime.now(timezone.utc).date()
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
-    return dt.date()
+    return dt.astimezone(timezone.utc).date()
 
 
 def _event_dict(value: Any) -> dict | None:
