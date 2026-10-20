@@ -2,6 +2,14 @@
 
 **Decision:** Source-only cleanup now. The operator's standing release-integrity gate is an absolute blocker: **NO DEPLOYMENT, SERVICE RESTART, RELEASE PROMOTION, OR VPS CUTOVER until the existing deployed release-integrity violation has been fixed and independently verified.** GitHub source merges do not waive that gate. Claude may conduct read-only VPS investigation in the meantime. No trading, broker, risk, evidence collection, release, secret, or service mutation is authorized by this note.
 
+
+## Current GitHub-only status (source checkpoint 2026-10-19/20)
+
+- #1231 (`852b014`) and #1232 (`3354d3e`) merged after reviewed exact-head checks. #1233 (`6ffb151`) **also merged** as documentation-only; earlier references to #1233 as an outstanding draft are historical.
+- GitHub `main` is now `4db26a1` after separate lifetime reporting merges #1234 and #1235. These GitHub source changes did **not** install a watcher, reporter, Discord route or collector.
+- October 19 ChatGPT audit claims (including the **62-message watcher count discrepancy**) remain unverified without primary VPS+Discord receipts; do not infer delivery from log assertions.
+- **Current runtime/integrity/destination truth UNKNOWN** pending separately authorized *read-only* investigation. Absolute release-integrity restriction and explicit operator GO remain intact.
+
 ## Evidence and authority
 
 - Basis: **ChatGPT's October 19 notification audit summary**, covering reported repository/VPS/Discord observations for October 6–19, 2026. **The counts and runtime observations in that summary have not been independently checked against raw VPS logs or Discord delivery records for this document.** The summary names futures release `94a71bdbb975`, options-scanner directory `47ae01acdbed`, and remote repository main `a04bd05b54ff` as of that audit, not as current verified runtime state. Re-read source, box, and routes before any later VPS action.
@@ -72,4 +80,4 @@ Reuse/rename existing Discord channels where possible. A three-feed target does 
 - Retired senders do not run, and every remaining scheduled sender has an owner, purpose and delivery receipt.
 - One complete natural weekly reporting cycle of evidence, independently reviewed; no live execution, contract/risk change, strategy edit, or unsanctioned service change.
 
-**Status:** WAIT / INTEGRITY BLOCKER. GitHub source PRs #1231 and #1232 were merged, but installed VPS services are unchanged; #1233 remains documentation-only. **No deploy, restart, or VPS cutover until the integrity problem is fixed and independently verified.** Counts above are attributed to ChatGPT's audit and remain unverified.
+**Historical status (October 19 before the later merge):** WAIT / INTEGRITY BLOCKER. GitHub PRs #1231/#1232 were merged; #1233 was documentation-only and subsequently merged as `6ffb151`. Whether installed VPS services changed later is **unverified**; GitHub merges alone did not deploy them. **No deploy, restart, or VPS cutover until the integrity problem is fixed and independently verified.** Counts above are attributed to ChatGPT's audit and remain unverified.
