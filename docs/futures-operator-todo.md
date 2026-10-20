@@ -2,15 +2,16 @@
 
 ## CURRENT bounded queue — 2026-10-19/20 (source-only)
 
-**GitHub main** `4db26a1` checked for this checkpoint. Box integrity/installed source **not checked**. **HOLD deployment and ALL service restarts**, even after source merges, until independently documented restored release integrity and separate operator GO.
+**GitHub main** `4db26a1` checked for this source checkpoint. **AFS-0313 Cursor reports** current release `94a71bd` integrity FAIL and attributes its stray `.pyc` to an Oct 11 Cursor audit running the live venv Python without `-B`; ChatGPT has **not independently verified** that cause or a clean recut. **Fix path: QA-passed v9 immutable recut of `94a71bd` this weekend, only with separate operator GO and independent verification. DO NOT delete `.pyc` in place.** No deploy/restart/repin authorized by this TODO. **AFS-0315:** operator accepted the documented `ssh hetzner` root read-only access precedent; never run Python from a release directory without `-B`.
 
 - [x] GitHub-only Discord noise/reporting changes #1231–#1233 merged; no VPS installation proven.
 - [x] Read-only gross lifetime accounting source #1234 and provenance/epoch comparison #1235 merged; not historical P&L proof.
 - [ ] Close source correctness follow-up: per-ticker `INCOMPLETE` for unstamped futures execution mode — focused draft #1236 awaiting CI and independent reviewer.
-- [ ] One **read-only** original-box evidence pass: release manifest/stray bytecode cause; installed sha, expected fingerprint, PYTHONDONTWRITEBYTECODE unit/env posture (redacted), watcher, drift alarms, deploy lock, broker live-off/demo/flatness, pins, rollback readiness. Preserve alerts; no changes.
+- [x] **Cursor-reported read-only cause investigation (AFS-0313):** Oct 11 venv Python audit without `-B` wrote a bytecode cache file; **not independently reverified by ChatGPT**. Do not redo broad investigation or remove the file in place. [ ] After separately authorized **v9 immutable recut** this weekend, obtain an independent full manifest and drift-gate PASS before any release or restart decision.
 - [ ] One **read-only** private lifetime ledger reconciliation: all dated futures journals, exact order joins, paper/demo/live provenance, options SQLite snapshot + WAL, ACTIVE vs COUNTERFACTUAL, epoch/option-opening-side/quantity, commissions and actual change activation timestamps. No private P&L in public GitHub.
 - [ ] One **read-only** monitoring pass: weekly review, options scanner locks/error routing, forward proof/disabled timer, 3 intended Discord streams + protected critical fallback, delivery receipts. Never silence warning alarms to fabricate health.
-- [ ] Independent forward/DEMO evidence proof for approved tracks, without opening MNQ sealed research. No strategy tuning or deployment.
+- [x] **Six-micro TSMOM retired Oct 18**: **ABORTED/NOT_RUN, 0/40**, **DONE / DO NOT REDO**. This is **not a strategy failure**; do not re-enable its disabled timer or treat missing round turns as a strategy loss. [ ] Verify remaining *active* forward/DEMO tracks only, without opening sealed MNQ research, changing strategy, or deploying.
+- [ ] **GitHub follow-ups only:** draft #1236 must also read CLOSE/OUTCOME live mode, not just entry, so a live close never contributes to paper/demo ticker totals. **AFTER the weekend v9 recut only**, add a fake-release regression for the new unlisted top-level package-directory integrity blind spot (`ops/release_integrity.py`:136,154–161), then review any source fix independently; touch no release/manifest code now.
 - [ ] Review PR classifications in `docs/afs-repo-readonly-closeout-2026-10-19.md`; close/merge/rebase none without explicit operator review.
 - [ ] After independent integrity repair proof only: separately nominate exact deploy SHA, recheck release/CI/rollback and seek operator GO. No candidate currently approved.
 
