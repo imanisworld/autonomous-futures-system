@@ -242,6 +242,21 @@ def _execution_mode(row: dict) -> str:
     return "MODE_UNSTAMPED"
 
 
+def _close_execution_mode(exit_: dict) -> str:
+    """Reconcile OUTCOME envelope and payload; never let either hide LIVE."""
+    candidates = {
+        mode for mode in (
+            _execution_mode(exit_),
+            exit_.get("_outer_close_mode", "MODE_UNSTAMPED"),
+        ) if mode != "MODE_UNSTAMPED"
+    }
+    if "LIVE_EXCLUDED" in candidates:
+        return "LIVE_EXCLUDED"
+    if len(candidates) > 1:
+        return "MODE_CONFLICT"
+    return next(iter(candidates)) if candidates else "MODE_UNSTAMPED"
+
+
 def futures_report(journal_rows: list[dict], *, changes: list[dict] | None = None) -> dict:
     """Exact cross-file paper_order_id join. Never FIFO-pair by market or date."""
     changes = changes or []
@@ -256,7 +271,11 @@ def futures_report(journal_rows: list[dict], *, changes: list[dict] | None = Non
         if row.get("type") == "OUTCOME":
             out = _obj(row.get("outcome"))
             oid = out.get("paper_order_id")
-            outcomes[str(oid) if oid else ""].append({**out, "_journal_close_event_utc": row.get("ts")})
+            outcomes[str(oid) if oid else ""].append({
+                **out,
+                "_journal_close_event_utc": row.get("ts"),
+                "_outer_close_mode": _execution_mode(row),
+            })
         if row.get("type") == "SHADOW_OUTCOME":
             cid = row.get("candidate_key") or row.get("candidate_id")
             if not cid:
@@ -274,8 +293,8 @@ def futures_report(journal_rows: list[dict], *, changes: list[dict] | None = Non
             ambiguous += len(entries)
             continue
         trade = entries[0]
-        execution_mode = _execution_mode(trade)
-        if execution_mode == "LIVE_EXCLUDED":
+        entry_mode = _execution_mode(trade)
+        if entry_mode == "LIVE_EXCLUDED":
             excluded_live += 1
             continue
         outcomes_here = outcomes.get(oid, [])
@@ -285,6 +304,18 @@ def futures_report(journal_rows: list[dict], *, changes: list[dict] | None = Non
             continue
         exit_ = inline if inline.get("result") else (outcomes_here[0] if outcomes_here else {})
         result = str(exit_.get("result") or "OPEN").upper()
+        close_mode = _close_execution_mode(exit_) if result not in ("OPEN", "PENDING") else "NO_CLOSE"
+        if close_mode == "LIVE_EXCLUDED":
+            excluded_live += 1
+            continue
+        # Both entry and CLOSE must carry consistent PAPER/DEMO provenance.
+        # A documented LIVE close is excluded above, even if entry claimed PAPER.
+        execution_mode = entry_mode
+        if result not in ("OPEN", "PENDING"):
+            if close_mode != entry_mode or close_mode not in ("PAPER", "DEMO"):
+                execution_mode = "MODE_CONFLICT" if (
+                    close_mode in ("PAPER", "DEMO") and entry_mode in ("PAPER", "DEMO")
+                ) else "MODE_UNSTAMPED"
         if not outcomes_here and not inline.get("result"):
             unresolved += 1
         setup = _obj(trade.get("setup"))
@@ -292,6 +323,8 @@ def futures_report(journal_rows: list[dict], *, changes: list[dict] | None = Non
         item = {
             "ticker": ticker,
             "execution_mode": execution_mode,
+            "entry_execution_mode": entry_mode,
+            "close_execution_mode": close_mode,
             "strategy": str(setup.get("strategy") or "UNSPECIFIED"),
             "status": "NO_FILL" if result == "CANCELLED" and exit_.get("no_fill_reason") and exit_.get("exit_price") is None else result,
             "pnl_usd": _futures_reprice(trade, exit_) if result not in ("OPEN", "PENDING", "NO_FILL") else None,
@@ -327,8 +360,8 @@ def futures_report(journal_rows: list[dict], *, changes: list[dict] | None = Non
     return {
         "paper_trade_lifetime": _totals(clean, closed=FUTURES_RESOLVED),
         "journal_by_execution_mode": _groups(clean, "execution_mode", closed=FUTURES_RESOLVED),
-        "unstamped_or_unrecognized_mode_rows": sum(row["execution_mode"] in
-            ("MODE_UNSTAMPED", "UNRECOGNIZED_MODE") for row in clean),
+        "unstamped_or_unrecognized_mode_rows": sum(row["execution_mode"] not in
+            ("PAPER", "DEMO") for row in clean),
         "explicit_live_rows_excluded_from_paper": excluded_live,
         "paper_by_ticker": _groups(clean, "ticker", closed=FUTURES_RESOLVED),
         "paper_by_change": _groups(clean, "change_period", closed=FUTURES_RESOLVED),
