@@ -17,7 +17,7 @@ from typing import Any
 
 CLOSED = frozenset({"WIN", "LOSS", "BREAKEVEN", "EXPIRED"})
 NON_OUTCOMES = frozenset({"TARGET_CONSUMED_AT_ENTRY", "STOP_CONSUMED_AT_ENTRY"})
-FUTURES_RESOLVED = frozenset({"WIN", "LOSS", "BREAKEVEN"})
+FUTURES_RESOLVED = frozenset({"WIN", "LOSS", "BREAKEVEN", "TIMEOUT"})
 
 
 def _time(value: Any) -> datetime | None:
