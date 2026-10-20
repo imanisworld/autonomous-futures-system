@@ -51,7 +51,7 @@ def _obj(value: Any) -> dict:
 
 
 def _totals(rows: list[dict], *, closed: frozenset[str] = CLOSED) -> dict:
-    finished = [r for r in rows if r["status"] in closed]
+    finished = [r for r in rows if r["status"] not in {"OPEN", "PENDING", "NO_FILL", "REJECTED", *NON_OUTCOMES}]
     amounts = [_money(r.get("pnl_usd")) for r in finished]
     prices = [p for p in amounts if p is not None]
     missing = len(amounts) - len(prices)
