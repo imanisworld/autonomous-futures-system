@@ -176,7 +176,8 @@ itself. Independently correlate order IDs, releases, account identifiers
 **Options:** V1 source is purchased-premium/cash-only, confirmed in
 `alert_ranker/paper_v1.py` and `alert_ranker/account_equity.py`. This is a
 **code-scope observation**, not verification of every historical database row.
-Explicit `SELL_TO_OPEN` rows are flagged, excluded from buy-only P&L
+Explicit `SELL_TO_OPEN`, contradictory opening-side metadata and other
+unsupported opening intent are flagged, excluded from buy-only P&L
 arithmetic and make the related totals incomplete. Rows without an explicit
 opening side are counted as **UNSTAMPED BUY-ONLY ASSUMPTION**. Bearish PUT
 purchases and underlying SHORT signals are **not** classified as short-option
