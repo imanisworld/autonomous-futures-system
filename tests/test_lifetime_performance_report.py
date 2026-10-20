@@ -29,7 +29,7 @@ def _options_fixture(tmp_path):
         for rid, stamp, ticker, status, lane, pnl in rows:
             conn.execute("INSERT INTO options_shadow_journal VALUES (?,?,?,?,?,?,?)",
                          (rid, stamp, ticker, status, "{}", json.dumps({"paper_evidence_lane": lane, "option_mark": 2, "contracts": 1}),
-                          json.dumps({"pnl_dollars": pnl} if pnl is not None else {})))
+                          json.dumps({"pnl_dollars": pnl, "exit_mark": 2.0 + float(pnl) / 100.0} if pnl is not None else {})))
     epoch = tmp_path / "epochs.json"
     epoch.write_text(json.dumps({
         "cohort": "V1-EPOCH-3", "epoch_start": "2026-09-21T19:23:01Z",
