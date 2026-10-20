@@ -165,6 +165,7 @@ def test_extra_scan_ignores_non_runtime_and_flags_pycache(tmp_path, monkeypatch)
     _pin(monkeypatch, tmp_path)
     report = verify_release(repo_root=tmp_path)
     assert report["extra_runtime_files"] == [
+        "docs/notes.py",
         "webhook/__pycache__/junk.py",
         "webhook/__pycache__/runner.cpython-312.pyc",
     ]
@@ -297,11 +298,19 @@ def test_round_trip_with_release_manifest_builder(tmp_path):
     same tree it was built from (mismatched/missing empty, fingerprint ok)."""
     from ops.release_manifest import build_release_manifest
 
+    import shutil
+
     repo_root = Path(__file__).resolve().parents[1]
     manifest = build_release_manifest(repo_root)
+    # Verify the staged release, not the CI checkout: the checkout contains
+    # unshipped test bytecode and local files that a curated release excludes.
+    for rel in manifest["source_files"]:
+        dest = tmp_path / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(repo_root / rel, dest)
     out = tmp_path / "release_manifest.json"
     out.write_text(json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8")
-    report = verify_release(repo_root=repo_root, manifest_path=out)
+    report = verify_release(repo_root=tmp_path, manifest_path=out)
     assert report["mismatched"] == []
     assert report["missing"] == []
     assert report["fingerprint_ok"] is True
