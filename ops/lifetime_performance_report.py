@@ -139,7 +139,7 @@ def futures_report(journal_rows: list[dict], *, changes: list[dict] | None = Non
     changes = changes or []
     decisions: dict[str, list[dict]] = defaultdict(list)
     outcomes: dict[str, list[dict]] = defaultdict(list)
-    shadow: dict[str, dict] = {}
+    shadow: dict[tuple[str, str, str, str, str], dict] = {}
     shadow_unidentified = 0
     for row in journal_rows:
         if row.get("decision") == "TRADE" and _obj(row.get("risk_check")).get("result") == "APPROVED":
@@ -155,7 +155,7 @@ def futures_report(journal_rows: list[dict], *, changes: list[dict] | None = Non
                 shadow_unidentified += 1
             else:
                 # Existing forward resolver semantics: last journal revision wins.
-                shadow[str(cid)] = row
+                shadow[(str(row.get('lane') or ''), str(row.get('strategy') or ''), str(row.get('instrument') or ''), str(row.get('evidence_epoch') or ''), str(cid))] = row
     clean: list[dict] = []
     unresolved = 0
     invalid_identity = len(decisions.pop("", []))
@@ -225,7 +225,7 @@ def futures_report(journal_rows: list[dict], *, changes: list[dict] | None = Non
         "shadow_observations_by_ticker": shadow_summary,
         "shadow_unidentified_excluded": shadow_unidentified,
         "change_source": "operator-supplied external documented boundaries" if changes else "NO VERIFIED FUTURES CHANGE BOUNDARIES",
-        "pnl_authoritative": invalid_identity == 0 and ambiguous == 0 and orphan == 0,
+        "reconciled_within_supplied_journals": invalid_identity == 0 and ambiguous == 0 and orphan == 0,
     }
 
 
@@ -307,7 +307,7 @@ def options_report(db_path: Path, registry: Path) -> dict:
         "unknown_lane_excluded": unknown_lane,
         "epoch_boundary_conflicts": boundary_conflicts,
         "before_registered_epochs": prior_rows,
-        "pnl_authoritative": unknown_lane == 0 and boundary_conflicts == 0,
+        "reconciled_within_supplied_options_snapshot": unknown_lane == 0 and boundary_conflicts == 0,
         "cost_model": "recorded scanner ASK entry / BID exit; commissions excluded",
         "warning": "unpriced closed options invalidate complete P&L; structural WIN is not necessarily financial profit",
     }
@@ -323,7 +323,9 @@ def build_report(journal_dir: Path, options_db: Path, options_epochs: Path,
                    "options_snapshot": str(options_db), "options_epoch_registry": str(options_epochs)},
         "futures": futures_report(rows, changes=_futures_changes(futures_changes)),
         "options": options_report(options_db, options_epochs),
-        "complete_evidence": malformed == 0,
+        "parse_complete": malformed == 0,
+        "lifetime_source_coverage_verified": False,
+        "source_coverage_warning": "Input history and epoch version coverage must be independently verified before declaring since-inception performance.",
         "interpretation": "actual/demo futures and ACTIVE options are separate paper-ledger populations; "
                           "shadow observer ticks are not money or tradable fills; "
                           "pre/post changes are descriptive cohorts, never causal improvement claims",
@@ -340,9 +342,9 @@ def main(argv: list[str] | None = None) -> int:
     report = build_report(args.journal_dir, args.options_db, args.options_epochs, args.futures_changes)
     print(json.dumps(report, indent=2, sort_keys=True))
     # Partial/unreconciled input refuses a success status; JSON remains available for triage.
-    ok = (report["complete_evidence"] and report["futures"]["pnl_authoritative"]
+    ok = (report["parse_complete"] and report["futures"]["reconciled_within_supplied_journals"]
           and report["futures"]["paper_trade_lifetime"]["pnl_complete"]
-          and report["options"]["pnl_authoritative"] and report["options"]["lifetime_active"]["pnl_complete"])
+          and report["options"]["reconciled_within_supplied_options_snapshot"] and report["options"]["lifetime_active"]["pnl_complete"])
     return 0 if ok else 2
 
 
