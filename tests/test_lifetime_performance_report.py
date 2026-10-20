@@ -50,10 +50,10 @@ def _journal_fixture(tmp_path):
     earlier = [
         {"decision": "TRADE", "ts": "2026-09-15T10:00:00Z", "instrument": "MNQ",
          "paper_order_id": "a", "risk_check": {"result": "APPROVED"},
-         "setup": {"strategy": "orb_reclaim"}},
+         "setup": {"strategy": "orb_reclaim", "direction": "LONG", "contracts": 1}},
         {"decision": "TRADE", "ts": "2026-09-16T10:00:00Z", "instrument": "MES",
          "paper_order_id": "b", "risk_check": {"result": "APPROVED"},
-         "setup": {"strategy": "vwap_hold"}},
+         "setup": {"strategy": "vwap_hold", "direction": "LONG", "contracts": 1}},
         {"decision": "TRADE", "ts": "2026-09-16T11:00:00Z", "instrument": "MNQ",
          "paper_order_id": "open", "risk_check": {"result": "APPROVED"},
          "setup": {"strategy": "orb_reclaim"}},
