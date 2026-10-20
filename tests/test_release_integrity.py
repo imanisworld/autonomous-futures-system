@@ -119,6 +119,43 @@ def test_extra_root_module_fails(tmp_path):
     assert report["extra_runtime_files"] == ["settings.py"]
 
 
+@pytest.mark.parametrize(
+    "unexpected",
+    [
+        "newpkg/__init__.py",
+        "newpkg/sub/mod.py",
+        "newpkg/__pycache__/newpkg.cpython-313.pyc",
+    ],
+)
+def test_unlisted_top_level_runtime_folder_fails_closed(tmp_path, monkeypatch, unexpected):
+    """An undeployed package can run without a manifest-listed import root."""
+    _make_release(tmp_path)
+    _pin(monkeypatch, tmp_path)
+    _write(tmp_path, unexpected, "unexpected runtime bytes\n")
+    report = verify_release(repo_root=tmp_path)
+    assert report["ok"] is False
+    assert report["status"] == "FAIL"
+    assert unexpected in report["extra_runtime_files"]
+
+
+def test_unlisted_top_level_plain_text_is_not_runtime_drift(tmp_path, monkeypatch):
+    _make_release(tmp_path)
+    _pin(monkeypatch, tmp_path)
+    _write(tmp_path, "notes/readme.txt", "Operator notes only\n")
+    report = verify_release(repo_root=tmp_path)
+    assert report["ok"] is True
+    assert report["extra_runtime_files"] == []
+
+
+def test_existing_listed_runtime_package_remains_clean(tmp_path, monkeypatch):
+    _make_release(tmp_path)
+    _add_shipped(tmp_path, {"newpkg/__init__.py": "SHIPPED = True\n"})
+    _pin(monkeypatch, tmp_path)
+    report = verify_release(repo_root=tmp_path)
+    assert report["ok"] is True
+    assert report["extra_runtime_files"] == []
+
+
 def test_extra_scan_ignores_non_runtime_and_flags_pycache(tmp_path, monkeypatch):
     _make_release(tmp_path)
     _write(tmp_path, "webhook/__pycache__/junk.py", "x = 1\n")
