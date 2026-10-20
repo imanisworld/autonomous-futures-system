@@ -106,7 +106,7 @@ def _totals(rows: list[dict], *, closed: frozenset[str] = CLOSED) -> dict:
         "priced_closed": len(prices),
         "unpriced_closed": missing,
         "open": sum(r["status"] == "OPEN" for r in rows),
-        "other_or_non_outcome": sum(r["status"] not in closed and r["status"] != "OPEN" for r in rows),
+        "other_or_non_outcome": len(rows) - len(finished) - sum(r["status"] in {"OPEN", "PENDING"} for r in rows),
         "financial_wins": sum(p > 0 for p in prices),
         "financial_losses": sum(p < 0 for p in prices),
         "financial_breakeven": sum(p == 0 for p in prices),
