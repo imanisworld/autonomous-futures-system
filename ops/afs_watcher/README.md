@@ -177,3 +177,19 @@ timedatectl commands are rejected by the watcher's command guard.
 The existing sanctioned deploy already synchronizes `watcher.py`, so this
 change requires no new deploy artifact. It remains repo-only until a separately
 approved sanctioned promote/restart places the new watcher on the VPS.
+
+
+## Discord memory-recovery confirmation (source-only; deploy separately)
+
+For dynamic memory WARNINGs and fixed swap/growth WARNINGs, only the Discord
+recovery card waits for three consecutive watcher checks without that WARNING.
+A WARNING that returns before confirmation cancels the pending recovery so
+brief threshold flapping no longer generates alternating WARNING/RECOVERED
+cards. First WARNING messages, critical/BLOCKED alerts, resource warnings,
+memory sampling, durable event evidence, and runtime memory risk gates are
+unchanged. Do not represent an unconfirmed recovery as healthy in Discord.
+
+The watcher is installed separately from the trading release. Any future
+watcher update needs the exact installed-source comparison, targeted tests,
+read-only proof of the current warning behavior, and a separately approved
+watcher-only installation. No automatic VPS changes are authorized.

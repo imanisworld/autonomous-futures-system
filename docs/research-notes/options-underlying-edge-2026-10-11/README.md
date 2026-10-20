@@ -2,6 +2,8 @@
 
 Source-only research. No collector change, no trading authority, and no options-profitability claim.
 
+**Ledger integrity correction (2026-10-18):** This screen ran before any governing trial registration and is now recorded retrospectively as `UNREGISTERED_ATTEMPT` / `INVALID_EVIDENCE` in `docs/research-trial-ledger.jsonl` (`T-2026-10-11-options-underlying-edge-screen-01`). The results, episodes, verifier, and historical operator choices below are unchanged source-only provenance. Reproduced calculations do not satisfy register-before-evidence, and these figures cannot support a strategy verdict, options expectancy, or promotion gate. See `docs/research-evidence/T-2026-10-11-options-underlying-edge-screen-01/result.md`. No rerun or retroactive preregistration is authorized.
+
 Operator decision after the screen:
 
 | Strategy | Decision | Reason |

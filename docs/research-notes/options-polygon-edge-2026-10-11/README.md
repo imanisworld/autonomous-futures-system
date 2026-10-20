@@ -33,7 +33,14 @@ The uncommitted 2026-10-11 session closeout recorded an operator verdict on this
 
 It also said that beating the losing baseline is not an edge, that the definitions should not be retuned, and that no options test should follow.
 
-That verdict was not confirmed again for this note. It also conflicts with the decision table in `docs/options-current-state-handoff.md`, which keeps failed-break **KEEP FOR RESEARCH** and compression **REJECT**. The handoff stays the authority until the operator reconciles the two.
+That verdict was not confirmed again for this note.
+
+Like the #1222 screen, this run was scored without a preregistration in the shared trial ledger. Under the 2026-10-18 governance correction (#1228), #1222 is recorded as `UNREGISTERED_ATTEMPT` / `INVALID_EVIDENCE`. This run has the same status:
+
+- Its numbers are historical research notes only.
+- They are not an Inventory, handoff or promotion evidence claim.
+
+No ledger row has been added for this run. Recording one is an operator decision.
 
 ## Dataset and reproduction
 

@@ -149,14 +149,13 @@ COLLECTORS: tuple[Collector, ...] = (
         note="OPEN-gated; silence here also means zero eligible candidates",
         session="us_equity",
     ),
-    # options_companion is intentionally disabled in the current system.
-    # Its historical SQLite file remains for review/weekly reporting, but there
-    # is no producer to monitor. If that lane is ever explicitly re-enabled,
-    # re-register it here as part of that activation change.
+    # options_companion and its companion_daily.log report are intentionally
+    # disabled. Their historical files remain available for review but are not
+    # freshness obligations. Explicitly re-register only if their producer and
+    # schedule are independently reactivated and verified.
     # --- scheduled reports ----------------------------------------------
     Collector("health digest", "file", "health_digest_latest.json", 1560),
     Collector("proof backup", "file", "proof_backup.log", 1560),
-    Collector("companion daily", "file", "companion_daily.log", 4320),
     # RETIRED 2026-09-16: ``Collector("overnight watch", "file",
     # "overnight_watch_summary.log", 60)``.  The producer was a legacy VPS-only
     # script (/root/afs-shared/ops_overnight_watch.py, not in this repo) that
