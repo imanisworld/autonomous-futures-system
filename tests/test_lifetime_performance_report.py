@@ -184,3 +184,17 @@ def test_timeout_is_not_ignored():
     assert result["closed"] == 2
     assert result["unpriced_closed"] == 1
     assert result["complete_pnl_usd"] is None
+
+def test_independent_price_math_and_fee_status():
+    assert rep._futures_reprice(
+        {"instrument": "MNQ", "setup": {"direction": "SHORT", "contracts": 2}},
+        {"entry_price": 20000, "exit_price": 20010, "contracts": 2}) == -40.0
+    assert rep._options_reprice(
+        {"option_mark": 2, "contracts": 2}, {"exit_mark": 1.5}) == -100.0
+    report = rep._totals([{"status": "TIMEOUT", "pnl_usd": -40,
+                           "recorded_pnl_usd": 999}])
+    assert report["recorded_pnl_discrepancies"] == 1
+    assert report["priced_subtotal_usd"] == -40
+    assert report["complete_pnl_usd"] is None
+    assert report["fees_included"] is False
+    assert report["net_after_fees_usd"] is None
