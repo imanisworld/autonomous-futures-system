@@ -1,12 +1,12 @@
 # AFS Discord notification consolidation — staged operator handoff (2026-10-19 ET)
 
-**Decision:** Source-only cleanup now, separately approved VPS/Discord cutover later. No trading, broker, risk, evidence collection, release, secret, or service mutation is authorized by this note.
+**Decision:** Source-only cleanup now. The operator's standing release-integrity gate is an absolute blocker: **NO DEPLOYMENT, SERVICE RESTART, RELEASE PROMOTION, OR VPS CUTOVER until the existing deployed release-integrity violation has been fixed and independently verified.** GitHub source merges do not waive that gate. Claude may conduct read-only VPS investigation in the meantime. No trading, broker, risk, evidence collection, release, secret, or service mutation is authorized by this note.
 
 ## Evidence and authority
 
-- Basis: read-only repository, VPS and Discord audit, Oct 6–19, 2026; current-state checks Oct 19 evening. The audit found the active futures release `94a71bdbb975`, options scanner directory `47ae01acdbed`, and remote repository main `a04bd05b54ff` **at the time of that audit**. Re-read all three before any later VPS action.
-- Observed: 1,692 successful watcher sends (1,141 recovery, 325 WARNING, 164 critical-memory) in the 14-day period. These are send counts, not proof all incidents were benign.
-- Observed: Oct 12–19: eight daily drift alarms concerning a real unmanifested Python bytecode file under the deployed release. Preserve the drift detector. Investigate the writer, release-state integrity and fix method separately; no automatic reinstall/deletion.
+- Basis: **ChatGPT's October 19 notification audit summary**, covering reported repository/VPS/Discord observations for October 6–19, 2026. **The counts and runtime observations in that summary have not been independently checked against raw VPS logs or Discord delivery records for this document.** The summary names futures release `94a71bdbb975`, options-scanner directory `47ae01acdbed`, and remote repository main `a04bd05b54ff` as of that audit, not as current verified runtime state. Re-read source, box, and routes before any later VPS action.
+- **Unverified notification counts from ChatGPT's audit:** the audit reported **1,692** successful watcher sends during October 6–19 and specified **1,141** memory recoveries, **325** memory warnings, and **164** critical-memory alerts. The named categories sum to **1,630**, leaving a **62-message discrepancy** relative to the claimed total. These three categories may be non-exhaustive, but their relationship to the total was not demonstrated. **Do not treat 1,692, 1,630, or individual category counts as independently verified until raw logs are reconciled, duplicate stdout is excluded, and delivery records are checked.**
+- **Unverified audit finding / hard-stop blocker:** ChatGPT's audit reported eight daily drift alarms (October 12–19) concerning an unmanifested Python bytecode file under the deployed release. Preserve the drift detector. Investigate the writer, compare the deployed release to its signed/expected manifest, correct the cause, and independently prove integrity restored. **No deployment, promotion, or service restart before that proof.** No automatic reinstall/deletion.
 - Observed: six scheduled failures (Oct 12–19) of `afs-forward-lanes-daily-proof`, with no proven independent Discord escalation. The disabled six-micro timer and options binding failure must be interpreted correctly before alerting or changing any collector.
 - Observed: seven options-scanner database-lock exceptions without verified delivery of corresponding error notices. Confirm severity and existing routing rather than assuming these events did or did not interrupt collection.
 - Observed: legacy `scripts.weekly_review` jobs ran Oct 9/16 and each reported `posted to Discord: False`; its options component reads the old companion ledger. Compare unique weekly metrics/artifacts before removing the installed cron.
@@ -35,23 +35,26 @@ Reuse/rename existing Discord channels where possible. A three-feed target does 
 
 ## Source-only work / review queue
 
-1. [Draft PR #1231](https://github.com/imanisworld/autonomous-futures-system/pull/1231): retire obsolete `companion daily` census registration, regression test; **installed pinned paper-reporter unaffected** until separate proof + repin.
-2. [Draft PR #1232](https://github.com/imanisworld/autonomous-futures-system/pull/1232): confirmation before dynamic/fixed memory WARNING recovery cards, tests; **watcher independently installed** and unaffected until separately approved update.
+1. [Merged PR #1231](https://github.com/imanisworld/autonomous-futures-system/pull/1231) (`852b0141` squash): retire obsolete `companion daily` census registration, regression test; **installed pinned paper-reporter unaffected**; re-pin blocked by release-integrity hard stop.
+2. [Merged PR #1232](https://github.com/imanisworld/autonomous-futures-system/pull/1232) (`3354d3e1` squash): confirmation before dynamic/fixed memory WARNING recovery cards, tests; **watcher independently installed** and unaffected; service restart/update blocked by release-integrity hard stop.
 3. Continue evaluation of `scripts.weekly_review` against active weekly paper-collection, shadow P&L, options P&L. No premature removal of a unique evidence field.
 4. No forward-proof failure escalation change until latest proof JSON/service state distinguishes real breaks from disabled-by-design six-micro and source-binding mismatches; no automatic enabling of collectors.
 5. No DB-lock alarm addition until errors are classified for actionable failure vs normal busy retry and existing message/health coverage is checked.
 
-## Claude handoff — only after source PR review and operator GO
+## Claude handoff — read-only now; all deployment/restart actions blocked by unresolved release-integrity violation
 
-**Stage A — READ ONLY / no mutation:**
+**Stage A — READ ONLY / no mutation (allowed while integrity is unresolved):**
 - Establish exact authorized VPS identity, deployed source SHA, dedicated installed watcher/paper reporter hashes, live-safe settings, service health, and paper-only/no-order posture without printing credentials.
 - Enumerate *all* active senders and actual webhook destination IDs using irreversible redacted fingerprints. Include systemd, cron, nested script fallbacks, `DISCORD_ROUTE_*`, legacy `DISCORD_WEBHOOK_URL`, `DISCORD_OPTIONS_*`, and `OPTIONS_SCANNER_DISCORD_WEBHOOK_URL`.
 - Produce source -> effective env -> channel -> active schedule -> last successful delivery -> missing/failed delivery -> unique coverage map. Verify upsert edit activity by message edit times. Distinguish present code from installed activation.
-- Independently confirm weekly-review field coverage, retired companion census source/pin, watcher memory warning recurrence and severity, integrity-alarm writer, forward-proof failing invariants, scanner lock exceptions and current escalation.
+- Independently confirm weekly-review field coverage, retired companion census source/pin, watcher memory warning recurrence and severity, integrity-alarm writer, forward-proof failing invariants, scanner lock exceptions and current escalation. Reconcile the claimed watcher counts: 1,141 + 325 + 164 = 1,630, versus claimed 1,692, with 62 unaccounted for by those labels. Confirm whether these are mutually exclusive categories and compare against raw send/delivery records.
 - Output a precise no-execution cutover/rollback procedure and unresolved blockers; **STOP**.
 
-**Stage B — controlled operations, separately approved:**
-- Require exact reviewed commits, passing targeted and required CI, approved source/installed pin diff, no active broker positions/orders when a service restart is proposed, and a proven rollback copy/mapping.
+**Stage B — FUTURE ONLY; BLOCKED until the release-integrity violation has been fixed and independently verified, with separate operator GO:**
+
+- **Hard gate:** Claude MUST STOP before any deploy, promote, repin, service restart, cron/timer modification, webhook/env configuration mutation, or Discord cutover while the deployed release-integrity violation remains unresolved. An operator's approval of source PRs is **not** approval to bypass the integrity gate. Read-only inspection and documentation may proceed; report findings and wait.
+- Stage B may be considered only after a reviewer confirms the integrity root cause and remediation from fresh VPS release-manifest/provenance checks and records explicit **INTEGRITY RESTORED** evidence. If the proof is missing, conflicting, or stale, the decision remains **WAIT / NO RUN**.
+- After the integrity hard gate has passed and a new explicit operator GO is provided: require exact reviewed commits, passing targeted and required CI, approved source/installed pin diff, no active broker positions/orders when a service restart is proposed, and a proven rollback copy/mapping.
 - Stage redacted webhook mapping to three destinations without deleting original channel history or changing trading/collection code. Preserve required routes and legacy safety fallbacks.
 - Apply only the authorized reporter re-pin / watcher update / cron retirement / webhook configuration changes, one independent component at a time. Do not bundle with futures strategy release or options scanner release.
 - Verify error/failure/recovery delivery and correct destination under controlled tests, including critical-memory, release-drift, broker/ingestion, feed-gap, collector outage, and final-versus-preliminary corrections. Ensure Discord outages cannot interrupt the system or block trading safety logic.
@@ -60,6 +63,7 @@ Reuse/rename existing Discord channels where possible. A three-feed target does 
 
 ## Acceptance criteria / definition of done
 
+- Independently verified resolution of the deployed release-integrity violation **before** any service restart or deployment; while unresolved the project remains **WAIT / NO RUN**.
 - Three comprehensible active Discord destination feeds; all critical logical routes verified end to end, including fallback routes.
 - No false retired companion DEAD report. Historical artifacts still accessible.
 - No repeat recovery flood attributable to single-check memory threshold flapping. Genuine recurring critical incidents remain visible and are investigated.
@@ -68,4 +72,4 @@ Reuse/rename existing Discord channels where possible. A three-feed target does 
 - Retired senders do not run, and every remaining scheduled sender has an owner, purpose and delivery receipt.
 - One complete natural weekly reporting cycle of evidence, independently reviewed; no live execution, contract/risk change, strategy edit, or unsanctioned service change.
 
-**Status:** HANDOFF PREPARED / NO VPS ACTION. Source PRs are separately reviewable, not evidence of deployment.
+**Status:** WAIT / INTEGRITY BLOCKER. GitHub source PRs #1231 and #1232 were merged, but installed VPS services are unchanged; #1233 remains documentation-only. **No deploy, restart, or VPS cutover until the integrity problem is fixed and independently verified.** Counts above are attributed to ChatGPT's audit and remain unverified.
