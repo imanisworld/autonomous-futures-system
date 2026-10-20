@@ -130,7 +130,10 @@ def _futures_segment(row: dict, changes: list[dict]) -> str:
     instant = _time(row.get("ts"))
     if instant is None:
         return "MISSING_ENTRY_TIMESTAMP"
-    relevant = [x for x in changes if x["instrument"] in (row["ticker"], "*") and x["_time"] <= instant]
+    eligible = [x for x in changes if x["instrument"] in (row["ticker"], "*")]
+    if not eligible:
+        return "CHANGE_BOUNDARIES_UNVERIFIED"
+    relevant = [x for x in eligible if x["_time"] <= instant]
     return relevant[-1]["label"] if relevant else "BEFORE_FIRST_DOCUMENTED_CHANGE"
 
 
