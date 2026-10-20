@@ -313,3 +313,10 @@ def test_cohort_comparison_stats_refuse_unknown_exit_order():
     assert rep._totals(rows)["realized_gross_closed_trade_max_drawdown_usd"] is None
     rows[1]["closed_at_utc"] = rows[0]["closed_at_utc"]
     assert rep._totals(rows)["realized_gross_closed_trade_max_drawdown_usd"] is None
+
+
+def test_no_closed_trades_cannot_claim_zero_realized_drawdown():
+    result = rep._totals([{"status": "OPEN", "pnl_usd": None}])
+    assert result["closed"] == 0
+    assert result["gross_avg_per_closed_usd"] is None
+    assert result["realized_gross_closed_trade_max_drawdown_usd"] is None
