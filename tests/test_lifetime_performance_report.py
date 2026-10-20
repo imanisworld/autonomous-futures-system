@@ -245,3 +245,71 @@ def test_cancelled_requires_proven_no_fill_to_exclude():
     assert uncertain["closed"] == 1
     assert uncertain["unpriced_closed"] == 1
     assert uncertain["pnl_complete"] is False
+
+
+def test_successful_calculations_cannot_claim_verified_inception(monkeypatch, capsys, tmp_path):
+    # Calculation completeness on supplied copies is not historical coverage proof.
+    synthetic = {
+        "parse_complete": True,
+        "since_inception_verified": False,
+        "lifetime_source_coverage_verified": False,
+        "futures": {"reconciled_within_supplied_journals": True,
+                    "paper_trade_lifetime": {"pnl_complete": True}},
+        "options": {"reconciled_within_supplied_options_snapshot": True,
+                    "lifetime_active": {"pnl_complete": True}},
+    }
+    monkeypatch.setattr(rep, "build_report", lambda *args: synthetic)
+    result = rep.main(["--journal-dir", str(tmp_path), "--options-db",
+                       str(tmp_path / "synthetic.db")])
+    output = json.loads(capsys.readouterr().out)
+    assert output["since_inception_verified"] is False
+    assert result == 2
+
+
+def test_options_sell_to_open_blocks_buy_premium_arithmetic(tmp_path):
+    db, epochs = _options_fixture(tmp_path)
+    with sqlite3.connect(db) as con:
+        selected = {"paper_evidence_lane": "ACTIVE", "option_mark": 2,
+                    "contracts": 1, "opening_side": "SELL_TO_OPEN"}
+        con.execute("UPDATE options_shadow_journal SET selected_contract_json=? WHERE id=20",
+                    (json.dumps(selected),))
+    actual = rep.options_report(db, epochs)
+    assert actual["sell_to_open_unsupported"] == 1
+    assert actual["active_by_ticker"]["SPY"]["unpriced_closed"] == 1
+    assert actual["active_by_ticker"]["SPY"]["complete_pnl_usd"] is None
+    assert actual["reconciled_within_supplied_options_snapshot"] is False
+    assert rep._opening_side({"option_type": "PUT"}, {"direction": "SHORT"}) == "UNSTAMPED_BUY_ONLY_ASSUMPTION"
+    assert rep._opening_side({"entry_side": "BUY_TO_OPEN"}, {}) == "BUY_TO_OPEN"
+
+
+def test_journal_account_mode_is_not_assumed_paper():
+    assert rep._execution_mode({}) == "MODE_UNSTAMPED"
+    assert rep._execution_mode({"account_mode": "paper"}) == "PAPER"
+    assert rep._execution_mode({"context": {"account_mode": "demo"}}) == "DEMO"
+    assert rep._execution_mode({"broker_mode": "live"}) == "LIVE_EXCLUDED"
+    d = {"decision": "TRADE", "paper_order_id": "L", "instrument": "MNQ",
+         "account_mode": "LIVE", "risk_check": {"result": "APPROVED"},
+         "setup": {"direction": "LONG"}}
+    o = {"type": "OUTCOME", "outcome": {"paper_order_id": "L", "result": "WIN",
+         "entry_price": 20000, "exit_price": 20050, "contracts": 1, "pnl_dollars": 100}}
+    result = rep.futures_report([d, o])
+    assert result["explicit_live_rows_excluded_from_paper"] == 1
+    assert result["paper_trade_lifetime"]["records"] == 0
+    assert result["reconciled_within_supplied_journals"] is False
+
+
+def test_cohort_comparison_stats_refuse_unknown_exit_order():
+    rows = [{"status": "WIN", "pnl_usd": 100, "recorded_pnl_usd": 100,
+             "ts": "2026-09-01T13:00:00Z", "closed_at_utc": "2026-09-01T14:00:00Z"},
+            {"status": "LOSS", "pnl_usd": -75, "recorded_pnl_usd": -75,
+             "ts": "2026-09-02T13:00:00Z", "closed_at_utc": "2026-09-02T14:00:00Z"}]
+    t = rep._totals(rows)
+    assert t["closed"] == 2
+    assert t["gross_avg_per_closed_usd"] == 12.5
+    assert t["priced_win_rate_percent"] == 50
+    assert t["realized_gross_closed_trade_max_drawdown_usd"] == 75
+    assert t["entry_utc_span"]["distinct_utc_dates"] == 2
+    rows[1]["closed_at_utc"] = None
+    assert rep._totals(rows)["realized_gross_closed_trade_max_drawdown_usd"] is None
+    rows[1]["closed_at_utc"] = rows[0]["closed_at_utc"]
+    assert rep._totals(rows)["realized_gross_closed_trade_max_drawdown_usd"] is None
