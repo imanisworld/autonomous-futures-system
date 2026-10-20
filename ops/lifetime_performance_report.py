@@ -93,6 +93,23 @@ def _options_reprice(selected: dict, outcome: dict) -> float | None:
     return round((exit_ - entry) * 100 * int(count), 2)
 
 
+def _gross_closed_trade_drawdown(rows: list[dict]) -> float | None:
+    """Peak-to-trough gross closed-outcome curve, not account-equity drawdown."""
+    if not rows:
+        return None  # no closed trades is no observed drawdown evidence
+    timed = [(_time(row.get("closed_at_utc")), _money(row.get("pnl_usd"))) for row in rows]
+    if any(stamp is None or pnl is None for stamp, pnl in timed):
+        return None
+    if len({stamp for stamp, _ in timed}) != len(timed):
+        return None  # unknown intratimestamp order must not alter drawdown
+    balance = peak = max_drawdown = 0.0
+    for _, pnl in sorted(timed, key=lambda item: item[0]):
+        balance += pnl
+        peak = max(peak, balance)
+        max_drawdown = max(max_drawdown, peak - balance)
+    return round(max_drawdown, 2)
+
+
 def _totals(rows: list[dict], *, closed: frozenset[str] = CLOSED) -> dict:
     finished = [r for r in rows if r["status"] not in {"OPEN", "PENDING", "NO_FILL", "REJECTED", *NON_OUTCOMES}]
     amounts = [_money(r.get("pnl_usd")) for r in finished]
@@ -100,6 +117,13 @@ def _totals(rows: list[dict], *, closed: frozenset[str] = CLOSED) -> dict:
     missing = len(amounts) - len(prices)
     missing_recorded = sum(_money(row.get("recorded_pnl_usd")) is None for row in finished)
     mismatch = sum(abs(_money(row["pnl_usd"]) - _money(row["recorded_pnl_usd"])) > 0.011 for row in finished if _money(row.get("pnl_usd")) is not None and _money(row.get("recorded_pnl_usd")) is not None)
+    complete = not (missing or mismatch or missing_recorded)
+    entry_stamps = [_time(row.get("ts")) for row in rows]
+    entry_span = None if not rows or any(stamp is None for stamp in entry_stamps) else {
+        "first_utc": min(entry_stamps).isoformat(),
+        "last_utc": max(entry_stamps).isoformat(),
+        "distinct_utc_dates": len({stamp.date() for stamp in entry_stamps}),
+    }
     return {
         "records": len(rows),
         "closed": len(finished),
@@ -110,6 +134,11 @@ def _totals(rows: list[dict], *, closed: frozenset[str] = CLOSED) -> dict:
         "financial_wins": sum(p > 0 for p in prices),
         "financial_losses": sum(p < 0 for p in prices),
         "financial_breakeven": sum(p == 0 for p in prices),
+        "gross_avg_per_closed_usd": round(sum(prices) / len(prices), 2) if complete and prices else None,
+        "priced_win_rate_percent": round(100 * sum(p > 0 for p in prices) / len(prices), 2) if complete and prices else None,
+        "realized_gross_closed_trade_max_drawdown_usd": _gross_closed_trade_drawdown(finished) if complete else None,
+        "entry_utc_span": entry_span,
+        "sample_note": "DESCRIPTIVE_ONLY_FURTHER_MULTIMONTH_EVIDENCE_NEEDED",
         "priced_subtotal_usd": round(sum(prices), 2),
         "complete_pnl_usd": round(sum(prices), 2) if not (missing or mismatch or missing_recorded) else None,
         "pnl_complete": not (missing or mismatch or missing_recorded),
@@ -186,6 +215,26 @@ def _futures_segment(row: dict, changes: list[dict]) -> str:
     return relevant[-1]["label"] if relevant else "BEFORE_FIRST_DOCUMENTED_CHANGE"
 
 
+def _execution_mode(row: dict) -> str:
+    """Read explicit journal mode; absent fields cannot prove paper provenance."""
+    context = _obj(row.get("context"))
+    for field in ("account_mode", "execution_mode", "broker_mode", "trade_mode"):
+        value = row.get(field)
+        if value is None:
+            value = context.get(field)
+        if value is None:
+            continue
+        mode = str(value).upper().strip()
+        if mode in ("PAPER", "SIM", "SIMULATED"):
+            return "PAPER"
+        if mode in ("DEMO", "SANDBOX"):
+            return "DEMO"
+        if mode in ("LIVE", "REAL", "PRODUCTION"):
+            return "LIVE_EXCLUDED"
+        return "UNRECOGNIZED_MODE"
+    return "MODE_UNSTAMPED"
+
+
 def futures_report(journal_rows: list[dict], *, changes: list[dict] | None = None) -> dict:
     """Exact cross-file paper_order_id join. Never FIFO-pair by market or date."""
     changes = changes or []
@@ -200,7 +249,7 @@ def futures_report(journal_rows: list[dict], *, changes: list[dict] | None = Non
         if row.get("type") == "OUTCOME":
             out = _obj(row.get("outcome"))
             oid = out.get("paper_order_id")
-            outcomes[str(oid) if oid else ""].append(out)
+            outcomes[str(oid) if oid else ""].append({**out, "_journal_close_event_utc": row.get("ts")})
         if row.get("type") == "SHADOW_OUTCOME":
             cid = row.get("candidate_key") or row.get("candidate_id")
             if not cid:
@@ -212,11 +261,16 @@ def futures_report(journal_rows: list[dict], *, changes: list[dict] | None = Non
     unresolved = 0
     invalid_identity = len(decisions.pop("", []))
     ambiguous = 0
+    excluded_live = 0
     for oid, entries in decisions.items():
         if len(entries) != 1 or len(outcomes.get(oid, [])) > 1:
             ambiguous += len(entries)
             continue
         trade = entries[0]
+        execution_mode = _execution_mode(trade)
+        if execution_mode == "LIVE_EXCLUDED":
+            excluded_live += 1
+            continue
         outcomes_here = outcomes.get(oid, [])
         inline = _obj(trade.get("outcome"))
         if inline.get("result") and outcomes_here:
@@ -230,11 +284,13 @@ def futures_report(journal_rows: list[dict], *, changes: list[dict] | None = Non
         ticker = str(trade.get("instrument") or "UNKNOWN")
         item = {
             "ticker": ticker,
+            "execution_mode": execution_mode,
             "strategy": str(setup.get("strategy") or "UNSPECIFIED"),
             "status": "NO_FILL" if result == "CANCELLED" and exit_.get("no_fill_reason") and exit_.get("exit_price") is None else result,
             "pnl_usd": _futures_reprice(trade, exit_) if result not in ("OPEN", "PENDING", "NO_FILL") else None,
             "recorded_pnl_usd": exit_.get("pnl_dollars"),
             "ts": trade.get("ts"),
+            "closed_at_utc": exit_.get("resolved_at") or exit_.get("_journal_close_event_utc"),
         }
         item["change_period"] = _futures_segment(item, changes)
         clean.append(item)
@@ -263,6 +319,10 @@ def futures_report(journal_rows: list[dict], *, changes: list[dict] | None = Non
         }
     return {
         "paper_trade_lifetime": _totals(clean, closed=FUTURES_RESOLVED),
+        "journal_by_execution_mode": _groups(clean, "execution_mode", closed=FUTURES_RESOLVED),
+        "unstamped_or_unrecognized_mode_rows": sum(row["execution_mode"] in
+            ("MODE_UNSTAMPED", "UNRECOGNIZED_MODE") for row in clean),
+        "explicit_live_rows_excluded_from_paper": excluded_live,
         "paper_by_ticker": _groups(clean, "ticker", closed=FUTURES_RESOLVED),
         "paper_by_change": _groups(clean, "change_period", closed=FUTURES_RESOLVED),
         "paper_by_ticker_and_change": {
@@ -278,7 +338,7 @@ def futures_report(journal_rows: list[dict], *, changes: list[dict] | None = Non
         "shadow_observations_by_ticker": shadow_summary,
         "shadow_unidentified_excluded": shadow_unidentified,
         "change_source": "operator-supplied external documented boundaries" if changes else "NO VERIFIED FUTURES CHANGE BOUNDARIES",
-        "reconciled_within_supplied_journals": invalid_identity == 0 and ambiguous == 0 and orphan == 0,
+        "reconciled_within_supplied_journals": invalid_identity == 0 and ambiguous == 0 and orphan == 0 and excluded_live == 0 and all(row["execution_mode"] not in ("MODE_UNSTAMPED", "UNRECOGNIZED_MODE") for row in clean),
     }
 
 
@@ -301,6 +361,28 @@ def _epochs(path: Path) -> list[dict]:
     return boundaries
 
 
+def _opening_side(selected: dict, inputs: dict) -> str:
+    """Inspect only opening-order intent; bearish signals do not mean sold puts."""
+    observed = []
+    for field in ("position_intent", "entry_side", "opening_side", "open_side",
+                  "opening_action", "entry_action"):
+        value = selected.get(field)
+        if value is None:
+            value = inputs.get(field)
+        if value is None:
+            continue
+        side = str(value).upper().strip().replace("-", "_").replace(" ", "_")
+        if side in ("BUY_TO_OPEN", "BTO", "BUY"):
+            observed.append("BUY_TO_OPEN")
+        elif side in ("SELL_TO_OPEN", "STO", "SELL", "SHORT"):
+            observed.append("SELL_TO_OPEN")
+        else:
+            observed.append("UNRECOGNIZED_EXPLICIT_OPEN_SIDE")
+    if not observed:
+        return "UNSTAMPED_BUY_ONLY_ASSUMPTION"
+    return observed[0] if len(set(observed)) == 1 else "CONFLICTING_OPEN_SIDE"
+
+
 def options_report(db_path: Path, registry: Path) -> dict:
     if not db_path.is_file():
         raise FileNotFoundError(f"missing options snapshot: {db_path}")
@@ -313,6 +395,9 @@ def options_report(db_path: Path, registry: Path) -> dict:
     active: list[dict] = []
     counterfactual = 0
     unknown_lane = 0
+    nonlong_open_side = 0
+    explicit_sell_to_open = 0
+    unstamped_open_side = 0
     boundary_conflicts = 0
     prior_rows = 0
     for rid, ts, ticker, status, input_json, contract_json, result_json in db_rows:
@@ -326,6 +411,13 @@ def options_report(db_path: Path, registry: Path) -> dict:
         if lane != "ACTIVE":
             unknown_lane += 1
             continue
+        open_side = _opening_side(selected, inputs)
+        if open_side == "UNSTAMPED_BUY_ONLY_ASSUMPTION":
+            unstamped_open_side += 1
+        elif open_side != "BUY_TO_OPEN":
+            nonlong_open_side += 1
+            if open_side == "SELL_TO_OPEN":
+                explicit_sell_to_open += 1
         start = _time(ts)
         if start is None:
             boundary_conflicts += 1
@@ -345,8 +437,11 @@ def options_report(db_path: Path, registry: Path) -> dict:
             "ticker": str(ticker or "UNKNOWN"),
             "epoch": epoch,
             "status": str(status or "OPEN").upper(),
-            "pnl_usd": _options_reprice(selected, out),
+            "pnl_usd": _options_reprice(selected, out) if open_side in ("BUY_TO_OPEN", "UNSTAMPED_BUY_ONLY_ASSUMPTION") else None,
             "recorded_pnl_usd": out.get("pnl_dollars"),
+            "opening_side_provenance": open_side,
+            "ts": ts,
+            "closed_at_utc": out.get("resolved_at"),
         })
     return {
         "lifetime_active": _totals(active),
@@ -359,9 +454,12 @@ def options_report(db_path: Path, registry: Path) -> dict:
         "epochs": [{k: x[k] for k in ("name", "first_id", "reason")} | {"start_utc": x["start"].isoformat()} for x in boundaries],
         "counterfactual_excluded": counterfactual,
         "unknown_lane_excluded": unknown_lane,
+        "sell_to_open_unsupported": explicit_sell_to_open,
+        "unrecognized_or_conflicting_open_side": nonlong_open_side - explicit_sell_to_open,
+        "opening_side_unstamped": unstamped_open_side,
         "epoch_boundary_conflicts": boundary_conflicts,
         "before_registered_epochs": prior_rows,
-        "reconciled_within_supplied_options_snapshot": unknown_lane == 0 and boundary_conflicts == 0,
+        "reconciled_within_supplied_options_snapshot": unknown_lane == 0 and boundary_conflicts == 0 and nonlong_open_side == 0,
         "cost_model": "recorded scanner ASK entry / BID exit; commissions excluded",
         "warning": "unpriced closed options invalidate complete P&L; structural WIN is not necessarily financial profit",
     }
@@ -379,8 +477,18 @@ def build_report(journal_dir: Path, options_db: Path, options_epochs: Path,
         "options": options_report(options_db, options_epochs),
         "parse_complete": malformed == 0,
         "lifetime_source_coverage_verified": False,
-        "source_coverage_warning": "Input history and epoch version coverage must be independently verified before declaring since-inception performance.",
-        "interpretation": "actual/demo futures and ACTIVE options are separate paper-ledger populations; "
+        "execution_provenance_verified": False,
+        "options_open_side_history_verified": False,
+        "since_inception_verified": False,
+        "verification_blockers": [
+            "historical_journal_and_sqlite_coverage_unverified",
+            "futures_account_execution_mode_unverified",
+            "options_historical_buy_only_direction_unverified",
+            "installed_futures_change_boundaries_unverified",
+            "net_fee_schedule_unverified",
+        ],
+        "source_coverage_warning": "Read-only snapshots cannot prove since-inception coverage, execution account mode, historical option buy/sell direction, or net fees without independent operator evidence.",
+        "interpretation": "approved futures journal rows have not been proven paper/demo/live by source metadata; options ACTIVE marks are a separate cohort; "
                           "shadow observer ticks are not money or tradable fills; "
                           "pre/post changes are descriptive cohorts, never causal improvement claims",
     }
@@ -392,23 +500,34 @@ def format_human(report: dict) -> str:
     def dollars(t: dict) -> str:
         value = t["complete_pnl_usd"]
         if value is None:
-            return (f"INCOMPLETE (priced subset ${t['priced_subtotal_usd']:+,.2f}; "
-                    f"{t['unpriced_closed']} unpriced closed)")
+            return (f"INCOMPLETE (gross priced subset ${t['priced_subtotal_usd']:+,.2f}; "
+                    f"{t['unpriced_closed']} unpriced, "
+                    f"{t['recorded_pnl_discrepancies']} price-vs-journal mismatches, "
+                    f"{t['recorded_pnl_missing']} missing recorded P&L)")
         return f"${value:+,.2f} ({t['priced_closed']} priced closed)"
+
+    def comparison(t: dict) -> str:
+        avg = t.get("gross_avg_per_closed_usd")
+        dd = t.get("realized_gross_closed_trade_max_drawdown_usd")
+        return (f" | {t['closed']} closed"
+                f" | avg gross ${avg:+,.2f}" if avg is not None else
+                f" | {t['closed']} closed | avg gross UNKNOWN") + (
+                f" | closed-trade max drawdown ${dd:,.2f}" if dd is not None
+                else " | closed-trade max drawdown UNVERIFIED")
 
     lines = ["LIFETIME PAPER EVIDENCE · READ ONLY",
              "Supplied-file history coverage: NOT YET INDEPENDENTLY VERIFIED",
-             "Futures approved journal outcomes (not broker account balance):"]
+             "Futures approved journal outcomes (execution account provenance requires verification):"]
     for ticker, totals in report["futures"]["paper_by_ticker"].items():
-        lines.append(f"  {ticker}: {dollars(totals)}")
+        lines.append(f"  {ticker}: {dollars(totals)}{comparison(totals)}")
         changes = report["futures"]["paper_by_ticker_and_change"][ticker]
         for change, segment in changes.items():
-            lines.append(f"    {change}: {dollars(segment)}")
+            lines.append(f"    {change}: {dollars(segment)}{comparison(segment)}")
     lines.append("Options ACTIVE paper marks (ASK entry / BID exit; commissions excluded):")
     for ticker, totals in report["options"]["active_by_ticker"].items():
-        lines.append(f"  {ticker}: {dollars(totals)}")
+        lines.append(f"  {ticker}: {dollars(totals)}{comparison(totals)}")
         for epoch, segment in report["options"]["active_by_ticker_and_epoch"][ticker].items():
-            lines.append(f"    {epoch}: {dollars(segment)}")
+            lines.append(f"    {epoch}: {dollars(segment)}{comparison(segment)}")
     lines.append("Futures shadow/observer data: separate hypothetical ticks, NOT account dollars")
     for ticker, item in report["futures"]["shadow_observations_by_ticker"].items():
         lines.append(f"  {ticker}: {item['pnl_ticks_priced_subtotal']:+,.1f} recorded ticks "
@@ -417,7 +536,16 @@ def format_human(report: dict) -> str:
                  f"futures {report['futures']['identity_problems']}; "
                  f"options unclassified {report['options']['unknown_lane_excluded']}, "
                  f"epoch conflicts {report['options']['epoch_boundary_conflicts']}")
+    lines.append("Execution provenance: futures "
+                 f"{report['futures']['unstamped_or_unrecognized_mode_rows']} unstamped mode rows; "
+                 f"{report['futures']['explicit_live_rows_excluded_from_paper']} explicitly live rows excluded.")
+    lines.append("Options opening-side provenance: "
+                 f"{report['options']['opening_side_unstamped']} unstamped, "
+                 f"{report['options']['sell_to_open_unsupported']} sell-to-open, "
+                 f"{report['options']['unrecognized_or_conflicting_open_side']} unsupported/conflicting.")
+    lines.append("Since-inception VERIFIED: NO. Source completeness, account mode and deployed change dates require independent evidence.")
     lines.append("Financial figures are gross before fees; net after fees is UNKNOWN.")
+    lines.append("Closed-trade drawdown is an entry/exit-price gross realized curve only, NOT true account-equity drawdown.")
     lines.append("Do not interpret these data as verified since-inception performance, "
                  "broker-realized P&L, or a causal strategy improvement.")
     return "\n".join(lines)
@@ -433,8 +561,10 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
     report = build_report(args.journal_dir, args.options_db, args.options_epochs, args.futures_changes)
     print(format_human(report) if args.text else json.dumps(report, indent=2, sort_keys=True))
-    # Partial/unreconciled input refuses a success status; JSON remains available for triage.
-    ok = (report["parse_complete"] and report["futures"]["reconciled_within_supplied_journals"]
+    # A copied ledger cannot authenticate historical completeness or account mode.
+    # An internally consistent subtotal therefore never exits as VERIFIED.
+    ok = (report["since_inception_verified"] and report["parse_complete"]
+          and report["futures"]["reconciled_within_supplied_journals"]
           and report["futures"]["paper_trade_lifetime"]["pnl_complete"]
           and report["options"]["reconciled_within_supplied_options_snapshot"] and report["options"]["lifetime_active"]["pnl_complete"])
     return 0 if ok else 2

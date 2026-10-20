@@ -150,4 +150,91 @@ against explicitly authorized, consistent offline evidence copies.
 **Current financial figures: UNKNOWN; no production journal or SQLite data was
 read for this PR.**
 
-AFS-0308 reviewer issues addressed in draft: unexpected exits counted, gross repriced from fill prices and contract quantities, fees excluded/unknown, and new regression cases. Independent re-review and exact-head CI still required; do not merge.
+AFS-0308/AFS-0309: reviewed price-recomputation fixes merged via PR #1234;
+this follow-up PR adds source-provenance and comparison truthfulness only.
+No trading execution, live orders, deployment or service restarts.
+
+## Remaining source-data verification and honest comparison (read-only handoff)
+
+This report can now compute internally consistent **gross** arithmetic against
+copied data but intentionally exits with code 2 because nothing in a local
+file snapshot authenticates an entire historical account from inception.
+`pnl_complete` is limited to the **supplied rows**; it never establishes that
+the ledger covers all days, all accounts, all fills or all released rule versions.
+Review `verification_blockers`, `since_inception_verified=false`,
+`execution_provenance_verified=false` and
+`options_open_side_history_verified=false` before describing any figure.
+
+**Futures:** `account_mode`, `execution_mode`, `broker_mode`, and
+`trade_mode` are checked when explicitly stamped. The report displays
+paper/demo separately and excludes explicitly live rows from its paper/demo
+subtotal. Missing/unknown journal modes are **UNSTAMPED**, not presumed
+paper; no entry in this source can authenticate a broker fill or account by
+itself. Independently correlate order IDs, releases, account identifiers
+(redacted), broker transaction books, and installed source provenance.
+
+**Options:** V1 source is purchased-premium/cash-only, confirmed in
+`alert_ranker/paper_v1.py` and `alert_ranker/account_equity.py`. This is a
+**code-scope observation**, not verification of every historical database row.
+Explicit `SELL_TO_OPEN`, contradictory opening-side metadata and other
+unsupported opening intent are flagged, excluded from buy-only P&L
+arithmetic and make the related totals incomplete. Rows without an explicit
+opening side are counted as **UNSTAMPED BUY-ONLY ASSUMPTION**. Bearish PUT
+purchases and underlying SHORT signals are **not** classified as short-option
+positions on that basis alone. Confirm the historical option contract,
+order intent, quantity, multiplier and opening/closing bid/ask provenance
+before promoting buy-only assumptions to verified facts.
+
+**Comparisons:** Gross average per priced closed outcome, priced win rate,
+entry-date UTC span and realized gross closed-trade drawdown are descriptive
+only. Where closure price, price reconciliation, date or intratimestamp order
+is missing, corresponding statistics remain unavailable. Realized
+closed-trade drawdown is not intratrade MAE, mark-to-market portfolio
+drawdown, broker account equity drawdown, or maximum capital required.
+For **options cash/equity/drawdown** reuse the already-existing
+`alert_ranker/account_equity.py`. For fee/slippage stress reuse the scenarios
+in `alert_ranker/v1_diagnostics.py`. Do not add their independent stress
+estimates to canonical gross ledger dollars or invent a net figure.
+
+### Claude read-only steps once authorized evidence access exists
+
+1. Verify the unresolved release-integrity incident **read-only**. Any
+   installation, promotion, service restart, collector toggle or cutover remains
+   prohibited until the incident is fixed and independently reverified;
+   this report's source merge changes none of that.
+2. Obtain offline-consistent **copies** of all original futures daily journals
+   and the options SQLite ledger including WAL contents. Document source host
+   identity (redacted), archive manifest, hashes, true first/last event,
+   missing/unreadable days, duplicate IDs, and active/completed counts.
+   Never place raw records in GitHub, a public artifact or Discord.
+3. Reconcile the futures order-id join against account/broker transaction
+   evidence to classify paper, demo and live, including no-fill cancels,
+   same-day/cross-day exits, bust/corrections, orphan outcomes and zero-trade
+   days. Preserve any unresolved or duplicated record as a hard failure,
+   not as a zero-dollar trade.
+4. Reconcile all options underlying tickers by unique contract/position,
+   `paper_policy_id`, buying or selling at opening, quantity, actual ask/bid,
+   multiplier, close reason and known unpriced/unclassified outcomes.
+   Check V1-EPOCH-1/2/3 boundaries against **installed scanner version and
+   activation dates**; do not infer from GitHub merge timestamp.
+5. Run the new script only against the authenticated offline input copies.
+   Compare aggregate/ticker/epoch results against
+   `ops/options_daily_pnl_report.py`, the earlier #1071 epoch auditor
+   (separate unmerged scope), existing forward-evidence summaries, and the
+   source event counts. Compare source values to independent repricing; do not
+   dismiss mismatches as fees without evidence.
+6. Obtain documented fee/slippage schedule and execution-price source **for
+   each historical epoch**, or preserve `net_after_fees_usd=null`. Provide a
+   separate scenario table only if the assumptions are openly identified.
+7. Produce a **private**, human-reviewed comparison with each instrument,
+   strategy, change timestamp and reason, priced/unpriced trade counts,
+   gross subtotal, net **UNKNOWN** if costs unverified, average gross trade,
+   realized outcome drawdown (when chronologically provable), existing
+   options mark-to-market drawdown (separately), and time/sample coverage.
+   Keep proposed changes separate from observed outcomes; no causal claims.
+   Respect all MNQ sealed-cohort boundaries when viewing or sampling data.
+
+**Stop condition:** The operator has a documented lifetime coverage census
+and truthful per-ticker/per-change result, with gaps and uncertainty plainly
+marked. No broad rewrite, new scheduled jobs, report posting, or strategy
+tuning is authorized.
