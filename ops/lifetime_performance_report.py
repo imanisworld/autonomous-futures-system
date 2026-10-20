@@ -113,7 +113,11 @@ def _totals(rows: list[dict], *, closed: frozenset[str] = CLOSED) -> dict:
         "priced_subtotal_usd": round(sum(prices), 2),
         "complete_pnl_usd": round(sum(prices), 2) if not (missing or mismatch or missing_recorded) else None,
         "pnl_complete": not (missing or mismatch or missing_recorded),
-        "model": "recorded_paper_pnl_only",
+        "model": "independent_gross_from_exit_and_entry_prices",
+        "recorded_pnl_discrepancies": mismatch,
+        "recorded_pnl_missing": missing_recorded,
+        "fees_included": False,
+        "net_after_fees_usd": None,
     }
 
 
