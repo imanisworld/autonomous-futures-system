@@ -204,6 +204,9 @@ def test_memory_warning_episode_emits_one_recovery_notice(monkeypatch):
     monkeypatch.setattr(w, "_largest_rss_process", lambda: None)
     w.handle_memory_fixed_warnings(state, w.Findings(), _memory_tick())
     w.handle_memory_fixed_warnings(state, w.Findings(), _memory_tick())
+    assert sent == []
+    assert state["memory_fixed_warnings"]["swap_pressure_warning"]["active"] is True
+    w.handle_memory_fixed_warnings(state, w.Findings(), _memory_tick())
     assert len(sent) == 1
     assert sent[0][1].startswith("✅ Server memory is back to normal")
 
@@ -268,3 +271,81 @@ def test_campaign_populations_are_strategy_variant_specific_and_zero_visible():
     assert "**Progress to review:** 0 of 20 trading days, 0 of 30 filled trades (slowest version)" in text
     for internal in ("vwap_hold", "orb_reclaim", "control", "modified", "cand ", "arms"):
         assert internal not in text
+
+
+def test_memory_recovery_requires_consecutive_health_and_resets_on_rebound(monkeypatch):
+    state = {"memory_warning": {"active": True, "first_utc": "2026-09-15T20:00:00Z"}, "notified": {}}
+    sent = []
+    monkeypatch.setattr(w, "log", lambda *_args: None)
+    monkeypatch.setattr(w, "notify", lambda _state, route, text, key: sent.append((route, text, key)))
+    monkeypatch.setattr(w, "_largest_rss_process", lambda: None)
+    healthy = w.Findings()
+    warning = w.Findings()
+    warning.add("WARN", "memory_warning", "headroom briefly crossed the warning level")
+
+    w.handle_memory_warning(state, healthy, _memory_tick())
+    w.handle_memory_warning(state, healthy, _memory_tick())
+    assert sent == []
+    assert state["memory_warning"]["clear_streak"] == 2
+    w.handle_memory_warning(state, warning, _memory_tick())
+    assert sent == []  # No false recovery or duplicate WARNING while flapping.
+    assert "clear_streak" not in state["memory_warning"]
+
+    for _ in range(w.MEMORY_RECOVERY_CONFIRM_TICKS - 1):
+        w.handle_memory_warning(state, healthy, _memory_tick())
+    assert sent == []
+    w.handle_memory_warning(state, healthy, _memory_tick())
+    assert len(sent) == 1
+    assert sent[0][0] == w.MEMORY_WARNING_ROUTE
+    assert sent[0][1].startswith("✅ Server memory is back to normal")
+    assert state["memory_warning"] == {"active": False}
+
+
+def test_fixed_memory_warning_rebounds_without_duplicate_discord(monkeypatch):
+    key = "swap_pressure_warning"
+    state = {"memory_fixed_warnings": {key: {"active": True, "summary": "paging"}}, "notified": {}}
+    sent = []
+    monkeypatch.setattr(w, "notify", lambda _state, route, text, _key: sent.append((route, text)))
+    monkeypatch.setattr(w, "log", lambda *_args: None)
+    monkeypatch.setattr(w, "_largest_rss_process", lambda: None)
+    healthy = w.Findings()
+    warning = w.Findings()
+    warning.add("WARN", key, "paging resumed")
+
+    w.handle_memory_fixed_warnings(state, healthy, _memory_tick())
+    w.handle_memory_fixed_warnings(state, healthy, _memory_tick())
+    w.handle_memory_fixed_warnings(state, warning, _memory_tick())
+    assert sent == []
+    assert state["memory_fixed_warnings"][key]["active"] is True
+    assert "clear_streak" not in state["memory_fixed_warnings"][key]
+
+    for _ in range(w.MEMORY_RECOVERY_CONFIRM_TICKS):
+        w.handle_memory_fixed_warnings(state, healthy, _memory_tick())
+    assert len(sent) == 1
+    assert state["memory_fixed_warnings"][key] == {"active": False}
+
+
+def test_memory_critical_blocking_path_unchanged_by_recovery_confirmation():
+    # Critical findings are independent of the warning notification cache.
+    f = w.Findings()
+    f.add("BLOCKED", "memory_critical", "headroom critically low")
+    assert any(row["key"] == "memory_critical" for row in f.blocked())
+
+
+def test_memory_warning_does_not_report_recovered_during_critical_block(monkeypatch):
+    state = {"memory_warning": {"active": True, "clear_streak": 2},
+             "memory_fixed_warnings": {"swap_pressure_warning": {"active": True, "clear_streak": 2}},
+             "notified": {}}
+    sent = []
+    monkeypatch.setattr(w, "notify", lambda *_args: sent.append("unexpected"))
+    blocked = w.Findings()
+    blocked.add("BLOCKED", "memory_critical", "critical headroom violation")
+
+    for _ in range(4):
+        w.handle_memory_warning(state, blocked, _memory_tick())
+        w.handle_memory_fixed_warnings(state, blocked, _memory_tick())
+    assert sent == []
+    assert state["memory_warning"]["active"] is True
+    assert state["memory_fixed_warnings"]["swap_pressure_warning"]["active"] is True
+    assert "clear_streak" not in state["memory_warning"]
+    assert "clear_streak" not in state["memory_fixed_warnings"]["swap_pressure_warning"]
