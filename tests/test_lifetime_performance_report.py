@@ -230,3 +230,18 @@ def test_options_timeout_and_fee_caveat_from_real_sqlite(tmp_path):
     assert spy["pnl_complete"] is False
     assert spy["fees_included"] is False
     assert spy["net_after_fees_usd"] is None
+
+def test_cancelled_requires_proven_no_fill_to_exclude():
+    trade = {"decision": "TRADE", "paper_order_id": "c", "instrument": "MES",
+             "risk_check": {"result": "APPROVED"}, "setup": {"direction": "LONG"}}
+    with_proof = {"type": "OUTCOME", "outcome": {
+        "paper_order_id": "c", "result": "CANCELLED", "no_fill_reason": "ENTRY_NOT_FILLED"}}
+    report = rep.futures_report([trade, with_proof])["paper_trade_lifetime"]
+    assert report["closed"] == 0
+    assert report["other_or_non_outcome"] == 1
+    without_proof = {"type": "OUTCOME", "outcome": {
+        "paper_order_id": "c", "result": "CANCELLED"}}
+    uncertain = rep.futures_report([trade, without_proof])["paper_trade_lifetime"]
+    assert uncertain["closed"] == 1
+    assert uncertain["unpriced_closed"] == 1
+    assert uncertain["pnl_complete"] is False
