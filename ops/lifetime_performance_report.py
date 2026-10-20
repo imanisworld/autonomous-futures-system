@@ -362,7 +362,8 @@ def _epochs(path: Path) -> list[dict]:
 
 
 def _opening_side(selected: dict, inputs: dict) -> str:
-    """Check opening-order intent only, never underlying LONG/SHORT signal."""
+    """Inspect only opening-order intent; bearish signals do not mean sold puts."""
+    observed = []
     for field in ("position_intent", "entry_side", "opening_side", "open_side",
                   "opening_action", "entry_action"):
         value = selected.get(field)
@@ -372,12 +373,14 @@ def _opening_side(selected: dict, inputs: dict) -> str:
             continue
         side = str(value).upper().strip().replace("-", "_").replace(" ", "_")
         if side in ("BUY_TO_OPEN", "BTO", "BUY"):
-            return "BUY_TO_OPEN"
-        if side in ("SELL_TO_OPEN", "STO", "SELL", "SHORT"):
-            return "SELL_TO_OPEN"
-        return "UNKNOWN_OPEN_SIDE"
-    # A bearish PUT purchase can have an underlying SHORT signal.
-    return "UNSTAMPED_BUY_ONLY_ASSUMPTION"
+            observed.append("BUY_TO_OPEN")
+        elif side in ("SELL_TO_OPEN", "STO", "SELL", "SHORT"):
+            observed.append("SELL_TO_OPEN")
+        else:
+            observed.append("UNRECOGNIZED_EXPLICIT_OPEN_SIDE")
+    if not observed:
+        return "UNSTAMPED_BUY_ONLY_ASSUMPTION"
+    return observed[0] if len(set(observed)) == 1 else "CONFLICTING_OPEN_SIDE"
 
 
 def options_report(db_path: Path, registry: Path) -> dict:
@@ -408,10 +411,10 @@ def options_report(db_path: Path, registry: Path) -> dict:
             unknown_lane += 1
             continue
         open_side = _opening_side(selected, inputs)
-        if open_side == "SELL_TO_OPEN":
-            nonlong_open_side += 1
-        elif open_side != "BUY_TO_OPEN":
+        if open_side == "UNSTAMPED_BUY_ONLY_ASSUMPTION":
             unstamped_open_side += 1
+        elif open_side != "BUY_TO_OPEN":
+            nonlong_open_side += 1
         start = _time(ts)
         if start is None:
             boundary_conflicts += 1
@@ -431,7 +434,7 @@ def options_report(db_path: Path, registry: Path) -> dict:
             "ticker": str(ticker or "UNKNOWN"),
             "epoch": epoch,
             "status": str(status or "OPEN").upper(),
-            "pnl_usd": _options_reprice(selected, out) if open_side != "SELL_TO_OPEN" else None,
+            "pnl_usd": _options_reprice(selected, out) if open_side in ("BUY_TO_OPEN", "UNSTAMPED_BUY_ONLY_ASSUMPTION") else None,
             "recorded_pnl_usd": out.get("pnl_dollars"),
             "opening_side_provenance": open_side,
             "ts": ts,
