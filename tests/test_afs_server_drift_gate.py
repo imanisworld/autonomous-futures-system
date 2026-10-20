@@ -94,6 +94,40 @@ def test_expected_commit_mismatch_is_red_alarm():
         assert "-# EXPECTED_LIVE_COMMIT=wrong manifest_commit=abc123" in result.stdout
         assert "-# READ ONLY" in result.stdout
 
+def test_combined_failures_are_all_reported_without_early_exit():
+    with tempfile.TemporaryDirectory() as tmp:
+        root, live, shared = _fixture(tmp, expected="wrong", manifest="abc123")
+        result = _run_sourced(
+            root, live, shared,
+            'release_integrity_check(){ echo "source drift"; return 1; }\n'
+            'options_scanner_release_check(){ echo "options drift"; return 1; }\n'
+            'post_red_alert(){ :; }\nrun_gate\n',
+        )
+        assert result.returncode == 1
+        alarm_lines = [
+            line for line in result.stdout.splitlines()
+            if "ALARM release-drift:" in line
+        ]
+        assert len(alarm_lines) == 3, result.stdout
+        assert any("release integrity FAILED" in line for line in alarm_lines)
+        assert any("pinned commit mismatch" in line for line in alarm_lines)
+        assert any("options-scanner release integrity FAILED" in line for line in alarm_lines)
+
+
+def test_missing_manifest_still_checks_options_scanner():
+    with tempfile.TemporaryDirectory() as tmp:
+        root, live, shared = _fixture(tmp)
+        (live / "release_manifest.json").unlink()
+        result = _run_sourced(
+            root, live, shared,
+            'options_scanner_release_check(){ echo "options drift"; return 1; }\n'
+            'post_red_alert(){ :; }\nrun_gate\n',
+        )
+        assert result.returncode == 1
+        assert "live release tree/manifest unavailable" in result.stdout
+        assert "options-scanner release integrity FAILED" in result.stdout
+
+
 def test_main_ahead_is_informational_and_non_failing():
     with tempfile.TemporaryDirectory() as tmp:
         root, live, shared = _fixture(tmp)
