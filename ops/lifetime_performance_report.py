@@ -417,6 +417,7 @@ def format_human(report: dict) -> str:
                  f"futures {report['futures']['identity_problems']}; "
                  f"options unclassified {report['options']['unknown_lane_excluded']}, "
                  f"epoch conflicts {report['options']['epoch_boundary_conflicts']}")
+    lines.append("Financial figures are gross before fees; net after fees is UNKNOWN.")
     lines.append("Do not interpret these data as verified since-inception performance, "
                  "broker-realized P&L, or a causal strategy improvement.")
     return "\n".join(lines)
