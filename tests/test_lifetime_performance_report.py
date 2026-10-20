@@ -320,3 +320,20 @@ def test_no_closed_trades_cannot_claim_zero_realized_drawdown():
     assert result["closed"] == 0
     assert result["gross_avg_per_closed_usd"] is None
     assert result["realized_gross_closed_trade_max_drawdown_usd"] is None
+
+
+def test_conflicting_or_unrecognized_option_open_intent_blocks_pricing(tmp_path):
+    assert rep._opening_side({"position_intent": "BUY_TO_CLOSE"}, {}) == "UNRECOGNIZED_EXPLICIT_OPEN_SIDE"
+    assert rep._opening_side({"position_intent": "BUY_TO_OPEN",
+                               "opening_side": "SELL_TO_OPEN"}, {}) == "CONFLICTING_OPEN_SIDE"
+    db, epochs = _options_fixture(tmp_path)
+    with sqlite3.connect(db) as con:
+        selected = {"paper_evidence_lane": "ACTIVE", "option_mark": 2,
+                    "contracts": 1, "position_intent": "BUY_TO_CLOSE"}
+        con.execute("UPDATE options_shadow_journal SET selected_contract_json=? WHERE id=20",
+                    (json.dumps(selected),))
+    report = rep.options_report(db, epochs)
+    assert report["unrecognized_or_conflicting_open_side"] == 1
+    assert report["sell_to_open_unsupported"] == 0
+    assert report["active_by_ticker"]["SPY"]["unpriced_closed"] == 1
+    assert report["reconciled_within_supplied_options_snapshot"] is False
