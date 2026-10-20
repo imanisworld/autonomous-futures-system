@@ -2,19 +2,23 @@
 
 ## START HERE — source checkpoint 2026-10-19/20 (GitHub only; runtime HOLD)
 
-**GitHub `main` verified:** `4db26a112ea5c2f045d9853ed6819b22f6b9f1a7`, following approved squash merges #1231, #1232, #1233, #1234 and #1235. This source checkpoint records no VPS read, no installed-release update, no broker action and no global redeploy. The previously reported **unexpected bytecode / release-manifest integrity alarm remains UNRESOLVED until independently verified on the VPS.** No deploy, promote, build, service restart, timer/cron/collector change, or Discord cutover under this checkpoint. The operator's separate explicit GO is required after integrity proof.
+**GitHub `main` verified:** `4db26a112ea5c2f045d9853ed6819b22f6b9f1a7`, following approved squash merges #1231, #1232, #1233, #1234 and #1235. This source checkpoint records no VPS read, no installed-release update, no broker action and no global redeploy. **AFS-0313:** Cursor reports the integrity alarm is real and attributes its cause to an Oct 11 Cursor audit running the live release venv Python without `-B`, creating an unexpected `.pyc`; this cause has **not been independently verified by ChatGPT**. The approved planning path is the **QA-passed v9 immutable recut of `94a71bd` this weekend**, subject to separate operator GO and independent post-recut verification. **Do not delete the `.pyc` in place.** No deploy, promote, build, service restart, timer/cron/collector change, or Discord cutover under this checkpoint. The operator's separate explicit GO is required after integrity proof.
 
 | Workstream | Latest source state | Real next gate |
 |---|---|---|
-| Runtime / release | GitHub source ahead of box; last **reported** futures symlink `94a71bd` from Oct 11, **not re-read** | Read-only manifest/bytecode incident root-cause and independent integrity restoration proof; then separate release GO |
+| Runtime / release | Cursor AFS-0313 reports installed `94a71bd` integrity FAIL caused by Oct 11 venv Python inspection without `-B`; independently unverified here | **QA-passed v9 immutable recut this weekend**, only after separate operator GO; independent full integrity and drift-gate PASS; never delete `.pyc` inside existing release |
 | Notifications | #1231/#1232 source-merged, #1233 handoff docs-merged; no VPS changes proven | Read-only weekly/collector/Discord receipts and destination review; no service/channel cutover |
-| Lifetime money | #1234 and #1235 merged, source-only gross reporter; **historical coverage, net fees, account mode and options side unverified** | Read-only complete journal+SQLite/WAL census and price/order/release reconciliation; truthful incomplete labels |
+| Lifetime money | #1234 and #1235 merged, source-only gross reporter; **historical coverage, net fees, account mode and options side unverified** | Private ledger reconciliation as available; draft #1236 must check **CLOSE/OUTCOME live mode** in addition to entry; no clean per-ticker P&L without both proven |
 | Ticker label correctness | Draft focused source fix (see GitHub PR #1236); not merged | Exact-head CI, independent review and separate operator merge approval |
-| Futures proof | 4HR MNQ promising but unproven; paper 5m IOC vs historical 1m trigger mismatch persists | Existing forward evidence/DEM0 parity and risk proof; respect sealed MNQ data |
+| Futures proof | 4HR MNQ promising but unproven; paper 5m IOC vs historical 1m trigger mismatch persists. **Six-micro TSMOM RETIRED Oct 18 — ABORTED/NOT_RUN, 0/40; DONE / DO NOT REDO, not a strategy failure** | Forward evidence checks only for remaining active lanes; respect sealed MNQ data. Do not revive retired TSMOM |
 | Options proof | V1 purchased-premium model in source, no independently verified profitable option P&L; 66-symbol screening is research-only | Existing ACTIVE cohort ledger, exit marks, direction and costs; do not launch a new trial |
 | Deferred PRs | 23 original PRs inventoried; GitHub now shows 25 including new unmerged #1236/#1237 drafts | Per-PR independent review/classification; no auto-close, merge or delete |
 
 **Source-only exit:** PR #1236 is pending independent review; the operator requested a separate GitHub hygiene/coverage/source audit and VPS evidence handoff, without broad rewrites. Maintain `docs/strategy-rules/Strategy_Inventory.md` and `docs/research-trial-ledger.jsonl` as authoritative strategy/trial sources. Do not infer deployed mode or profitable edge from source CI. Compact open-PR and report inventories are in `docs/afs-repo-readonly-closeout-2026-10-19.md` (draft until reviewed).
+
+**AFS-0315 operator-accepted access:** documented `ssh hetzner` root read-only precedent; there is **no Cursor-specific VPS account**. Never run Python from a release directory without `-B`. No source/docs PR grants a VPS write or restart.
+
+**Deferred integrity-source follow-up, strictly AFTER the weekend recut:** Test whether `ops/release_integrity.py` lines 136 and 154–161 miss entirely new unlisted top-level Python package directories; begin with a fake-release regression, then separately review any narrow source fix. Do **not** edit integrity/release/manifest code before the recut.
 
 **Do not follow the dated October 11 NEXT list below.** It is preserved solely as historical box/source provenance.
 
