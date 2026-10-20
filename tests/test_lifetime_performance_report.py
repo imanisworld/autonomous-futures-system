@@ -198,3 +198,18 @@ def test_independent_price_math_and_fee_status():
     assert report["complete_pnl_usd"] is None
     assert report["fees_included"] is False
     assert report["net_after_fees_usd"] is None
+
+def test_real_futures_timeout_price_and_wrong_recorded_dollars(tmp_path):
+    folder = _journal_fixture(tmp_path)
+    rows, _, _ = rep._read_journals(folder)
+    rows += [
+        {"decision": "TRADE", "instrument": "MNQ", "paper_order_id": "t",
+         "setup": {"direction": "SHORT", "contracts": 2}, "risk_check": {"result": "APPROVED"}},
+        {"type": "OUTCOME", "outcome": {"paper_order_id": "t", "result": "TIMEOUT",
+         "entry_price": 20000, "exit_price": 20010, "contracts": 2, "pnl_dollars": 0}},
+    ]
+    result = rep.futures_report(rows)["paper_by_ticker"]["MNQ"]
+    assert result["closed"] == 2
+    assert result["priced_subtotal_usd"] == 80
+    assert result["recorded_pnl_discrepancies"] == 1
+    assert result["pnl_complete"] is False
