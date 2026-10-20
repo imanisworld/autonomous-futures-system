@@ -390,3 +390,5 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+# AFS-0308: audit review hold pending independent arithmetic fixes.
