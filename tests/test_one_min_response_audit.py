@@ -200,3 +200,38 @@ def test_response_audit_module_has_no_execution_imports():
         elif isinstance(node, ast.ImportFrom):
             imported.append(node.module or "")
     assert not any(name.startswith(("execution", "risk", "webhook.runner")) for name in imported)
+
+
+def test_unix_seconds_timestamp_uses_2026_evidence_day_not_1792(tmp_path):
+    event = {"event": "TRIGGER_TOUCH", "strategy": "strat_4hr_retrigger"}
+    payload = _payload()
+    payload.timestamp = "1792072500"  # 2026-10-15T13:55:00Z
+    out = append_observer_response_audit(
+        str(tmp_path), payload, {"decision": "ONE_MIN_CONTEXT",
+                                 "one_min_trigger": event, "execution_reachable": False},
+    )
+    assert out is not None
+    names = sorted(p.name for p in (tmp_path / "tf1m").glob("observer_response_audit_*.jsonl"))
+    assert names == ["observer_response_audit_2026-10-15.jsonl"]
+    row = json.loads((tmp_path / "tf1m" / names[0]).read_text())
+    assert row["payload"]["timestamp"] == "1792072500"
+
+
+def test_unix_milliseconds_and_offset_cross_day_use_utc_filename(tmp_path):
+    event = {"event": "ARMED", "strategy": "strat_322_first_live"}
+    payload = _payload()
+    payload.timestamp = 1792072500000
+    append_observer_response_audit(
+        str(tmp_path), payload, {"decision": "FIVE_MIN_CONTEXT",
+                                 "one_min_322_observer": event},
+    )
+    payload.timestamp = "2026-10-15T23:30:00-04:00"
+    append_observer_response_audit(
+        str(tmp_path), payload, {"decision": "FIVE_MIN_CONTEXT",
+                                 "one_min_322_observer": event},
+    )
+    one_min = tmp_path / "tf1m"
+    assert sorted(p.name for p in one_min.glob("observer_response_audit_*.jsonl")) == [
+        "observer_response_audit_2026-10-15.jsonl",
+        "observer_response_audit_2026-10-16.jsonl",
+    ]
