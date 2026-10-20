@@ -133,3 +133,78 @@ def test_main_failsoft_writes_artifact_no_webhook(tmp_path, monkeypatch, capsys)
     assert data["week"] == "2026-W26"
     assert data["approved_trades"] == 4
     assert "no webhook configured" in capsys.readouterr().out
+
+
+def test_discord_403_logs_http_status_reason_without_webhook_secret(monkeypatch, caplog):
+    import logging
+    import urllib.error
+
+    token_url = "https://discord.example/api/webhooks/123/PRIVATE_TOKEN"
+    captured = []
+
+    def reject(req, timeout):
+        captured.append((req.full_url, req.get_header("User-agent"), timeout))
+        raise urllib.error.HTTPError(token_url, 403, "server reason PRIVATE_TOKEN", {}, None)
+
+    monkeypatch.setattr(wr.urllib.request, "urlopen", reject)
+    with caplog.at_level(logging.ERROR, logger=wr.__name__):
+        assert wr._post_discord(token_url, "Weekly report") is False
+
+    assert captured == [(token_url, "AFS-Weekly-Review/1.0", 15)]
+    assert "HTTP 403 Forbidden" in caplog.text
+    assert "PRIVATE_TOKEN" not in caplog.text
+    assert token_url not in caplog.text
+    assert "server reason" not in caplog.text
+
+
+def test_discord_non_2xx_result_logs_status_and_reason(monkeypatch, caplog):
+    import logging
+
+    class Response:
+        status = 429
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+
+    monkeypatch.setattr(wr.urllib.request, "urlopen", lambda req, timeout: Response())
+    with caplog.at_level(logging.ERROR, logger=wr.__name__):
+        assert wr._post_discord("https://example.invalid/webhook/SECRET", "Weekly report") is False
+    assert "HTTP 429 Too Many Requests" in caplog.text
+    assert "SECRET" not in caplog.text
+
+
+def test_discord_transport_failure_omits_embedded_secret(monkeypatch, caplog):
+    import logging
+    import urllib.error
+
+    def reject(req, timeout):
+        raise urllib.error.URLError("https://example.invalid/webhooks/SECRET refused")
+
+    monkeypatch.setattr(wr.urllib.request, "urlopen", reject)
+    with caplog.at_level(logging.ERROR, logger=wr.__name__):
+        assert wr._post_discord("https://example.invalid/webhooks/SECRET", "Weekly report") is False
+    assert "transport error" in caplog.text
+    assert "SECRET" not in caplog.text
+
+
+def test_discord_success_and_weekly_main_failed_delivery_exit(tmp_path, monkeypatch, capsys):
+    class Response:
+        status = 204
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+
+    monkeypatch.setattr(wr.urllib.request, "urlopen", lambda req, timeout: Response())
+    assert wr._post_discord("https://example.invalid/webhook", "weekly") is True
+
+    monkeypatch.setenv("LOG_DIR", str(tmp_path))
+    monkeypatch.setenv("WEEKLY_REVIEW_DATE", "2026-06-27")
+    monkeypatch.setenv("DISCORD_ROUTE_DAILY_REPORT", "https://example.invalid/webhook/SECRET")
+    monkeypatch.setattr(wr, "load_option_rows", lambda *args: [])
+    monkeypatch.setattr(wr, "collect_health", lambda *args: {})
+    monkeypatch.setattr(wr, "_post_discord", lambda *args: False)
+    assert wr.main() == 1
+    assert (tmp_path / "weekly_review_2026-W26.json").exists()
+    assert "posted to Discord: False" in capsys.readouterr().out

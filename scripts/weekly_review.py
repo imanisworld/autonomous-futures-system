@@ -18,10 +18,13 @@ does not depend on the box-only notification router. If no webhook is configured
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sqlite3
 import subprocess
+import urllib.error
 import urllib.request
+from http import HTTPStatus
 from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -250,10 +253,26 @@ def collect_health(monday: date) -> dict:
     }
 
 
+_LOG = logging.getLogger(__name__)
+_WEEKLY_USER_AGENT = "AFS-Weekly-Review/1.0"
+
+
+def _http_reason(code: int) -> str:
+    # Use the standard reason phrase. Never log server-controlled response
+    # bodies, error URLs (webhook tokens), or exception strings.
+    try:
+        return HTTPStatus(code).phrase
+    except ValueError:
+        return "Unknown HTTP status"
+
+
 def _post_discord(webhook_url: str, content: str) -> bool:
     def _post(payload: dict) -> int:
         req = urllib.request.Request(
-            webhook_url, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"}
+            webhook_url,
+            data=json.dumps(payload).encode(),
+            headers={"Content-Type": "application/json",
+                     "User-Agent": _WEEKLY_USER_AGENT},
         )
         with urllib.request.urlopen(req, timeout=15) as resp:
             return resp.status
@@ -263,8 +282,18 @@ def _post_discord(webhook_url: str, content: str) -> bool:
             status = _post_card_or_text(_post, content, source="weekly review")
         else:
             status = _post({"content": content})
-        return 200 <= status < 300
-    except Exception:
+        if not 200 <= status < 300:
+            _LOG.error("Weekly review Discord post failed: HTTP %s %s", status, _http_reason(status))
+            return False
+        return True
+    except urllib.error.HTTPError as exc:
+        _LOG.error("Weekly review Discord post failed: HTTP %s %s", exc.code, _http_reason(exc.code))
+        return False
+    except urllib.error.URLError:
+        _LOG.error("Weekly review Discord post failed: transport error (URLError)")
+        return False
+    except Exception as exc:
+        _LOG.error("Weekly review Discord post failed: %s", type(exc).__name__)
         return False
 
 
@@ -292,13 +321,15 @@ def main(argv: Optional[list[str]] = None) -> int:
         pass
 
     webhook = (os.getenv("DISCORD_ROUTE_DAILY_REPORT") or os.getenv("DISCORD_WEBHOOK_URL") or "").strip()
+    delivery_failed = False
     if webhook:
         ok = _post_discord(webhook, report)
+        delivery_failed = not ok
         print(f"[weekly_review] posted to Discord: {ok}")
     else:
         print("[weekly_review] no webhook configured; artifact written only")
     print(report)
-    return 0
+    return 1 if delivery_failed else 0
 
 
 if __name__ == "__main__":
