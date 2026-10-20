@@ -98,6 +98,7 @@ def _totals(rows: list[dict], *, closed: frozenset[str] = CLOSED) -> dict:
     amounts = [_money(r.get("pnl_usd")) for r in finished]
     prices = [p for p in amounts if p is not None]
     missing = len(amounts) - len(prices)
+    missing_recorded = sum(_money(row.get("recorded_pnl_usd")) is None for row in finished)
     return {
         "records": len(rows),
         "closed": len(finished),
