@@ -51,6 +51,28 @@ def _obj(value: Any) -> dict:
     return decoded if isinstance(decoded, dict) else {}
 
 
+
+def _futures_reprice(trade: dict, outcome: dict) -> float | None:
+    """Gross from actual fills; planned entry is never a fill substitute."""
+    root = contract_root(trade.get("instrument"))
+    try:
+        tick, value = contract_economics(root)
+    except (ValueError, TypeError):
+        return None
+    entry, exit_ = _money(outcome.get("entry_price")), _money(outcome.get("exit_price"))
+    count = _money(outcome.get("contracts"))
+    side = str(_obj(trade.get("setup")).get("direction") or trade.get("direction") or "").upper()
+    if entry is None or exit_ is None or min(entry, exit_) <= 0:
+        return None
+    if count is None or count < 1 or count != int(count) or side not in ("LONG", "SHORT"):
+        return None
+    planned = _money(_obj(trade.get("setup")).get("contracts"))
+    if planned is not None and planned != count:
+        return None
+    sign = 1 if side == "LONG" else -1
+    return round((exit_ - entry) * sign * (value / tick) * int(count), 2)
+
+
 def _totals(rows: list[dict], *, closed: frozenset[str] = CLOSED) -> dict:
     finished = [r for r in rows if r["status"] not in {"OPEN", "PENDING", "NO_FILL", "REJECTED", *NON_OUTCOMES}]
     amounts = [_money(r.get("pnl_usd")) for r in finished]
