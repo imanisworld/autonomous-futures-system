@@ -14,6 +14,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from config.futures_contracts import contract_root, contract_economics
 
 CLOSED = frozenset({"WIN", "LOSS", "BREAKEVEN", "EXPIRED"})
 NON_OUTCOMES = frozenset({"TARGET_CONSUMED_AT_ENTRY", "STOP_CONSUMED_AT_ENTRY"})
