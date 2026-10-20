@@ -301,6 +301,25 @@ def _epochs(path: Path) -> list[dict]:
     return boundaries
 
 
+def _opening_side(selected: dict, inputs: dict) -> str:
+    """Check opening-order intent only, never underlying LONG/SHORT signal."""
+    for field in ("position_intent", "entry_side", "opening_side", "open_side",
+                  "opening_action", "entry_action"):
+        value = selected.get(field)
+        if value is None:
+            value = inputs.get(field)
+        if value is None:
+            continue
+        side = str(value).upper().strip().replace("-", "_").replace(" ", "_")
+        if side in ("BUY_TO_OPEN", "BTO", "BUY"):
+            return "BUY_TO_OPEN"
+        if side in ("SELL_TO_OPEN", "STO", "SELL", "SHORT"):
+            return "SELL_TO_OPEN"
+        return "UNKNOWN_OPEN_SIDE"
+    # A bearish PUT purchase can have an underlying SHORT signal.
+    return "UNSTAMPED_BUY_ONLY_ASSUMPTION"
+
+
 def options_report(db_path: Path, registry: Path) -> dict:
     if not db_path.is_file():
         raise FileNotFoundError(f"missing options snapshot: {db_path}")
@@ -313,6 +332,8 @@ def options_report(db_path: Path, registry: Path) -> dict:
     active: list[dict] = []
     counterfactual = 0
     unknown_lane = 0
+    nonlong_open_side = 0
+    unstamped_open_side = 0
     boundary_conflicts = 0
     prior_rows = 0
     for rid, ts, ticker, status, input_json, contract_json, result_json in db_rows:
@@ -326,6 +347,11 @@ def options_report(db_path: Path, registry: Path) -> dict:
         if lane != "ACTIVE":
             unknown_lane += 1
             continue
+        open_side = _opening_side(selected, inputs)
+        if open_side == "SELL_TO_OPEN":
+            nonlong_open_side += 1
+        elif open_side != "BUY_TO_OPEN":
+            unstamped_open_side += 1
         start = _time(ts)
         if start is None:
             boundary_conflicts += 1
@@ -345,8 +371,9 @@ def options_report(db_path: Path, registry: Path) -> dict:
             "ticker": str(ticker or "UNKNOWN"),
             "epoch": epoch,
             "status": str(status or "OPEN").upper(),
-            "pnl_usd": _options_reprice(selected, out),
+            "pnl_usd": _options_reprice(selected, out) if open_side != "SELL_TO_OPEN" else None,
             "recorded_pnl_usd": out.get("pnl_dollars"),
+            "opening_side_provenance": open_side,
         })
     return {
         "lifetime_active": _totals(active),
@@ -359,9 +386,11 @@ def options_report(db_path: Path, registry: Path) -> dict:
         "epochs": [{k: x[k] for k in ("name", "first_id", "reason")} | {"start_utc": x["start"].isoformat()} for x in boundaries],
         "counterfactual_excluded": counterfactual,
         "unknown_lane_excluded": unknown_lane,
+        "sell_to_open_unsupported": nonlong_open_side,
+        "opening_side_unstamped": unstamped_open_side,
         "epoch_boundary_conflicts": boundary_conflicts,
         "before_registered_epochs": prior_rows,
-        "reconciled_within_supplied_options_snapshot": unknown_lane == 0 and boundary_conflicts == 0,
+        "reconciled_within_supplied_options_snapshot": unknown_lane == 0 and boundary_conflicts == 0 and nonlong_open_side == 0,
         "cost_model": "recorded scanner ASK entry / BID exit; commissions excluded",
         "warning": "unpriced closed options invalidate complete P&L; structural WIN is not necessarily financial profit",
     }
