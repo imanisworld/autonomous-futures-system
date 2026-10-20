@@ -48,13 +48,13 @@ def _journal_fixture(tmp_path):
     folder = tmp_path / "journals"
     folder.mkdir()
     earlier = [
-        {"decision": "TRADE", "ts": "2026-09-15T10:00:00Z", "instrument": "MNQ",
+        {"decision": "TRADE", "account_mode": "PAPER", "ts": "2026-09-15T10:00:00Z", "instrument": "MNQ",
          "paper_order_id": "a", "risk_check": {"result": "APPROVED"},
          "setup": {"strategy": "orb_reclaim", "direction": "LONG", "contracts": 1}},
-        {"decision": "TRADE", "ts": "2026-09-16T10:00:00Z", "instrument": "MES",
+        {"decision": "TRADE", "account_mode": "PAPER", "ts": "2026-09-16T10:00:00Z", "instrument": "MES",
          "paper_order_id": "b", "risk_check": {"result": "APPROVED"},
          "setup": {"strategy": "vwap_hold", "direction": "LONG", "contracts": 1}},
-        {"decision": "TRADE", "ts": "2026-09-16T11:00:00Z", "instrument": "MNQ",
+        {"decision": "TRADE", "account_mode": "PAPER", "ts": "2026-09-16T11:00:00Z", "instrument": "MNQ",
          "paper_order_id": "open", "risk_check": {"result": "APPROVED"},
          "setup": {"strategy": "orb_reclaim"}},
         {"type": "SHADOW_OUTCOME", "instrument": "MGC", "candidate_key": "c",
@@ -62,8 +62,8 @@ def _journal_fixture(tmp_path):
          "shadow_outcome": {"result": "WIN", "pnl_ticks": 12}},
     ]
     later = [
-        {"type": "OUTCOME", "outcome": {"paper_order_id": "a", "result": "WIN", "entry_price": 20000, "exit_price": 20060, "contracts": 1, "pnl_dollars": 120}},
-        {"type": "OUTCOME", "outcome": {"paper_order_id": "b", "result": "LOSS", "entry_price": 5000, "exit_price": 4994, "contracts": 1, "pnl_dollars": -30}},
+        {"type": "OUTCOME", "account_mode": "PAPER", "outcome": {"paper_order_id": "a", "result": "WIN", "entry_price": 20000, "exit_price": 20060, "contracts": 1, "pnl_dollars": 120}},
+        {"type": "OUTCOME", "account_mode": "PAPER", "outcome": {"paper_order_id": "b", "result": "LOSS", "entry_price": 5000, "exit_price": 4994, "contracts": 1, "pnl_dollars": -30}},
         {"type": "SHADOW_OUTCOME", "instrument": "MGC", "candidate_key": "c",
          "strategy": "shadow", "evidence_epoch": "e1",
          "shadow_outcome": {"result": "LOSS", "pnl_ticks": -5}},
@@ -337,3 +337,125 @@ def test_conflicting_or_unrecognized_option_open_intent_blocks_pricing(tmp_path)
     assert report["sell_to_open_unsupported"] == 0
     assert report["active_by_ticker"]["SPY"]["unpriced_closed"] == 1
     assert report["reconciled_within_supplied_options_snapshot"] is False
+
+
+def test_unverified_mode_makes_only_affected_futures_ticker_incomplete():
+    def trade(order_id, ticker, mode):
+        row = {"decision": "TRADE", "paper_order_id": order_id,
+               "instrument": ticker, "risk_check": {"result": "APPROVED"},
+               "setup": {"direction": "LONG", "contracts": 1},
+               "ts": "2026-09-16T13:00:00Z"}
+        if mode is not None:
+            row["account_mode"] = mode
+        return row
+
+    def outcome(order_id, ticker):
+        # One tick in MNQ is $0.50; one tick in MES is $1.25.
+        tick = 0.25
+        recorded = 0.50 if ticker == "MNQ" else 1.25
+        return {"type": "OUTCOME", "ts": "2026-09-16T14:00:00Z",
+                "account_mode": "DEMO" if ticker == "MES" else "PAPER",
+                "outcome": {"paper_order_id": order_id, "result": "WIN",
+                            "entry_price": 20000, "exit_price": 20000 + tick,
+                            "contracts": 1, "pnl_dollars": recorded}}
+
+    journal = [
+        trade("mnq1", "MNQ", "PAPER"), outcome("mnq1", "MNQ"),
+        trade("mnq2", "MNQ", None), outcome("mnq2", "MNQ"),
+        trade("mes1", "MES", "DEMO"), outcome("mes1", "MES"),
+    ]
+    result = rep.futures_report(journal)
+    mnq = result["paper_by_ticker"]["MNQ"]
+    mes = result["paper_by_ticker"]["MES"]
+    assert mnq["priced_subtotal_usd"] == 1.0
+    assert mnq["unpriced_closed"] == 0
+    assert mnq["unverified_execution_mode_rows"] == 1
+    assert mnq["pnl_complete"] is False
+    assert mnq["complete_pnl_usd"] is None
+    assert result["paper_by_ticker_and_change"]["MNQ"]["CHANGE_BOUNDARIES_UNVERIFIED"]["complete_pnl_usd"] is None
+    assert result["paper_trade_lifetime"]["complete_pnl_usd"] is None
+
+    assert mes["unverified_execution_mode_rows"] == 0
+    assert mes["pnl_complete"] is True
+    assert mes["complete_pnl_usd"] == 1.25
+    assert result["journal_by_execution_mode"]["MODE_UNSTAMPED"]["pnl_complete"] is False
+    assert result["journal_by_execution_mode"]["DEMO"]["pnl_complete"] is True
+
+
+def test_incomplete_label_names_unverified_mode_without_dropping_priced_subset():
+    sample = rep._totals([
+        {"status": "WIN", "pnl_usd": 10, "recorded_pnl_usd": 10,
+         "execution_mode": "MODE_UNSTAMPED"},
+        {"status": "LOSS", "pnl_usd": -3, "recorded_pnl_usd": -3,
+         "execution_mode": "PAPER"},
+    ])
+    assert sample["unverified_execution_mode_rows"] == 1
+    assert sample["priced_subtotal_usd"] == 7
+    assert sample["complete_pnl_usd"] is None
+    blank = rep._totals([{"status": "OPEN", "pnl_usd": None,
+                           "execution_mode": "UNRECOGNIZED_MODE"}])
+    assert blank["unverified_execution_mode_rows"] == 1
+    assert blank["pnl_complete"] is False
+    assert rep._totals([{"status": "WIN", "pnl_usd": 1,
+                         "recorded_pnl_usd": 1}])["unverified_execution_mode_rows"] == 0
+
+
+def test_human_report_marks_unverified_ticker_incomplete(tmp_path):
+    journal_dir = _journal_fixture(tmp_path)
+    options_db, epochs = _options_fixture(tmp_path)
+    rows, malformed, _ = rep._read_journals(journal_dir)
+    assert malformed == 0
+    for row in rows:
+        if row.get("paper_order_id") == "a":
+            row.pop("account_mode", None)
+    report = {
+        "futures": rep.futures_report(rows),
+        "options": rep.options_report(options_db, epochs),
+    }
+    rendered = rep.format_human(report)
+    assert "MNQ: INCOMPLETE" in rendered
+    assert "1 unverified paper/demo mode" in rendered
+    assert "MES: $-30.00" in rendered
+
+
+def test_live_close_is_excluded_even_when_entry_says_paper():
+    trade = {"decision": "TRADE", "paper_order_id": "L", "instrument": "MES",
+             "account_mode": "PAPER", "risk_check": {"result": "APPROVED"},
+             "setup": {"direction": "LONG", "contracts": 1}}
+    live_close = {"type": "OUTCOME", "account_mode": "LIVE",
+                  "outcome": {"paper_order_id": "L", "result": "WIN",
+                              "entry_price": 5000, "exit_price": 5001,
+                              "contracts": 1, "pnl_dollars": 5}}
+    report = rep.futures_report([trade, live_close])
+    assert report["explicit_live_rows_excluded_from_paper"] == 1
+    assert report["paper_trade_lifetime"]["records"] == 0
+    assert report["paper_by_ticker"] == {}
+
+    # Nested CLOSE evidence must not override the outer envelope's LIVE mode.
+    nested = {"type": "OUTCOME", "account_mode": "PAPER",
+              "outcome": {**live_close["outcome"], "account_mode": "LIVE"}}
+    assert rep.futures_report([trade, nested])["explicit_live_rows_excluded_from_paper"] == 1
+
+
+def test_close_mode_missing_or_conflicting_marks_ticker_incomplete():
+    trade = {"decision": "TRADE", "paper_order_id": "C", "instrument": "MNQ",
+             "account_mode": "PAPER", "risk_check": {"result": "APPROVED"},
+             "setup": {"direction": "LONG", "contracts": 1}}
+    exit_payload = {"paper_order_id": "C", "result": "WIN", "entry_price": 20000,
+                    "exit_price": 20010, "contracts": 1, "pnl_dollars": 20}
+    for close in (
+        {"type": "OUTCOME", "outcome": exit_payload},
+        {"type": "OUTCOME", "account_mode": "DEMO", "outcome": exit_payload},
+        {"type": "OUTCOME", "account_mode": "PAPER",
+         "outcome": {**exit_payload, "account_mode": "DEMO"}},
+    ):
+        result = rep.futures_report([trade, close])["paper_by_ticker"]["MNQ"]
+        assert result["priced_subtotal_usd"] == 20
+        assert result["complete_pnl_usd"] is None
+        assert result["unverified_execution_mode_rows"] == 1
+
+    proved_close = {"type": "OUTCOME", "account_mode": "PAPER",
+                    "outcome": exit_payload}
+    proved = rep.futures_report([trade, proved_close])["paper_by_ticker"]["MNQ"]
+    assert proved["complete_pnl_usd"] == 20
+    assert proved["unverified_execution_mode_rows"] == 0

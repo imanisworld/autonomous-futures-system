@@ -117,7 +117,13 @@ def _totals(rows: list[dict], *, closed: frozenset[str] = CLOSED) -> dict:
     missing = len(amounts) - len(prices)
     missing_recorded = sum(_money(row.get("recorded_pnl_usd")) is None for row in finished)
     mismatch = sum(abs(_money(row["pnl_usd"]) - _money(row["recorded_pnl_usd"])) > 0.011 for row in finished if _money(row.get("pnl_usd")) is not None and _money(row.get("recorded_pnl_usd")) is not None)
-    complete = not (missing or mismatch or missing_recorded)
+    # An unstamped futures execution cannot be counted as verified paper/demo,
+    # even when its exit prices and the recorded gross dollars agree.
+    unverified_mode_rows = sum(
+        "execution_mode" in row and row["execution_mode"] not in ("PAPER", "DEMO")
+        for row in rows
+    )
+    complete = not (missing or mismatch or missing_recorded or unverified_mode_rows)
     entry_stamps = [_time(row.get("ts")) for row in rows]
     entry_span = None if not rows or any(stamp is None for stamp in entry_stamps) else {
         "first_utc": min(entry_stamps).isoformat(),
@@ -140,11 +146,12 @@ def _totals(rows: list[dict], *, closed: frozenset[str] = CLOSED) -> dict:
         "entry_utc_span": entry_span,
         "sample_note": "DESCRIPTIVE_ONLY_FURTHER_MULTIMONTH_EVIDENCE_NEEDED",
         "priced_subtotal_usd": round(sum(prices), 2),
-        "complete_pnl_usd": round(sum(prices), 2) if not (missing or mismatch or missing_recorded) else None,
-        "pnl_complete": not (missing or mismatch or missing_recorded),
+        "complete_pnl_usd": round(sum(prices), 2) if complete else None,
+        "pnl_complete": complete,
         "model": "independent_gross_from_exit_and_entry_prices",
         "recorded_pnl_discrepancies": mismatch,
         "recorded_pnl_missing": missing_recorded,
+        "unverified_execution_mode_rows": unverified_mode_rows,
         "fees_included": False,
         "net_after_fees_usd": None,
     }
@@ -235,6 +242,21 @@ def _execution_mode(row: dict) -> str:
     return "MODE_UNSTAMPED"
 
 
+def _close_execution_mode(exit_: dict) -> str:
+    """Reconcile OUTCOME envelope and payload; never let either hide LIVE."""
+    candidates = {
+        mode for mode in (
+            _execution_mode(exit_),
+            exit_.get("_outer_close_mode", "MODE_UNSTAMPED"),
+        ) if mode != "MODE_UNSTAMPED"
+    }
+    if "LIVE_EXCLUDED" in candidates:
+        return "LIVE_EXCLUDED"
+    if len(candidates) > 1:
+        return "MODE_CONFLICT"
+    return next(iter(candidates)) if candidates else "MODE_UNSTAMPED"
+
+
 def futures_report(journal_rows: list[dict], *, changes: list[dict] | None = None) -> dict:
     """Exact cross-file paper_order_id join. Never FIFO-pair by market or date."""
     changes = changes or []
@@ -249,7 +271,11 @@ def futures_report(journal_rows: list[dict], *, changes: list[dict] | None = Non
         if row.get("type") == "OUTCOME":
             out = _obj(row.get("outcome"))
             oid = out.get("paper_order_id")
-            outcomes[str(oid) if oid else ""].append({**out, "_journal_close_event_utc": row.get("ts")})
+            outcomes[str(oid) if oid else ""].append({
+                **out,
+                "_journal_close_event_utc": row.get("ts"),
+                "_outer_close_mode": _execution_mode(row),
+            })
         if row.get("type") == "SHADOW_OUTCOME":
             cid = row.get("candidate_key") or row.get("candidate_id")
             if not cid:
@@ -267,8 +293,8 @@ def futures_report(journal_rows: list[dict], *, changes: list[dict] | None = Non
             ambiguous += len(entries)
             continue
         trade = entries[0]
-        execution_mode = _execution_mode(trade)
-        if execution_mode == "LIVE_EXCLUDED":
+        entry_mode = _execution_mode(trade)
+        if entry_mode == "LIVE_EXCLUDED":
             excluded_live += 1
             continue
         outcomes_here = outcomes.get(oid, [])
@@ -278,6 +304,18 @@ def futures_report(journal_rows: list[dict], *, changes: list[dict] | None = Non
             continue
         exit_ = inline if inline.get("result") else (outcomes_here[0] if outcomes_here else {})
         result = str(exit_.get("result") or "OPEN").upper()
+        close_mode = _close_execution_mode(exit_) if result not in ("OPEN", "PENDING") else "NO_CLOSE"
+        if close_mode == "LIVE_EXCLUDED":
+            excluded_live += 1
+            continue
+        # Both entry and CLOSE must carry consistent PAPER/DEMO provenance.
+        # A documented LIVE close is excluded above, even if entry claimed PAPER.
+        execution_mode = entry_mode
+        if result not in ("OPEN", "PENDING"):
+            if close_mode != entry_mode or close_mode not in ("PAPER", "DEMO"):
+                execution_mode = "MODE_CONFLICT" if (
+                    close_mode in ("PAPER", "DEMO") and entry_mode in ("PAPER", "DEMO")
+                ) else "MODE_UNSTAMPED"
         if not outcomes_here and not inline.get("result"):
             unresolved += 1
         setup = _obj(trade.get("setup"))
@@ -285,6 +323,8 @@ def futures_report(journal_rows: list[dict], *, changes: list[dict] | None = Non
         item = {
             "ticker": ticker,
             "execution_mode": execution_mode,
+            "entry_execution_mode": entry_mode,
+            "close_execution_mode": close_mode,
             "strategy": str(setup.get("strategy") or "UNSPECIFIED"),
             "status": "NO_FILL" if result == "CANCELLED" and exit_.get("no_fill_reason") and exit_.get("exit_price") is None else result,
             "pnl_usd": _futures_reprice(trade, exit_) if result not in ("OPEN", "PENDING", "NO_FILL") else None,
@@ -320,8 +360,8 @@ def futures_report(journal_rows: list[dict], *, changes: list[dict] | None = Non
     return {
         "paper_trade_lifetime": _totals(clean, closed=FUTURES_RESOLVED),
         "journal_by_execution_mode": _groups(clean, "execution_mode", closed=FUTURES_RESOLVED),
-        "unstamped_or_unrecognized_mode_rows": sum(row["execution_mode"] in
-            ("MODE_UNSTAMPED", "UNRECOGNIZED_MODE") for row in clean),
+        "unstamped_or_unrecognized_mode_rows": sum(row["execution_mode"] not in
+            ("PAPER", "DEMO") for row in clean),
         "explicit_live_rows_excluded_from_paper": excluded_live,
         "paper_by_ticker": _groups(clean, "ticker", closed=FUTURES_RESOLVED),
         "paper_by_change": _groups(clean, "change_period", closed=FUTURES_RESOLVED),
@@ -503,7 +543,8 @@ def format_human(report: dict) -> str:
             return (f"INCOMPLETE (gross priced subset ${t['priced_subtotal_usd']:+,.2f}; "
                     f"{t['unpriced_closed']} unpriced, "
                     f"{t['recorded_pnl_discrepancies']} price-vs-journal mismatches, "
-                    f"{t['recorded_pnl_missing']} missing recorded P&L)")
+                    f"{t['recorded_pnl_missing']} missing recorded P&L, "
+                    f"{t['unverified_execution_mode_rows']} unverified paper/demo mode)")
         return f"${value:+,.2f} ({t['priced_closed']} priced closed)"
 
     def comparison(t: dict) -> str:
