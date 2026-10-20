@@ -176,3 +176,11 @@ def test_text_view_keeps_unpriced_and_unverified_labels(tmp_path, capsys):
     assert "NOT YET INDEPENDENTLY VERIFIED" in text
     assert "MGC: -5.0 recorded ticks" in text
     assert "\nOptions ACTIVE" in text
+
+def test_timeout_is_not_ignored():
+    rows = [{"status": "WIN", "pnl_usd": 10, "recorded_pnl_usd": 10},
+            {"status": "TIMEOUT", "pnl_usd": None, "recorded_pnl_usd": 99}]
+    result = rep._totals(rows)
+    assert result["closed"] == 2
+    assert result["unpriced_closed"] == 1
+    assert result["complete_pnl_usd"] is None
