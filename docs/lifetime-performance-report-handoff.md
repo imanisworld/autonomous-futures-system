@@ -169,9 +169,12 @@ Review `verification_blockers`, `since_inception_verified=false`,
 `trade_mode` are checked when explicitly stamped. A ticker, cohort or gross
 aggregate with even one unverified execution-mode row is labeled **INCOMPLETE**
 and has `complete_pnl_usd=null`; its `priced_subtotal_usd` is a partial,
-unverified subtotal and cannot be described as paper/demo profit. Explicit
-PAPER and DEMO records remain independently classified in
-`journal_by_execution_mode`. The report displays
+unverified subtotal and cannot be described as paper/demo profit. Both the
+TRADE decision and the independent OUTCOME/CLOSE record must carry consistent
+PAPER/DEMO mode; a LIVE marker on either the outer CLOSE envelope or nested
+outcome excludes that trade from paper totals, even when entry says PAPER.
+Missing or conflicting CLOSE mode is INCOMPLETE. Explicit PAPER and DEMO
+records remain independently classified in `journal_by_execution_mode`. The report displays
 paper/demo separately and excludes explicitly live rows from its paper/demo
 subtotal. Missing/unknown journal modes are **UNSTAMPED**, not presumed
 paper; no entry in this source can authenticate a broker fill or account by
