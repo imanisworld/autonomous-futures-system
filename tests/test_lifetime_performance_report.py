@@ -175,4 +175,4 @@ def test_text_view_keeps_unpriced_and_unverified_labels(tmp_path, capsys):
     assert "CHANGE_BOUNDARIES_UNVERIFIED" in text
     assert "NOT YET INDEPENDENTLY VERIFIED" in text
     assert "MGC: -5.0 recorded ticks" in text
-    assert "\\nOptions ACTIVE" not in text
+    assert "\nOptions ACTIVE" in text
