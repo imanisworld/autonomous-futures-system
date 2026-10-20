@@ -2259,11 +2259,22 @@ def capture_snapshot(reason: str, tick: dict, findings: Findings) -> Path:
 MEMORY_RECOVERY_CONFIRM_TICKS = 3
 
 
+def _memory_critical_finding(findings: Findings) -> bool:
+    """Never call memory 'recovered' while a critical memory alert is active."""
+    return any(
+        row["key"].startswith(("memory_", "swap_", "oom_"))
+        for row in findings.blocked()
+    )
+
+
 def handle_memory_warning(state: dict, findings: Findings, tick: dict) -> None:
     warning = next((row for row in findings.warns() if row["key"] == "memory_warning"), None)
     if warning is None:
         previous = state.get("memory_warning") or {}
         if previous.get("active"):
+            if _memory_critical_finding(findings):
+                previous.pop("clear_streak", None)
+                return
             previous["clear_streak"] = previous.get("clear_streak", 0) + 1
             if previous["clear_streak"] < MEMORY_RECOVERY_CONFIRM_TICKS:
                 return
@@ -2310,6 +2321,9 @@ def handle_memory_fixed_warnings(state: dict, findings: Findings, tick: dict) ->
     present = {row["key"]: row for row in findings.warns() if row["key"] in MEM_FIXED_WARNING_KEYS}
     for key in list(active):
         if key not in present and active[key].get("active"):
+            if _memory_critical_finding(findings):
+                active[key].pop("clear_streak", None)
+                continue
             active[key]["clear_streak"] = active[key].get("clear_streak", 0) + 1
             if active[key]["clear_streak"] < MEMORY_RECOVERY_CONFIRM_TICKS:
                 continue
