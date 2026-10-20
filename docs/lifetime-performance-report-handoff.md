@@ -90,7 +90,7 @@ snapshot. No VPS actions are approved by this document.
 | `*.priced_subtotal_usd` | Visible priced subset; do **not** call it lifetime total when incomplete |
 | `lifetime_source_coverage_verified` | **false until independent archive/start/epoch verification** |
 
-The scripts intentionally do not guess an initial deposit, broker balance,
+**Fee basis:** independently recomputed dollars are GROSS, before all commissions and fees. `fees_included=false`; `net_after_fees_usd=null`. Fee differences must not be guessed away.\n\nThe scripts intentionally do not guess an initial deposit, broker balance,
 missing fills, options commission, futures trade attribution by deployed
 release, or historical gaps. An all-time ledger result is **not** account
 equity and is **not** a realized broker statement. The date-range and
