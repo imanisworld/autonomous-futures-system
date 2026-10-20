@@ -114,6 +114,27 @@ def test_combined_failures_are_all_reported_without_early_exit():
         assert any("options-scanner release integrity FAILED" in line for line in alarm_lines)
 
 
+def test_fingerprint_and_options_checks_survive_primary_integrity_failure():
+    with tempfile.TemporaryDirectory() as tmp:
+        root, live, shared = _fixture(tmp)
+        (shared / ".env").write_text(
+            "EXPECTED_LIVE_COMMIT=abc123\n"
+            "EXPECTED_RELEASE_FINGERPRINT=wrong-fingerprint\n"
+        )
+        result = _run_sourced(
+            root, live, shared,
+            'release_integrity_check(){ echo "source drift"; return 1; }\n'
+            'options_scanner_release_check(){ echo "options drift"; return 1; }\n'
+            'post_red_alert(){ :; }\nrun_gate\n',
+        )
+        assert result.returncode == 1
+        alarms = [line for line in result.stdout.splitlines() if "ALARM release-drift:" in line]
+        assert len(alarms) == 3, result.stdout
+        assert any("release integrity FAILED" in alarm for alarm in alarms)
+        assert any("pinned fingerprint mismatch" in alarm for alarm in alarms)
+        assert any("options-scanner release integrity FAILED" in alarm for alarm in alarms)
+
+
 def test_missing_manifest_still_checks_options_scanner():
     with tempfile.TemporaryDirectory() as tmp:
         root, live, shared = _fixture(tmp)
