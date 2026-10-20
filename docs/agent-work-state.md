@@ -12,7 +12,7 @@
 | Ticker label correctness | Draft focused source fix (see GitHub PR #1236); not merged | Exact-head CI, independent review and separate operator merge approval |
 | Futures proof | 4HR MNQ promising but unproven; paper 5m IOC vs historical 1m trigger mismatch persists | Existing forward evidence/DEM0 parity and risk proof; respect sealed MNQ data |
 | Options proof | V1 purchased-premium model in source, no independently verified profitable option P&L; 66-symbol screening is research-only | Existing ACTIVE cohort ledger, exit marks, direction and costs; do not launch a new trial |
-| Deferred PRs | 23 PRs open at snapshot, including competing docs and unused research; inventory in source-only closeout review | Per-PR independent review/classification; no auto-close, merge or delete |
+| Deferred PRs | 23 original PRs inventoried; GitHub now shows 25 including new unmerged #1236/#1237 drafts | Per-PR independent review/classification; no auto-close, merge or delete |
 
 **Source-only exit:** PR #1236 is pending independent review; the operator requested a separate GitHub hygiene/coverage/source audit and VPS evidence handoff, without broad rewrites. Maintain `docs/strategy-rules/Strategy_Inventory.md` and `docs/research-trial-ledger.jsonl` as authoritative strategy/trial sources. Do not infer deployed mode or profitable edge from source CI. Compact open-PR and report inventories are in `docs/afs-repo-readonly-closeout-2026-10-19.md` (draft until reviewed).
 
