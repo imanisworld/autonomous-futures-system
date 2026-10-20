@@ -48,6 +48,9 @@ snapshot. No VPS actions are approved by this document.
 - Futures: approved TRADE decisions joined to OUTCOME strictly by exact
   `paper_order_id` **across all supplied daily files**, matching the identity
   principle in `adaptive/journal_reader.py`; no cross-day or per-market FIFO.
+  Independently reprice gross from recorded actual fill entry/exit prices,
+  direction, contract quantity and canonical `config.futures_contracts` tick
+  values; mismatches against journal dollars block complete figures.
   Unjoinable, duplicate and orphan rows are surfaced and excluded from verified
   dollars; CANCELLED/non-outcome rows never become wins.
 - Futures observation-only: `SHADOW_OUTCOME` latest candidate revision by
