@@ -161,3 +161,18 @@ def test_cli_reports_partial_evidence_and_nonzero_status(tmp_path, capsys):
     printed = json.loads(capsys.readouterr().out)
     assert printed["options"]["lifetime_active"]["pnl_complete"] is False
     assert printed["futures"]["paper_trade_lifetime"]["complete_pnl_usd"] == 90.0
+
+def test_text_view_keeps_unpriced_and_unverified_labels(tmp_path, capsys):
+    folder = _journal_fixture(tmp_path)
+    db, epoch = _options_fixture(tmp_path)
+    code = rep.main(["--journal-dir", str(folder), "--options-db", str(db),
+                     "--options-epochs", str(epoch), "--text"])
+    assert code == 2
+    text = capsys.readouterr().out
+    assert "MNQ: $+120.00" in text
+    assert "SPY: $+6.00" in text
+    assert "QQQ: INCOMPLETE" in text
+    assert "CHANGE_BOUNDARIES_UNVERIFIED" in text
+    assert "NOT YET INDEPENDENTLY VERIFIED" in text
+    assert "MGC: -5.0 recorded ticks" in text
+    assert "\\nOptions ACTIVE" not in text
