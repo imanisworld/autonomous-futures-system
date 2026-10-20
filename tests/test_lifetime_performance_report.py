@@ -397,3 +397,21 @@ def test_incomplete_label_names_unverified_mode_without_dropping_priced_subset()
     assert blank["pnl_complete"] is False
     assert rep._totals([{"status": "WIN", "pnl_usd": 1,
                          "recorded_pnl_usd": 1}])["unverified_execution_mode_rows"] == 0
+
+
+def test_human_report_marks_unverified_ticker_incomplete(tmp_path):
+    journal_dir = _journal_fixture(tmp_path)
+    options_db, epochs = _options_fixture(tmp_path)
+    rows, malformed, _ = rep._read_journals(journal_dir)
+    assert malformed == 0
+    for row in rows:
+        if row.get("paper_order_id") == "a":
+            row.pop("account_mode", None)
+    report = {
+        "futures": rep.futures_report(rows),
+        "options": rep.options_report(options_db, epochs),
+    }
+    rendered = rep.format_human(report)
+    assert "MNQ: INCOMPLETE" in rendered
+    assert "1 unverified paper/demo mode" in rendered
+    assert "MES: $-30.00" in rendered
