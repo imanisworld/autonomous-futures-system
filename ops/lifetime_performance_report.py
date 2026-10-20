@@ -493,23 +493,34 @@ def format_human(report: dict) -> str:
     def dollars(t: dict) -> str:
         value = t["complete_pnl_usd"]
         if value is None:
-            return (f"INCOMPLETE (priced subset ${t['priced_subtotal_usd']:+,.2f}; "
-                    f"{t['unpriced_closed']} unpriced closed)")
+            return (f"INCOMPLETE (gross priced subset ${t['priced_subtotal_usd']:+,.2f}; "
+                    f"{t['unpriced_closed']} unpriced, "
+                    f"{t['recorded_pnl_discrepancies']} price-vs-journal mismatches, "
+                    f"{t['recorded_pnl_missing']} missing recorded P&L)")
         return f"${value:+,.2f} ({t['priced_closed']} priced closed)"
+
+    def comparison(t: dict) -> str:
+        avg = t.get("gross_avg_per_closed_usd")
+        dd = t.get("realized_gross_closed_trade_max_drawdown_usd")
+        return (f" | {t['closed']} closed"
+                f" | avg gross ${avg:+,.2f}" if avg is not None else
+                f" | {t['closed']} closed | avg gross UNKNOWN") + (
+                f" | closed-trade max drawdown ${dd:,.2f}" if dd is not None
+                else " | closed-trade max drawdown UNVERIFIED")
 
     lines = ["LIFETIME PAPER EVIDENCE · READ ONLY",
              "Supplied-file history coverage: NOT YET INDEPENDENTLY VERIFIED",
              "Futures approved journal outcomes (not broker account balance):"]
     for ticker, totals in report["futures"]["paper_by_ticker"].items():
-        lines.append(f"  {ticker}: {dollars(totals)}")
+        lines.append(f"  {ticker}: {dollars(totals)}{comparison(totals)}")
         changes = report["futures"]["paper_by_ticker_and_change"][ticker]
         for change, segment in changes.items():
-            lines.append(f"    {change}: {dollars(segment)}")
+            lines.append(f"    {change}: {dollars(segment)}{comparison(segment)}")
     lines.append("Options ACTIVE paper marks (ASK entry / BID exit; commissions excluded):")
     for ticker, totals in report["options"]["active_by_ticker"].items():
         lines.append(f"  {ticker}: {dollars(totals)}")
         for epoch, segment in report["options"]["active_by_ticker_and_epoch"][ticker].items():
-            lines.append(f"    {epoch}: {dollars(segment)}")
+            lines.append(f"    {epoch}: {dollars(segment)}{comparison(segment)}")
     lines.append("Futures shadow/observer data: separate hypothetical ticks, NOT account dollars")
     for ticker, item in report["futures"]["shadow_observations_by_ticker"].items():
         lines.append(f"  {ticker}: {item['pnl_ticks_priced_subtotal']:+,.1f} recorded ticks "
@@ -518,6 +529,13 @@ def format_human(report: dict) -> str:
                  f"futures {report['futures']['identity_problems']}; "
                  f"options unclassified {report['options']['unknown_lane_excluded']}, "
                  f"epoch conflicts {report['options']['epoch_boundary_conflicts']}")
+    lines.append("Execution provenance: futures "
+                 f"{report['futures']['unstamped_or_unrecognized_mode_rows']} unstamped mode rows; "
+                 f"{report['futures']['explicit_live_rows_excluded_from_paper']} explicitly live rows excluded.")
+    lines.append("Options opening-side provenance: "
+                 f"{report['options']['opening_side_unstamped']} unstamped, "
+                 f"{report['options']['sell_to_open_unsupported']} sell-to-open unsupported.")
+    lines.append("Since-inception VERIFIED: NO. Source completeness, account mode and deployed change dates require independent evidence.")
     lines.append("Financial figures are gross before fees; net after fees is UNKNOWN.")
     lines.append("Do not interpret these data as verified since-inception performance, "
                  "broker-realized P&L, or a causal strategy improvement.")
