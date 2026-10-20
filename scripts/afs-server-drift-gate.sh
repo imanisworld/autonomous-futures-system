@@ -235,6 +235,7 @@ main_ahead_report() {
 
 run_gate() {
   local integrity expected_commit manifest_commit expected_fp manifest_fp body
+  local options_integrity failed=0 primary_ok=1
 
   if [[ ! -d "$LIVE" || ! -f "$LIVE/release_manifest.json" ]]; then
     body="live release tree/manifest unavailable: $LIVE"
@@ -242,19 +243,23 @@ run_gate() {
     post_plain_alert "🚨 Can't confirm which version the server is running" \
       "The installed version's record file is missing, so the server can't prove it runs the approved version." \
       "Check what's installed before trusting any new results" "$body"
-    return 1
+    failed=1
+    primary_ok=0
+  else
+    if ! integrity="$(release_integrity_check 2>&1)"; then
+      body="$integrity"
+      log_line "ALARM release-drift: release integrity FAILED"
+      printf '%s\n' "$body"
+      post_plain_alert "🚨 Server files don't match the installed version" \
+        "Some of the bot's files on the server changed after the version was installed." \
+        "Don't trust new results until the approved version is reinstalled" "$body"
+      failed=1
+      primary_ok=0
+    fi
   fi
 
-  if ! integrity="$(release_integrity_check 2>&1)"; then
-    body="$integrity"
-    log_line "ALARM release-drift: release integrity FAILED"
-    printf '%s\n' "$body"
-    post_plain_alert "🚨 Server files don't match the installed version" \
-      "Some of the bot's files on the server changed after the version was installed." \
-      "Don't trust new results until the approved version is reinstalled" "$body"
-    return 1
-  fi
-
+  # The pins and options-scanner are separate proofs: report all failures even
+  # if the release manifest is missing or the primary integrity check fails.
   expected_commit="$(env_value EXPECTED_LIVE_COMMIT 2>/dev/null || true)"
   manifest_commit="$(manifest_value commit 2>/dev/null || true)"
   if [[ -z "$expected_commit" || -z "$manifest_commit" || "$expected_commit" != "$manifest_commit" ]]; then
@@ -263,22 +268,26 @@ run_gate() {
     post_plain_alert "🚨 Server is running a different version than expected" \
       "The installed version isn't the one the server's settings say should be running." \
       "Check which version was meant to be installed" "$body"
-    return 1
+    failed=1
+    primary_ok=0
   fi
+
   expected_fp="$(env_value EXPECTED_RELEASE_FINGERPRINT 2>/dev/null || true)"
   manifest_fp="$(manifest_value fingerprint 2>/dev/null || true)"
-  if [[ -n "$expected_fp" && "$expected_fp" != "$manifest_fp" ]]; then
-    body="EXPECTED_RELEASE_FINGERPRINT=$expected_fp manifest_fingerprint=${manifest_fp:-<missing>}"
+  if [[ -z "$expected_fp" || -z "$manifest_fp" || "$expected_fp" != "$manifest_fp" ]]; then
+    body="EXPECTED_RELEASE_FINGERPRINT=${expected_fp:-<missing>} manifest_fingerprint=${manifest_fp:-<missing>}"
     log_line "ALARM release-drift: pinned fingerprint mismatch"
     post_plain_alert "🚨 Server is running a different version than expected" \
       "The installed files don't match the fingerprint the server's settings expect." \
       "Check which version was meant to be installed" "$body"
-    return 1
+    failed=1
+    primary_ok=0
   fi
 
-  [[ "$QUIET" -eq 1 ]] || log_line "OK release-integrity: ${manifest_commit:0:12} matches manifest and durable pins"
+  if [[ "$primary_ok" -eq 1 && "$QUIET" -ne 1 ]]; then
+    log_line "OK release-integrity: ${manifest_commit:0:12} matches manifest and durable pins"
+  fi
 
-  local options_integrity
   if ! options_integrity="$(options_scanner_release_check 2>&1)"; then
     body="$options_integrity"
     log_line "ALARM release-drift: options-scanner release integrity FAILED"
@@ -286,7 +295,7 @@ run_gate() {
     post_plain_alert "🚨 Options scanner files don't match its installed version" \
       "Some of the options scanner's files changed after its version was installed." \
       "Don't trust new options alerts until the approved version is reinstalled" "$body"
-    return 1
+    failed=1
   fi
   if [[ -n "$options_integrity" && "$QUIET" -ne 1 ]]; then
     printf '%s\n' "$options_integrity" | tee -a "$LOG"
@@ -295,7 +304,7 @@ run_gate() {
   if [[ "$INFO_MAIN" == "1" ]]; then
     main_ahead_report
   fi
-  return 0
+  return "$failed"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
