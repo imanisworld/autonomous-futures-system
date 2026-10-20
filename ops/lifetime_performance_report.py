@@ -379,7 +379,17 @@ def build_report(journal_dir: Path, options_db: Path, options_epochs: Path,
         "options": options_report(options_db, options_epochs),
         "parse_complete": malformed == 0,
         "lifetime_source_coverage_verified": False,
-        "source_coverage_warning": "Input history and epoch version coverage must be independently verified before declaring since-inception performance.",
+        "execution_provenance_verified": False,
+        "options_open_side_history_verified": False,
+        "since_inception_verified": False,
+        "verification_blockers": [
+            "historical_journal_and_sqlite_coverage_unverified",
+            "futures_account_execution_mode_unverified",
+            "options_historical_buy_only_direction_unverified",
+            "installed_futures_change_boundaries_unverified",
+            "net_fee_schedule_unverified",
+        ],
+        "source_coverage_warning": "Read-only snapshots cannot prove since-inception coverage, execution account mode, historical option buy/sell direction, or net fees without independent operator evidence.",
         "interpretation": "actual/demo futures and ACTIVE options are separate paper-ledger populations; "
                           "shadow observer ticks are not money or tradable fills; "
                           "pre/post changes are descriptive cohorts, never causal improvement claims",
@@ -433,8 +443,10 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
     report = build_report(args.journal_dir, args.options_db, args.options_epochs, args.futures_changes)
     print(format_human(report) if args.text else json.dumps(report, indent=2, sort_keys=True))
-    # Partial/unreconciled input refuses a success status; JSON remains available for triage.
-    ok = (report["parse_complete"] and report["futures"]["reconciled_within_supplied_journals"]
+    # A copied ledger cannot authenticate historical completeness or account mode.
+    # An internally consistent subtotal therefore never exits as VERIFIED.
+    ok = (report["since_inception_verified"] and report["parse_complete"]
+          and report["futures"]["reconciled_within_supplied_journals"]
           and report["futures"]["paper_trade_lifetime"]["pnl_complete"]
           and report["options"]["reconciled_within_supplied_options_snapshot"] and report["options"]["lifetime_active"]["pnl_complete"])
     return 0 if ok else 2
