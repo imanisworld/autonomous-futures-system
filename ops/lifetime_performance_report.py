@@ -186,6 +186,26 @@ def _futures_segment(row: dict, changes: list[dict]) -> str:
     return relevant[-1]["label"] if relevant else "BEFORE_FIRST_DOCUMENTED_CHANGE"
 
 
+def _execution_mode(row: dict) -> str:
+    """Read explicit journal mode; absent fields cannot prove paper provenance."""
+    context = _obj(row.get("context"))
+    for field in ("account_mode", "execution_mode", "broker_mode", "trade_mode"):
+        value = row.get(field)
+        if value is None:
+            value = context.get(field)
+        if value is None:
+            continue
+        mode = str(value).upper().strip()
+        if mode in ("PAPER", "SIM", "SIMULATED"):
+            return "PAPER"
+        if mode in ("DEMO", "SANDBOX"):
+            return "DEMO"
+        if mode in ("LIVE", "REAL", "PRODUCTION"):
+            return "LIVE_EXCLUDED"
+        return "UNRECOGNIZED_MODE"
+    return "MODE_UNSTAMPED"
+
+
 def futures_report(journal_rows: list[dict], *, changes: list[dict] | None = None) -> dict:
     """Exact cross-file paper_order_id join. Never FIFO-pair by market or date."""
     changes = changes or []
@@ -212,11 +232,16 @@ def futures_report(journal_rows: list[dict], *, changes: list[dict] | None = Non
     unresolved = 0
     invalid_identity = len(decisions.pop("", []))
     ambiguous = 0
+    excluded_live = 0
     for oid, entries in decisions.items():
         if len(entries) != 1 or len(outcomes.get(oid, [])) > 1:
             ambiguous += len(entries)
             continue
         trade = entries[0]
+        execution_mode = _execution_mode(trade)
+        if execution_mode == "LIVE_EXCLUDED":
+            excluded_live += 1
+            continue
         outcomes_here = outcomes.get(oid, [])
         inline = _obj(trade.get("outcome"))
         if inline.get("result") and outcomes_here:
@@ -230,6 +255,7 @@ def futures_report(journal_rows: list[dict], *, changes: list[dict] | None = Non
         ticker = str(trade.get("instrument") or "UNKNOWN")
         item = {
             "ticker": ticker,
+            "execution_mode": execution_mode,
             "strategy": str(setup.get("strategy") or "UNSPECIFIED"),
             "status": "NO_FILL" if result == "CANCELLED" and exit_.get("no_fill_reason") and exit_.get("exit_price") is None else result,
             "pnl_usd": _futures_reprice(trade, exit_) if result not in ("OPEN", "PENDING", "NO_FILL") else None,
@@ -263,6 +289,10 @@ def futures_report(journal_rows: list[dict], *, changes: list[dict] | None = Non
         }
     return {
         "paper_trade_lifetime": _totals(clean, closed=FUTURES_RESOLVED),
+        "journal_by_execution_mode": _groups(clean, "execution_mode", closed=FUTURES_RESOLVED),
+        "unstamped_or_unrecognized_mode_rows": sum(row["execution_mode"] in
+            ("MODE_UNSTAMPED", "UNRECOGNIZED_MODE") for row in clean),
+        "explicit_live_rows_excluded_from_paper": excluded_live,
         "paper_by_ticker": _groups(clean, "ticker", closed=FUTURES_RESOLVED),
         "paper_by_change": _groups(clean, "change_period", closed=FUTURES_RESOLVED),
         "paper_by_ticker_and_change": {
@@ -278,7 +308,7 @@ def futures_report(journal_rows: list[dict], *, changes: list[dict] | None = Non
         "shadow_observations_by_ticker": shadow_summary,
         "shadow_unidentified_excluded": shadow_unidentified,
         "change_source": "operator-supplied external documented boundaries" if changes else "NO VERIFIED FUTURES CHANGE BOUNDARIES",
-        "reconciled_within_supplied_journals": invalid_identity == 0 and ambiguous == 0 and orphan == 0,
+        "reconciled_within_supplied_journals": invalid_identity == 0 and ambiguous == 0 and orphan == 0 and excluded_live == 0 and all(row["execution_mode"] not in ("MODE_UNSTAMPED", "UNRECOGNIZED_MODE") for row in clean),
     }
 
 
