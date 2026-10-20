@@ -62,7 +62,7 @@ def _journal_fixture(tmp_path):
          "shadow_outcome": {"result": "WIN", "pnl_ticks": 12}},
     ]
     later = [
-        {"type": "OUTCOME", "outcome": {"paper_order_id": "a", "result": "WIN", "pnl_dollars": 120}},
+        {"type": "OUTCOME", "outcome": {"paper_order_id": "a", "result": "WIN", "entry_price": 20000, "exit_price": 20060, "contracts": 1, "pnl_dollars": 120}},
         {"type": "OUTCOME", "outcome": {"paper_order_id": "b", "result": "LOSS", "pnl_dollars": -30}},
         {"type": "SHADOW_OUTCOME", "instrument": "MGC", "candidate_key": "c",
          "strategy": "shadow", "evidence_epoch": "e1",
