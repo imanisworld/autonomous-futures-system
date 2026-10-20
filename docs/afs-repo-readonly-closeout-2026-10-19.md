@@ -11,7 +11,9 @@ Scope: a bounded GitHub snapshot, not a live or broker verification. GitHub `mai
 - The per-ticker error after #1235 (unstamped futures rows could still show clean ticker dollars) has a separate **draft-only** fix in #1236. Merge and deployment are separate decisions.
 - Existing options daily, cash/equity and diagnostics reports should be **reused**, not replaced. Research and sealed forward gates remain untouched.
 
-## Open PR inventory — 23 at GitHub snapshot
+## Open PR inventory — original 23, plus this work's two draft PRs
+
+The original review had **23 open PRs**. A subsequent GitHub check found **25** after creating source-only draft #1236 (ticker-label fix) and #1237 (this docs closeout); neither of those two has been merged or independently approved.
 
 **Categories:** KEEP/HOLD = distinct source or review value, no merge authority; CONFLICT/RECONCILE = overlapping documentation or differing verdicts; DEFER = deliberate unapproved expansion/privileged operation; CLOSE CANDIDATE = operator may archive after preserving unique evidence and confirming no active dependency. No PR has been closed, rebased, merged or deleted by this audit. Titles and file footprints were checked, but the full semantic diffs have not all received independent code review.
 
