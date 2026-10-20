@@ -1,0 +1,8 @@
+# Restricted maintenance for the existing grok-audit account.
+# grok-audit may run only this program, and only with the "run" argument.
+# The program's own parser is the operation allowlist.
+# This file does not grant a shell, a restart, a deploy, or any other binary.
+Defaults!/usr/local/sbin/afs-maintenance env_reset
+Defaults!/usr/local/sbin/afs-maintenance env_keep+="SSH_CONNECTION SSH_CLIENT"
+Defaults!/usr/local/sbin/afs-maintenance secure_path="/usr/sbin:/usr/bin:/sbin:/bin"
+grok-audit ALL=(root) NOPASSWD: /usr/local/sbin/afs-maintenance run *
