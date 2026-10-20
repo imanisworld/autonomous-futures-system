@@ -481,7 +481,7 @@ def build_report(journal_dir: Path, options_db: Path, options_epochs: Path,
             "net_fee_schedule_unverified",
         ],
         "source_coverage_warning": "Read-only snapshots cannot prove since-inception coverage, execution account mode, historical option buy/sell direction, or net fees without independent operator evidence.",
-        "interpretation": "actual/demo futures and ACTIVE options are separate paper-ledger populations; "
+        "interpretation": "approved futures journal rows have not been proven paper/demo/live by source metadata; options ACTIVE marks are a separate cohort; "
                           "shadow observer ticks are not money or tradable fills; "
                           "pre/post changes are descriptive cohorts, never causal improvement claims",
     }
@@ -510,7 +510,7 @@ def format_human(report: dict) -> str:
 
     lines = ["LIFETIME PAPER EVIDENCE · READ ONLY",
              "Supplied-file history coverage: NOT YET INDEPENDENTLY VERIFIED",
-             "Futures approved journal outcomes (not broker account balance):"]
+             "Futures approved journal outcomes (execution account provenance requires verification):"]
     for ticker, totals in report["futures"]["paper_by_ticker"].items():
         lines.append(f"  {ticker}: {dollars(totals)}{comparison(totals)}")
         changes = report["futures"]["paper_by_ticker_and_change"][ticker]
@@ -518,7 +518,7 @@ def format_human(report: dict) -> str:
             lines.append(f"    {change}: {dollars(segment)}{comparison(segment)}")
     lines.append("Options ACTIVE paper marks (ASK entry / BID exit; commissions excluded):")
     for ticker, totals in report["options"]["active_by_ticker"].items():
-        lines.append(f"  {ticker}: {dollars(totals)}")
+        lines.append(f"  {ticker}: {dollars(totals)}{comparison(totals)}")
         for epoch, segment in report["options"]["active_by_ticker_and_epoch"][ticker].items():
             lines.append(f"    {epoch}: {dollars(segment)}{comparison(segment)}")
     lines.append("Futures shadow/observer data: separate hypothetical ticks, NOT account dollars")
@@ -537,6 +537,7 @@ def format_human(report: dict) -> str:
                  f"{report['options']['sell_to_open_unsupported']} sell-to-open unsupported.")
     lines.append("Since-inception VERIFIED: NO. Source completeness, account mode and deployed change dates require independent evidence.")
     lines.append("Financial figures are gross before fees; net after fees is UNKNOWN.")
+    lines.append("Closed-trade drawdown is an entry/exit-price gross realized curve only, NOT true account-equity drawdown.")
     lines.append("Do not interpret these data as verified since-inception performance, "
                  "broker-realized P&L, or a causal strategy improvement.")
     return "\n".join(lines)
