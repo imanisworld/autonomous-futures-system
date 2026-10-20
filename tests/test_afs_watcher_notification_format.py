@@ -330,3 +330,22 @@ def test_memory_critical_blocking_path_unchanged_by_recovery_confirmation():
     f = w.Findings()
     f.add("BLOCKED", "memory_critical", "headroom critically low")
     assert any(row["key"] == "memory_critical" for row in f.blocked())
+
+
+def test_memory_warning_does_not_report_recovered_during_critical_block(monkeypatch):
+    state = {"memory_warning": {"active": True, "clear_streak": 2},
+             "memory_fixed_warnings": {"swap_pressure_warning": {"active": True, "clear_streak": 2}},
+             "notified": {}}
+    sent = []
+    monkeypatch.setattr(w, "notify", lambda *_args: sent.append("unexpected"))
+    blocked = w.Findings()
+    blocked.add("BLOCKED", "memory_critical", "critical headroom violation")
+
+    for _ in range(4):
+        w.handle_memory_warning(state, blocked, _memory_tick())
+        w.handle_memory_fixed_warnings(state, blocked, _memory_tick())
+    assert sent == []
+    assert state["memory_warning"]["active"] is True
+    assert state["memory_fixed_warnings"]["swap_pressure_warning"]["active"] is True
+    assert "clear_streak" not in state["memory_warning"]
+    assert "clear_streak" not in state["memory_fixed_warnings"]["swap_pressure_warning"]
