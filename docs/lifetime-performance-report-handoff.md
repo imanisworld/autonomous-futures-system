@@ -150,4 +150,4 @@ against explicitly authorized, consistent offline evidence copies.
 **Current financial figures: UNKNOWN; no production journal or SQLite data was
 read for this PR.**
 
-AFS-0308 review: changes pending; do not merge.
+AFS-0308 reviewer issues addressed in draft: unexpected exits counted, gross repriced from fill prices and contract quantities, fees excluded/unknown, and new regression cases. Independent re-review and exact-head CI still required; do not merge.
