@@ -396,6 +396,7 @@ def options_report(db_path: Path, registry: Path) -> dict:
     counterfactual = 0
     unknown_lane = 0
     nonlong_open_side = 0
+    explicit_sell_to_open = 0
     unstamped_open_side = 0
     boundary_conflicts = 0
     prior_rows = 0
@@ -415,6 +416,8 @@ def options_report(db_path: Path, registry: Path) -> dict:
             unstamped_open_side += 1
         elif open_side != "BUY_TO_OPEN":
             nonlong_open_side += 1
+            if open_side == "SELL_TO_OPEN":
+                explicit_sell_to_open += 1
         start = _time(ts)
         if start is None:
             boundary_conflicts += 1
@@ -451,7 +454,8 @@ def options_report(db_path: Path, registry: Path) -> dict:
         "epochs": [{k: x[k] for k in ("name", "first_id", "reason")} | {"start_utc": x["start"].isoformat()} for x in boundaries],
         "counterfactual_excluded": counterfactual,
         "unknown_lane_excluded": unknown_lane,
-        "sell_to_open_unsupported": nonlong_open_side,
+        "sell_to_open_unsupported": explicit_sell_to_open,
+        "unrecognized_or_conflicting_open_side": nonlong_open_side - explicit_sell_to_open,
         "opening_side_unstamped": unstamped_open_side,
         "epoch_boundary_conflicts": boundary_conflicts,
         "before_registered_epochs": prior_rows,
@@ -537,7 +541,8 @@ def format_human(report: dict) -> str:
                  f"{report['futures']['explicit_live_rows_excluded_from_paper']} explicitly live rows excluded.")
     lines.append("Options opening-side provenance: "
                  f"{report['options']['opening_side_unstamped']} unstamped, "
-                 f"{report['options']['sell_to_open_unsupported']} sell-to-open unsupported.")
+                 f"{report['options']['sell_to_open_unsupported']} sell-to-open, "
+                 f"{report['options']['unrecognized_or_conflicting_open_side']} unsupported/conflicting.")
     lines.append("Since-inception VERIFIED: NO. Source completeness, account mode and deployed change dates require independent evidence.")
     lines.append("Financial figures are gross before fees; net after fees is UNKNOWN.")
     lines.append("Closed-trade drawdown is an entry/exit-price gross realized curve only, NOT true account-equity drawdown.")
