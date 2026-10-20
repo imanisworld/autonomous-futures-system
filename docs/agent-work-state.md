@@ -1,6 +1,29 @@
 # Agent Work State
 
-## START HERE — source `4d56333` / #1222 merged; box checkpoint remains 2026-10-11 ~14:50Z (HOLD wide-stop)
+## START HERE — source `4db26a1` / operator VPS snapshot 2026-10-20; HOLD / NO RUN
+
+Read this block and `AGENTS.md` before the dated archive. Adapted from the operator-provided `agent-work-state_2026-10-19.md` checkpoint and the 2026-10-20 Cursor read-only findings. **Repository facts were checked in GitHub; VPS observations are attributed to the operator's Cursor report and have NOT been independently verified here.** No private P&L totals are included in this checkpoint.
+
+| Item | Current source / operator-reported state |
+|---|---|
+| **GitHub `main`** | Verified `4db26a112ea5c2f045d9853ed6819b22f6b9f1a7`. Source-only merges #1228/#1229 and later #1231–#1235 are already included. These merges do not establish any installed VPS change. |
+| **Runtime release / integrity** | Cursor read-only report: futures release `94a71bd`, **integrity FAIL** due to exactly `scripts/__pycache__/options_122_prospective_collect.cpython-313.pyc`. Reporter attributes creation to a 2026-10-11 root audit running Python without `-B`; manifest-listed source stayed unchanged. Root cause is **reported proven**, but restoration has **not occurred** and independently verified PASS is still required. |
+| **Service restart risk** | Cursor reports `futures-bot` currently running in DEMO/live-off posture, no orders or positions; a restart could fail the enforced integrity gate. Do not restart or remove the stray file under this source-only work. |
+| **Repair authority** | Incident-evidence backup, exact `__pycache__` removal, read-only recheck and next complete drift-gate pass are a **separate operator-governed VPS action** in the Oct 23–25 maintenance plan. This checkpoint gives **no authorization** for any of them. No deployment, build, promote, restart, repin, timer/service mutation or `apt upgrade` before independently reverified integrity and separate operator GO. |
+| **Other masked monitoring** | Cursor reports the drift gate stopped at the futures check and skipped later options-scanner/pin checks; manual checks passed separately. Weekly review Discord failures, scanner database locks and watcher swap pressure remain operational evidence tasks. #1231/#1232 are GitHub-only fixes; #1233 is a merged documentation handoff, not installed Discord consolidation. |
+| **Lifetime finance** | Source-only reporters #1234/#1235 merged. Cursor reports original journals lack joinable order IDs and execution-mode stamps; **verified since-inception futures totals are UNKNOWN**. Options opening sides are unstamped; actual net-after-fee results UNKNOWN. Keep futures actual broker-path, hypothetical shadow and options ACTIVE evidence strictly separate. Draft #1236 adds stricter per-ticker/CLOSE mode labels; awaits Grok review. |
+| **Futures forward** | Cursor reports Track B bars flowing but forward ledger stale; independently count qualifying setups before claiming collection. 4HR/3-2-2 observer evidence accumulating but prereg gates not met. No source merge implies an edge. |
+| **Six-micro** | Cursor reports timer manually disabled Oct 19 and required evidence not collected. Operator must decide whether the disable was intended **before any timer action**; keep disabled until separate authorization. |
+| **Options forward** | Options 122 forward proof remains blocked by its older installed collector pin and missing binding evidence. No repin, retroactive binding, data backfill or new scanner experiment. |
+| **Source-only draft PRs** | #1236 — lifetime entry+CLOSE mode reconciliation; #1238 — weekly HTTP delivery diagnostics; #1239 — observer Unix-time filename fix; this checkpoint is separate; #1237 is an overlapping, still-unmerged broader docs/hygiene draft and must be reconciled before any docs merge. Each requires exact-head CI and independent Grok approval. |
+| **Outstanding research / open PRs** | #1217 MNQ forward-seal guard remains on hold; #1226/#1225/#1230 competing hygiene/research docs require distinct review. Do not reopen sealed MNQ evidence or infer validated futures/options profitability. |
+| **Verdict and next** | **HOLD / NO RUN**. Grok reviews small GitHub draft diffs. Separately, the operator decides whether to authorize the narrow integrity repair; independent verifier must confirm clean release **and complete gate traversal** before any release/restart discussion. |
+
+**Historical checkpoints below are retained as evidence, not current work orders.** The source SHA, demo/timer state and action list in the 2026-10-11 section are superseded by this attributed October 20 checkpoint.
+
+## Archived checkpoint — 2026-10-11
+
+### START HERE (2026-10-11, superseded) — source `4d56333` / #1222 merged; box checkpoint remains 2026-10-11 ~14:50Z (HOLD wide-stop)
 
 Read **only** this block + `AGENTS.md` unless drift is detected. Private numeric handoff: ChatGPT Library `/Futures Research/Futures Research Handoff - 2026-10-10.md`.
 
