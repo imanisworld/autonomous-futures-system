@@ -337,3 +337,63 @@ def test_conflicting_or_unrecognized_option_open_intent_blocks_pricing(tmp_path)
     assert report["sell_to_open_unsupported"] == 0
     assert report["active_by_ticker"]["SPY"]["unpriced_closed"] == 1
     assert report["reconciled_within_supplied_options_snapshot"] is False
+
+
+def test_unverified_mode_makes_only_affected_futures_ticker_incomplete():
+    def trade(order_id, ticker, mode):
+        row = {"decision": "TRADE", "paper_order_id": order_id,
+               "instrument": ticker, "risk_check": {"result": "APPROVED"},
+               "setup": {"direction": "LONG", "contracts": 1},
+               "ts": "2026-09-16T13:00:00Z"}
+        if mode is not None:
+            row["account_mode"] = mode
+        return row
+
+    def outcome(order_id, ticker):
+        # One tick in MNQ is $0.50; one tick in MES is $1.25.
+        tick = 0.25
+        recorded = 0.50 if ticker == "MNQ" else 1.25
+        return {"type": "OUTCOME", "ts": "2026-09-16T14:00:00Z",
+                "outcome": {"paper_order_id": order_id, "result": "WIN",
+                            "entry_price": 20000, "exit_price": 20000 + tick,
+                            "contracts": 1, "pnl_dollars": recorded}}
+
+    journal = [
+        trade("mnq1", "MNQ", "PAPER"), outcome("mnq1", "MNQ"),
+        trade("mnq2", "MNQ", None), outcome("mnq2", "MNQ"),
+        trade("mes1", "MES", "DEMO"), outcome("mes1", "MES"),
+    ]
+    result = rep.futures_report(journal)
+    mnq = result["paper_by_ticker"]["MNQ"]
+    mes = result["paper_by_ticker"]["MES"]
+    assert mnq["priced_subtotal_usd"] == 1.0
+    assert mnq["unpriced_closed"] == 0
+    assert mnq["unverified_execution_mode_rows"] == 1
+    assert mnq["pnl_complete"] is False
+    assert mnq["complete_pnl_usd"] is None
+    assert result["paper_by_ticker_and_change"]["MNQ"]["CHANGE_BOUNDARIES_UNVERIFIED"]["complete_pnl_usd"] is None
+    assert result["paper_trade_lifetime"]["complete_pnl_usd"] is None
+
+    assert mes["unverified_execution_mode_rows"] == 0
+    assert mes["pnl_complete"] is True
+    assert mes["complete_pnl_usd"] == 1.25
+    assert result["journal_by_execution_mode"]["MODE_UNSTAMPED"]["pnl_complete"] is False
+    assert result["journal_by_execution_mode"]["DEMO"]["pnl_complete"] is True
+
+
+def test_incomplete_label_names_unverified_mode_without_dropping_priced_subset():
+    sample = rep._totals([
+        {"status": "WIN", "pnl_usd": 10, "recorded_pnl_usd": 10,
+         "execution_mode": "MODE_UNSTAMPED"},
+        {"status": "LOSS", "pnl_usd": -3, "recorded_pnl_usd": -3,
+         "execution_mode": "PAPER"},
+    ])
+    assert sample["unverified_execution_mode_rows"] == 1
+    assert sample["priced_subtotal_usd"] == 7
+    assert sample["complete_pnl_usd"] is None
+    blank = rep._totals([{"status": "OPEN", "pnl_usd": None,
+                           "execution_mode": "UNRECOGNIZED_MODE"}])
+    assert blank["unverified_execution_mode_rows"] == 1
+    assert blank["pnl_complete"] is False
+    assert rep._totals([{"status": "WIN", "pnl_usd": 1,
+                         "recorded_pnl_usd": 1}])["unverified_execution_mode_rows"] == 0
