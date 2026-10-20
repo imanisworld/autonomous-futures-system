@@ -1,6 +1,22 @@
 # Futures Operator TODO
 
-## Operator checklist — 2026-10-08 (completion requires operator verification)
+## CURRENT bounded queue — 2026-10-19/20 (source-only)
+
+**GitHub main** `4db26a1` checked for this checkpoint. Box integrity/installed source **not checked**. **HOLD deployment and ALL service restarts**, even after source merges, until independently documented restored release integrity and separate operator GO.
+
+- [x] GitHub-only Discord noise/reporting changes #1231–#1233 merged; no VPS installation proven.
+- [x] Read-only gross lifetime accounting source #1234 and provenance/epoch comparison #1235 merged; not historical P&L proof.
+- [ ] Close source correctness follow-up: per-ticker `INCOMPLETE` for unstamped futures execution mode — focused draft #1236 awaiting CI and independent reviewer.
+- [ ] One **read-only** original-box evidence pass: release manifest/stray bytecode cause; installed sha, expected fingerprint, PYTHONDONTWRITEBYTECODE unit/env posture (redacted), watcher, drift alarms, deploy lock, broker live-off/demo/flatness, pins, rollback readiness. Preserve alerts; no changes.
+- [ ] One **read-only** private lifetime ledger reconciliation: all dated futures journals, exact order joins, paper/demo/live provenance, options SQLite snapshot + WAL, ACTIVE vs COUNTERFACTUAL, epoch/option-opening-side/quantity, commissions and actual change activation timestamps. No private P&L in public GitHub.
+- [ ] One **read-only** monitoring pass: weekly review, options scanner locks/error routing, forward proof/disabled timer, 3 intended Discord streams + protected critical fallback, delivery receipts. Never silence warning alarms to fabricate health.
+- [ ] Independent forward/DEMO evidence proof for approved tracks, without opening MNQ sealed research. No strategy tuning or deployment.
+- [ ] Review PR classifications in `docs/afs-repo-readonly-closeout-2026-10-19.md`; close/merge/rebase none without explicit operator review.
+- [ ] After independent integrity repair proof only: separately nominate exact deploy SHA, recheck release/CI/rollback and seek operator GO. No candidate currently approved.
+
+**DONE condition:** one reviewed source-only closeout and one authenticated read-only VPS evidence packet showing either complete per-ticker accounting and valid monitoring, or exact named blockers. Do not launch another indefinite feature/audit cycle.
+
+## HISTORICAL operator checklist — 2026-10-08 (completion requires operator verification)
 
 **Priority:** Resolve Grok's actual blockers first. Do not deploy merely to finish this checklist.
 
