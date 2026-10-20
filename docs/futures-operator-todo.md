@@ -27,7 +27,7 @@
 - [ ] Keep #1167 cleanup audit-only; no code or evidence deletion.
 
 ### 5. Trading evidence
-- [ ] Keep existing read-only collection unchanged if evidence integrity is verified; check whether 'dead companion daily' was a retired Discord job using root read-only census, not assume loss of trading evidence.
+- [x] Oct 19 notification audit verified the companion daily cron is absent and the options companion remains disabled; the repository census had an obsolete `companion daily` freshness expectation. Removal is proposed in the separate read-only census PR; re-pin the independently installed reporter only after review and box proof. Preserve historical logs and active collection checks.
 - [ ] Defer combined trade-performance review until the weekend. Preserve existing reports without promotion claims.
 
 **End-of-day goal:** Verified readiness, current documentation, and a clear deployment decision — not necessarily deployment itself.
