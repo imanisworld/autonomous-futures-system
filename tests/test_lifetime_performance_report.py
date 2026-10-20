@@ -110,7 +110,7 @@ def test_futures_change_markers_require_evidence_and_use_entry_time(tmp_path):
     by = rep.futures_report(journal, changes=changes)["paper_by_ticker_and_change"]
     assert by["MNQ"]["BEFORE_FIRST_DOCUMENTED_CHANGE"]["complete_pnl_usd"] == 120
     assert by["MNQ"]["NEW_RULE"]["records"] == 1
-    assert by["MES"]["BEFORE_FIRST_DOCUMENTED_CHANGE"]["complete_pnl_usd"] == -30
+    assert by["MES"]["CHANGE_BOUNDARIES_UNVERIFIED"]["complete_pnl_usd"] == -30
     manifest.write_text(json.dumps({"changes": [{"instrument": "MNQ",
         "label": "unsourced", "effective_utc": "2026-09-16T00:00:00Z"}]}))
     with pytest.raises(ValueError, match="evidence_ref"):
