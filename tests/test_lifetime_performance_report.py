@@ -84,6 +84,7 @@ def test_lifetime_separates_futures_option_epochs_and_shadow(tmp_path):
     assert futures["paper_by_change"]["CHANGE_BOUNDARIES_UNVERIFIED"]["records"] == 3
     assert futures["identity_problems"]["unresolved_with_identity"] == 1
     assert futures["shadow_observations_by_ticker"]["MGC"]["pnl_ticks_priced_subtotal"] == -5
+    assert report["lifetime_source_coverage_verified"] is False
     assert report["options"]["lifetime_active"]["priced_subtotal_usd"] == 6
     assert report["options"]["lifetime_active"]["complete_pnl_usd"] is None
     assert report["options"]["active_by_ticker"]["SPY"]["complete_pnl_usd"] == 6
@@ -93,7 +94,7 @@ def test_lifetime_separates_futures_option_epochs_and_shadow(tmp_path):
     assert report["options"]["active_by_epoch"]["BEFORE_REGISTERED_EPOCHS"]["complete_pnl_usd"] == -20
     assert report["options"]["counterfactual_excluded"] == 1
     assert report["options"]["unknown_lane_excluded"] == 1
-    assert report["options"]["pnl_authoritative"] is False
+    assert report["options"]["reconciled_within_supplied_options_snapshot"] is False
 
 
 def test_futures_change_markers_require_evidence_and_use_entry_time(tmp_path):
@@ -125,7 +126,7 @@ def test_ambiguity_and_nonfinite_prices_are_never_assumed_valid(tmp_path):
     actual = rep.futures_report(journal)
     assert actual["identity_problems"]["ambiguous_duplicate_id_decisions"] == 1
     assert actual["paper_trade_lifetime"]["priced_subtotal_usd"] == -30
-    assert actual["pnl_authoritative"] is False
+    assert actual["reconciled_within_supplied_journals"] is False
     assert rep._money(float("nan")) is None
     assert rep._money(float("inf")) is None
     result = rep._totals([{"status": "WIN", "pnl_usd": None}])
@@ -140,7 +141,7 @@ def test_epoch_boundary_mismatch_is_counted_not_relabelled(tmp_path):
     out = rep.options_report(db, epoch)
     assert out["epoch_boundary_conflicts"] == 1
     assert out["active_by_epoch"]["BOUNDARY_CONFLICT"]["records"] == 1
-    assert out["pnl_authoritative"] is False
+    assert out["reconciled_within_supplied_options_snapshot"] is False
 
 
 def test_absent_inputs_fail_and_no_sqlite_is_created(tmp_path):
