@@ -365,7 +365,7 @@ def format_human(report: dict) -> str:
                  f"epoch conflicts {report['options']['epoch_boundary_conflicts']}")
     lines.append("Do not interpret these data as verified since-inception performance, "
                  "broker-realized P&L, or a causal strategy improvement.")
-    return "\\n".join(lines)
+    return "\n".join(lines)
 
 
 def main(argv: list[str] | None = None) -> int:
