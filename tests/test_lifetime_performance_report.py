@@ -213,3 +213,20 @@ def test_real_futures_timeout_price_and_wrong_recorded_dollars(tmp_path):
     assert result["priced_subtotal_usd"] == 80
     assert result["recorded_pnl_discrepancies"] == 1
     assert result["pnl_complete"] is False
+
+def test_options_timeout_and_fee_caveat_from_real_sqlite(tmp_path):
+    db, epoch = _options_fixture(tmp_path)
+    with sqlite3.connect(db) as conn:
+        conn.execute("INSERT INTO options_shadow_journal VALUES (?,?,?,?,?,?,?)",
+                     (23, "2026-09-22T15:00:00Z", "SPY", "TIMEOUT", "{}",
+                      json.dumps({"paper_evidence_lane": "ACTIVE", "option_mark": 2,
+                                  "contracts": 2}),
+                      json.dumps({"exit_mark": 1.5, "pnl_dollars": -10})))
+    out = rep.options_report(db, epoch)
+    spy = out["active_by_ticker"]["SPY"]
+    assert spy["closed"] == 5
+    assert spy["priced_subtotal_usd"] == -94
+    assert spy["recorded_pnl_discrepancies"] == 1
+    assert spy["pnl_complete"] is False
+    assert spy["fees_included"] is False
+    assert spy["net_after_fees_usd"] is None
