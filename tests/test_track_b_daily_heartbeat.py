@@ -243,6 +243,41 @@ def test_six_micro_retired_is_not_failed(tmp_path):
     assert result["retired_on_et"] == "2026-10-18"
 
 
+def test_bad_heartbeat_state_cannot_break_existing_eod_exit(tmp_path, caplog):
+    import context.wide_stop_demo_runtime as demo
+
+    path = tmp_path / "track_b_heartbeat_state" / "2026-10-20.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({"bars": {"bad": "wrong shape"}}), encoding="utf-8")
+    result = demo.run_demo_eod_fallback(
+        cfg=_cfg(), log_dir=tmp_path,
+        now=datetime(2026, 10, 20, 20, 2, tzinfo=timezone.utc),
+    )
+    assert result == {"ok": True, "action": "NO_ACTION", "reason": "NO_DEMO_STATE"}
+    assert "Track B EOD heartbeat seal failed" in caplog.text
+    assert not (tmp_path / JOURNAL_NAME).exists()
+
+
+def test_heartbeat_write_failure_cannot_break_paper_collector(tmp_path, monkeypatch, caplog):
+    import context.track_b_daily_heartbeat as heartbeat
+
+    monkeypatch.setattr(
+        collector, "_evaluate_canonical_candidate",
+        lambda **kwargs: (None, None, None, None),
+    )
+    monkeypatch.setattr(collector, "_resolve_one_position", lambda **kwargs: None)
+    def explode(*args, **kwargs):
+        raise RuntimeError("synthetic heartbeat storage fault")
+    monkeypatch.setattr(heartbeat, "record_bar", explode)
+    result = collector.process_five_min_bar(
+        payload=_payload("2026-10-20T14:05:00+00:00"),
+        cfg=_cfg(), bars_5m=[], log_dir=tmp_path,
+        for_date=date(2026, 10, 20),
+    )
+    assert result == []
+    assert "Track B heartbeat checkpoint failed" in caplog.text
+
+
 def test_retired_timer_reactivation_still_fails(tmp_path):
     result = check_six_micro(
         shared=tmp_path, run=_fake_run_for_retirement(enabled="enabled", active="active"),
