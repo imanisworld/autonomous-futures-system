@@ -540,7 +540,10 @@ def _process_five_min_bar_locked(
             strategy=strategy,
         )
         if strategy == FOUR_HR and _in_detection_window(FOUR_HR, current_ts):
-            track_b_checked = True
+            # A window tick with no DecisionEngine result is NOT proof that
+            # the setup was evaluated. The sealed day must fail if all checks
+            # returned unavailable.
+            track_b_checked = decision is not None
             track_b_signal = bool(
                 candidate is not None
                 and decision is not None
