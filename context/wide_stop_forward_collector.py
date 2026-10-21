@@ -516,6 +516,7 @@ def _process_five_min_bar_locked(
     events: list[dict[str, Any]] = []
     track_b_checked = False
     track_b_signal = False
+    track_b_entry_recorded = False
     track_b_reason = "NO_4HR_WINDOW_EVALUATION"
 
     # Resolve first. A position opened at the prior bar close can resolve on
@@ -687,6 +688,12 @@ def _process_five_min_bar_locked(
             continue
         audit["collector"] = "wide_stop_forward_v1"
         audit["collector_event"] = "CANDIDATE"
+        if (
+            strategy == FOUR_HR
+            and audit.get("fill_status") == "OPEN"
+            and audit.get("fill_price") is not None
+        ):
+            track_b_entry_recorded = True
         if audit.get("fill_status") == "OPEN" and audit.get("fill_price") is not None:
             lane_state["position"] = _position_record(
                 strategy=strategy,
@@ -712,11 +719,7 @@ def _process_five_min_bar_locked(
             checked=track_b_checked,
             signal=track_b_signal,
             reason=track_b_reason,
-            entry_recorded=any(
-                event.get("strategy") == FOUR_HR
-                and event.get("fill_status") == "OPEN"
-                for event in events
-            ),
+            entry_recorded=track_b_entry_recorded,
         )
     except (OSError, ValueError) as exc:
         logger.error("Track B heartbeat checkpoint failed: %s", exc)
