@@ -78,6 +78,58 @@ def test_no_signal_day_seals_one_valid_heartbeat(tmp_path, monkeypatch):
     assert verified["status"] == "OK — no signal"
 
 
+def test_entry_recorded_is_distinct_from_no_signal(tmp_path):
+    for stamp, checked in (
+        ("2026-10-20T14:05:00+00:00", True),
+        ("2026-10-20T19:55:00+00:00", False),
+    ):
+        record_bar(
+            tmp_path / "logs",
+            current_ts=datetime.fromisoformat(stamp),
+            checked=checked, signal=checked, reason="4HR_SIGNAL" if checked else "AFTER_WINDOW",
+            entry_recorded=checked,
+        )
+    row = seal_session(
+        tmp_path / "logs",
+        now=datetime(2026, 10, 20, 20, 2, tzinfo=timezone.utc),
+        fallback_action="NO_ACTION",
+    )
+    assert row["signal"] is True
+    assert row["entry_recorded"] is True
+    assert row["complete"] is True
+    proof = track_b_heartbeat_proof(
+        tmp_path, datetime(2026, 10, 20, 21, 25, tzinfo=timezone.utc),
+    )
+    assert proof["status"] == "ENTRY_RECORDED"
+    assert proof["passed"] is True
+
+
+def test_bars_without_a_real_decision_cannot_pass_as_no_signal(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        collector, "_evaluate_canonical_candidate",
+        lambda **kwargs: (None, None, None, None),
+    )
+    monkeypatch.setattr(collector, "_resolve_one_position", lambda **kwargs: None)
+    for ts in ("2026-10-20T14:05:00+00:00", "2026-10-20T19:55:00+00:00"):
+        collector.process_five_min_bar(
+            payload=_payload(ts), cfg=_cfg(), bars_5m=[],
+            log_dir=tmp_path / "logs", for_date=date(2026, 10, 20),
+        )
+    row = seal_session(
+        tmp_path / "logs",
+        now=datetime(2026, 10, 20, 20, 2, tzinfo=timezone.utc),
+        fallback_action="NO_ACTION",
+    )
+    assert row["bars_evaluated"] == 2
+    assert row["setups_checked"] == 0
+    assert row["complete"] is False
+    proof = track_b_heartbeat_proof(
+        tmp_path, datetime(2026, 10, 20, 21, 25, tzinfo=timezone.utc),
+    )
+    assert proof["passed"] is False
+    assert proof["reason"] == "NO_BARS_OR_SETUP_EVALUATIONS"
+
+
 def test_missing_heartbeat_fails_even_when_service_is_healthy(tmp_path):
     report = track_b_heartbeat_proof(
         tmp_path, datetime(2026, 10, 20, 21, 25, tzinfo=timezone.utc)
