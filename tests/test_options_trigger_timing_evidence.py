@@ -123,6 +123,17 @@ def test_flag_off_does_not_touch_candidate_fields_or_write_a_journal(tmp_path):
     assert not (tmp_path / "first-sight.jsonl").exists()
 
 
+def test_corrupt_timing_journal_cannot_interrupt_existing_scan(tmp_path):
+    (tmp_path / "first-sight.jsonl").write_text("{not valid JSON\n", encoding="utf-8")
+    scanner = _test_scan(tmp_path, enabled=True)
+    assert len(scanner.captured) == 2
+    _, daily = scanner.captured[1]
+    assert daily["setup_entry_trigger"] == 100.0
+    assert daily["trigger_timing_evidence_status"] == "ERROR"
+    assert "trigger_known_at" not in daily
+    assert "first_eval_price_vs_trigger_r" not in daily
+
+
 def test_enabled_observer_fields_flow_to_daily_setup_inputs(tmp_path):
     scanner = _test_scan(tmp_path, enabled=True)
     assert len(scanner.captured) == 2
