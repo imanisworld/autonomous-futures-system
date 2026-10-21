@@ -721,7 +721,7 @@ def _process_five_min_bar_locked(
             reason=track_b_reason,
             entry_recorded=track_b_entry_recorded,
         )
-    except (OSError, ValueError) as exc:
+    except Exception as exc:  # noqa: BLE001 — observer cannot stop paper collection
         logger.error("Track B heartbeat checkpoint failed: %s", exc)
     return events
 
