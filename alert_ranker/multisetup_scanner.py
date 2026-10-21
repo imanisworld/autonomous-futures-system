@@ -478,7 +478,7 @@ def build_multisetup_scanner(base_cls):
                             )
                             data.update(timing)
                             data["trigger_timing_evidence_status"] = "FIRST_SCAN_OBSERVED"
-                        except (OSError, ValueError, TypeError):
+                        except Exception:  # noqa: BLE001 — opt-in telemetry cannot break scans
                             # Evidence failure is explicit, never represented
                             # as a successful first-sight observation.
                             data["trigger_timing_evidence_status"] = "ERROR"
