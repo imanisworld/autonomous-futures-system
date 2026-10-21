@@ -242,6 +242,21 @@ def check_six_micro(
 ) -> dict[str, Any]:
     timer = _systemd_on_calendar("six-micro-daily-tsmom.timer", run)
     service = _oneshot_result("six-micro-daily-tsmom.service", run)
+    if today_et >= SIX_MICRO_RETIRED_ON:
+        # AFS-0332: six-micro was retired Oct 18 (0/40, ABORTED/NOT_RUN).
+        # Its intentional lack of future rows must not be a failed campaign.
+        timer_active = run(["systemctl", "is-active", "six-micro-daily-tsmom.timer"]).stdout.strip()
+        safe = timer in {"disabled", "masked"} and timer_active != "active"
+        return {
+            "lane": "six_micro_daily_tsmom",
+            "status": "RETIRED",
+            "retired_on_et": SIX_MICRO_RETIRED_ON.isoformat(),
+            "timer_enabled": timer,
+            "timer_active": timer_active,
+            "last_service": service,
+            "passed": safe,
+            "reason": None if safe else "RETIRED_TIMER_STILL_ARMED",
+        }
     journal_dir = shared / "logs" / "six-micro-daily-tsmom"
     state_file = journal_dir / "state.json"
     journal_ok = state_file.is_file()
