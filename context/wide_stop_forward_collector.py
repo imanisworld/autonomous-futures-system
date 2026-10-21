@@ -514,6 +514,9 @@ def _process_five_min_bar_locked(
         "close": float(payload.close),
     }
     events: list[dict[str, Any]] = []
+    track_b_checked = False
+    track_b_signal = False
+    track_b_reason = "NO_4HR_WINDOW_EVALUATION"
 
     # Resolve first. A position opened at the prior bar close can resolve on
     # this bar; a position opened below cannot see this bar's earlier OHLC.
@@ -536,6 +539,19 @@ def _process_five_min_bar_locked(
             bars_5m=bars_5m,
             strategy=strategy,
         )
+        if strategy == FOUR_HR and _in_detection_window(FOUR_HR, current_ts):
+            track_b_checked = True
+            track_b_signal = bool(
+                candidate is not None
+                and decision is not None
+                and decision.decision == "TRADE"
+                and decision.setup is not None
+            )
+            track_b_reason = (
+                "4HR_SIGNAL"
+                if track_b_signal
+                else str(getattr(decision, "reason", None) or "NO_4HR_SETUP")
+            )
         if (
             strategy == FOUR_HR
             and isinstance(machine, dict)
@@ -681,6 +697,26 @@ def _process_five_min_bar_locked(
         _save_state(log_dir, ledger, lane_state)
         events.append(audit)
 
+    # Evidence-only: no signal and no candidate must still be observable. A
+    # failed heartbeat write cannot change paper decisions or broker routing;
+    # the independent daily proof will fail closed on its absence.
+    try:
+        from context.track_b_daily_heartbeat import record_bar
+
+        record_bar(
+            log_dir,
+            current_ts=current_ts,
+            checked=track_b_checked,
+            signal=track_b_signal,
+            reason=track_b_reason,
+            entry_recorded=any(
+                event.get("strategy") == FOUR_HR
+                and event.get("fill_status") == "OPEN"
+                for event in events
+            ),
+        )
+    except (OSError, ValueError) as exc:
+        logger.error("Track B heartbeat checkpoint failed: %s", exc)
     return events
 
 
