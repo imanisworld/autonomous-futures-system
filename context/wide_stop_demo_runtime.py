@@ -67,7 +67,7 @@ def run_demo_eod_fallback(*, cfg, log_dir: str | Path, now=None, broker_factory=
             seal_session(
                 log_dir, now=current, fallback_action=str(result.get("action") or "UNKNOWN")
             )
-        except (OSError, ValueError) as exc:
+        except Exception as exc:  # noqa: BLE001 — telemetry cannot affect exit safety
             logger.error("Track B EOD heartbeat seal failed: %s", exc)
             # The independent forward daily proof will flag the absent row.
     return result
