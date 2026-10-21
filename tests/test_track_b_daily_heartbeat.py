@@ -12,7 +12,8 @@ from context.track_b_daily_heartbeat import (
     JOURNAL_NAME, read_session, record_bar, seal_session,
 )
 from ops.forward_lanes_daily_proof import (
-    check_six_micro, last_completed_track_b_session, track_b_heartbeat_proof,
+    check_futures_track_b, check_six_micro, last_completed_track_b_session,
+    track_b_heartbeat_proof,
 )
 
 
@@ -128,6 +129,46 @@ def test_bars_without_a_real_decision_cannot_pass_as_no_signal(tmp_path, monkeyp
     )
     assert proof["passed"] is False
     assert proof["reason"] == "NO_BARS_OR_SETUP_EVALUATIONS"
+
+
+def test_futures_proof_fails_when_service_healthy_but_no_session_evaluation(tmp_path, monkeypatch):
+    import urllib.request
+
+    current = tmp_path / "current"
+    release = tmp_path / "release"
+    release.mkdir()
+    commit = "a" * 40
+    (release / "release_manifest.json").write_text(
+        json.dumps({"repo": {"commit": commit}}), encoding="utf-8",
+    )
+    current.symlink_to(release, target_is_directory=True)
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    (shared / ".env").write_text(
+        f"EXPECTED_LIVE_COMMIT={commit}\n", encoding="utf-8",
+    )
+
+    class HealthResponse:
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return None
+        def read(self):
+            return b'{"ok": true, "live_trading_enabled": false, "broker": "paper"}'
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *args, **kwargs: HealthResponse())
+    report = check_futures_track_b(
+        current=current,
+        shared=shared,
+        health_url="http://127.0.0.1:9/health",
+        run=lambda cmd: SimpleNamespace(stdout="active", returncode=0),
+        now=datetime(2026, 10, 20, 21, 25, tzinfo=timezone.utc),
+    )
+    assert report["symlink_ok"] is True
+    assert report["futures_bot_active"] is True
+    assert report["health"]["ok"] is True
+    assert report["heartbeat"]["reason"] == "MISSING_HEARTBEAT"
+    assert report["passed"] is False
 
 
 def test_missing_heartbeat_fails_even_when_service_is_healthy(tmp_path):
