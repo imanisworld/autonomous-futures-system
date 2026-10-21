@@ -53,7 +53,14 @@ def _read_state(path: Path) -> dict:
         doc = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         return {"bars": {}}
-    if not isinstance(doc, dict) or not isinstance(doc.get("bars"), dict):
+    if (
+        not isinstance(doc, dict)
+        or not isinstance(doc.get("bars"), dict)
+        or any(
+            not isinstance(key, str) or not isinstance(value, dict)
+            for key, value in doc["bars"].items()
+        )
+    ):
         raise ValueError("invalid Track B heartbeat state")
     return doc
 
