@@ -156,6 +156,12 @@ class ScannerConfig:
     #   flag to restore the old hourly requirement.
     paper_v1_daily_min_target_rr: float = 1.0
     paper_v1_daily_require_hourly_alignment: bool = False
+    # AFS-0339: optional first-scan timing evidence; OFF means no new fields,
+    # no timing-journal writes, and no changes to the existing Daily 1R floor.
+    paper_v1_trigger_timing_observe_enabled: bool = False
+    paper_v1_trigger_timing_journal: str = (
+        "/root/afs-shared/logs/options_trigger_timing.jsonl"
+    )
     # In-app access gate (see alert_ranker/access_gate.py). Blank means only
     # direct, unproxied loopback requests reach non-public routes.
     access_token: str = field(default="", repr=False)
@@ -295,6 +301,13 @@ def load_config(environ: Iterable[tuple[str, str]] | None = None) -> ScannerConf
         paper_v1_daily_require_hourly_alignment=_as_bool(
             env.get("OPTIONS_PAPER_V1_DAILY_REQUIRE_HOURLY"), False
         ),
+        paper_v1_trigger_timing_observe_enabled=_as_bool(
+            env.get("OPTIONS_PAPER_V1_TRIGGER_TIMING_OBSERVE_ENABLED"), False
+        ),
+        paper_v1_trigger_timing_journal=env.get(
+            "OPTIONS_PAPER_V1_TRIGGER_TIMING_JOURNAL",
+            "/root/afs-shared/logs/options_trigger_timing.jsonl",
+        ).strip() or "/root/afs-shared/logs/options_trigger_timing.jsonl",
         setup_capture_enabled=_as_bool(env.get("OPTIONS_SETUP_CAPTURE_ENABLED"), True),
         setup_capture_journal=env.get(
             "OPTIONS_SETUP_CAPTURE_JOURNAL",
