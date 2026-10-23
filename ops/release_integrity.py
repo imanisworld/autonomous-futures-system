@@ -60,6 +60,8 @@ RUNTIME_SUFFIXES = (".py", ".yaml", ".yml")
 EXTRA_RISK_SUFFIXES = (".so", ".pyc", ".pth")
 CUSTOMIZE_MODULE_NAMES = {"sitecustomize.py", "usercustomize.py"}
 PYCACHE_DIR_NAME = "__pycache__"
+# .venv has its own focused site-hook scan; .git is never shipped runtime code.
+TOP_LEVEL_SCAN_EXCLUSIONS = frozenset({".venv", ".git"})
 
 
 def _is_stray_env_file(name: str) -> bool:
@@ -151,9 +153,21 @@ def _runtime_extras(root: Path, listed: set[str]) -> list[str]:
     # box accumulated several root .py files from pre-release deploy history.
     for path in root.iterdir():
         consider(path)
-    for dirname in _scan_directories(listed):
+    scanned = set(_scan_directories(listed))
+    for dirname in sorted(scanned):
         base = root / dirname
         if not base.is_dir():
+            continue
+        for path in base.rglob("*"):
+            consider(path)
+
+    # A brand-new top-level package cannot appear in the manifest-derived
+    # directory list. Inspect all remaining directories with the same rules,
+    # including nested modules and __pycache__ in an unknown import root.
+    for base in root.iterdir():
+        if not base.is_dir():
+            continue
+        if base.name in scanned or base.name in TOP_LEVEL_SCAN_EXCLUSIONS:
             continue
         for path in base.rglob("*"):
             consider(path)
