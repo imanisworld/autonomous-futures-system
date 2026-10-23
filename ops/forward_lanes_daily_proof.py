@@ -19,13 +19,17 @@ import subprocess
 import sys
 import urllib.error
 import urllib.request
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
 SCHEMA = "forward-lanes-daily-proof-v1"
 FORWARD_SESSION_START = date(2026, 10, 12)
+SIX_MICRO_RETIRED_ON = date(2026, 10, 18)
+TRACK_B_HEARTBEAT_NAME = "track_b_daily_heartbeat.jsonl"
+TRACK_B_HEARTBEAT_SCHEMA = "track-b-daily-heartbeat-v1"
+TRACK_B_LAST_BAR_MINIMUM_ET = time(15, 50)
 ET = ZoneInfo("America/New_York")
 
 DEFAULT_SHARED = Path("/root/afs-shared")
@@ -72,12 +76,101 @@ def live_release_sha(current_link: Path) -> str:
     return ""
 
 
+
+def last_completed_track_b_session(now: datetime) -> date:
+    """Latest completed weekday RTH; holiday proof remains fail-closed."""
+    local = now.astimezone(ET)
+    day = local.date()
+    if local.time().replace(tzinfo=None) < time(16, 5):
+        day -= timedelta(days=1)
+    while day.weekday() >= 5:
+        day -= timedelta(days=1)
+    return day
+
+
+def track_b_heartbeat_proof(shared: Path, now: datetime) -> dict[str, Any]:
+    """Verify sealed Track B work rather than treating silence as 'no setup'."""
+    day = last_completed_track_b_session(now)
+    base: dict[str, Any] = {
+        "session_date_et": day.isoformat(),
+        "status": "FAIL",
+        "reason": "MISSING_HEARTBEAT",
+        "passed": False,
+    }
+    if day < FORWARD_SESSION_START:
+        return {**base, "status": "NOT_STARTED", "reason": None, "passed": True}
+    path = shared / "logs" / TRACK_B_HEARTBEAT_NAME
+    if not path.is_file():
+        return base
+    try:
+        rows = []
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            if not isinstance(row, dict):
+                raise ValueError("invalid journal entry")
+            if row.get("session_date_et") == day.isoformat():
+                rows.append(row)
+        if len(rows) != 1:
+            return {**base, "reason": "DUPLICATE_HEARTBEAT" if rows else "MISSING_HEARTBEAT"}
+        row = rows[0]
+        if row.get("schema") != TRACK_B_HEARTBEAT_SCHEMA:
+            return {**base, "reason": "INVALID_HEARTBEAT_SCHEMA"}
+        bars = row.get("bars_evaluated")
+        checked = row.get("setups_checked")
+        if type(bars) is not int or type(checked) is not int or bars <= 0 or checked <= 0:
+            return {**base, "reason": "NO_BARS_OR_SETUP_EVALUATIONS"}
+        bar_string = row.get("last_bar_time")
+        if not isinstance(bar_string, str):
+            return {**base, "reason": "MISSING_LAST_BAR_TIME"}
+        last_bar = datetime.fromisoformat(bar_string)
+        if last_bar.tzinfo is None:
+            return {**base, "reason": "NAIVE_LAST_BAR_TIME"}
+        last_local = last_bar.astimezone(ET)
+        if last_local.date() != day or not (
+            TRACK_B_LAST_BAR_MINIMUM_ET <= last_local.time().replace(tzinfo=None)
+            < time(16, 0)
+        ):
+            return {**base, "reason": "STALE_LAST_BAR"}
+        if (
+            type(row.get("signal")) is not bool
+            or type(row.get("entry_recorded")) is not bool
+            or row.get("source") != "paper_5m_collector"
+            or row.get("sealed_by") != "demo_eod_fallback"
+            or row.get("complete") is not True
+            or row.get("bars_fresh") is not True
+            or row.get("fallback_action") == "FAIL_CLOSED"
+        ):
+            return {**base, "reason": "INCOMPLETE_OR_INVALID_HEARTBEAT"}
+        signal = row["signal"]
+        entry = row["entry_recorded"]
+        reason = row.get("no_signal_reason")
+        if (not signal and (not isinstance(reason, str) or not reason.strip())) or (entry and not signal):
+            return {**base, "reason": "INCONSISTENT_SIGNAL_CLASSIFICATION"}
+        status = "ENTRY_RECORDED" if entry else ("SIGNAL_NO_ENTRY" if signal else "OK — no signal")
+        return {
+            "session_date_et": day.isoformat(),
+            "status": status,
+            "reason": reason if not signal else None,
+            "bars_evaluated": bars,
+            "last_bar_time": bar_string,
+            "setups_checked": checked,
+            "signal": signal,
+            "entry_recorded": entry,
+            "passed": True,
+        }
+    except (OSError, ValueError, TypeError):
+        return {**base, "reason": "UNREADABLE_HEARTBEAT"}
+
+
 def check_futures_track_b(
     *,
     current: Path,
     shared: Path,
     health_url: str,
     run: Callable[[list[str]], subprocess.CompletedProcess[str]],
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     pins = read_env_pins(shared / ".env", ENV_ALLOWLIST)
     expected = pins.get("EXPECTED_LIVE_COMMIT", "").lower()
@@ -98,7 +191,8 @@ def check_futures_track_b(
     lock_path = shared / "deploy.lock"
     deploy_lock = lock_path.is_dir() or lock_path.is_file()
     sha_match = bool(expected and live_sha and expected == live_sha)
-    passed = symlink_ok and active and health.get("ok") and not deploy_lock and sha_match
+    heartbeat = track_b_heartbeat_proof(shared, now or datetime.now(timezone.utc))
+    passed = bool(symlink_ok and active and health.get("ok") and not deploy_lock and sha_match and heartbeat["passed"])
     return {
         "lane": "track_b_wide_stop",
         "live_sha_prefix": live_sha[:12] if live_sha else None,
@@ -107,6 +201,7 @@ def check_futures_track_b(
         "futures_bot_active": active,
         "health": health,
         "deploy_lock": deploy_lock,
+        "heartbeat": heartbeat,
         "passed": passed,
     }
 
@@ -147,6 +242,21 @@ def check_six_micro(
 ) -> dict[str, Any]:
     timer = _systemd_on_calendar("six-micro-daily-tsmom.timer", run)
     service = _oneshot_result("six-micro-daily-tsmom.service", run)
+    if today_et >= SIX_MICRO_RETIRED_ON:
+        # AFS-0332: six-micro was retired Oct 18 (0/40, ABORTED/NOT_RUN).
+        # Its intentional lack of future rows must not be a failed campaign.
+        timer_active = run(["systemctl", "is-active", "six-micro-daily-tsmom.timer"]).stdout.strip()
+        safe = timer in {"disabled", "masked"} and timer_active != "active"
+        return {
+            "lane": "six_micro_daily_tsmom",
+            "status": "RETIRED",
+            "retired_on_et": SIX_MICRO_RETIRED_ON.isoformat(),
+            "timer_enabled": timer,
+            "timer_active": timer_active,
+            "last_service": service,
+            "passed": safe,
+            "reason": None if safe else "RETIRED_TIMER_STILL_ARMED",
+        }
     journal_dir = shared / "logs" / "six-micro-daily-tsmom"
     state_file = journal_dir / "state.json"
     journal_ok = state_file.is_file()
@@ -288,7 +398,7 @@ def build_report(
     now = now or datetime.now(timezone.utc)
     today_et = now.astimezone(ET).date()
     lanes = [
-        check_futures_track_b(current=current, shared=shared, health_url=health_url, run=run),
+        check_futures_track_b(current=current, shared=shared, health_url=health_url, run=run, now=now),
         check_six_micro(shared=shared, run=run, today_et=today_et),
         check_options_122(shared=shared, run=run, today_et=today_et),
     ]

@@ -8,7 +8,13 @@ blended into demo performance/risk accounting.
 """
 from __future__ import annotations
 
+import logging
+from datetime import datetime, timezone
 from pathlib import Path
+
+from context.track_b_daily_heartbeat import seal_session
+
+logger = logging.getLogger(__name__)
 
 from context import wide_stop_demo_runtime_core as _core
 
@@ -46,10 +52,22 @@ def process_demo_five_min_bar(
 
 
 def run_demo_eod_fallback(*, cfg, log_dir: str | Path, now=None, broker_factory=None):
-    """Run the exit-only fallback against DEMO-isolated storage."""
-    return _core.run_demo_eod_fallback(
+    """Run the unchanged DEMO exit fallback; seal shared paper evidence after close."""
+    current = now or datetime.now(timezone.utc)
+    result = _core.run_demo_eod_fallback(
         cfg=cfg,
         log_dir=isolated_log_dir(log_dir),
         now=now,
         broker_factory=broker_factory,
     )
+    if result.get("reason") != "BEFORE_EOD_CLOSE":
+        # Exit-only DEMO behavior is unchanged; this adds no entry path and
+        # does not read DEMO P&L. Missing paper bars seal as INCOMPLETE.
+        try:
+            seal_session(
+                log_dir, now=current, fallback_action=str(result.get("action") or "UNKNOWN")
+            )
+        except Exception as exc:  # noqa: BLE001 — telemetry cannot affect exit safety
+            logger.error("Track B EOD heartbeat seal failed: %s", exc)
+            # The independent forward daily proof will flag the absent row.
+    return result
