@@ -941,3 +941,14 @@ def test_demo_entry_timing_never_invents_broker_clock():
     assert data["broker_last_fill_at_utc"] is None
     assert data["broker_entry_order_type"] is None
     assert data["adverse_entry_slippage_ticks"] == 1.0
+
+def test_unreadable_diagnostic_fill_price_never_raises_or_fabricates_slippage():
+    fill = Fill(
+        instrument="MNQ", direction="LONG", contracts=1, entry_price=None,
+        exit_price=None, exit_reason=None, result="OPEN", pnl_ticks=None,
+        pnl_dollars=None,
+    )
+    evidence = demo._core._entry_provenance(_setup(), fill)
+    assert evidence["actual_entry_fill_price"] is None
+    assert evidence["adverse_entry_slippage_ticks"] is None
+    assert evidence["broker_first_fill_at_utc"] is None
