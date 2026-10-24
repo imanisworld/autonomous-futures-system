@@ -875,3 +875,69 @@ def test_eod_exclusive_gate_blocks_missing_order_status():
 
     assert ok is False
     assert reason == "eod_broker_state_unreadable:ValueError"
+
+def test_demo_entry_timing_is_broker_sourced_and_survives_outcome(tmp_path, monkeypatch):
+    """No signal-time substitution: broker-reported UTC times follow the demo trade."""
+    _demo_env(monkeypatch)
+    _patch_candidate(monkeypatch, FOUR_HR)
+    order_created = "2026-09-08T14:05:01+00:00"
+    first_fill = "2026-09-08T14:05:02+00:00"
+    broker = _FakeBroker(fill=Fill(
+        instrument="MNQ", direction="LONG", contracts=1, entry_price=20_000.5,
+        exit_price=None, exit_reason=None, result="OPEN", pnl_ticks=None,
+        pnl_dollars=None, order_type="Limit",
+        execution_audit={
+            "post_fill_validation": {"accepted": True, "actual_entry": 20_000.5},
+            "broker_entry_timing": {
+                "order_type": "Limit",
+                "broker_order_created_at_utc": order_created,
+                "broker_first_fill_at_utc": first_fill,
+                "broker_last_fill_at_utc": first_fill,
+            },
+        },
+    ))
+    events = demo.process_demo_five_min_bar(
+        payload=_payload(), cfg=_cfg(), bars_5m=[], log_dir=tmp_path,
+        for_date=DAY, broker_factory=lambda: broker,
+    )
+    rows = [r for r in events if r.get("fill_status") == "OPEN"]
+    assert len(rows) == 1
+    entry = rows[0]
+    assert entry["planned_entry_price"] == 20_000.0
+    assert entry["actual_entry_fill_price"] == 20_000.5
+    assert entry["adverse_entry_slippage_ticks"] == 2.0
+    assert entry["broker_entry_order_type"] == "Limit"
+    assert entry["broker_order_created_at_utc"] == order_created
+    assert entry["broker_first_fill_at_utc"] == first_fill
+
+    state = demo_state.load_state(_root(tmp_path), DAY)
+    position = state["position"]
+    assert position["broker_first_fill_at_utc"] == first_fill
+    assert position["broker_order_created_at_utc"] == order_created
+    ledger = contract.LEDGERS["wide_stop_4k"]
+    resolved = Fill(
+        instrument="MNQ", direction="LONG", contracts=1, entry_price=20_000.5,
+        exit_price=19_995.0, exit_reason="STOP_HIT", result="LOSS",
+        pnl_ticks=-22, pnl_dollars=-11,
+    )
+    outcome = demo._core._record_outcome(
+        cfg=_cfg(), ledger=ledger, log_dir=_root(tmp_path), for_date=DAY,
+        position=position, fill=resolved, valid_outcome=True,
+    )
+    assert outcome["broker_order_created_at_utc"] == order_created
+    assert outcome["broker_first_fill_at_utc"] == first_fill
+    assert outcome["adverse_entry_slippage_ticks"] == 2.0
+
+
+def test_demo_entry_timing_never_invents_broker_clock():
+    fill = Fill(
+        instrument="MNQ", direction="LONG", contracts=1, entry_price=20_000.25,
+        exit_price=None, exit_reason=None, result="OPEN", pnl_ticks=None,
+        pnl_dollars=None,
+    )
+    data = demo._core._entry_provenance(_setup(), fill)
+    assert data["broker_order_created_at_utc"] is None
+    assert data["broker_first_fill_at_utc"] is None
+    assert data["broker_last_fill_at_utc"] is None
+    assert data["broker_entry_order_type"] is None
+    assert data["adverse_entry_slippage_ticks"] == 1.0
