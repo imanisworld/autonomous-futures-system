@@ -169,7 +169,12 @@ def _entry_provenance(setup, fill: Fill) -> dict[str, Any]:
     execution = fill.execution_audit if isinstance(fill.execution_audit, dict) else {}
     broker_time = execution.get("broker_entry_timing")
     broker_time = broker_time if isinstance(broker_time, dict) else {}
-    actual = float(fill.entry_price) if _actual_entry_happened(fill) else None
+    actual = None
+    if _actual_entry_happened(fill):
+        try:
+            actual = float(fill.entry_price)
+        except (TypeError, ValueError, OverflowError):
+            pass  # Unreadable evidence cannot interrupt an already-submitted order.
     planned = float(setup.entry)
     signed_ticks = None
     if actual is not None:
