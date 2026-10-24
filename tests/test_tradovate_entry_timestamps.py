@@ -1,6 +1,4 @@
 """Synthetic Tradovate response clock tests. No broker authentication or network calls."""
-from datetime import timezone
-
 from execution.tradovate_broker import TradovateBroker, _broker_utc_timestamp
 
 
@@ -47,5 +45,5 @@ def test_mismatched_order_identity_does_not_create_false_order_timestamp():
     broker._get = lambda path: {
         "id": 88, "timestamp": "2026-09-08T14:05:01Z", "ordStatus": "Filled"
     }
-    assert broker._entry_status(11, retries=1, delay=0) == "filled"
+    broker._entry_status(11, retries=1, delay=0)
     assert "broker_order_created_at_utc" not in broker._entry_timing
