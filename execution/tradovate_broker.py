@@ -22,7 +22,7 @@ import math
 import os
 import threading
 import time
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from dataclasses import dataclass, field
 from typing import Optional
 from zoneinfo import ZoneInfo
@@ -42,6 +42,20 @@ from execution.post_fill_validation import validate_post_fill
 from notifications import plain_english as _pe
 
 logger = logging.getLogger(__name__)
+
+
+def _broker_utc_timestamp(value: object) -> Optional[str]:
+    """Normalize a broker-reported instant; never treat a local/naive time as proof."""
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        stamp = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if stamp.tzinfo is None:
+        return None
+    return stamp.astimezone(timezone.utc).isoformat()
+
 
 # ── Front-month contract roll ─────────────────────────────────────────────────
 # CME equity-index micros (MES/MNQ) are quarterly: Mar/Jun/Sep/Dec → H/M/U/Z.
@@ -409,6 +423,9 @@ class TradovateBroker(BrokerInterface):
         # grab an overlapping trade's fill). None → resolve falls back to
         # price-matching. Cleared whenever the position goes flat/resolves.
         self._last_order_ids: Optional[dict] = None
+        # Observational fields captured from order/item and fill/list reads that
+        # execution already performs. No additional broker calls.
+        self._entry_timing: dict = {}
         self._account_id: Optional[int] = None
         self._contract_cache: dict[str, int] = {}  # root symbol → contract ID
         self._contract_symbol_cache: dict[str, str] = {}  # root → front-month symbol (e.g. MESM6)
@@ -1431,6 +1448,10 @@ class TradovateBroker(BrokerInterface):
                     )
                 body["clOrdId"] = client_id
 
+            self._entry_timing = {"order_type": entry_leg.get("orderType"),
+                                  "broker_order_created_at_utc": None,
+                                  "broker_first_fill_at_utc": None,
+                                  "broker_last_fill_at_utc": None}
             try:
                 result = self._post("/order/placeOSO", body)
             except Exception:
@@ -1670,10 +1691,14 @@ class TradovateBroker(BrokerInterface):
                     qty = filled_qty
                     if self._last_position is not None:
                         self._last_position.quantity = filled_qty
-            execution_audit = None
+            execution_audit = (
+                {"broker_entry_timing": dict(getattr(self, "_entry_timing", {}) or {})}
+                if getattr(order, "post_fill_validation_required", False) else None
+            )
             if getattr(order, "post_fill_validation_required", False):
                 if actual_entry is None:
                     execution_audit = {
+                        **(execution_audit or {}),
                         "post_fill_validation": {
                             "accepted": False,
                             "requested_entry": float(order.entry),
@@ -1683,7 +1708,7 @@ class TradovateBroker(BrokerInterface):
                     }
                     return self._handle_invalid_post_fill(order, qty, execution_audit)
                 validation = validate_post_fill(order, float(actual_entry))
-                execution_audit = {"post_fill_validation": validation.to_dict()}
+                execution_audit = {**(execution_audit or {}), "post_fill_validation": validation.to_dict()}
                 if not validation.accepted:
                     return self._handle_invalid_post_fill(order, qty, execution_audit)
             execution_audit = {**(execution_audit or {}), "contract_identity": identity_audit}
@@ -1697,6 +1722,7 @@ class TradovateBroker(BrokerInterface):
                 result="OPEN",
                 pnl_ticks=None,
                 pnl_dollars=None,
+                order_type=entry_leg.get("orderType"),
                 execution_audit=execution_audit,
             )
         except Exception as exc:
@@ -2049,6 +2075,10 @@ class TradovateBroker(BrokerInterface):
         for attempt in range(max(1, retries)):
             try:
                 o = self._get(f"/order/item?id={order_id}")
+                if isinstance(o, dict) and str(o.get("id", order_id)) == str(order_id):
+                    stamp = _broker_utc_timestamp(o.get("timestamp"))
+                    if stamp and isinstance(getattr(self, "_entry_timing", None), dict):
+                        self._entry_timing["broker_order_created_at_utc"] = stamp
                 st = str(o.get("ordStatus", "")).lower()
                 if st == "filled":
                     return "filled"
@@ -2470,6 +2500,10 @@ class TradovateBroker(BrokerInterface):
                     if f.get("orderId") == order_id and f.get("price") is not None
                 ]
                 if matches:
+                    stamps = sorted(filter(None, (_broker_utc_timestamp(f.get("timestamp")) for f in matches)))
+                    if stamps and isinstance(getattr(self, "_entry_timing", None), dict):
+                        self._entry_timing["broker_first_fill_at_utc"] = stamps[0]
+                        self._entry_timing["broker_last_fill_at_utc"] = stamps[-1]
                     qty = sum(abs(float(f.get("qty") or 0)) for f in matches)
                     if qty > 0:
                         return sum(
