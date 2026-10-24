@@ -157,6 +157,38 @@ def _definitive_no_fill(fill: Fill) -> bool:
     )
 
 
+_ENTRY_PROVENANCE_FIELDS = (
+    "planned_entry_price", "actual_entry_fill_price", "broker_entry_order_type",
+    "broker_order_created_at_utc", "broker_first_fill_at_utc",
+    "broker_last_fill_at_utc", "adverse_entry_slippage_ticks",
+)
+
+
+def _entry_provenance(setup, fill: Fill) -> dict[str, Any]:
+    """Observation only: never substitute signal time for broker time."""
+    execution = fill.execution_audit if isinstance(fill.execution_audit, dict) else {}
+    broker_time = execution.get("broker_entry_timing")
+    broker_time = broker_time if isinstance(broker_time, dict) else {}
+    actual = float(fill.entry_price) if _actual_entry_happened(fill) else None
+    planned = float(setup.entry)
+    signed_ticks = None
+    if actual is not None:
+        direction = str(setup.direction).upper()
+        if direction in ("LONG", "SHORT"):
+            signed_ticks = round(
+                ((actual - planned) if direction == "LONG" else (planned - actual)) / _TICK, 4
+            )
+    return {
+        "planned_entry_price": planned,
+        "actual_entry_fill_price": actual,
+        "broker_entry_order_type": broker_time.get("order_type") or fill.order_type,
+        "broker_order_created_at_utc": broker_time.get("broker_order_created_at_utc"),
+        "broker_first_fill_at_utc": broker_time.get("broker_first_fill_at_utc"),
+        "broker_last_fill_at_utc": broker_time.get("broker_last_fill_at_utc"),
+        "adverse_entry_slippage_ticks": signed_ticks,
+    }
+
+
 def _pending_record(strategy, setup, key, day) -> dict[str, Any]:
     return {
         "candidate_key": str(key),
@@ -181,11 +213,13 @@ def _pending_record(strategy, setup, key, day) -> dict[str, Any]:
     }
 
 
-def _position_from_fill(strategy, setup, key, day, fill, broker) -> dict[str, Any]:
+def _position_from_fill(strategy, setup, key, day, fill, broker, provenance=None) -> dict[str, Any]:
     row = _pending_record(strategy, setup, key, day)
     row["entry"] = float(fill.entry_price)
     row["contracts"] = int(fill.contracts or contract.CONTRACTS)
     row["broker_order_ids"] = dict(getattr(broker, "_last_order_ids", {}) or {})
+    if provenance:
+        row.update(provenance)
     return row
 
 
@@ -226,6 +260,14 @@ def _record_outcome(
         strategy=str(position.get("strategy") or ""),
         signal_timestamp=str(position.get("entry_time") or ""),
         client_order_id=position.get("client_order_id"),
+        # Broker order creation time, not client HTTP-call start time.
+        submit_timestamp=position.get("broker_order_created_at_utc"),
+        order_type=position.get("broker_entry_order_type"),
+        requested_entry=position.get("planned_entry_price"),
+        ticks_moved_from_entry=position.get("adverse_entry_slippage_ticks"),
+        execution_audit={"broker_entry_provenance": {
+            k: position.get(k) for k in _ENTRY_PROVENANCE_FIELDS
+        }},
     )
     audit = contract.evaluate(cfg).audit(
         instrument=contract.INSTRUMENT,
@@ -251,6 +293,7 @@ def _record_outcome(
         valid_outcome=bool(valid_outcome),
         promotion_path=False,
     )
+    audit.update({k: position.get(k) for k in _ENTRY_PROVENANCE_FIELDS})
     collector._journal(log_dir, ledger, audit, for_date)
     return audit
 
@@ -905,6 +948,7 @@ def process_demo_five_min_bar(
                 contract_hint=getattr(payload, "contract_hint", None),
             )
             fill = broker.execute_bracket(order)
+            entry_provenance = _entry_provenance(setup, fill)
             actual_fill = _actual_entry_happened(fill)
             if actual_fill:
                 demo_state.confirm_slot(state, key, strategy)
@@ -922,14 +966,16 @@ def process_demo_five_min_bar(
                 client_order_id=order.client_order_id,
                 broker_order_ids=dict(getattr(broker, "_last_order_ids", {}) or {}),
                 execution_audit=fill.execution_audit,
+                **entry_provenance,
             )
 
             if fill.result == "OPEN":
-                state["position"] = _position_from_fill(strategy, setup, key, day, fill, broker)
+                state["position"] = _position_from_fill(strategy, setup, key, day, fill, broker, entry_provenance)
                 state["pending"] = None
             elif actual_fill and fill.pnl_dollars is not None and fill.exit_price is not None:
                 position = dict(state["pending"] or {})
                 position["entry"] = float(fill.entry_price)
+                position.update(entry_provenance)
                 audit["post_fill_outcome"] = _record_outcome(
                     cfg=cfg, ledger=ledger, log_dir=log_dir, for_date=for_date,
                     position=position, fill=fill, valid_outcome=False,
