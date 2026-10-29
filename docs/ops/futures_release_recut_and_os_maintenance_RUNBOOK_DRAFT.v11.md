@@ -7,6 +7,7 @@ Supersedes the executed v10_thu1029 (sha256 `13a6a459a022547948c8b5d9d7a33b68a61
 Fixes from the 2026-10-29 recut (AFS-0450..0455), not applied on the box by this file:
 - Fix A: a clean `journalctl` (`-- No entries --`, or rc 0 with no real lines) is `JOURNAL_CLEAN`, not a rollback. A `journalctl` failure is a fail, not a pass.
 - Fix B: rollback target is the verified clean recut `/root/afs-releases/94a71bdbb975-recut-20261029-210507`, not the polluted `94a71bd` directory. That old directory stays as forensic evidence. Do not delete its stray `.pyc` in place.
+- AFS-0458: `rollback_ok` does not need a live MainPID. It uses the four integrity pins saved at precheck, or the systemd unit Environment if that file is missing. It does not read the shared secret file. `_switch_back` and `step_reswitch_new` can run while the unit is crash-looping.
 - `c44d32bc` is not an automatic fallback. Use it only after a read-only integrity check passes and Imani says so. Never `cddef4a4`.
 - Next window constants are Fri 2026-10-30 17:05–17:30 ET switch stop, rollback warning at 17:45 ET (`RB_STOP`), so the window does not end on the 17:50 apt-daily slot. Friday still needs Imani's fresh GO. `step_postboot`'s `journal_postboot_warn.txt` is a report only; nothing tests it with `-s`.
 
@@ -28,13 +29,7 @@ All times are **America/New_York (ET)**. The box clock is UTC (AFS-0281). Every 
 
 ## 0. GO line + window
 
-The Oct 23–25 GO line below is provenance from the earlier draft. It is not the v11 window and it is not authorization to run.
-
-```
-GO Imani <ET timestamp>: recut 94a71bdbb975b53f21a81b7084482ea3c5270ceb (recut only; NO apt, NO reboot: CONSOLE_OK=NO), window Fri Oct 23 17:00 ET - Sun Oct 25 18:00 ET, no switch after Sun 12:00 ET, rollback complete by Sun 15:00 ET. D1 results reviewed by Ops/QA. Drop-in §5A SKIPPED (Branch B); AFS-0266 whitelist stays.
-```
-
-v11 clock (same constants as the lib). Friday still needs Imani's fresh GO. This file is not that GO. A PM GO relayed through someone else is not Imani's.
+Friday still needs Imani's fresh GO. This file is not that GO. A PM GO relayed through someone else is not Imani's. The earlier multi-day window is retired.
 
 | Gate (ET) | Threshold `%Y%m%d%H%M` | Meaning |
 |---|---|---|
@@ -90,7 +85,7 @@ Consequences:
 
 ---
 
-## PRE-WINDOW DRY RUNS (read-only; Imani runs before Fri Oct 23 17:00 ET; QA verdict: safe)
+## PRE-WINDOW DRY RUNS (read-only; completed Oct 19; not a gate for Fri 2026-10-30)
 
 Run these as root on the box. They change nothing: no restart, lock, write, or reboot. Send every output marked "send back" to Ops.
 
@@ -297,15 +292,51 @@ integrity(){ local d=$1 o=$2 p; p=$(fb_pid); [ "${p:-0}" -gt 0 ] || { fail "futu
 integrity_ok(){ integrity "$1" "$2" || { fail "integrity nonzero: $(head -c 400 "$2")"; return 1; }
   grep -qE '^release integrity: OK — [0-9]+ files checked' "$2" || { fail "no OK summary line"; return 1; }
   [ "$(grep -c '✗' "$2")" -eq 0 ] || { fail "integrity ✗ lines present"; return 1; }; echo INTEGRITY_OK; }
+# Four pins release_integrity reads. Saved at precheck from the live process environ.
+# rollback_ok uses the saved file so a crash loop (MainPID 0, no /proc) can still be checked.
+# If the file is missing, the same four keys are taken from `systemctl show -p Environment`.
+# Never read the shared secret file.
+INTEGRITY_PIN_RE='^(EXPECTED_LIVE_COMMIT|EXPECTED_RELEASE_FINGERPRINT|EXPECTED_RISK_RULES_SHA256|RELEASE_INTEGRITY_ENFORCED)='
+_pin_file_ok(){ local f=$1
+  case "$f" in *.env|*/.env) fail "refusing pin path $f"; return 1;; esac
+  [ -s "$f" ] || return 1
+  grep -q '^EXPECTED_LIVE_COMMIT=' "$f" && grep -q '^EXPECTED_RELEASE_FINGERPRINT=' "$f" \
+    && grep -q '^EXPECTED_RISK_RULES_SHA256=' "$f" && grep -q '^RELEASE_INTEGRITY_ENFORCED=' "$f"; }
+capture_integrity_pins(){ local p out="${EV:?}/integrity_pins.txt"
+  case "$out" in *.env|*/.env) fail "refusing pin path $out"; return 1;; esac
+  p=$(fb_pid)
+  if [ "${p:-0}" -gt 0 ] && [ -r "/proc/$p/environ" ]; then
+    tr '\0' '\n' </proc/"$p"/environ | grep -E "$INTEGRITY_PIN_RE" | sort > "$out"
+  else
+    systemctl show futures-bot -p Environment --value | tr ' ' '\n' | grep -E "$INTEGRITY_PIN_RE" | sort > "$out"
+  fi
+  _pin_file_ok "$out" || { fail "integrity pins incomplete"; return 1; }
+  state_set INTEGRITY_PINS "$out"; }
+ensure_integrity_pins(){ local pins="${INTEGRITY_PINS:-${EV:-}/integrity_pins.txt}"
+  case "$pins" in *.env|*/.env) fail "refusing pin path $pins"; return 1;; esac
+  _pin_file_ok "$pins" && return 0
+  capture_integrity_pins; }
+integrity_from_pins(){ local d=$1 o=$2 pins
+  ensure_integrity_pins || return 1
+  pins="${INTEGRITY_PINS:-$EV/integrity_pins.txt}"
+  case "$pins" in *.env|*/.env) fail "refusing pin path $pins"; return 1;; esac
+  ( cd "$d" && env -i PATH=/usr/bin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$d" \
+      $(grep -E "$INTEGRITY_PIN_RE" "$pins") \
+      "$d/.venv/bin/python" -S -B -m ops.release_integrity --repo-root "$d" ) > "$o" 2>&1; }
+integrity_ok_from_pins(){ integrity_from_pins "$1" "$2" || { fail "integrity nonzero: $(head -c 400 "$2")"; return 1; }
+  grep -qE '^release integrity: OK — [0-9]+ files checked' "$2" || { fail "no OK summary line"; return 1; }
+  [ "$(grep -c '✗' "$2")" -eq 0 ] || { fail "integrity ✗ lines present"; return 1; }
+  echo INTEGRITY_OK; }
 # journal_err_clean <file>: 0 = clean (empty, whitespace-only, or only journalctl's "-- No entries --" line);
 # 1 = at least one real line; 2 = file missing. Never matches on substrings: a real line that contains "No entries" is still an error.
 journal_err_clean(){ [ -f "$1" ] || return 2; ! grep -vxE '[[:space:]]*(-- No entries --)?[[:space:]]*' "$1" >/dev/null; }
-# rollback_ok <dir>: the rollback target must pass integrity_ok, have no pyc outside .venv, be read-only, and carry a manifest
+# rollback_ok <dir>: manifest, no pyc outside .venv, read-only, integrity from saved pins.
+# Does not call fb_pid. Safe while futures-bot is crash-looping.
 rollback_ok(){ local d=$1
   [ -d "$d" ] && [ -s "$d/release_manifest.json" ] || { fail "rollback target missing/manifest missing: $d"; return 1; }
   [ -z "$(find "$d" -mindepth 1 \( -name .venv -prune \) -o \( -name __pycache__ -o -name '*.pyc' \) -print)" ] || { fail "rollback target has pycache: $d"; return 1; }
   [ -z "$(find "$d" -mindepth 1 \( -name .venv -prune \) -o -perm -u=w -print -quit)" ] || { fail "rollback target not read-only: $d"; return 1; }
-  integrity_ok "$d" "$EV/integrity_rollback_$(basename "$d").txt" || { fail "rollback target fails integrity: $d"; return 1; }
+  integrity_ok_from_pins "$d" "$EV/integrity_rollback_$(basename "$d").txt" || { fail "rollback target fails integrity: $d"; return 1; }
   echo ROLLBACK_TARGET_OK; }
 # p4_exact <outfile>: OLD tree must FAIL with exactly one ✗ line that is EXACTLY the known stray (all not-in-manifest entries share one line: release_integrity.py:299-308)
 p4_exact(){ grep -qE '^release integrity: FAIL — [0-9]+ files checked' "$1" && [ "$(grep -c '✗' "$1")" -eq 1 ] && grep -qxF "  ✗ not in release manifest: $STRAY_REL" "$1"; }
@@ -346,6 +377,7 @@ _prechecks(){ local f=0 p
   LIVE=$(readlink -f "$LINK"); p=$(fb_pid); [ -n "${OLD:-}" ] || OLD=$LIVE   # NEW-3: never overwrite a persisted OLD
   [ "$LIVE" = "$LIVE_EXPECT" ] && [ "$OLD" = "$LIVE" ] || { fail "P2 live target must be pinned LIVE_EXPECT (OLD=$OLD live=$LIVE expect=$LIVE_EXPECT)"; return 1; }; state_set OLD "$OLD"
   [ -n "${ROLLBACK:-}" ] || ROLLBACK=$OLD
+  capture_integrity_pins || { fail "P2 integrity pins not captured"; return 1; }
   rollback_ok "$ROLLBACK" || { fail "P2 no verified rollback target"; return 1; }
   state_set ROLLBACK "$ROLLBACK"
   [ "${p:-0}" -gt 0 ] && [ -d "/proc/$p" ] || { fail "P2 futures-bot MainPID=$p not running (MainPID is authoritative, not ExecStart pid)"; return 1; }
@@ -594,7 +626,7 @@ step_prechecks             # P1-P10 -> must print PRECHECKS_PASS
 
 Each check, its PASS condition, and where the evidence goes in `$EV`:
 - **P1:** no `deploy.lock`, and no release/pip process running.
-- **P2:** the link target is the pinned `LIVE_EXPECT` (`/root/afs-releases/94a71bdbb975-recut-20261029-210507` after AFS-0454), futures-bot's cwd equals it, and the manifest `repo.commit` is still `$SHA`. It is persisted as `OLD`. `rollback_ok "$ROLLBACK"` is a hard gate. The literal `$RELEASES/$SHA` directory is the polluted forensic tree and is not the live target.
+- **P2:** the link target is the pinned `LIVE_EXPECT` (`/root/afs-releases/94a71bdbb975-recut-20261029-210507` after AFS-0454), futures-bot's cwd equals it, and the manifest `repo.commit` is still `$SHA`. It is persisted as `OLD`. `capture_integrity_pins` saves the four integrity pins from the live process, then `rollback_ok "$ROLLBACK"` is a hard gate. Later rollback does not need a MainPID. The literal `$RELEASES/$SHA` directory is the polluted forensic tree and is not the live target.
 - **P3:** futures-bot `WorkingDirectory` is the link; the drop-in hashes are snapshotted.
 - **P4:** informational only. If the live tree is still the known-polluted `$RELEASES/$SHA` dir, record whether `p4_exact` matches the single stray `.pyc`. It does not authorize that dir as a rollback target. The hard gate is `rollback_ok`.
 - **P5:** the pins `LIVE_TRADING_ENABLED=false`, `TRADOVATE_ENV=demo`, `MAX_CONTRACTS_HARD_CAP=1`, `WIDE_STOP_LEDGER_MODE=paper_sim`, `WIDE_STOP_DEMO_EXECUTION_ENABLED=true`, `EXPECTED_LIVE_COMMIT=$SHA`. The cap lines must sit at `wide_stop_ledger_paper.py:86` and `wide_stop_execution.py:35`, and the sha256 of both cap files is saved (N1).
@@ -700,7 +732,7 @@ On failure, run `step_cut_cleanup` (R0). It removes `$NEW` only through `safe_rm
 
 ## 8–9. SWITCH, RESTART, 10-minute POST-GATE = `step_switch`
 
-1. Window and `SWITCH_STOP` (**Fri 2026-10-30 17:30 ET**), `CUT_OK`, link at OLD, flat, and `rollback_ok` on `$ROLLBACK` before the lock is taken.
+1. Window and `SWITCH_STOP` (**Fri 2026-10-30 17:30 ET**), `CUT_OK`, link at OLD, flat, and `rollback_ok` on `$ROLLBACK` before the lock is taken. That check uses the precheck pin file, so it still passes if MainPID is 0.
 2. **Lock taken**, with `trap lock_release EXIT`.
 3. `current.previous` written, then an atomic `ln -sfn` + `mv -T`.
 4. The futures-bot drop-in hashes must be unchanged, so no `daemon-reload`.
@@ -727,7 +759,7 @@ find "$NEW" -mindepth 1 \( -name .venv -prune \) -o \( -name __pycache__ -o -nam
   ```bash
   . /root/afs-maint-lib.sh && state_load && step_rollback   # link -> $ROLLBACK (verified clean tree), restart, stable pid/NRestarts/port check
   ```
-  It is never blocked by the clock. It warns if it finishes at or after `RB_STOP` (Fri 2026-10-30 17:45 ET). Keep `$NEW` for diagnosis. Do not roll back onto the polluted `94a71bd` directory: a restart there refuses on the stray `.pyc`. The AFS-0266 whitelist does not make that startup succeed. Before `_switch_back` restarts, `rollback_ok` runs again; if it fails, the bot is left where it is, `LOCK_HOLD=1`, and the HOLD lines include `systemctl show` plus `journalctl -q -n 30`. On HOLD with a crash-looping unit, do not restart again.
+  It is never blocked by the clock. It warns if it finishes at or after `RB_STOP` (Fri 2026-10-30 17:45 ET). Keep `$NEW` for diagnosis. Do not roll back onto the polluted `94a71bd` directory: a restart there refuses on the stray `.pyc`. The AFS-0266 whitelist does not make that startup succeed. Before `_switch_back` restarts, `rollback_ok` runs again. It uses the pins saved at precheck, or the systemd unit Environment, and it does not need a MainPID, so a crash loop does not block the rollback. If `rollback_ok` fails, the bot is left where it is, `LOCK_HOLD=1`, and the HOLD lines include `systemctl show` plus `journalctl -q -n 30`. On HOLD with a crash-looping unit, do not restart again. `step_reswitch_new` uses the same pin path, so it can repoint at NEW while MainPID is 0.
 - **§5A:** skipped (Branch B), so there is nothing to roll back.
 - **R-OS, reboot/upgrade fault: SKIPPED THIS WINDOW** (no apt, no planned reboot). Kept for the future window. For an *unplanned* reboot, see RK-1 in §13.
   1. Try one `systemctl restart <unit>` and read `journalctl -b -u <unit>`.
