@@ -20,6 +20,8 @@ Historical dated notes and old/closed PRs are provenance only. They do not overr
 
 **DO NOT REDO:** 66-symbol 2026-04-01–09-08 screen, frozen definitions, episode verifier, sealed 2026-09-09–15 cohort, or the 443-row SIP reconciliation. Do not restart a general audit, optimize these strategy thresholds, retest rejected compression, or infer options P&L from underlying hits.
 
+**Polygon cross-check (historical, unregistered; not verdict authority):** `docs/research-notes/options-polygon-edge-2026-10-11/` re-scores the same frozen #1222 families on adjusted Polygon 5-minute bars for the same window, with exit-R added. It was scored on 2026-10-11 without a ledger preregistration. It therefore has the same status as the #1222 screen above, and its results are not repeated here. It has no ledger row of its own; recording one is an operator decision.
+
 **Remaining independently gated work:** Existing `OPTIONS_PAPER_V1` current-epoch ledger/mark accounting remains a **separate** unresolved question from this completed discovery screen (see `docs/options-next-actions.md` and older #1071 provenance). If an operator later approves a prospective option-exit measurement, first freeze evidence, quote/fill rules, and epoch; implement only with separate review and rollout authority. **Present instruction: no additional strategy research or trial.**
 
 ## Active source and edge-research update — 2026-10-08 (historical checkpoint; superseded for options edge research)

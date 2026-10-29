@@ -46,8 +46,9 @@ Read **only** this block + `AGENTS.md` unless drift is detected. Private numeric
 | **Daily tsmom / AFS-0256** | **#1218 MERGED** **`f8d4845`**. Operator **2026-10-11:** code matches reviewed **`e510dc4`** (docs-only delta) — **release good**. **TIMER ON — operator GO** (builder): `systemctl enable --now six-micro-daily-tsmom.timer`; weekdays **17:10 America/New_York**; pin **`f8d4845`** in `10-release.conf`; **no `futures-bot` restart**. Prior box read reported timer enabled — **re-verify after GO** (unverified this turn). Trial **`T-2026-10-10-prereg-six-micro-daily-tsmom-forward-2026-10-10-01`**: **RUNNING**; scorable from **2026-10-12**; **40** round-turn gate. |
 | **Open futures PRs (not HOLD deploy)** | **#1217** (draft) MNQ seal guard · **#1219** (draft) six-micro paper cleanup · **#1214** (draft) handoff docs |
 | **Public resume** | `docs/futures-research-resume-checkpoint-2026-10-10.md` (+ Cursor + Claude options appendices) |
-| **Options ETF research** | Remote **`claude/options-time-exit-research-20261010`** **deleted 2026-10-11** (operator GO; contained trade files). Not on `main`. |
+| **Options ETF research** | **`claude/options-time-exit-research-20261010`** removed **2026-10-11** (operator GO; contained trade files). Re-checked **2026-10-19**: no `origin` ref (`git ls-remote` empty), no local branch, and the `private/wt-options-docs` worktree is gone. Not on `main`. |
 | **Options edge screen / #1222** | **SOURCE MERGED / QA PASS** at `4d56333` (2026-10-11): 66 names / 110 sessions, pullback + failed-break **KEEP FOR RESEARCH**, compression **REJECT**. No approved options-profitability trial; no deployment. Details: `docs/options-current-state-handoff.md` and `docs/research-notes/options-underlying-edge-2026-10-11/`. 1-2-2 SIP underlying reconciliation done (443 separate rows), **101 entry quotes / no option exits**; prospective exit spec design only. **No further strategy research.** |
+| **Options Polygon cross-check** | Same frozen definitions on adjusted Polygon 5m bars, with exit-R added: `docs/research-notes/options-polygon-edge-2026-10-11/`. Per-setup R: pullback **+0.003**, failed-break **−0.016**, compression **+0.001**. All three were negative in 2026-08-14..09-08. The verdict recorded in the 10-11 closeout (pullback HOLD flat · failed-break **REJECT** · compression HOLD flat) is historical only. Like #1222 (see #1228), this run was scored **unregistered**, so it is not verdict authority. No ledger row yet; that is an operator decision. |
 | **Saved 4HR benchmark** | `docs/research-notes/4hr-mnq-400-historical-benchmark-2026-10-10/` (on **`main`** via #1216) |
 | **Saved ORB/VWAP sweeps** | `docs/research-notes/orb-vwap-tf-window-sweep-2026-10-10/` (on **`main`** via #1216) |
 | **Vault NR7 + Keltner exploratory** | **`T-2026-10-11-exploratory-nr7-keltner-capital-unconstrained-01`** — closed **RESEARCH_ONLY** / **FAIL**; artifacts `docs/research-notes/capital-unconstrained-strategy-research-2026-10-11/` + ledger evidence dir |
@@ -60,6 +61,41 @@ Read **only** this block + `AGENTS.md` unless drift is detected. Private numeric
 **DO NOT REDO:** gzip 4HR cell reproduction; ORB/VWAP TF×window sweeps (baseline + trending + orb48); Grok PASS work on merged **#1208**/**#1209**; Sep decompositions listed below; **NR7ID + Keltner KC-long** capital-unconstrained exploratory (`T-2026-10-11-exploratory-nr7-keltner-capital-unconstrained-01`).
 
 **OPTIONS STOP:** #1222 QA + merge complete; do not re-run the 66-name screen or start an options trial. New strategy research is HOLD; Options Paper V1 current-epoch accounting is a separate unresolved workstream. **NEXT (futures only):** (1) **Builder/VPS:** confirm **`six-micro-daily-tsmom.timer`** enabled+active after operator **TIMER ON** GO (**unverified** from Mac this turn). (2) **2026-10-12 ~17:17 ET:** operator Track B check; **17:10 ET** first scheduled six-micro collect. (3) **2026-10-19:** Polygon check (operator). (4) Wide-stop live symlink stays **`94a71bd`** — no global promote to **`f8d4845`**.
+
+**DONE / DO NOT REDO — Polygon 66-symbol 5-minute OHLC, 2026-10-11:** The local key accepted historical minute aggregates: HTTP 200 on 2026-06-02 and 2026-08-03, with no 402. The dataset `data/options_research_polygon_5m_20260401_20260908/` is gitignored. It holds adjusted Polygon 5-minute bars:
+
+- 66/66 symbols over NYSE 2026-04-01..2026-09-08
+- 110/110 exact regular-session grids
+- zero bars from the sealed week
+- hashes that match `manifest.json`
+
+It overlaps the QQQ archive on 13,248 timestamps and the AAPL smoke file on 15,723. Discovery-readiness **PASS**. No strategy backtest was run as part of the acquisition. 1-2-2 is unchanged.
+
+**DONE / DO NOT REDO — Polygon screen, 2026-10-11:** `docs/research-notes/options-polygon-edge-2026-10-11/` re-scores the frozen #1222 families on those bars. On 2026-10-19 it re-ran byte-identical from the local dataset. Beating the losing baseline is not an edge. Do not retune, and do not start an options test. 1-2-2 stays the existing forward measurement only. Daily/weekly equity momentum is not this screen. Do not rescore futures `T-2026-10-10-prereg-six-micro-daily-tsmom-forward-2026-10-10-01`. Do not rerun AFS-0209/0210, AFS-0214, or the 414 Strategy Lab momentum tests.
+
+**DONE / DO NOT REDO — exchange-OHLC coverage check, 2026-10-11:** No stored exchange OHLC archive on disk covered the 66-symbol universe at the time. The local tapes were:
+
+- Polygon 5m QQQ/TQQQ/SQQQ
+- an AAPL smoke file
+- the sealed 2026-09-09..15 primary-20 week
+
+The #1222 screen then fetched Alpaca SIP 5-minute bars for the universe. Use that artifact rather than repeating this gap check.
+
+**DONE / DO NOT REDO — options Signa effectiveness, 2026-10-11 (recorded; not re-run 2026-10-19):** The pass read `/root/afs-shared/logs/options_scanner.sqlite` with `mode=ro`:
+
+- 886,259,712 bytes, mtime 2026-10-09 19:58Z
+- `journal_mode=delete`, no WAL, `integrity_check=ok`
+
+No second copy was written. `signa_options_research_only_2026-10-11.zip` was not in the repo.
+
+Verdict **INCONCLUSIVE**:
+
+- Signa v2 telemetry exists: `signa_v2_ok` on 49,492 of 77,908 scans.
+- ACTIVE closed paper rows: 26. Structural 10 WIN / 16 LOSS, option P&L **−$1,536**, ask-in/bid-out, no commission.
+- Pre-entry v2 matches: 17 trades over 9 days, below the 50-example and 10-day bar.
+- Counterfactual pre-entry v2 (n=337) shows no detectable aligned-vs-opposed improvement.
+
+Do not add a Signa gate from this pass. Re-measure only on a newer sqlite snapshot.
 
 Prior chat context for this session is **closed**. Section below is coordination archive unless stale.
 
