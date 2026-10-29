@@ -275,7 +275,9 @@ class OptionsScanner:
             data.update(data_invalid("chain_expiration_mismatch"))
             return data
 
-        evidence_decision_ts = datetime.now(timezone.utc).isoformat()
+        # Evidence uses the same reference time as expiry/DTE selection above;
+        # the wall clock is only the scan_ticker default when no ``now`` is passed.
+        evidence_decision_ts = now.isoformat()
         underlying_price = _float_or_none(normalized.get("price"))
         try:
             selector_evidence = build_selector_evidence_capture(
@@ -326,7 +328,7 @@ class OptionsScanner:
         try:
             data["selector_evidence_id"] = self.storage.record_selector_evidence(
                 selector_evidence,
-                timestamp=datetime.fromisoformat(evidence_decision_ts),
+                timestamp=now,
             )
             data["selector_evidence_status"] = selector_evidence.get("status")
             data["selector_evidence_sha256"] = selector_evidence.get("evidence_sha256")
