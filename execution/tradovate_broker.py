@@ -1378,6 +1378,8 @@ class TradovateBroker(BrokerInterface):
                     _stop_entry_confirm_seconds(),
                 )
 
+            # Observability only. The placeOSO body below is unchanged.
+            self._last_entry_limit_price = limit_px
             # Place protective children via OSO. Tradovate's official schema
             # requires bracket1 and makes bracket2 optional, so runner_live uses
             # a STOP as bracket1 and omits the fixed target entirely. This makes

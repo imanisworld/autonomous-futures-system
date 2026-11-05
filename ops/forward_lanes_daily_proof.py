@@ -29,7 +29,9 @@ FORWARD_SESSION_START = date(2026, 10, 12)
 SIX_MICRO_RETIRED_ON = date(2026, 10, 18)
 TRACK_B_HEARTBEAT_NAME = "track_b_daily_heartbeat.jsonl"
 TRACK_B_HEARTBEAT_SCHEMA = "track-b-daily-heartbeat-v1"
+TRACK_B_HEARTBEAT_SCHEMA_V2 = "track-b-daily-heartbeat-v2"
 TRACK_B_LAST_BAR_MINIMUM_ET = time(15, 50)
+TRACK_B_NATIVE_STRATEGIES = ("strat_4hr_retrigger", "strat_322_first_live")
 ET = ZoneInfo("America/New_York")
 
 DEFAULT_SHARED = Path("/root/afs-shared")
@@ -112,56 +114,125 @@ def track_b_heartbeat_proof(shared: Path, now: datetime) -> dict[str, Any]:
                 raise ValueError("invalid journal entry")
             if row.get("session_date_et") == day.isoformat():
                 rows.append(row)
-        if len(rows) != 1:
-            return {**base, "reason": "DUPLICATE_HEARTBEAT" if rows else "MISSING_HEARTBEAT"}
-        row = rows[0]
-        if row.get("schema") != TRACK_B_HEARTBEAT_SCHEMA:
+        if not rows:
+            return {**base, "reason": "MISSING_HEARTBEAT"}
+        v1_rows = [row for row in rows if row.get("schema") == TRACK_B_HEARTBEAT_SCHEMA]
+        v2_rows = [row for row in rows if row.get("schema") == TRACK_B_HEARTBEAT_SCHEMA_V2]
+        if len(v1_rows) + len(v2_rows) != len(rows):
             return {**base, "reason": "INVALID_HEARTBEAT_SCHEMA"}
-        bars = row.get("bars_evaluated")
-        checked = row.get("setups_checked")
-        if type(bars) is not int or type(checked) is not int or bars <= 0 or checked <= 0:
-            return {**base, "reason": "NO_BARS_OR_SETUP_EVALUATIONS"}
-        bar_string = row.get("last_bar_time")
-        if not isinstance(bar_string, str):
-            return {**base, "reason": "MISSING_LAST_BAR_TIME"}
-        last_bar = datetime.fromisoformat(bar_string)
-        if last_bar.tzinfo is None:
-            return {**base, "reason": "NAIVE_LAST_BAR_TIME"}
-        last_local = last_bar.astimezone(ET)
-        if last_local.date() != day or not (
-            TRACK_B_LAST_BAR_MINIMUM_ET <= last_local.time().replace(tzinfo=None)
-            < time(16, 0)
-        ):
-            return {**base, "reason": "STALE_LAST_BAR"}
-        if (
-            type(row.get("signal")) is not bool
-            or type(row.get("entry_recorded")) is not bool
-            or row.get("source") != "paper_5m_collector"
-            or row.get("sealed_by") != "demo_eod_fallback"
-            or row.get("complete") is not True
-            or row.get("bars_fresh") is not True
-            or row.get("fallback_action") == "FAIL_CLOSED"
-        ):
-            return {**base, "reason": "INCOMPLETE_OR_INVALID_HEARTBEAT"}
-        signal = row["signal"]
-        entry = row["entry_recorded"]
-        reason = row.get("no_signal_reason")
-        if (not signal and (not isinstance(reason, str) or not reason.strip())) or (entry and not signal):
-            return {**base, "reason": "INCONSISTENT_SIGNAL_CLASSIFICATION"}
-        status = "ENTRY_RECORDED" if entry else ("SIGNAL_NO_ENTRY" if signal else "OK — no signal")
-        return {
-            "session_date_et": day.isoformat(),
-            "status": status,
-            "reason": reason if not signal else None,
-            "bars_evaluated": bars,
-            "last_bar_time": bar_string,
-            "setups_checked": checked,
-            "signal": signal,
-            "entry_recorded": entry,
-            "passed": True,
-        }
+        if len(v1_rows) > 1:
+            return {**base, "reason": "DUPLICATE_HEARTBEAT"}
+        v2_keys = [(row.get("strategy"), row.get("lane")) for row in v2_rows]
+        if len(v2_keys) != len(set(v2_keys)):
+            return {**base, "reason": "DUPLICATE_HEARTBEAT"}
+        if v1_rows and not v2_rows:
+            return _track_b_v1_row_proof(v1_rows[0], day, base)
+        if not v1_rows and not v2_rows:
+            return {**base, "reason": "MISSING_HEARTBEAT"}
+        v2_result = _track_b_v2_rows_proof(v2_rows, day, base)
+        if not v2_result["passed"]:
+            return v2_result
+        if v1_rows:
+            v1_result = _track_b_v1_row_proof(v1_rows[0], day, base)
+            if not v1_result["passed"]:
+                return v1_result
+            return {**v1_result, "hint_missing_bars": v2_result.get("hint_missing_bars", 0)}
+        return v2_result
     except (OSError, ValueError, TypeError):
         return {**base, "reason": "UNREADABLE_HEARTBEAT"}
+
+
+def _track_b_v1_row_proof(row: dict, day: date, base: dict[str, Any]) -> dict[str, Any]:
+    """Original single-row paper heartbeat proof. Unchanged decision rules."""
+    if row.get("schema") != TRACK_B_HEARTBEAT_SCHEMA:
+        return {**base, "reason": "INVALID_HEARTBEAT_SCHEMA"}
+    bars = row.get("bars_evaluated")
+    checked = row.get("setups_checked")
+    if type(bars) is not int or type(checked) is not int or bars <= 0 or checked <= 0:
+        return {**base, "reason": "NO_BARS_OR_SETUP_EVALUATIONS"}
+    bar_string = row.get("last_bar_time")
+    if not isinstance(bar_string, str):
+        return {**base, "reason": "MISSING_LAST_BAR_TIME"}
+    last_bar = datetime.fromisoformat(bar_string)
+    if last_bar.tzinfo is None:
+        return {**base, "reason": "NAIVE_LAST_BAR_TIME"}
+    last_local = last_bar.astimezone(ET)
+    if last_local.date() != day or not (
+        TRACK_B_LAST_BAR_MINIMUM_ET <= last_local.time().replace(tzinfo=None)
+        < time(16, 0)
+    ):
+        return {**base, "reason": "STALE_LAST_BAR"}
+    if (
+        type(row.get("signal")) is not bool
+        or type(row.get("entry_recorded")) is not bool
+        or row.get("source") != "paper_5m_collector"
+        or row.get("sealed_by") != "demo_eod_fallback"
+        or row.get("complete") is not True
+        or row.get("bars_fresh") is not True
+        or row.get("fallback_action") == "FAIL_CLOSED"
+    ):
+        return {**base, "reason": "INCOMPLETE_OR_INVALID_HEARTBEAT"}
+    signal = row["signal"]
+    entry = row["entry_recorded"]
+    reason = row.get("no_signal_reason")
+    if (not signal and (not isinstance(reason, str) or not reason.strip())) or (entry and not signal):
+        return {**base, "reason": "INCONSISTENT_SIGNAL_CLASSIFICATION"}
+    status = "ENTRY_RECORDED" if entry else ("SIGNAL_NO_ENTRY" if signal else "OK — no signal")
+    return {
+        "session_date_et": day.isoformat(),
+        "status": status,
+        "reason": reason if not signal else None,
+        "bars_evaluated": bars,
+        "last_bar_time": bar_string,
+        "setups_checked": checked,
+        "signal": signal,
+        "entry_recorded": entry,
+        "passed": True,
+    }
+
+
+def _track_b_v2_rows_proof(rows: list[dict], day: date, base: dict[str, Any]) -> dict[str, Any]:
+    """Per-strategy rows. Missing, STOPPED, INCOMPLETE, and duplicates fail."""
+    by_lane: dict[str, set[str]] = {}
+    for row in rows:
+        lane = row.get("lane")
+        strategy = row.get("strategy")
+        if not isinstance(lane, str) or not isinstance(strategy, str):
+            return {**base, "reason": "MISSING_HEARTBEAT"}
+        by_lane.setdefault(lane, set()).add(strategy)
+    for strategies in by_lane.values():
+        if set(TRACK_B_NATIVE_STRATEGIES) - strategies:
+            return {**base, "reason": "MISSING_HEARTBEAT"}
+    hint_missing = 0
+    saw_entry = False
+    saw_signal = False
+    for row in rows:
+        status = row.get("status")
+        if status == "STOPPED":
+            return {**base, "reason": "STOPPED", "strategy": row.get("strategy"), "lane": row.get("lane")}
+        if status == "INCOMPLETE":
+            return {**base, "reason": "INCOMPLETE", "strategy": row.get("strategy"), "lane": row.get("lane")}
+        if status not in {"OK", "NO_SETUP"}:
+            return {**base, "reason": "INCOMPLETE_OR_INVALID_HEARTBEAT"}
+        hint_missing += int(row.get("hint_missing_bars") or 0)
+        saw_entry = saw_entry or bool(row.get("entry_recorded"))
+        saw_signal = saw_signal or bool(row.get("signal"))
+    if all(row.get("status") == "NO_SETUP" for row in rows):
+        status_text = "OK — no signal"
+    elif saw_entry:
+        status_text = "ENTRY_RECORDED"
+    elif saw_signal:
+        status_text = "SIGNAL_NO_ENTRY"
+    else:
+        status_text = "OK — no signal"
+    return {
+        "session_date_et": day.isoformat(),
+        "status": status_text,
+        "reason": None,
+        "passed": True,
+        "hint_missing_bars": hint_missing,
+        "contract_hint_gaps": hint_missing,
+    }
 
 
 def check_futures_track_b(

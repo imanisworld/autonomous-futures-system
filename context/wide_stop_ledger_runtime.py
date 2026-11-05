@@ -104,6 +104,14 @@ def observe_candidate(
     )
     if candidate_key:
         audit["candidate_key"] = str(candidate_key)
+    try:
+        from context.wide_stop_demo_execution import stale_entry_shadow_record
+
+        audit["stale_entry_shadow"] = stale_entry_shadow_record(
+            setup.direction, setup.entry, setup.stop, market_price,
+        )
+    except Exception:
+        audit["stale_entry_shadow"] = {"status": "ERROR"}
 
     global_approved = bool(getattr(global_risk_result, "approved", False))
     global_rule = getattr(global_risk_result, "failed_rule", None)

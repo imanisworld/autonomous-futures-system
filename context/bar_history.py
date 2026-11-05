@@ -132,8 +132,14 @@ class BarHistory:
             rec["source"] = source
         if source_ticker:
             rec["source_ticker"] = str(source_ticker)
+        # Presence is recorded. A missing hint is left missing; nothing here
+        # invents a dated symbol for the bar.
         if contract_hint:
-            rec["contract_hint"] = str(contract_hint)
+            stored = contract_hint if isinstance(contract_hint, str) else str(contract_hint)
+            rec["contract_hint"] = stored
+            rec["contract_hint_present"] = bool(stored.strip())
+        else:
+            rec["contract_hint_present"] = False
         existing = self._read_bars(path)
         if existing and existing[-1].get("ts") == rec["ts"]:
             return existing[-1]
