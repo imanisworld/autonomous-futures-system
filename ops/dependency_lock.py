@@ -46,6 +46,13 @@ SCRIPT_STYLE_LOCAL_PREFIXES = (
     "research/sd_zone_round4/frozen_round4_code/",
 )
 
+# Frozen paper/shadow scripts plus the variant tracker that imports them.
+# Not part of the release runtime. The copies import pandas and sibling
+# modules (trend_shadow, e4_fomc) that are not release dependencies.
+NON_RUNTIME_RESEARCH_PREFIXES = (
+    "research/trend_r3_forward/",
+)
+
 _PIN = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)==([A-Za-z0-9][A-Za-z0-9.+!_-]*)$")
 
 
@@ -192,9 +199,12 @@ def production_third_party_imports(root: Path) -> dict[str, set[str]]:
     found: dict[str, set[str]] = {}
     for path in sorted(root.rglob("*.py")):
         rel = path.relative_to(root)
+        rel_posix = rel.as_posix()
         if any(part in NON_PRODUCTION_DIRS for part in rel.parts):
             continue
-        if any(rel.as_posix().startswith(prefix + "/") for prefix in SEPARATE_COMPONENTS):
+        if any(rel_posix.startswith(prefix + "/") for prefix in SEPARATE_COMPONENTS):
+            continue
+        if any(rel_posix.startswith(prefix) for prefix in NON_RUNTIME_RESEARCH_PREFIXES):
             continue
         try:
             tree = ast.parse(path.read_text(encoding="utf-8"))
