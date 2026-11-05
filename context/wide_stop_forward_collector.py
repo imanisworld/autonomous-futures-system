@@ -322,10 +322,27 @@ def _trade_setup(state, decision) -> TradeSetup:
     )
 
 
+def _stale_entry_shadow(candidate, ref_price) -> dict[str, Any]:
+    """Log-only. A failure here cannot change the paper lane result."""
+    try:
+        from context.wide_stop_demo_execution import stale_entry_shadow_record
+
+        return stale_entry_shadow_record(
+            candidate.get("direction") if isinstance(candidate, dict) else None,
+            candidate.get("entry") if isinstance(candidate, dict) else None,
+            candidate.get("stop") if isinstance(candidate, dict) else None,
+            ref_price,
+        )
+    except Exception:
+        return {"status": "ERROR"}
+
+
 def _record_block(
-    *, cfg, ledger, strategy, candidate, key, log_dir, for_date, lane_result, failed_rule, reason
+    *, cfg, ledger, strategy, candidate, key, log_dir, for_date, lane_result, failed_rule, reason,
+    ref_price=None,
 ) -> dict[str, Any]:
     audit = _base_audit(cfg, ledger, strategy, candidate, key)
+    audit["stale_entry_shadow"] = _stale_entry_shadow(candidate, ref_price)
     audit.update(
         collector_event="CANDIDATE",
         lane_result=lane_result,
@@ -625,6 +642,7 @@ def _process_five_min_bar_locked(
                     if decision is not None
                     else "isolated signal evaluation unavailable"
                 ),
+                ref_price=getattr(payload, "close", None),
             )
             _save_state(log_dir, ledger, lane_state)
             events.append(audit)
@@ -642,6 +660,7 @@ def _process_five_min_bar_locked(
                 lane_result="BLOCKED_OPEN_POSITION",
                 failed_rule="max_open_positions",
                 reason="hypothetical ledger already has an open position",
+                ref_price=getattr(payload, "close", None),
             )
             _save_state(log_dir, ledger, lane_state)
             events.append(audit)
@@ -662,6 +681,7 @@ def _process_five_min_bar_locked(
                     f"hypothetical ledger already has {MAX_FILLED_PER_DAY} "
                     "filled trades today"
                 ),
+                ref_price=getattr(payload, "close", None),
             )
             _save_state(log_dir, ledger, lane_state)
             events.append(audit)

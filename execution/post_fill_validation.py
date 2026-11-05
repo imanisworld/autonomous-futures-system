@@ -51,6 +51,8 @@ class PostFillValidation:
     slippage_points: float
     slippage_ticks: float
     adverse_slippage_ticks: float
+    favorable_slippage_ticks: float
+    abs_slippage_frac_of_stop: float
     max_dollar_risk: Optional[float]
     max_stop_ticks: Optional[float]
     max_slippage_ticks: Optional[float]
@@ -96,6 +98,10 @@ def validate_post_fill(order: BracketOrder, actual_entry: float) -> PostFillVali
     actual_rr = actual_reward / actual_risk if actual_risk > 0 else 0.0
     slippage_ticks = signed_slippage / tick if tick > 0 else 0.0
     adverse_slippage_ticks = max(0.0, slippage_ticks)
+    favorable_slippage_ticks = max(0.0, -slippage_ticks)
+    abs_slippage_frac_of_stop = (
+        abs(signed_slippage) / planned_risk if planned_risk > 0 else float("inf")
+    )
     actual_stop_ticks = actual_risk / tick if tick > 0 else float("inf")
     actual_dollar_risk = actual_stop_ticks * tick_value * qty
 
@@ -135,6 +141,8 @@ def validate_post_fill(order: BracketOrder, actual_entry: float) -> PostFillVali
         slippage_points=signed_slippage,
         slippage_ticks=slippage_ticks,
         adverse_slippage_ticks=adverse_slippage_ticks,
+        favorable_slippage_ticks=favorable_slippage_ticks,
+        abs_slippage_frac_of_stop=abs_slippage_frac_of_stop,
         max_dollar_risk=float(max_dollar) if max_dollar is not None else None,
         max_stop_ticks=float(max_stop) if max_stop is not None else None,
         max_slippage_ticks=float(max_slippage) if max_slippage is not None else None,

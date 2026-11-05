@@ -48,6 +48,9 @@ def process_demo_five_min_bar(
         log_dir=isolated_log_dir(log_dir),
         for_date=for_date,
         broker_factory=broker_factory,
+        # Heartbeat stays on the shared log the EOD seal and daily proof read.
+        # Demo orders and P&L remain in the isolated directory.
+        heartbeat_log_dir=log_dir,
     )
 
 

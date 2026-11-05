@@ -71,6 +71,46 @@ _AMBIGUOUS_REASONS = {
 logger = logging.getLogger(__name__)
 
 
+def _mask_broker_id(value: object) -> str:
+    """Mask a broker id in logs and alerts, keeping the last three digits."""
+    text = str(value)
+    digits = [index for index, char in enumerate(text) if char.isdigit()]
+    if len(digits) <= 3:
+        return text
+    chars = list(text)
+    for index in digits[:-3]:
+        chars[index] = "*"
+    return "".join(chars)
+
+
+def _contract_hint_present(payload) -> bool:
+    hint = getattr(payload, "contract_hint", None)
+    return isinstance(hint, str) and bool(hint.strip())
+
+
+def _checkpoint_demo_bar(log_dir, current_ts, reasons, *, hint_present, signals, entries) -> None:
+    """Per-strategy demo heartbeat. Never raises and never changes ``events``."""
+    try:
+        if current_ts is None or not reasons:
+            return
+        from context.track_b_daily_heartbeat import record_bar
+
+        for strategy, reason in reasons.items():
+            record_bar(
+                log_dir,
+                current_ts=current_ts,
+                checked=reason != "DEMO_CONFIG_BLOCKED",
+                signal=strategy in signals,
+                reason=reason,
+                entry_recorded=strategy in entries,
+                strategy=strategy,
+                lane="demo",
+                hint_present=hint_present,
+            )
+    except Exception:
+        logger.error("demo heartbeat checkpoint failed", exc_info=True)
+
+
 def _send_journal_write_alert(cfg, reason: str) -> None:
     """The runner's once-per-process operator alert (lazy import: no cycle)."""
     try:
@@ -682,10 +722,20 @@ def process_demo_five_min_bar(
     *, payload, cfg, bars_5m: list[dict], log_dir: str | Path,
     for_date: Optional[date] = None,
     broker_factory: Optional[Callable[[], Any]] = None,
+    heartbeat_log_dir: str | Path | None = None,
 ) -> list[dict[str, Any]]:
     """Process one completed MNQ 5-minute bar through Tradovate DEMO."""
+    hb_dir = log_dir if heartbeat_log_dir is None else heartbeat_log_dir
     errors = execution.demo_config_errors(cfg)
     if errors:
+        _checkpoint_demo_bar(
+            hb_dir,
+            _parse_dt(str(getattr(payload, "timestamp", "") or "")),
+            {strategy: "DEMO_CONFIG_BLOCKED" for strategy in collector._NATIVE},
+            hint_present=_contract_hint_present(payload),
+            signals=set(),
+            entries=set(),
+        )
         raise ValueError("wide-stop demo configuration blocked: " + ",".join(errors))
     if not contract.evaluate(cfg).active:
         return []
@@ -720,19 +770,32 @@ def process_demo_five_min_bar(
 
         # Any pending ambiguity blocks further external submissions.
         if isinstance(state.get("pending"), dict):
+            _checkpoint_demo_bar(
+                hb_dir, current_ts,
+                {strategy: "DEMO_PENDING_AMBIGUITY" for strategy in collector._NATIVE},
+                hint_present=_contract_hint_present(payload),
+                signals=set(),
+                entries=set(),
+            )
             return events
 
+        lane_reasons = {strategy: "NO_CANDIDATE" for strategy in collector._NATIVE}
+        lane_signals: set[str] = set()
+        lane_entries: set[str] = set()
         for strategy in collector._NATIVE:
             decision, market_state, candidate, _machine = collector._evaluate_canonical_candidate(
                 payload=payload, cfg=cfg, bars_5m=bars_5m, strategy=strategy,
             )
             if candidate is None:
                 continue
+            lane_signals.add(strategy)
             ledger = contract.ledger_for(contract.INSTRUMENT, strategy)
             if ledger is None or not contract.is_fill_eligible(contract.INSTRUMENT, strategy):
+                lane_reasons[strategy] = "CANDIDATE_BLOCKED:not_fill_eligible"
                 continue
             key = collector._candidate_key(strategy, candidate)
             if key in state["seen"]:
+                lane_reasons[strategy] = "CANDIDATE_BLOCKED:already_seen"
                 continue
             demo_state.mark_seen(state, key)
 
@@ -741,6 +804,7 @@ def process_demo_five_min_bar(
                     (decision.failed_gates or ["SIGNAL_GATE_REJECTED"])[0]
                     if decision is not None else "SIGNAL_GATE_REJECTED"
                 )
+                lane_reasons[strategy] = f"CANDIDATE_BLOCKED:{failed}"
                 audit = _journal_block(
                     cfg=cfg, ledger=ledger, strategy=strategy, candidate=candidate,
                     key=key, log_dir=log_dir, for_date=for_date, state=state,
@@ -756,6 +820,7 @@ def process_demo_five_min_bar(
                 # LW fix: a critical journal row was lost in this process, so the
                 # lane's own balance/drawdown/daily-loss state cannot be trusted.
                 _send_journal_write_alert(cfg, _journal_failure)
+                lane_reasons[strategy] = "CANDIDATE_BLOCKED:journal_unwritable"
                 audit = _journal_block(
                     cfg=cfg, ledger=ledger, strategy=strategy, candidate=candidate,
                     key=key, log_dir=log_dir, for_date=for_date, state=state,
@@ -767,6 +832,7 @@ def process_demo_five_min_bar(
                 continue
 
             if demo_state.slots_used(state) >= demo_state.MAX_FILLS_PER_DAY:
+                lane_reasons[strategy] = "CANDIDATE_BLOCKED:demo_max_trades_per_day"
                 audit = _journal_block(
                     cfg=cfg, ledger=ledger, strategy=strategy, candidate=candidate,
                     key=key, log_dir=log_dir, for_date=for_date, state=state,
@@ -778,6 +844,7 @@ def process_demo_five_min_bar(
                 continue
 
             if isinstance(state.get("position"), dict):
+                lane_reasons[strategy] = "CANDIDATE_BLOCKED:demo_same_instrument_position_open"
                 audit = _journal_block(
                     cfg=cfg, ledger=ledger, strategy=strategy, candidate=candidate,
                     key=key, log_dir=log_dir, for_date=for_date, state=state,
@@ -797,6 +864,7 @@ def process_demo_five_min_bar(
             if not global_risk.approved and not contract.global_rejection_is_overridable(
                 global_risk.failed_rule
             ):
+                lane_reasons[strategy] = f"CANDIDATE_BLOCKED:{global_risk.failed_rule or 'global_risk'}"
                 audit = _journal_block(
                     cfg=cfg, ledger=ledger, strategy=strategy, candidate=candidate,
                     key=key, log_dir=log_dir, for_date=for_date, state=state,
@@ -818,6 +886,7 @@ def process_demo_five_min_bar(
                 schedule_mode=getattr(cfg, "schedule_mode", "current"),
             ).validate(setup, lane_daily)
             if not lane_result.approved:
+                lane_reasons[strategy] = f"CANDIDATE_BLOCKED:{lane_result.failed_rule or 'lane_risk'}"
                 audit = _journal_block(
                     cfg=cfg, ledger=ledger, strategy=strategy, candidate=candidate,
                     key=key, log_dir=log_dir, for_date=for_date, state=state,
@@ -831,6 +900,7 @@ def process_demo_five_min_bar(
             demo_cap = execution.demo_stop_cap_ticks(ledger.max_stop_ticks)
             stop_ticks = abs(float(setup.entry) - float(setup.stop)) / _TICK
             if stop_ticks > demo_cap:
+                lane_reasons[strategy] = "CANDIDATE_BLOCKED:demo_stop_cap"
                 audit = _journal_block(
                     cfg=cfg, ledger=ledger, strategy=strategy, candidate=candidate,
                     key=key, log_dir=log_dir, for_date=for_date, state=state,
@@ -846,6 +916,7 @@ def process_demo_five_min_bar(
 
             planned_risk = demo_state.risk_dollars(setup.entry, setup.stop, contract.CONTRACTS)
             if planned_risk > demo_state.MAX_COMBINED_OPEN_RISK_DOLLARS + 1e-9:
+                lane_reasons[strategy] = "CANDIDATE_BLOCKED:demo_combined_open_risk"
                 audit = _journal_block(
                     cfg=cfg, ledger=ledger, strategy=strategy, candidate=candidate,
                     key=key, log_dir=log_dir, for_date=for_date, state=state,
@@ -862,6 +933,7 @@ def process_demo_five_min_bar(
             # Lane-local session allowlist first: it can only NARROW what the
             # global gate would permit, never widen it.
             if not execution.demo_session_allowed(setup.session):
+                lane_reasons[strategy] = "CANDIDATE_BLOCKED:demo_session_not_allowed"
                 audit = _journal_block(
                     cfg=cfg, ledger=ledger, strategy=strategy, candidate=candidate,
                     key=key, log_dir=log_dir, for_date=for_date, state=state,
@@ -887,6 +959,7 @@ def process_demo_five_min_bar(
                 broker_is_paper=False,
             )
             if not allowed:
+                lane_reasons[strategy] = "CANDIDATE_BLOCKED:execution_gate"
                 audit = _journal_block(
                     cfg=cfg, ledger=ledger, strategy=strategy, candidate=candidate,
                     key=key, log_dir=log_dir, for_date=for_date, state=state,
@@ -896,11 +969,36 @@ def process_demo_five_min_bar(
                 events.append(audit)
                 continue
 
+            # Log-only. A stale reference never skips, resizes, or reprices the order.
+            ref_for_journal = None
+            stale_entry_shadow: dict[str, Any] = {"status": "ERROR"}
+            try:
+                from context import wide_stop_demo_execution as stale_shadow
+
+                ref_for_journal = float(payload.close)
+                would_block, shadow_reason, shadow_metrics = stale_shadow.stale_entry_check(
+                    setup.direction,
+                    setup.entry,
+                    setup.stop,
+                    ref_for_journal,
+                    stale_shadow.DEMO_STALE_ENTRY_SHADOW_X,
+                )
+                stale_entry_shadow = {
+                    "status": "OK",
+                    "would_block": would_block,
+                    "reason": shadow_reason,
+                    **shadow_metrics,
+                }
+            except Exception:
+                logger.exception('stale_entry_shadow={"status":"ERROR"}')
+                stale_entry_shadow = {"status": "ERROR"}
+
             broker = factory()
             if getattr(broker, "is_live", True):
                 raise ValueError("wide-stop demo route refuses a live broker")
             account_ok, account_reason = _account_entry_gate(broker)
             if not account_ok:
+                lane_reasons[strategy] = "CANDIDATE_BLOCKED:demo_account_exclusive_gate"
                 audit = _journal_block(
                     cfg=cfg, ledger=ledger, strategy=strategy, candidate=candidate,
                     key=key, log_dir=log_dir, for_date=for_date, state=state,
@@ -912,6 +1010,7 @@ def process_demo_five_min_bar(
 
             reserved, reserve_reason = demo_state.reserve_slot(state, key, strategy)
             if not reserved:
+                lane_reasons[strategy] = "CANDIDATE_BLOCKED:demo_daily_slot"
                 audit = _journal_block(
                     cfg=cfg, ledger=ledger, strategy=strategy, candidate=candidate,
                     key=key, log_dir=log_dir, for_date=for_date, state=state,
@@ -953,6 +1052,8 @@ def process_demo_five_min_bar(
                 contract_hint=getattr(payload, "contract_hint", None),
             )
             fill = broker.execute_bracket(order)
+            lane_reasons[strategy] = "SUBMITTED"
+            lane_entries.add(strategy)
             entry_provenance = _entry_provenance(setup, fill)
             actual_fill = _actual_entry_happened(fill)
             if actual_fill:
@@ -972,6 +1073,36 @@ def process_demo_five_min_bar(
                 broker_order_ids=dict(getattr(broker, "_last_order_ids", {}) or {}),
                 execution_audit=fill.execution_audit,
                 **entry_provenance,
+            )
+            submit_ts = datetime.now(timezone.utc)
+            try:
+                submit_latency_ms = int(round((submit_ts - current_ts).total_seconds() * 1000.0))
+            except Exception:
+                submit_latency_ms = None
+            limit_price_sent = getattr(broker, "_last_entry_limit_price", None)
+            audit.update(
+                stale_entry_shadow=stale_entry_shadow,
+                submit_ts_utc=submit_ts.isoformat(),
+                ref_price=ref_for_journal,
+                limit_price_sent=limit_price_sent,
+                planned_entry=float(setup.entry),
+                cap_ticks=execution.FROZEN_MNQ_IOC_TICKS,
+                bar_close_ts=current_ts.isoformat(),
+                submit_latency_ms=submit_latency_ms,
+            )
+            logger.info(
+                "demo submit capture submit_ts_utc=%s ref_price=%s limit_price_sent=%s "
+                "planned_entry=%s cap_ticks=%s bar_close_ts=%s submit_latency_ms=%s "
+                "broker_order_ids=%s client_order_id=%s",
+                audit["submit_ts_utc"],
+                audit["ref_price"],
+                limit_price_sent,
+                audit["planned_entry"],
+                audit["cap_ticks"],
+                audit["bar_close_ts"],
+                submit_latency_ms,
+                {key: _mask_broker_id(value) for key, value in audit["broker_order_ids"].items()},
+                order.client_order_id,
             )
 
             if fill.result == "OPEN":
@@ -994,5 +1125,12 @@ def process_demo_five_min_bar(
             collector._journal(log_dir, ledger, audit, for_date)
             demo_state.save_state(log_dir, state)
             events.append(audit)
+
+        _checkpoint_demo_bar(
+            hb_dir, current_ts, lane_reasons,
+            hint_present=_contract_hint_present(payload),
+            signals=lane_signals,
+            entries=lane_entries,
+        )
 
     return events
