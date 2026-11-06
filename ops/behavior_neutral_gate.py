@@ -54,6 +54,7 @@ NEVER_SAFE_FILES = frozenset({
     "ops/grok_ops/gates.py",
     "ops/grok_ops/sudoers.py",
     "ops/grok_ops/keys.py",
+    "ops/grok_ops/paths.py",
     "scripts/ops/install_grok_ops.sh",
     "scripts/ops/uninstall_grok_ops.sh",
 })

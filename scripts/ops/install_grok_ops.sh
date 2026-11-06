@@ -79,56 +79,33 @@ EOF
   chmod 600 "$PREFIX/etc/afs-ops/release.env"
 fi
 
-write_action() {
-  local name="$1" verb="$2"
+lib="$PREFIX/usr/local/lib/afs-ops"
+rm -rf "$lib"
+mkdir -p "$lib/ops"
+cp "$REPO/ops/__init__.py" "$lib/ops/__init__.py"
+cp -R "$REPO/ops/grok_ops" "$lib/ops/grok_ops"
+chmod -R u+rX,go-w "$lib"
+
+write_root() {
+  local name="$1"
+  local body="$2"
   local dest="$PREFIX/usr/local/sbin/$name"
-  cat > "$dest" <<EOF
-#!/bin/bash
-set -euo pipefail
-export PYTHONDONTWRITEBYTECODE=1
-export PYTHONPATH='${REPO}'
-export AFS_OPS_VERB='${verb}'
-exec /usr/bin/python3 -B -m ops.grok_ops.actions
-EOF
+  printf '%s\n' '#!/bin/sh' "$body" > "$dest"
   chmod 755 "$dest"
 }
 
-write_action afs-ops-preflight preflight
-write_action afs-ops-backup backup
-write_action afs-ops-baseline-reset-dry-run baseline-reset-dry-run
-write_action afs-ops-baseline-reset baseline-reset
-write_action afs-ops-promote promote
-write_action afs-ops-verify verify
-write_action afs-ops-rollback rollback
-write_action afs-ops-status status
-
-cat > "$PREFIX/usr/local/sbin/afs-grok-ops" <<EOF
-#!/bin/bash
-set -euo pipefail
-export PYTHONDONTWRITEBYTECODE=1
-export PYTHONPATH='${REPO}'
-exec /usr/bin/python3 -B -m ops.grok_ops.dispatcher
-EOF
-chmod 755 "$PREFIX/usr/local/sbin/afs-grok-ops"
-
-cat > "$PREFIX/usr/local/sbin/afs-ops-authorize" <<EOF
-#!/bin/bash
-set -euo pipefail
-export PYTHONDONTWRITEBYTECODE=1
-export PYTHONPATH='${REPO}'
-exec /usr/bin/python3 -B -m ops.grok_ops.authorize "\$@"
-EOF
-chmod 755 "$PREFIX/usr/local/sbin/afs-ops-authorize"
-
-cat > "$PREFIX/usr/local/sbin/afs-ops-record-refusal" <<EOF
-#!/bin/bash
-set -euo pipefail
-export PYTHONDONTWRITEBYTECODE=1
-export PYTHONPATH='${REPO}'
-export AFS_OPS_RECORD_REFUSAL=1
-exec /usr/bin/python3 -B -m ops.grok_ops.dispatcher
-EOF
-chmod 755 "$PREFIX/usr/local/sbin/afs-ops-record-refusal"
+root_exec='/usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/usr/local/lib/afs-ops /usr/bin/python3 -B -m'
+write_root afs-ops-preflight "exec $root_exec ops.grok_ops.actions preflight"
+write_root afs-ops-backup "exec $root_exec ops.grok_ops.actions backup"
+write_root afs-ops-baseline-reset-dry-run "exec $root_exec ops.grok_ops.actions baseline-reset-dry-run"
+write_root afs-ops-baseline-reset "exec $root_exec ops.grok_ops.actions baseline-reset"
+write_root afs-ops-promote "exec $root_exec ops.grok_ops.actions promote"
+write_root afs-ops-verify "exec $root_exec ops.grok_ops.actions verify"
+write_root afs-ops-rollback "exec $root_exec ops.grok_ops.actions rollback"
+write_root afs-ops-status "exec $root_exec ops.grok_ops.actions status"
+write_root afs-ops-record-refusal "exec $root_exec ops.grok_ops.dispatcher record-refusal"
+write_root afs-ops-authorize "exec $root_exec ops.grok_ops.authorize \"\$@\""
+write_root afs-grok-ops "exec /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/usr/local/lib/afs-ops SSH_ORIGINAL_COMMAND=\"\$SSH_ORIGINAL_COMMAND\" SSH_CLIENT=\"\$SSH_CLIENT\" /usr/bin/python3 -B -m ops.grok_ops.dispatcher"
 
 if [[ -z "$PREFIX" ]]; then
   chown -R grok-ops:grok-ops /var/lib/afs-ops/.ssh

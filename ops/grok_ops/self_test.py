@@ -78,7 +78,7 @@ def _checks() -> list[tuple[str, object]]:
         ("command-substitution", lambda: _rejected("status $(id)", "injection")),
         ("sudoers-count", lambda: _assert_len(sudoers)),
         ("sudoers-no-wildcard", lambda: _assert_absent(sudoers, "*")),
-        ("sudoers-no-shell", lambda: _assert_absent(sudoers, "/bin/bash")),
+        ("sudoers-no-shell", lambda: (_assert_absent(sudoers, "/bin/bash"), _assert_absent(sudoers, "SETENV"))),
         ("visudo", lambda: visudo_check(sudoers)),
         ("key-command", lambda: _assert_present(line, "command=")),
         ("key-no-pty", lambda: _assert_present(line, "no-pty")),

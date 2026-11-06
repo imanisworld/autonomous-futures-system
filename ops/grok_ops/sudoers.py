@@ -43,6 +43,9 @@ def render_sudoers() -> str:
 def validate_sudoers_text(text: str) -> None:
     if "*" in text or "?" in text:
         raise ValueError("sudoers contains a wildcard")
+    upper = text.upper()
+    if "SETENV" in upper or "ENV_KEEP" in upper:
+        raise ValueError("sudoers keeps the caller environment")
     lowered = text.lower()
     for shell in _SHELLS:
         if shell in text:

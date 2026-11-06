@@ -22,6 +22,7 @@ rm -f \
   "$PREFIX/usr/local/sbin/afs-ops-rollback" \
   "$PREFIX/usr/local/sbin/afs-ops-status" \
   "$PREFIX/var/lib/afs-ops/.ssh/authorized_keys"
+rm -rf "$PREFIX/usr/local/lib/afs-ops"
 
 if [[ -z "$PREFIX" ]] && id grok-ops >/dev/null 2>&1; then
   passwd -l grok-ops >/dev/null || true
