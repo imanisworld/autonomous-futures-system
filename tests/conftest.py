@@ -34,6 +34,12 @@ from risk.risk_engine import DailyState, TradeSetup
 
 
 @pytest.fixture(autouse=True)
+def isolate_order_submission_store(tmp_path, monkeypatch):
+    """Each test gets its own durable submission directory."""
+    monkeypatch.setenv("AFS_ORDER_SUBMISSION_DIR", str(tmp_path / "order_submissions"))
+
+
+@pytest.fixture(autouse=True)
 def isolate_live_broker_env(monkeypatch):
     """Keep local live/demo broker settings from leaking into unit tests."""
     monkeypatch.setenv("BROKER", "paper")

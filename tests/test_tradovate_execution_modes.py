@@ -484,9 +484,10 @@ def test_ambiguous_submission_blocks_retry_until_reconciled(monkeypatch):
 
     monkeypatch.setattr(b, "_post", exploding_post)
     first = b.execute_bracket(_long_order(client_order_id="AFS-amb"))
-    assert first.result == "CANCELLED"          # outer handler fails closed
+    assert first.result == "UNKNOWN"            # transport uncertainty is not a cancel
+    assert first.execution_audit["execution_state"] == "RECONCILE_REQUIRED"
     retry = b.execute_bracket(_long_order(client_order_id="AFS-amb"))
-    assert retry.result == "CANCELLED"
+    assert retry.result == "UNKNOWN"
     assert retry.exit_reason == "SUBMIT_AMBIGUOUS_UNRECONCILED"
     assert calls["n"] == 1                      # no blind re-fire
 
@@ -503,11 +504,12 @@ def test_malformed_placeoso_response_poisoned_as_ambiguous(monkeypatch, malforme
     monkeypatch.setattr(b, "_post", malformed_post)
 
     first = b.execute_bracket(_long_order(client_order_id="AFS-malformed"))
-    assert first.result == "CANCELLED"
+    assert first.result == "UNKNOWN"
     assert first.exit_reason == "TRADOVATE_NO_ORDER_ID"
+    assert first.execution_audit["execution_state"] == "RECONCILE_REQUIRED"
 
     retry = b.execute_bracket(_long_order(client_order_id="AFS-malformed"))
-    assert retry.result == "CANCELLED"
+    assert retry.result == "UNKNOWN"
     assert retry.exit_reason == "SUBMIT_AMBIGUOUS_UNRECONCILED"
     assert calls["n"] == 1
 
@@ -537,9 +539,13 @@ def test_explicit_rejection_frees_identity_for_future_signals(monkeypatch):
     cap = _capture_body(monkeypatch, b, result={"failureReason": "NoQuote"})
     first = b.execute_bracket(_long_order(client_order_id="AFS-rej"))
     assert first.result == "CANCELLED"
-    # A clean rejection created nothing server-side — same identity may retry.
+    # A clean rejection is terminal for this client id. It is not an ambiguous
+    # block, and it is not sent again. A different signal id is a new order.
     second = b.execute_bracket(_long_order(client_order_id="AFS-rej"))
-    assert second.result == "CANCELLED"
+    assert second.result == "UNKNOWN"
+    assert cap["calls"] == 1
+    third = b.execute_bracket(_long_order(client_order_id="AFS-rej-next"))
+    assert third.result == "CANCELLED"
     assert cap["calls"] == 2
 
 

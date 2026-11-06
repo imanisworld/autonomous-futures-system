@@ -105,7 +105,9 @@ def test_fi4_late_fill_of_uncancelled_entry_is_not_left_unrecorded(config, tmp_p
         new_entry_blocked=str(book.place_calls() == 1),
         journal_broker_diverge=str(not journal_open(log_dir) and book.net_pos != 0),
     )
-    assert journal_open(log_dir) or book.net_pos == 0, str(rec)
+    assert book.place_calls() == 1
+    assert not any(row.get("result") == "CANCELLED" for row in outcomes(log_dir))
+    assert second["decision"] == "BLOCKED_RECONCILE_REQUIRED", str(rec)
 
 
 # ── FI-4 fix: only an observed dead order is a definitive no-fill ─────────────
@@ -130,8 +132,8 @@ def test_fi4_cancel_error_but_order_observed_canceled_is_a_no_fill(monkeypatch):
 
 
 def test_fi4_entry_fills_during_cancel_is_journaled_open_with_ids(config, tmp_path, monkeypatch):
-    """The resting entry fills while we try to cancel it: CANCEL_UNCONFIRMED,
-    and the runner journals an open AMBIGUOUS_SUBMIT trade with the OSO ids."""
+    """The resting entry fills while we try to cancel it. The fill is adopted
+    once, with the OSO ids, and no second entry is sent."""
     monkeypatch.setattr("notifications.discord_notifier.send_operational_alert",
                         lambda *a, **k: None)
     monkeypatch.setenv("ENTRY_SLIPPAGE_TOLERANCE_TICKS", "2")
@@ -150,10 +152,7 @@ def test_fi4_entry_fills_during_cancel_is_journaled_open_with_ids(config, tmp_pa
     book.require(book.net_pos == 1, "fake broker holds the late fill")
     trade = next(r for r in journal_rows(log_dir) if r.get("decision") == "TRADE")
     ids = next(r for r in journal_rows(log_dir) if r.get("type") == "ORDER_IDS")
-    assert result["decision"] == "AMBIGUOUS_SUBMIT_OPEN"
-    assert trade["ambiguous_submit"] == {
-        "reason": "CANCEL_UNCONFIRMED", "broker_truth": "position_open",
-    }
+    assert result["decision"] == "TRADE"
     assert ids["order_ids"]["entry"] == ENTRY_ID
     assert {ids["order_ids"]["target"], ids["order_ids"]["stop"]} == {TARGET_ID, STOP_ID}
     assert journal_open(log_dir) and outcomes(log_dir) == []
@@ -167,7 +166,9 @@ def test_fi4_unreadable_entry_with_unconfirmed_cancel_stays_unconfirmed(monkeypa
     book.get_faults["/order/item"] = ConnectionError("order read failed")
     broker = make_broker(monkeypatch, book)
     fill = broker.execute_bracket(_limit_order())
-    assert (fill.result, fill.exit_reason) == ("CANCELLED", "ENTRY_UNCONFIRMED")
+    assert (fill.result, fill.exit_reason) == ("UNKNOWN", "ENTRY_UNCONFIRMED")
+    assert fill.execution_audit["execution_state"] == "RECONCILE_REQUIRED"
+    assert broker._last_order_ids["entry"] == ENTRY_ID
 
 
 def test_fi4_demo_lane_treats_cancel_unconfirmed_as_ambiguous():

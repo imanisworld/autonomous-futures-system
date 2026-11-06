@@ -11,9 +11,20 @@ Observer-only source PR. Do not deploy, restart, or merge from an agent.
 | **Ops note** | WAL adds `-wal` and `-shm` beside `options_scanner.sqlite`. Those files stay with the data file, outside the release tree and integrity manifest. |
 | **NEXT** | Grok reviews the frozen head. Imani decides whether to merge. A later Ops GO is required before the running scanner uses this. |
 
+## START HERE — 2026-11-06 source-only Tradovate submission durability
+
+Paper/demo source only. Do not deploy, restart, or merge from an agent.
+
+| Item | State |
+|---|---|
+| **Branch** | `fix/order-state-durability` |
+| **Scope** | Durable pre-send AMBIGUOUS submissions and UNKNOWN / RECONCILE_REQUIRED instead of a local cancel when an entry or cancel cannot be read. `AFS_ORDER_SUBMISSION_DIR` or `LOG_DIR/order_submissions`. |
+| **Runtime** | Not exercised. The October HOLD below still governs the box. |
+| **NEXT** | Grok reviews the PR. Imani decides whether to merge. Do not set live trading and do not retry an unresolved client id. |
+
 ## Merged — 2026-11-05 source-only trend variant shadow (no deploy)
 
-Paper/shadow forward tracking only. Runtime HOLD below is unchanged. Do not deploy, restart, or enable a schedule.
+Source merged. `VARIANTS_START` stays unset. Paper/shadow forward tracking only. Runtime HOLD below is unchanged. Do not deploy, restart, enable a schedule, or redo the implementation.
 
 | Item | State |
 |---|---|
@@ -22,7 +33,6 @@ Paper/shadow forward tracking only. Runtime HOLD below is unchanged. Do not depl
 | **Frozen sources** | Byte-identical under `research/trend_r3_forward/` at commit `f2170a9dd1e674a7a868354f286610c976b1f6bc`. Do not edit those five files. |
 | **Tracker** | `35f21644f7f9dff8ca6739071e8c9473fd9837cc` adds the four arms, tests, and the research-tree import exclusion. |
 | **Authority** | Operator GO AFS-0480 / AFS-0485. QA AFS-0479 and AFS-0484. This file does not change strategy status. |
-| **NEXT** | Grok reviews the PR. Imani merges. Do not merge from an agent. Do not activate the shadow and do not redo this implementation. |
 
 ## Archived checkpoint — source `3964389` / operator VPS snapshot 2026-10-20; HOLD / NO RUN
 

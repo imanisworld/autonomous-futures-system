@@ -2732,6 +2732,23 @@ def _safe_live_preflight_status() -> dict:
         return {"ready": False, "reason": "unavailable", "armed": False}
 
 
+def _order_submission_status() -> dict:
+    """Unresolved broker submissions for status pages. Errors block, never look flat."""
+    try:
+        from execution.order_submission_store import OrderSubmissionStore
+        return OrderSubmissionStore().public_status()
+    except Exception as exc:
+        logger.warning("order submission status unreadable: %s", exc)
+        return {
+            "recovery_required": True,
+            "entries_blocked": True,
+            "store_trusted": False,
+            "error": "unreadable",
+            "unresolved_count": None,
+            "unresolved": [],
+        }
+
+
 def _daily_summary_payload(for_date: date) -> dict:
     """Journal-only subset of `_dashboard_payload` for one day: exactly the
     fields /status/history reports. Reads only that day's journal (parsed once
@@ -2751,6 +2768,7 @@ def _daily_summary_payload(for_date: date) -> dict:
         "max_trades_per_day": _config.max_trades_per_day + int(getattr(_config, "bonus_trades_after_max", 0) or 0),
         "consecutive_losses": daily_state.consecutive_losses,
         "has_open_position": daily_state.has_open_position,
+        "order_submissions": _order_submission_status(),
         "no_trades": summary.get("no_trades", 0),
         "wins": wins,
         "losses": losses,
@@ -2826,6 +2844,7 @@ def _dashboard_payload(for_date: date) -> dict:
         "max_consecutive_losses": _config.max_consecutive_losses,
         "has_open_position": daily_state.has_open_position,
         "open_position": journal.get_open_position(for_date),
+        "order_submissions": _order_submission_status(),
         # When BROKER=tradovate and a position is open outside session hours, the
         # bracket orders on Tradovate's side will close it. No action required from
         # this system — just flag it so the dashboard makes the state obvious.
