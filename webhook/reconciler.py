@@ -90,6 +90,39 @@ def _resolve_completed_trade(broker, open_pos: dict):
     return fill
 
 
+def _recover_durable_submissions(broker=None) -> dict:
+    """Read-only recovery of durable submissions. No flatten and no resend.
+
+    Runs even when the journal has no open row. Unreadable broker evidence
+    leaves the record reconcile-required.
+    """
+    from execution.order_submission_store import OrderSubmissionStore, SubmissionStoreError
+
+    store = OrderSubmissionStore()
+    try:
+        block = store.entry_block()
+    except SubmissionStoreError as exc:
+        return {"ok": False, "entries_blocked": True, "error": str(exc)}
+    if not block:
+        return {"ok": True, "unresolved": []}
+    updated = []
+    if broker is not None and hasattr(broker, "submission_evidence"):
+        for client_id in block.get("client_order_ids") or []:
+            record = store.get(client_id)
+            if record is None:
+                continue
+            try:
+                evidence = broker.submission_evidence(record)
+            except Exception as exc:
+                evidence = {"error": str(exc), "identity_linked": False}
+            try:
+                updated.append(store.reconcile_with_evidence(client_id, evidence).get("state"))
+            except Exception:
+                logger.warning("submission reconcile failed for %s", client_id, exc_info=True)
+                updated.append("RECONCILE_REQUIRED")
+    return {"ok": True, "unresolved": block.get("client_order_ids") or [], "updated": updated}
+
+
 def reconcile_open_position(
     config,
     log_dir: str = "logs",
@@ -119,8 +152,9 @@ def reconcile_open_position(
             open_pos = journal.get_open_position(candidate)
             open_pos_date = candidate
             break
+    submission_recovery = _recover_durable_submissions(broker)
     if not open_pos:
-        return {"action": "none"}
+        return {"action": "none", "submissions": submission_recovery}
 
     # Paper positions resolve against bars in the runner — only the real broker
     # path can desync into a phantom.

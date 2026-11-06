@@ -123,6 +123,10 @@ from config.futures_contracts import (
     round_to_tick as _contract_round_to_tick,
     symbol_economics as _symbol_economics,
 )
+from execution.order_submission_store import (
+    OrderSubmissionStore,
+    SubmissionStoreError,
+)
 from journal.journal_logger import JournalLogger, JournalWriteError, journal_write_failed
 from notifications import plain_english as _pe
 from risk.risk_engine import DailyState, RiskEngine, RiskResult, TradeSetup
@@ -1829,6 +1833,23 @@ def process_alert(
             "consecutive_losses": daily_state.consecutive_losses,
             "limit": cfg.max_consecutive_losses,
         }
+    else:
+        try:
+            _submission_block = OrderSubmissionStore().entry_block()
+        except SubmissionStoreError as exc:
+            _submission_block = {
+                "reason": "store_untrusted",
+                "error": str(exc),
+                "entries_blocked": True,
+                "recovery_required": True,
+            }
+        if _submission_block:
+            execution_block = {
+                "code": "BLOCKED_RECONCILE_REQUIRED",
+                "reason": "Unresolved broker submission; new entries are blocked until reconciliation.",
+                **_submission_block,
+            }
+            _send_reconcile_required_alert(cfg, _submission_block)
     if execution_block is not None:
         result["execution_block"] = execution_block
     if daily_state.has_open_position:
@@ -3157,6 +3178,11 @@ def process_alert(
             else None
         )
     )
+    if not isinstance(broker, PaperBroker) and not str(getattr(order, "client_order_id", "") or "").strip():
+        logger.error("BLOCKED Tradovate order: missing client_order_id")
+        result["decision"] = "BLOCKED_CLIENT_ORDER_ID_REQUIRED"
+        result["fill"] = {"status": "CANCELLED", "reason": "CLIENT_ORDER_ID_REQUIRED"}
+        return result
     _submit_ts = datetime.now(timezone.utc)
     fill = (
         broker.execute_bracket(order, market_price=_paper_market_px)
@@ -3185,6 +3211,31 @@ def process_alert(
     # resolver (real exit) or the reconciler (phantom clear) then settles.
     _ambiguous_submit = None
     _flat_confirmed_audit = None
+    if _fill_needs_reconciliation(fill):
+        _audit = {
+            "reason": getattr(fill, "exit_reason", None) or "RECONCILE_REQUIRED",
+            "broker_truth": "reconcile_required",
+            "execution_state": "RECONCILE_REQUIRED",
+            "execution_audit": getattr(fill, "execution_audit", None),
+        }
+        logger.error(
+            "RECONCILE_REQUIRED: %s %s — %s; not booking CANCELLED and not clearing exposure",
+            order.instrument, order.direction, _audit["reason"],
+        )
+        _send_ambiguous_submit_alert(cfg, order, _audit)
+        result["decision"] = "RECONCILE_REQUIRED"
+        result["fill"] = {
+            "status": "UNKNOWN",
+            "execution_state": "RECONCILE_REQUIRED",
+            "instrument": state.instrument,
+            "direction": order.direction,
+            "entry": order.entry,
+            "stop": order.stop,
+            "target": order.target,
+            "reason": _audit["reason"],
+            "execution_audit": getattr(fill, "execution_audit", None),
+        }
+        return result
     if (
         fill.result != "OPEN"
         and not isinstance(broker, PaperBroker)
@@ -3562,6 +3613,38 @@ def _send_journal_write_alert(cfg, reason: str, order=None) -> None:
         )
     except Exception as exc:  # pragma: no cover - notification must never affect trading
         logger.warning("Journal-write Discord alert failed: %s", exc)
+
+
+def _fill_needs_reconciliation(fill) -> bool:
+    """UNKNOWN is unresolved execution, not a cancelled-reason membership."""
+    if getattr(fill, "result", None) == "UNKNOWN":
+        return True
+    audit = getattr(fill, "execution_audit", None) or {}
+    return isinstance(audit, dict) and audit.get("execution_state") == "RECONCILE_REQUIRED"
+
+
+def _send_reconcile_required_alert(cfg, block: dict) -> None:
+    """Startup/unresolved alert. A notifier failure does not clear the block."""
+    ids = [str(item) for item in (block or {}).get("client_order_ids") or [] if item]
+    try:
+        store = OrderSubmissionStore()
+        if ids and not any(store.claim_alert(item) for item in ids):
+            return
+    except Exception:
+        logger.warning("reconcile-required alert dedupe failed", exc_info=True)
+    try:
+        from notifications.discord_notifier import send_operational_alert
+        send_operational_alert(
+            cfg,
+            "🚨 Broker submission needs reconciliation — new entries stopped\n"
+            f"Client ids: {', '.join(ids) or 'unavailable'}\n"
+            "What happened: an order may already exist at the broker and the bot cannot prove it is flat\n"
+            "What the bot did: it will not open a new trade until that order is identified\n"
+            "What to do: check Tradovate for working orders and positions before any restart retry\n"
+            f"-# details: RECONCILE_REQUIRED {block.get('reason')}",
+        )
+    except Exception as exc:  # pragma: no cover - notification must never affect trading
+        logger.warning("Reconcile-required Discord alert failed: %s", exc)
 
 
 def _send_ambiguous_submit_alert(cfg, order, ambiguous: dict) -> None:

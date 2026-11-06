@@ -1,17 +1,25 @@
 # Agent Work State
 
-## START HERE — 2026-11-05 source-only trend variant shadow (no deploy)
+## START HERE — 2026-11-06 source-only Tradovate submission durability
 
-Paper/shadow forward tracking only. Runtime HOLD below is unchanged. Do not deploy, restart, or enable a schedule.
+Paper/demo source only. Do not deploy, restart, or merge from an agent.
+
+| Item | State |
+|---|---|
+| **Branch** | `fix/order-state-durability` |
+| **Scope** | Durable pre-send AMBIGUOUS submissions and UNKNOWN / RECONCILE_REQUIRED instead of a local cancel when an entry or cancel cannot be read. `AFS_ORDER_SUBMISSION_DIR` or `LOG_DIR/order_submissions`. |
+| **Runtime** | Not exercised. The October HOLD below still governs the box. |
+| **NEXT** | Grok reviews the PR. Imani decides whether to merge. Do not set live trading and do not retry an unresolved client id. |
+
+## Merged — 2026-11-05 trend variant shadow
+
+Source merged. `VARIANTS_START` stays unset. Do not activate a schedule and do not redo the implementation.
 
 | Item | State |
 |---|---|
 | **Branch** | `shadow/trend-variants-va-vb` |
-| **Scope** | CONTROL_R3_v2 + V-A + V-B + V-C at two-sided alpha 0.0167. `VARIANTS_START` is unset, so the driver prints `NOT_ACTIVATED` and writes nothing. |
 | **Frozen sources** | Byte-identical under `research/trend_r3_forward/` at commit `f2170a9dd1e674a7a868354f286610c976b1f6bc`. Do not edit those five files. |
-| **Tracker** | `35f21644f7f9dff8ca6739071e8c9473fd9837cc` adds the four arms, tests, and the research-tree import exclusion. |
-| **Authority** | Operator GO AFS-0480 / AFS-0485. QA AFS-0479 and AFS-0484. This file does not change strategy status. |
-| **NEXT** | Grok reviews the PR. Imani merges. Do not merge from an agent. Do not activate the shadow and do not redo this implementation. |
+| **Tracker** | `35f21644f7f9dff8ca6739071e8c9473fd9837cc` |
 
 ## Archived checkpoint — source `3964389` / operator VPS snapshot 2026-10-20; HOLD / NO RUN
 

@@ -285,9 +285,12 @@ def test_unknown_entry_confirmed_flat_cancels_all(monkeypatch):
 def test_unknown_entry_never_confirmed_journals_nothing(monkeypatch):
     b, posts = _unknown_entry_broker(monkeypatch, [(False, None)])
     fill = b.execute_bracket(_long_order())
-    assert fill.result == "CANCELLED"
+    # Unreadable entry is UNKNOWN, not a local cancel, and the ids stay.
+    assert fill.result == "UNKNOWN"
     assert fill.exit_reason == "ENTRY_UNCONFIRMED"
+    assert fill.execution_audit["execution_state"] == "RECONCILE_REQUIRED"
     assert b._last_position is None
+    assert b._last_order_ids["entry"] == 111
     # the entry cancel attempt (late-fill prevention) must have gone out
     cancels = {body.get("orderId") for path, body in posts if path == "/order/cancelorder"}
     assert 111 in cancels
@@ -298,7 +301,8 @@ def test_unknown_entry_direction_mismatch_not_adopted(monkeypatch):
     # ladder unable to prove our entry, journal nothing open.
     b, _ = _unknown_entry_broker(monkeypatch, [(True, _pos(direction="SHORT"))])
     fill = b.execute_bracket(_long_order())
-    assert fill.result == "CANCELLED"
+    assert fill.result == "UNKNOWN"
+    assert b._last_order_ids["entry"] == 111
     assert b._last_position is None
 
 

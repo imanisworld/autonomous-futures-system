@@ -514,4 +514,5 @@ def test_confirmed_trade_still_requires_order_id_with_both_overrides_set(monkeyp
     order = _tradovate_order(force_market_entry=True, force_runner_exit=True)
     fill = broker.execute_bracket(order)
     assert fill.result != "OPEN"
-    assert fill.result == "CANCELLED"
+    # A response with no order id is unresolved, not a proven cancel.
+    assert fill.result == "UNKNOWN"
