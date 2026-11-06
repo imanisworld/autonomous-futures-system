@@ -1,6 +1,17 @@
 # Agent Work State
 
-## START HERE — 2026-11-05 source-only trend variant shadow (no deploy)
+## START HERE — 2026-11-06 options scanner SQLite lock fix
+
+Observer-only source PR. Do not deploy, restart, or merge from an agent.
+
+| Item | State |
+|---|---|
+| **Branch** | `fix/options-db-lock-2026-11-06` |
+| **Scope** | `ScanStorage` uses a 30s connect timeout, `busy_timeout=30000`, and WAL. Writes retry lock/busy errors. `resolve_open_candidates` isolates one candidate failure. |
+| **Ops note** | WAL adds `-wal` and `-shm` beside `options_scanner.sqlite`. Those files stay with the data file, outside the release tree and integrity manifest. |
+| **NEXT** | Grok reviews the frozen head. Imani decides whether to merge. A later Ops GO is required before the running scanner uses this. |
+
+## Merged — 2026-11-05 source-only trend variant shadow (no deploy)
 
 Paper/shadow forward tracking only. Runtime HOLD below is unchanged. Do not deploy, restart, or enable a schedule.
 

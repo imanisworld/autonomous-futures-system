@@ -181,7 +181,7 @@ def test_stop_resolution_marks_loss(tmp_path):
     outcome = scan(scanner, candidate_payload())
     market.price = 98.5  # below the 99.0 stop for a LONG
     counts = asyncio.run(scanner.resolve_open_candidates(now=OPEN_TIME + timedelta(hours=1)))
-    assert counts == {"checked": 1, "resolved": 1}
+    assert counts == {"checked": 1, "resolved": 1, "errors": 0}
     setup = storage.get_shadow_setup(outcome.shadow_id)
     assert setup.status == "LOSS"
     assert setup.outcome["closed_reason"] == "stop_hit"
@@ -217,7 +217,7 @@ def test_provider_failure_leaves_candidate_open(tmp_path):
     market.error = "timeout"
     market.price = None
     counts = asyncio.run(scanner.resolve_open_candidates(now=OPEN_TIME + timedelta(hours=1)))
-    assert counts == {"checked": 1, "resolved": 0}
+    assert counts == {"checked": 1, "resolved": 0, "errors": 0}
     assert storage.get_shadow_setup(outcome.shadow_id).status == "OPEN"
 
 def test_webhook_scan_after_close_records_but_cannot_alert(tmp_path):
@@ -263,7 +263,7 @@ def test_scheduler_resolution_skips_outside_market_hours(tmp_path):
         scanner.resolve_open_candidates(now=OPEN_TIME.replace(hour=18), scheduled=True)
     )
 
-    assert counts == {"checked": 0, "resolved": 0}
+    assert counts == {"checked": 0, "resolved": 0, "errors": 0}
     assert scanner.last_skip_reason == "outside_market_hours"
     assert market.calls == 1
     assert storage.get_shadow_setup(outcome.shadow_id).status == "OPEN"

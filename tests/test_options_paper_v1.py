@@ -249,7 +249,7 @@ def test_v1_resolver_reprices_exact_contract_and_exits_at_premium_stop(tmp_path)
 
     market.contract = quote(bid=3.70, ask=3.80)
     counts = asyncio.run(scanner.resolve_open_candidates(now=NOW.replace(hour=11)))
-    assert counts == {"checked": 1, "resolved": 1}
+    assert counts == {"checked": 1, "resolved": 1, "errors": 0}
     row = storage.get_shadow_setup(outcome.shadow_id)
     assert row.status == "LOSS"
     assert row.outcome["closed_reason"] == "premium_stop_hit"
