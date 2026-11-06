@@ -14,6 +14,7 @@ import sys
 
 from ops.grok_ops.allowlist import VERBS, CommandRejected, parse_command
 from ops.grok_ops.auditlog import AuditLog
+from ops.grok_ops.paths import AUDIT_LOG
 from ops.grok_ops.sudoers import REFUSAL_PATH, VERB_PATHS
 
 _VERB_PATH = dict(zip(VERBS, VERB_PATHS, strict=True))
@@ -43,9 +44,10 @@ def _refuse(reason: str) -> int:
     return 2
 
 
-def record_refusal_main() -> int:
+def record_refusal_main(*, audit_path: str = AUDIT_LOG, euid: int | None = None) -> int:
     """Root-only writer for a rejected SSH command. Accepts a fixed reason code."""
-    if os.geteuid() != 0 and os.environ.get("AFS_OPS_ALLOW_NONROOT") != "1":
+    uid = os.geteuid() if euid is None else euid
+    if uid != 0:
         print("refusal recorder must run as root", file=sys.stderr)
         return 1
     try:
@@ -59,7 +61,7 @@ def record_refusal_main() -> int:
     if not isinstance(actor, str) or not _ACTOR.fullmatch(actor):
         actor = "grok-ops"
     try:
-        AuditLog(os.environ.get("AFS_OPS_AUDIT_LOG", "/var/lib/afs-ops/audit.log")).append(
+        AuditLog(audit_path).append(
             actor=actor,
             verb="INVALID",
             sha="",
@@ -73,12 +75,10 @@ def record_refusal_main() -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    if os.environ.get("AFS_OPS_RECORD_REFUSAL") == "1":
+    args = list(sys.argv[1:] if argv is None else argv)
+    if args == ["record-refusal"]:
         return record_refusal_main()
-    if os.environ.get("AFS_OPS_DISPATCH_ARGV") == "1":
-        raw = " ".join(sys.argv[1:] if argv is None else argv)
-    else:
-        raw = os.environ.get("SSH_ORIGINAL_COMMAND", "")
+    raw = os.environ.get("SSH_ORIGINAL_COMMAND", "")
     try:
         parsed = parse_command(raw)
     except CommandRejected as exc:

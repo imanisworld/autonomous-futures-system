@@ -7,6 +7,8 @@ and every hard refusal fails closed without printing .env values.
 
 from __future__ import annotations
 
+import hashlib
+import inspect
 import json
 import os
 import stat
@@ -18,7 +20,14 @@ from pathlib import Path
 
 import pytest
 
-from ops.grok_ops.actions import ActionContext, run_verb
+from ops.grok_ops.actions import ActionContext, production_context, run_verb
+from ops.grok_ops.paths import (
+    TOKEN_DIR,
+    OwnershipError,
+    assert_directory,
+    open_verified,
+    pin_release,
+)
 from ops.grok_ops.allowlist import CommandRejected, parse_command
 from ops.grok_ops.auditlog import AuditLog
 from ops.grok_ops.authorize import main as authorize_main
@@ -41,6 +50,7 @@ from ops.grok_ops.tokens import TOKEN_TTL, TokenError, TokenStore
 
 SHA_A = "a" * 40
 SHA_B = "b" * 40
+FP = "ab" * 32
 PUBKEY = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGrokOpsTestKeyMaterialOnly grok-ops"
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -180,7 +190,7 @@ def test_token_binds_sha_expires_and_is_single_use(tmp_path):
     start = datetime(2026, 11, 6, 18, 0, tzinfo=timezone.utc)
     clock = {"now": start}
     store = TokenStore(tmp_path, clock=lambda: clock["now"])
-    token_id = store.authorize(SHA_A, "AFS-0509")
+    token_id = store.authorize(SHA_A, "AFS-0509", FP)
     record = store.consume(token_id, SHA_A)
     assert record["sha"] == SHA_A
     assert record["ledger_id"] == "AFS-0509"
@@ -193,7 +203,7 @@ def test_token_expiry_and_sha_mismatch(tmp_path):
     start = datetime(2026, 11, 6, 18, 0, tzinfo=timezone.utc)
     clock = {"now": start}
     store = TokenStore(tmp_path, clock=lambda: clock["now"])
-    token_id = store.authorize(SHA_A, "AFS-0509")
+    token_id = store.authorize(SHA_A, "AFS-0509", FP)
     with pytest.raises(TokenError) as mismatch:
         store.consume(token_id, SHA_B)
     assert mismatch.value.reason == "mismatch"
@@ -205,16 +215,20 @@ def test_token_expiry_and_sha_mismatch(tmp_path):
 
 
 def test_authorize_cli_requires_root_and_exact_sha(tmp_path, capsys):
-    code = authorize_main(["not-a-sha", "AFS-1"], euid=0, store_root=tmp_path)
+    code = authorize_main(["not-a-sha", "AFS-1", FP], euid=0, store_root=tmp_path)
     assert code == 2
-    code = authorize_main([SHA_A, "AFS-1"], euid=1000, store_root=tmp_path)
+    code = authorize_main([SHA_A, "AFS-1", FP], euid=1000, store_root=tmp_path)
     assert code == 1
     captured = capsys.readouterr()
     assert "root" in captured.err
-    code = authorize_main([SHA_A, "AFS-1"], euid=0, store_root=tmp_path)
+    code = authorize_main([SHA_A, "AFS-1", "not-a-digest"], euid=0, store_root=tmp_path)
+    assert code == 2
+    code = authorize_main([SHA_A, "AFS-1", FP], euid=0, store_root=tmp_path)
     assert code == 0
     out = capsys.readouterr().out.strip()
-    assert TokenStore(tmp_path).consume(out, SHA_A)["ledger_id"] == "AFS-1"
+    record = TokenStore(tmp_path).consume(out, SHA_A)
+    assert record["ledger_id"] == "AFS-1"
+    assert record["release_fingerprint"] == FP
 
 
 def _ctx(tmp_path: Path, runner, flat=None, env_text=None, variants=None, lock=False):
@@ -283,7 +297,7 @@ def test_every_hard_refusal_blocks_promote_without_printing_env(tmp_path):
         if code == "shadow-active":
             env_text = _quiet_env()
         ctx = _ctx(tmp_path / f"{index}-{code}", lambda argv, env: 0, flat=flat, env_text=env_text, variants=variants, lock=lock)
-        token = ctx.token_store.authorize(SHA_A, "AFS-1")
+        token = ctx.token_store.authorize(SHA_A, "AFS-1", FP)
         parsed = parse_command(f"promote {SHA_A}")
         rc = run_verb(parsed, ctx, token_id=token)
         assert rc != 0
@@ -303,7 +317,7 @@ def test_missing_flat_reader_fails_closed(tmp_path):
         raise OSError("broker down")
 
     ctx.flat_reader = boom
-    token = ctx.token_store.authorize(SHA_A, "AFS-1")
+    token = ctx.token_store.authorize(SHA_A, "AFS-1", FP)
     rc = run_verb(parse_command(f"promote {SHA_A}"), ctx, token_id=token)
     assert rc != 0
     assert "flat-unreadable" in ctx.audit.path.read_text()
@@ -312,7 +326,7 @@ def test_missing_flat_reader_fails_closed(tmp_path):
 
 def test_promote_consumes_token_and_requires_ancestor(tmp_path):
     ctx = _ctx(tmp_path, lambda argv, env: 0)
-    token = ctx.token_store.authorize(SHA_A, "AFS-9")
+    token = ctx.token_store.authorize(SHA_A, "AFS-9", FP)
     rc = run_verb(parse_command(f"promote {SHA_A}"), ctx, token_id=token)
     assert rc == 0
     assert ctx.calls[0][0][:3] == [str(ctx.atomic_release), "promote", SHA_A]
@@ -321,7 +335,7 @@ def test_promote_consumes_token_and_requires_ancestor(tmp_path):
     with pytest.raises(TokenError) as reused:
         ctx.token_store.consume(token, SHA_A)
     assert reused.value.reason == "reused"
-    other = ctx.token_store.authorize(SHA_B, "AFS-9")
+    other = ctx.token_store.authorize(SHA_B, "AFS-9", FP)
     rc = run_verb(parse_command(f"promote {SHA_B}"), ctx, token_id=other)
     assert rc != 0
     assert "ancestor" in ctx.audit.path.read_text()
@@ -333,7 +347,7 @@ def test_env_file_is_not_modified_or_echoed(tmp_path):
     secret = "webhook-secret-should-stay-unread"
     ctx.env_file.write_text(_quiet_env() + f"WEBHOOK_SECRET={secret}\n")
     original = ctx.env_file.read_bytes()
-    token = ctx.token_store.authorize(SHA_A, "AFS-9")
+    token = ctx.token_store.authorize(SHA_A, "AFS-9", FP)
     run_verb(parse_command("status"), ctx)
     run_verb(parse_command(f"promote {SHA_A}"), ctx, token_id=token)
     assert ctx.env_file.read_bytes() == original
@@ -345,16 +359,31 @@ def test_env_file_is_not_modified_or_echoed(tmp_path):
 
 def test_baseline_reset_calls_sibling_script_and_dry_run_skips_token(tmp_path):
     ctx = _ctx(tmp_path, lambda argv, env: 0)
-    dry = run_verb(parse_command("baseline-reset-dry-run"), ctx)
+    token = ctx.token_store.authorize(SHA_A, "LEDGER-1", FP)
+    dry = run_verb(parse_command("baseline-reset-dry-run"), ctx, token_id=token)
     assert dry == 0
-    assert ctx.calls[0][0][0].endswith("scripts/ops/baseline_reset.sh")
-    assert "--dry-run" in ctx.calls[0][0]
-    token = ctx.token_store.authorize(SHA_A, "LEDGER-1")
+    dry_argv = ctx.calls[0][0]
+    assert dry_argv[0].endswith("scripts/ops/baseline_reset.sh")
+    assert dry_argv[1] == "reset"
+    assert "--dry-run" in dry_argv
+    assert "--target-sha" in dry_argv
+    assert "--release-fingerprint" in dry_argv
+    assert dry_argv[dry_argv.index("--release-fingerprint") + 1] == FP
+    assert "--ticket" in dry_argv
+    assert "--shared-dir" in dry_argv
+    assert "--status-file" in dry_argv
+    phrase = f"AUTHORIZE BASELINE RESET {SHA_A} {FP} LEDGER-1"
+    assert phrase in dry_argv
+    script_bytes = Path(dry_argv[0]).read_bytes()
+    assert hashlib.sha256(script_bytes).hexdigest() != FP
+    assert (ctx.token_store.root / f"{token}.json").is_file()
     rc = run_verb(parse_command("baseline-reset"), ctx, token_id=token)
     assert rc == 0
-    assert "--sha" in ctx.calls[1][0]
-    assert SHA_A in ctx.calls[1][0]
-    assert "--ledger-id" in ctx.calls[1][0]
+    reset_argv = ctx.calls[1][0]
+    assert "--dry-run" not in reset_argv
+    assert "--target-sha" in reset_argv
+    assert SHA_A in reset_argv
+    assert "--status-file" in reset_argv
     with pytest.raises(TokenError):
         ctx.token_store.consume(token, SHA_A)
 
@@ -362,7 +391,7 @@ def test_baseline_reset_calls_sibling_script_and_dry_run_skips_token(tmp_path):
 def test_baseline_reset_missing_script_is_a_documented_dependency(tmp_path):
     ctx = _ctx(tmp_path, lambda argv, env: 0)
     (ctx.repo_root / "scripts" / "ops" / "baseline_reset.sh").unlink()
-    token = ctx.token_store.authorize(SHA_A, "LEDGER-1")
+    token = ctx.token_store.authorize(SHA_A, "LEDGER-1", FP)
     rc = run_verb(parse_command("baseline-reset"), ctx, token_id=token)
     assert rc == 78
     assert "dependency-missing" in ctx.audit.path.read_text()
@@ -392,20 +421,18 @@ def test_unreadable_env_and_shadow_file_fail_closed(tmp_path):
 
 
 def test_refusal_recorder_accepts_only_fixed_reason_codes(tmp_path, monkeypatch):
-    monkeypatch.setenv("AFS_OPS_ALLOW_NONROOT", "1")
-    monkeypatch.setenv("AFS_OPS_AUDIT_LOG", str(tmp_path / "audit.log"))
     monkeypatch.setattr(
         sys,
         "stdin",
         StringIO(json.dumps({"reason": "injection", "actor": "grok-ops@203.0.113.8"})),
     )
-    assert record_refusal_main() == 0
+    assert record_refusal_main(audit_path=str(tmp_path / "audit.log"), euid=0) == 0
     row = json.loads((tmp_path / "audit.log").read_text())
     assert row["verb"] == "INVALID"
     assert row["result"] == "injection"
     assert row["actor"] == "grok-ops@203.0.113.8"
     monkeypatch.setattr(sys, "stdin", StringIO(json.dumps({"reason": "id", "actor": "root"})))
-    assert record_refusal_main() == 2
+    assert record_refusal_main(audit_path=str(tmp_path / "audit.log"), euid=0) == 2
     assert (tmp_path / "audit.log").read_text().count("\n") == 1
 
 
@@ -435,6 +462,110 @@ def test_self_test_is_34_of_34():
     assert total == 34
     assert failures == []
     assert passed == 34
+
+
+def test_production_context_ignores_agent_environment(monkeypatch):
+    monkeypatch.setenv("AFS_OPS_TOKEN_DIR", "/tmp/pwned-tokens")
+    monkeypatch.setenv("AFS_OPS_ENV_FILE", "/tmp/pwned.env")
+    monkeypatch.setenv("AFS_CURRENT_LINK", "/tmp/pwned-link")
+    monkeypatch.setenv("AFS_OPS_VERB", "promote")
+    monkeypatch.setenv("AFS_SHARED_DIR", "/tmp/pwned-shared")
+    source = inspect.getsource(production_context)
+    assert "AFS_OPS_" not in source
+    assert "os.environ" not in source
+    with pytest.raises(OwnershipError):
+        production_context()
+    assert not Path("/tmp/pwned-tokens").exists()
+    assert TOKEN_DIR == "/var/lib/afs-ops/tokens"
+
+
+def test_ownership_guard_rejects_group_writable_and_non_root(tmp_path):
+    directory = tmp_path / "tokens"
+    directory.mkdir(mode=0o755)
+    assert_directory(str(directory), uid=os.getuid())
+    directory.chmod(0o775)
+    with pytest.raises(OwnershipError):
+        assert_directory(str(directory), uid=os.getuid())
+    directory.chmod(0o755)
+    with pytest.raises(OwnershipError):
+        assert_directory(str(directory), uid=0)
+
+
+def _release_tree(tmp_path: Path, name: str, *, mode: int = 0o755) -> Path:
+    root = tmp_path / "afs-releases" / name
+    script_dir = root / "scripts" / "ops"
+    script_dir.mkdir(parents=True)
+    script = script_dir / "baseline_reset.sh"
+    script.write_text("#!/bin/sh\nexit 0\n")
+    script.chmod(0o755)
+    for path in (tmp_path / "afs-releases", root, root / "scripts", script_dir, script):
+        path.chmod(mode if path.is_dir() else 0o755)
+    return root
+
+
+def test_release_pin_detects_symlink_swap_and_writable_tree(tmp_path):
+    uid = os.getuid()
+    prefix = tmp_path / "afs-releases"
+    good = _release_tree(tmp_path, "good")
+    evil = _release_tree(tmp_path, "evil")
+    parent = tmp_path / "links"
+    parent.mkdir(mode=0o755)
+    link = parent / "current"
+    link.symlink_to(good)
+    pinned = pin_release(str(link), str(prefix), uid=uid)
+    assert pinned.real == str(good.resolve())
+    link.unlink()
+    link.symlink_to(evil)
+    with pytest.raises(OwnershipError) as swapped:
+        pinned.reverify(uid=uid)
+    assert swapped.value.code == "release-toctou"
+    outside = tmp_path / "outside.sh"
+    outside.write_text("#!/bin/sh\nexit 0\n")
+    swapped_script = good / "scripts" / "ops" / "baseline_reset.sh"
+    swapped_script.unlink()
+    swapped_script.symlink_to(outside)
+    with pytest.raises(OwnershipError):
+        open_verified(str(good), "scripts/ops/baseline_reset.sh", uid=uid)
+    good.chmod(0o775)
+    fresh = parent / "fresh"
+    fresh.symlink_to(good)
+    with pytest.raises(OwnershipError):
+        pin_release(str(fresh), str(prefix), uid=uid)
+
+
+def test_zero_and_expired_tokens_refuse_without_typeerror(tmp_path):
+    store = TokenStore(tmp_path)
+    with pytest.raises(TokenError) as missing:
+        store.find_single_open()
+    assert missing.value.reason == "missing"
+    assert not isinstance(missing.value, TypeError)
+    (tmp_path / "broken.json").write_text('{"expires_at": null}')
+    with pytest.raises(TokenError) as still_missing:
+        store.find_open_for_sha(SHA_A)
+    assert still_missing.value.reason == "missing"
+    start = datetime(2026, 11, 6, 18, 0, tzinfo=timezone.utc)
+    clock = {"now": start}
+    timed = TokenStore(tmp_path / "timed", clock=lambda: clock["now"])
+    token_id = timed.authorize(SHA_A, "AFS-1", FP)
+    clock["now"] = start + TOKEN_TTL + timedelta(seconds=1)
+    with pytest.raises(TokenError) as expired:
+        timed.find_single_open()
+    assert expired.value.reason == "missing"
+    assert not (timed.root / f"{token_id}.json").exists()
+    dead = json.loads((timed.root / "expired" / f"{token_id}.json").read_text())
+    assert dead["expired_at"]
+    ctx = _ctx(tmp_path / "verb", lambda argv, env: 0)
+    rc = run_verb(parse_command("baseline-reset"), ctx)
+    assert rc == 3
+    assert "missing" in ctx.audit.path.read_text()
+    assert ctx.calls == []
+
+
+def test_sudoers_rejects_setenv_mutation():
+    text = render_sudoers()
+    assert "SETENV" not in text
+    with pytest.raises(ValueError):
+        validate_sudoers_text(text.replace("env_reset", "env_reset, SETENV"))
 
 
 def test_install_refuses_without_root_or_prefix(tmp_path):
@@ -471,6 +602,11 @@ def test_install_and_uninstall_round_trip(tmp_path):
     validate_authorized_key_line(line)
     assert "grok-ops" in (root / "etc" / "passwd").read_text()
     assert "/usr/sbin/nologin" in (root / "etc" / "passwd").read_text()
+    promote = (root / "usr" / "local" / "sbin" / "afs-ops-promote").read_text()
+    assert "env -i" in promote
+    assert "/usr/bin/python3" in promote
+    assert "AFS_OPS_" not in promote
+    assert "ops.grok_ops.actions promote" in promote
     proc = subprocess.run(["bash", str(self_test)], check=True, env=env, capture_output=True, text=True)
     assert "34/34" in proc.stdout
     audit = root / "var" / "lib" / "afs-ops" / "audit.log"

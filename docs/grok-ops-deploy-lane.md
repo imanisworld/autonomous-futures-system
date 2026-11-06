@@ -13,8 +13,8 @@ After the Operator installs it and types a GO, `grok-ops` may run only:
 | `preflight` | Report the hard gates. Writes an audit row. |
 | `status` | Same report, no mutation. |
 | `backup` | Runs `python -B -m scripts.backup_proof_data` with `LOG_DIR` and `PROOF_BACKUP_DIR` from the root-owned release config. |
-| `baseline-reset-dry-run` | Calls `scripts/ops/baseline_reset.sh --dry-run` when that file exists. |
-| `baseline-reset` | Consumes a GO token, then calls `scripts/ops/baseline_reset.sh --sha <sha> --ledger-id <id>`. |
+| `baseline-reset-dry-run` | Calls `scripts/ops/baseline_reset.sh reset --dry-run` with the #1257 flags when that file exists. Does not consume the GO token. |
+| `baseline-reset` | Consumes a GO token, then calls `scripts/ops/baseline_reset.sh reset --target-sha <sha> --release-fingerprint <digest> --ticket <ledger-id> --operator-token "AUTHORIZE BASELINE RESET <sha> <digest> <ledger-id>" --status-file /var/lib/afs-ops/exposure.json --shared-dir /root/afs-shared --env-file /root/afs-shared/.env`. |
 | `promote <sha>` | Consumes a GO token, then runs `scripts/atomic_release.sh promote <sha>`. |
 | `verify` | Runs `scripts/atomic_release.sh verify` for `EXPECTED_LIVE_COMMIT`. |
 | `rollback <release>` | Runs `scripts/atomic_release.sh rollback` only when `<release>` is the basename of `current.previous`. |
@@ -51,10 +51,10 @@ The flatness snapshot is `/var/lib/afs-ops/flat.json` unless `AFS_OPS_FLAT_FILE`
 `promote` and `baseline-reset` require a one-time token.
 
 ```bash
-sudo /usr/local/sbin/afs-ops-authorize <40-hex-sha> <ledger-id>
+sudo /usr/local/sbin/afs-ops-authorize <40-hex-sha> <ledger-id> <64-hex-release-fingerprint>
 ```
 
-The command prints a token id. The token expires two hours after creation, binds to that exact SHA, and is consumed on first use. A second use, an expired token, or a SHA that does not match the token is refused. The SHA must also be an ancestor of `origin/main`. The agent does not pass the token id on the SSH command. The verb script consumes the single open token for that SHA (`promote`) or the single open token (`baseline-reset`). Two open tokens for the same action refuse as ambiguous.
+The fingerprint is the Operator's approved-manifest digest. The lane stores that value and passes it to `--release-fingerprint`. It does not hash the staged release tree. The command prints a token id. The token expires two hours after creation, binds to that exact SHA and fingerprint, and is consumed on first use. A second use, an expired token, or a SHA that does not match the token is refused. The SHA must also be an ancestor of `origin/main`. The agent does not pass the token id on the SSH command. The verb script consumes the single open token for that SHA (`promote`) or the single open token (`baseline-reset`). Two open tokens for the same action refuse as ambiguous.
 
 Create the token only after the Operator has typed GO for that SHA and ledger id. The token is the record of that GO.
 
@@ -81,7 +81,7 @@ The self-test prints `34/34` when the allowlist, key guard, sudoers policy, and 
 Example session after install:
 
 ```bash
-sudo /usr/local/sbin/afs-ops-authorize <sha> <ledger-id>
+sudo /usr/local/sbin/afs-ops-authorize <sha> <ledger-id> <release-fingerprint>
 ssh -i grok-ops-key grok-ops@<vps> preflight
 ssh -i grok-ops-key grok-ops@<vps> promote <sha>
 ```
@@ -108,14 +108,16 @@ Uninstall removes the sudoers drop-in, the verb scripts, the dispatcher, and the
 scripts/ops/baseline_reset.sh
 ```
 
-That script is not on `main` at `f8b044be`. It is the in-flight sanctioned baseline-reset procedure from agent `bc-57c374c1` (`bc-57c374c1-9f65-53d3-98b1-71abbdec6c72`). Expected interface:
+That script is not on `main` at `f8b044be`. It is the in-flight sanctioned baseline-reset procedure from agent `bc-57c374c1` (`bc-57c374c1-9f65-53d3-98b1-71abbdec6c72`), PR #1257 at `ab4c9a7d`. Expected interface:
 
 ```text
-scripts/ops/baseline_reset.sh --dry-run
-scripts/ops/baseline_reset.sh --sha <40-hex-sha> --ledger-id <ledger-id>
+scripts/ops/baseline_reset.sh reset --dry-run --target-sha <sha> --release-fingerprint <digest> --ticket <ledger-id> --operator-token "AUTHORIZE BASELINE RESET <sha> <digest> <ledger-id>" --status-file /var/lib/afs-ops/exposure.json --shared-dir /root/afs-shared --env-file /root/afs-shared/.env
+scripts/ops/baseline_reset.sh reset --target-sha <sha> --release-fingerprint <digest> --ticket <ledger-id> --operator-token "AUTHORIZE BASELINE RESET <sha> <digest> <ledger-id>" --status-file /var/lib/afs-ops/exposure.json --shared-dir /root/afs-shared --env-file /root/afs-shared/.env
 ```
 
-Until that file is on the tree this lane runs from, both verbs exit `78` with audit result `refused:dependency-missing` and do not consume a token. Do not point the verb at a different script.
+Until that file is on the tree this lane runs from, both verbs exit `78` with audit result `refused:dependency-missing` and do not consume a token. The fingerprint is the value the Operator passed to `afs-ops-authorize`. The lane does not hash the staged tree to invent it. Do not point the verb at a different script.
+
+The root wrappers start with `/usr/bin/env -i` and `/usr/bin/python3`. They do not read `AFS_OPS_*` from the caller. Token, gate, and release paths are the absolute paths in `ops/grok_ops/paths.py`. The current symlink, the release tree under `/root/afs-releases`, the installed code under `/usr/local/lib/afs-ops`, and the token directory must be root-owned and not group- or world-writable. A swapped symlink or a symlink leaf fails the re-check.
 
 ## Threat model
 
