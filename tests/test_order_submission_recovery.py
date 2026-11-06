@@ -187,6 +187,76 @@ def test_startup_adopts_filled_order_from_custom_tag_and_position(monkeypatch, t
     assert sum(1 for row in again["history"] if row["to"] == OPEN) == 1
 
 
+def test_filled_order_without_a_working_stop_is_not_adopted(monkeypatch, tmp_path):
+    """A matching position and a full fill stay unresolved when the stop is dead.
+
+    Removing the protection_verified requirement adopts this row to OPEN and
+    this assertion fails.
+    """
+    monkeypatch.setenv("AFS_ORDER_SUBMISSION_DIR", str(tmp_path / "submissions"))
+    monkeypatch.setenv("BROKER", "tradovate")
+    store = OrderSubmissionStore()
+    store.reserve_initial_send(_spec("AFS-naked"))
+    broker = _bind(monkeypatch, _broker(monkeypatch), {
+        "orders": [
+            {
+                "id": 51, "clOrdId": "AFS-naked", "ordStatus": "Filled",
+                "filledQty": 1, "orderType": "Market",
+            },
+            {"id": 52, "parentId": 51, "ordStatus": "Canceled", "orderType": "Stop"},
+            {"id": 53, "parentId": 51, "ordStatus": "Working", "orderType": "Limit"},
+        ],
+        "fills": [{"orderId": 51, "qty": 1, "price": 100}],
+        "executions": [{"orderId": 51, "qty": 1}],
+        "positions": [{"netPos": 1, "netPrice": 100, "contractId": 7}],
+    })
+    _recover(monkeypatch, tmp_path, broker)
+    row = store.get("AFS-naked")
+    assert row["state"] == RECONCILE_REQUIRED
+    assert row["state"] != OPEN
+    assert store.entry_block()["entries_blocked"] is True
+
+
+def test_lifespan_reconciles_with_broker_before_accepting_entries(monkeypatch):
+    """The server asks the broker before it yields to requests.
+
+    Deleting the startup call in the lifespan leaves this list without a
+    broker read before ``accepting``, and the assertion fails.
+    """
+    import webhook.app as app_module
+    import webhook.reconciler as reconciler
+
+    order = []
+    sentinel = object()
+
+    def factory():
+        order.append("broker")
+        return sentinel
+
+    def recover(config, log_dir="logs", broker=None, **kwargs):
+        order.append(("reconcile", broker))
+        return {"action": "none"}
+
+    async def idle(*args, **kwargs):
+        await asyncio.Event().wait()
+
+    monkeypatch.setenv("WEBHOOK_SECRET", "test-secret")
+    monkeypatch.setenv("BROKER", "tradovate")
+    monkeypatch.setattr(app_module, "_require_tradovate_env_for_selected_broker", lambda: None)
+    monkeypatch.setattr(reconciler, "broker_for_submission_recovery", factory)
+    monkeypatch.setattr(reconciler, "reconcile_open_position", recover)
+    monkeypatch.setattr(app_module, "run_tradovate_supervisor", idle)
+    monkeypatch.setattr(app_module, "run_reconciler_loop", idle)
+    monkeypatch.setattr(app_module, "run_heartbeat_loop", idle)
+
+    async def exercise():
+        async with app_module._lifespan(app_module.app):
+            order.append("accepting")
+            return list(order)
+
+    assert asyncio.run(exercise()) == ["broker", ("reconcile", sentinel), "accepting"]
+
+
 def test_completed_round_trip_closes_from_broker_evidence(monkeypatch, tmp_path):
     monkeypatch.setenv("AFS_ORDER_SUBMISSION_DIR", str(tmp_path / "submissions"))
     monkeypatch.setenv("BROKER", "tradovate")
