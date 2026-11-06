@@ -16,11 +16,13 @@ import hashlib
 import json
 import re
 import sys
+from pathlib import Path
 
 AUTH_FILENAME = "baseline_authorization.json"
 AUDIT_FILENAME = "baseline_audit.jsonl"
 
 SHA_RE = re.compile(r"[0-9a-f]{40}")
+FINGERPRINT_RE = re.compile(r"[0-9a-f]{64}")
 TICKET_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,80}")
 
 PATH_A_PIN_ORDER = (
@@ -115,44 +117,85 @@ def non_pin_assignments(text: str, allowed: set[str]) -> list[tuple[str, str]]:
     return [(key, value) for key, value in env_assignments(text) if key not in allowed]
 
 
-def authorized_target(record_text: str) -> str:
-    """Return the authorized SHA or raise ValueError if the record is unusable."""
+def _load_object(raw: str) -> dict:
     try:
-        payload = json.loads(record_text)
+        payload = json.loads(raw)
     except json.JSONDecodeError as exc:
-        raise ValueError("baseline authorization unreadable") from exc
+        raise ValueError("unreadable") from exc
     if not isinstance(payload, dict):
-        raise ValueError("baseline authorization unreadable")
+        raise ValueError("unreadable")
+    return payload
+
+
+def authorized_binding(record_text: str) -> tuple[str, str]:
+    """Return ``(commit_sha, release_fingerprint)`` or raise ValueError.
+
+    A record that names only a commit is unusable. Promote must be able to
+    compare the staged manifest fingerprint as well as the commit.
+    """
+    payload = _load_object(record_text)
     sha = payload.get("target_sha")
+    fingerprint = payload.get("release_fingerprint")
     if not isinstance(sha, str) or SHA_RE.fullmatch(sha) is None:
         raise ValueError("baseline authorization unreadable")
-    return sha
+    if not isinstance(fingerprint, str) or FINGERPRINT_RE.fullmatch(fingerprint) is None:
+        raise ValueError("baseline authorization unreadable")
+    return sha, fingerprint
 
 
-def check_sha(candidate: str, record_text: str) -> int:
+def check_release(candidate: str, record_text: str, manifest_text: str) -> int:
+    """0 only when the candidate commit and staged manifest both match."""
     try:
-        authorized = authorized_target(record_text)
+        authorized_sha, authorized_fingerprint = authorized_binding(record_text)
     except ValueError:
         print("baseline authorization unreadable", file=sys.stderr)
         return 1
-    if candidate != authorized:
+    if candidate != authorized_sha:
         print(
-            f"baseline authorization accepts only {authorized}",
+            f"baseline authorization accepts only {authorized_sha}",
             file=sys.stderr,
         )
         return 1
-    print(authorized)
+    try:
+        manifest = _load_object(manifest_text)
+    except ValueError:
+        print("staged release manifest unreadable", file=sys.stderr)
+        return 1
+    repo = manifest.get("repo")
+    staged_commit = repo.get("commit") if isinstance(repo, dict) else None
+    staged_fingerprint = manifest.get("fingerprint_sha256")
+    if staged_commit != authorized_sha:
+        print(
+            "staged release commit does not match the authorized baseline",
+            file=sys.stderr,
+        )
+        return 1
+    if staged_fingerprint != authorized_fingerprint:
+        print(
+            "staged release fingerprint does not match the authorized baseline",
+            file=sys.stderr,
+        )
+        return 1
+    print(authorized_sha)
     return 0
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="baseline_authorization")
     sub = parser.add_subparsers(dest="command", required=True)
-    check = sub.add_parser("check-sha")
+    check = sub.add_parser("check-release")
     check.add_argument("--candidate-sha", required=True)
+    check.add_argument("--authorization", required=True)
+    check.add_argument("--manifest", required=True)
     args = parser.parse_args(argv)
-    if args.command == "check-sha":
-        return check_sha(args.candidate_sha, sys.stdin.read())
+    if args.command == "check-release":
+        try:
+            record_text = Path(args.authorization).read_text(encoding="utf-8")
+            manifest_text = Path(args.manifest).read_text(encoding="utf-8")
+        except OSError:
+            print("baseline authorization unreadable", file=sys.stderr)
+            return 1
+        return check_release(args.candidate_sha, record_text, manifest_text)
     print("unknown command", file=sys.stderr)
     return 1
 

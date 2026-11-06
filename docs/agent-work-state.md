@@ -7,10 +7,10 @@ Source only. Do not deploy, restart, reset a box, or place a demo order from thi
 | Item | State |
 |---|---|
 | **Branch** | `cursor/baseline-reset-procedure-6c72` |
-| **Scope** | Operator baseline reset, restore, preflight, pre-deploy backup, and a gated one-lot demo recovery proof. Path A promote accepts only the recorded SHA. Startup logs `ACCEPTING ENTRIES:` after reconciliation. |
+| **Scope** | Operator baseline reset binds the commit and the staged manifest fingerprint. Path A promote refuses a fingerprint or commit mismatch. Startup logs `ACCEPTING ENTRIES` only after a clear reconcile; unresolved ids stay `BLOCKED_RECONCILE_REQUIRED`. |
 | **Runbook** | `docs/ops/baseline_reset_runbook.md` |
 | **Runtime** | Not exercised. No server was contacted. |
-| **Tests** | `python -B -m pytest -q`: 8986 passed, 8 skipped, exit 0. |
+| **Tests** | `python -B -m pytest -q` after AFS-0509: 8991 passed, 8 skipped, exit 0. |
 | **NEXT** | Independent review. Operator GO is still required before any host command in the runbook. Do not merge from this checkpoint. |
 
 ## Previous — 2026-11-06 AFS-0500 submission-evidence follow-up

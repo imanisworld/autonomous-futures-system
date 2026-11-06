@@ -232,11 +232,29 @@ _promote_gate_check() {
 
   if [[ "$on_baseline" -eq 0 ]]; then
     if remote "test -f '$SHARED/baseline_authorization.json'"; then
-      if ! remote "cat '$SHARED/baseline_authorization.json'" \
-          | PYTHONDONTWRITEBYTECODE=1 python3 -m ops.baseline_authorization check-sha --candidate-sha "$sha" >/dev/null; then
+      local auth_tmp manifest_tmp
+      auth_tmp="$(mktemp)"
+      manifest_tmp="$(mktemp)"
+      if ! remote "cat '$SHARED/baseline_authorization.json'" > "$auth_tmp"; then
+        rm -f "$auth_tmp" "$manifest_tmp"
+        echo "promotion refused: baseline authorization unreadable" >&2
+        return 1
+      fi
+      if ! remote "test -f '$RELEASES/$sha/release_manifest.json'" \
+          || ! remote "cat '$RELEASES/$sha/release_manifest.json'" > "$manifest_tmp"; then
+        rm -f "$auth_tmp" "$manifest_tmp"
+        echo "promotion refused: staged release manifest unreadable" >&2
+        return 1
+      fi
+      if ! PYTHONDONTWRITEBYTECODE=1 python3 -m ops.baseline_authorization check-release \
+          --candidate-sha "$sha" \
+          --authorization "$auth_tmp" \
+          --manifest "$manifest_tmp" >/dev/null; then
+        rm -f "$auth_tmp" "$manifest_tmp"
         echo "promotion refused: baseline authorization does not accept $sha" >&2
         return 1
       fi
+      rm -f "$auth_tmp" "$manifest_tmp"
       echo "baseline authorization matches $sha"
     fi
     return 0

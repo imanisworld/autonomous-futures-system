@@ -28,6 +28,7 @@ from execution.tradovate_broker import TradovateBroker, TradovateConfig
 from ops.baseline_authorization import (
     AUDIT_FILENAME,
     AUTH_FILENAME,
+    FINGERPRINT_RE,
     PATH_A_PINS,
     RELEASE_PIN_KEYS,
     SHA_RE,
@@ -94,6 +95,12 @@ def require_sha(sha: str) -> str:
     if not isinstance(sha, str) or SHA_RE.fullmatch(sha) is None:
         raise Refusal("target sha refused")
     return sha
+
+
+def require_fingerprint(fingerprint: str) -> str:
+    if not isinstance(fingerprint, str) or FINGERPRINT_RE.fullmatch(fingerprint) is None:
+        raise Refusal("release fingerprint refused")
+    return fingerprint
 
 
 def require_ticket(ticket: str) -> str:
@@ -274,6 +281,7 @@ def reset(
     status: dict,
     env_path: Path | None = None,
     target_sha: str,
+    release_fingerprint: str,
     ticket: str,
     operator_token: str,
     dry_run: bool = False,
@@ -283,8 +291,12 @@ def reset(
     on_step: Callable[[str], None] | None = None,
 ) -> dict:
     sha = require_sha(target_sha)
+    fingerprint = require_fingerprint(release_fingerprint)
     ticket_id = require_ticket(ticket)
-    require_operator_token(operator_token, f"AUTHORIZE BASELINE RESET {sha} {ticket_id}")
+    require_operator_token(
+        operator_token,
+        f"AUTHORIZE BASELINE RESET {sha} {fingerprint} {ticket_id}",
+    )
     enforce_runtime_guards(
         env_text=env_text,
         shared=shared,
@@ -304,6 +316,7 @@ def reset(
         return {
             "dry_run": "reset",
             "target_sha": sha,
+            "release_fingerprint": fingerprint,
             "ticket_id": ticket_id,
             "prior_baseline_sha256": prior_hash or "none",
             "writes": "none",
@@ -314,6 +327,7 @@ def reset(
         "schema_version": 1,
         "action": "reset",
         "target_sha": sha,
+        "release_fingerprint": fingerprint,
         "ticket_id": ticket_id,
         "operator_user": user,
         "recorded_at": stamp,
@@ -345,6 +359,7 @@ def reset(
             "operator_user": user,
             "recorded_at": stamp,
             "target_sha": sha,
+            "release_fingerprint": fingerprint,
             "ticket_id": ticket_id,
             "prior_baseline_sha256": prior_hash,
         })
@@ -362,6 +377,7 @@ def reset(
     return {
         "baseline_reset": "ok",
         "target_sha": sha,
+        "release_fingerprint": fingerprint,
         "ticket_id": ticket_id,
         "operator_user": user,
         "recorded_at": stamp,
@@ -818,17 +834,22 @@ def preflight_report(env_text: str, shared: Path) -> tuple[int, list[str]]:
     configured = path_a_configured(env_text)
     auth_path = shared / AUTH_FILENAME
     authorized = "none"
+    fingerprint = "none"
     if auth_path.is_file():
         try:
-            authorized = json.loads(auth_path.read_text()).get("target_sha") or "unreadable"
+            payload = json.loads(auth_path.read_text())
+            authorized = payload.get("target_sha") or "unreadable"
+            fingerprint = payload.get("release_fingerprint") or "unreadable"
         except (OSError, json.JSONDecodeError):
             authorized = "unreadable"
+            fingerprint = "unreadable"
         if not isinstance(authorized, str) or (authorized not in {"unreadable"} and SHA_RE.fullmatch(authorized) is None):
             authorized = "unreadable"
     lines = [
         f"path_a_configured={'yes' if configured else 'no'}",
         f"reset_needed={'no' if configured else 'yes'}",
         f"authorized_sha={authorized}",
+        f"release_fingerprint={fingerprint}",
     ]
     values = env_values(env_text)
     for key in PATH_A_PINS:
@@ -842,7 +863,7 @@ def preflight_report(env_text: str, shared: Path) -> tuple[int, list[str]]:
 def _emit(payload: dict) -> None:
     for key in (
         "dry_run", "baseline_reset", "baseline_restore", "backup",
-        "target_sha", "ticket_id", "prior_baseline_sha256",
+        "target_sha", "release_fingerprint", "ticket_id", "prior_baseline_sha256",
         "authorization_sha256", "audit", "writes", "order_submissions",
         "journals", "baseline", "path", "quantity", "instrument",
         "direction", "broker_called", "recovery_order_result",
@@ -888,6 +909,7 @@ def main(argv: list[str] | None = None) -> int:
 
     reset_cmd = sub.add_parser("reset", parents=[common])
     reset_cmd.add_argument("--target-sha", required=True)
+    reset_cmd.add_argument("--release-fingerprint", required=True)
     sub.add_parser("restore", parents=[common])
     sub.add_parser("backup", parents=[common])
 
@@ -934,6 +956,7 @@ def main(argv: list[str] | None = None) -> int:
                 env_path=env_path,
                 status=status,
                 target_sha=args.target_sha,
+                release_fingerprint=args.release_fingerprint,
                 ticket=args.ticket,
                 operator_token=args.operator_token,
                 dry_run=args.dry_run,

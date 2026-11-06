@@ -2,13 +2,14 @@
 
 Status: procedure only. This file does not authorize a reset, a backup, a promote, a restart, or a demo order. The Operator runs it, as root, over the existing `ssh hetzner` alias. Do not paste `.env`, account ids, or broker bodies into chat.
 
-The reset records one exact release SHA and sets only the six Path A posture pins. After that file exists, `scripts/atomic_release.sh` accepts that SHA and refuses every other SHA. It does not edit `BROKER`, risk limits, `LIVE_TRADING_ENABLED`, or `TRADOVATE_ENV`.
+The reset records one exact release SHA and the staged manifest fingerprint, and sets only the six Path A posture pins. After that file exists, `scripts/atomic_release.sh` accepts that SHA only when the staged `release_manifest.json` commit and `fingerprint_sha256` both match the record. Any other SHA, or the same SHA with a different fingerprint, is refused. It does not edit `BROKER`, risk limits, `LIVE_TRADING_ENABLED`, or `TRADOVATE_ENV`.
 
 `TARGET_SHA` below is the reviewed behavioral release. `PROCEDURE_SHA` is the merged commit that contains this runbook and `ops/baseline_reset.py`. Promote with the procedure checkout. The copy of `atomic_release.sh` inside `TARGET_SHA` does not know about the authorization file.
 
 ```text
 PROCEDURE_SHA=<40-hex commit that contains this runbook>
 TARGET_SHA=f8b044be38df8f14300bdf47465fc3ff0c2c0a62
+RELEASE_FINGERPRINT=<64-hex fingerprint_sha256 from the staged release_manifest.json>
 TICKET=AFS-0508
 PROC=/root/afs-maint/baseline-reset
 PY=/root/autonomous-futures-system/.venv/bin/python
@@ -43,6 +44,7 @@ Path A already configured (do not reset):
 path_a_configured=yes
 reset_needed=no
 authorized_sha=none
+release_fingerprint=none
 SCHEDULE_MODE=always_on_shadow
 EXPECTED_PROOF_SCHEDULE_MODE=always_on_shadow
 HTF_DIRECTION_MODE=off
@@ -52,7 +54,7 @@ EXPECTED_PROOF_EXIT_MODE=static
 preflight_rc=0
 ```
 
-`authorized_sha` may be a 40-hex SHA instead of `none`. If it is already `TARGET_SHA`, skip reset and continue at the backup. If it is a different SHA, stop: promote of `TARGET_SHA` will be refused.
+`authorized_sha` may be a 40-hex SHA instead of `none`, and `release_fingerprint` may be the 64-hex manifest fingerprint instead of `none`. If both already name this staged release, skip reset and continue at the backup. If either differs, stop: promote will be refused.
 
 Path A not configured (reset required before this behavioral promote):
 
@@ -60,6 +62,7 @@ Path A not configured (reset required before this behavioral promote):
 path_a_configured=no
 reset_needed=yes
 authorized_sha=none
+release_fingerprint=none
 preflight_rc=10
 ```
 
@@ -168,7 +171,16 @@ If the command prints `baseline_reset failed: rolled back`, the `predeploy-*` di
 
 ## 5. Reset
 
-Skip this section when preflight printed `reset_needed=no`.
+Skip this section when preflight printed `reset_needed=no` and the recorded fingerprint already matches the staged manifest.
+
+Read the fingerprint from the staged manifest. Do not print the manifest.
+
+```bash
+ssh hetzner "$PY -c 'import json,sys; print(json.load(open(sys.argv[1]))[\"fingerprint_sha256\"])' \
+  /root/afs-releases/$TARGET_SHA/release_manifest.json"
+```
+
+Expected: one 64-hex line. That value is `RELEASE_FINGERPRINT`. If the manifest is missing, build the exact SHA first; do not invent a hash.
 
 Dry-run:
 
@@ -177,8 +189,9 @@ ssh hetzner "AFS_PYTHON=$PY $PROC/scripts/ops/baseline_reset.sh reset \
   --shared-dir /root/afs-shared \
   --status-file /root/afs-maint/exposure.json \
   --target-sha $TARGET_SHA \
+  --release-fingerprint $RELEASE_FINGERPRINT \
   --ticket $TICKET \
-  --operator-token \"AUTHORIZE BASELINE RESET $TARGET_SHA $TICKET\" \
+  --operator-token \"AUTHORIZE BASELINE RESET $TARGET_SHA $RELEASE_FINGERPRINT $TICKET\" \
   --dry-run"
 ```
 
@@ -187,12 +200,13 @@ Expected:
 ```text
 dry_run=reset
 target_sha=f8b044be38df8f14300bdf47465fc3ff0c2c0a62
+release_fingerprint=<64 hex>
 ticket_id=AFS-0508
 prior_baseline_sha256=none
 writes=none
 ```
 
-`prior_baseline_sha256` is a 64-hex digest when an authorization file already existed. `writes=none` is required. A token that does not name this SHA and this ticket exits 1 with `baseline_reset refused: operator token refused`.
+`prior_baseline_sha256` is a 64-hex digest when an authorization file already existed. `writes=none` is required. A token that does not name this SHA, this fingerprint, and this ticket exits 1 with `baseline_reset refused: operator token refused`.
 
 Reset:
 
@@ -201,8 +215,9 @@ ssh hetzner "AFS_PYTHON=$PY $PROC/scripts/ops/baseline_reset.sh reset \
   --shared-dir /root/afs-shared \
   --status-file /root/afs-maint/exposure.json \
   --target-sha $TARGET_SHA \
+  --release-fingerprint $RELEASE_FINGERPRINT \
   --ticket $TICKET \
-  --operator-token \"AUTHORIZE BASELINE RESET $TARGET_SHA $TICKET\""
+  --operator-token \"AUTHORIZE BASELINE RESET $TARGET_SHA $RELEASE_FINGERPRINT $TICKET\""
 ```
 
 Expected:
@@ -210,6 +225,7 @@ Expected:
 ```text
 baseline_reset=ok
 target_sha=f8b044be38df8f14300bdf47465fc3ff0c2c0a62
+release_fingerprint=<64 hex>
 ticket_id=AFS-0508
 prior_baseline_sha256=none
 authorization_sha256=<64 hex>
@@ -259,6 +275,7 @@ Expected:
 path_a_configured=yes
 reset_needed=no
 authorized_sha=f8b044be38df8f14300bdf47465fc3ff0c2c0a62
+release_fingerprint=<64 hex matching RELEASE_FINGERPRINT>
 SCHEDULE_MODE=always_on_shadow
 EXPECTED_PROOF_SCHEDULE_MODE=always_on_shadow
 HTF_DIRECTION_MODE=off
@@ -281,7 +298,21 @@ A different SHA is refused even on Path A:
 promotion refused: baseline authorization does not accept <other-sha>
 ```
 
-The matching SHA prints:
+The same SHA with a different staged `fingerprint_sha256`, or a manifest whose `repo.commit` is not that SHA, is also refused:
+
+```text
+staged release fingerprint does not match the authorized baseline
+```
+
+or:
+
+```text
+staged release commit does not match the authorized baseline
+```
+
+A missing staged manifest prints `promotion refused: staged release manifest unreadable`.
+
+The matching SHA and fingerprint print:
 
 ```text
 baseline authorization matches f8b044be38df8f14300bdf47465fc3ff0c2c0a62
@@ -323,7 +354,13 @@ Expected:
 ACCEPTING ENTRIES: startup reconciliation complete
 ```
 
-That line is logged only after `reconcile_submissions_before_entries` returns and before the process accepts requests. A missing line is a stop.
+That line is logged only after `reconcile_submissions_before_entries` returns a clear result and before the process accepts requests. If the result has unresolved client ids or an untrusted store, the process logs this instead and does not log `ACCEPTING ENTRIES`:
+
+```text
+BLOCKED_RECONCILE_REQUIRED: startup reconciliation unresolved
+```
+
+Entries then stay `BLOCKED_RECONCILE_REQUIRED` for the life of that process, including when the startup pass had no broker and returned unresolved ids. A missing `ACCEPTING ENTRIES` line, or the blocked line, is a stop for normal order flow.
 
 ## 8. Restore the prior posture
 

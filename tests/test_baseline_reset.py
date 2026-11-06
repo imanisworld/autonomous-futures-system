@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 from execution.broker_interface import Fill
-from ops.baseline_authorization import PATH_A_PINS, check_sha
+from ops.baseline_authorization import PATH_A_PINS, check_release
 from ops.baseline_reset import (
     Refusal,
     backup,
@@ -40,6 +40,8 @@ from ops.baseline_reset import (
 SECRET = "super-secret-value"
 SHA = "a" * 40
 OTHER = "b" * 40
+FP = "f" * 64
+OTHER_FP = "e" * 64
 TICKET = "AFS-0508"
 WHEN = datetime(2026, 11, 6, 18, 0, tzinfo=timezone.utc)
 FLAT = {
@@ -112,8 +114,9 @@ def _reset(shared, log_dir, **overrides):
         env_text=_env(log_dir),
         status=json.loads(json.dumps(FLAT)),
         target_sha=SHA,
+        release_fingerprint=FP,
         ticket=TICKET,
-        operator_token=f"AUTHORIZE BASELINE RESET {SHA} {TICKET}",
+        operator_token=f"AUTHORIZE BASELINE RESET {SHA} {FP} {TICKET}",
         operator_user="imani",
         clock=lambda: WHEN,
         environ={},
@@ -156,11 +159,17 @@ def test_require_sha_and_ticket_and_token_reject_blanks():
     with pytest.raises(Refusal):
         require_ticket("has space")
     with pytest.raises(Refusal):
-        require_operator_token("", f"AUTHORIZE BASELINE RESET {SHA} {TICKET}")
+        require_operator_token("", f"AUTHORIZE BASELINE RESET {SHA} {FP} {TICKET}")
     with pytest.raises(Refusal):
-        require_operator_token(f"AUTHORIZE BASELINE RESET {OTHER} {TICKET}", f"AUTHORIZE BASELINE RESET {SHA} {TICKET}")
+        require_operator_token(
+            f"AUTHORIZE BASELINE RESET {OTHER} {FP} {TICKET}",
+            f"AUTHORIZE BASELINE RESET {SHA} {FP} {TICKET}",
+        )
     with pytest.raises(Refusal):
-        require_operator_token(f"AUTHORIZE BASELINE RESET {SHA} AFS-1", f"AUTHORIZE BASELINE RESET {SHA} {TICKET}")
+        require_operator_token(
+            f"AUTHORIZE BASELINE RESET {SHA} {FP} AFS-1",
+            f"AUTHORIZE BASELINE RESET {SHA} {FP} {TICKET}",
+        )
 
 
 @pytest.mark.parametrize("live,tradovate", [
@@ -216,6 +225,8 @@ def test_each_reset_refusal_writes_nothing(tmp_path):
     cases = [
         dict(operator_token="nope"),
         dict(target_sha="abc"),
+        dict(release_fingerprint="abc"),
+        dict(operator_token=f"AUTHORIZE BASELINE RESET {SHA} {TICKET}"),
         dict(ticket="bad ticket"),
         dict(env_text=_env(log_dir, live="true")),
         dict(env_text=_env(log_dir, tradovate="live")),
@@ -247,8 +258,8 @@ def test_dry_run_reset_writes_nothing_and_hides_secrets(tmp_path, capsys):
     assert _files(tmp_path) == before
     code = main([
         "reset", "--shared-dir", str(shared), "--status-file", _status_file(tmp_path),
-        "--target-sha", SHA, "--ticket", TICKET,
-        "--operator-token", f"AUTHORIZE BASELINE RESET {SHA} {TICKET}",
+        "--target-sha", SHA, "--release-fingerprint", FP, "--ticket", TICKET,
+        "--operator-token", f"AUTHORIZE BASELINE RESET {SHA} {FP} {TICKET}",
         "--dry-run",
     ])
     captured = capsys.readouterr()
@@ -280,6 +291,7 @@ def test_reset_is_atomic_and_backs_up_the_prior_baseline(tmp_path):
     assert result["prior_baseline_sha256"] != "none"
     auth = json.loads((shared / "baseline_authorization.json").read_text())
     assert auth["target_sha"] == SHA
+    assert auth["release_fingerprint"] == FP
     assert auth["ticket_id"] == TICKET
     assert auth["operator_user"] == "imani"
     assert auth["prior_baseline_sha256"] == result["prior_baseline_sha256"]
@@ -301,6 +313,7 @@ def test_reset_is_atomic_and_backs_up_the_prior_baseline(tmp_path):
     assert row["operator_user"] == "imani"
     assert row["recorded_at"] == "2026-11-06T18:00:00Z"
     assert row["target_sha"] == SHA
+    assert row["release_fingerprint"] == FP
     assert row["prior_baseline_sha256"] == auth["prior_baseline_sha256"]
     _untouched(shared, log_dir, shadow)
 
@@ -586,12 +599,22 @@ def test_backup_failure_removes_the_partial_directory(tmp_path):
     assert not backups.exists() or list(backups.iterdir()) == []
 
 
-def test_check_sha_accepts_only_the_recorded_sha():
-    record = json.dumps({"target_sha": SHA})
-    assert check_sha(SHA, record) == 0
-    assert check_sha(OTHER, record) == 1
-    assert check_sha(SHA, "{") == 1
-    assert check_sha(SHA, json.dumps({"target_sha": "nope"})) == 1
+def _manifest(commit, fingerprint):
+    return json.dumps({
+        "fingerprint_sha256": fingerprint,
+        "repo": {"commit": commit},
+    })
+
+
+def test_check_release_binds_commit_and_fingerprint():
+    record = json.dumps({"target_sha": SHA, "release_fingerprint": FP})
+    assert check_release(SHA, record, _manifest(SHA, FP)) == 0
+    assert check_release(OTHER, record, _manifest(OTHER, FP)) == 1
+    assert check_release(SHA, record, _manifest(SHA, OTHER_FP)) == 1
+    assert check_release(SHA, record, _manifest(OTHER, FP)) == 1
+    assert check_release(SHA, "{", _manifest(SHA, FP)) == 1
+    assert check_release(SHA, json.dumps({"target_sha": SHA}), _manifest(SHA, FP)) == 1
+    assert check_release(SHA, record, "{") == 1
 
 
 def test_exposure_census_fails_closed_and_strips_broker_rows():

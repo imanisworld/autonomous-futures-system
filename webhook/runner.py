@@ -137,6 +137,7 @@ from strategy.shadow_resolver import resolve_pending_shadow_outcomes
 from strategy.shadow_setups import evaluate_shadow_setups
 from strategy.signal_engine import DecisionEngine
 from webhook.payload import AlertPayload
+from webhook.startup_gate import startup_entry_block
 from execution import cross_instrument_observation as _cio
 from webhook.state_builder import build_market_state
 from context.wall_context import build_wall_context as _build_wall_context
@@ -435,6 +436,23 @@ def _candidate_snapshot(
         if value is not None:
             snapshot[key] = value
     return snapshot
+
+
+def _startup_execution_block():
+    """BLOCKED_RECONCILE_REQUIRED when startup reconciliation did not clear.
+
+    Deleting this call in ``process_alert`` lets a bar through after an
+    unresolved startup result. The startup latch is the authority for that
+    process; the store check below it is the later-bar check.
+    """
+    block = startup_entry_block()
+    if not block:
+        return None
+    return {
+        "code": "BLOCKED_RECONCILE_REQUIRED",
+        "reason": "Unresolved broker submission; new entries are blocked until reconciliation.",
+        **block,
+    }
 
 
 def process_alert(
@@ -1804,10 +1822,12 @@ def process_alert(
     # unchanged; the early return moved to after Step 3's candidate audit, and
     # the RiskEngine's own daily_trade_limit / consecutive_losses checks remain
     # the second layer behind it.
-    execution_block = None
+    execution_block = _startup_execution_block()
     total_daily_capacity = cfg.max_trades_per_day + int(getattr(cfg, "bonus_trades_after_max", 0) or 0)
     _journal_failure = journal_write_failed()
-    if _journal_failure is not None:
+    if execution_block is not None:
+        _send_reconcile_required_alert(cfg, execution_block)
+    elif _journal_failure is not None:
         # FI-5 fix: a critical journal row was lost earlier in this process, so
         # the book's own position/risk state can no longer be trusted. Block all
         # new entries until a restart; resolution above has already run.

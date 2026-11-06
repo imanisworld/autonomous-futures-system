@@ -70,6 +70,7 @@ from webhook.event_id import ensure_event_id
 from webhook.maintenance import maintenance_active
 from webhook.payload import AlertPayload
 from webhook.reconciler import reconcile_submissions_before_entries, run_reconciler_loop
+from webhook.startup_gate import note_startup_reconciliation
 from notifications.heartbeat import run_heartbeat_loop
 from webhook.runner import process_alert, normalize_timeframe_minutes
 from webhook.observation_transport import observe_collection_only_alert
@@ -431,12 +432,18 @@ async def _lifespan(app: FastAPI):
     # Classify durable UNKNOWN/AMBIGUOUS submissions before the server accepts
     # entries. Paper mode does not construct a Tradovate client. There is no
     # initial sleep; the background loop repeats the same pass on its timer.
-    await asyncio.to_thread(
+    recovery = await asyncio.to_thread(
         reconcile_submissions_before_entries, _config, _config.log_dir
     )
-    # Ordering proof for operators: this line is emitted only after startup
-    # reconciliation returns and before the lifespan yields to requests.
-    logger.info("ACCEPTING ENTRIES: startup reconciliation complete")
+    # Ordering proof for operators. ACCEPTING ENTRIES is logged only after a
+    # clear reconcile result and before the lifespan yields. Unresolved or
+    # untrusted submissions keep entries blocked for this process.
+    if note_startup_reconciliation(recovery) == "block":
+        logger.error(
+            "BLOCKED_RECONCILE_REQUIRED: startup reconciliation unresolved"
+        )
+    else:
+        logger.info("ACCEPTING ENTRIES: startup reconciliation complete")
     # Background safety tasks run independently of the TradingView bar feed.
     background_tasks = [
         asyncio.create_task(run_tradovate_supervisor()),

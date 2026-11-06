@@ -3,6 +3,7 @@ string assertions on the script text. Sources the real script with a mocked
 `remote()` (runs locally instead of over ssh) against a fake $SHARED/.env and
 a real, disposable git repo, and exercises the actual bash control flow.
 """
+import json
 import subprocess
 import textwrap
 from pathlib import Path
@@ -175,17 +176,31 @@ def test_invalid_live_commit_fails_closed(git_repo_with_two_commits):
     assert "not behavior-neutral" in err or "could not diff" in err
 
 
-def _write_authorization(repo, target_sha):
+_FP = "f" * 64
+
+
+def _write_authorization(repo, target_sha, fingerprint=_FP):
     shared = repo / "shared"
     shared.mkdir(exist_ok=True)
-    (shared / "baseline_authorization.json").write_text(
-        '{"target_sha": "%s"}\n' % target_sha
-    )
+    (shared / "baseline_authorization.json").write_text(json.dumps({
+        "target_sha": target_sha,
+        "release_fingerprint": fingerprint,
+    }) + "\n")
+
+
+def _write_manifest(repo, sha, fingerprint=_FP, commit=None):
+    release = repo / "releases" / sha
+    release.mkdir(parents=True, exist_ok=True)
+    (release / "release_manifest.json").write_text(json.dumps({
+        "fingerprint_sha256": fingerprint,
+        "repo": {"commit": commit if commit is not None else sha},
+    }) + "\n")
 
 
 def test_authorization_accepts_only_its_exact_sha(git_repo_with_two_commits):
     repo, live_sha, _safe, unsafe_candidate = git_repo_with_two_commits
     _write_authorization(repo, unsafe_candidate)
+    _write_manifest(repo, unsafe_candidate)
     env_lines = BASELINE_PINS + [f"EXPECTED_LIVE_COMMIT={live_sha}"]
     code, out, err = _run_gate_check(repo, env_lines, unsafe_candidate)
     assert code == 0, err
@@ -196,10 +211,40 @@ def test_authorization_accepts_only_its_exact_sha(git_repo_with_two_commits):
 def test_authorization_refuses_any_other_sha(git_repo_with_two_commits):
     repo, live_sha, safe_candidate, unsafe_candidate = git_repo_with_two_commits
     _write_authorization(repo, unsafe_candidate)
+    _write_manifest(repo, safe_candidate)
     env_lines = BASELINE_PINS + [f"EXPECTED_LIVE_COMMIT={live_sha}"]
     code, _out, err = _run_gate_check(repo, env_lines, safe_candidate)
     assert code == 1
     assert f"does not accept {safe_candidate}" in err
+
+
+def test_authorization_refuses_fingerprint_mismatch(git_repo_with_two_commits):
+    repo, live_sha, _safe, unsafe_candidate = git_repo_with_two_commits
+    _write_authorization(repo, unsafe_candidate, fingerprint=_FP)
+    _write_manifest(repo, unsafe_candidate, fingerprint="e" * 64)
+    env_lines = BASELINE_PINS + [f"EXPECTED_LIVE_COMMIT={live_sha}"]
+    code, _out, err = _run_gate_check(repo, env_lines, unsafe_candidate)
+    assert code == 1
+    assert "fingerprint does not match" in err
+
+
+def test_authorization_refuses_staged_commit_mismatch(git_repo_with_two_commits):
+    repo, live_sha, safe_candidate, unsafe_candidate = git_repo_with_two_commits
+    _write_authorization(repo, unsafe_candidate)
+    _write_manifest(repo, unsafe_candidate, commit=safe_candidate)
+    env_lines = BASELINE_PINS + [f"EXPECTED_LIVE_COMMIT={live_sha}"]
+    code, _out, err = _run_gate_check(repo, env_lines, unsafe_candidate)
+    assert code == 1
+    assert "commit does not match" in err
+
+
+def test_authorization_refuses_when_staged_manifest_is_missing(git_repo_with_two_commits):
+    repo, live_sha, _safe, unsafe_candidate = git_repo_with_two_commits
+    _write_authorization(repo, unsafe_candidate)
+    env_lines = BASELINE_PINS + [f"EXPECTED_LIVE_COMMIT={live_sha}"]
+    code, _out, err = _run_gate_check(repo, env_lines, unsafe_candidate)
+    assert code == 1
+    assert "staged release manifest unreadable" in err
 
 
 def test_unreadable_authorization_refuses(git_repo_with_two_commits):
@@ -207,10 +252,11 @@ def test_unreadable_authorization_refuses(git_repo_with_two_commits):
     shared = repo / "shared"
     shared.mkdir(exist_ok=True)
     (shared / "baseline_authorization.json").write_text("{")
+    _write_manifest(repo, unsafe_candidate)
     env_lines = BASELINE_PINS + [f"EXPECTED_LIVE_COMMIT={live_sha}"]
     code, _out, err = _run_gate_check(repo, env_lines, unsafe_candidate)
     assert code == 1
-    assert "does not accept" in err
+    assert "unreadable" in err or "does not accept" in err
 
 
 def test_gate_check_never_mutates_env_or_current_link(git_repo_with_two_commits):
