@@ -7,10 +7,10 @@ Source only. Do not deploy, restart, reset a box, or place a demo order from thi
 | Item | State |
 |---|---|
 | **Branch** | `cursor/baseline-reset-procedure-6c72` |
-| **Scope** | The approved manifest digest is the operator argument in the baseline record, outside the staged tree. Promote recomputes the staged payload and refuses a mismatch. The startup block is monotonic until process restart. Reset CLI flags are stable for #1258. |
+| **Scope** | Baseline reset authority is an `ssh-keygen -Y` signature over SHA, manifest digest, ticket, and expiry, checked against `/root/afs-shared/baseline_allowed_signers`. The predictable reset token is not authority. `--shared-dir` stays optional. |
 | **Runbook** | `docs/ops/baseline_reset_runbook.md` |
 | **Runtime** | Not exercised. No server was contacted. |
-| **Tests** | `python -B -m pytest -q` after AFS-0511: 8994 passed, 8 skipped, exit 0. |
+| **Tests** | `python -B -m pytest -q` after AFS-0512: 9008 passed, 8 skipped, exit 0. |
 | **NEXT** | Independent review. Operator GO is still required before any host command in the runbook. Do not merge from this checkpoint. |
 
 ## Previous — 2026-11-06 AFS-0500 submission-evidence follow-up

@@ -176,10 +176,53 @@ If the command prints `baseline_reset failed: rolled back`, the `predeploy-*` di
 `#1258` aligns to this argv. The names stay as written:
 
 ```text
-reset --target-sha --release-fingerprint --ticket --operator-token --status-file --shared-dir
+reset --target-sha --release-fingerprint --ticket --approval --signature --status-file [--shared-dir]
 ```
 
+`--shared-dir` is optional. When it is omitted, the command uses `AFS_SHARED_DIR` if that environment variable is set, otherwise `/root/afs-shared`. The path must be absolute, must not contain `..`, and must not be a symlink or have a symlink in any parent directory. A symlink is refused so the directory cannot be redirected onto another tree. The command does not load trust material from this directory.
+
 `--release-fingerprint` is the operator's approved digest. It is recorded in `/root/afs-shared/baseline_authorization.json`, outside `/root/afs-releases/<sha>`. Do not fill it by reading `fingerprint_sha256` from the staged `release_manifest.json`. That field is inside the tree being checked. The digest comes from the separate manifest review.
+
+There is no reset token. A string such as `AUTHORIZE BASELINE RESET <sha> <digest> <ticket>` is not authority. The authority is an `ssh-keygen -Y` signature over the approval record.
+
+### Operator key, on the Mac
+
+Imani creates the key on the Mac. The private key stays there. Do not copy it to the server, and do not commit it.
+
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/afs-release-approval -C "imani afs-release-approval"
+```
+
+Build the approval file with these exact lines and a trailing newline. `expires` is UTC and must still be in the future when the reset runs.
+
+```text
+afs-release-approval
+version=1
+target_sha=<40-hex SHA>
+manifest_digest=<64-hex digest>
+ticket=AFS-0508
+expires=2026-11-07T00:00:00Z
+```
+
+Sign it. The namespace must be `afs-release-approval`.
+
+```bash
+ssh-keygen -Y sign -f ~/.ssh/afs-release-approval -n afs-release-approval /tmp/afs-approval.txt
+```
+
+That writes `/tmp/afs-approval.txt.sig`. Copy the approval file and the signature to the server, for example `/root/afs-maint/afs-approval.txt` and `/root/afs-maint/afs-approval.txt.sig`. Do not copy `~/.ssh/afs-release-approval`.
+
+Install only the public key, as root, at the fixed path `/root/afs-shared/baseline_allowed_signers`. One line:
+
+```text
+imani@mac namespaces="afs-release-approval" ssh-ed25519 <public key> imani
+```
+
+```bash
+install -o root -g root -m 0444 /root/afs-maint/allowed_signers.line /root/afs-shared/baseline_allowed_signers
+```
+
+The reset refuses that file when it is missing, is a symlink, is not owned by root, or is writable by group or other. It does not accept another path. `--dry-run` performs this check and the signature check. A dry-run without a valid signature writes nothing and exits 1.
 
 Skip this section when preflight printed `reset_needed=no` and `release_fingerprint` is already the approved digest.
 
@@ -187,12 +230,12 @@ Dry-run:
 
 ```bash
 ssh hetzner "AFS_PYTHON=$PY $PROC/scripts/ops/baseline_reset.sh reset \
-  --shared-dir /root/afs-shared \
-  --status-file /root/afs-maint/exposure.json \
   --target-sha $TARGET_SHA \
   --release-fingerprint $RELEASE_FINGERPRINT \
   --ticket $TICKET \
-  --operator-token \"AUTHORIZE BASELINE RESET $TARGET_SHA $RELEASE_FINGERPRINT $TICKET\" \
+  --approval /root/afs-maint/afs-approval.txt \
+  --signature /root/afs-maint/afs-approval.txt.sig \
+  --status-file /root/afs-maint/exposure.json \
   --dry-run"
 ```
 
@@ -207,18 +250,18 @@ prior_baseline_sha256=none
 writes=none
 ```
 
-`prior_baseline_sha256` is a 64-hex digest when an authorization file already existed. `writes=none` is required. A token that does not name this SHA, this fingerprint, and this ticket exits 1 with `baseline_reset refused: operator token refused`.
+`prior_baseline_sha256` is a 64-hex digest when an authorization file already existed. `writes=none` is required. A bad signature, an expired approval, or an unsafe `/root/afs-shared/baseline_allowed_signers` exits 1 with `baseline_reset refused:` and writes nothing.
 
 Reset:
 
 ```bash
 ssh hetzner "AFS_PYTHON=$PY $PROC/scripts/ops/baseline_reset.sh reset \
-  --shared-dir /root/afs-shared \
-  --status-file /root/afs-maint/exposure.json \
   --target-sha $TARGET_SHA \
   --release-fingerprint $RELEASE_FINGERPRINT \
   --ticket $TICKET \
-  --operator-token \"AUTHORIZE BASELINE RESET $TARGET_SHA $RELEASE_FINGERPRINT $TICKET\""
+  --approval /root/afs-maint/afs-approval.txt \
+  --signature /root/afs-maint/afs-approval.txt.sig \
+  --status-file /root/afs-maint/exposure.json"
 ```
 
 Expected:

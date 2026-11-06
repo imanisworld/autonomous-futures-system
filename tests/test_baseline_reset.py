@@ -8,8 +8,10 @@ from __future__ import annotations
 import inspect
 import json
 import os
+import stat
 import subprocess
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -17,6 +19,7 @@ import pytest
 
 from execution.broker_interface import Fill
 from ops.baseline_authorization import PATH_A_PINS, check_release, staged_manifest_digest
+from ops.release_approval import canonical_approval
 from ops.baseline_reset import (
     RESET_CLI_FLAGS,
     Refusal,
@@ -109,7 +112,41 @@ def _files(root: Path):
     }
 
 
+class _RootFile:
+    """Stat stand-in for a root-owned mode 0444 regular file."""
+
+    st_mode = stat.S_IFREG | 0o444
+    st_uid = 0
+
+
+def _sign(sha=SHA, digest=FP, ticket=TICKET, expires="2099-01-01T00:00:00Z", key_name="op"):
+    directory = Path(tempfile.mkdtemp(prefix="afs-approval-"))
+    key_path = directory / key_name
+    subprocess.run(
+        ["ssh-keygen", "-t", "ed25519", "-f", str(key_path), "-N", "", "-q"],
+        check=True,
+    )
+    approval = directory / "approval.txt"
+    approval.write_bytes(canonical_approval(
+        target_sha=sha, manifest_digest=digest, ticket=ticket, expires=expires,
+    ))
+    subprocess.run(
+        [
+            "ssh-keygen", "-Y", "sign", "-f", str(key_path),
+            "-n", "afs-release-approval", str(approval),
+        ],
+        check=True,
+    )
+    kind, material, *_rest = key_path.with_suffix(".pub").read_text().split()
+    allowed = directory / "allowed_signers"
+    allowed.write_text(
+        f'imani@mac namespaces="afs-release-approval" {kind} {material}\n'
+    )
+    return approval, Path(str(approval) + ".sig"), allowed
+
+
 def _reset(shared, log_dir, **overrides):
+    approval, signature, allowed = _sign()
     args = dict(
         shared=shared,
         env_text=_env(log_dir),
@@ -117,7 +154,10 @@ def _reset(shared, log_dir, **overrides):
         target_sha=SHA,
         release_fingerprint=FP,
         ticket=TICKET,
-        operator_token=f"AUTHORIZE BASELINE RESET {SHA} {FP} {TICKET}",
+        approval_path=approval,
+        signature_path=signature,
+        allowed_signers=allowed,
+        signer_stat=_RootFile(),
         operator_user="imani",
         clock=lambda: WHEN,
         environ={},
@@ -146,6 +186,8 @@ def test_guard_sources_are_called_by_each_mutation():
     ):
         assert name in source
     assert "execute_bracket" not in inspect.getsource(reset)
+    assert "verify_reset_approval(" in inspect.getsource(reset)
+    assert "AUTHORIZE BASELINE RESET" not in inspect.getsource(reset)
     assert "systemctl" not in inspect.getsource(reset)
     assert "execute_bracket" in inspect.getsource(place_recovery_order)
 
@@ -224,10 +266,8 @@ def test_each_reset_refusal_writes_nothing(tmp_path):
     shared, log_dir, shadow = _layout(tmp_path)
     before = _files(tmp_path)
     cases = [
-        dict(operator_token="nope"),
         dict(target_sha="abc"),
         dict(release_fingerprint="abc"),
-        dict(operator_token=f"AUTHORIZE BASELINE RESET {SHA} {TICKET}"),
         dict(ticket="bad ticket"),
         dict(env_text=_env(log_dir, live="true")),
         dict(env_text=_env(log_dir, tradovate="live")),
@@ -257,15 +297,17 @@ def test_dry_run_reset_writes_nothing_and_hides_secrets(tmp_path, capsys):
     assert result["writes"] == "none"
     assert result["dry_run"] == "reset"
     assert _files(tmp_path) == before
+    approval, signature, _allowed = _sign()
     code = main([
         "reset", "--shared-dir", str(shared), "--status-file", _status_file(tmp_path),
         "--target-sha", SHA, "--release-fingerprint", FP, "--ticket", TICKET,
-        "--operator-token", f"AUTHORIZE BASELINE RESET {SHA} {FP} {TICKET}",
+        "--approval", str(approval), "--signature", str(signature),
         "--dry-run",
     ])
     captured = capsys.readouterr()
-    assert code == 0
-    assert "writes=none" in captured.out
+    assert code == 1
+    assert "allowed_signers missing" in captured.err
+    assert "writes=none" not in captured.out
     assert SECRET not in captured.out
     assert SECRET not in captured.err
     assert _files(tmp_path) == before
@@ -644,7 +686,8 @@ def test_reset_cli_stable_flags_are_required(tmp_path, capsys):
         "--target-sha": SHA,
         "--release-fingerprint": FP,
         "--ticket": TICKET,
-        "--operator-token": f"AUTHORIZE BASELINE RESET {SHA} {FP} {TICKET}",
+        "--approval": str(_sign()[0]),
+        "--signature": str(_sign()[1]),
         "--status-file": status,
         "--shared-dir": str(shared),
     }
@@ -653,13 +696,18 @@ def test_reset_cli_stable_flags_are_required(tmp_path, capsys):
     for flag in RESET_CLI_FLAGS:
         argv.extend((flag, values[flag]))
     argv.append("--dry-run")
-    assert main(argv) == 0
+    assert main(argv) == 1
+    refused = capsys.readouterr()
+    assert "allowed_signers missing" in refused.err
+    assert "--operator-token" not in refused.out
     with pytest.raises(SystemExit) as caught:
         main(["reset", "--help"])
     assert caught.value.code == 0
     help_text = capsys.readouterr().out
     for flag in RESET_CLI_FLAGS:
         assert flag in help_text
+    assert "--operator-token" not in help_text
+    assert "--allowed-signers" not in help_text
     required = tuple(flag for flag in RESET_CLI_FLAGS if flag != "--shared-dir")
     for flag in required:
         omitted = ["reset", "--dry-run", "--shared-dir", str(shared)]

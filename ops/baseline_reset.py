@@ -10,7 +10,7 @@ The promote gate reads the authorization file through
 
 Stable reset argv, which other callers align to::
 
-    reset --target-sha --release-fingerprint --ticket --operator-token --status-file --shared-dir
+    reset --target-sha --release-fingerprint --ticket --approval --signature --status-file [--shared-dir]
 """
 
 from __future__ import annotations
@@ -29,6 +29,11 @@ from pathlib import Path
 from execution.broker_interface import BracketOrder, Fill
 from execution.order_submission_store import OrderSubmissionStore
 from execution.tradovate_broker import TradovateBroker, TradovateConfig
+from ops.release_approval import (
+    ALLOWED_SIGNERS_PATH,
+    ApprovalError,
+    verify_reset_approval,
+)
 from ops.baseline_authorization import (
     AUDIT_FILENAME,
     AUTH_FILENAME,
@@ -58,7 +63,8 @@ RESET_CLI_FLAGS = (
     "--target-sha",
     "--release-fingerprint",
     "--ticket",
-    "--operator-token",
+    "--approval",
+    "--signature",
     "--status-file",
     "--shared-dir",
 )
@@ -93,6 +99,13 @@ def _user(operator_user: str | None) -> str:
     if not user or any(char in user for char in "\n\r"):
         raise Refusal("operator identity unreadable")
     return user
+
+
+def _approval_now(clock: Callable[[], datetime] | None) -> datetime:
+    moment = clock() if clock is not None else datetime.now(timezone.utc)
+    if moment.tzinfo is None:
+        raise Refusal("clock must be timezone-aware")
+    return moment
 
 
 def _stamp(clock: Callable[[], datetime] | None) -> str:
@@ -138,6 +151,28 @@ def require_demo_posture(env_text: str) -> None:
         raise Refusal("LIVE_TRADING_ENABLED must be false")
     if demo_values != ["demo"]:
         raise Refusal("TRADOVATE_ENV must be demo")
+
+
+def require_trusted_shared_dir(path: Path) -> Path:
+    """Optional shared dir: absolute, no ``..``, and no symlink component.
+
+    The default is ``AFS_SHARED_DIR`` or ``/root/afs-shared``. A symlink,
+    including a symlink in a parent directory, is refused so the path cannot
+    be redirected onto another tree. The allowed_signers file is not loaded
+    from this directory.
+    """
+    if not path.is_absolute():
+        raise Refusal("shared-dir must be absolute")
+    if any(part == ".." for part in path.parts):
+        raise Refusal("shared-dir must not contain ..")
+    cursor = Path(path.anchor)
+    for part in path.parts[1:]:
+        cursor = cursor / part
+        if cursor.is_symlink():
+            raise Refusal("shared-dir must not be a symlink")
+    if not path.is_dir():
+        raise Refusal("shared-dir unreadable")
+    return path
 
 
 def require_lock_clear(shared: Path) -> None:
@@ -298,20 +333,33 @@ def reset(
     target_sha: str,
     release_fingerprint: str,
     ticket: str,
-    operator_token: str,
+    approval_path: Path,
+    signature_path: Path,
+    allowed_signers: Path = ALLOWED_SIGNERS_PATH,
+    signer_stat: object | None = None,
     dry_run: bool = False,
     environ: Mapping[str, str] | None = None,
     operator_user: str | None = None,
     clock: Callable[[], datetime] | None = None,
     on_step: Callable[[str], None] | None = None,
 ) -> dict:
+    require_trusted_shared_dir(shared)
     sha = require_sha(target_sha)
     fingerprint = require_fingerprint(release_fingerprint)
     ticket_id = require_ticket(ticket)
-    require_operator_token(
-        operator_token,
-        f"AUTHORIZE BASELINE RESET {sha} {fingerprint} {ticket_id}",
-    )
+    try:
+        signer = verify_reset_approval(
+            approval_path=approval_path,
+            signature_path=signature_path,
+            allowed_signers=allowed_signers,
+            target_sha=sha,
+            manifest_digest=fingerprint,
+            ticket=ticket_id,
+            now=_approval_now(clock),
+            signer_stat=signer_stat,
+        )
+    except ApprovalError as exc:
+        raise Refusal(str(exc)) from exc
     enforce_runtime_guards(
         env_text=env_text,
         shared=shared,
@@ -345,6 +393,7 @@ def reset(
         "release_fingerprint": fingerprint,
         "ticket_id": ticket_id,
         "operator_user": user,
+        "signer": signer,
         "recorded_at": stamp,
         "prior_baseline_sha256": prior_hash,
         "prior_pins": _prior_pins(env_text),
@@ -372,6 +421,7 @@ def reset(
         _append_audit(audit_path, {
             "action": "reset",
             "operator_user": user,
+            "signer": signer,
             "recorded_at": stamp,
             "target_sha": sha,
             "release_fingerprint": fingerprint,
@@ -922,13 +972,24 @@ def main(argv: list[str] | None = None) -> int:
     common.add_argument("--operator-token", required=True)
     common.add_argument("--dry-run", action="store_true")
 
+    reset_parent = argparse.ArgumentParser(add_help=False, parents=[root])
+    reset_parent.add_argument("--env-file", default=None)
+    reset_parent.add_argument("--status-file", required=True)
+    reset_parent.add_argument("--ticket", required=True)
+    reset_parent.add_argument("--dry-run", action="store_true")
     reset_cmd = sub.add_parser(
         "reset",
-        parents=[common],
-        description="Stable interface: " + " ".join(RESET_CLI_FLAGS),
+        parents=[reset_parent],
+        description=(
+            "Stable interface: "
+            + " ".join(RESET_CLI_FLAGS)
+            + ". --shared-dir is optional. Approval is an ssh-keygen -Y signature, not a token."
+        ),
     )
     reset_cmd.add_argument("--target-sha", required=True)
     reset_cmd.add_argument("--release-fingerprint", required=True)
+    reset_cmd.add_argument("--approval", required=True)
+    reset_cmd.add_argument("--signature", required=True)
     sub.add_parser("restore", parents=[common])
     sub.add_parser("backup", parents=[common])
 
@@ -977,7 +1038,8 @@ def main(argv: list[str] | None = None) -> int:
                 target_sha=args.target_sha,
                 release_fingerprint=args.release_fingerprint,
                 ticket=args.ticket,
-                operator_token=args.operator_token,
+                approval_path=Path(args.approval),
+                signature_path=Path(args.signature),
                 dry_run=args.dry_run,
             ))
         if args.command == "restore":
