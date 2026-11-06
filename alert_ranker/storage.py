@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -11,6 +13,14 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from .scorer import ScoreResult
+
+logger = logging.getLogger(__name__)
+
+# Python's sqlite3 timeout is in seconds. SQLite's busy_timeout is milliseconds.
+_CONNECT_TIMEOUT_SECONDS = 30.0
+_BUSY_TIMEOUT_MS = 30_000
+_WRITE_ATTEMPTS = 5
+_WRITE_BACKOFF_SECONDS = (0.01, 0.02, 0.04, 0.08)
 
 
 @dataclass(frozen=True)
@@ -69,7 +79,7 @@ class ScanStorage:
         self.initialize()
 
     def initialize(self) -> None:
-        with self._connect() as conn:
+        def _schema(conn: sqlite3.Connection) -> None:
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS scans (
@@ -153,6 +163,8 @@ class ScanStorage:
                 "ON options_selector_evidence (ticker, decision_ts, id)"
             )
 
+        self.write("initialize", _schema)
+
     def record_scan(
         self,
         result: ScoreResult,
@@ -163,7 +175,8 @@ class ScanStorage:
         timestamp: datetime | None = None,
     ) -> int:
         stamp = (timestamp or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat()
-        with self._connect() as conn:
+
+        def _insert(conn: sqlite3.Connection) -> int:
             cursor = conn.execute(
                 """
                 INSERT INTO scans (
@@ -187,6 +200,8 @@ class ScanStorage:
             )
             return int(cursor.lastrowid)
 
+        return self.write("record_scan", _insert)
+
     def record_shadow_setup(
         self,
         result: ScoreResult,
@@ -200,7 +215,8 @@ class ScanStorage:
         timestamp: datetime | None = None,
     ) -> int:
         stamp = (timestamp or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat()
-        with self._connect() as conn:
+
+        def _insert(conn: sqlite3.Connection) -> int:
             cursor = conn.execute(
                 """
                 INSERT INTO options_shadow_journal (
@@ -225,6 +241,8 @@ class ScanStorage:
             )
             return int(cursor.lastrowid)
 
+        return self.write("record_shadow_setup", _insert)
+
     def record_selector_evidence(
         self,
         evidence: dict[str, Any],
@@ -236,7 +254,8 @@ class ScanStorage:
         stamp = (timestamp or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat()
         status = str(evidence.get("status") or "DATA_BLOCKED")
         reason_code = str(evidence.get("reason_code") or "")
-        with self._connect() as conn:
+
+        def _insert(conn: sqlite3.Connection) -> int:
             cursor = conn.execute(
                 """
                 INSERT INTO options_selector_evidence (
@@ -260,6 +279,8 @@ class ScanStorage:
                 ),
             )
             return int(cursor.lastrowid)
+
+        return self.write("record_selector_evidence", _insert)
 
     def latest_selector_evidence(self, limit: int = 25) -> list[dict[str, Any]]:
         bounded = max(1, min(int(limit), 500))
@@ -448,7 +469,8 @@ class ScanStorage:
         merged_outcome = dict(existing.outcome)
         merged_outcome.update(outcome)
         merged_outcome = _derive_shadow_outcome_math(existing, merged_outcome)
-        with self._connect() as conn:
+
+        def _update(conn: sqlite3.Connection) -> None:
             conn.execute(
                 """
                 UPDATE options_shadow_journal
@@ -461,6 +483,8 @@ class ScanStorage:
                     shadow_id,
                 ),
             )
+
+        self.write("update_shadow_outcome", _update)
         return self.get_shadow_setup(shadow_id)
 
     def shadow_summary(
@@ -561,7 +585,8 @@ class ScanStorage:
         if not episode_key:
             return
         stamp = (blocked_at or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat()
-        with self._connect() as conn:
+
+        def _insert(conn: sqlite3.Connection) -> None:
             conn.execute(
                 """
                 INSERT OR IGNORE INTO options_episode_blocks
@@ -570,6 +595,8 @@ class ScanStorage:
                 """,
                 (ticker.upper(), episode_key, reason, stamp, scan_id),
             )
+
+        self.write("block_episode", _insert)
 
     def episode_block(self, ticker: str, episode_key: str) -> str | None:
         """Reason this ACTIVE episode is blocked, or None when it may open."""
@@ -665,6 +692,36 @@ class ScanStorage:
                 reconciled += 1
         return reconciled
 
+    def write(self, operation: str, fn):
+        """Run one write transaction, retrying only SQLite lock/busy errors.
+
+        Non-lock ``OperationalError`` values and every other exception propagate
+        on the first attempt. Each attempt opens and closes its own connection.
+        """
+        for attempt in range(1, _WRITE_ATTEMPTS + 1):
+            try:
+                with self._connect() as conn:
+                    return fn(conn)
+            except sqlite3.OperationalError as exc:
+                if not _is_lock_error(exc) or attempt == _WRITE_ATTEMPTS:
+                    if _is_lock_error(exc):
+                        logger.error(
+                            "SQLite write %s failed after %s attempts: %s",
+                            operation,
+                            attempt,
+                            exc,
+                        )
+                    raise
+                logger.warning(
+                    "SQLite write %s locked (attempt %s/%s): %s",
+                    operation,
+                    attempt,
+                    _WRITE_ATTEMPTS,
+                    exc,
+                )
+                time.sleep(_WRITE_BACKOFF_SECONDS[attempt - 1])
+        raise AssertionError("write retry loop exited without a result")
+
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
         """Yield one transaction-scoped connection and always close it.
@@ -674,14 +731,40 @@ class ScanStorage:
         scanner opens a connection for every storage operation, so relying on
         that behavior leaked descriptors until GC and made legacy journal
         reconciliation fail at the process ulimit.
+
+        WAL creates ``<db>-wal`` and ``<db>-shm`` beside the database file.
+        Those siblings must stay next to the data file, outside any release
+        tree and outside the release integrity manifest.
         """
-        conn = sqlite3.connect(self.path)
+        conn = sqlite3.connect(self.path, timeout=_CONNECT_TIMEOUT_SECONDS)
         conn.row_factory = sqlite3.Row
         try:
+            self._apply_pragmas(conn)
             with conn:
                 yield conn
         finally:
             conn.close()
+
+    @staticmethod
+    def _apply_pragmas(conn: sqlite3.Connection) -> None:
+        conn.execute(f"PRAGMA busy_timeout={_BUSY_TIMEOUT_MS}")
+        # journal_mode persists on the database file. It must run outside an
+        # open transaction, which is why this happens before ``with conn``.
+        mode_row = conn.execute("PRAGMA journal_mode=WAL").fetchone()
+        mode = str(mode_row[0] if mode_row else "").lower()
+        if mode != "wal":
+            logger.error(
+                "SQLite journal_mode stayed %r after PRAGMA journal_mode=WAL; "
+                "lock collisions can still abort scanner cycles",
+                mode or "unknown",
+            )
+        # NORMAL is the usual WAL durability setting for this observer DB.
+        conn.execute("PRAGMA synchronous=NORMAL")
+
+
+def _is_lock_error(exc: BaseException) -> bool:
+    message = str(exc).lower()
+    return "database is locked" in message or "database is busy" in message
 
 
 def _derive_shadow_outcome_math(

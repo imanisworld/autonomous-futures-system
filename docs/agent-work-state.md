@@ -1,25 +1,49 @@
 # Agent Work State
 
-## START HERE — 2026-11-06 AFS-0498 submission-evidence follow-up
+## START HERE — 2026-11-06 AFS-0500 submission-evidence follow-up
 
-Paper/demo source only. Do not deploy, restart, or merge from an agent. PR #1254 is merged at `0341f8be`. Do not push `fix/order-state-durability`.
+Paper/demo source only. Do not deploy, restart, or merge from an agent. Do not push `fix/order-state-durability`.
 
 | Item | State |
 |---|---|
-| **Branch** | `fix/order-state-durability-followup` |
-| **Scope** | Empty `/order/list` must not clear AMBIGUOUS. Adoption requires position, fills, executions, and verified protection. Startup reconciliation runs before entries, with a broker, even when the journal has no open row. |
+| **Branch** | `fix/order-state-durability-followup` (PR #1256) |
+| **Scope** | Empty `/order/list` must not clear AMBIGUOUS. A filled order is adopted only with a matching position and a working protective stop. Startup reconciliation runs with a broker before entries are accepted. |
 | **Runtime** | Not exercised. The October HOLD below still governs the box. |
-| **NEXT** | Grok reviews the new PR against AFS-0498. Imani decides whether to merge. Do not set live trading and do not retry an unresolved client id. |
+| **NEXT** | Grok reviews again after CI. Imani decides whether to merge. Do not set live trading and do not retry an unresolved client id. |
 
-## Merged — 2026-11-05 trend variant shadow
+## Merged — 2026-11-06 options scanner SQLite lock fix
 
-Source merged. `VARIANTS_START` stays unset. Do not activate a schedule and do not redo the implementation.
+Source merged in #1255. Observer only. Do not deploy or restart from that merge.
+
+| Item | State |
+|---|---|
+| **Branch** | `fix/options-db-lock-2026-11-06` |
+| **Scope** | `ScanStorage` uses a 30s connect timeout, `busy_timeout=30000`, and WAL. Writes retry lock/busy errors. `resolve_open_candidates` isolates one candidate failure. |
+| **Ops note** | WAL adds `-wal` and `-shm` beside `options_scanner.sqlite`. Those files stay with the data file, outside the release tree and integrity manifest. |
+| **NEXT** | A later Ops GO is required before the running scanner uses this. |
+
+## Merged — 2026-11-06 source-only Tradovate submission durability
+
+Paper/demo source only. PR #1254 is merged at `0341f8be`. Do not deploy, restart, or redo that branch.
+
+| Item | State |
+|---|---|
+| **Branch** | `fix/order-state-durability` |
+| **Scope** | Durable pre-send AMBIGUOUS submissions and UNKNOWN / RECONCILE_REQUIRED instead of a local cancel when an entry or cancel cannot be read. `AFS_ORDER_SUBMISSION_DIR` or `LOG_DIR/order_submissions`. |
+| **Runtime** | Not exercised. The October HOLD below still governs the box. |
+| **NEXT** | Follow-up review is AFS-0500 on PR #1256. Do not set live trading and do not retry an unresolved client id. |
+
+## Merged — 2026-11-05 source-only trend variant shadow (no deploy)
+
+Source merged. `VARIANTS_START` stays unset. Paper/shadow forward tracking only. Runtime HOLD below is unchanged. Do not deploy, restart, enable a schedule, or redo the implementation.
 
 | Item | State |
 |---|---|
 | **Branch** | `shadow/trend-variants-va-vb` |
+| **Scope** | CONTROL_R3_v2 + V-A + V-B + V-C at two-sided alpha 0.0167. `VARIANTS_START` is unset, so the driver prints `NOT_ACTIVATED` and writes nothing. |
 | **Frozen sources** | Byte-identical under `research/trend_r3_forward/` at commit `f2170a9dd1e674a7a868354f286610c976b1f6bc`. Do not edit those five files. |
-| **Tracker** | `35f21644f7f9dff8ca6739071e8c9473fd9837cc` |
+| **Tracker** | `35f21644f7f9dff8ca6739071e8c9473fd9837cc` adds the four arms, tests, and the research-tree import exclusion. |
+| **Authority** | Operator GO AFS-0480 / AFS-0485. QA AFS-0479 and AFS-0484. This file does not change strategy status. |
 
 ## Archived checkpoint — source `3964389` / operator VPS snapshot 2026-10-20; HOLD / NO RUN
 

@@ -14,7 +14,7 @@ from typing import Any
 
 
 def ensure_schema(storage) -> None:
-    with storage._connect() as conn:
+    def _schema(conn) -> None:
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS options_contract_marks (
@@ -42,6 +42,8 @@ def ensure_schema(storage) -> None:
             "ON options_contract_marks (shadow_id, timestamp)"
         )
 
+    storage.write("ensure_contract_marks_schema", _schema)
+
 
 def record_contract_mark(
     storage,
@@ -64,7 +66,8 @@ def record_contract_mark(
 ) -> int:
     ensure_schema(storage)
     stamp = timestamp.astimezone(timezone.utc).isoformat()
-    with storage._connect() as conn:
+
+    def _insert(conn) -> int:
         cursor = conn.execute(
             """
             INSERT INTO options_contract_marks (
@@ -92,6 +95,8 @@ def record_contract_mark(
             ),
         )
         return int(cursor.lastrowid)
+
+    return storage.write("record_contract_mark", _insert)
 
 
 def contract_marks(storage, shadow_id: int, *, limit: int = 500) -> list[dict[str, Any]]:
