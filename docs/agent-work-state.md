@@ -1,15 +1,15 @@
 # Agent Work State
 
-## START HERE — 2026-11-06 source-only Tradovate submission durability
+## START HERE — 2026-11-06 AFS-0498 submission-evidence follow-up
 
-Paper/demo source only. Do not deploy, restart, or merge from an agent.
+Paper/demo source only. Do not deploy, restart, or merge from an agent. PR #1254 is merged at `0341f8be`. Do not push `fix/order-state-durability`.
 
 | Item | State |
 |---|---|
-| **Branch** | `fix/order-state-durability` |
-| **Scope** | Durable pre-send AMBIGUOUS submissions and UNKNOWN / RECONCILE_REQUIRED instead of a local cancel when an entry or cancel cannot be read. `AFS_ORDER_SUBMISSION_DIR` or `LOG_DIR/order_submissions`. |
+| **Branch** | `fix/order-state-durability-followup` |
+| **Scope** | Empty `/order/list` must not clear AMBIGUOUS. Adoption requires position, fills, executions, and verified protection. Startup reconciliation runs before entries, with a broker, even when the journal has no open row. |
 | **Runtime** | Not exercised. The October HOLD below still governs the box. |
-| **NEXT** | Grok reviews the PR. Imani decides whether to merge. Do not set live trading and do not retry an unresolved client id. |
+| **NEXT** | Grok reviews the new PR against AFS-0498. Imani decides whether to merge. Do not set live trading and do not retry an unresolved client id. |
 
 ## Merged — 2026-11-05 trend variant shadow
 

@@ -30,6 +30,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+from execution.tradovate_broker import TradovateBroker, TradovateConfig, TradovateEnvConfigError
 from notifications import plain_english as _pe
 
 logger = logging.getLogger(__name__)
@@ -88,6 +89,27 @@ def _resolve_completed_trade(broker, open_pos: dict):
         if fill is not None:
             break
     return fill
+
+
+def broker_for_submission_recovery():
+    """Tradovate client for read-only submission recovery. Paper returns None.
+
+    Construction validates ``TRADOVATE_ENV`` and does not send an order.
+    """
+    if os.getenv("BROKER", "paper").strip().lower() != "tradovate":
+        return None
+    return TradovateBroker(config=TradovateConfig.from_env())
+
+
+def reconcile_submissions_before_entries(config, log_dir: str = "logs", broker=None) -> dict:
+    """Reconcile durable submissions before any new entry is accepted.
+
+    The broker client is supplied even when the journal has no open row.
+    Paper mode does not construct a Tradovate client.
+    """
+    if broker is None:
+        broker = broker_for_submission_recovery()
+    return reconcile_open_position(config, log_dir, broker=broker)
 
 
 def _recover_durable_submissions(broker=None) -> dict:
@@ -372,18 +394,25 @@ def reconcile_open_position(
 async def run_reconciler_loop(
     config, log_dir: str = "logs", interval_s: int = RECONCILE_INTERVAL_SECONDS
 ) -> None:
-    """Run reconcile_open_position on a timer until cancelled."""
+    """Reconcile once immediately, then on the timer.
+
+    The first pass runs before the sleep so a restarted process classifies
+    durable UNKNOWN/AMBIGUOUS submissions before the next interval, with a
+    broker client even when no journal row is open.
+    """
     logger.info("Phantom reconciler started (interval=%ds)", interval_s)
     while True:
         try:
-            await asyncio.sleep(interval_s)
-            await asyncio.to_thread(reconcile_open_position, config, log_dir)
+            await asyncio.to_thread(reconcile_submissions_before_entries, config, log_dir)
         except asyncio.CancelledError:
             logger.info("Phantom reconciler stopped")
             break
         except Exception as exc:
-            from execution.tradovate_broker import TradovateEnvConfigError
-
             if isinstance(exc, TradovateEnvConfigError):
                 raise
             logger.warning("reconciler loop error: %s", exc)
+        try:
+            await asyncio.sleep(interval_s)
+        except asyncio.CancelledError:
+            logger.info("Phantom reconciler stopped")
+            break
