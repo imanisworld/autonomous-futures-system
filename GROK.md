@@ -14,6 +14,10 @@ For repository work, start here. Keep startup cheap.
 6. If something changed, inspect only that changed scope. Fetch more context only when the narrower evidence is insufficient.
 7. Full repo/runtime reconciliation is an escalation path, not the default startup path.
 
+## MNQ sealed historical boundary (operator hard stop, 2026-10-10)
+
+For any **MNQ exploratory backtest**, first apply the binding seal in `AGENTS.md`: the last eligible complete CME historical session is **2026-06-26**. **NEVER query, load, inspect or score MNQ data from the 2026-06-29 session onward** to generate/tune/compare ideas, even from a public Massive/Polygon endpoint or a different futures contract month. Never request `2026Q3` MNQ for exploratory strategy screening. Enforce the cutoff both **before data acquisition and before scoring**, fail closed on ambiguous timestamps/session labels, and do not salvage a breached screen by trimming it after seeing outcomes. All post-seal data remain reserved for their separately authorized forward protocols. ChatGPT's two Oct 10 exploratory MNQ screens violated this; treat their conclusions as `CONTAMINATED_POST_SEAL` and **DO NOT REDO** on the sealed data. See `docs/mnq-research-seal-incident-2026-10-10.md`. No strategy promotion follows.
+
 ## Useful work allowed
 
 Grok owns **research / edge discovery / contract discovery**. Its job is to search for useful opportunities and propose what should be tested next, not to duplicate every other agent's audit.
