@@ -33,7 +33,6 @@ def render_sudoers() -> str:
         "# grok-ops deploy lane. Exact script paths. No shell.",
         "Defaults:grok-ops env_reset",
         'Defaults:grok-ops secure_path="/usr/sbin:/usr/bin:/sbin:/bin"',
-        "Defaults:grok-ops !requiretty",
     ]
     lines.extend(_LINE.format(path=path) for path in SUDO_PATHS)
     lines.append("")
@@ -83,7 +82,8 @@ def visudo_check(text: str, visudo: str = "visudo") -> None:
     finally:
         Path(path).unlink(missing_ok=True)
     if result.returncode != 0:
-        raise ValueError("visudo rejected the sudoers drop-in")
+        detail = (result.stderr or result.stdout or "").strip()
+        raise ValueError(detail or "visudo rejected the sudoers drop-in")
 
 
 def main() -> int:
