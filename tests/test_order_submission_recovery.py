@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from multiprocessing import Process, Queue
 
 import pytest
@@ -255,6 +256,55 @@ def test_lifespan_reconciles_with_broker_before_accepting_entries(monkeypatch):
             return list(order)
 
     assert asyncio.run(exercise()) == ["broker", ("reconcile", sentinel), "accepting"]
+
+
+def test_accepting_entries_marker_is_logged_after_startup_reconcile(monkeypatch):
+    """The marker is absent until reconciliation returns, then present before yield.
+
+    Moving the log ahead of the reconcile call fails the assertion inside
+    ``recover``. Deleting the log fails the assertion after the lifespan yields.
+    """
+    import webhook.app as app_module
+    import webhook.reconciler as reconciler
+
+    messages = []
+
+    class ListHandler(logging.Handler):
+        def emit(self, record):
+            messages.append(record.getMessage())
+
+    handler = ListHandler()
+    previous_level = app_module.logger.level
+    app_module.logger.setLevel(logging.INFO)
+    app_module.logger.addHandler(handler)
+
+    def recover(config, log_dir="logs", broker=None, **kwargs):
+        assert not any(message.startswith("ACCEPTING ENTRIES:") for message in messages)
+        return {"action": "none"}
+
+    async def idle(*args, **kwargs):
+        await asyncio.Event().wait()
+
+    monkeypatch.setenv("WEBHOOK_SECRET", "test-secret")
+    monkeypatch.setenv("BROKER", "tradovate")
+    monkeypatch.setattr(app_module, "_require_tradovate_env_for_selected_broker", lambda: None)
+    monkeypatch.setattr(reconciler, "broker_for_submission_recovery", lambda: object())
+    monkeypatch.setattr(reconciler, "reconcile_open_position", recover)
+    monkeypatch.setattr(app_module, "run_tradovate_supervisor", idle)
+    monkeypatch.setattr(app_module, "run_reconciler_loop", idle)
+    monkeypatch.setattr(app_module, "run_heartbeat_loop", idle)
+
+    async def exercise():
+        async with app_module._lifespan(app_module.app):
+            return list(messages)
+
+    try:
+        seen = asyncio.run(exercise())
+    finally:
+        app_module.logger.removeHandler(handler)
+        app_module.logger.setLevel(previous_level)
+
+    assert any(message.startswith("ACCEPTING ENTRIES:") for message in seen)
 
 
 def test_completed_round_trip_closes_from_broker_evidence(monkeypatch, tmp_path):

@@ -1,6 +1,19 @@
 # Agent Work State
 
-## START HERE — 2026-11-06 AFS-0500 submission-evidence follow-up
+## START HERE — 2026-11-06 baseline-reset procedure
+
+Source only. Do not deploy, restart, reset a box, or place a demo order from this checkpoint.
+
+| Item | State |
+|---|---|
+| **Branch** | `cursor/baseline-reset-procedure-6c72` |
+| **Scope** | Operator baseline reset, restore, preflight, pre-deploy backup, and a gated one-lot demo recovery proof. Path A promote accepts only the recorded SHA. Startup logs `ACCEPTING ENTRIES:` after reconciliation. |
+| **Runbook** | `docs/ops/baseline_reset_runbook.md` |
+| **Runtime** | Not exercised. No server was contacted. |
+| **Tests** | `python -B -m pytest -q`: 8986 passed, 8 skipped, exit 0. |
+| **NEXT** | Independent review. Operator GO is still required before any host command in the runbook. Do not merge from this checkpoint. |
+
+## Previous — 2026-11-06 AFS-0500 submission-evidence follow-up
 
 Paper/demo source only. Do not deploy, restart, or merge from an agent. Do not push `fix/order-state-durability`.
 

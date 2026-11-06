@@ -214,9 +214,12 @@ verify_release() {
 _promote_gate_check() {
   local sha="$1"
 
-  # Path 1: box is on the fully-reset baseline posture. Any release may
-  # promote here -- this is the route for actual strategy/risk/exit changes,
-  # always starting from a known-safe, no-live-orders state.
+  # Path 1: box is on the fully-reset baseline posture. With no
+  # baseline_authorization.json this is the historical route: any release
+  # may promote from a box that is already on the reset baseline. When the
+  # operator reset procedure has written that file, only its target_sha may
+  # promote. Any other SHA is refused. An unreadable file refuses. This
+  # function still does not modify .env, the authorization file, or the link.
   local on_baseline=0
   remote "
     grep -qx 'SCHEDULE_MODE=always_on_shadow' '$SHARED/.env' &&
@@ -228,6 +231,14 @@ _promote_gate_check() {
   " >/dev/null 2>&1 || on_baseline=1
 
   if [[ "$on_baseline" -eq 0 ]]; then
+    if remote "test -f '$SHARED/baseline_authorization.json'"; then
+      if ! remote "cat '$SHARED/baseline_authorization.json'" \
+          | PYTHONDONTWRITEBYTECODE=1 python3 -m ops.baseline_authorization check-sha --candidate-sha "$sha" >/dev/null; then
+        echo "promotion refused: baseline authorization does not accept $sha" >&2
+        return 1
+      fi
+      echo "baseline authorization matches $sha"
+    fi
     return 0
   fi
 

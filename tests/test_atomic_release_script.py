@@ -296,6 +296,9 @@ def test_promote_supports_baseline_and_operational_postures():
     assert "ops.behavior_neutral_gate" in text
     assert "EXPECTED_LIVE_COMMIT" in text
     assert "promotion refused" in text
+    assert "baseline_authorization.json" in text
+    assert "ops.baseline_authorization" in text
+    assert "does not accept" in text
 
 
 def test_promote_refuses_when_neither_posture_matches():

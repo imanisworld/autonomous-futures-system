@@ -175,6 +175,44 @@ def test_invalid_live_commit_fails_closed(git_repo_with_two_commits):
     assert "not behavior-neutral" in err or "could not diff" in err
 
 
+def _write_authorization(repo, target_sha):
+    shared = repo / "shared"
+    shared.mkdir(exist_ok=True)
+    (shared / "baseline_authorization.json").write_text(
+        '{"target_sha": "%s"}\n' % target_sha
+    )
+
+
+def test_authorization_accepts_only_its_exact_sha(git_repo_with_two_commits):
+    repo, live_sha, _safe, unsafe_candidate = git_repo_with_two_commits
+    _write_authorization(repo, unsafe_candidate)
+    env_lines = BASELINE_PINS + [f"EXPECTED_LIVE_COMMIT={live_sha}"]
+    code, out, err = _run_gate_check(repo, env_lines, unsafe_candidate)
+    assert code == 0, err
+    assert "baseline authorization matches" in out
+    assert "behavior-neutral" not in out
+
+
+def test_authorization_refuses_any_other_sha(git_repo_with_two_commits):
+    repo, live_sha, safe_candidate, unsafe_candidate = git_repo_with_two_commits
+    _write_authorization(repo, unsafe_candidate)
+    env_lines = BASELINE_PINS + [f"EXPECTED_LIVE_COMMIT={live_sha}"]
+    code, _out, err = _run_gate_check(repo, env_lines, safe_candidate)
+    assert code == 1
+    assert f"does not accept {safe_candidate}" in err
+
+
+def test_unreadable_authorization_refuses(git_repo_with_two_commits):
+    repo, live_sha, _safe, unsafe_candidate = git_repo_with_two_commits
+    shared = repo / "shared"
+    shared.mkdir(exist_ok=True)
+    (shared / "baseline_authorization.json").write_text("{")
+    env_lines = BASELINE_PINS + [f"EXPECTED_LIVE_COMMIT={live_sha}"]
+    code, _out, err = _run_gate_check(repo, env_lines, unsafe_candidate)
+    assert code == 1
+    assert "does not accept" in err
+
+
 def test_gate_check_never_mutates_env_or_current_link(git_repo_with_two_commits):
     repo, live_sha, _safe, unsafe_candidate = git_repo_with_two_commits
     env_lines = CURRENT_PINS + [f"EXPECTED_LIVE_COMMIT={live_sha}"]

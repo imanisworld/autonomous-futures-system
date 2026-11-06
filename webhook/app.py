@@ -434,6 +434,9 @@ async def _lifespan(app: FastAPI):
     await asyncio.to_thread(
         reconcile_submissions_before_entries, _config, _config.log_dir
     )
+    # Ordering proof for operators: this line is emitted only after startup
+    # reconciliation returns and before the lifespan yields to requests.
+    logger.info("ACCEPTING ENTRIES: startup reconciliation complete")
     # Background safety tasks run independently of the TradingView bar feed.
     background_tasks = [
         asyncio.create_task(run_tradovate_supervisor()),
