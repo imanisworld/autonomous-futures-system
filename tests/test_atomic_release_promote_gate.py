@@ -8,6 +8,8 @@ import subprocess
 import textwrap
 from pathlib import Path
 
+from ops.baseline_authorization import staged_manifest_digest
+
 import pytest
 
 SCRIPT = "scripts/atomic_release.sh"
@@ -188,19 +190,28 @@ def _write_authorization(repo, target_sha, fingerprint=_FP):
     }) + "\n")
 
 
-def _write_manifest(repo, sha, fingerprint=_FP, commit=None):
+def _write_manifest(repo, sha, fingerprint=None, commit=None):
+    """Write a staged manifest. Return the recomputed payload digest.
+
+    ``fingerprint`` is only the unused field inside the tree. The gate must
+    not treat that field as the expected digest.
+    """
     release = repo / "releases" / sha
     release.mkdir(parents=True, exist_ok=True)
-    (release / "release_manifest.json").write_text(json.dumps({
-        "fingerprint_sha256": fingerprint,
+    payload = {
+        "schema_version": 1,
         "repo": {"commit": commit if commit is not None else sha},
-    }) + "\n")
+    }
+    body = dict(payload)
+    body["fingerprint_sha256"] = _FP if fingerprint is None else fingerprint
+    (release / "release_manifest.json").write_text(json.dumps(body) + "\n")
+    return staged_manifest_digest(payload)
 
 
 def test_authorization_accepts_only_its_exact_sha(git_repo_with_two_commits):
     repo, live_sha, _safe, unsafe_candidate = git_repo_with_two_commits
-    _write_authorization(repo, unsafe_candidate)
-    _write_manifest(repo, unsafe_candidate)
+    digest = _write_manifest(repo, unsafe_candidate, fingerprint="0" * 64)
+    _write_authorization(repo, unsafe_candidate, fingerprint=digest)
     env_lines = BASELINE_PINS + [f"EXPECTED_LIVE_COMMIT={live_sha}"]
     code, out, err = _run_gate_check(repo, env_lines, unsafe_candidate)
     assert code == 0, err
@@ -219,8 +230,12 @@ def test_authorization_refuses_any_other_sha(git_repo_with_two_commits):
 
 
 def test_authorization_refuses_fingerprint_mismatch(git_repo_with_two_commits):
+    """The staged field matches the approval and the payload does not.
+
+    Comparing fingerprint_sha256 to the authorization would accept this.
+    """
     repo, live_sha, _safe, unsafe_candidate = git_repo_with_two_commits
-    _write_authorization(repo, unsafe_candidate, fingerprint=_FP)
+    _write_authorization(repo, unsafe_candidate, fingerprint="e" * 64)
     _write_manifest(repo, unsafe_candidate, fingerprint="e" * 64)
     env_lines = BASELINE_PINS + [f"EXPECTED_LIVE_COMMIT={live_sha}"]
     code, _out, err = _run_gate_check(repo, env_lines, unsafe_candidate)

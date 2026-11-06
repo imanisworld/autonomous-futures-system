@@ -127,11 +127,27 @@ def _load_object(raw: str) -> dict:
     return payload
 
 
+def staged_manifest_digest(manifest: dict) -> str:
+    """Digest of a staged manifest payload, excluding its own fingerprint field.
+
+    This matches ``ops.release_integrity.manifest_fingerprint``. The
+    ``fingerprint_sha256`` value stored inside the staged tree is not an
+    input. The expected digest is the operator's external authorization.
+    """
+    payload = {
+        key: value
+        for key, value in manifest.items()
+        if key not in ("generated_at", "fingerprint_sha256")
+    }
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
+
+
 def authorized_binding(record_text: str) -> tuple[str, str]:
     """Return ``(commit_sha, release_fingerprint)`` or raise ValueError.
 
-    A record that names only a commit is unusable. Promote must be able to
-    compare the staged manifest fingerprint as well as the commit.
+    Both values come from the operator authorization, which lives outside
+    the staged release tree. A record that names only a commit is unusable.
     """
     payload = _load_object(record_text)
     sha = payload.get("target_sha")
@@ -163,14 +179,15 @@ def check_release(candidate: str, record_text: str, manifest_text: str) -> int:
         return 1
     repo = manifest.get("repo")
     staged_commit = repo.get("commit") if isinstance(repo, dict) else None
-    staged_fingerprint = manifest.get("fingerprint_sha256")
     if staged_commit != authorized_sha:
         print(
             "staged release commit does not match the authorized baseline",
             file=sys.stderr,
         )
         return 1
-    if staged_fingerprint != authorized_fingerprint:
+    # The expected digest is the authorization record. Recompute the staged
+    # payload. The fingerprint_sha256 field inside the manifest is not read.
+    if staged_manifest_digest(manifest) != authorized_fingerprint:
         print(
             "staged release fingerprint does not match the authorized baseline",
             file=sys.stderr,

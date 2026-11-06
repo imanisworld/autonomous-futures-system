@@ -45,8 +45,14 @@ def reconciliation_blocks(result: object) -> bool:
 
 
 def note_startup_reconciliation(result: object) -> str:
-    """Record the startup result. Returns ``accept`` or ``block``."""
+    """Record the startup result. Returns ``accept`` or ``block``.
+
+    The latch is monotonic. Once this process is blocked, a later clear
+    result does not lift it. Only a new process starts clear.
+    """
     global _BLOCK
+    if _BLOCK is not None:
+        return "block"
     if reconciliation_blocks(result):
         submissions = result.get("submissions") if isinstance(result, dict) else None
         unresolved = _id_list(submissions) or _id_list(result)

@@ -16,8 +16,9 @@ from pathlib import Path
 import pytest
 
 from execution.broker_interface import Fill
-from ops.baseline_authorization import PATH_A_PINS, check_release
+from ops.baseline_authorization import PATH_A_PINS, check_release, staged_manifest_digest
 from ops.baseline_reset import (
+    RESET_CLI_FLAGS,
     Refusal,
     backup,
     classify_recovery,
@@ -599,22 +600,85 @@ def test_backup_failure_removes_the_partial_directory(tmp_path):
     assert not backups.exists() or list(backups.iterdir()) == []
 
 
-def _manifest(commit, fingerprint):
-    return json.dumps({
-        "fingerprint_sha256": fingerprint,
-        "repo": {"commit": commit},
+def _payload(commit):
+    return {"schema_version": 1, "repo": {"commit": commit}}
+
+
+def test_check_release_uses_external_digest_not_the_staged_field():
+    """The staged fingerprint_sha256 field is not the expected digest.
+
+    A manifest whose field equals the approved digest, but whose payload
+    does not, must be refused. Deleting the payload recomputation and
+    comparing that field instead makes this assertion fail.
+    """
+    payload = _payload(SHA)
+    digest = staged_manifest_digest(payload)
+    assert digest != FP
+    lying = {**payload, "fingerprint_sha256": FP}
+    approved = json.dumps({"target_sha": SHA, "release_fingerprint": FP})
+    assert check_release(SHA, approved, json.dumps(lying)) == 1
+    honest = {**payload, "fingerprint_sha256": OTHER_FP}
+    external = json.dumps({"target_sha": SHA, "release_fingerprint": digest})
+    assert check_release(SHA, external, json.dumps(honest)) == 0
+    assert check_release(SHA, approved, json.dumps(honest)) == 1
+    other = _payload(OTHER)
+    other_record = json.dumps({
+        "target_sha": SHA,
+        "release_fingerprint": staged_manifest_digest(other),
     })
+    assert check_release(SHA, other_record, json.dumps(other)) == 1
+    assert check_release(SHA, "{", json.dumps(honest)) == 1
+    assert check_release(SHA, json.dumps({"target_sha": SHA}), json.dumps(honest)) == 1
+    assert check_release(SHA, external, "{") == 1
 
 
-def test_check_release_binds_commit_and_fingerprint():
-    record = json.dumps({"target_sha": SHA, "release_fingerprint": FP})
-    assert check_release(SHA, record, _manifest(SHA, FP)) == 0
-    assert check_release(OTHER, record, _manifest(OTHER, FP)) == 1
-    assert check_release(SHA, record, _manifest(SHA, OTHER_FP)) == 1
-    assert check_release(SHA, record, _manifest(OTHER, FP)) == 1
-    assert check_release(SHA, "{", _manifest(SHA, FP)) == 1
-    assert check_release(SHA, json.dumps({"target_sha": SHA}), _manifest(SHA, FP)) == 1
-    assert check_release(SHA, record, "{") == 1
+def test_reset_cli_stable_flags_are_required(tmp_path, capsys):
+    """The published reset argv is exactly these flags.
+
+    Dropping one from the required set lets that invocation exit 0, so the
+    assertion on argparse's exit code 2 fails.
+    """
+    shared, _log_dir, _shadow = _layout(tmp_path)
+    status = _status_file(tmp_path)
+    values = {
+        "--target-sha": SHA,
+        "--release-fingerprint": FP,
+        "--ticket": TICKET,
+        "--operator-token": f"AUTHORIZE BASELINE RESET {SHA} {FP} {TICKET}",
+        "--status-file": status,
+        "--shared-dir": str(shared),
+    }
+    assert tuple(values) == RESET_CLI_FLAGS
+    argv = ["reset"]
+    for flag in RESET_CLI_FLAGS:
+        argv.extend((flag, values[flag]))
+    argv.append("--dry-run")
+    assert main(argv) == 0
+    with pytest.raises(SystemExit) as caught:
+        main(["reset", "--help"])
+    assert caught.value.code == 0
+    help_text = capsys.readouterr().out
+    for flag in RESET_CLI_FLAGS:
+        assert flag in help_text
+    required = tuple(flag for flag in RESET_CLI_FLAGS if flag != "--shared-dir")
+    for flag in required:
+        omitted = ["reset", "--dry-run", "--shared-dir", str(shared)]
+        for other in required:
+            if other == flag:
+                continue
+            omitted.extend((other, values[other]))
+        with pytest.raises(SystemExit) as missing:
+            main(omitted)
+        assert missing.value.code == 2
+
+
+def test_staged_digest_matches_release_integrity():
+    from ops.release_integrity import manifest_fingerprint
+
+    payload = _payload(SHA)
+    payload["generated_at"] = "2026-11-06T00:00:00+00:00"
+    payload["fingerprint_sha256"] = FP
+    assert staged_manifest_digest(payload) == manifest_fingerprint(payload)
 
 
 def test_exposure_census_fails_closed_and_strips_broker_rows():

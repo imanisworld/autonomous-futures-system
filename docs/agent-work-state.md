@@ -7,10 +7,10 @@ Source only. Do not deploy, restart, reset a box, or place a demo order from thi
 | Item | State |
 |---|---|
 | **Branch** | `cursor/baseline-reset-procedure-6c72` |
-| **Scope** | Operator baseline reset binds the commit and the staged manifest fingerprint. Path A promote refuses a fingerprint or commit mismatch. Startup logs `ACCEPTING ENTRIES` only after a clear reconcile; unresolved ids stay `BLOCKED_RECONCILE_REQUIRED`. |
+| **Scope** | The approved manifest digest is the operator argument in the baseline record, outside the staged tree. Promote recomputes the staged payload and refuses a mismatch. The startup block is monotonic until process restart. Reset CLI flags are stable for #1258. |
 | **Runbook** | `docs/ops/baseline_reset_runbook.md` |
 | **Runtime** | Not exercised. No server was contacted. |
-| **Tests** | `python -B -m pytest -q` after AFS-0509: 8991 passed, 8 skipped, exit 0. |
+| **Tests** | `python -B -m pytest -q` after AFS-0511: 8994 passed, 8 skipped, exit 0. |
 | **NEXT** | Independent review. Operator GO is still required before any host command in the runbook. Do not merge from this checkpoint. |
 
 ## Previous — 2026-11-06 AFS-0500 submission-evidence follow-up

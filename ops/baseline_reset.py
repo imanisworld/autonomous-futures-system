@@ -7,6 +7,10 @@ units. Track B files and trend-shadow history are not opened.
 
 The promote gate reads the authorization file through
 ``ops.baseline_authorization``. This module is the only writer.
+
+Stable reset argv, which other callers align to::
+
+    reset --target-sha --release-fingerprint --ticket --operator-token --status-file --shared-dir
 """
 
 from __future__ import annotations
@@ -48,6 +52,17 @@ BLOCKING_SUBMISSION_STATES = frozenset({
     "SUBMITTED",
     "PARTIALLY_FILLED",
 })
+# Names are stable. #1258 aligns to this list. A rename or a new required
+# flag is an interface change.
+RESET_CLI_FLAGS = (
+    "--target-sha",
+    "--release-fingerprint",
+    "--ticket",
+    "--operator-token",
+    "--status-file",
+    "--shared-dir",
+)
+
 TERMINAL_ORDER_STATUSES = frozenset({
     "filled",
     "canceled",
@@ -907,7 +922,11 @@ def main(argv: list[str] | None = None) -> int:
     common.add_argument("--operator-token", required=True)
     common.add_argument("--dry-run", action="store_true")
 
-    reset_cmd = sub.add_parser("reset", parents=[common])
+    reset_cmd = sub.add_parser(
+        "reset",
+        parents=[common],
+        description="Stable interface: " + " ".join(RESET_CLI_FLAGS),
+    )
     reset_cmd.add_argument("--target-sha", required=True)
     reset_cmd.add_argument("--release-fingerprint", required=True)
     sub.add_parser("restore", parents=[common])

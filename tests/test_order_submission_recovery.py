@@ -28,6 +28,7 @@ from execution.order_submission_store import (
 )
 from execution.tradovate_broker import TradovateBroker
 from tests.test_tradovate_entry_fill import _broker
+from webhook.startup_gate import reset_startup_gate, startup_entry_block
 
 
 def _order(client_order_id=None):
@@ -249,13 +250,17 @@ def test_lifespan_reconciles_with_broker_before_accepting_entries(monkeypatch):
     monkeypatch.setattr(app_module, "run_tradovate_supervisor", idle)
     monkeypatch.setattr(app_module, "run_reconciler_loop", idle)
     monkeypatch.setattr(app_module, "run_heartbeat_loop", idle)
+    reset_startup_gate()
 
     async def exercise():
         async with app_module._lifespan(app_module.app):
             order.append("accepting")
             return list(order)
 
-    assert asyncio.run(exercise()) == ["broker", ("reconcile", sentinel), "accepting"]
+    try:
+        assert asyncio.run(exercise()) == ["broker", ("reconcile", sentinel), "accepting"]
+    finally:
+        reset_startup_gate()
 
 
 def test_accepting_entries_marker_is_logged_after_startup_reconcile(monkeypatch):
@@ -293,6 +298,7 @@ def test_accepting_entries_marker_is_logged_after_startup_reconcile(monkeypatch)
     monkeypatch.setattr(app_module, "run_tradovate_supervisor", idle)
     monkeypatch.setattr(app_module, "run_reconciler_loop", idle)
     monkeypatch.setattr(app_module, "run_heartbeat_loop", idle)
+    reset_startup_gate()
 
     async def exercise():
         async with app_module._lifespan(app_module.app):
@@ -303,6 +309,7 @@ def test_accepting_entries_marker_is_logged_after_startup_reconcile(monkeypatch)
     finally:
         app_module.logger.removeHandler(handler)
         app_module.logger.setLevel(previous_level)
+        reset_startup_gate()
 
     assert any(message.startswith("ACCEPTING ENTRIES:") for message in seen)
     assert not any(message.startswith("BLOCKED_RECONCILE_REQUIRED:") for message in seen)
@@ -318,8 +325,8 @@ def test_unresolved_startup_reconciliation_does_not_accept_entries(monkeypatch):
     import webhook.app as app_module
     import webhook.reconciler as reconciler
     import webhook.runner as runner
-    from webhook.startup_gate import reset_startup_gate, startup_entry_block
 
+    reset_startup_gate()
     messages = []
 
     class ListHandler(logging.Handler):
@@ -370,6 +377,31 @@ def test_unresolved_startup_reconciliation_does_not_accept_entries(monkeypatch):
 def inspect_process(runner):
     import inspect
     return inspect.getsource(runner.process_alert)
+
+
+def test_startup_latch_stays_blocked_after_a_later_clear():
+    """A clean note cannot lift BLOCKED_RECONCILE_REQUIRED in this process.
+
+    Deleting the monotonic guard clears the latch on the second call, so
+    the assertions fail. Only ``reset_startup_gate`` models a restart.
+    """
+    from webhook.startup_gate import (
+        note_startup_reconciliation,
+        reset_startup_gate,
+        startup_entry_block,
+    )
+
+    reset_startup_gate()
+    try:
+        blocked = {"submissions": {"ok": True, "unresolved": ["cid"]}}
+        clear = {"submissions": {"ok": True, "unresolved": []}}
+        assert note_startup_reconciliation(blocked) == "block"
+        assert note_startup_reconciliation(clear) == "block"
+        assert startup_entry_block()["client_order_ids"] == ["cid"]
+        assert startup_entry_block()["entries_blocked"] is True
+    finally:
+        reset_startup_gate()
+        assert startup_entry_block() is None
 
 
 def test_untrusted_or_missing_reconciliation_blocks():

@@ -2,14 +2,14 @@
 
 Status: procedure only. This file does not authorize a reset, a backup, a promote, a restart, or a demo order. The Operator runs it, as root, over the existing `ssh hetzner` alias. Do not paste `.env`, account ids, or broker bodies into chat.
 
-The reset records one exact release SHA and the staged manifest fingerprint, and sets only the six Path A posture pins. After that file exists, `scripts/atomic_release.sh` accepts that SHA only when the staged `release_manifest.json` commit and `fingerprint_sha256` both match the record. Any other SHA, or the same SHA with a different fingerprint, is refused. It does not edit `BROKER`, risk limits, `LIVE_TRADING_ENABLED`, or `TRADOVATE_ENV`.
+The reset records one exact release SHA and an operator-supplied manifest digest. That digest is the expected fingerprint. It is not read from the staged release tree. After the authorization file exists, `scripts/atomic_release.sh` recomputes the staged manifest payload and accepts the SHA only when that recomputation matches the recorded digest and the manifest commit matches the SHA. A fingerprint field inside the staged manifest is not the authority. It does not edit `BROKER`, risk limits, `LIVE_TRADING_ENABLED`, or `TRADOVATE_ENV`.
 
 `TARGET_SHA` below is the reviewed behavioral release. `PROCEDURE_SHA` is the merged commit that contains this runbook and `ops/baseline_reset.py`. Promote with the procedure checkout. The copy of `atomic_release.sh` inside `TARGET_SHA` does not know about the authorization file.
 
 ```text
 PROCEDURE_SHA=<40-hex commit that contains this runbook>
 TARGET_SHA=f8b044be38df8f14300bdf47465fc3ff0c2c0a62
-RELEASE_FINGERPRINT=<64-hex fingerprint_sha256 from the staged release_manifest.json>
+RELEASE_FINGERPRINT=<64-hex digest from the independent manifest review, not from the staged tree>
 TICKET=AFS-0508
 PROC=/root/afs-maint/baseline-reset
 PY=/root/autonomous-futures-system/.venv/bin/python
@@ -171,16 +171,17 @@ If the command prints `baseline_reset failed: rolled back`, the `predeploy-*` di
 
 ## 5. Reset
 
-Skip this section when preflight printed `reset_needed=no` and the recorded fingerprint already matches the staged manifest.
+### Stable reset command
 
-Read the fingerprint from the staged manifest. Do not print the manifest.
+`#1258` aligns to this argv. The names stay as written:
 
-```bash
-ssh hetzner "$PY -c 'import json,sys; print(json.load(open(sys.argv[1]))[\"fingerprint_sha256\"])' \
-  /root/afs-releases/$TARGET_SHA/release_manifest.json"
+```text
+reset --target-sha --release-fingerprint --ticket --operator-token --status-file --shared-dir
 ```
 
-Expected: one 64-hex line. That value is `RELEASE_FINGERPRINT`. If the manifest is missing, build the exact SHA first; do not invent a hash.
+`--release-fingerprint` is the operator's approved digest. It is recorded in `/root/afs-shared/baseline_authorization.json`, outside `/root/afs-releases/<sha>`. Do not fill it by reading `fingerprint_sha256` from the staged `release_manifest.json`. That field is inside the tree being checked. The digest comes from the separate manifest review.
+
+Skip this section when preflight printed `reset_needed=no` and `release_fingerprint` is already the approved digest.
 
 Dry-run:
 
@@ -298,7 +299,7 @@ A different SHA is refused even on Path A:
 promotion refused: baseline authorization does not accept <other-sha>
 ```
 
-The same SHA with a different staged `fingerprint_sha256`, or a manifest whose `repo.commit` is not that SHA, is also refused:
+The same SHA whose recomputed manifest digest differs from the recorded approval, even when the staged `fingerprint_sha256` field equals that approval, is refused. A manifest whose `repo.commit` is not that SHA is also refused:
 
 ```text
 staged release fingerprint does not match the authorized baseline
