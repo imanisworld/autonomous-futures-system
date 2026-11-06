@@ -186,8 +186,16 @@ def check_futures_track_b(
             "live_trading_enabled": body.get("live_trading_enabled"),
             "broker": body.get("broker"),
         }
-    except (urllib.error.URLError, json.JSONDecodeError, TimeoutError) as exc:
+    except (
+        urllib.error.URLError,
+        json.JSONDecodeError,
+        TimeoutError,
+        ConnectionError,
+    ) as exc:
+        health["ok"] = False
         health["error"] = type(exc).__name__
+        if not isinstance(exc, json.JSONDecodeError):
+            health["status"] = "DOWN"
     lock_path = shared / "deploy.lock"
     deploy_lock = lock_path.is_dir() or lock_path.is_file()
     sha_match = bool(expected and live_sha and expected == live_sha)
@@ -327,16 +335,24 @@ def check_options_122(
     need_binding = today_et > FORWARD_SESSION_START or (
         today_et == FORWARD_SESSION_START and on_rth
     )
-    # First eligible Monday: allow zero stamped rows until EOD proof window; warn only.
+    recorded = journal.is_file() and stats["lines_on_or_after_start"] > 0
+    if need_binding and not recorded:
+        data_status = "NO_DATA"
+        data_ok = False
+    else:
+        data_status = "OK"
+        data_ok = True
+    # Rows may exist with zero ARMED stamps. A missing or empty journal is NO_DATA.
     binding_ok = (not need_binding) or stats["armed"] == 0 or stats["armed_with_canonical_binding"] > 0
     service_ok = service.get("result") in {"success", "done", ""} or not on_rth
-    passed = timer_ok and service_ok and binding_ok
+    passed = timer_ok and service_ok and binding_ok and data_ok
     return {
         "lane": "options_122_iex_e1",
         "timer_active": timer,
         "last_service": service,
         "journal_since_forward_start": stats,
         "require_canonical_binding": need_binding,
+        "data_status": data_status,
         "passed": passed,
     }
 
@@ -347,7 +363,12 @@ def run_options_observer_snapshot(
 ) -> dict[str, Any]:
     tool = current / "ops" / "options_observer_status.py"
     if not tool.is_file():
-        return {"present": False, "overall": "SKIPPED", "passed": True}
+        return {
+            "present": False,
+            "overall": "FAILED",
+            "passed": False,
+            "reason": "STATUS_TOOL_MISSING",
+        }
     proc = run(
         [
             sys.executable,
@@ -369,7 +390,22 @@ def run_options_observer_snapshot(
             "passed": False,
             "stderr_prefix": proc.stderr[:200],
         }
-    report = json.loads(proc.stdout)
+    try:
+        report = json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        return {
+            "present": True,
+            "overall": "FAILED",
+            "passed": False,
+            "reason": "MALFORMED_STATUS_OUTPUT",
+        }
+    if not isinstance(report, dict):
+        return {
+            "present": True,
+            "overall": "FAILED",
+            "passed": False,
+            "reason": "MALFORMED_STATUS_OUTPUT",
+        }
     overall = report.get("overall", "UNKNOWN")
     degraded = list(report.get("degraded") or [])
     forward_relevant = [

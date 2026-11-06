@@ -953,7 +953,13 @@ def process_demo_five_min_bar(
                 contract_hint=getattr(payload, "contract_hint", None),
             )
             fill = broker.execute_bracket(order)
-            entry_provenance = _entry_provenance(setup, fill)
+            try:
+                entry_provenance = _entry_provenance(setup, fill)
+            except Exception:
+                logger.exception(
+                    "entry-timing provenance failed after broker submit; bookkeeping continues"
+                )
+                entry_provenance = {name: None for name in _ENTRY_PROVENANCE_FIELDS}
             actual_fill = _actual_entry_happened(fill)
             if actual_fill:
                 demo_state.confirm_slot(state, key, strategy)

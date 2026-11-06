@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 from datetime import date, datetime, timezone
 from types import SimpleNamespace
 
@@ -941,6 +942,34 @@ def test_demo_entry_timing_never_invents_broker_clock():
     assert data["broker_last_fill_at_utc"] is None
     assert data["broker_entry_order_type"] is None
     assert data["adverse_entry_slippage_ticks"] == 1.0
+
+def test_entry_timing_error_after_submit_still_journals_and_confirms_slot(
+    tmp_path, monkeypatch, caplog
+):
+    """A broker order already sent must be confirmed and journaled if entry timing raises."""
+    _demo_env(monkeypatch)
+    _patch_candidate(monkeypatch, FOUR_HR)
+
+    def broken_entry_timing(setup, fill):
+        raise RuntimeError("entry timing broke")
+
+    monkeypatch.setattr(demo._core, "_entry_provenance", broken_entry_timing)
+    broker = _FakeBroker()
+    with caplog.at_level(logging.ERROR, logger="context.wide_stop_demo_runtime_core"):
+        events = demo.process_demo_five_min_bar(
+            payload=_payload(), cfg=_cfg(), bars_5m=[], log_dir=tmp_path,
+            for_date=DAY, broker_factory=lambda: broker,
+        )
+    assert broker.execute_calls == 1
+    state = demo_state.load_state(_root(tmp_path), DAY)
+    assert demo_state.confirmed_fills(state) == 1
+    ledger = contract.ledger_for("MNQ", FOUR_HR)
+    journal = contract.journal_dir(_root(tmp_path), ledger) / f"journal_{DAY.isoformat()}.jsonl"
+    assert journal.is_file()
+    assert "OPEN" in journal.read_text(encoding="utf-8")
+    assert any(row.get("fill_status") == "OPEN" for row in events)
+    assert "bookkeeping continues" in caplog.text
+
 
 def test_unreadable_diagnostic_fill_price_never_raises_or_fabricates_slippage():
     fill = Fill(

@@ -37,3 +37,7 @@ jobs:
           python -m pip check
       - name: Run tests
         run: pytest -q
+      - name: Run v11 gate shell tests
+        run: |
+          bash docs/ops/gate_test_v11/test_journal_err_clean.sh
+          bash docs/ops/gate_test_v11/test_postgate_and_rollback.sh
