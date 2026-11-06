@@ -3870,15 +3870,21 @@ def _decision_direction(decision) -> str | None:
 
 
 def _shared_signa_snapshot_db_path() -> str | None:
-    """Return shared Signa snapshot DB path only when it already exists.
+    """Resolve the scanner's existing snapshot DB; never use the companion DB.
 
-    This is read-only context plumbing. It must not create the options DB or make
-    Signa/network calls from the futures runtime.
+    Futures only reads the scanner database, never creates it or calls Signa.
+    An explicitly configured scanner path must exist; do not silently switch
+    to another database if that path is absent.
     """
     try:
-        path = Path(options_companion_sqlite_path())
-        return str(path) if path.exists() else None
-    except Exception:  # noqa: BLE001 - context lookup must fail soft
+        configured = os.getenv("OPTIONS_SCANNER_SQLITE_PATH", "").strip()
+        path = (
+            Path(configured)
+            if configured
+            else Path(os.getenv("LOG_DIR", "logs")) / "options_scanner.sqlite"
+        )
+        return str(path) if path.is_file() else None
+    except (OSError, ValueError):  # evidence-only; missing context fails closed
         return None
 
 

@@ -218,6 +218,7 @@ def test_shared_snapshot_reader_prefers_ok_action_card_over_newer_error(tmp_path
         timeframe="1d",
         params={"symbol": "QQQ", "timeframe": "1d"},
         retrieved_at="2026-09-20T14:00:00Z",
+        data_as_of="2026-09-20T13:55:00Z",
         payload={
             "data": {
                 "signal": {
@@ -249,3 +250,127 @@ def test_shared_snapshot_reader_prefers_ok_action_card_over_newer_error(tmp_path
     assert record["gate_authoritative"] is False
     assert record["trade_authorized"] is False
     assert record["execution_authority"] is False
+
+
+def _qqq_snapshot(store, *, retrieved_at, data_as_of, direction="bullish", params=None, status="OK"):
+    return store.record_snapshot(
+        endpoint="/api/v1/signals/QQQ",
+        symbol="QQQ",
+        timeframe="1d",
+        params=params or {"symbol": "QQQ", "timeframe": "1d"},
+        retrieved_at=retrieved_at,
+        data_as_of=data_as_of,
+        payload={"data": {"signal": {"symbol": "QQQ", "timeframe": "1d", "direction": direction}}},
+        status=status,
+    )
+
+
+def test_snapshot_asof_excludes_future_retrieval_and_future_data_time(tmp_path):
+    db = tmp_path / "scanner.sqlite"
+    store = SignaSnapshotStore(db)
+    eligible = _qqq_snapshot(
+        store,
+        retrieved_at="2026-09-30T14:18:00Z",
+        data_as_of="2026-09-30T14:10:00Z",
+    )
+    _qqq_snapshot(
+        store,
+        retrieved_at="2026-09-30T14:25:00Z",
+        data_as_of="2026-09-30T14:10:00Z",
+        direction="bearish",
+    )
+    _qqq_snapshot(
+        store,
+        retrieved_at="2026-09-30T14:19:00Z",
+        data_as_of="2026-09-30T14:25:00Z",
+        direction="bearish",
+        params={"symbol": "QQQ", "timeframe": "1d", "test": "future_data"},
+    )
+    _qqq_snapshot(
+        store,
+        retrieved_at="2026-09-30T14:17:00Z",
+        data_as_of=None,
+        direction="bearish",
+        params={"symbol": "QQQ", "timeframe": "1d", "test": "missing_data_time"},
+    )
+    result = build_signa_futures_context(
+        SimpleNamespace(instrument="MNQ", signa=None),
+        futures_direction="LONG",
+        timeframe="1d",
+        snapshot_db_path=db,
+        now="2026-09-30T14:20:00Z",
+    )
+    assert result["snapshot_ids"] == [eligible.snapshot_id]
+    assert result["snapshot_status"] == "OK"
+    assert result["primary_bias"] == "LONG"
+    assert result["trade_authorized"] is False
+    assert result["execution_authority"] is False
+
+
+def test_snapshot_asof_with_future_only_or_no_data_asof_fails_closed(tmp_path):
+    db = tmp_path / "scanner.sqlite"
+    store = SignaSnapshotStore(db)
+    _qqq_snapshot(
+        store,
+        retrieved_at="2026-09-30T14:25:00Z",
+        data_as_of="2026-09-30T14:15:00Z",
+    )
+    _qqq_snapshot(
+        store,
+        retrieved_at="2026-09-30T14:15:00Z",
+        data_as_of=None,
+        params={"symbol": "QQQ", "timeframe": "1d", "test": "no_asof"},
+    )
+    result = build_signa_futures_context(
+        SimpleNamespace(instrument="MNQ", signa=None),
+        futures_direction="LONG",
+        timeframe="1d",
+        snapshot_db_path=db,
+        now="2026-09-30T14:20:00Z",
+    )
+    assert result["snapshot_ids"] == []
+    assert result["snapshot_status"] == "ERROR"
+    assert result["primary_bias"] == "UNKNOWN"
+    assert "QQQ:1d:snapshot_missing" in result["errors"]
+    assert result["trade_authorized"] is False
+
+
+def test_snapshot_asof_retains_stale_status_and_does_not_promote(tmp_path):
+    db = tmp_path / "scanner.sqlite"
+    store = SignaSnapshotStore(db)
+    _qqq_snapshot(
+        store,
+        retrieved_at="2026-09-30T10:00:00Z",
+        data_as_of="2026-09-30T09:55:00Z",
+    )
+    result = build_signa_futures_context(
+        SimpleNamespace(instrument="MNQ", signa=None),
+        futures_direction="LONG",
+        timeframe="1d",
+        snapshot_db_path=db,
+        now="2026-09-30T14:20:00Z",
+    )
+    assert result["snapshot_status"] == "STALE"
+    assert result["primary_bias"] == "UNKNOWN"
+    assert result["trade_authorized"] is False
+
+
+def test_futures_reader_uses_scanner_db_never_companion(tmp_path, monkeypatch):
+    from webhook.runner import _shared_signa_snapshot_db_path
+
+    monkeypatch.setenv("LOG_DIR", str(tmp_path))
+    monkeypatch.delenv("OPTIONS_SCANNER_SQLITE_PATH", raising=False)
+    (tmp_path / "options_companion.sqlite").touch()
+    assert _shared_signa_snapshot_db_path() is None
+
+    scanner = tmp_path / "options_scanner.sqlite"
+    scanner.touch()
+    assert _shared_signa_snapshot_db_path() == str(scanner)
+
+    override = tmp_path / "explicit-scanner.sqlite"
+    override.touch()
+    monkeypatch.setenv("OPTIONS_SCANNER_SQLITE_PATH", str(override))
+    assert _shared_signa_snapshot_db_path() == str(override)
+
+    monkeypatch.setenv("OPTIONS_SCANNER_SQLITE_PATH", str(tmp_path / "missing.sqlite"))
+    assert _shared_signa_snapshot_db_path() is None
