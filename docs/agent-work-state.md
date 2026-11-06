@@ -1,6 +1,19 @@
 # Agent Work State
 
-## START HERE — source `3964389` / operator VPS snapshot 2026-10-20; HOLD / NO RUN
+## START HERE — 2026-11-05 source-only trend variant shadow (no deploy)
+
+Paper/shadow forward tracking only. Runtime HOLD below is unchanged. Do not deploy, restart, or enable a schedule.
+
+| Item | State |
+|---|---|
+| **Branch** | `shadow/trend-variants-va-vb` |
+| **Scope** | CONTROL_R3_v2 + V-A + V-B + V-C at two-sided alpha 0.0167. `VARIANTS_START` is unset, so the driver prints `NOT_ACTIVATED` and writes nothing. |
+| **Frozen sources** | Byte-identical under `research/trend_r3_forward/` at commit `f2170a9dd1e674a7a868354f286610c976b1f6bc`. Do not edit those five files. |
+| **Tracker** | `35f21644f7f9dff8ca6739071e8c9473fd9837cc` adds the four arms, tests, and the research-tree import exclusion. |
+| **Authority** | Operator GO AFS-0480 / AFS-0485. QA AFS-0479 and AFS-0484. This file does not change strategy status. |
+| **NEXT** | Grok reviews the PR. Imani merges. Do not merge from an agent. Do not activate the shadow and do not redo this implementation. |
+
+## Archived checkpoint — source `3964389` / operator VPS snapshot 2026-10-20; HOLD / NO RUN
 
 Read this block and `AGENTS.md` before the dated archive. Adapted from the operator-provided `agent-work-state_2026-10-19.md` checkpoint and the 2026-10-20 Cursor read-only findings. **Repository facts were checked in GitHub; VPS observations are attributed to the operator's Cursor report and have NOT been independently verified here.** No private P&L totals are included in this checkpoint.
 
