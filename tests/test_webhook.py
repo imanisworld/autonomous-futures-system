@@ -745,6 +745,42 @@ def test_real_broker_non_open_writes_cancelled_no_confirmed_trade(config, tmp_pa
     assert ds.trade_count == 0
 
 
+def test_real_broker_unknown_is_not_booked_cancelled(config, tmp_path, monkeypatch):
+    from execution.broker_interface import Fill
+    from journal.journal_logger import JournalLogger
+    from webhook import runner
+
+    alerts = []
+    monkeypatch.setattr(
+        "notifications.discord_notifier.send_operational_alert",
+        lambda cfg, msg, *a, **k: alerts.append(msg),
+    )
+    monkeypatch.setenv("BROKER", "tradovate")
+    unknown = Fill(
+        instrument="MES", direction="LONG", contracts=1, entry_price=5898.5,
+        exit_price=None, exit_reason="ENTRY_UNCONFIRMED", result="UNKNOWN",
+        pnl_ticks=None, pnl_dollars=None,
+        execution_audit={
+            "execution_state": "RECONCILE_REQUIRED",
+            "client_order_id": "AFS-unknown",
+            "order_ids": {"entry": 11, "stop": 12, "target": 13},
+            "provenance": "ENTRY_UNCONFIRMED",
+        },
+    )
+    fake = _FakeRealBroker(unknown, {"entry": 11, "stop": 12, "target": 13})
+    monkeypatch.setattr(runner, "_make_broker", lambda **kw: fake)
+    log_dir = str(tmp_path / "logs")
+    result = runner.process_alert(_mes_orb_payload(), config=_mes_real_broker_cfg(config), log_dir=log_dir)
+    assert result["decision"] == "RECONCILE_REQUIRED"
+    assert result["fill"]["status"] == "UNKNOWN"
+    rows = _read_journal_rows(tmp_path)
+    assert [r for r in rows if r.get("type") == "OUTCOME"] == []
+    assert [r for r in rows if r.get("decision") == "TRADE"] == []
+    assert alerts
+    ds = JournalLogger(log_dir=log_dir).get_daily_state(_journal_date(tmp_path))
+    assert ds.has_open_position is False
+
+
 def test_journal_reconstructs_orb_break_flags_from_persisted_context(tmp_path):
     from journal.journal_logger import JournalLogger
 

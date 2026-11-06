@@ -342,6 +342,9 @@ def test_execution_env_reads_are_classified_for_proof_guard():
         # which already-authenticated account an order may reach, never
         # setup eligibility, sizing, entry/fill behavior, or exits.
         "TRADOVATE_EXPECTED_ACCOUNT_ID",
+        # Anonymous Tradovate submits are refused when this is "1". It does
+        # not change setup eligibility, sizing, stops, or routing.
+        "AFS_REQUIRE_CLIENT_ORDER_ID",
     }
     classified = set(PROOF_CRITICAL_RUNTIME_OVERRIDES) | non_proof_runtime_env
 
