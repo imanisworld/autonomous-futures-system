@@ -47,6 +47,16 @@ NEVER_SAFE_FILES = frozenset({
     "ops/release_integrity.py",
     "ops/live_box_guard.py",
     "ops/runner_shadow_evidence.py",  # imported directly by webhook/runner.py
+    # grok-ops is a deploy entry point. It must not approve itself.
+    "ops/grok_ops/actions.py",
+    "ops/grok_ops/dispatcher.py",
+    "ops/grok_ops/tokens.py",
+    "ops/grok_ops/gates.py",
+    "ops/grok_ops/sudoers.py",
+    "ops/grok_ops/keys.py",
+    "ops/grok_ops/paths.py",
+    "scripts/ops/install_grok_ops.sh",
+    "scripts/ops/uninstall_grok_ops.sh",
 })
 
 # Whole directories confirmed (via import-graph check) to have zero path

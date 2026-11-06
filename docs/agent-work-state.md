@@ -1,6 +1,18 @@
 # Agent Work State
 
-## START HERE — 2026-11-06 AFS-0500 submission-evidence follow-up
+## START HERE — 2026-11-06 grok-ops deploy lane (source only)
+
+Code and docs only. Do not install the account, deploy, or restart from this change.
+
+| Item | State |
+|---|---|
+| **Branch** | `cursor/grok-ops-deploy-lane-40d9` (PR #1258). QA AFS-0510 changes required; do not merge or install. |
+| **Scope** | Restricted `grok-ops` forced-command user. Root wrappers ignore `AFS_OPS_*`. Baseline-reset argv matches PR #1257. Install doc: `docs/grok-ops-deploy-lane.md`. |
+| **Dependency** | `baseline-reset` calls `scripts/ops/baseline_reset.sh`. That script is not on `main` at `f8b044be`. It belongs to the in-flight baseline-reset procedure, agent `bc-57c374c1`. Missing script exits 78 and does not consume a token. |
+| **Runtime** | Not installed. The October HOLD still governs the box. |
+| **NEXT** | Independent review of the lane. Operator installs only after that review and a separate GO. Do not merge from this note. |
+
+## Previous — 2026-11-06 AFS-0500 submission-evidence follow-up
 
 Paper/demo source only. Do not deploy, restart, or merge from an agent. Do not push `fix/order-state-durability`.
 
