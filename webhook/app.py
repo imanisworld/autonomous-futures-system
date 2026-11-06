@@ -69,7 +69,7 @@ from webhook.dedupe import DedupeCache
 from webhook.event_id import ensure_event_id
 from webhook.maintenance import maintenance_active
 from webhook.payload import AlertPayload
-from webhook.reconciler import run_reconciler_loop
+from webhook.reconciler import reconcile_submissions_before_entries, run_reconciler_loop
 from notifications.heartbeat import run_heartbeat_loop
 from webhook.runner import process_alert, normalize_timeframe_minutes
 from webhook.observation_transport import observe_collection_only_alert
@@ -428,6 +428,12 @@ async def _lifespan(app: FastAPI):
             "(allowed=%s). Live alerts for these will be rejected as 'not in allowed universe'.",
             missing, allowed,
         )
+    # Classify durable UNKNOWN/AMBIGUOUS submissions before the server accepts
+    # entries. Paper mode does not construct a Tradovate client. There is no
+    # initial sleep; the background loop repeats the same pass on its timer.
+    await asyncio.to_thread(
+        reconcile_submissions_before_entries, _config, _config.log_dir
+    )
     # Background safety tasks run independently of the TradingView bar feed.
     background_tasks = [
         asyncio.create_task(run_tradovate_supervisor()),

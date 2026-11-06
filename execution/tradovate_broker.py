@@ -2048,48 +2048,280 @@ class TradovateBroker(BrokerInterface):
         except Exception as exc:
             logger.warning("naked-position Discord alert failed: %s", exc)
 
+    @staticmethod
+    def _submission_qty(value) -> Optional[int]:
+        if value is None or value == "":
+            return None
+        try:
+            return int(float(value))
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _order_identity_match(row: dict, client_id: str) -> bool:
+        """True when the row carries this submission's clOrdId or custom tag."""
+        if not client_id or not isinstance(row, dict):
+            return False
+        for key in ("clOrdId", "customTag", "customTag50"):
+            if str(row.get(key) or "") == client_id:
+                return True
+        return False
+
+    def _read_broker_list(self, path: str) -> tuple[Optional[list], Optional[str]]:
+        try:
+            payload = self._get(path)
+        except Exception as exc:
+            return None, str(exc)
+        if not isinstance(payload, list):
+            return None, f"{path} malformed"
+        return payload, None
+
     def submission_evidence(self, record: dict) -> dict:
-        """Read-only identity check for one durable submission. Never sends."""
+        """Read-only identity check for one durable submission. Never sends.
+
+        An empty ``/order/list`` is not proof that nothing was sent. Clearing
+        requires a clOrdId/custom-tag order lookup plus fill history, execution
+        history, and a confirmed position read. A filled order is adopted only
+        when the position and its protective children are actually present.
+        """
         client_id = str(record.get("client_order_id") or "")
         parent = record.get("parent_id")
-        try:
-            orders = self._get("/order/list")
-        except Exception as exc:
-            return {"error": str(exc), "identity_linked": False}
-        if not isinstance(orders, list):
-            return {"error": "order_list_malformed", "identity_linked": False}
+        known_stop = record.get("stop_id")
+        known_target = record.get("target_id")
+        orders, order_error = self._read_broker_list("/order/list")
+        if order_error:
+            return {"error": order_error, "identity_linked": False}
         owned = [
             row for row in orders
-            if str(row.get("clOrdId") or "") == client_id
+            if self._order_identity_match(row, client_id)
             or (parent is not None and str(row.get("id")) == str(parent))
         ]
-        if parent is not None and not any(str(row.get("id")) == str(parent) for row in orders):
-            return {"error": "known_parent_not_listed", "identity_linked": False}
-        if not owned:
+        if parent is not None and not any(str(row.get("id")) == str(parent) for row in owned):
+            try:
+                item = self._get(f"/order/item?id={parent}")
+            except Exception as exc:
+                item = exc
+            if isinstance(item, dict) and item.get("id") is not None:
+                owned.append(item)
+            elif not any(self._order_identity_match(row, client_id) for row in owned):
+                # The known parent was not readable. Do not treat that as absence.
+                return {"error": "known_parent_not_listed", "identity_linked": False}
+
+        account = self._account_id
+        fills, fill_error = self._read_broker_list(f"/fill/list?accountId={account}")
+        if fill_error:
+            return {"error": fill_error, "identity_linked": False, "order_identity_checked": True}
+        executions, execution_error = self._read_broker_list(
+            f"/execution/list?accountId={account}"
+        )
+        if execution_error:
+            return {
+                "error": execution_error,
+                "identity_linked": False,
+                "order_identity_checked": True,
+                "fills_checked": True,
+            }
+        confirmed, position = self.get_position_snapshot()
+        if not confirmed:
+            return {
+                "error": "position_unconfirmed",
+                "identity_linked": False,
+                "order_identity_checked": True,
+                "fills_checked": True,
+                "executions_checked": True,
+            }
+
+        def linked(rows: list, order_ids: set[str]) -> list:
+            found = []
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                if self._order_identity_match(row, client_id):
+                    found.append(row)
+                    continue
+                if order_ids and str(row.get("orderId") or "") in order_ids:
+                    found.append(row)
+            return found
+
+        parent_row = None
+        for row in owned:
+            if parent is not None and str(row.get("id")) == str(parent):
+                parent_row = row
+                break
+        if parent_row is None:
+            for row in owned:
+                if not row.get("parentId"):
+                    parent_row = row
+                    break
+        if parent_row is None and owned:
+            parent_row = owned[0]
+
+        parent_id = None if parent_row is None else parent_row.get("id")
+        order_ids = {str(parent_id)} if parent_id is not None else set()
+        if parent is not None:
+            order_ids.add(str(parent))
+        children = []
+        for row in orders:
+            if not isinstance(row, dict) or parent_id is None:
+                continue
+            if str(row.get("id")) == str(parent_id):
+                continue
+            known_child = str(row.get("id")) in {str(known_stop), str(known_target)}
+            if str(row.get("parentId") or "") == str(parent_id) or known_child:
+                children.append(row)
+                order_ids.add(str(row.get("id")))
+        for child_id in (known_stop, known_target):
+            if child_id is None or str(child_id) in order_ids:
+                continue
+            try:
+                item = self._get(f"/order/item?id={child_id}")
+            except Exception as exc:
+                return {"error": f"child_unreadable:{exc}", "identity_linked": False}
+            if isinstance(item, dict) and item.get("id") is not None:
+                children.append(item)
+                order_ids.add(str(item.get("id")))
+
+        linked_fills = linked(fills, order_ids if parent_row is not None or parent is not None else set())
+        linked_executions = linked(
+            executions, order_ids if parent_row is not None or parent is not None else set()
+        )
+        # Before a parent id exists, only tag-bearing rows are identity evidence.
+        if parent_row is None and parent is None:
+            linked_fills = [row for row in fills if self._order_identity_match(row, client_id)]
+            linked_executions = [
+                row for row in executions if self._order_identity_match(row, client_id)
+            ]
+
+        position_open = position is not None and bool(getattr(position, "open", False))
+        same_root = False
+        if position_open:
+            same_root = contract_root(getattr(position, "instrument", None)) == contract_root(
+                record.get("instrument")
+            ) and contract_root(record.get("instrument")) is not None
+
+        if parent_row is None and not linked_fills and not linked_executions:
+            if same_root:
+                return {
+                    "error": "position_without_order_identity",
+                    "identity_linked": False,
+                    "order_identity_checked": True,
+                    "fills_checked": True,
+                    "executions_checked": True,
+                    "position_checked": True,
+                }
             return {
                 "identity_linked": True,
+                "absence_proven": True,
+                "order_identity_checked": True,
+                "order_found": False,
                 "no_order": True,
                 "filled_qty": 0,
+                "requested_qty": record.get("quantity"),
                 "position_linked": False,
+                "position_checked": True,
+                "fills_checked": True,
+                "executions_checked": True,
                 "children_resolved": True,
+                "protection_verified": False,
                 "status": "expired",
             }
-        parent_row = owned[0]
+
+        if parent_row is None:
+            return {
+                "error": "fills_without_order_row",
+                "identity_linked": False,
+                "order_identity_checked": True,
+                "fills_checked": True,
+                "executions_checked": True,
+                "position_checked": True,
+            }
+
         status = str(parent_row.get("ordStatus") or "")
-        filled = parent_row.get("filledQty", parent_row.get("cumQty"))
-        try:
-            filled_qty = int(filled) if filled is not None else None
-        except (TypeError, ValueError):
-            filled_qty = None
+        filled_qty = self._submission_qty(
+            parent_row.get("filledQty", parent_row.get("cumQty"))
+        )
+        fill_qty = sum(self._submission_qty(row.get("qty")) or 0 for row in linked_fills if str(row.get("orderId")) == str(parent_id))
+        if filled_qty is None:
+            filled_qty = fill_qty
+        elif fill_qty and fill_qty != filled_qty:
+            return {"error": "fill_qty_disagrees", "identity_linked": False}
+        exec_qty = sum(
+            self._submission_qty(row.get("qty")) or 0
+            for row in linked_executions
+            if str(row.get("orderId")) == str(parent_id)
+        )
+        if exec_qty and filled_qty is not None and exec_qty != filled_qty:
+            return {"error": "execution_qty_disagrees", "identity_linked": False}
+
+        requested = self._submission_qty(record.get("quantity"))
+        direction = str(record.get("direction") or "").upper()
+        position_linked = False
+        if position_open and same_root and str(getattr(position, "direction", "")).upper() == direction:
+            if filled_qty is None or int(position.quantity) == int(filled_qty):
+                position_linked = True
+
+        def _child_status(row: dict) -> str:
+            return str(row.get("ordStatus") or "").lower()
+
+        def _is_stop(row: dict) -> bool:
+            kind = str(row.get("orderType") or "").lower()
+            return "stop" in kind or str(row.get("id")) == str(known_stop)
+
+        def _is_target(row: dict) -> bool:
+            kind = str(row.get("orderType") or "").lower()
+            return kind == "limit" or str(row.get("id")) == str(known_target)
+
+        stop_row = next((row for row in children if _is_stop(row)), None)
+        target_row = next((row for row in children if _is_target(row) and row is not stop_row), None)
+        dead = set(self._DEAD_ORDER_STATUSES)
+        working = [
+            row for row in children
+            if _child_status(row) and _child_status(row) not in dead
+            and _child_status(row) not in {"filled", "completed"}
+        ]
+        children_resolved = all(_child_status(row) for row in children)
+        if status.lower() in dead | {"filled", "completed"} and not children:
+            children_resolved = True
+        protection_verified = bool(
+            stop_row and _child_status(stop_row) and _child_status(stop_row) not in dead
+            and (
+                _child_status(stop_row) not in {"filled", "completed"}
+                or not position_open
+            )
+        )
+        exit_qty = 0
+        child_ids = {str(row.get("id")) for row in children}
+        for row in linked_fills:
+            if str(row.get("orderId")) in child_ids:
+                exit_qty += self._submission_qty(row.get("qty")) or 0
+        closed_round_trip = bool(
+            not position_open
+            and filled_qty not in (None, 0)
+            and requested not in (None, 0)
+            and filled_qty == requested
+            and children_resolved
+            and exit_qty >= filled_qty
+            and any(_child_status(row) in {"filled", "completed"} for row in children)
+        )
         return {
             "identity_linked": True,
+            "absence_proven": False,
+            "order_identity_checked": True,
+            "order_found": True,
+            "no_order": False,
             "status": status,
-            "parent_id": parent_row.get("id"),
+            "parent_id": parent_id,
+            "stop_id": None if stop_row is None else stop_row.get("id"),
+            "target_id": None if target_row is None else target_row.get("id"),
             "filled_qty": filled_qty,
             "requested_qty": record.get("quantity"),
-            "position_linked": False,
-            "children_resolved": status.lower() in {"canceled", "cancelled", "rejected", "expired", "filled"},
-            "no_order": False,
+            "position_linked": position_linked,
+            "position_checked": True,
+            "fills_checked": True,
+            "executions_checked": True,
+            "children_resolved": children_resolved and (not working or protection_verified or closed_round_trip),
+            "protection_verified": protection_verified or closed_round_trip,
+            "closed_round_trip": closed_round_trip,
         }
 
     def get_position_snapshot(self) -> tuple[bool, Optional[Position]]:

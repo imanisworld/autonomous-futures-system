@@ -273,8 +273,15 @@ class OrderSubmissionStore:
         """Apply one identity-scoped read. Inconclusive evidence never clears.
 
         ``evidence`` keys: error, status, parent_id, stop_id, target_id,
-        filled_qty, requested_qty, position_linked, children_resolved,
-        identity_linked, closed_round_trip, rejection_linked.
+        filled_qty, requested_qty, position_linked, position_checked,
+        children_resolved, protection_verified, identity_linked,
+        order_found, order_identity_checked, fills_checked,
+        executions_checked, absence_proven, no_order, closed_round_trip,
+        rejection_linked.
+
+        ``no_order`` clears only when absence was proven from the order
+        identity lookup, fill history, execution history, and position read.
+        An empty order list by itself stays unresolved.
         """
         current = self.get(client_order_id)
         if current is None:
@@ -309,7 +316,13 @@ class OrderSubmissionStore:
             if target not in _TRANSITIONS.get(current.get("state"), set()):
                 target = RECONCILE_REQUIRED
             return self.transition(client_order_id, target, resolution="identity_linked_rejection", **ids)
-        if evidence.get("closed_round_trip") and filled not in (None, 0):
+        if (
+            evidence.get("closed_round_trip")
+            and evidence.get("order_found") is True
+            and evidence.get("children_resolved")
+            and evidence.get("position_checked") is True
+            and filled not in (None, 0)
+        ):
             state = current.get("state")
             if state == AMBIGUOUS:
                 self.transition(client_order_id, SUBMITTED, **ids)
@@ -318,7 +331,13 @@ class OrderSubmissionStore:
                 if state != OPEN:
                     self.transition(client_order_id, OPEN, **ids)
             return self.transition(client_order_id, CLOSED, resolution="filled_and_closed", **ids)
-        if status == "filled" and filled == requested and evidence.get("position_linked"):
+        if (
+            status == "filled"
+            and filled == requested
+            and evidence.get("position_linked")
+            and evidence.get("protection_verified")
+            and evidence.get("position_checked")
+        ):
             state = current.get("state")
             if state == AMBIGUOUS:
                 self.transition(client_order_id, SUBMITTED, **ids)
@@ -327,18 +346,41 @@ class OrderSubmissionStore:
             state = current.get("state")
             if state == AMBIGUOUS:
                 self.transition(client_order_id, SUBMITTED, **ids)
-            if evidence.get("children_resolved") and evidence.get("position_linked"):
+            if (
+                evidence.get("children_resolved")
+                and evidence.get("position_linked")
+                and evidence.get("protection_verified")
+            ):
                 self.transition(client_order_id, PARTIALLY_FILLED, **ids)
                 return self.transition(client_order_id, OPEN, resolution="partial_adopted", **ids)
             if state != PARTIALLY_FILLED:
                 return self.transition(client_order_id, PARTIALLY_FILLED, **ids)
             return self.transition(client_order_id, RECONCILE_REQUIRED, last_error="partial_protection_unknown", **ids)
-        no_order = evidence.get("no_order") and filled in (0, None) and evidence.get("position_linked") is False
-        if no_order and evidence.get("children_resolved", True):
+        absence_proven = (
+            evidence.get("absence_proven") is True
+            and evidence.get("no_order") is True
+            and evidence.get("order_found") is False
+            and evidence.get("order_identity_checked") is True
+            and evidence.get("fills_checked") is True
+            and evidence.get("executions_checked") is True
+            and evidence.get("position_checked") is True
+            and filled in (0, None)
+            and evidence.get("position_linked") is False
+        )
+        if absence_proven and evidence.get("children_resolved", True):
             state = current.get("state")
             target = NO_FILL if NO_FILL in _TRANSITIONS.get(state, set()) else RECONCILE_REQUIRED
             return self.transition(client_order_id, target, resolution="no_order_created", **ids)
-        if dead and filled == 0 and evidence.get("position_linked") is False and evidence.get("children_resolved"):
+        if (
+            dead
+            and evidence.get("order_found") is True
+            and filled == 0
+            and evidence.get("position_linked") is False
+            and evidence.get("position_checked") is True
+            and evidence.get("fills_checked") is True
+            and evidence.get("executions_checked") is True
+            and evidence.get("children_resolved")
+        ):
             state = current.get("state")
             target = CANCELLED if status in {"canceled", "cancelled"} else NO_FILL
             if target not in _TRANSITIONS.get(state, set()):

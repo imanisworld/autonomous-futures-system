@@ -1,26 +1,37 @@
 # Agent Work State
 
-## START HERE — 2026-11-06 options scanner SQLite lock fix
+## START HERE — 2026-11-06 AFS-0500 submission-evidence follow-up
 
-Observer-only source PR. Do not deploy, restart, or merge from an agent.
+Paper/demo source only. Do not deploy, restart, or merge from an agent. Do not push `fix/order-state-durability`.
+
+| Item | State |
+|---|---|
+| **Branch** | `fix/order-state-durability-followup` (PR #1256) |
+| **Scope** | Empty `/order/list` must not clear AMBIGUOUS. A filled order is adopted only with a matching position and a working protective stop. Startup reconciliation runs with a broker before entries are accepted. |
+| **Runtime** | Not exercised. The October HOLD below still governs the box. |
+| **NEXT** | Grok reviews again after CI. Imani decides whether to merge. Do not set live trading and do not retry an unresolved client id. |
+
+## Merged — 2026-11-06 options scanner SQLite lock fix
+
+Source merged in #1255. Observer only. Do not deploy or restart from that merge.
 
 | Item | State |
 |---|---|
 | **Branch** | `fix/options-db-lock-2026-11-06` |
 | **Scope** | `ScanStorage` uses a 30s connect timeout, `busy_timeout=30000`, and WAL. Writes retry lock/busy errors. `resolve_open_candidates` isolates one candidate failure. |
 | **Ops note** | WAL adds `-wal` and `-shm` beside `options_scanner.sqlite`. Those files stay with the data file, outside the release tree and integrity manifest. |
-| **NEXT** | Grok reviews the frozen head. Imani decides whether to merge. A later Ops GO is required before the running scanner uses this. |
+| **NEXT** | A later Ops GO is required before the running scanner uses this. |
 
-## START HERE — 2026-11-06 source-only Tradovate submission durability
+## Merged — 2026-11-06 source-only Tradovate submission durability
 
-Paper/demo source only. Do not deploy, restart, or merge from an agent.
+Paper/demo source only. PR #1254 is merged at `0341f8be`. Do not deploy, restart, or redo that branch.
 
 | Item | State |
 |---|---|
 | **Branch** | `fix/order-state-durability` |
 | **Scope** | Durable pre-send AMBIGUOUS submissions and UNKNOWN / RECONCILE_REQUIRED instead of a local cancel when an entry or cancel cannot be read. `AFS_ORDER_SUBMISSION_DIR` or `LOG_DIR/order_submissions`. |
 | **Runtime** | Not exercised. The October HOLD below still governs the box. |
-| **NEXT** | Grok reviews the PR. Imani decides whether to merge. Do not set live trading and do not retry an unresolved client id. |
+| **NEXT** | Follow-up review is AFS-0500 on PR #1256. Do not set live trading and do not retry an unresolved client id. |
 
 ## Merged — 2026-11-05 source-only trend variant shadow (no deploy)
 
