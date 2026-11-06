@@ -207,7 +207,7 @@ init_nonce_store(Path("/root/afs-shared/baseline_approval_nonces"))
 PY
 ```
 
-Run that Python from the release tree so `ops.release_approval` imports. Init writes an `INITIALIZED` marker and an empty `ledger`. A reset appends `CLAIMED`, then `RESET_COMMITTED` or `RESET_FAILED`, with an fsync of the ledger and the directory. If the process stops after `CLAIMED` and before an outcome, that nonce stays burned. Sign a new approval with a new nonce. Do not delete the ledger to clear it. A missing ledger or a store that is mode `0777` or not root-owned is refused, and the command does not create a fresh empty ledger.
+Run that Python from the release tree so `ops.release_approval` imports. Init writes an `INITIALIZED` marker and an empty `ledger`. A reset appends `CLAIMED`, then `RESET_COMMITTED` or `RESET_FAILED`. Each append takes an exclusive `flock` on `ledger.lock` in that directory, opened from the store directory fd, and holds it across the ledger read, the check, the append, and the fsync of the file and the directory. If the process stops after `CLAIMED` and before an outcome, that nonce stays burned. Sign a new approval with a new nonce. Do not delete the ledger to clear it. A missing ledger or a store that is mode `0777` or not root-owned is refused, and the command does not create a fresh empty ledger.
 
 ```bash
 ssh hetzner "python3 -c 'import hashlib,pathlib; print(hashlib.sha256(pathlib.Path(\"/etc/machine-id\").read_text().strip().encode()).hexdigest())'"

@@ -12,6 +12,7 @@ machine and installs only the public key.
 from __future__ import annotations
 
 import errno
+import fcntl
 import hashlib
 import json
 import os
@@ -28,6 +29,7 @@ NONCE_LEDGER_PATH = Path("/root/afs-shared/baseline_approval_nonces")
 PRIVATE_DIR = Path("/root/afs-shared/approval-private")
 INIT_MARKER = "INITIALIZED"
 LEDGER_NAME = "ledger"
+LOCK_NAME = "ledger.lock"
 CLAIMED = "CLAIMED"
 RESET_COMMITTED = "RESET_COMMITTED"
 RESET_FAILED = "RESET_FAILED"
@@ -431,6 +433,7 @@ def init_nonce_store(path: Path, *, trust: bool = True, fstat=os.fstat) -> None:
             raise ApprovalError("nonce ledger missing")
         _create_file(store, INIT_MARKER, b"initialized\n")
         _create_file(store, LEDGER_NAME, b"")
+        _create_file(store, LOCK_NAME, b"")
         os.fsync(store)
     finally:
         os.close(store)
@@ -501,6 +504,27 @@ def _check_nonce(nonce: str) -> None:
         raise ApprovalError("approval nonce refused")
 
 
+def _acquire_store_lock(dirfd: int) -> int:
+    """Exclusive lock on the store lock file, opened from the verified dirfd."""
+    try:
+        lockfd = os.open(LOCK_NAME, os.O_RDWR | os.O_NOFOLLOW, dir_fd=dirfd)
+    except OSError as exc:
+        raise ApprovalError("nonce lock missing") from exc
+    try:
+        fcntl.flock(lockfd, fcntl.LOCK_EX)
+    except OSError:
+        os.close(lockfd)
+        raise
+    return lockfd
+
+
+def _release_store_lock(lockfd: int) -> None:
+    try:
+        fcntl.flock(lockfd, fcntl.LOCK_UN)
+    finally:
+        os.close(lockfd)
+
+
 def claim_nonce(
     ledger: Path,
     nonce: str,
@@ -518,12 +542,16 @@ def claim_nonce(
     _check_nonce(nonce)
     dirfd = _open_store(ledger, trust=trust, fstat=fstat)
     try:
-        state = _nonce_state(_read_ledger(dirfd), nonce)
-        if state is not None:
-            raise ApprovalError("approval nonce burned")
-        if dry_run:
-            return
-        _append_state(dirfd, nonce, CLAIMED, ticket)
+        lockfd = _acquire_store_lock(dirfd)
+        try:
+            state = _nonce_state(_read_ledger(dirfd), nonce)
+            if state is not None:
+                raise ApprovalError("approval nonce burned")
+            if dry_run:
+                return
+            _append_state(dirfd, nonce, CLAIMED, ticket)
+        finally:
+            _release_store_lock(lockfd)
     finally:
         os.close(dirfd)
 
@@ -541,9 +569,13 @@ def finish_nonce(
         raise ApprovalError("approval nonce refused")
     dirfd = _open_store(ledger, trust=trust)
     try:
-        if _nonce_state(_read_ledger(dirfd), nonce) != CLAIMED:
-            raise ApprovalError("approval nonce burned")
-        _append_state(dirfd, nonce, outcome, ticket)
+        lockfd = _acquire_store_lock(dirfd)
+        try:
+            if _nonce_state(_read_ledger(dirfd), nonce) != CLAIMED:
+                raise ApprovalError("approval nonce burned")
+            _append_state(dirfd, nonce, outcome, ticket)
+        finally:
+            _release_store_lock(lockfd)
     finally:
         os.close(dirfd)
 

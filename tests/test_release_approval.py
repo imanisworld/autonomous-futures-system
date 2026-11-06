@@ -1,6 +1,8 @@
 """Operator signature checks. Keys exist only in the test temporary directory."""
 from __future__ import annotations
 
+import json
+import multiprocessing
 import os
 import stat
 import subprocess
@@ -15,6 +17,7 @@ from ops.release_approval import (
     ApprovalError,
     canonical_approval,
     claim_nonce,
+    finish_nonce,
     init_nonce_store,
     read_signers_walk,
     require_allowed_signers,
@@ -300,6 +303,64 @@ def test_claimed_nonce_without_outcome_stays_burned(tmp_path):
     assert "RESET_COMMITTED" not in text
     with pytest.raises(ApprovalError, match="approval nonce burned"):
         claim_nonce(store, "cd" * 16, ticket=TICKET, dry_run=True, trust=False)
+
+
+def _claim_worker(store: str, nonce: str, ticket: str, queue) -> None:
+    try:
+        claim_nonce(Path(store), nonce, ticket=ticket, dry_run=False, trust=False)
+    except ApprovalError as exc:
+        queue.put(str(exc))
+    else:
+        queue.put("ok")
+
+
+def _finish_worker(store: str, nonce: str, ticket: str, queue) -> None:
+    try:
+        finish_nonce(Path(store), nonce, "RESET_COMMITTED", ticket, trust=False)
+    except ApprovalError as exc:
+        queue.put(str(exc))
+    else:
+        queue.put("ok")
+
+
+def _run_workers(target, store: Path, nonce: str, ticket: str, count: int) -> list[str]:
+    ctx = multiprocessing.get_context("spawn")
+    queue = ctx.Queue()
+    procs = [
+        ctx.Process(target=target, args=(str(store), nonce, ticket, queue))
+        for _ in range(count)
+    ]
+    for proc in procs:
+        proc.start()
+    for proc in procs:
+        proc.join(30)
+        assert proc.exitcode == 0
+    return [queue.get(timeout=5) for _ in range(count)]
+
+
+def test_concurrent_claims_have_one_winner(tmp_path):
+    """Eight processes, 32 trials: one CLAIMED and one terminal record."""
+    store = tmp_path / "nonces"
+    init_nonce_store(store, trust=False)
+    workers = 8
+    for trial in range(32):
+        nonce = f"{trial:032x}"
+        claimed = _run_workers(_claim_worker, store, nonce, TICKET, workers)
+        assert claimed.count("ok") == 1
+        assert claimed.count("approval nonce burned") == workers - 1
+        finished = _run_workers(_finish_worker, store, nonce, TICKET, workers)
+        assert finished.count("ok") == 1
+        assert finished.count("approval nonce burned") == workers - 1
+        rows = [
+            json.loads(line)
+            for line in (store / "ledger").read_text().splitlines()
+            if line
+        ]
+        mine = [row for row in rows if row["nonce"] == nonce]
+        assert mine == [
+            {"nonce": nonce, "state": "CLAIMED", "ticket": TICKET},
+            {"nonce": nonce, "state": "RESET_COMMITTED", "ticket": TICKET},
+        ]
 
 
 def test_cross_host_approval_is_refused():

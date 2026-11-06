@@ -7,10 +7,10 @@ Source only. Do not deploy, restart, reset a box, or place a demo order from thi
 | Item | State |
 |---|---|
 | **Branch** | `cursor/baseline-reset-procedure-6c72` |
-| **Scope** | Signers and nonce directories are opened with openat from /. Ancestors must be root-owned and not group-writable. A claimed nonce stays burned until a new signed approval. |
+| **Scope** | Nonce claim and outcome appends hold an exclusive flock on the store lock file across the ledger read, the check, the append, and the fsync. |
 | **Runbook** | `docs/ops/baseline_reset_runbook.md` |
 | **Runtime** | Not exercised. No server was contacted. |
-| **Tests** | `python -B -m pytest -q` after AFS-0514: 9017 passed, 8 skipped, exit 0. |
+| **Tests** | `python -B -m pytest -q` after the nonce lock: 9018 passed, 8 skipped, exit 0. The 8-process spawn test then passed on its own in 27.61s. |
 | **NEXT** | Independent review. Operator GO is still required before any host command in the runbook. Do not merge from this checkpoint. |
 
 ## Previous — 2026-11-06 AFS-0500 submission-evidence follow-up
