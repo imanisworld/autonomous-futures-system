@@ -179,7 +179,7 @@ If the command prints `baseline_reset failed: rolled back`, the `predeploy-*` di
 reset --target-sha --release-fingerprint --ticket --approval --signature --status-file [--shared-dir]
 ```
 
-`--shared-dir` is optional. When it is omitted, the command uses `AFS_SHARED_DIR` if that environment variable is set, otherwise `/root/afs-shared`. The path must be absolute, must not contain `..`, and must not be a symlink or have a symlink in any parent directory. A symlink is refused so the directory cannot be redirected onto another tree. The command does not load trust material from this directory.
+`--shared-dir` is optional. When it is omitted, the command uses `AFS_SHARED_DIR` if that environment variable is set, otherwise `/root/afs-shared`. The path must be absolute, must not contain `..`, and must not be a symlink or have a symlink in any parent directory. Every existing directory on that path, including a parent, must not be writable by group or other. A mode `0777` parent is refused. A symlink is refused so the directory cannot be redirected onto another tree. The command does not load trust material from this directory.
 
 `--release-fingerprint` is the operator's approved digest. It is recorded in `/root/afs-shared/baseline_authorization.json`, outside `/root/afs-releases/<sha>`. Do not fill it by reading `fingerprint_sha256` from the staged `release_manifest.json`. That field is inside the tree being checked. The digest comes from the separate manifest review.
 
@@ -193,7 +193,12 @@ Imani creates the key on the Mac. The private key stays there. Do not copy it to
 ssh-keygen -t ed25519 -f ~/.ssh/afs-release-approval -C "imani afs-release-approval"
 ```
 
-Build the approval file with these exact lines and a trailing newline. `expires` is UTC and must still be in the future when the reset runs.
+Build the approval file on the Mac with these exact lines and a trailing newline. `issued_at` and `expires` are UTC. `expires` must be after `issued_at` and no more than 24 hours later. `issued_at` must not be more than five minutes in the future. `nonce` is 32 hex characters from `openssl rand -hex 16` and must be new for every approval. `host_id` is the sha256 of the target server's `/etc/machine-id` (run that hash on the server; do not copy the file). An approval signed for another host is refused. A second use of the same nonce is refused. `--dry-run` checks the nonce and does not record it.
+
+```bash
+ssh hetzner "python3 -c 'import hashlib,pathlib; print(hashlib.sha256(pathlib.Path(\"/etc/machine-id\").read_text().strip().encode()).hexdigest())'"
+openssl rand -hex 16
+```
 
 ```text
 afs-release-approval
@@ -201,7 +206,10 @@ version=1
 target_sha=<40-hex SHA>
 manifest_digest=<64-hex digest>
 ticket=AFS-0508
-expires=2026-11-07T00:00:00Z
+nonce=<32 hex>
+host_id=<64-hex sha256 of the server /etc/machine-id>
+issued_at=2026-11-06T18:00:00Z
+expires=2026-11-07T12:00:00Z
 ```
 
 Sign it. The namespace must be `afs-release-approval`.

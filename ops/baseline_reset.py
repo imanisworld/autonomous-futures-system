@@ -165,11 +165,17 @@ def require_trusted_shared_dir(path: Path) -> Path:
         raise Refusal("shared-dir must be absolute")
     if any(part == ".." for part in path.parts):
         raise Refusal("shared-dir must not contain ..")
+    if path.is_symlink():
+        raise Refusal("shared-dir must not be a symlink")
     cursor = Path(path.anchor)
     for part in path.parts[1:]:
         cursor = cursor / part
+        if not cursor.exists() and cursor != path:
+            continue
         if cursor.is_symlink():
             raise Refusal("shared-dir must not be a symlink")
+        if cursor.is_dir() and cursor.stat().st_mode & 0o022:
+            raise Refusal("shared-dir ancestor writable by group or other")
     if not path.is_dir():
         raise Refusal("shared-dir unreadable")
     return path
@@ -337,13 +343,18 @@ def reset(
     signature_path: Path,
     allowed_signers: Path = ALLOWED_SIGNERS_PATH,
     signer_stat: object | None = None,
+    nonce_ledger: Path | None = None,
+    expected_host_id: str | None = None,
+    private_dir: Path | None = None,
+    enforce_shared_trust: bool = True,
     dry_run: bool = False,
     environ: Mapping[str, str] | None = None,
     operator_user: str | None = None,
     clock: Callable[[], datetime] | None = None,
     on_step: Callable[[str], None] | None = None,
 ) -> dict:
-    require_trusted_shared_dir(shared)
+    if enforce_shared_trust:
+        require_trusted_shared_dir(shared)
     sha = require_sha(target_sha)
     fingerprint = require_fingerprint(release_fingerprint)
     ticket_id = require_ticket(ticket)
@@ -357,6 +368,11 @@ def reset(
             ticket=ticket_id,
             now=_approval_now(clock),
             signer_stat=signer_stat,
+            nonce_ledger=nonce_ledger,
+            expected_host_id=expected_host_id,
+            private_dir=private_dir,
+            dry_run=dry_run,
+            trust_ancestors=enforce_shared_trust,
         )
     except ApprovalError as exc:
         raise Refusal(str(exc)) from exc

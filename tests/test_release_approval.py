@@ -1,9 +1,11 @@
 """Operator signature checks. Keys exist only in the test temporary directory."""
 from __future__ import annotations
 
+import os
 import stat
 import subprocess
-from datetime import datetime, timezone
+import tempfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -15,7 +17,9 @@ from ops.release_approval import (
     signer_stat_problem,
     verify_reset_approval,
 )
-from tests.test_baseline_reset import FP, SHA, TICKET, WHEN, _layout, _reset, _sign
+from tests.test_baseline_reset import (
+    FP, HOST, SHA, TICKET, WHEN, _layout, _reset, _sign,
+)
 
 NAMESPACE = "afs-release-approval"
 
@@ -36,6 +40,10 @@ def _verify(approval, signature, allowed, **overrides):
         ticket=TICKET,
         now=WHEN,
         signer_stat=_Stat(stat.S_IFREG | 0o444, 0),
+        nonce_ledger=Path(tempfile.mkdtemp(prefix="afs-nonces-")),
+        expected_host_id=HOST,
+        private_dir=Path(tempfile.mkdtemp(prefix="afs-private-")),
+        trust_ancestors=False,
     )
     args.update(overrides)
     return verify_reset_approval(**args)
@@ -83,7 +91,9 @@ def test_tampered_binding_is_refused(field):
 
 
 def test_expired_approval_is_refused_even_when_the_signature_is_valid():
-    approval, signature, allowed = _sign(expires="2000-01-01T00:00:00Z")
+    approval, signature, allowed = _sign(
+        issued_at="2000-01-01T00:00:00Z", expires="2000-01-01T12:00:00Z",
+    )
     with pytest.raises(Exception, match="approval expired"):
         _verify(approval, signature, allowed)
 
@@ -162,9 +172,79 @@ def test_shared_dir_rejects_symlink_and_relative_paths(tmp_path):
         require_trusted_shared_dir(tmp_path / ".." / tmp_path.name)
 
 
+def test_signers_read_uses_the_opened_inode_after_path_swap(tmp_path, monkeypatch):
+    """Replacing the path after open must not change the bytes ssh-keygen sees.
+
+    A second open of the path would observe the swapped file. Deleting the
+    single-fd read does that, and this assertion fails.
+    """
+    from ops.release_approval import read_signers_fd
+
+    path = tmp_path / "signers"
+    path.write_text("GOOD\n")
+    evil = tmp_path / "evil"
+    evil.write_text("EVIL\n")
+    real_open = os.open
+
+    def wrapped(opened, flags, *args, **kwargs):
+        fd = real_open(opened, flags, *args, **kwargs)
+        if Path(opened) == path and path.exists():
+            path.unlink()
+            evil.rename(path)
+        return fd
+
+    monkeypatch.setattr(os, "open", wrapped)
+    data = read_signers_fd(path, fstat=lambda _fd: _Stat(stat.S_IFREG | 0o444, 0))
+    assert data == b"GOOD\n"
+    assert path.read_text() == "EVIL\n"
+
+
+def test_shared_dir_rejects_a_world_writable_parent(tmp_path):
+    from ops.baseline_reset import Refusal, require_trusted_shared_dir
+
+    parent = tmp_path / "open"
+    parent.mkdir()
+    parent.chmod(0o777)
+    child = parent / "shared"
+    child.mkdir()
+    with pytest.raises(Refusal, match="writable"):
+        require_trusted_shared_dir(child)
+
+
+def test_replay_is_refused_and_dry_run_does_not_consume(tmp_path):
+    approval, signature, allowed = _sign()
+    ledger = tmp_path / "ledger"
+    ledger.mkdir()
+    common = dict(nonce_ledger=ledger, trust_ancestors=False)
+    assert _verify(approval, signature, allowed, dry_run=True, **common)
+    assert list(ledger.iterdir()) == []
+    assert _verify(approval, signature, allowed, dry_run=False, **common)
+    assert list(ledger.iterdir())
+    with pytest.raises(Exception, match="approval nonce reused"):
+        _verify(approval, signature, allowed, dry_run=True, **common)
+
+
+def test_cross_host_approval_is_refused():
+    approval, signature, allowed = _sign(host_id="a" * 64)
+    with pytest.raises(Exception, match="approval host mismatch"):
+        _verify(approval, signature, allowed)
+
+
+def test_expiry_more_than_24h_after_issue_is_refused():
+    issued = WHEN
+    expires = (issued + timedelta(hours=24, seconds=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    approval, signature, allowed = _sign(
+        issued_at=issued.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        expires=expires,
+    )
+    with pytest.raises(Exception, match="approval lifetime exceeds 24h"):
+        _verify(approval, signature, allowed)
+
+
 def test_canonical_bytes_round_trip():
     raw = canonical_approval(
-        target_sha=SHA, manifest_digest=FP, ticket=TICKET, expires="2099-01-01T00:00:00Z",
+        target_sha=SHA, manifest_digest=FP, ticket=TICKET, nonce="cd" * 16,
+        host_id=HOST, issued_at="2026-11-06T18:00:00Z", expires="2026-11-07T12:00:00Z",
     )
     assert raw.endswith(b"\n")
     assert b"manifest_digest=" + FP.encode() in raw

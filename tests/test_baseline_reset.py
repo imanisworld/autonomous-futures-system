@@ -119,7 +119,21 @@ class _RootFile:
     st_uid = 0
 
 
-def _sign(sha=SHA, digest=FP, ticket=TICKET, expires="2099-01-01T00:00:00Z", key_name="op"):
+HOST = "ab" * 32
+ISSUED = "2026-11-06T18:00:00Z"
+EXPIRES = "2026-11-07T12:00:00Z"
+
+
+def _sign(
+    sha=SHA,
+    digest=FP,
+    ticket=TICKET,
+    expires=EXPIRES,
+    issued_at=ISSUED,
+    host_id=HOST,
+    nonce="cd" * 16,
+    key_name="op",
+):
     directory = Path(tempfile.mkdtemp(prefix="afs-approval-"))
     key_path = directory / key_name
     subprocess.run(
@@ -128,7 +142,13 @@ def _sign(sha=SHA, digest=FP, ticket=TICKET, expires="2099-01-01T00:00:00Z", key
     )
     approval = directory / "approval.txt"
     approval.write_bytes(canonical_approval(
-        target_sha=sha, manifest_digest=digest, ticket=ticket, expires=expires,
+        target_sha=sha,
+        manifest_digest=digest,
+        ticket=ticket,
+        nonce=nonce,
+        host_id=host_id,
+        issued_at=issued_at,
+        expires=expires,
     ))
     subprocess.run(
         [
@@ -158,6 +178,10 @@ def _reset(shared, log_dir, **overrides):
         signature_path=signature,
         allowed_signers=allowed,
         signer_stat=_RootFile(),
+        nonce_ledger=Path(tempfile.mkdtemp(prefix="afs-nonces-")),
+        expected_host_id=HOST,
+        private_dir=Path(tempfile.mkdtemp(prefix="afs-private-")),
+        enforce_shared_trust=False,
         operator_user="imani",
         clock=lambda: WHEN,
         environ={},
@@ -306,7 +330,7 @@ def test_dry_run_reset_writes_nothing_and_hides_secrets(tmp_path, capsys):
     ])
     captured = capsys.readouterr()
     assert code == 1
-    assert "allowed_signers missing" in captured.err
+    assert "shared-dir ancestor writable" in captured.err
     assert "writes=none" not in captured.out
     assert SECRET not in captured.out
     assert SECRET not in captured.err
@@ -698,7 +722,7 @@ def test_reset_cli_stable_flags_are_required(tmp_path, capsys):
     argv.append("--dry-run")
     assert main(argv) == 1
     refused = capsys.readouterr()
-    assert "allowed_signers missing" in refused.err
+    assert "shared-dir ancestor writable" in refused.err
     assert "--operator-token" not in refused.out
     with pytest.raises(SystemExit) as caught:
         main(["reset", "--help"])
