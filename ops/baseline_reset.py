@@ -31,8 +31,12 @@ from execution.order_submission_store import OrderSubmissionStore
 from execution.tradovate_broker import TradovateBroker, TradovateConfig
 from ops.release_approval import (
     ALLOWED_SIGNERS_PATH,
+    NONCE_LEDGER_PATH,
     ApprovalError,
+    finish_nonce,
+    parse_approval,
     verify_reset_approval,
+    walk_dir,
 )
 from ops.baseline_authorization import (
     AUDIT_FILENAME,
@@ -167,17 +171,19 @@ def require_trusted_shared_dir(path: Path) -> Path:
         raise Refusal("shared-dir must not contain ..")
     if path.is_symlink():
         raise Refusal("shared-dir must not be a symlink")
-    cursor = Path(path.anchor)
-    for part in path.parts[1:]:
-        cursor = cursor / part
-        if not cursor.exists() and cursor != path:
-            continue
-        if cursor.is_symlink():
-            raise Refusal("shared-dir must not be a symlink")
-        if cursor.is_dir() and cursor.stat().st_mode & 0o022:
-            raise Refusal("shared-dir ancestor writable by group or other")
-    if not path.is_dir():
-        raise Refusal("shared-dir unreadable")
+    try:
+        dirfd = walk_dir(path)
+    except ApprovalError as exc:
+        message = str(exc)
+        if "writable" in message:
+            raise Refusal("shared-dir ancestor writable by group or other") from exc
+        if "root-owned" in message:
+            raise Refusal("shared-dir ancestor not root-owned") from exc
+        if "symlink" in message:
+            raise Refusal("shared-dir must not be a symlink") from exc
+        raise Refusal("shared-dir unreadable") from exc
+    else:
+        os.close(dirfd)
     return path
 
 
@@ -358,6 +364,7 @@ def reset(
     sha = require_sha(target_sha)
     fingerprint = require_fingerprint(release_fingerprint)
     ticket_id = require_ticket(ticket)
+    store = NONCE_LEDGER_PATH if nonce_ledger is None else nonce_ledger
     try:
         signer = verify_reset_approval(
             approval_path=approval_path,
@@ -368,7 +375,7 @@ def reset(
             ticket=ticket_id,
             now=_approval_now(clock),
             signer_stat=signer_stat,
-            nonce_ledger=nonce_ledger,
+            nonce_ledger=store,
             expected_host_id=expected_host_id,
             private_dir=private_dir,
             dry_run=dry_run,
@@ -376,6 +383,55 @@ def reset(
         )
     except ApprovalError as exc:
         raise Refusal(str(exc)) from exc
+    claimed = not dry_run
+
+    def _nonce_outcome(state: str) -> None:
+        nonce = parse_approval(approval_path.read_bytes())["nonce"]
+        finish_nonce(store, nonce, state, ticket_id, trust=enforce_shared_trust)
+
+    try:
+        return _reset_after_approval(
+            shared=shared,
+            env_text=env_text,
+            status=status,
+            env_path=env_path,
+            sha=sha,
+            fingerprint=fingerprint,
+            ticket_id=ticket_id,
+            signer=signer,
+            dry_run=dry_run,
+            environ=environ,
+            operator_user=operator_user,
+            clock=clock,
+            on_step=on_step,
+            on_commit=None if dry_run else lambda: _nonce_outcome("RESET_COMMITTED"),
+        )
+    except Exception:
+        if claimed:
+            try:
+                _nonce_outcome("RESET_FAILED")
+            except ApprovalError:
+                pass
+        raise
+
+
+def _reset_after_approval(
+    *,
+    shared: Path,
+    env_text: str,
+    status: dict,
+    env_path: Path | None,
+    sha: str,
+    fingerprint: str,
+    ticket_id: str,
+    signer: str,
+    dry_run: bool,
+    environ: Mapping[str, str] | None,
+    operator_user: str | None,
+    clock: Callable[[], datetime] | None,
+    on_step: Callable[[str], None] | None,
+    on_commit: Callable[[], None] | None,
+) -> dict:
     enforce_runtime_guards(
         env_text=env_text,
         shared=shared,
@@ -455,6 +511,8 @@ def reset(
             audit_size=audit_size,
         )
         raise
+    if on_commit is not None:
+        on_commit()
     return {
         "baseline_reset": "ok",
         "target_sha": sha,

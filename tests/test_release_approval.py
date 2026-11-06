@@ -12,13 +12,17 @@ import pytest
 
 from ops.release_approval import (
     ALLOWED_SIGNERS_PATH,
+    ApprovalError,
     canonical_approval,
+    claim_nonce,
+    init_nonce_store,
+    read_signers_walk,
     require_allowed_signers,
     signer_stat_problem,
     verify_reset_approval,
 )
 from tests.test_baseline_reset import (
-    FP, HOST, SHA, TICKET, WHEN, _layout, _reset, _sign,
+    FP, HOST, SHA, TICKET, WHEN, _layout, _nonce_store, _reset, _sign,
 )
 
 NAMESPACE = "afs-release-approval"
@@ -40,7 +44,7 @@ def _verify(approval, signature, allowed, **overrides):
         ticket=TICKET,
         now=WHEN,
         signer_stat=_Stat(stat.S_IFREG | 0o444, 0),
-        nonce_ledger=Path(tempfile.mkdtemp(prefix="afs-nonces-")),
+        nonce_ledger=_nonce_store(),
         expected_host_id=HOST,
         private_dir=Path(tempfile.mkdtemp(prefix="afs-private-")),
         trust_ancestors=False,
@@ -214,14 +218,88 @@ def test_shared_dir_rejects_a_world_writable_parent(tmp_path):
 def test_replay_is_refused_and_dry_run_does_not_consume(tmp_path):
     approval, signature, allowed = _sign()
     ledger = tmp_path / "ledger"
-    ledger.mkdir()
+    init_nonce_store(ledger, trust=False)
     common = dict(nonce_ledger=ledger, trust_ancestors=False)
     assert _verify(approval, signature, allowed, dry_run=True, **common)
-    assert list(ledger.iterdir()) == []
+    assert "CLAIMED" not in (ledger / "ledger").read_text()
     assert _verify(approval, signature, allowed, dry_run=False, **common)
-    assert list(ledger.iterdir())
-    with pytest.raises(Exception, match="approval nonce reused"):
+    assert "CLAIMED" in (ledger / "ledger").read_text()
+    with pytest.raises(Exception, match="approval nonce burned"):
         _verify(approval, signature, allowed, dry_run=True, **common)
+
+
+def test_parent_swap_to_non_root_ancestor_is_refused(tmp_path, monkeypatch):
+    """A parent replaced by a non-root directory after it is opened must be refused.
+
+    The walk fstats the fd from openat. Faking every other directory as
+    root-owned makes the swapped parent the only real non-root directory.
+    """
+    base = tmp_path / "base"
+    base.mkdir()
+    real = base / "parent"
+    real.mkdir()
+    (real / "signers").write_text("GOOD\n")
+    planted = base / "planted"
+    planted.mkdir()
+    (planted / "signers").write_text("EVIL\n")
+    planted_ino = planted.stat().st_ino
+    swapped = {"done": False}
+    real_fstat = os.fstat
+    real_open = os.open
+
+    def fstat(fd):
+        st = real_fstat(fd)
+        if st.st_ino == planted_ino:
+            return st
+        if stat.S_ISDIR(st.st_mode):
+            return _Stat(stat.S_IFDIR | 0o755, 0)
+        return _Stat(stat.S_IFREG | 0o444, 0)
+
+    def wrapped(opened, flags, *args, **kwargs):
+        fd = real_open(opened, flags, *args, **kwargs)
+        if not swapped["done"]:
+            try:
+                link = os.readlink(f"/proc/self/fd/{fd}")
+            except OSError:
+                link = ""
+            if link == str(base):
+                swapped["done"] = True
+                real.rename(base / "real-saved")
+                planted.rename(base / "parent")
+        return fd
+
+    monkeypatch.setattr(os, "open", wrapped)
+    with pytest.raises(ApprovalError, match="not root-owned"):
+        read_signers_walk(base / "parent" / "signers", fstat=fstat)
+    assert swapped["done"] is True
+
+
+def test_mode_0777_nonce_dir_is_refused(tmp_path):
+    store = tmp_path / "nonces"
+    store.mkdir()
+    store.chmod(0o777)
+    with pytest.raises(ApprovalError, match="nonce store writable"):
+        claim_nonce(store, "cd" * 16, ticket=TICKET, dry_run=True, trust=False)
+
+
+def test_deleted_ledger_is_not_treated_as_empty(tmp_path):
+    store = tmp_path / "nonces"
+    init_nonce_store(store, trust=False)
+    (store / "ledger").unlink()
+    with pytest.raises(ApprovalError, match="nonce ledger missing"):
+        claim_nonce(store, "cd" * 16, ticket=TICKET, dry_run=True, trust=False)
+    assert not (store / "ledger").exists()
+
+
+def test_claimed_nonce_without_outcome_stays_burned(tmp_path):
+    store = tmp_path / "nonces"
+    init_nonce_store(store, trust=False)
+    claim_nonce(store, "cd" * 16, ticket=TICKET, dry_run=False, trust=False)
+    text = (store / "ledger").read_text()
+    assert "CLAIMED" in text
+    assert "RESET_COMMITTED" not in text
+    with pytest.raises(ApprovalError, match="approval nonce burned"):
+        claim_nonce(store, "cd" * 16, ticket=TICKET, dry_run=True, trust=False)
 
 
 def test_cross_host_approval_is_refused():

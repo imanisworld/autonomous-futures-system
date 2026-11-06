@@ -7,10 +7,10 @@ Source only. Do not deploy, restart, reset a box, or place a demo order from thi
 | Item | State |
 |---|---|
 | **Branch** | `cursor/baseline-reset-procedure-6c72` |
-| **Scope** | The signers file is opened with O_NOFOLLOW and verified from a private copy. Approvals bind a nonce and host id, expire within 24h, and cannot be replayed. A world-writable shared-dir parent is refused. |
+| **Scope** | Signers and nonce directories are opened with openat from /. Ancestors must be root-owned and not group-writable. A claimed nonce stays burned until a new signed approval. |
 | **Runbook** | `docs/ops/baseline_reset_runbook.md` |
 | **Runtime** | Not exercised. No server was contacted. |
-| **Tests** | `python -B -m pytest -q` after AFS-0513: 9013 passed, 8 skipped, exit 0. |
+| **Tests** | `python -B -m pytest -q` after AFS-0514: 9017 passed, 8 skipped, exit 0. |
 | **NEXT** | Independent review. Operator GO is still required before any host command in the runbook. Do not merge from this checkpoint. |
 
 ## Previous — 2026-11-06 AFS-0500 submission-evidence follow-up

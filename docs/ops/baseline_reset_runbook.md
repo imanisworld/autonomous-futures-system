@@ -179,7 +179,7 @@ If the command prints `baseline_reset failed: rolled back`, the `predeploy-*` di
 reset --target-sha --release-fingerprint --ticket --approval --signature --status-file [--shared-dir]
 ```
 
-`--shared-dir` is optional. When it is omitted, the command uses `AFS_SHARED_DIR` if that environment variable is set, otherwise `/root/afs-shared`. The path must be absolute, must not contain `..`, and must not be a symlink or have a symlink in any parent directory. Every existing directory on that path, including a parent, must not be writable by group or other. A mode `0777` parent is refused. A symlink is refused so the directory cannot be redirected onto another tree. The command does not load trust material from this directory.
+`--shared-dir` is optional. When it is omitted, the command uses `AFS_SHARED_DIR` if that environment variable is set, otherwise `/root/afs-shared`. The path must be absolute, must not contain `..`, and must not be a symlink or have a symlink in any parent directory. The command walks from `/` with `openat` and `O_NOFOLLOW`, and `fstat`s each directory fd. Every ancestor must be root-owned and not writable by group or other. A mode `0777` parent is refused. A symlink is refused so the directory cannot be redirected onto another tree. The command does not load trust material from this directory.
 
 `--release-fingerprint` is the operator's approved digest. It is recorded in `/root/afs-shared/baseline_authorization.json`, outside `/root/afs-releases/<sha>`. Do not fill it by reading `fingerprint_sha256` from the staged `release_manifest.json`. That field is inside the tree being checked. The digest comes from the separate manifest review.
 
@@ -194,6 +194,20 @@ ssh-keygen -t ed25519 -f ~/.ssh/afs-release-approval -C "imani afs-release-appro
 ```
 
 Build the approval file on the Mac with these exact lines and a trailing newline. `issued_at` and `expires` are UTC. `expires` must be after `issued_at` and no more than 24 hours later. `issued_at` must not be more than five minutes in the future. `nonce` is 32 hex characters from `openssl rand -hex 16` and must be new for every approval. `host_id` is the sha256 of the target server's `/etc/machine-id` (run that hash on the server; do not copy the file). An approval signed for another host is refused. A second use of the same nonce is refused. `--dry-run` checks the nonce and does not record it.
+
+The nonce store is `/root/afs-shared/baseline_approval_nonces`, mode `0700` and root-owned. The private signature copy directory is `/root/afs-shared/approval-private`, also mode `0700` and root-owned. Create both once, as root, before the first reset. Do not delete them to retry:
+
+```bash
+install -d -o root -g root -m 0700 /root/afs-shared/approval-private
+install -d -o root -g root -m 0700 /root/afs-shared/baseline_approval_nonces
+python3 - <<'PY'
+from pathlib import Path
+from ops.release_approval import init_nonce_store
+init_nonce_store(Path("/root/afs-shared/baseline_approval_nonces"))
+PY
+```
+
+Run that Python from the release tree so `ops.release_approval` imports. Init writes an `INITIALIZED` marker and an empty `ledger`. A reset appends `CLAIMED`, then `RESET_COMMITTED` or `RESET_FAILED`, with an fsync of the ledger and the directory. If the process stops after `CLAIMED` and before an outcome, that nonce stays burned. Sign a new approval with a new nonce. Do not delete the ledger to clear it. A missing ledger or a store that is mode `0777` or not root-owned is refused, and the command does not create a fresh empty ledger.
 
 ```bash
 ssh hetzner "python3 -c 'import hashlib,pathlib; print(hashlib.sha256(pathlib.Path(\"/etc/machine-id\").read_text().strip().encode()).hexdigest())'"

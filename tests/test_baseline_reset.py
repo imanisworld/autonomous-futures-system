@@ -19,7 +19,7 @@ import pytest
 
 from execution.broker_interface import Fill
 from ops.baseline_authorization import PATH_A_PINS, check_release, staged_manifest_digest
-from ops.release_approval import canonical_approval
+from ops.release_approval import canonical_approval, init_nonce_store
 from ops.baseline_reset import (
     RESET_CLI_FLAGS,
     Refusal,
@@ -39,6 +39,7 @@ from ops.baseline_reset import (
     require_variants_inactive,
     reset,
     restore,
+    _reset_after_approval,
 )
 
 SECRET = "super-secret-value"
@@ -165,6 +166,13 @@ def _sign(
     return approval, Path(str(approval) + ".sig"), allowed
 
 
+def _nonce_store() -> Path:
+    parent = Path(tempfile.mkdtemp(prefix="afs-nonces-"))
+    store = parent / "store"
+    init_nonce_store(store, trust=False)
+    return store
+
+
 def _reset(shared, log_dir, **overrides):
     approval, signature, allowed = _sign()
     args = dict(
@@ -178,7 +186,7 @@ def _reset(shared, log_dir, **overrides):
         signature_path=signature,
         allowed_signers=allowed,
         signer_stat=_RootFile(),
-        nonce_ledger=Path(tempfile.mkdtemp(prefix="afs-nonces-")),
+        nonce_ledger=_nonce_store(),
         expected_host_id=HOST,
         private_dir=Path(tempfile.mkdtemp(prefix="afs-private-")),
         enforce_shared_trust=False,
@@ -199,8 +207,10 @@ def _untouched(shared, log_dir, shadow):
 
 
 def test_guard_sources_are_called_by_each_mutation():
-    for fn in (reset, restore, backup, place_recovery_order):
+    for fn in (restore, backup, place_recovery_order):
         assert "enforce_runtime_guards(" in inspect.getsource(fn)
+    assert "_reset_after_approval(" in inspect.getsource(reset)
+    assert "enforce_runtime_guards(" in inspect.getsource(_reset_after_approval)
     source = inspect.getsource(enforce_runtime_guards)
     for name in (
         "require_demo_posture(",
