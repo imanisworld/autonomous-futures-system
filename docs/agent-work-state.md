@@ -1,17 +1,29 @@
 # Agent Work State
 
-## START HERE — 2026-11-06 baseline-reset procedure
+## START HERE — 2026-11-06 grok-ops deploy lane (source only)
 
-Source only. Do not deploy, restart, reset a box, or place a demo order from this checkpoint.
+Code and docs only. Do not install the account, deploy, or restart from this change.
 
 | Item | State |
 |---|---|
-| **Branch** | `cursor/baseline-reset-procedure-6c72` |
+| **Branch** | `cursor/grok-ops-deploy-lane-40d9` |
+| **Scope** | Restricted `grok-ops` forced-command user, exact-path sudoers, one-time GO token, hard refusals, append-only audit log. Install doc: `docs/grok-ops-deploy-lane.md`. |
+| **Dependency** | `baseline-reset` calls `scripts/ops/baseline_reset.sh`. That script is not on `main` at `f8b044be`. It belongs to the in-flight baseline-reset procedure, agent `bc-57c374c1`. Missing script exits 78 and does not consume a token. |
+| **Runtime** | Not installed. The October HOLD still governs the box. |
+| **NEXT** | Independent review of the lane. Operator installs only after that review and a separate GO. Do not merge from this note. |
+
+## Merged — 2026-11-06 baseline-reset procedure
+
+Source merged in #1257 at `d703232b`. Do not deploy, restart, reset a box, or place a demo order from this note.
+
+| Item | State |
+|---|---|
+| **Branch** | `cursor/baseline-reset-procedure-6c72` (PR #1257), merged |
 | **Scope** | Nonce claim and outcome appends hold an exclusive flock on the store lock file across the ledger read, the check, the append, and the fsync. |
 | **Runbook** | `docs/ops/baseline_reset_runbook.md` |
 | **Runtime** | Not exercised. No server was contacted. |
 | **Tests** | `python -B -m pytest -q` after the nonce lock: 9018 passed, 8 skipped, exit 0. The 8-process spawn test then passed on its own in 27.61s. |
-| **NEXT** | Independent review. Operator GO is still required before any host command in the runbook. Do not merge from this checkpoint. |
+| **NEXT** | Operator GO is still required before any host command in the runbook. |
 
 ## Previous — 2026-11-06 AFS-0500 submission-evidence follow-up
 
