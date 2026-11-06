@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from multiprocessing import Process, Queue
 
 import pytest
@@ -27,6 +28,7 @@ from execution.order_submission_store import (
 )
 from execution.tradovate_broker import TradovateBroker
 from tests.test_tradovate_entry_fill import _broker
+from webhook.startup_gate import reset_startup_gate, startup_entry_block
 
 
 def _order(client_order_id=None):
@@ -248,13 +250,178 @@ def test_lifespan_reconciles_with_broker_before_accepting_entries(monkeypatch):
     monkeypatch.setattr(app_module, "run_tradovate_supervisor", idle)
     monkeypatch.setattr(app_module, "run_reconciler_loop", idle)
     monkeypatch.setattr(app_module, "run_heartbeat_loop", idle)
+    reset_startup_gate()
 
     async def exercise():
         async with app_module._lifespan(app_module.app):
             order.append("accepting")
             return list(order)
 
-    assert asyncio.run(exercise()) == ["broker", ("reconcile", sentinel), "accepting"]
+    try:
+        assert asyncio.run(exercise()) == ["broker", ("reconcile", sentinel), "accepting"]
+    finally:
+        reset_startup_gate()
+
+
+def test_accepting_entries_marker_is_logged_after_startup_reconcile(monkeypatch):
+    """The marker is absent until reconciliation returns, then present before yield.
+
+    Moving the log ahead of the reconcile call fails the assertion inside
+    ``recover``. Deleting the log fails the assertion after the lifespan yields.
+    """
+    import webhook.app as app_module
+    import webhook.reconciler as reconciler
+
+    messages = []
+
+    class ListHandler(logging.Handler):
+        def emit(self, record):
+            messages.append(record.getMessage())
+
+    handler = ListHandler()
+    previous_level = app_module.logger.level
+    app_module.logger.setLevel(logging.INFO)
+    app_module.logger.addHandler(handler)
+
+    def recover(config, log_dir="logs", broker=None, **kwargs):
+        assert not any(message.startswith("ACCEPTING ENTRIES:") for message in messages)
+        return {"action": "none", "submissions": {"ok": True, "unresolved": []}}
+
+    async def idle(*args, **kwargs):
+        await asyncio.Event().wait()
+
+    monkeypatch.setenv("WEBHOOK_SECRET", "test-secret")
+    monkeypatch.setenv("BROKER", "tradovate")
+    monkeypatch.setattr(app_module, "_require_tradovate_env_for_selected_broker", lambda: None)
+    monkeypatch.setattr(reconciler, "broker_for_submission_recovery", lambda: object())
+    monkeypatch.setattr(reconciler, "reconcile_open_position", recover)
+    monkeypatch.setattr(app_module, "run_tradovate_supervisor", idle)
+    monkeypatch.setattr(app_module, "run_reconciler_loop", idle)
+    monkeypatch.setattr(app_module, "run_heartbeat_loop", idle)
+    reset_startup_gate()
+
+    async def exercise():
+        async with app_module._lifespan(app_module.app):
+            return list(messages)
+
+    try:
+        seen = asyncio.run(exercise())
+    finally:
+        app_module.logger.removeHandler(handler)
+        app_module.logger.setLevel(previous_level)
+        reset_startup_gate()
+
+    assert any(message.startswith("ACCEPTING ENTRIES:") for message in seen)
+    assert not any(message.startswith("BLOCKED_RECONCILE_REQUIRED:") for message in seen)
+
+
+def test_unresolved_startup_reconciliation_does_not_accept_entries(monkeypatch):
+    """No broker and unresolved ids must not log ACCEPTING ENTRIES.
+
+    The reproduced result is ``submissions.unresolved == ['cid']``. Deleting
+    the block check logs ACCEPTING ENTRIES and leaves the startup latch empty,
+    so both assertions fail. The runner then reports BLOCKED_RECONCILE_REQUIRED.
+    """
+    import webhook.app as app_module
+    import webhook.reconciler as reconciler
+    import webhook.runner as runner
+
+    reset_startup_gate()
+    messages = []
+
+    class ListHandler(logging.Handler):
+        def emit(self, record):
+            messages.append(record.getMessage())
+
+    handler = ListHandler()
+    previous_level = app_module.logger.level
+    app_module.logger.setLevel(logging.INFO)
+    app_module.logger.addHandler(handler)
+
+    def recover(config, log_dir="logs", broker=None, **kwargs):
+        assert broker is None
+        return {"action": "none", "submissions": {"ok": True, "unresolved": ["cid"]}}
+
+    async def idle(*args, **kwargs):
+        await asyncio.Event().wait()
+
+    monkeypatch.setenv("WEBHOOK_SECRET", "test-secret")
+    monkeypatch.setenv("BROKER", "paper")
+    monkeypatch.setattr(app_module, "_require_tradovate_env_for_selected_broker", lambda: None)
+    monkeypatch.setattr(reconciler, "broker_for_submission_recovery", lambda: None)
+    monkeypatch.setattr(reconciler, "reconcile_open_position", recover)
+    monkeypatch.setattr(app_module, "run_tradovate_supervisor", idle)
+    monkeypatch.setattr(app_module, "run_reconciler_loop", idle)
+    monkeypatch.setattr(app_module, "run_heartbeat_loop", idle)
+
+    async def exercise():
+        async with app_module._lifespan(app_module.app):
+            return list(messages)
+
+    try:
+        seen = asyncio.run(exercise())
+        assert not any(message.startswith("ACCEPTING ENTRIES:") for message in seen)
+        assert any(
+            message.startswith("BLOCKED_RECONCILE_REQUIRED:") for message in seen
+        )
+        assert startup_entry_block()["client_order_ids"] == ["cid"]
+        block = runner._startup_execution_block()
+        assert block["code"] == "BLOCKED_RECONCILE_REQUIRED"
+        assert "execution_block = _startup_execution_block()" in inspect_process(runner)
+    finally:
+        app_module.logger.removeHandler(handler)
+        app_module.logger.setLevel(previous_level)
+        reset_startup_gate()
+
+
+def inspect_process(runner):
+    import inspect
+    return inspect.getsource(runner.process_alert)
+
+
+def test_startup_latch_stays_blocked_after_a_later_clear():
+    """A clean note cannot lift BLOCKED_RECONCILE_REQUIRED in this process.
+
+    Deleting the monotonic guard clears the latch on the second call, so
+    the assertions fail. Only ``reset_startup_gate`` models a restart.
+    """
+    from webhook.startup_gate import (
+        note_startup_reconciliation,
+        reset_startup_gate,
+        startup_entry_block,
+    )
+
+    reset_startup_gate()
+    try:
+        blocked = {"submissions": {"ok": True, "unresolved": ["cid"]}}
+        clear = {"submissions": {"ok": True, "unresolved": []}}
+        assert note_startup_reconciliation(blocked) == "block"
+        assert note_startup_reconciliation(clear) == "block"
+        assert startup_entry_block()["client_order_ids"] == ["cid"]
+        assert startup_entry_block()["entries_blocked"] is True
+    finally:
+        reset_startup_gate()
+        assert startup_entry_block() is None
+
+
+def test_untrusted_or_missing_reconciliation_blocks():
+    from webhook.startup_gate import note_startup_reconciliation, reconciliation_blocks, reset_startup_gate
+
+    try:
+        assert reconciliation_blocks({"action": "none"})
+        assert reconciliation_blocks({
+            "action": "none",
+            "submissions": {"ok": False, "entries_blocked": True, "unresolved": []},
+        })
+        assert note_startup_reconciliation({
+            "submissions": {"ok": False, "entries_blocked": True},
+        }) == "block"
+        assert reconciliation_blocks({
+            "action": "none",
+            "submissions": {"ok": True, "unresolved": []},
+        }) is False
+    finally:
+        reset_startup_gate()
 
 
 def test_completed_round_trip_closes_from_broker_evidence(monkeypatch, tmp_path):
