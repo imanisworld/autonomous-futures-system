@@ -452,6 +452,36 @@ def build_multisetup_scanner(base_cls):
                     if not isinstance(candidate, dict):
                         continue
                     data = self._overlay_candidate(normalized, candidate)
+                    if (
+                        getattr(self.config, "paper_v1_trigger_timing_observe_enabled", False)
+                        and candidate.get("setup_entry_trigger") is not None
+                        and candidate.get("setup_type")
+                        and candidate.get("setup_direction") in {"CALL", "PUT"}
+                        and candidate.get("setup_timeframe") == DAILY_TIMEFRAME
+                    ):
+                        # Timestamp only the first SCAN whose Daily verdict
+                        # triggered; do not claim the underlying break time.
+                        # This is a separate append-only file, not a DB write.
+                        from .trigger_timing_evidence import first_observed_daily_trigger
+
+                        try:
+                            timing = first_observed_daily_trigger(
+                                journal=self.config.paper_v1_trigger_timing_journal,
+                                ticker=ticker,
+                                timeframe=DAILY_TIMEFRAME,
+                                setup_type=str(candidate["setup_type"]),
+                                direction=str(candidate["setup_direction"]),
+                                trigger=candidate["setup_entry_trigger"],
+                                invalidation=candidate.get("underlying_invalidation"),
+                                live_price=normalized.get("price"),
+                                now=now,
+                            )
+                            data.update(timing)
+                            data["trigger_timing_evidence_status"] = "FIRST_SCAN_OBSERVED"
+                        except Exception:  # noqa: BLE001 — opt-in telemetry cannot break scans
+                            # Evidence failure is explicit, never represented
+                            # as a successful first-sight observation.
+                            data["trigger_timing_evidence_status"] = "ERROR"
                     data["paper_setup_candidate_index"] = index
                     data["paper_setup_candidate_count"] = len(daily_candidates)
                     await self._process_normalized_candidate(
