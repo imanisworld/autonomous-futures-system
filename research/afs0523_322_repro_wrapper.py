@@ -33,11 +33,13 @@ import dataclasses
 import hashlib
 import importlib.util
 import json
+import os
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from config.futures_contracts import contract_economics
+from config.settings import per_instrument_contract_ceiling
 from research.databento_322_bar_adapter import data_gap_dates_from_trees
 from research.run_322_expanded_evidence import detect_candidates
 from scripts.edge_decomposition_audit import (
@@ -69,6 +71,21 @@ DATA_MANIFEST_REL = f"docs/research-evidence/{TRIAL_ID}/databento-download-manif
 DATA_MANIFEST_PATH = REPO / DATA_MANIFEST_REL
 # SHA-256 of the committed download manifest. The gate refuses on any other bytes.
 DATA_MANIFEST_SHA256 = "6c9d5ab3c29a7aeade90e95c84e0128795afc1bdd19aa165e18d364760b7f43d"
+# Oct 4 corrected rerun profile. Sources: docs/322-corrected-eod-rerun-erratum-2026-10-04.md
+# (MAX_CONTRACTS_HARD_CAP=1) and resolve_bracket in the frozen edge-decomposition
+# harness. The ceiling is the max of risk_rules.yaml position_rules.max_contracts_per_instrument,
+# which parse_max_contracts_hard_cap reads before it accepts the cap.
+OCT4_SCORING_PROFILE = {
+    "MAX_CONTRACTS_HARD_CAP": "1",
+    "risk_rules_contract_ceiling": 6,
+    "contracts": 1,
+    "starting_balance": 100000.0,
+    "pessimistic_both_hit": True,
+    "entry_tolerance_ticks": 32.0,
+    "slippage_ticks": [1.0, 2.0, 3.0],
+    "entry_fill_models": ["market", "ioc_limit", "stop_market"],
+    "commission_round_trip": 1.48,
+}
 _FROZEN_LEDGER_FIELDS = (
     "prereg_path",
     "prereg_commit",
@@ -762,6 +779,7 @@ def _data_identity(
     research_15m: Path,
     audit_5m: Path,
     data_root: Path,
+    scoring_profile: dict,
 ) -> dict:
     return {
         "pulled_files": manifest.get("pulled_files"),
@@ -769,6 +787,7 @@ def _data_identity(
         "audit_5m_sha256": _tree_sha256(audit_5m),
         "manifest_sha256": manifest_sha256,
         "data_root": str(data_root),
+        "scoring_profile": scoring_profile,
     }
 
 
@@ -833,6 +852,7 @@ def _append_gate_event(payload: dict, artifact_sha256: str) -> None:
             "audit_5m_sha256": payload.get("audit_5m_sha256"),
             "manifest_sha256": payload.get("manifest_sha256"),
             "data_root": payload.get("data_root"),
+            "scoring_profile": payload.get("scoring_profile"),
             "prior_attempts": payload.get("prior_attempts"),
             "notes": "Reproduction gate only. Older slices stay blocked until Claude reviews this result on the pull request.",
         }
@@ -903,11 +923,40 @@ def _record_scoring_failure(
     return payload
 
 
+def _effective_scoring_profile() -> dict:
+    """Read the settings the frozen bracket path consults. Do not assign them."""
+    return {
+        "MAX_CONTRACTS_HARD_CAP": os.environ.get("MAX_CONTRACTS_HARD_CAP"),
+        "risk_rules_contract_ceiling": per_instrument_contract_ceiling(),
+        "contracts": 1,
+        "starting_balance": 100000.0,
+        "pessimistic_both_hit": True,
+        "entry_tolerance_ticks": float(harness.IOC_TOLERANCE),
+        "slippage_ticks": [1.0, 2.0, 3.0],
+        "entry_fill_models": ["market", "ioc_limit", "stop_market"],
+        "commission_round_trip": float(COMMISSION_ROUND_TRIP),
+    }
+
+
+def _scoring_profile_or_refuse() -> dict:
+    """Refuse a profile that is not the Oct 4 run. This is not a scoring attempt."""
+    profile = _effective_scoring_profile()
+    for key, expected in OCT4_SCORING_PROFILE.items():
+        if profile[key] != expected:
+            raise RuntimeError(
+                f"bad config: scoring profile {key} is {profile[key]!r}, "
+                f"Oct 4 run used {expected!r}; refusing before scoring"
+            )
+    return profile
+
+
 def run_reproduction_gate(data_root: Path, research_15m: Path, audit_5m: Path) -> dict:
     """Score only the reproduction window, and only on the pinned download.
 
     ``data_root`` is required. Pulled files and both trees are resolved under
-    it. The working directory is not used. The manifest path and its SHA-256
+    it. The working directory is not used. The Oct 4 scoring profile, including
+    ``MAX_CONTRACTS_HARD_CAP`` exactly equal to ``1``, is required before any
+    scoring and is not assigned by this function. The manifest path and its SHA-256
     are module constants. The window and the expected count are fixed. Tree
     hashes are checked against the reproduction window entry. A DATA_GAP that
     removes a candidate fails this gate through the 34-count check. Any
@@ -917,11 +966,12 @@ def run_reproduction_gate(data_root: Path, research_15m: Path, audit_5m: Path) -
     _refuse_if_superseded()
     if not RUN_AUTHORIZED:
         raise RuntimeError("RUN_AUTHORIZED is false; reproduction gate refused")
+    scoring_profile = _scoring_profile_or_refuse()
     root = _resolved_data_root(data_root)
     verify_frozen_modules()
     manifest, manifest_sha256 = _load_pinned_manifest()
     research, audit = _verify_download_record(root, research_15m, audit_5m, manifest)
-    identity = _data_identity(manifest, manifest_sha256, research, audit, root)
+    identity = _data_identity(manifest, manifest_sha256, research, audit, root, scoring_profile)
     try:
         scored = _run_window(
             research,

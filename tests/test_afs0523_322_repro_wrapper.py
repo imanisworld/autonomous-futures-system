@@ -9,6 +9,7 @@ import ast
 import hashlib
 import importlib.util
 import json
+import os
 from datetime import date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -642,11 +643,19 @@ def _pin_manifest(monkeypatch, tmp_path: Path, manifest: dict) -> str:
 
 
 def _call_gate(data_root: Path, research: Path, audit: Path):
-    return run_reproduction_gate(
-        data_root,
-        research.relative_to(data_root),
-        audit.relative_to(data_root),
-    )
+    previous = os.environ.get("MAX_CONTRACTS_HARD_CAP")
+    os.environ["MAX_CONTRACTS_HARD_CAP"] = "1"
+    try:
+        return run_reproduction_gate(
+            data_root,
+            research.relative_to(data_root),
+            audit.relative_to(data_root),
+        )
+    finally:
+        if previous is None:
+            os.environ.pop("MAX_CONTRACTS_HARD_CAP", None)
+        else:
+            os.environ["MAX_CONTRACTS_HARD_CAP"] = previous
 
 
 def _patch_gate_paths(monkeypatch, tmp_path: Path) -> tuple[Path, Path]:
@@ -724,6 +733,7 @@ def test_reproduction_gate_refuses_a_caller_manifest_or_placeholder_pin(monkeypa
 
 
 def test_reproduction_gate_resolves_paths_under_data_root(monkeypatch, tmp_path):
+    monkeypatch.setenv("MAX_CONTRACTS_HARD_CAP", "1")
     with pytest.raises(RuntimeError, match="data_root is missing"):
         run_reproduction_gate(tmp_path / "missing-root", Path("research"), Path("audit"))
     research = tmp_path / "research"
@@ -896,6 +906,10 @@ def test_reproduction_gate_records_a_count_failure_on_a_synthetic_fixture(monkey
     assert last["event"] == "GATE"
     assert last["gate_pass"] is False
     assert last["trial_id"] == TRIAL_ID
+    assert result["scoring_profile"]["MAX_CONTRACTS_HARD_CAP"] == "1"
+    assert result["scoring_profile"]["risk_rules_contract_ceiling"] == 6
+    assert last["scoring_profile"] == result["scoring_profile"]
+    assert written["scoring_profile"] == result["scoring_profile"]
     assert last["manifest_sha256"] == pin
     assert last["research_15m_sha256"] == _repro(manifest)["research_15m_sha256"]
     assert last["audit_5m_sha256"] == _repro(manifest)["audit_5m_sha256"]
@@ -1204,6 +1218,33 @@ def test_superseded_trial_refuses_the_reproduction_gate(monkeypatch, tmp_path):
         run_reproduction_gate(tmp_path, Path("."), Path("."))
     assert ledger.read_bytes() == before
     assert not (tmp_path / "reproduction-gate.json").exists()
+    assert (ROOT / "docs/research-trial-ledger.jsonl").read_bytes() == real_ledger
+
+
+def test_bad_scoring_profile_refuses_before_a_gate_line(monkeypatch, tmp_path):
+    ledger = tmp_path / "ledger.jsonl"
+    ledger.write_bytes((ROOT / "docs/research-trial-ledger.jsonl").read_bytes())
+    artifact = tmp_path / "reproduction-gate.json"
+    monkeypatch.setattr("research.afs0523_322_repro_wrapper.TRIAL_LEDGER", ledger)
+    monkeypatch.setattr("research.afs0523_322_repro_wrapper.GATE_ARTIFACT", artifact)
+    before = ledger.read_bytes()
+    real_ledger = (ROOT / "docs/research-trial-ledger.jsonl").read_bytes()
+    monkeypatch.delenv("MAX_CONTRACTS_HARD_CAP", raising=False)
+    with pytest.raises(RuntimeError, match="MAX_CONTRACTS_HARD_CAP"):
+        run_reproduction_gate(tmp_path, Path("research"), Path("audit"))
+    for bad in ("2", ""):
+        monkeypatch.setenv("MAX_CONTRACTS_HARD_CAP", bad)
+        with pytest.raises(RuntimeError, match="MAX_CONTRACTS_HARD_CAP"):
+            run_reproduction_gate(tmp_path, Path("research"), Path("audit"))
+    monkeypatch.setenv("MAX_CONTRACTS_HARD_CAP", "1")
+    monkeypatch.setattr(
+        "research.afs0523_322_repro_wrapper.per_instrument_contract_ceiling",
+        lambda: 5,
+    )
+    with pytest.raises(RuntimeError, match="risk_rules_contract_ceiling"):
+        run_reproduction_gate(tmp_path, Path("research"), Path("audit"))
+    assert ledger.read_bytes() == before
+    assert not artifact.exists()
     assert (ROOT / "docs/research-trial-ledger.jsonl").read_bytes() == real_ledger
 
 
