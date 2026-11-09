@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "afs0523-databento-download-manifest.schema.json",
+  "title": "AFS-0523 Databento download manifest",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["pulled_files", "windows"],
+  "properties": {
+    "pulled_files": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["path", "sha256"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "windows": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "description": "One tree-hash pair for the reproduction window and for each real slice. The ids are reproduction, mnq-2019-05-to-2024-06, and nq-2010-06-to-2019-05. combined is report-only and is not a window.",
+      "items": {
+        "type": "object",
+        "required": ["id", "start", "end", "research_15m_sha256", "audit_5m_sha256"],
+        "properties": {
+          "id": {
+            "enum": [
+              "reproduction",
+              "mnq-2019-05-to-2024-06",
+              "nq-2010-06-to-2019-05"
+            ]
+          },
+          "start": {"type": "string", "format": "date"},
+          "end": {"type": "string", "format": "date"},
+          "research_15m_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "audit_5m_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    }
+  }
+}

@@ -1,5 +1,14 @@
 # Agent Work State
 
+## START HERE — 2026-11-09 AFS-0523 preregistration (source only, not authorized to run)
+
+| Item | State |
+|---|---|
+| **Branch** | `cursor/322-repro-comparison-oct4` |
+| **Scope** | Preregistered wrapper and Databento bar adapter. Frozen harness and `check_repro()` are not edited. Reproduction gate compares all 306 Oct 4 outcome records. Pre-2019 NQ results are labeled MNQ-equivalent research, not executable historical MNQ. Break-even is one shared win rate per fill model and slippage. Gap-open days are scored at the 10AM open and counted. DATA_GAP days are not scored. |
+| **Runtime** | Not exercised. No vendor download. `RUN_AUTHORIZED` is false. |
+| **NEXT** | Claude reviews the preregistration before any new data runs. Do not merge from this checkpoint. Inventory wording is a separate docs branch. |
+
 ## START HERE — 2026-11-09 read-only audit ENTRY_FILL_MODEL pin
 
 Source only. Do not merge, deploy, restart, or install from this checkpoint.
