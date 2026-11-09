@@ -297,7 +297,19 @@ def test_discord_never_sends_absurd_2099_expiration(tmp_path):
     assert sent == []
 
 
-def test_frozen_212r_cross_trade_price_binds_to_production_selector_context_path(tmp_path):
+def test_frozen_212r_cross_trade_price_binds_to_production_selector_context_path(tmp_path, monkeypatch):
+    # Evidence replay uses the wall clock, same as the SPY fixture above.
+    # Freeze it on the decision date so the Nov 20 expiry stays inside the 14-DTE gate.
+    from alert_ranker import scanner_legacy
+
+    decision_now = datetime(2026, 9, 9, 10, 47, tzinfo=NY)
+
+    class FixtureDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return decision_now.astimezone(tz) if tz is not None else decision_now.replace(tzinfo=None)
+
+    monkeypatch.setattr(scanner_legacy, "datetime", FixtureDatetime)
     artifact = Path("data/options_trigger_trade_timestamp_audit_2026_09_18/events.jsonl")
     frozen = None
     for raw in artifact.read_text().splitlines():
@@ -388,7 +400,6 @@ def test_frozen_212r_cross_trade_price_binds_to_production_selector_context_path
     storage = ScanStorage(config.sqlite_path)
     market = FrozenAMZNMarket()
     scanner = OptionsScanner(config, market, storage, DiscordAlerter(config, storage))
-    decision_now = datetime(2026, 9, 9, 10, 47, tzinfo=NY)
 
     outcome = asyncio.run(
         scanner.scan_ticker(
