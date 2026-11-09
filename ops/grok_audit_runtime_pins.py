@@ -192,7 +192,7 @@ def apply_settings_default(
     """
     chosen = code_default if yaml_value is None else yaml_value
     text = str(chosen or empty_fallback or "market").strip().lower()
-    if any(ord(char) < 32 or ord(char) == 127 for char in text) or len(text) > 64:
+    if any(not char.isprintable() for char in text) or len(text) > 64:
         return UNREADABLE
     return text or "market"
 
@@ -533,8 +533,8 @@ def _read_release_text(root: Path, relative: str) -> str:
 
 
 def _shown_value(value: str) -> str:
-    """Replace a value that contains a control character so it cannot forge a line."""
-    if any(ord(char) < 32 or ord(char) == 127 for char in value):
+    """Replace a value that contains a non-printable character so it cannot forge a line."""
+    if any(not char.isprintable() for char in value):
         return UNPRINTABLE
     return value
 

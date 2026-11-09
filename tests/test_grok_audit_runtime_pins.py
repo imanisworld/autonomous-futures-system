@@ -301,6 +301,18 @@ def test_cli_rejects_any_dispatcher_path_except_the_vps_one(capsys):
     assert main(["install", "--dispatcher", "/usr/local/sbin/afs-audit-dispatcher"]) == 2
 
 
+def test_cli_rejects_a_tmp_dispatcher_even_with_expect_sha256(capsys):
+    assert main([
+        "install",
+        "--dispatcher",
+        "/tmp/afs-audit-dispatcher",
+        "--expect-sha256",
+        "ab" * 32,
+    ]) == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+
+
 def test_control_characters_cannot_forge_output_lines():
     forged = "market\nACCOUNT_PIN_MATCH=true\nEVIL=1"
     text = format_runtime_pins({"ENTRY_FILL_MODEL": forged, "BROKER": "paper\r\x1b[2K"}, "market")
@@ -437,6 +449,8 @@ def test_install_refuses_a_symlink_dispatcher(tmp_path: Path, monkeypatch):
     with pytest.raises(ValueError, match="symlink"):
         _install(link, tmp_path, expect_sha256=hashlib.sha256(payload).hexdigest())
     assert real.read_bytes() == payload
+    assert not (tmp_path / "lib").exists()
+    assert not (tmp_path / "backups").exists()
 
 
 def test_install_refuses_a_backup_inside_sbin(tmp_path: Path, monkeypatch):
@@ -532,3 +546,77 @@ def test_patched_interpreter_ignores_a_cwd_stdlib_shadow(tmp_path: Path):
         check=False,
     )
     assert shadowed.returncode == 9
+
+
+@pytest.mark.parametrize("char", ["\u0085", "\u2028", "\u009b", "\u202e"])
+def test_non_ascii_nonprintable_characters_are_not_emitted(char: str):
+    text = format_runtime_pins({"ENTRY_FILL_MODEL": f"market{char}MORE"}, "market")
+    assert char not in text
+    assert "MORE" not in text
+    assert "ENTRY_FILL_MODEL=<unprintable>" in text.splitlines()
+    assert apply_settings_default("market", "market", f"market{char}x") == "<unreadable>"
+
+
+def test_settings_symlink_inside_the_release_is_not_followed(tmp_path: Path):
+    release = tmp_path / "release"
+    (release / "config").mkdir(parents=True)
+    real = release / "config" / "settings_real.py"
+    real.write_text(
+        "entry_fill_model=str(\n"
+        '    os.getenv("ENTRY_FILL_MODEL", fill_model.get("entry_fill_model", "symlink_followed"))\n'
+        '    or "market"\n'
+        ").strip().lower()\n",
+        encoding="utf-8",
+    )
+    (release / "config" / "settings.py").symlink_to(real.name)
+    (release / "risk_rules.yaml").write_text("fill_model:\n", encoding="utf-8")
+    proc = tmp_path / "proc" / "11"
+    proc.mkdir(parents=True)
+    os.symlink(release, proc / "cwd")
+    (proc / "environ").write_bytes(b"ENTRY_FILL_MODEL=market\0")
+    text = report_from_environ_path(str(proc / "environ"))
+    assert "ENTRY_FILL_MODEL_RESOLVED_DEFAULT=<unreadable>" in text.splitlines()
+    assert "symlink_followed" not in text
+
+
+def test_rollback_refuses_non_root(tmp_path: Path):
+    backup = tmp_path / "backup"
+    dispatcher = tmp_path / "afs-audit-dispatcher"
+    payload = b"original-dispatcher\n"
+    backup.write_bytes(payload)
+    dispatcher.write_bytes(b"patched\n")
+    with pytest.raises(PermissionError, match="root"):
+        restore_checked(
+            backup,
+            dispatcher,
+            expect_sha256=hashlib.sha256(payload).hexdigest(),
+            mode=0o750,
+            uid=os.getuid(),
+            gid=os.getgid(),
+            euid=1000,
+        )
+    assert dispatcher.read_bytes() == b"patched\n"
+    assert backup.read_bytes() == payload
+
+
+def test_rollback_rejects_a_sha_mismatch_after_the_write(tmp_path: Path, monkeypatch):
+    backup = tmp_path / "backup"
+    dispatcher = tmp_path / "afs-audit-dispatcher"
+    payload = b"original-dispatcher\n"
+    backup.write_bytes(payload)
+    dispatcher.write_bytes(b"patched\n")
+
+    def write_other(path: Path, data: bytes, *, mode: int, uid: int, gid: int) -> None:
+        path.write_bytes(b"not-the-backup\n")
+
+    monkeypatch.setattr(pins, "_replace_file", write_other)
+    with pytest.raises(ValueError, match="after rollback"):
+        restore_checked(
+            backup,
+            dispatcher,
+            expect_sha256=hashlib.sha256(payload).hexdigest(),
+            mode=0o750,
+            uid=os.getuid(),
+            gid=os.getgid(),
+            euid=0,
+        )
