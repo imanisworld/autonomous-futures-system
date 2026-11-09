@@ -9,12 +9,14 @@ import ast
 import hashlib
 import importlib.util
 import json
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pytest
 
 from config.futures_contracts import contract_economics
+from strategy.strat_322_first_live import advance_strat_322_first_live
 
 ROOT = Path(__file__).resolve().parents[1]
 LEDGER = (
@@ -292,6 +294,7 @@ def test_preregistration_cites_the_trial_and_blocks_a_new_data_run():
     assert "fill-price sensitivity only" in text
     assert "306" in text
     assert "score_at_10am_open" in text
+    assert "INVALID_ENTRY_BRACKET" in text
     assert "DATA_GAP" in text
     assert "roll_days=8" in text
     assert not (ROOT / "docs/research-evidence/afs0523-322-row-copy.json").exists()
@@ -344,6 +347,89 @@ def test_gap_open_days_are_scored_at_the_10am_open_and_counted():
     assert len(exclude_gap_opens_for_tests([gap, touched])) == 1
 
 
+def _production_gap_decision(direction: str, entry: float, stop: float, target: float, trigger: float):
+    day = date(2024, 8, 2)
+    opened = datetime(2024, 8, 2, 10, 0, tzinfo=ZoneInfo("America/New_York"))
+    state, candidate = advance_strat_322_first_live(
+        bars_5m=[{
+            "ts": opened.isoformat(),
+            "open": entry,
+            "high": max(entry, trigger) + 1.0,
+            "low": min(entry, trigger) - 1.0,
+            "close": entry,
+        }],
+        current_bar_ts=opened,
+        instrument="MNQ",
+        persisted_state={
+            "trading_date": day.isoformat(),
+            "status": "ARMED",
+            "direction": direction,
+            "trigger": trigger,
+            "stop": stop,
+            "target": target,
+        },
+    )
+    return candidate is not None, state.get("invalidation")
+
+
+def test_invalid_gap_open_brackets_match_the_state_machine_and_do_not_break_parity():
+    from research.afs0523_322_repro_wrapper import (
+        entry_inside_bracket,
+        partition_invalid_gap_opens,
+    )
+
+    cases = [
+        ("SHORT", 85.0, 110.0, 90.0, 100.0, False),
+        ("LONG", 115.0, 90.0, 110.0, 100.0, False),
+        ("SHORT", 95.0, 110.0, 90.0, 100.0, True),
+        ("LONG", 105.0, 90.0, 110.0, 100.0, True),
+        ("SHORT", 90.0, 110.0, 90.0, 100.0, False),
+        ("LONG", 110.0, 90.0, 110.0, 100.0, False),
+        ("SHORT", 110.0, 110.0, 90.0, 120.0, False),
+        ("LONG", 105.0, 105.0, 120.0, 100.0, False),
+    ]
+    for direction, entry, stop, target, trigger, accepted in cases:
+        assert entry_inside_bracket(direction, entry, stop, target) is accepted
+        produced, reason = _production_gap_decision(direction, entry, stop, target, trigger)
+        assert produced is accepted
+        if not accepted:
+            assert reason == "INVALID_ENTRY_BRACKET"
+
+    short_past = {
+        "date": date(2024, 8, 2),
+        "direction": "SHORT",
+        "gap_open": True,
+        "entry_trigger": 100.0,
+        "entry_price": 85.0,
+        "stop": 110.0,
+        "target": 90.0,
+    }
+    long_past = {
+        "date": date(2024, 8, 5),
+        "direction": "LONG",
+        "gap_open": True,
+        "entry_trigger": 100.0,
+        "entry_price": 115.0,
+        "stop": 90.0,
+        "target": 110.0,
+    }
+    short_inside = {
+        "date": date(2024, 8, 6),
+        "direction": "SHORT",
+        "gap_open": True,
+        "entry_trigger": 100.0,
+        "entry_price": 95.0,
+        "stop": 110.0,
+        "target": 90.0,
+    }
+    kept, invalid = partition_invalid_gap_opens([short_past, long_past, short_inside])
+    assert [row["date"] for row in kept] == [short_inside["date"]]
+    assert [row["direction"] for row in invalid] == ["SHORT", "LONG"]
+    assert all(row["invalidation"] == "INVALID_ENTRY_BRACKET" for row in invalid)
+    state_count = 1
+    assert len(kept) == state_count
+
+
 def test_data_gap_days_are_reported_and_not_scored(tmp_path):
     day = date(2024, 8, 2)
     audit = tmp_path / "audit"
@@ -363,6 +449,7 @@ def test_data_gap_days_are_reported_and_not_scored(tmp_path):
     assert result["candidate_count"] == 0
     assert result["data_gap_count"] >= 1
     assert result["gap_open_count"] == 0
+    assert result["invalid_entry_bracket_count"] == 0
     assert result["gap_open_policy"] == "score_at_10am_open"
     assert all(item["scored"] is False for item in result["data_gaps"])
     assert "2024-08-02" in {item["date"] for item in result["data_gaps"]}

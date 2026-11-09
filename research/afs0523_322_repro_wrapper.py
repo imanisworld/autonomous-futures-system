@@ -173,6 +173,50 @@ def assert_5m_window(audit_5m: Path, start: date, end: date) -> None:
         )
 
 
+def entry_inside_bracket(direction: str, entry_price: float, stop: float, target: float) -> bool:
+    """Production bracket rule from ``strategy/strat_322_first_live.py``.
+
+    Equality at either boundary is outside the bracket. SHORT requires
+    ``target < entry < stop``. LONG requires ``stop < entry < target``.
+    """
+    if direction == "SHORT":
+        return target < entry_price < stop
+    if direction == "LONG":
+        return stop < entry_price < target
+    raise RuntimeError(f"unsupported direction {direction!r}")
+
+
+def partition_invalid_gap_opens(rows: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Drop gap-opens the production state machine labels INVALID_ENTRY_BRACKET.
+
+    The research detector keeps those rows. Removing them before the count
+    check is what lets parity agree with the state machine.
+    """
+    kept: list[dict] = []
+    invalid: list[dict] = []
+    for row in rows:
+        if row.get("gap_open") and not entry_inside_bracket(
+            str(row["direction"]),
+            float(row["entry_price"]),
+            float(row["stop"]),
+            float(row["target"]),
+        ):
+            day = row["date"]
+            invalid.append(
+                {
+                    "date": day.isoformat() if hasattr(day, "isoformat") else str(day),
+                    "direction": row["direction"],
+                    "entry_price": float(row["entry_price"]),
+                    "stop": float(row["stop"]),
+                    "target": float(row["target"]),
+                    "invalidation": "INVALID_ENTRY_BRACKET",
+                }
+            )
+            continue
+        kept.append(row)
+    return kept, invalid
+
+
 def comparison_entry(research_row: dict) -> float:
     """Entry the parity check uses. Gap-open days use the 10AM open."""
     if research_row["gap_open"]:
@@ -394,10 +438,9 @@ def _parity(
     """
     verify_frozen_modules()
     assert_5m_window(audit_5m, start, end)
-    research = [
-        row for row in detect_candidates(research_15m, "MNQ", start, end)
-        if row["date"].isoformat() not in gap_dates
-    ]
+    detected = detect_candidates(research_15m, "MNQ", start, end)
+    detected, invalid_brackets = partition_invalid_gap_opens(detected)
+    research = [row for row in detected if row["date"].isoformat() not in gap_dates]
     bars = load_bars(audit_5m, "MNQ")
     state = extract_state_machine(LANES["322_mnq"], bars)
     state = [candidate for candidate in state if candidate.date not in gap_dates]
@@ -437,7 +480,7 @@ def _parity(
         }
     if mismatches:
         raise RuntimeError(f"candidate parity failed: {mismatches[:5]}")
-    return state, triggers, bars
+    return state, triggers, bars, invalid_brackets
 
 
 def run_window(
@@ -454,7 +497,7 @@ def run_window(
     """
     gap_report = data_gap_dates_from_trees(research_15m, audit_5m, start, end)
     gap_dates = {item["date"] for item in gap_report["data_gaps"]}
-    candidates, triggers, bars = _parity(
+    candidates, triggers, bars, invalid_brackets = _parity(
         research_15m, audit_5m, start, end, expected_count, gap_dates
     )
     prearmed = harness.make_prearmed(candidates, triggers, bars) if candidates else []
@@ -501,6 +544,8 @@ def run_window(
         "ledger": ledgers,
         "gap_open_policy": GAP_OPEN_POLICY,
         "gap_open_count": gap_summary["gap_open_count"],
+        "invalid_entry_bracket_count": len(invalid_brackets),
+        "invalid_entry_brackets": invalid_brackets,
         "data_gaps": gap_report["data_gaps"],
         "data_gap_count": gap_report["data_gap_count"],
     }

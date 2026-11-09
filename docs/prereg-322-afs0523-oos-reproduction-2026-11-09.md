@@ -66,6 +66,8 @@ The wrapper checks the pinned frozen-file hashes at runtime and refuses on a mis
 
 Imani, 2026-11-09 10:10 America/New_York: gap-open days are scored at the 10AM open (`score_at_10am_open`), per the 3-2-2 rules, and the gap-open count is reported. This replaces the open decision. The production path does not offer exclude-and-count as a reporting variant. The Oct 4 population has no gap-open candidates, so the 306-record reproduction gate is unchanged under this policy.
 
+A gap-open whose 10AM open is already outside the target-to-stop range is not scored. The research detector keeps that row. The production state machine (`strategy/strat_322_first_live.py`, the execution authority) rejects it as `INVALID_ENTRY_BRACKET`. The wrapper drops those research rows before the parity count, using that same rule: SHORT requires `target < entry < stop`, LONG requires `stop < entry < target`, and equality at either boundary is outside the bracket. The dropped count is reported next to the gap-open count. The variant manifest is unchanged: this is not a fourth variant.
+
 ## Slippage sensitivity and break-even
 
 1-3 tick slippage sensitivity tests fill-price sensitivity only, not whether fills would have happened; spread, depth and fill probability remain separate unquantified uncertainties.
