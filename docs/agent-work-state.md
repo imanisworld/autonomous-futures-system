@@ -1,6 +1,18 @@
 # Agent Work State
 
-## START HERE — 2026-11-09 AFS handoff
+## START HERE — 2026-11-09 read-only audit ENTRY_FILL_MODEL pin
+
+Source only. Do not merge, deploy, restart, or install from this checkpoint.
+
+| Item | State |
+|---|---|
+| **Branch** | `cursor/audit-expose-entry-fill-model` |
+| **Scope** | `ops/grok_audit_runtime_pins.py` adds `ENTRY_FILL_MODEL` to the read-only audit `runtime-pins` allowlist. Process value or `<unset>` (absent at exec, not after `.env` load), plus the `config/settings.py` fallback. QA AFS-0526 R1–R6 are in this branch. No fill-model default change and no trading-path change. |
+| **Install** | Not done. Root steps, including `--expect-sha256` and the sha-checked rollback, are in the PR body. The live dispatcher is unchanged until Imani runs them. |
+| **Clock test** | `#1261` froze that 212R clock on `main`. This branch now contains that commit. The earlier failure is not expected on this head. |
+| **NEXT** | Independent review. Imani installs only after review. Do not merge from this checkpoint. |
+
+## Previous — 2026-11-09 AFS handoff
 
 Docs-only coordination record. Claude breaker/QA, verified by ChatGPT. Source `main` at `d703232b7c9df3bf2b942f1437235dc5488a0890`. This checkpoint does not deploy, restart, merge, change strategy inventory, change risk rules, or change fill-model code. The 2026-11-06 baseline-reset procedure below is unchanged and is not closed by this handoff.
 
