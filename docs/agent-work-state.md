@@ -1,6 +1,18 @@
 # Agent Work State
 
-## START HERE — 2026-11-06 baseline-reset procedure
+## START HERE — 2026-11-09 read-only audit ENTRY_FILL_MODEL pin
+
+Source only. Do not merge, deploy, restart, or install from this checkpoint.
+
+| Item | State |
+|---|---|
+| **Branch** | `cursor/audit-expose-entry-fill-model` |
+| **Scope** | `ops/grok_audit_runtime_pins.py` adds `ENTRY_FILL_MODEL` to the read-only audit `runtime-pins` allowlist. Process value or `<unset>`, plus the `config/settings.py` fallback. No fill-model default change and no trading-path change. |
+| **Install** | Not done. Root steps are in the PR body. The live dispatcher is unchanged until Imani runs them. |
+| **Known red test** | `tests/test_options_paper_v1.py::test_frozen_212r_cross_trade_price_binds_to_production_selector_context_path` fails on `main` from a clock issue in a separate PR. Ignore only that test. |
+| **NEXT** | Independent review. Imani installs only after review. Do not merge from this checkpoint. |
+
+## Previous — 2026-11-06 baseline-reset procedure
 
 Source only. Do not deploy, restart, reset a box, or place a demo order from this checkpoint.
 
