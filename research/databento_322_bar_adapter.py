@@ -337,11 +337,27 @@ def _expiration_date(definition: dict) -> date | None:
     return None
 
 
-def _front_symbol_and_expiry(root: str, on_date: date) -> tuple[str, date]:
-    """Front raw symbol plus the third-Friday expiry that symbol stands for.
+def _contract_year_month(definition: dict, expiration: date | None) -> tuple[int, int] | None:
+    """Contract month from maturity fields, otherwise from the expiration year and month.
 
-    ``front_contract`` returns a single year digit, so NQM0 is both June 2010
-    and June 2020. The expiry date is what distinguishes them.
+    The calendar day is not part of the identity. Exchange holidays move the
+    expiration off the third Friday without changing the contract.
+    """
+    year = definition.get("maturity_year")
+    month = definition.get("maturity_month")
+    if year is not None and month is not None and year != "" and month != "":
+        return int(year), int(month)
+    if expiration is not None:
+        return expiration.year, expiration.month
+    return None
+
+
+def _front_symbol_and_expiry(root: str, on_date: date) -> tuple[str, date]:
+    """Front raw symbol plus the harness third-Friday expiry.
+
+    ``front_contract`` with ``roll_days=8`` decides the month and when to roll.
+    The returned date is that harness expiry, used only for its year and month.
+    It is not compared to Databento's expiration day.
     """
     symbol = front_contract(root, on_date, DEFAULT_ROLL_DAYS)
     year, month = on_date.year, on_date.month
@@ -367,10 +383,10 @@ def _front_symbol_and_expiry(root: str, on_date: date) -> tuple[str, date]:
 
 
 def _index_outrights(definitions: list[dict], root: str) -> dict[str, list[dict]]:
-    """Index outrights by raw symbol. Identity is instrument_id plus expiration.
+    """Index outrights by raw symbol. Identity is root, month, and full year.
 
-    A repeated raw symbol is a decade collision when the expirations differ.
-    The same raw symbol and the same expiration is a real ambiguity and refuses.
+    A repeated raw symbol is a decade collision when the contract years differ.
+    Two instruments for the same month and year are a real ambiguity and refuse.
     """
     root = root.strip().upper()
     grouped: dict[str, list[dict]] = {}
@@ -380,42 +396,53 @@ def _index_outrights(definitions: list[dict], root: str) -> dict[str, list[dict]
             continue
         if _parent_root(definition) != root:
             continue
+        expiration = _expiration_date(definition)
         grouped.setdefault(symbol, []).append(
             {
                 "instrument_id": int(definition["instrument_id"]),
-                "expiration": _expiration_date(definition),
+                "expiration": expiration,
+                "year_month": _contract_year_month(definition, expiration),
                 "raw_symbol": symbol,
             }
         )
     for symbol, items in grouped.items():
         if len(items) == 1:
             continue
-        expirations = [item["expiration"] for item in items]
-        if any(item is None for item in expirations) or len(set(expirations)) != len(expirations):
+        if any(item["year_month"] is None for item in items):
             raise RuntimeError(
                 f"ambiguous outright {symbol}: duplicate raw symbol without a distinct expiration"
+            )
+        months = [item["year_month"] for item in items]
+        if len(set(months)) != len(months):
+            raise RuntimeError(
+                f"ambiguous outright {symbol}: more than one instrument for the same contract month"
             )
     return grouped
 
 
-def _instrument_for_front(indexed: dict[str, list[dict]], symbol: str, expiry: date) -> int | None:
+def _instrument_for_front(indexed: dict[str, list[dict]], symbol: str, expiry: date) -> int:
+    """Map the harness front month to one Databento instrument.
+
+    The harness expiry supplies the year and month. A definition matches when
+    its expiration or maturity falls in that month, even if the day differs.
+    No match and more than one match both refuse.
+    """
     items = indexed.get(symbol, [])
-    if not items:
-        return None
-    if len(items) == 1:
-        only = items[0]
-        if only["expiration"] is not None and only["expiration"] != expiry:
-            return None
-        return only["instrument_id"]
-    matched = [item for item in items if item["expiration"] == expiry]
+    wanted = (expiry.year, expiry.month)
+    matched = [item for item in items if item["year_month"] == wanted]
+    if len(matched) > 1:
+        ids = ", ".join(str(item["instrument_id"]) for item in matched)
+        raise RuntimeError(f"ambiguous outright {symbol} {wanted[0]}-{wanted[1]:02d}: {ids}")
     if len(matched) == 1:
         return matched[0]["instrument_id"]
-    if len(matched) > 1:
+    undated = [item for item in items if item["year_month"] is None]
+    if len(items) == 1 and len(undated) == 1:
+        return undated[0]["instrument_id"]
+    if len(undated) > 1:
         raise RuntimeError(
-            f"ambiguous outright {symbol} on {expiry.isoformat()}: "
-            + ", ".join(str(item["instrument_id"]) for item in matched)
+            f"ambiguous outright {symbol}: duplicate raw symbol without a distinct expiration"
         )
-    return None
+    raise RuntimeError(f"missing outright {symbol} for {wanted[0]}-{wanted[1]:02d}")
 
 
 def _select_bars(

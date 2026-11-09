@@ -299,7 +299,13 @@ def test_full_holiday_closure_is_not_a_data_gap():
 def test_decade_symbol_collision_resolves_by_expiration_and_fails_closed(tmp_path):
     """NQM0 is both the 2010 and 2020 June contracts. The raw symbol is not enough."""
     definitions = [
-        {"instrument_id": 6641, "raw_symbol": "NQM0", "asset": "NQ", "expiration": "2010-06-18"},
+        {
+            "instrument_id": 6641,
+            "raw_symbol": "NQM0",
+            "asset": "NQ",
+            "maturity_year": 2010,
+            "maturity_month": 6,
+        },
         {"instrument_id": 16908, "raw_symbol": "NQM0", "asset": "NQ", "expiration": "2020-06-19"},
     ]
     day_2010 = date(2010, 6, 7)
@@ -335,6 +341,60 @@ def test_decade_symbol_collision_resolves_by_expiration_and_fails_closed(tmp_pat
                 {"instrument_id": 2, "raw_symbol": "NQM0", "asset": "NQ", "expiration": "2010-06-18"},
             ],
             "NQ",
+        )
+
+
+def test_juneteenth_shifted_expiration_still_follows_the_harness_roll(tmp_path):
+    """MNQM6 expires on Thursday 2026-06-18. The harness still rolls on 2026-03-12."""
+    definitions = [
+        {"instrument_id": 41, "raw_symbol": "MNQH6", "asset": "MNQ", "expiration": "2026-03-20"},
+        {"instrument_id": 42, "raw_symbol": "MNQM6", "asset": "MNQ", "expiration": "2026-06-18"},
+    ]
+    before = date(2026, 3, 11)
+    roll_day = date(2026, 3, 12)
+    bars = (
+        _minutes(41, before, 10, 0, 5, 11.0)
+        + _minutes(42, before, 10, 0, 5, 22.0)
+        + _minutes(41, roll_day, 10, 0, 5, 33.0)
+        + _minutes(42, roll_day, 10, 0, 5, 44.0)
+    )
+    _research, audit, report = _adapt(
+        tmp_path, definitions, bars, root="MNQ", start=before, end=roll_day
+    )
+    march_11 = next(
+        row
+        for row in _rows(audit / "MNQ" / "MNQ_2026-03-11.jsonl")
+        if row["timestamp"] == "2026-03-11T14:00:00+00:00"
+    )
+    march_12 = next(
+        row
+        for row in _rows(audit / "MNQ" / "MNQ_2026-03-12.jsonl")
+        if row["timestamp"] == "2026-03-12T14:00:00+00:00"
+    )
+    assert march_11["open"] == 11.0
+    assert march_12["open"] == 44.0
+    by_day = {item["date"]: item["instrument_id"] for item in report["contracts"]}
+    assert by_day["2026-03-11"] == 41
+    assert by_day["2026-03-12"] == 42
+
+    with pytest.raises(RuntimeError, match="missing outright MNQM6"):
+        _adapt(
+            tmp_path,
+            [definitions[0]],
+            _minutes(41, roll_day, 10, 0, 5, 11.0),
+            root="MNQ",
+            start=roll_day,
+            end=roll_day,
+        )
+    with pytest.raises(RuntimeError, match="ambiguous outright MNQM6"):
+        _adapt(
+            tmp_path,
+            definitions
+            + [{"instrument_id": 43, "raw_symbol": "MNQM6", "asset": "MNQ", "expiration": "2026-06-19"}],
+            bars,
+            root="MNQ",
+            start=roll_day,
+            end=roll_day,
         )
 
 
