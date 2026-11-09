@@ -21,9 +21,11 @@ MNQ lane ($2/point). This module does not assign a point value.
 
 ``RUN_AUTHORIZED`` is true and is checked by ``run_reproduction_gate``. That
 function is the only path that scores Databento data, and only the fixed
-reproduction window. ``run_window`` scores nothing. ``run_declared_slices()``
-stays refused until a hash-verified PASS artifact contains Claude's written
-review, and even then it does not score the older slices.
+reproduction window on the committed manifest at ``DATA_MANIFEST_PATH``.
+``DATA_MANIFEST_SHA256`` is a placeholder, so the gate refuses until a later
+reviewed commit pins the real file. ``run_window`` scores nothing.
+``run_declared_slices()`` does not score. A ``claude_review`` string is
+self-attested; pull-request review is the real gate.
 """
 from __future__ import annotations
 
@@ -63,6 +65,11 @@ GATE_ARTIFACT = (
     / TRIAL_ID
     / "reproduction-gate.json"
 )
+DATA_MANIFEST_REL = f"docs/research-evidence/{TRIAL_ID}/databento-download-manifest.json"
+DATA_MANIFEST_PATH = REPO / DATA_MANIFEST_REL
+# Placeholder until a reviewed commit pins the real Databento download file.
+# The gate refuses while this value is not the SHA-256 of that committed file.
+DATA_MANIFEST_SHA256 = "PLACEHOLDER"
 _FROZEN_LEDGER_FIELDS = (
     "prereg_path",
     "prereg_commit",
@@ -610,6 +617,39 @@ def _refuse_outside_reproduction_window(root: Path, label: str) -> None:
         )
 
 
+def _is_sha256(value: object) -> bool:
+    if not isinstance(value, str) or len(value) != 64:
+        return False
+    try:
+        int(value, 16)
+    except ValueError:
+        return False
+    return True
+
+
+def _load_pinned_manifest() -> tuple[dict, str]:
+    """Read the download record from its fixed path and check the pinned hash.
+
+    Callers cannot supply this record. While the pin is a placeholder, or the
+    file bytes are not that pin, the gate refuses.
+    """
+    if DATA_MANIFEST_SHA256 == "PLACEHOLDER" or not _is_sha256(DATA_MANIFEST_SHA256):
+        raise RuntimeError(
+            "DATA_MANIFEST_SHA256 is a placeholder; the reproduction gate refuses "
+            "until a reviewed commit pins the committed Databento manifest"
+        )
+    if not DATA_MANIFEST_PATH.is_file():
+        raise RuntimeError(f"pinned Databento manifest is missing: {DATA_MANIFEST_REL}")
+    raw = DATA_MANIFEST_PATH.read_bytes()
+    digest = hashlib.sha256(raw).hexdigest()
+    if digest != DATA_MANIFEST_SHA256:
+        raise RuntimeError("pinned Databento manifest hash mismatch")
+    manifest = json.loads(raw)
+    if not isinstance(manifest, dict):
+        raise RuntimeError("pinned Databento manifest is not an object")
+    return manifest, digest
+
+
 def _verify_download_record(research_15m: Path, audit_5m: Path, manifest: dict) -> None:
     pulled = manifest.get("pulled_files")
     if not isinstance(pulled, list) or not pulled:
@@ -629,9 +669,25 @@ def _verify_download_record(research_15m: Path, audit_5m: Path, manifest: dict) 
         raise RuntimeError("audit 5m tree hash mismatch")
 
 
-def _gate_payload(scored: dict | None, comparison: dict | None, manifest: dict, error: str | None) -> dict:
-    passed = comparison is not None and comparison.get("ok") is True and error is None
+def _data_identity(manifest: dict, manifest_sha256: str, research_15m: Path, audit_5m: Path) -> dict:
     return {
+        "pulled_files": manifest.get("pulled_files"),
+        "research_15m_sha256": _tree_sha256(research_15m),
+        "audit_5m_sha256": _tree_sha256(audit_5m),
+        "manifest_sha256": manifest_sha256,
+    }
+
+
+def _gate_payload(
+    scored: dict | None,
+    comparison: dict | None,
+    manifest: dict,
+    error: str | None,
+    identity: dict,
+    prior_attempts: list[dict],
+) -> dict:
+    passed = comparison is not None and comparison.get("ok") is True and error is None
+    payload = {
         "pass": passed,
         "comparisons": None if comparison is None else comparison.get("comparisons"),
         "outcome_records": OUTCOME_RECORD_COUNT,
@@ -644,7 +700,10 @@ def _gate_payload(scored: dict | None, comparison: dict | None, manifest: dict, 
         "adapter_report": manifest.get("adapter_report"),
         "error": error,
         "claude_review": None,
+        "prior_attempts": prior_attempts,
     }
+    payload.update(identity)
+    return payload
 
 
 def _write_gate_artifact(payload: dict) -> str:
@@ -675,36 +734,86 @@ def _append_gate_event(payload: dict, artifact_sha256: str) -> None:
             "gate_pass": payload["pass"],
             "gate_artifact": str(GATE_ARTIFACT.relative_to(REPO)) if GATE_ARTIFACT.is_relative_to(REPO) else str(GATE_ARTIFACT),
             "gate_artifact_sha256": artifact_sha256,
-            "notes": "Reproduction gate only. Older slices stay blocked until Claude reviews this result.",
+            "pulled_files": payload.get("pulled_files"),
+            "research_15m_sha256": payload.get("research_15m_sha256"),
+            "audit_5m_sha256": payload.get("audit_5m_sha256"),
+            "manifest_sha256": payload.get("manifest_sha256"),
+            "prior_attempts": payload.get("prior_attempts"),
+            "notes": "Reproduction gate only. Older slices stay blocked until Claude reviews this result on the pull request.",
         }
     )
     with TRIAL_LEDGER.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(event, separators=(",", ":")) + "\n")
 
 
-def _latest_gate_line() -> dict | None:
+def _gate_lines() -> list[dict]:
     if not TRIAL_LEDGER.is_file():
-        return None
-    found = None
+        return []
+    found = []
     for line in TRIAL_LEDGER.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
         row = json.loads(line)
         if row.get("trial_id") == TRIAL_ID and row.get("event") == "GATE":
-            found = row
+            found.append(row)
     return found
 
 
-def run_reproduction_gate(research_15m: Path, audit_5m: Path, data_manifest: dict) -> dict:
-    """Score only the reproduction window, and only on the recorded download.
+def _prior_attempts() -> list[dict]:
+    attempts = []
+    for row in _gate_lines():
+        attempts.append(
+            {
+                "recorded_at": row.get("recorded_at"),
+                "gate_pass": row.get("gate_pass"),
+                "pulled_files": row.get("pulled_files"),
+                "research_15m_sha256": row.get("research_15m_sha256"),
+                "audit_5m_sha256": row.get("audit_5m_sha256"),
+                "manifest_sha256": row.get("manifest_sha256"),
+                "gate_artifact_sha256": row.get("gate_artifact_sha256"),
+            }
+        )
+    return attempts
 
-    The window and the expected count are fixed. Callers cannot override them.
-    A DATA_GAP that removes a candidate fails this gate through the 34-count check.
+
+def _record_scoring_failure(
+    research_15m: Path,
+    audit_5m: Path,
+    manifest: dict,
+    identity: dict,
+    error: str,
+) -> dict:
+    gaps: list[dict] = []
+    gap_count = 0
+    try:
+        gap_report = data_gap_dates_from_trees(research_15m, audit_5m, REPRO_START, REPRO_END)
+        gaps = gap_report["data_gaps"]
+        gap_count = gap_report["data_gap_count"]
+    except Exception:
+        gaps = []
+        gap_count = 0
+    payload = _gate_payload(None, None, manifest, error, identity, _prior_attempts())
+    payload["data_gaps"] = gaps
+    payload["data_gap_count"] = gap_count
+    digest = _write_gate_artifact(payload)
+    _append_gate_event(payload, digest)
+    return payload
+
+
+def run_reproduction_gate(research_15m: Path, audit_5m: Path) -> dict:
+    """Score only the reproduction window, and only on the pinned download.
+
+    The manifest path and its SHA-256 are module constants. The window and the
+    expected count are fixed. A DATA_GAP that removes a candidate fails this
+    gate through the 34-count check. Any scoring exception is stored as a FAIL
+    artifact and a GATE line, then returned as that FAIL.
     """
     if not RUN_AUTHORIZED:
         raise RuntimeError("RUN_AUTHORIZED is false; reproduction gate refused")
     verify_frozen_modules()
-    _verify_download_record(research_15m, audit_5m, data_manifest)
+    manifest, manifest_sha256 = _load_pinned_manifest()
+    _verify_download_record(research_15m, audit_5m, manifest)
+    identity = _data_identity(manifest, manifest_sha256, research_15m, audit_5m)
     try:
         scored = _run_window(
             research_15m,
@@ -713,16 +822,10 @@ def run_reproduction_gate(research_15m: Path, audit_5m: Path, data_manifest: dic
             end=REPRO_END,
             expected_count=REPRO_EXPECTED_COUNT,
         )
-    except RuntimeError as exc:
-        gap_report = data_gap_dates_from_trees(research_15m, audit_5m, REPRO_START, REPRO_END)
-        payload = _gate_payload(None, None, data_manifest, str(exc))
-        payload["data_gaps"] = gap_report["data_gaps"]
-        payload["data_gap_count"] = gap_report["data_gap_count"]
-        digest = _write_gate_artifact(payload)
-        _append_gate_event(payload, digest)
-        return payload
-    comparison = compare_replay_to_oct4(scored)
-    payload = _gate_payload(scored, comparison, data_manifest, None)
+        comparison = compare_replay_to_oct4(scored)
+    except Exception as exc:
+        return _record_scoring_failure(research_15m, audit_5m, manifest, identity, str(exc))
+    payload = _gate_payload(scored, comparison, manifest, None, identity, _prior_attempts())
     digest = _write_gate_artifact(payload)
     _append_gate_event(payload, digest)
     return payload
@@ -750,25 +853,85 @@ def run_window(
 
 
 def _verified_gate_artifact() -> dict:
-    line = _latest_gate_line()
-    if line is None or not GATE_ARTIFACT.is_file():
+    lines = _gate_lines()
+    if not lines or not GATE_ARTIFACT.is_file():
         raise RuntimeError(
             "no committed reproduction-gate artifact; Claude's review of a PASS "
             "gate is required before the older slices run"
         )
     text = GATE_ARTIFACT.read_text(encoding="utf-8")
     digest = hashlib.sha256(text.encode()).hexdigest()
-    if digest != line.get("gate_artifact_sha256"):
+    if digest != lines[-1].get("gate_artifact_sha256"):
         raise RuntimeError("reproduction-gate artifact hash mismatch")
     return json.loads(text)
 
 
-def run_declared_slices(*_args: object, **_kwargs: object) -> None:
-    """Admit the older slices only after the gate evidence and Claude's review.
+def _same_data(left: dict, right: dict) -> bool:
+    return (
+        left.get("manifest_sha256") == right.get("manifest_sha256")
+        and left.get("research_15m_sha256") == right.get("research_15m_sha256")
+        and left.get("audit_5m_sha256") == right.get("audit_5m_sha256")
+    )
 
-    A passing boolean is not enough. The artifact must be the hash-verified
-    PASS record, and ``claude_review`` must be Claude's written review of that
-    result. This function does not score those slices.
+
+def _refuse_changed_gate_data(artifact: dict) -> None:
+    """Surface every earlier GATE attempt and refuse a data change."""
+    lines = _gate_lines()
+    disclosed = artifact.get("prior_attempts")
+    if not isinstance(disclosed, list) or len(disclosed) != len(lines) - 1:
+        raise RuntimeError("PASS artifact does not report every prior GATE attempt")
+    disclosed_keys = {
+        (item.get("manifest_sha256"), item.get("research_15m_sha256"), item.get("audit_5m_sha256"))
+        for item in disclosed
+        if isinstance(item, dict)
+    }
+    for earlier in lines[:-1]:
+        key = (
+            earlier.get("manifest_sha256"),
+            earlier.get("research_15m_sha256"),
+            earlier.get("audit_5m_sha256"),
+        )
+        if key not in disclosed_keys:
+            raise RuntimeError(
+                "earlier GATE attempt is not disclosed in the PASS artifact: "
+                f"manifest={key[0]} research_15m={key[1]} audit_5m={key[2]}"
+            )
+        if not _same_data(earlier, artifact):
+            raise RuntimeError(
+                "earlier GATE attempt used different data from the PASS: "
+                f"manifest={key[0]} research_15m={key[1]} audit_5m={key[2]}"
+            )
+    if not _same_data(lines[-1], artifact):
+        raise RuntimeError("latest GATE line data hashes do not match the PASS artifact")
+
+
+def _refuse_slice_data_mismatch(artifact: dict, research_15m: Path, audit_5m: Path) -> None:
+    _manifest, manifest_sha256 = _load_pinned_manifest()
+    if manifest_sha256 != artifact.get("manifest_sha256"):
+        raise RuntimeError("slice manifest hash does not match the PASS gate")
+    research_hash = _tree_sha256(research_15m)
+    audit_hash = _tree_sha256(audit_5m)
+    if research_hash != artifact.get("research_15m_sha256"):
+        raise RuntimeError("slice research 15m tree hash does not match the PASS gate")
+    if audit_hash != artifact.get("audit_5m_sha256"):
+        raise RuntimeError("slice audit 5m tree hash does not match the PASS gate")
+
+
+def run_declared_slices(research_15m: Path | None = None, audit_5m: Path | None = None) -> None:
+    """Check a slice against the PASS gate. This function does not score.
+
+    ``claude_review`` is self-attested text stored in the artifact. It is not
+    authorization. Pull-request review is the real gate.
+
+    Procedure for adding a review, in a later commit, not this one:
+    1. A reviewed commit replaces placeholder ``DATA_MANIFEST_SHA256`` with
+       the SHA-256 of the committed manifest file.
+    2. ``run_reproduction_gate`` writes the artifact with ``claude_review``
+       null and appends a GATE line for that file's hash.
+    3. Claude reviews that artifact on the pull request.
+    4. A later reviewed commit may copy that review into ``claude_review``
+       and append a new GATE line for the updated artifact hash.
+    5. This function still returns without scoring.
     """
     artifact = _verified_gate_artifact()
     if artifact.get("pass") is not True:
@@ -778,6 +941,10 @@ def run_declared_slices(*_args: object, **_kwargs: object) -> None:
         raise RuntimeError(
             "Claude's review of the gate result is required before the older slices run"
         )
+    _refuse_changed_gate_data(artifact)
+    if research_15m is None or audit_5m is None:
+        raise RuntimeError("slice admission requires the research and audit trees")
+    _refuse_slice_data_mismatch(artifact, research_15m, audit_5m)
     return None
 
 

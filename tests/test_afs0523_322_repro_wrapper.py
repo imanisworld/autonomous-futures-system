@@ -17,6 +17,7 @@ import pytest
 
 from config.futures_contracts import contract_economics
 from research.afs0523_322_repro_wrapper import (
+    DATA_MANIFEST_SHA256,
     REPRO_END,
     REPRO_START,
     TRIAL_ID,
@@ -593,13 +594,24 @@ def _bar_file(root: Path, day: date) -> None:
 
 def _manifest(tmp_path: Path, research: Path, audit: Path) -> dict:
     pulled = tmp_path / "pulled.dbn"
-    pulled.write_bytes(b"synthetic-download-record")
+    if not pulled.exists():
+        pulled.write_bytes(b"synthetic-download-record")
     return {
         "pulled_files": [{"path": str(pulled), "sha256": hashlib.sha256(pulled.read_bytes()).hexdigest()}],
         "research_15m_sha256": _tree_sha256(research),
         "audit_5m_sha256": _tree_sha256(audit),
         "adapter_report": {"contracts": ["MNQH5"], "missing_minutes": []},
     }
+
+
+def _pin_manifest(monkeypatch, tmp_path: Path, manifest: dict) -> str:
+    path = tmp_path / "databento-download-manifest.json"
+    raw = (json.dumps(manifest, indent=2) + "\n").encode()
+    path.write_bytes(raw)
+    pin = hashlib.sha256(raw).hexdigest()
+    monkeypatch.setattr("research.afs0523_322_repro_wrapper.DATA_MANIFEST_PATH", path)
+    monkeypatch.setattr("research.afs0523_322_repro_wrapper.DATA_MANIFEST_SHA256", pin)
+    return pin
 
 
 def _patch_gate_paths(monkeypatch, tmp_path: Path) -> tuple[Path, Path]:
@@ -614,32 +626,34 @@ def _patch_gate_paths(monkeypatch, tmp_path: Path) -> tuple[Path, Path]:
 def test_reproduction_gate_refuses_when_the_flag_is_false(monkeypatch, tmp_path):
     monkeypatch.setattr("research.afs0523_322_repro_wrapper.RUN_AUTHORIZED", False)
     with pytest.raises(RuntimeError, match="RUN_AUTHORIZED"):
-        run_reproduction_gate(tmp_path, tmp_path, {})
+        run_reproduction_gate(tmp_path, tmp_path)
 
 
-def test_reproduction_gate_refuses_a_day_file_outside_the_window(tmp_path):
+def test_reproduction_gate_refuses_a_day_file_outside_the_window(monkeypatch, tmp_path):
     research = tmp_path / "research"
     audit = tmp_path / "audit"
     _bar_file(research, date(2020, 1, 2))
     _bar_file(audit, date(2024, 8, 2))
-    manifest = _manifest(tmp_path, research, audit)
+    _pin_manifest(monkeypatch, tmp_path, _manifest(tmp_path, research, audit))
     with pytest.raises(RuntimeError, match="outside"):
-        run_reproduction_gate(research, audit, manifest)
+        run_reproduction_gate(research, audit)
 
 
-def test_reproduction_gate_refuses_a_checksum_or_tree_hash_mismatch(tmp_path):
+def test_reproduction_gate_refuses_a_checksum_or_tree_hash_mismatch(monkeypatch, tmp_path):
     research = tmp_path / "research"
     audit = tmp_path / "audit"
     _bar_file(research, date(2024, 8, 2))
     _bar_file(audit, date(2024, 8, 2))
-    manifest = _manifest(tmp_path, research, audit)
-    manifest["pulled_files"][0]["sha256"] = "0" * 64
+    bad_checksum = _manifest(tmp_path, research, audit)
+    bad_checksum["pulled_files"][0]["sha256"] = "0" * 64
+    _pin_manifest(monkeypatch, tmp_path, bad_checksum)
     with pytest.raises(RuntimeError, match="checksum mismatch"):
-        run_reproduction_gate(research, audit, manifest)
-    manifest = _manifest(tmp_path, research, audit)
-    manifest["research_15m_sha256"] = "0" * 64
+        run_reproduction_gate(research, audit)
+    bad_tree = _manifest(tmp_path, research, audit)
+    bad_tree["research_15m_sha256"] = "0" * 64
+    _pin_manifest(monkeypatch, tmp_path, bad_tree)
     with pytest.raises(RuntimeError, match="tree hash mismatch"):
-        run_reproduction_gate(research, audit, manifest)
+        run_reproduction_gate(research, audit)
 
 
 def test_reproduction_gate_refuses_a_caller_window_or_count_override(tmp_path):
@@ -652,6 +666,25 @@ def test_reproduction_gate_refuses_a_caller_window_or_count_override(tmp_path):
             end=date(2024, 6, 30),
             expected_count=1,
         )
+
+
+def test_reproduction_gate_refuses_a_caller_manifest_or_placeholder_pin(monkeypatch, tmp_path):
+    assert DATA_MANIFEST_SHA256 == "PLACEHOLDER"
+    research = tmp_path / "research"
+    audit = tmp_path / "audit"
+    _bar_file(research, date(2024, 8, 2))
+    _bar_file(audit, date(2024, 8, 2))
+    real_ledger = (ROOT / "docs/research-trial-ledger.jsonl").read_bytes()
+    with pytest.raises(TypeError):
+        run_reproduction_gate(research, audit, data_manifest=_manifest(tmp_path, research, audit))
+    with pytest.raises(RuntimeError, match="placeholder"):
+        run_reproduction_gate(research, audit)
+    manifest = _manifest(tmp_path, research, audit)
+    _pin_manifest(monkeypatch, tmp_path, manifest)
+    monkeypatch.setattr("research.afs0523_322_repro_wrapper.DATA_MANIFEST_SHA256", "0" * 64)
+    with pytest.raises(RuntimeError, match="manifest hash mismatch"):
+        run_reproduction_gate(research, audit)
+    assert (ROOT / "docs/research-trial-ledger.jsonl").read_bytes() == real_ledger
 
 
 def test_run_window_refuses_a_call_outside_the_reproduction_window(tmp_path):
@@ -684,6 +717,11 @@ def _write_gate(artifact: Path, ledger: Path, payload: dict, *, tamper: bool = F
         "event": "GATE",
         "gate_pass": payload["pass"],
         "gate_artifact_sha256": digest,
+        "pulled_files": payload.get("pulled_files"),
+        "research_15m_sha256": payload.get("research_15m_sha256"),
+        "audit_5m_sha256": payload.get("audit_5m_sha256"),
+        "manifest_sha256": payload.get("manifest_sha256"),
+        "prior_attempts": payload.get("prior_attempts"),
     }
     ledger.write_text(json.dumps(line) + "\n", encoding="utf-8")
 
@@ -701,12 +739,30 @@ def test_declared_slices_refuse_without_a_verified_pass_artifact(monkeypatch, tm
     _write_gate(artifact, ledger, {"pass": True, "claude_review": True})
     with pytest.raises(RuntimeError, match="Claude's review"):
         run_declared_slices()
+    research = tmp_path / "research"
+    audit = tmp_path / "audit"
+    _bar_file(research, date(2024, 8, 2))
+    _bar_file(audit, date(2024, 8, 2))
+    manifest = _manifest(tmp_path, research, audit)
+    pin = _pin_manifest(monkeypatch, tmp_path, manifest)
     _write_gate(
         artifact,
         ledger,
-        {"pass": True, "claude_review": "Claude reviewed the committed gate artifact."},
+        {
+            "pass": True,
+            "claude_review": "Claude reviewed the committed gate artifact.",
+            "prior_attempts": [],
+            "pulled_files": manifest["pulled_files"],
+            "research_15m_sha256": manifest["research_15m_sha256"],
+            "audit_5m_sha256": manifest["audit_5m_sha256"],
+            "manifest_sha256": pin,
+        },
     )
-    assert run_declared_slices() is None
+    assert run_declared_slices(research, audit) is None
+    other = tmp_path / "other"
+    _bar_file(other, date(2024, 8, 5))
+    with pytest.raises(RuntimeError, match="does not match the PASS gate"):
+        run_declared_slices(other, audit)
 
 
 def test_reproduction_gate_records_a_count_failure_on_a_synthetic_fixture(monkeypatch, tmp_path):
@@ -716,9 +772,10 @@ def test_reproduction_gate_records_a_count_failure_on_a_synthetic_fixture(monkey
     _bar_file(research, day)
     _bar_file(audit, day)
     manifest = _manifest(tmp_path, research, audit)
+    pin = _pin_manifest(monkeypatch, tmp_path, manifest)
     artifact, ledger = _patch_gate_paths(monkeypatch, tmp_path)
     real_ledger = (ROOT / "docs/research-trial-ledger.jsonl").read_bytes()
-    result = run_reproduction_gate(research, audit, manifest)
+    result = run_reproduction_gate(research, audit)
     assert result["pass"] is False
     assert "expected-count" in result["error"]
     assert result["comparisons"] is None
@@ -732,4 +789,104 @@ def test_reproduction_gate_records_a_count_failure_on_a_synthetic_fixture(monkey
     assert last["event"] == "GATE"
     assert last["gate_pass"] is False
     assert last["trial_id"] == TRIAL_ID
+    assert last["manifest_sha256"] == pin
+    assert last["research_15m_sha256"] == manifest["research_15m_sha256"]
+    assert last["audit_5m_sha256"] == manifest["audit_5m_sha256"]
+    assert last["pulled_files"] == manifest["pulled_files"]
+    assert result["manifest_sha256"] == pin
+    assert result["research_15m_sha256"] == manifest["research_15m_sha256"]
+    assert result["audit_5m_sha256"] == manifest["audit_5m_sha256"]
+    assert result["pulled_files"] == manifest["pulled_files"]
+    assert result["prior_attempts"] == []
+    assert written["manifest_sha256"] == pin
+    again = run_reproduction_gate(research, audit)
+    assert again["pass"] is False
+    assert len(again["prior_attempts"]) == 1
+    assert again["prior_attempts"][0]["manifest_sha256"] == pin
+    assert again["prior_attempts"][0]["research_15m_sha256"] == manifest["research_15m_sha256"]
+    assert (ROOT / "docs/research-trial-ledger.jsonl").read_bytes() == real_ledger
+
+
+def test_slice_admission_refuses_a_pass_after_different_data(monkeypatch, tmp_path):
+    artifact, ledger = _patch_gate_paths(monkeypatch, tmp_path)
+    research = tmp_path / "research"
+    audit = tmp_path / "audit"
+    _bar_file(research, date(2024, 8, 2))
+    _bar_file(audit, date(2024, 8, 2))
+    manifest = _manifest(tmp_path, research, audit)
+    pin = _pin_manifest(monkeypatch, tmp_path, manifest)
+    earlier = {
+        "recorded_at": "2026-11-09T15:00:00Z",
+        "gate_pass": False,
+        "pulled_files": [{"path": "other", "sha256": "a" * 64}],
+        "research_15m_sha256": "b" * 64,
+        "audit_5m_sha256": "c" * 64,
+        "manifest_sha256": "d" * 64,
+        "gate_artifact_sha256": "e" * 64,
+    }
+    passing = {
+        "pass": True,
+        "claude_review": "Claude reviewed the committed gate artifact.",
+        "prior_attempts": [earlier],
+        "pulled_files": manifest["pulled_files"],
+        "research_15m_sha256": manifest["research_15m_sha256"],
+        "audit_5m_sha256": manifest["audit_5m_sha256"],
+        "manifest_sha256": pin,
+    }
+    text = json.dumps(passing, indent=2) + "\n"
+    artifact.write_text(text, encoding="utf-8")
+    digest = hashlib.sha256(text.encode()).hexdigest()
+    fail_line = {"trial_id": TRIAL_ID, "event": "GATE", **earlier}
+    pass_line = {
+        "trial_id": TRIAL_ID,
+        "event": "GATE",
+        "gate_pass": True,
+        "gate_artifact_sha256": digest,
+        "pulled_files": passing["pulled_files"],
+        "research_15m_sha256": passing["research_15m_sha256"],
+        "audit_5m_sha256": passing["audit_5m_sha256"],
+        "manifest_sha256": pin,
+        "prior_attempts": [earlier],
+    }
+    ledger.write_text(json.dumps(fail_line) + "\n" + json.dumps(pass_line) + "\n", encoding="utf-8")
+    real_ledger = (ROOT / "docs/research-trial-ledger.jsonl").read_bytes()
+    with pytest.raises(RuntimeError, match="different data") as caught:
+        run_declared_slices(research, audit)
+    assert "b" * 64 in str(caught.value)
+    hidden = dict(passing)
+    hidden["prior_attempts"] = []
+    _write_gate(artifact, ledger, hidden)
+    ledger.write_text(
+        json.dumps(fail_line) + "\n" + ledger.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    with pytest.raises(RuntimeError, match="does not report every prior GATE attempt"):
+        run_declared_slices(research, audit)
+    assert (ROOT / "docs/research-trial-ledger.jsonl").read_bytes() == real_ledger
+
+
+def test_scoring_exception_is_recorded_as_fail(monkeypatch, tmp_path):
+    research = tmp_path / "research"
+    audit = tmp_path / "audit"
+    _bar_file(research, date(2024, 8, 2))
+    _bar_file(audit, date(2024, 8, 2))
+    manifest = _manifest(tmp_path, research, audit)
+    pin = _pin_manifest(monkeypatch, tmp_path, manifest)
+    artifact, ledger = _patch_gate_paths(monkeypatch, tmp_path)
+    real_ledger = (ROOT / "docs/research-trial-ledger.jsonl").read_bytes()
+
+    def boom(*_args, **_kwargs):
+        raise ValueError("not a runtime error")
+
+    monkeypatch.setattr("research.afs0523_322_repro_wrapper._run_window", boom)
+    result = run_reproduction_gate(research, audit)
+    assert result["pass"] is False
+    assert "not a runtime error" in result["error"]
+    assert result["manifest_sha256"] == pin
+    last = json.loads(ledger.read_text(encoding="utf-8").splitlines()[-1])
+    assert last["event"] == "GATE"
+    assert last["gate_pass"] is False
+    assert last["manifest_sha256"] == pin
+    written = json.loads(artifact.read_text(encoding="utf-8"))
+    assert written["pass"] is False
     assert (ROOT / "docs/research-trial-ledger.jsonl").read_bytes() == real_ledger

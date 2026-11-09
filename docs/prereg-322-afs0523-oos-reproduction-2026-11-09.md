@@ -2,7 +2,7 @@
 
 trial_id: T-2026-11-09-prereg-322-afs0523-oos-reproduction-2026-11-09-01
 
-Operator ledger id: **AFS-0523**. This file is the repository registration for that study. It is a preregistration only. Claude's review is required before any new data runs through the wrapper. `RUN_AUTHORIZED` is true, and the only scoring path is `run_reproduction_gate`. `run_declared_slices()` still refuses until a hash-verified PASS gate artifact exists and Claude has reviewed that result.
+Operator ledger id: **AFS-0523**. This file is the repository registration for that study. It is a preregistration only. Claude's review is required before any new data runs through the wrapper. `RUN_AUTHORIZED` is true, and the only scoring path is `run_reproduction_gate`. That function loads the Databento download manifest from the committed path `docs/research-evidence/T-2026-11-09-prereg-322-afs0523-oos-reproduction-2026-11-09-01/databento-download-manifest.json`. `DATA_MANIFEST_SHA256` is `PLACEHOLDER`, and the gate refuses while it is. A later reviewed commit pins the real file. `run_declared_slices()` does not score.
 
 No vendor download, no corpus fetch, and no scoring run is part of this registration. The frozen strategy rules, the frozen harness, and `check_repro()` are not edited.
 
@@ -76,11 +76,19 @@ The break-even win rate is one shared rate for a fill model and a slippage level
 
 ## Reproduction gate
 
-`run_reproduction_gate(research_15m, audit_5m, data_manifest)` is the only path that scores the Databento reproduction window. It reads `RUN_AUTHORIZED` and refuses when that is false. The window is fixed at 2024-07-02 through 2026-06-26 and the expected count is fixed at 34. A caller cannot override either. It checks the download record's pulled-file checksums and the hashes of the generated 15-minute and 5-minute trees, and it refuses any day file outside that window. It then calls the private scorer and `compare_replay_to_oct4`, and writes a gate artifact with pass/fail, the 306 comparisons, mismatches, DATA_GAPs, invalid brackets, the gap-open count, and the adapter report. It appends a `GATE` line to the trial ledger. A DATA_GAP that removes a candidate fails this gate through the 34-count check.
+`run_reproduction_gate(research_15m, audit_5m)` is the only path that scores the Databento reproduction window. It reads `RUN_AUTHORIZED` and refuses when that is false. The window is fixed at 2024-07-02 through 2026-06-26 and the expected count is fixed at 34. A caller cannot override either, and a caller cannot pass a manifest. The manifest is loaded from the committed path `docs/research-evidence/T-2026-11-09-prereg-322-afs0523-oos-reproduction-2026-11-09-01/databento-download-manifest.json`. Its SHA-256 is the module constant `DATA_MANIFEST_SHA256`. That constant is `PLACEHOLDER` in this commit, the file is not in the tree yet, and the gate refuses until a separate reviewed commit replaces the placeholder with the hash of the committed file. The gate then checks that file's pulled-file checksums and the hashes of the generated 15-minute and 5-minute trees, and it refuses any day file outside the window. It calls the private scorer and `compare_replay_to_oct4`. The artifact and the appended `GATE` line both record pass/fail, the 306 comparisons, mismatches, DATA_GAPs, invalid brackets, the gap-open count, the adapter report, `pulled_files`, both tree hashes, the manifest SHA-256, and every prior GATE attempt. A DATA_GAP that removes a candidate fails this gate through the 34-count check. Any exception during scoring is written as a FAIL artifact and a GATE line.
 
 `run_window` does not score. A window other than the reproduction window is refused, and a hash-verified PASS artifact does not open it. The reproduction window itself is scored only by `run_reproduction_gate`.
 
-`run_declared_slices` stays refused until a committed gate artifact shows PASS and the artifact bytes match the ledger hash. A boolean is not the unlock. Claude's written review of that gate result has to be in the artifact before the older slices are admitted, and this build does not score those slices.
+`run_declared_slices` does not score. It refuses unless the artifact shows PASS, the artifact bytes match the latest GATE line, every earlier GATE attempt is listed on that artifact, and every earlier attempt used the same manifest hash and the same tree hashes as the PASS. The slice trees and the pinned manifest file are hashed again at admission and must match that PASS. A mismatch refuses. `claude_review` is self-attested text in the artifact, not authorization. Pull-request review is the real gate. A boolean is not a review.
+
+Procedure for adding a review, after this commit:
+
+1. A reviewed commit replaces `DATA_MANIFEST_SHA256` with the SHA-256 of the committed manifest file.
+2. `run_reproduction_gate` writes the artifact with `claude_review` null and appends a GATE line whose `gate_artifact_sha256` is the hash of that file.
+3. Claude reviews that committed artifact on the pull request. That review is the gate.
+4. A later reviewed commit may copy Claude's review into `claude_review` and append a new GATE line for the updated file hash.
+5. `run_declared_slices` still returns without scoring.
 
 ## Prohibited until Claude's review
 
