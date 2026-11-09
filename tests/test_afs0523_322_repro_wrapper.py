@@ -250,7 +250,7 @@ def test_expected_count_is_a_wrapper_parameter_and_new_slices_are_refused(tmp_pa
     assert any(item["field"] == "row" for item in refused["mismatches"])
 
     assert wrapper["RUN_AUTHORIZED"] is True
-    with pytest.raises(RuntimeError, match="Claude"):
+    with pytest.raises(RuntimeError, match="did not PASS"):
         wrapper["run_declared_slices"](research, audit)
 
 
@@ -906,13 +906,15 @@ def test_reproduction_gate_records_a_count_failure_on_a_synthetic_fixture(monkey
     assert result["research_15m_sha256"] == _repro(manifest)["research_15m_sha256"]
     assert result["audit_5m_sha256"] == _repro(manifest)["audit_5m_sha256"]
     assert result["pulled_files"] == manifest["pulled_files"]
-    assert result["prior_attempts"] == []
+    assert len(result["prior_attempts"]) == 1
+    assert result["prior_attempts"][0]["manifest_sha256"] == DATA_MANIFEST_SHA256
+    assert result["prior_attempts"][0]["research_15m_sha256"] == "461384bc2c638e849ebcdbd4c1fed09fde79fbc9c48dee7656a1151c259e3339"
     assert written["manifest_sha256"] == pin
     again = _call_gate(tmp_path, research, audit)
     assert again["pass"] is False
-    assert len(again["prior_attempts"]) == 1
-    assert again["prior_attempts"][0]["manifest_sha256"] == pin
-    assert again["prior_attempts"][0]["research_15m_sha256"] == _repro(manifest)["research_15m_sha256"]
+    assert len(again["prior_attempts"]) == 2
+    assert again["prior_attempts"][0]["manifest_sha256"] == DATA_MANIFEST_SHA256
+    assert again["prior_attempts"][0]["research_15m_sha256"] == "461384bc2c638e849ebcdbd4c1fed09fde79fbc9c48dee7656a1151c259e3339"
     assert (ROOT / "docs/research-trial-ledger.jsonl").read_bytes() == real_ledger
 
 
@@ -1082,6 +1084,14 @@ def test_gate_review_admits_a_slice_without_scoring_and_rejects_a_different_arti
     )
     _pin_manifest(monkeypatch, tmp_path, manifest)
     artifact, ledger = _patch_gate_paths(monkeypatch, tmp_path)
+    kept = [
+        line
+        for line in ledger.read_text(encoding="utf-8").splitlines()
+        if not line.strip()
+        or json.loads(line).get("event") != "GATE"
+        or json.loads(line).get("trial_id") != TRIAL_ID
+    ]
+    ledger.write_text("\n".join(kept) + "\n", encoding="utf-8")
     real_ledger = (ROOT / "docs/research-trial-ledger.jsonl").read_bytes()
     monkeypatch.setattr(
         "research.afs0523_322_repro_wrapper._run_window",
