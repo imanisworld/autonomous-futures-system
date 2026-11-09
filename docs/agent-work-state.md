@@ -37,10 +37,10 @@ Code and docs only. Do not install the account, deploy, or restart from this cha
 | Item | State |
 |---|---|
 | **Branch** | `cursor/grok-ops-deploy-lane-40d9` (PR #1258), merged with `main` at `8089073` (#1259 and #1261). Do not merge this PR or install from this note. |
-| **Scope** | Restricted `grok-ops` forced-command user. Wrappers `cd /` and use `python3 -P`. Promote and baseline-reset pin `/root/afs-releases/<target-sha>` after `release-complete/<sha>` matches the manifest fingerprint and `repo.commit`. `scripts/atomic_release.sh` matches `main` (no `AFS_RELEASE_ROOT`, merged-SHA gate stays `git merge-base` against `origin/main`). Install doc: `docs/grok-ops-deploy-lane.md`. |
+| **Scope** | Restricted `grok-ops` forced-command user. Wrappers `cd /` and use `python3 -P`. Promote and baseline-reset pin `/root/afs-releases/<target-sha>` after `release-complete/<sha>` matches the manifest fingerprint and `repo.commit`, and the GO token fingerprint matches that digest. Promote, verify, and rollback refuse a git-less tree before the token is consumed. `scripts/atomic_release.sh`, `scripts/deploy_lock.sh`, and `baseline_reset.*` stay byte-identical to `main`. Install doc: `docs/grok-ops-deploy-lane.md`. |
 | **Dependency** | `baseline-reset` calls `scripts/ops/baseline_reset.sh` from merged #1257 (`d703232b`). The lane argv is `reset --target-sha --release-fingerprint --ticket --approval --signature --status-file --shared-dir`. The approval and signature files are passed through from `/root/afs-maint/`. The lane does not sign them. A missing script still exits 78 and does not consume a token. |
 | **Runtime** | Not installed. The October HOLD still governs the box. |
-| **NEXT** | QA re-review of AFS-0525 (G1–G7) on this branch. Do not merge or install from this note. Operator installs only after that review and a separate GO. |
+| **NEXT** | QA re-review of AFS-0528 (H1, M2, M3, L4) on this branch. Do not merge or install from this note. A git-less promote still needs a separate Imani-approved change to `scripts/atomic_release.sh`. |
 
 ## Previous — 2026-11-06 AFS-0500 submission-evidence follow-up
 

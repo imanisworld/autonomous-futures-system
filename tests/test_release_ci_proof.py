@@ -224,7 +224,8 @@ def test_release_installs_only_the_lock_and_verifies_it():
     assert "exit 66" in promote
     assert promote.index("git merge-base") < promote.index("deploy_lock_acquire")
     assert promote.index("verify-live") < promote.index("deploy_lock_acquire")
-    assert "AFS_RELEASE_ROOT" not in text
+    root_lines = [line.strip() for line in text.splitlines() if line.strip().startswith("ROOT=")]
+    assert root_lines == ['ROOT="$(git rev-parse --show-toplevel)"']
 
 
 def test_promote_unmerged_sha_exits_66(tmp_path):
@@ -265,3 +266,25 @@ def test_promote_unmerged_sha_exits_66(tmp_path):
     )
     assert proc.returncode == 66
     assert "not merged into origin/main" in proc.stderr
+
+
+def test_gitless_directory_named_as_unmerged_sha_cannot_promote(tmp_path):
+    """A folder named after an unmerged SHA is not a merged-SHA proof.
+
+    The real script dies in git rev-parse (128) before any promote gate.
+    A folder-name bypass that got past that line would no longer exit 66 or 128.
+    """
+    sha = "1" * 40
+    release = tmp_path / sha
+    release.mkdir()
+    env = os.environ.copy()
+    env["AFS_BOX"] = "unused"
+    env["RELEASE_CI_PROOF"] = str(tmp_path / "missing-proof.json")
+    proc = subprocess.run(
+        ["bash", str(ROOT / "scripts" / "atomic_release.sh"), "promote", sha],
+        cwd=release,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode in (66, 128)

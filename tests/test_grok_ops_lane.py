@@ -11,6 +11,7 @@ import hashlib
 import inspect
 import json
 import os
+import shutil
 import stat
 import subprocess
 import sys
@@ -99,6 +100,11 @@ def _seal_target(releases: Path, shared: Path, sha: str, source: Path) -> None:
     (complete / sha).chmod(0o644)
     for path in (releases, target, target / "scripts", target / "scripts" / "ops", shared, complete):
         path.chmod(0o755)
+    _init_git(target)
+
+
+def _init_git(path: Path) -> None:
+    subprocess.run(["git", "init", "-q"], cwd=path, check=True, capture_output=True)
 
 
 def _flat(**overrides) -> FlatSnapshot:
@@ -323,6 +329,7 @@ def _ctx(tmp_path: Path, runner, flat=None, env_text=None, variants=None, lock=F
     )
     releases = tmp_path / "afs-releases"
     shared = tmp_path / "afs-shared"
+    _init_git(repo)
     _seal_target(releases, shared, SHA_A, repo)
     ctx = ActionContext(
         repo_root=repo,
@@ -1038,6 +1045,11 @@ def test_symlink_atomic_release_never_runs(tmp_path, verb):
 
 
 def test_promote_b_while_running_a(tmp_path):
+    """Stub only. B's script is a two-line shell file, not scripts/atomic_release.sh.
+
+    It shows the runner executes the target pin rather than the running pin.
+    A git-less copy of the real script is refused before the token is consumed.
+    """
     sha_b = "b" * 40
     ctx = _ctx(tmp_path, lambda argv, env: 0)
     running_marker = tmp_path / "from-a"
@@ -1200,12 +1212,86 @@ def test_relative_program_is_refused(tmp_path):
     assert ctx.calls == []
 
 
-def test_release_script_does_not_trust_an_env_root():
-    text = (ROOT / "scripts" / "atomic_release.sh").read_text()
-    assert "AFS_RELEASE_ROOT" not in text
-    assert "git-less release directory is not named" not in text
-    assert "behavior-neutral check needs a git checkout" not in text
-    assert 'git -C "$ROOT" fetch -q origin' in text
+def test_gitless_real_atomic_release_refuses_before_consume(tmp_path):
+    """Unmocked. The sealed files are the repo's atomic_release.sh and deploy_lock.sh.
+
+    The production runner's cwd is that git-less tree, so the real script exits 128.
+    The lane refuses before consume and the GO token stays open.
+    """
+    ctx = _ctx(tmp_path, lambda argv, env: 0)
+    target = Path(ctx.releases_root) / SHA_A
+    shutil.rmtree(target / ".git")
+    for name in ("atomic_release.sh", "deploy_lock.sh"):
+        src = ROOT / "scripts" / name
+        dest = target / "scripts" / name
+        dest.write_bytes(src.read_bytes())
+        dest.chmod(0o755)
+    script = str(target / "scripts" / "atomic_release.sh")
+    pinned = hold_directory(str(target), uid=os.getuid(), fstat=ctx.fstat)
+    ctx.exec_pin = pinned
+    try:
+        code = _production_runner(ctx)(
+            [script, "promote", SHA_A],
+            {"AFS_BOX": "box.example", "PATH": "/usr/bin:/bin"},
+        )
+    finally:
+        ctx.exec_pin = None
+        pinned.close()
+    assert code == 128
+    ctx.runner = _production_runner(ctx)
+    token = ctx.token_store.authorize(SHA_A, "AFS-1", FP)
+    rc = run_verb(parse_command(f"promote {SHA_A}"), ctx, token_id=token)
+    assert rc == 3
+    assert "unsupported-release-model" in ctx.audit.path.read_text()
+    assert (ctx.token_store.root / f"{token}.json").is_file()
+
+
+def test_token_fingerprint_must_match_the_manifest(tmp_path):
+    ctx = _ctx(tmp_path, lambda argv, env: 0)
+    other = "cd" * 32
+    token = ctx.token_store.authorize(SHA_A, "AFS-1", other)
+    rc = run_verb(parse_command(f"promote {SHA_A}"), ctx, token_id=token)
+    assert rc == 3
+    assert "record-mismatch" in ctx.audit.path.read_text()
+    assert ctx.calls == []
+    assert (ctx.token_store.root / f"{token}.json").is_file()
+
+
+def test_manifest_commit_must_be_the_requested_sha(tmp_path):
+    uid = os.getuid()
+    fstat = _fstat_ancestors(tmp_path, uid)
+    sha = "c" * 40
+    other = "d" * 40
+    releases = tmp_path / "afs-releases"
+    shared = tmp_path / "afs-shared"
+    target = releases / sha
+    (target / "scripts").mkdir(parents=True)
+    manifest = {"repo": {"commit": other}, "fingerprint_sha256": FP}
+    (target / "release_manifest.json").write_text(json.dumps(manifest))
+    (target / "release_manifest.json").chmod(0o644)
+    complete = shared / "release-complete"
+    complete.mkdir(parents=True)
+    (complete / sha).write_text(FP + "\n")
+    (complete / sha).chmod(0o644)
+    for path in (releases, target, shared, complete):
+        path.chmod(0o755)
+    with pytest.raises(ActionError) as mismatch:
+        prove_target_release(str(releases), str(shared), sha, uid=uid, fstat=fstat)
+    assert mismatch.value.code == "record-mismatch"
+
+
+def test_symlinked_release_is_audited_as_release_symlink(tmp_path):
+    ctx = _ctx(tmp_path, lambda argv, env: 0)
+    linked = tmp_path / "linked-releases"
+    linked.symlink_to(Path(ctx.releases_root))
+    ctx.releases_root = str(linked)
+    token = ctx.token_store.authorize(SHA_A, "AFS-1", FP)
+    rc = run_verb(parse_command(f"promote {SHA_A}"), ctx, token_id=token)
+    assert rc == 3
+    assert "release-symlink" in ctx.audit.path.read_text()
+    assert "refused:ancestor" not in ctx.audit.path.read_text()
+    assert ctx.calls == []
+    assert (ctx.token_store.root / f"{token}.json").is_file()
 
 
 def test_expected_uid_is_required_and_paths_do_not_resolve():

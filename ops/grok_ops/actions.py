@@ -1,9 +1,11 @@
 """Privileged grok-ops verbs.
 
 Gates run before any sanctioned script. promote and baseline-reset consume a
-GO token only after the gates, the target-release record check, and the
-dependency check have passed. This module never writes the trading env and
-never passes --force-lock.
+GO token only after the gates, the target-release record check, the token
+fingerprint check, and the dependency check have passed. promote, verify, and
+rollback refuse a git-less tree before that token is consumed, because
+scripts/atomic_release.sh cannot run there. This module never writes the
+trading env and never passes --force-lock.
 """
 
 from __future__ import annotations
@@ -218,6 +220,8 @@ def _promote(ctx: ActionContext, parsed: ParsedCommand, token_id: str) -> int:
         _pinned_script(ctx, DEPLOY_LOCK_REL)
         release_env = _load_release_env(ctx.release_env)
         token_id = _resolve_promote_token(ctx, token_id, sha)
+        _require_token_fingerprint(ctx, token_id)
+        _require_supported_release_model(ctx)
         record = _consume(ctx, token_id, sha)
         argv = promote_argv(atomic, sha)
         return _invoke(ctx, parsed, record, argv, release_env)
@@ -245,6 +249,7 @@ def _baseline(ctx: ActionContext, parsed: ParsedCommand, token_id: str, *, dry_r
     ctx.exec_pin = target
     try:
         script = _baseline_script(ctx)
+        _require_token_fingerprint(ctx, token_id, expected=fingerprint)
         argv = baseline_reset_argv(
             str(script),
             sha=sha,
@@ -273,6 +278,7 @@ def _verify(ctx: ActionContext, parsed: ParsedCommand, token_id: str) -> int:
     release_env = _load_release_env(ctx.release_env)
     atomic = _pinned_script(ctx, ATOMIC_REL)
     _pinned_script(ctx, DEPLOY_LOCK_REL)
+    _require_supported_release_model(ctx)
     argv = [atomic, "verify", sha]
     if "--force-lock" in argv:
         raise ActionError("force-lock")
@@ -289,6 +295,7 @@ def _rollback(ctx: ActionContext, parsed: ParsedCommand, token_id: str) -> int:
     release_env = _load_release_env(ctx.release_env)
     atomic = _pinned_script(ctx, ATOMIC_REL)
     _pinned_script(ctx, DEPLOY_LOCK_REL)
+    _require_supported_release_model(ctx)
     argv = [atomic, "rollback"]
     return _invoke(ctx, parsed, {"token_id": token_id, "ledger_id": "", "sha": ""}, argv, release_env)
 
@@ -308,6 +315,80 @@ def _peek_token(ctx: ActionContext, token_id: str) -> dict:
     if token_id:
         return ctx.token_store.read(token_id)
     return ctx.token_store.find_single_open()
+
+
+def _manifest_fingerprint(ctx: ActionContext) -> str:
+    pin = _active_pin(ctx)
+    try:
+        raw = read_verified(
+            pin.real,
+            "release_manifest.json",
+            uid=ctx.expected_uid,
+            pin=pin,
+            fstat=ctx.fstat,
+        )
+        manifest = json.loads(raw)
+    except (FileNotFoundError, OwnershipError, json.JSONDecodeError, UnicodeError) as exc:
+        if isinstance(exc, OwnershipError) and exc.code == "release-symlink":
+            raise ActionError("release-symlink") from exc
+        raise ActionError("record-mismatch") from exc
+    fingerprint = manifest.get("fingerprint_sha256") if isinstance(manifest, dict) else None
+    if not isinstance(fingerprint, str):
+        raise ActionError("record-mismatch")
+    return fingerprint
+
+
+def _require_token_fingerprint(
+    ctx: ActionContext,
+    token_id: str,
+    expected: str | None = None,
+) -> None:
+    """Bind the GO token's fingerprint to the target manifest before consume."""
+    if expected is None:
+        try:
+            peeked = _peek_token(ctx, token_id)
+        except TokenError as exc:
+            raise ActionError(exc.reason) from exc
+        expected = peeked.get("release_fingerprint")
+    if not isinstance(expected, str) or expected != _manifest_fingerprint(ctx):
+        raise ActionError("record-mismatch")
+
+
+def _require_supported_release_model(ctx: ActionContext) -> None:
+    """Refuse a tree scripts/atomic_release.sh cannot use as its git ROOT.
+
+    That script assigns ROOT from ``git rev-parse --show-toplevel``. A git-less
+    release exits 128 there. Refuse before a GO token is consumed. A directory
+    nested inside some other repository is the same refusal: ROOT would not be
+    this release.
+    """
+    pin = _active_pin(ctx)
+    pin.reverify()
+    try:
+        git_fd = os.open(".git", os.O_RDONLY | os.O_NOFOLLOW, dir_fd=pin.dirfd)
+    except OSError as exc:
+        raise ActionError("unsupported-release-model") from exc
+    else:
+        os.close(git_fd)
+    try:
+        result = subprocess.run(
+            ["git", "-C", pin.real, "rev-parse", "--show-toplevel"],
+            check=False,
+            capture_output=True,
+            text=True,
+            env=_runner_env({}),
+        )
+    except OSError as exc:
+        raise ActionError("unsupported-release-model") from exc
+    if result.returncode != 0:
+        raise ActionError("unsupported-release-model")
+    try:
+        top = os.stat((result.stdout or "").strip(), follow_symlinks=True)
+        here = os.stat(pin.real, follow_symlinks=True)
+    except OSError as exc:
+        raise ActionError("unsupported-release-model") from exc
+    if (top.st_dev, top.st_ino) != (here.st_dev, here.st_ino):
+        raise ActionError("unsupported-release-model")
 
 
 def _active_pin(ctx: ActionContext) -> PinnedRelease:
@@ -352,12 +433,16 @@ def prove_target_release(
     try:
         pin = hold_directory(target, uid=uid, fstat=fstat)
     except OwnershipError as exc:
+        if exc.code == "release-symlink":
+            raise ActionError("release-symlink") from exc
         raise ActionError("ancestor") from exc
     try:
         try:
             raw = read_verified(pin.real, "release_manifest.json", uid=uid, pin=pin, fstat=fstat)
             manifest = json.loads(raw)
         except (FileNotFoundError, OwnershipError, json.JSONDecodeError, UnicodeError) as exc:
+            if isinstance(exc, OwnershipError) and exc.code == "release-symlink":
+                raise ActionError("release-symlink") from exc
             raise ActionError("record-mismatch") from exc
         if not isinstance(manifest, dict):
             raise ActionError("record-mismatch")
@@ -371,6 +456,8 @@ def prove_target_release(
         try:
             shared = hold_directory(shared_root, uid=uid, fstat=fstat)
         except OwnershipError as exc:
+            if exc.code == "release-symlink":
+                raise ActionError("release-symlink") from exc
             raise ActionError("record-mismatch") from exc
         try:
             recorded = read_verified(
@@ -381,6 +468,8 @@ def prove_target_release(
                 fstat=fstat,
             )
         except (FileNotFoundError, OwnershipError) as exc:
+            if isinstance(exc, OwnershipError) and exc.code == "release-symlink":
+                raise ActionError("release-symlink") from exc
             raise ActionError("record-mismatch") from exc
         finally:
             shared.close()
