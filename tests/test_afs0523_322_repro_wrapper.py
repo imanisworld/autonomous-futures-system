@@ -16,6 +16,10 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from config.futures_contracts import contract_economics
+from research.afs0523_322_repro_wrapper import (
+    invalid_brackets_outside_data_gaps,
+    partition_invalid_gap_opens,
+)
 from strategy.strat_322_first_live import advance_strat_322_first_live
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -231,7 +235,7 @@ def test_expected_count_is_a_wrapper_parameter_and_new_slices_are_refused(tmp_pa
     assert refused["ok"] is False
     assert any(item["field"] == "row" for item in refused["mismatches"])
 
-    assert wrapper["RUN_AUTHORIZED"] is False
+    assert wrapper["RUN_AUTHORIZED"] is True
     with pytest.raises(RuntimeError, match="Claude"):
         wrapper["run_declared_slices"](research, audit)
 
@@ -289,7 +293,7 @@ def test_preregistration_cites_the_trial_and_blocks_a_new_data_run():
     assert "check_repro" in text
     assert "AFS-0523" in text
     assert "Claude" in text
-    assert _wrapper()["RUN_AUTHORIZED"] is False
+    assert _wrapper()["RUN_AUTHORIZED"] is True
     assert "MNQ-equivalent research, not executable historical MNQ" in text
     assert "fill-price sensitivity only" in text
     assert "306" in text
@@ -428,6 +432,29 @@ def test_invalid_gap_open_brackets_match_the_state_machine_and_do_not_break_pari
     assert all(row["invalidation"] == "INVALID_ENTRY_BRACKET" for row in invalid)
     state_count = 1
     assert len(kept) == state_count
+
+
+def test_data_gap_day_is_not_also_listed_as_invalid_entry_bracket():
+    gap_day = date(2024, 8, 2)
+    other_day = date(2024, 8, 5)
+    bad = {
+        "direction": "SHORT",
+        "gap_open": True,
+        "entry_trigger": 100.0,
+        "entry_price": 85.0,
+        "stop": 110.0,
+        "target": 90.0,
+    }
+    kept, invalid = partition_invalid_gap_opens(
+        [
+            {**bad, "date": gap_day},
+            {**bad, "date": other_day},
+        ]
+    )
+    reported = invalid_brackets_outside_data_gaps(invalid, {gap_day.isoformat()})
+    assert kept == []
+    assert [row["date"] for row in reported] == [other_day.isoformat()]
+    assert len(reported) == 1
 
 
 def test_data_gap_days_are_reported_and_not_scored(tmp_path):

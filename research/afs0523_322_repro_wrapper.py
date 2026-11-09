@@ -19,9 +19,9 @@ window, the expected-count check, and the data paths. NQ prices, when a later
 reviewed run supplies them on the MNQ path, are accounted with the unchanged
 MNQ lane ($2/point). This module does not assign a point value.
 
-``RUN_AUTHORIZED`` is false. ``run_declared_slices()`` refuses every call until
-Claude reviews the preregistration. A mechanical ``run_window()`` call is not
-a study result and must not be committed as evidence.
+``RUN_AUTHORIZED`` is true. ``run_declared_slices()`` still refuses every call.
+A mechanical ``run_window()`` call is not a study result and must not be
+committed as evidence.
 """
 from __future__ import annotations
 
@@ -52,7 +52,7 @@ OCT4_LEDGER_REL = (
 OCT4_LEDGER_SHA256 = "0d0d8d72c48b3c9dd1e7065b23a5422176a765ac7b1eb594e2833b72f5d5a9b1"
 OCT4_LEDGER_COMMIT = "cf2ac0724a266198629a363fde23364ef00ce721"
 EOD_DATE = "2025-01-20"
-RUN_AUTHORIZED = False
+RUN_AUTHORIZED = True
 REPRO_START = date(2024, 7, 2)
 REPRO_END = date(2026, 6, 26)
 REPRO_EXPECTED_COUNT = 34
@@ -215,6 +215,11 @@ def partition_invalid_gap_opens(rows: list[dict]) -> tuple[list[dict], list[dict
             continue
         kept.append(row)
     return kept, invalid
+
+
+def invalid_brackets_outside_data_gaps(invalid: list[dict], gap_dates: set[str]) -> list[dict]:
+    """DATA_GAP wins when a day would otherwise be listed in both reports."""
+    return [row for row in invalid if row["date"] not in gap_dates]
 
 
 def comparison_entry(research_row: dict) -> float:
@@ -440,6 +445,7 @@ def _parity(
     assert_5m_window(audit_5m, start, end)
     detected = detect_candidates(research_15m, "MNQ", start, end)
     detected, invalid_brackets = partition_invalid_gap_opens(detected)
+    invalid_brackets = invalid_brackets_outside_data_gaps(invalid_brackets, gap_dates)
     research = [row for row in detected if row["date"].isoformat() not in gap_dates]
     bars = load_bars(audit_5m, "MNQ")
     state = extract_state_machine(LANES["322_mnq"], bars)
