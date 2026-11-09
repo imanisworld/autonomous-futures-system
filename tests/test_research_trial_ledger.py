@@ -27,6 +27,7 @@ EVENTS = {
     "SUPERSEDED",
     "UNREGISTERED_ATTEMPT",
     "GATE",
+    "GATE_REVIEW",
 }
 FIRST_EVENTS = {"PLANNED", "ADOPTED", "UNREGISTERED_ATTEMPT"}
 TERMINAL_EVENTS = {"COMPLETED", "ABORTED", "SUPERSEDED", "UNREGISTERED_ATTEMPT"}
@@ -228,6 +229,14 @@ def test_trial_ledger_schema_and_family_counts() -> None:
                 assert row.get(key) == first.get(key), (
                     f"line {lineno}: {trial_id}: frozen field {key!r} differs from the first line"
                 )
+
+        if event == "GATE_REVIEW":
+            assert SHA256_RE.fullmatch(row.get("gate_artifact_sha256") or ""), (
+                f"line {lineno}: GATE_REVIEW requires the PASS artifact sha256"
+            )
+            assert SHA40_RE.fullmatch(row.get("pr_head_sha") or ""), (
+                f"line {lineno}: GATE_REVIEW requires the reviewed pull request head SHA"
+            )
 
         if event in TERMINAL_EVENTS:
             assert row.get("disposition") in DISPOSITIONS
