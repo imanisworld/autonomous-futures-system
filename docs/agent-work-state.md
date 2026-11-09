@@ -1,8 +1,36 @@
 # Agent Work State
 
-## START HERE — 2026-11-06 baseline-reset procedure
+## START HERE — 2026-11-09 handoff checkpoint (source only)
 
-Source only. Do not deploy, restart, reset a box, or place a demo order from this checkpoint.
+HOLD. No new strategy research. Do not implement the fill-default change from this note. Do not deploy, restart, or contact the box.
+
+| Item | State |
+|---|---|
+| **Branch** | `cursor/nov9-handoff-fill-spec-7900`. Documentation only. It does not contain the fill-default code. |
+| **Main** | `d703232b7c9df3bf2b942f1437235dc5488a0890`. |
+| **WIP** | `claude/honest-default-entry-fill-model` @ `6fb01c935b7591dde5e9340351a16658b3ce79ee`. Labeled WIP / DO NOT MERGE. Three files: `.env.example`, `config/settings.py`, `ops/project_check/runtime.py`. |
+| **Fill decision** | Option (a) is the direction: the unconfigured default should become `ioc_limit`. Implementation stays HOLD until the spec gates in `docs/entry-fill-default-spec-2026-11-09.md` are met. |
+| **Code default today** | On `main`, `ENTRY_FILL_MODEL` still defaults to `market` (`config/settings.py`). `risk_rules.yaml` `fill_model` does not set `entry_fill_model`. `PaperBroker` and the webhook/replay getattr fallbacks still say `market`. |
+| **Server** | The box's effective `ENTRY_FILL_MODEL` is UNVERIFIED. This session did not contact a server. |
+| **WIP tests** | On `6fb01c9`, `.venv/bin/python -B -m pytest -q --tb=line`: 38 failed, 8977 passed, 11 skipped, exit 1. Classification is in the spec. One failure is the date-sensitive options test, not the fill flip. |
+| **Claude audit** | Claude reported 8,988 passed and 30 failed. That count was not reproduced here. |
+| **Bots** | Do not install Backtest Forensics Lab, Quant Researcher, or Risk Controller. Audit verdict HOLD. |
+| **NEXT** | Operator confirms account size and whether to lift the fill-default HOLD. Cursor does not implement the flip until then. Grok: no new hypotheses. Claude: falsify the 60M 3-2-2 32-0 result and the 4HR treatment concentration. |
+
+Claude's 2026-11-09 breaker notes, kept as attributed findings. Items not re-run in this session stay Claude-reported.
+
+- Pine repainting audit: Claude PASS. Not re-run here.
+- VWAP anchor: Claude says Pine and replay both reset on the CME trading day. The "RTH VWAP" comment in `research/futures_non_strat_coverage.py` is isolated research. Not re-run here.
+- Fill evidence: `docs/ioc-faithful-baseline-622d-2026-07-06.md` is the cited record that the legacy `market` edge is a fill artifact. This session confirmed the code default is still `market`. It did not recompute the P&L.
+- `/futures-full-audit`: Claude AUDIT_ONLY. `risk_rules.yaml` `strategy_permission_gate.default_status` is `SHADOW_ONLY`, and the listed strategy statuses in that block are `SHADOW_ONLY`. Alert-age, the 29 risk checks, and the working-order recheck were not re-run here. Server env, Tradovate, and preflight remain UNVERIFIED. Broker path in source is Tradovate.
+- Six-micro TSMOM: the archived checkpoint below already says RETIRED Oct 18, ABORTED/NOT_RUN, DO NOT REDO.
+- Trend R3 variant shadow: `VARIANTS_START` unset is the existing source posture. Design/holdout results are UNVERIFIED.
+- Honest re-baseline: DO NOT REDO. Claude's PROMISING BUT UNPROVEN labels for 4HR Re-Trigger (MNQ) and 60M 3-2-2 are inventory findings, not a new status change. The 32-0 / zero-stop result is a breaker flag, not a confirmed edge.
+- Core line from Claude: safety engineering is in place; intraday 15m close-confirmed entries do not survive honest fills. Pre-armed higher-timeframe entries are the only cited survivors, and Claude says account size blocks them. Account size is UNVERIFIED.
+
+## Merged — 2026-11-06 baseline-reset procedure
+
+Source merged in #1257 at `d703232b`. Do not deploy, restart, reset a box, or place a demo order from this note.
 
 | Item | State |
 |---|---|
@@ -11,7 +39,7 @@ Source only. Do not deploy, restart, reset a box, or place a demo order from thi
 | **Runbook** | `docs/ops/baseline_reset_runbook.md` |
 | **Runtime** | Not exercised. No server was contacted. |
 | **Tests** | `python -B -m pytest -q` after the nonce lock: 9018 passed, 8 skipped, exit 0. The 8-process spawn test then passed on its own in 27.61s. |
-| **NEXT** | Independent review. Operator GO is still required before any host command in the runbook. Do not merge from this checkpoint. |
+| **NEXT** | Operator GO is still required before any host command in the runbook. |
 
 ## Previous — 2026-11-06 AFS-0500 submission-evidence follow-up
 
