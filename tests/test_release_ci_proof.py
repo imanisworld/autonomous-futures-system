@@ -220,5 +220,9 @@ def test_release_installs_only_the_lock_and_verifies_it():
     assert build.index("verify-live") < build.index("deploy_lock_acquire")
     promote = text.split("promote_release() {", 1)[1].split("rollback_release() {", 1)[0]
     assert 'ops.release_ci_proof verify-live' in promote
-    assert 'git merge-base --is-ancestor "$sha" origin/main' in promote
+    assert '_require_merged_sha "$sha"' in promote
+    assert promote.index("_require_merged_sha") < promote.index("deploy_lock_acquire")
     assert promote.index("verify-live") < promote.index("deploy_lock_acquire")
+    merged = text.split("_require_merged_sha() {", 1)[1].split("promote_release() {", 1)[0]
+    assert 'git merge-base --is-ancestor "$sha" origin/main' in merged
+    assert 'git-less release directory is not named' in merged
