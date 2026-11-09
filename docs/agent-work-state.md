@@ -1,16 +1,21 @@
 # Agent Work State
 
-## START HERE — 2026-11-06 grok-ops deploy lane (source only)
+## START HERE — 2026-11-09 AFS handoff
 
-Code and docs only. Do not install the account, deploy, or restart from this change.
+Docs-only coordination record. Claude breaker/QA, verified by ChatGPT. Source `main` at `d703232b7c9df3bf2b942f1437235dc5488a0890`. This checkpoint does not deploy, restart, merge, change strategy inventory, change risk rules, or change fill-model code. The 2026-11-06 baseline-reset procedure below is unchanged and is not closed by this handoff.
 
 | Item | State |
 |---|---|
-| **Branch** | `cursor/grok-ops-deploy-lane-40d9` (PR #1258), rebased onto `main` at `d703232b`. Do not merge or install from this note. |
-| **Scope** | Restricted `grok-ops` forced-command user. Wrappers `cd /` and use `python3 -P`. Promote and baseline-reset pin `/root/afs-releases/<target-sha>` after `release-complete/<sha>` matches the manifest fingerprint and `repo.commit`. `scripts/atomic_release.sh` matches `main` (no `AFS_RELEASE_ROOT`, merged-SHA gate stays `git merge-base` against `origin/main`). Install doc: `docs/grok-ops-deploy-lane.md`. |
-| **Dependency** | `baseline-reset` calls `scripts/ops/baseline_reset.sh` from merged #1257 (`d703232b`). The lane argv is `reset --target-sha --release-fingerprint --ticket --approval --signature --status-file --shared-dir`. The approval and signature files are passed through from `/root/afs-maint/`. The lane does not sign them. A missing script still exits 78 and does not consume a token. |
-| **Runtime** | Not installed. The October HOLD still governs the box. |
-| **NEXT** | QA re-review of AFS-0525 (G1–G7) on this branch. Do not merge or install from this note. Operator installs only after that review and a separate GO. |
+| **Pine repainting audit** | PASS. `tradingview/risksentinel_context.pine`: confirmed-bar alerts; HTF `request.security` uses `[1]`/`[2]` with `lookahead_on`; confirmed pivots/BOS. |
+| **VWAP anchor** | Resolved. Pine and replay reset at the CME trading day. The `RTH VWAP` comment in `research/futures_non_strat_coverage.py` is misleading and research-only. |
+| **Fill model** | `main` still defaults `ENTRY_FILL_MODEL=market`. Legacy market edge is a fill artifact per `docs/ioc-faithful-baseline-622d-2026-07-06.md`. Operator chose option (a): flip to honest IOC eventually. HOLD until a spec and a test classification exist. |
+| **WIP fill-model branch** | `claude/honest-default-entry-fill-model` @ `6fb01c9` (`6fb01c935b7591dde5e9340351a16658b3ce79ee`) is WIP / DO NOT MERGE. It breaks ~34 tests and could change server paper behavior if `ENTRY_FILL_MODEL` is unset. |
+| **strategy_permission_gate** | Default and all listed strategies are `SHADOW_ONLY` in `risk_rules.yaml` (source-level). |
+| **Six-micro TSMOM** | RETIRED Oct 18 (ABORTED/NOT_RUN, DO NOT REDO). |
+| **Trend R3 variant shadow** | NOT_ACTIVATED. Design/holdout results are not in the repo (UNVERIFIED). |
+| **Re-baseline** | Already done (DO NOT REDO). Only 4HR Re-Trigger (MNQ) and 60M 3-2-2 are PROMISING BUT UNPROVEN. Both are blocked by `RISK_GATES_REMOVE_EDGE` (account cap, R:R floor). 60M 3-2-2 is 32-0 with zero stop hits and needs falsification. This file does not change `docs/strategy-rules/Strategy_Inventory.md`. |
+| **UNVERIFIED** | Server env and effective `ENTRY_FILL_MODEL`; deployed runtime enforcement; Tradovate connection; preflight state. Claude's 8,988 pass / 30 fail was not independently reproduced. |
+| **NEXT** | Cursor: spec and test classification only (no fix). Claude: falsify 60M 3-2-2 and 4HR concentration. Grok: independent review only. New strategy research: HOLD. Operator: confirm account size. Do not merge the WIP fill-model branch. |
 
 ## Merged — 2026-11-06 baseline-reset procedure
 
@@ -24,6 +29,18 @@ Source merged in #1257 at `d703232b`. Do not deploy, restart, reset a box, or pl
 | **Runtime** | Not exercised. No server was contacted. |
 | **Tests** | `python -B -m pytest -q` after the nonce lock: 9018 passed, 8 skipped, exit 0. The 8-process spawn test then passed on its own in 27.61s. |
 | **NEXT** | Operator GO is still required before any host command in the runbook. |
+
+## grok-ops deploy lane (source only, PR #1258)
+
+Code and docs only. Do not install the account, deploy, or restart from this change.
+
+| Item | State |
+|---|---|
+| **Branch** | `cursor/grok-ops-deploy-lane-40d9` (PR #1258), merged with `main` at `8089073` (#1259 and #1261). Do not merge this PR or install from this note. |
+| **Scope** | Restricted `grok-ops` forced-command user. Wrappers `cd /` and use `python3 -P`. Promote and baseline-reset pin `/root/afs-releases/<target-sha>` after `release-complete/<sha>` matches the manifest fingerprint and `repo.commit`. `scripts/atomic_release.sh` matches `main` (no `AFS_RELEASE_ROOT`, merged-SHA gate stays `git merge-base` against `origin/main`). Install doc: `docs/grok-ops-deploy-lane.md`. |
+| **Dependency** | `baseline-reset` calls `scripts/ops/baseline_reset.sh` from merged #1257 (`d703232b`). The lane argv is `reset --target-sha --release-fingerprint --ticket --approval --signature --status-file --shared-dir`. The approval and signature files are passed through from `/root/afs-maint/`. The lane does not sign them. A missing script still exits 78 and does not consume a token. |
+| **Runtime** | Not installed. The October HOLD still governs the box. |
+| **NEXT** | QA re-review of AFS-0525 (G1–G7) on this branch. Do not merge or install from this note. Operator installs only after that review and a separate GO. |
 
 ## Previous — 2026-11-06 AFS-0500 submission-evidence follow-up
 
