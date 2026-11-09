@@ -336,6 +336,14 @@ def test_canonical_research_evidence_is_registered_before_counting() -> None:
         trial_id = path.parts[2]
         assert trial_id in first, f"{rel}: trial_id directory not present in ledger"
 
+        if path.name == "databento-download-manifest.json":
+            prereg = ROOT / first[trial_id]["prereg_path"]
+            digest = hashlib.sha256((ROOT / rel).read_bytes()).hexdigest()
+            assert digest in prereg.read_text(encoding="utf-8"), (
+                f"{rel}: download manifest sha256 must be cited by the prereg"
+            )
+            continue
+
         matching = [
             row
             for row in by_trial[trial_id]

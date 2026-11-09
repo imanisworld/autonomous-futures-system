@@ -22,8 +22,8 @@ MNQ lane ($2/point). This module does not assign a point value.
 ``RUN_AUTHORIZED`` is true and is checked by ``run_reproduction_gate``. That
 function is the only path that scores Databento data, and only the fixed
 reproduction window on the committed manifest at ``DATA_MANIFEST_PATH``.
-``DATA_MANIFEST_SHA256`` is a placeholder, so the gate refuses until a later
-reviewed commit pins the real file. ``run_window`` scores nothing.
+``DATA_MANIFEST_SHA256`` is the SHA-256 of that committed file. The gate
+refuses a placeholder pin and any other byte mismatch. ``run_window`` scores nothing.
 ``run_declared_slices()`` does not score. A ``claude_review`` string is
 self-attested; pull-request review is the real gate.
 """
@@ -67,9 +67,8 @@ GATE_ARTIFACT = (
 )
 DATA_MANIFEST_REL = f"docs/research-evidence/{TRIAL_ID}/databento-download-manifest.json"
 DATA_MANIFEST_PATH = REPO / DATA_MANIFEST_REL
-# Placeholder until a reviewed commit pins the real Databento download file.
-# The gate refuses while this value is not the SHA-256 of that committed file.
-DATA_MANIFEST_SHA256 = "PLACEHOLDER"
+# SHA-256 of the committed download manifest. The gate refuses on any other bytes.
+DATA_MANIFEST_SHA256 = "6c9d5ab3c29a7aeade90e95c84e0128795afc1bdd19aa165e18d364760b7f43d"
 _FROZEN_LEDGER_FIELDS = (
     "prereg_path",
     "prereg_commit",
@@ -148,14 +147,14 @@ SLICES = (
     ),
     SliceSpec(
         "nq-2010-06-to-2019-05",
-        date(2010, 6, 1),
+        date(2010, 6, 6),
         date(2019, 4, 30),
         "NQ",
         "best available evidence, not fully clean",
     ),
     SliceSpec(
         "combined",
-        date(2010, 6, 1),
+        date(2010, 6, 6),
         date(2024, 6, 30),
         "COMBINED",
         "reported separately; no retuning",

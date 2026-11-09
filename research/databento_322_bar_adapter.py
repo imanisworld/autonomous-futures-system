@@ -306,31 +306,129 @@ def _bucket_starts(minutes: list[datetime], width: int) -> list[list[datetime]]:
     return buckets
 
 
-def _outrights(definitions: list[dict], root: str) -> dict[str, dict]:
+_QUARTER_MONTHS = (3, 6, 9, 12)
+_MONTH_CODE = {3: "H", 6: "M", 9: "U", 12: "Z"}
+
+
+def _third_friday(year: int, month: int) -> date:
+    first = date(year, month, 1)
+    return first + timedelta(days=(4 - first.weekday()) % 7 + 14)
+
+
+def _expiration_date(definition: dict) -> date | None:
+    for key in ("expiration", "maturity"):
+        raw = definition.get(key)
+        if raw is None or raw == "":
+            continue
+        if isinstance(raw, datetime):
+            return raw.date()
+        if isinstance(raw, date):
+            return raw
+        if isinstance(raw, str):
+            return date.fromisoformat(raw[:10])
+        if isinstance(raw, int):
+            if raw > 10**15:
+                seconds = raw / 1_000_000_000
+            elif raw > 10**12:
+                seconds = raw / 1_000
+            else:
+                seconds = float(raw)
+            return datetime.fromtimestamp(seconds, tz=timezone.utc).date()
+    return None
+
+
+def _front_symbol_and_expiry(root: str, on_date: date) -> tuple[str, date]:
+    """Front raw symbol plus the third-Friday expiry that symbol stands for.
+
+    ``front_contract`` returns a single year digit, so NQM0 is both June 2010
+    and June 2020. The expiry date is what distinguishes them.
+    """
+    symbol = front_contract(root, on_date, DEFAULT_ROLL_DAYS)
+    year, month = on_date.year, on_date.month
+    symbol_root = root.strip().upper()
+    for _ in range(8):
+        quarter_month = next((item for item in _QUARTER_MONTHS if item >= month), None)
+        if quarter_month is None:
+            year, month = year + 1, 1
+            continue
+        expiry = _third_friday(year, quarter_month)
+        if on_date < expiry - timedelta(days=DEFAULT_ROLL_DAYS):
+            expected = f"{symbol_root}{_MONTH_CODE[quarter_month]}{year % 10}"
+            if expected != symbol:
+                raise RuntimeError(
+                    f"front expiry {expiry.isoformat()} produced {expected}, "
+                    f"front_contract returned {symbol}"
+                )
+            return symbol, expiry
+        month = quarter_month + 1
+        if month > 12:
+            year, month = year + 1, 1
+    raise RuntimeError(f"could not resolve front expiry for {root} on {on_date}")
+
+
+def _index_outrights(definitions: list[dict], root: str) -> dict[str, list[dict]]:
+    """Index outrights by raw symbol. Identity is instrument_id plus expiration.
+
+    A repeated raw symbol is a decade collision when the expirations differ.
+    The same raw symbol and the same expiration is a real ambiguity and refuses.
+    """
     root = root.strip().upper()
-    found: dict[str, dict] = {}
+    grouped: dict[str, list[dict]] = {}
     for definition in definitions:
         symbol = str(definition.get("raw_symbol") or "").replace(" ", "").upper()
         if not OUTRIGHT_RE.fullmatch(symbol):
             continue
         if _parent_root(definition) != root:
             continue
-        if symbol in found:
-            raise RuntimeError(f"duplicate outright definition for {symbol}")
-        found[symbol] = definition
-    return found
+        grouped.setdefault(symbol, []).append(
+            {
+                "instrument_id": int(definition["instrument_id"]),
+                "expiration": _expiration_date(definition),
+                "raw_symbol": symbol,
+            }
+        )
+    for symbol, items in grouped.items():
+        if len(items) == 1:
+            continue
+        expirations = [item["expiration"] for item in items]
+        if any(item is None for item in expirations) or len(set(expirations)) != len(expirations):
+            raise RuntimeError(
+                f"ambiguous outright {symbol}: duplicate raw symbol without a distinct expiration"
+            )
+    return grouped
 
 
-def _select_bars(bars: list[dict], outrights: dict[str, dict], root: str) -> tuple[dict[str, dict], list[dict]]:
-    by_symbol = {symbol: int(defn["instrument_id"]) for symbol, defn in outrights.items()}
+def _instrument_for_front(indexed: dict[str, list[dict]], symbol: str, expiry: date) -> int | None:
+    items = indexed.get(symbol, [])
+    if not items:
+        return None
+    if len(items) == 1:
+        only = items[0]
+        if only["expiration"] is not None and only["expiration"] != expiry:
+            return None
+        return only["instrument_id"]
+    matched = [item for item in items if item["expiration"] == expiry]
+    if len(matched) == 1:
+        return matched[0]["instrument_id"]
+    if len(matched) > 1:
+        raise RuntimeError(
+            f"ambiguous outright {symbol} on {expiry.isoformat()}: "
+            + ", ".join(str(item["instrument_id"]) for item in matched)
+        )
+    return None
+
+
+def _select_bars(
+    bars: list[dict], indexed: dict[str, list[dict]], root: str
+) -> tuple[dict[str, dict], list[dict]]:
     selected: dict[str, dict] = {}
     contracts: dict[str, dict] = {}
     for bar in bars:
         stamp = datetime.fromtimestamp(int(bar["ts_event"]) / 1_000_000_000, tz=timezone.utc)
         local = stamp.astimezone(ET)
         session_date = local.date().isoformat()
-        symbol = front_contract(root, local.date(), DEFAULT_ROLL_DAYS)
-        instrument_id = by_symbol.get(symbol)
+        symbol, expiry = _front_symbol_and_expiry(root, local.date())
+        instrument_id = _instrument_for_front(indexed, symbol, expiry)
         contracts[session_date] = {
             "date": session_date,
             "raw_symbol": symbol,
@@ -396,8 +494,8 @@ def adapt_ohlcv_1m(
     symbol_root = root.strip().upper()
     if symbol_root not in {"MNQ", "NQ"}:
         raise RuntimeError(f"adapter root must be MNQ or NQ, got {symbol_root!r}")
-    outrights = _outrights(definitions, symbol_root)
-    selected, observed = _select_bars(bars, outrights, symbol_root)
+    indexed = _index_outrights(definitions, symbol_root)
+    selected, observed = _select_bars(bars, indexed, symbol_root)
     contracts = {
         item["date"]: item
         for item in observed
@@ -406,12 +504,11 @@ def adapt_ohlcv_1m(
     while day <= end:
         key = day.isoformat()
         if key not in contracts:
-            symbol = front_contract(symbol_root, day, DEFAULT_ROLL_DAYS)
-            definition = outrights.get(symbol)
+            symbol, expiry = _front_symbol_and_expiry(symbol_root, day)
             contracts[key] = {
                 "date": key,
                 "raw_symbol": symbol,
-                "instrument_id": None if definition is None else int(definition["instrument_id"]),
+                "instrument_id": _instrument_for_front(indexed, symbol, expiry),
             }
         day += timedelta(days=1)
 

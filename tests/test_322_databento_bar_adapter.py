@@ -7,6 +7,8 @@ from __future__ import annotations
 import ast
 import json
 from datetime import date, datetime, timezone
+
+import pytest
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -292,6 +294,48 @@ def test_full_holiday_closure_is_not_a_data_gap():
     report = classify_written_bars([], [], day, day)
     assert report["data_gap_count"] == 0
     assert report["expected_holiday_closures"] == [{"date": "2024-12-25", "kind": "closed"}]
+
+
+def test_decade_symbol_collision_resolves_by_expiration_and_fails_closed(tmp_path):
+    """NQM0 is both the 2010 and 2020 June contracts. The raw symbol is not enough."""
+    definitions = [
+        {"instrument_id": 6641, "raw_symbol": "NQM0", "asset": "NQ", "expiration": "2010-06-18"},
+        {"instrument_id": 16908, "raw_symbol": "NQM0", "asset": "NQ", "expiration": "2020-06-19"},
+    ]
+    day_2010 = date(2010, 6, 7)
+    day_2020 = date(2020, 6, 8)
+    bars_2010 = _minutes(6641, day_2010, 10, 0, 5, 10.0) + _minutes(16908, day_2010, 10, 0, 5, 20.0)
+    bars_2020 = _minutes(6641, day_2020, 10, 0, 5, 30.0) + _minutes(16908, day_2020, 10, 0, 5, 40.0)
+    _research, audit, report_2010 = _adapt(
+        tmp_path, definitions, bars_2010, root="NQ", start=day_2010, end=day_2010
+    )
+    chosen_2010 = next(
+        row
+        for row in _rows(audit / "MNQ" / "MNQ_2010-06-07.jsonl")
+        if row["timestamp"] == "2010-06-07T14:00:00+00:00"
+    )
+    assert chosen_2010["open"] == 10.0
+    assert {item["date"]: item["instrument_id"] for item in report_2010["contracts"]}["2010-06-07"] == 6641
+    _research, audit, report_2020 = _adapt(
+        tmp_path, definitions, bars_2020, root="NQ", start=day_2020, end=day_2020
+    )
+    chosen_2020 = next(
+        row
+        for row in _rows(audit / "MNQ" / "MNQ_2020-06-08.jsonl")
+        if row["timestamp"] == "2020-06-08T14:00:00+00:00"
+    )
+    assert chosen_2020["open"] == 40.0
+    assert {item["date"]: item["instrument_id"] for item in report_2020["contracts"]}["2020-06-08"] == 16908
+    from research.databento_322_bar_adapter import _index_outrights
+
+    with pytest.raises(RuntimeError, match="ambiguous outright NQM0"):
+        _index_outrights(
+            [
+                {"instrument_id": 1, "raw_symbol": "NQM0", "asset": "NQ", "expiration": "2010-06-18"},
+                {"instrument_id": 2, "raw_symbol": "NQM0", "asset": "NQ", "expiration": "2010-06-18"},
+            ],
+            "NQ",
+        )
 
 
 def test_adapter_source_does_not_open_a_network_client():

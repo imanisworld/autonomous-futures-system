@@ -1,0 +1,51 @@
+{
+  "pulled_files": [
+    {
+      "path": "reproduction/MNQ.FUT_ohlcv-1m_20240702_20260627.parent.dbn.zst",
+      "sha256": "be71c84c49a3fc0c58c178fa9cbc40ccfc16a762606663872872e2fb57936ba4"
+    },
+    {
+      "path": "reproduction/MNQ.FUT_definition_20240702_20260627.parent.dbn.zst",
+      "sha256": "b7c7ae39f0c703df972884cecdc9771b2d5425122e3e1c2228ae4cd7a2dc1e38"
+    },
+    {
+      "path": "mnq-2019-05-to-2024-06/MNQ.FUT_ohlcv-1m_20190501_20240701.parent.dbn.zst",
+      "sha256": "34658accfbf4a26267ddda1a2a7907b0cb9804d2f7a7e4fe0287a67938319e81"
+    },
+    {
+      "path": "mnq-2019-05-to-2024-06/MNQ.FUT_definition_20190501_20240701.parent.dbn.zst",
+      "sha256": "42d9552c597bd26bc7e135a2e28301c5ff5b6fba5dfb0c0ea27bc7d2842dc6b7"
+    },
+    {
+      "path": "nq-2010-06-to-2019-05/NQ.FUT_ohlcv-1m_20100606_20190501.parent.dbn.zst",
+      "sha256": "18ed25e813ab14020a2340499433f618f1b453dd79e5eee9dbdcc5d6a260b5e8"
+    },
+    {
+      "path": "nq-2010-06-to-2019-05/NQ.FUT_definition_20100606_20190501.parent.dbn.zst",
+      "sha256": "8f81483c9b8437acdf4371f29e5b054f045201d809d1ef306dfa3a3eef66ca28"
+    }
+  ],
+  "windows": [
+    {
+      "id": "reproduction",
+      "start": "2024-07-02",
+      "end": "2026-06-26",
+      "research_15m_sha256": "461384bc2c638e849ebcdbd4c1fed09fde79fbc9c48dee7656a1151c259e3339",
+      "audit_5m_sha256": "a08d909274fa5a06e9234b1c0975977d91a00b1f749c0560fd6d41859410c1e3"
+    },
+    {
+      "id": "mnq-2019-05-to-2024-06",
+      "start": "2019-05-01",
+      "end": "2024-06-30",
+      "research_15m_sha256": "bedaf87edccaedfff6392e933066c847d561e4947264f45b59c815306e3a2023",
+      "audit_5m_sha256": "6aab7d6e6115d810a4c8b4840a611f0a17fc7461ca7566c05d1fdca360f87021"
+    },
+    {
+      "id": "nq-2010-06-to-2019-05",
+      "start": "2010-06-06",
+      "end": "2019-04-30",
+      "research_15m_sha256": "cb0457ed6f277caa14b55d4d249d9f2b67a55a9668b9f163fe1a0c6c521b2b3d",
+      "audit_5m_sha256": "9621dfb3d2e42ae0ef775eee35d589c5eb3412f51f689c5e76c1bd72cb963235"
+    }
+  ]
+}

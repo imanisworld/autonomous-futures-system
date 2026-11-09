@@ -265,7 +265,7 @@ def test_declared_slices_stay_separate_and_nq_is_mnq_equivalent_dollars():
     assert mnq.start == date(2019, 5, 1)
     assert mnq.end == date(2024, 6, 30)
     assert mnq.price_source == "MNQ"
-    assert nq.start == date(2010, 6, 1)
+    assert nq.start == date(2010, 6, 6)
     assert nq.end == date(2019, 4, 30)
     assert nq.price_source == "NQ"
     assert nq.label == "best available evidence, not fully clean"
@@ -621,7 +621,7 @@ def _manifest(tmp_path: Path, research: Path, audit: Path, *, slices: dict | Non
         "windows": [
             _window("reproduction", "2024-07-02", "2026-06-26", _tree_sha256(research), _tree_sha256(audit)),
             _window("mnq-2019-05-to-2024-06", "2019-05-01", "2024-06-30", mnq[0], mnq[1]),
-            _window("nq-2010-06-to-2019-05", "2010-06-01", "2019-04-30", nq[0], nq[1]),
+            _window("nq-2010-06-to-2019-05", "2010-06-06", "2019-04-30", nq[0], nq[1]),
         ],
         "adapter_report": {"contracts": ["MNQH5"], "missing_minutes": []},
     }
@@ -696,7 +696,7 @@ def test_reproduction_gate_refuses_a_caller_window_or_count_override(tmp_path):
 
 
 def test_reproduction_gate_refuses_a_caller_manifest_or_placeholder_pin(monkeypatch, tmp_path):
-    assert DATA_MANIFEST_SHA256 == "PLACEHOLDER"
+    assert DATA_MANIFEST_SHA256 != "PLACEHOLDER"
     research = tmp_path / "research"
     audit = tmp_path / "audit"
     _bar_file(research, date(2024, 8, 2))
@@ -704,6 +704,7 @@ def test_reproduction_gate_refuses_a_caller_manifest_or_placeholder_pin(monkeypa
     real_ledger = (ROOT / "docs/research-trial-ledger.jsonl").read_bytes()
     with pytest.raises(TypeError):
         run_reproduction_gate(research, audit, data_manifest=_manifest(tmp_path, research, audit))
+    monkeypatch.setattr("research.afs0523_322_repro_wrapper.DATA_MANIFEST_SHA256", "PLACEHOLDER")
     with pytest.raises(RuntimeError, match="placeholder"):
         run_reproduction_gate(research, audit)
     manifest = _manifest(tmp_path, research, audit)
@@ -938,6 +939,29 @@ def test_scoring_exception_is_recorded_as_fail(monkeypatch, tmp_path):
     written = json.loads(artifact.read_text(encoding="utf-8"))
     assert written["pass"] is False
     assert (ROOT / "docs/research-trial-ledger.jsonl").read_bytes() == real_ledger
+
+
+def test_pinned_manifest_hash_matches_the_committed_file_and_june_1_is_refused(tmp_path):
+    from research.afs0523_322_repro_wrapper import DATA_MANIFEST_PATH, DATA_MANIFEST_SHA256
+
+    raw = DATA_MANIFEST_PATH.read_bytes()
+    assert hashlib.sha256(raw).hexdigest() == DATA_MANIFEST_SHA256
+    assert DATA_MANIFEST_SHA256 != "PLACEHOLDER"
+    committed = json.loads(raw)
+    nq = next(item for item in committed["windows"] if item["id"] == "nq-2010-06-to-2019-05")
+    assert nq["start"] == "2010-06-06"
+    assert nq["research_15m_sha256"] == "cb0457ed6f277caa14b55d4d249d9f2b67a55a9668b9f163fe1a0c6c521b2b3d"
+    assert nq["audit_5m_sha256"] == "9621dfb3d2e42ae0ef775eee35d589c5eb3412f51f689c5e76c1bd72cb963235"
+    research = tmp_path / "research"
+    audit = tmp_path / "audit"
+    _bar_file(research, date(2024, 8, 2))
+    _bar_file(audit, date(2024, 8, 2))
+    early = _manifest(tmp_path, research, audit)
+    for window in early["windows"]:
+        if window["id"] == "nq-2010-06-to-2019-05":
+            window["start"] = "2010-06-01"
+    with pytest.raises(RuntimeError, match="nq-2010-06-to-2019-05 bounds"):
+        validate_download_manifest(early)
 
 
 def test_download_manifest_schema_requires_each_window(monkeypatch, tmp_path):
