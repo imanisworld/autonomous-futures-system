@@ -1,7 +1,7 @@
 """Installer self-test for the grok-ops lane.
 
-Prints 34/34 when every static guard holds. A dropped key option or a
-sudoers wildcard fails the run.
+Prints the passing count when every static guard holds. A dropped key
+option or a sudoers wildcard fails the run.
 """
 
 from __future__ import annotations
@@ -9,7 +9,8 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from ops.grok_ops.actions import BASELINE_RESET_REL, promote_argv
+from ops.grok_ops.actions import BASELINE_RESET_REL, baseline_reset_argv, promote_argv
+from ops.grok_ops.paths import APPROVAL_FILE, SIGNATURE_FILE
 from ops.grok_ops.allowlist import CommandRejected, parse_command
 from ops.grok_ops.auditlog import AuditLog
 from ops.grok_ops.gates import FlatSnapshot, evaluate_gates
@@ -93,6 +94,7 @@ def _checks() -> list[tuple[str, object]]:
         ("audit-fields", _audit_fields),
         ("no-force-lock", lambda: _assert_absent(" ".join(promote_argv("/sbin/atomic", _SHA)), "--force-lock")),
         ("baseline-path", lambda: _assert_equal(BASELINE_RESET_REL, "scripts/ops/baseline_reset.sh")),
+        ("reset-argv", _assert_reset_argv),
         ("refusal-live", lambda: _assert_refusal("posture-live")),
         ("refusal-flat", lambda: _assert_refusal("flat-unreadable")),
         ("refusal-lock", lambda: _assert_refusal("deploy-lock")),
@@ -115,6 +117,33 @@ def _assert_present(text: str, needle: str) -> None:
 def _assert_absent(text: str, needle: str) -> None:
     if needle in text:
         raise AssertionError(needle)
+
+
+def _assert_reset_argv() -> None:
+    argv = baseline_reset_argv(
+        "/usr/local/lib/afs-ops/scripts/ops/baseline_reset.sh",
+        sha=_SHA,
+        ledger_id="AFS-1",
+        release_fingerprint="ab" * 32,
+        dry_run=False,
+        approval=APPROVAL_FILE,
+        signature=SIGNATURE_FILE,
+    )
+    flags = [item for item in argv if item.startswith("--")]
+    if flags != [
+        "--target-sha",
+        "--release-fingerprint",
+        "--ticket",
+        "--approval",
+        "--signature",
+        "--status-file",
+        "--shared-dir",
+    ]:
+        raise AssertionError(flags)
+    if "--operator-token" in argv or "--env-file" in argv:
+        raise AssertionError(argv)
+    if any(item == "ssh-keygen" for item in argv):
+        raise AssertionError("lane signed an approval")
 
 
 def _assert_equal(left: str, right: str) -> None:

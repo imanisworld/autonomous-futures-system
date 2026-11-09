@@ -12,9 +12,9 @@ After the Operator installs it and types a GO, `grok-ops` may run only:
 |---|---|
 | `preflight` | Report the hard gates. Writes an audit row. |
 | `status` | Same report, no mutation. |
-| `backup` | Runs `python -B -m scripts.backup_proof_data` with `LOG_DIR` and `PROOF_BACKUP_DIR` from the root-owned release config. |
-| `baseline-reset-dry-run` | Calls `scripts/ops/baseline_reset.sh reset --dry-run` with the #1257 flags when that file exists. Does not consume the GO token. |
-| `baseline-reset` | Consumes a GO token, then calls `scripts/ops/baseline_reset.sh reset --target-sha <sha> --release-fingerprint <digest> --ticket <ledger-id> --operator-token "AUTHORIZE BASELINE RESET <sha> <digest> <ledger-id>" --status-file /var/lib/afs-ops/exposure.json --shared-dir /root/afs-shared --env-file /root/afs-shared/.env`. |
+| `backup` | Runs `/usr/bin/python3 -B -m scripts.backup_proof_data` with `LOG_DIR` and `PROOF_BACKUP_DIR` from the root-owned release config. |
+| `baseline-reset-dry-run` | Calls `scripts/ops/baseline_reset.sh reset --dry-run` with the merged #1257 flags. Does not consume the GO token. Does not sign an approval. |
+| `baseline-reset` | Consumes a GO token, then calls `scripts/ops/baseline_reset.sh reset --target-sha <sha> --release-fingerprint <digest> --ticket <ledger-id> --approval /root/afs-maint/afs-approval.txt --signature /root/afs-maint/afs-approval.txt.sig --status-file /var/lib/afs-ops/exposure.json --shared-dir /root/afs-shared`. |
 | `promote <sha>` | Consumes a GO token, then runs `scripts/atomic_release.sh promote <sha>`. |
 | `verify` | Runs `scripts/atomic_release.sh verify` for `EXPECTED_LIVE_COMMIT`. |
 | `rollback <release>` | Runs `scripts/atomic_release.sh rollback` only when `<release>` is the basename of `current.previous`. |
@@ -44,7 +44,7 @@ Every verb checks these before it acts. `preflight` and `status` report them and
 - `deploy.lock` must be absent. If the lock path cannot be stated, the action refuses.
 - Shadow variants must be inactive: `VARIANTS_START = None` in the live `research/trend_r3_forward/trend_variants_shadow.py`, and `VARIANTS_START` unset in the trading env file.
 
-The flatness snapshot is `/var/lib/afs-ops/flat.json` unless `AFS_OPS_FLAT_FILE` is set. It is JSON with `checked_at`, `positions_readable`, `open_positions`, `orders_readable`, and `working_orders`. `checked_at` older than 120 seconds is unreadable. The lane does not open a broker client. A root job the Operator already trusts has to refresh that file. Until the file is fresh, promote and reset stay refused.
+The flatness snapshot is the fixed path `/var/lib/afs-ops/flat.json`. The lane does not read `AFS_OPS_FLAT_FILE` or any other `AFS_OPS_*` variable. The file is JSON with `checked_at`, `positions_readable`, `open_positions`, `orders_readable`, and `working_orders`. `checked_at` older than 120 seconds is unreadable. The lane does not open a broker client. A root job the Operator already trusts has to refresh that file. Until the file is fresh, promote and reset stay refused.
 
 ## GO token
 
@@ -60,11 +60,11 @@ Create the token only after the Operator has typed GO for that SHA and ledger id
 
 ## Install
 
-From a checkout of the reviewed commit, as root:
+From the reviewed commit, as root. Both paths are absolute, and neither path may contain a symlink:
 
 ```bash
-sudo bash scripts/ops/install_grok_ops.sh --public-key /root/grok-ops.pub
-sudo bash scripts/ops/grok_ops_self_test.sh
+sudo bash /root/afs-releases/<sha>/scripts/ops/install_grok_ops.sh --public-key /root/grok-ops.pub
+sudo bash /root/afs-releases/<sha>/scripts/ops/grok_ops_self_test.sh
 sudo visudo -c -f /etc/sudoers.d/grok-ops
 ```
 
@@ -76,7 +76,7 @@ restrict,command="/usr/local/sbin/afs-grok-ops",no-pty,no-port-forwarding,no-age
 
 followed by the public key. It writes `/etc/sudoers.d/grok-ops` only after `visudo -c` accepts the file. It creates `/var/lib/afs-ops/audit.log` and `/var/lib/afs-ops/tokens` (mode `0700`, root). It writes `/etc/afs-ops/release.env` if that file is missing. Set `AFS_BOX` there to the sanctioned release target before the first promote. Do not put trading secrets in that file.
 
-The self-test prints `34/34` when the allowlist, key guard, sudoers policy, and `visudo -c` all hold.
+The self-test prints `35/35` when the allowlist, key guard, sudoers policy, reset argv, and `visudo -c` all hold. Root runs use `/usr/bin/python3` and `env -i`. `AFS_OPS_PYTHON` is ignored. A root install also ignores `AFS_OPS_ROOT`.
 
 Example session after install:
 
@@ -91,7 +91,7 @@ ssh -i grok-ops-key grok-ops@<vps> promote <sha>
 Either delete the line in `/var/lib/afs-ops/.ssh/authorized_keys`, or remove the whole privilege set:
 
 ```bash
-sudo bash scripts/ops/uninstall_grok_ops.sh
+sudo bash /root/afs-releases/<sha>/scripts/ops/uninstall_grok_ops.sh
 ```
 
 Uninstall removes the sudoers drop-in, the verb scripts, the dispatcher, and the authorized_keys file. It locks the account again. It leaves `/var/lib/afs-ops/audit.log` in place.
@@ -108,16 +108,15 @@ Uninstall removes the sudoers drop-in, the verb scripts, the dispatcher, and the
 scripts/ops/baseline_reset.sh
 ```
 
-That script is not on `main` at `f8b044be`. It is the in-flight sanctioned baseline-reset procedure from agent `bc-57c374c1` (`bc-57c374c1-9f65-53d3-98b1-71abbdec6c72`), PR #1257 at `ab4c9a7d`. Expected interface:
+Merged #1257 put that script on `main`. The lane calls this interface and no other flags:
 
 ```text
-scripts/ops/baseline_reset.sh reset --dry-run --target-sha <sha> --release-fingerprint <digest> --ticket <ledger-id> --operator-token "AUTHORIZE BASELINE RESET <sha> <digest> <ledger-id>" --status-file /var/lib/afs-ops/exposure.json --shared-dir /root/afs-shared --env-file /root/afs-shared/.env
-scripts/ops/baseline_reset.sh reset --target-sha <sha> --release-fingerprint <digest> --ticket <ledger-id> --operator-token "AUTHORIZE BASELINE RESET <sha> <digest> <ledger-id>" --status-file /var/lib/afs-ops/exposure.json --shared-dir /root/afs-shared --env-file /root/afs-shared/.env
+scripts/ops/baseline_reset.sh reset --target-sha <sha> --release-fingerprint <digest> --ticket <ledger-id> --approval /root/afs-maint/afs-approval.txt --signature /root/afs-maint/afs-approval.txt.sig --status-file /var/lib/afs-ops/exposure.json --shared-dir /root/afs-shared
 ```
 
-Until that file is on the tree this lane runs from, both verbs exit `78` with audit result `refused:dependency-missing` and do not consume a token. The fingerprint is the value the Operator passed to `afs-ops-authorize`. The lane does not hash the staged tree to invent it. Do not point the verb at a different script.
+`baseline-reset-dry-run` appends `--dry-run`. There is no `--operator-token` and no `--env-file`. The approval file and the signature are the copies Imani signed on the Mac and installed at those two paths. This lane passes the paths through. It does not write the approval, does not call `ssh-keygen`, and does not mint a signature. A missing script still exits `78` with audit result `refused:dependency-missing` and does not consume a token. The fingerprint is the value the Operator passed to `afs-ops-authorize`. The lane does not hash the staged tree to invent it. Do not point the verb at a different script.
 
-The root wrappers start with `/usr/bin/env -i` and `/usr/bin/python3`. They do not read `AFS_OPS_*` from the caller. Token, gate, and release paths are the absolute paths in `ops/grok_ops/paths.py`. The current symlink, the release tree under `/root/afs-releases`, the installed code under `/usr/local/lib/afs-ops`, and the token directory must be root-owned and not group- or world-writable. A swapped symlink or a symlink leaf fails the re-check.
+The root wrappers and the installer, when run as root, start with `/usr/bin/env -i` and `/usr/bin/python3`. They do not read `AFS_OPS_*` or the process cwd. Token, gate, release, approval, and signature paths are the absolute paths in `ops/grok_ops/paths.py`. Directories are opened from `/` with `openat` and `O_NOFOLLOW`, and each directory fd is `fstat`ed. A symlink is refused before mode or owner bits are checked. Every directory on that walk must be owned by root and must not be group- or world-writable. The release pin keeps that directory fd, and a later open has to match its device and inode.
 
 ## Threat model
 

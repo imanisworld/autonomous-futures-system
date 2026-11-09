@@ -1,7 +1,32 @@
 #!/bin/bash
 # Install the grok-ops forced-command user, sudoers drop-in, and verb scripts.
-# Run as root on the VPS. Tests set AFS_OPS_ROOT to a scratch prefix.
+# Root ignores AFS_OPS_* and cwd. The interpreter is /usr/bin/python3.
+# A non-root run is the test prefix only, and it still cannot choose the interpreter.
 set -euo pipefail
+
+die() {
+  echo "$1" >&2
+  exit "${2:-1}"
+}
+
+walk_real() {
+  local path="$1"
+  local cursor=""
+  local part
+  [[ "$path" == /* ]] || die "refusing a path that depends on cwd" 2
+  local IFS=/
+  local -a parts
+  read -r -a parts <<< "$path"
+  for part in "${parts[@]}"; do
+    [[ -z "$part" ]] && continue
+    [[ "$part" == "." || "$part" == ".." ]] && die "refusing a parent segment" 2
+    cursor="${cursor}/${part}"
+    if [[ -L "$cursor" ]]; then
+      die "refusing symlink: $cursor" 2
+    fi
+  done
+  [[ -e "$cursor" ]] || die "missing path" 2
+}
 
 PUBLIC_KEY=""
 while [[ $# -gt 0 ]]; do
@@ -11,32 +36,45 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     *)
-      echo "usage: install_grok_ops.sh --public-key KEYFILE" >&2
-      exit 2
+      die "usage: install_grok_ops.sh --public-key KEYFILE" 2
       ;;
   esac
 done
 
-if [[ -z "$PUBLIC_KEY" || ! -f "$PUBLIC_KEY" ]]; then
-  echo "usage: install_grok_ops.sh --public-key KEYFILE" >&2
-  exit 2
+SCRIPT=${BASH_SOURCE[0]}
+walk_real "$SCRIPT"
+REPO=$(dirname "$(dirname "$(dirname "$SCRIPT")")")
+walk_real "$REPO"
+[[ "$SCRIPT" == "$REPO/scripts/ops/install_grok_ops.sh" ]] || die "unexpected script location" 2
+[[ -n "$PUBLIC_KEY" ]] || die "usage: install_grok_ops.sh --public-key KEYFILE" 2
+walk_real "$PUBLIC_KEY"
+[[ -f "$PUBLIC_KEY" && ! -L "$PUBLIC_KEY" ]] || die "usage: install_grok_ops.sh --public-key KEYFILE" 2
+
+if [[ "$(id -u)" -eq 0 ]]; then
+  unset AFS_OPS_ROOT AFS_OPS_PYTHON AFS_PYTHON AFS_OPS_FLAT_FILE PYTHONPATH
+  PREFIX=""
+else
+  PREFIX="${AFS_OPS_ROOT:-}"
+  [[ -n "$PREFIX" ]] || die "install_grok_ops.sh must run as root" 1
+  unset AFS_OPS_PYTHON AFS_PYTHON PYTHONPATH
 fi
 
-if [[ -z "${AFS_OPS_ROOT:-}" && "$(id -u)" -ne 0 ]]; then
-  echo "install_grok_ops.sh must run as root" >&2
-  exit 1
+PY=/usr/bin/python3
+[[ -x "$PY" ]] || die "missing /usr/bin/python3" 1
+
+if find "$REPO/ops/grok_ops" -type l | grep -q .; then
+  die "refusing symlink in ops/grok_ops" 2
 fi
 
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-PREFIX="${AFS_OPS_ROOT:-}"
-PY="${AFS_OPS_PYTHON:-python3}"
-export PYTHONPATH="${REPO}${PYTHONPATH:+:$PYTHONPATH}"
-export PYTHONDONTWRITEBYTECODE=1
+run_py() {
+  env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$REPO" \
+    "$PY" -B "$@"
+}
 
 install_file() {
   local mode="$1" src="$2" dest="$3"
   mkdir -p "$(dirname "$dest")"
-  cp "$src" "$dest"
+  cp -P "$src" "$dest"
   chmod "$mode" "$dest"
 }
 
@@ -54,11 +92,11 @@ fi
 
 staged="$(mktemp)"
 trap 'rm -f "$staged"' EXIT
-"$PY" -B -m ops.grok_ops.sudoers > "$staged"
+run_py -m ops.grok_ops.sudoers > "$staged"
 visudo -c -f "$staged" >/dev/null
 install_file 440 "$staged" "$PREFIX/etc/sudoers.d/grok-ops"
 
-key_line="$("$PY" -B -m ops.grok_ops.keys --public-key "$PUBLIC_KEY")"
+key_line="$(run_py -m ops.grok_ops.keys --public-key "$PUBLIC_KEY")"
 key_dir="$PREFIX/var/lib/afs-ops/.ssh"
 mkdir -p "$key_dir" "$PREFIX/var/lib/afs-ops/tokens" "$PREFIX/etc/afs-ops" "$PREFIX/usr/local/sbin"
 printf '%s\n' "$key_line" > "$key_dir/authorized_keys"
@@ -82,8 +120,8 @@ fi
 lib="$PREFIX/usr/local/lib/afs-ops"
 rm -rf "$lib"
 mkdir -p "$lib/ops"
-cp "$REPO/ops/__init__.py" "$lib/ops/__init__.py"
-cp -R "$REPO/ops/grok_ops" "$lib/ops/grok_ops"
+cp -P "$REPO/ops/__init__.py" "$lib/ops/__init__.py"
+cp -R -P "$REPO/ops/grok_ops" "$lib/ops/grok_ops"
 chmod -R u+rX,go-w "$lib"
 
 write_root() {

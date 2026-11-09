@@ -20,11 +20,21 @@ from pathlib import Path
 
 import pytest
 
-from ops.grok_ops.actions import ActionContext, production_context, run_verb
+from ops.baseline_reset import RESET_CLI_FLAGS, main as baseline_reset_main
+from ops.grok_ops.actions import (
+    APPROVAL_FILE,
+    SIGNATURE_FILE,
+    ActionContext,
+    baseline_reset_argv,
+    production_context,
+    run_verb,
+)
 from ops.grok_ops.paths import (
     TOKEN_DIR,
     OwnershipError,
+    PinnedRelease,
     assert_directory,
+    hold_directory,
     open_verified,
     pin_release,
 )
@@ -261,6 +271,17 @@ def _ctx(tmp_path: Path, runner, flat=None, env_text=None, variants=None, lock=F
         calls.append((argv, env))
         return runner(argv, env)
 
+    fd = os.open(repo, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    held = os.fstat(fd)
+    pin = PinnedRelease(
+        link="",
+        real=str(repo),
+        prefix=str(repo),
+        dev=held.st_dev,
+        ino=held.st_ino,
+        dirfd=fd,
+        uid=os.getuid(),
+    )
     ctx = ActionContext(
         repo_root=repo,
         token_store=TokenStore(tmp_path / "tokens"),
@@ -275,6 +296,8 @@ def _ctx(tmp_path: Path, runner, flat=None, env_text=None, variants=None, lock=F
         runner=_runner,
         actor="grok-ops",
         git_ancestor=lambda sha: sha == SHA_A,
+        expected_uid=os.getuid(),
+        release_pin=pin,
     )
     ctx.calls = calls
     return ctx
@@ -370,10 +393,14 @@ def test_baseline_reset_calls_sibling_script_and_dry_run_skips_token(tmp_path):
     assert "--release-fingerprint" in dry_argv
     assert dry_argv[dry_argv.index("--release-fingerprint") + 1] == FP
     assert "--ticket" in dry_argv
+    assert "--approval" in dry_argv
+    assert dry_argv[dry_argv.index("--approval") + 1] == APPROVAL_FILE
+    assert "--signature" in dry_argv
+    assert dry_argv[dry_argv.index("--signature") + 1] == SIGNATURE_FILE
     assert "--shared-dir" in dry_argv
     assert "--status-file" in dry_argv
-    phrase = f"AUTHORIZE BASELINE RESET {SHA_A} {FP} LEDGER-1"
-    assert phrase in dry_argv
+    assert "--operator-token" not in dry_argv
+    assert "--env-file" not in dry_argv
     script_bytes = Path(dry_argv[0]).read_bytes()
     assert hashlib.sha256(script_bytes).hexdigest() != FP
     assert (ctx.token_store.root / f"{token}.json").is_file()
@@ -457,11 +484,11 @@ def test_package_does_not_import_broker_or_risk():
             assert name not in text
 
 
-def test_self_test_is_34_of_34():
+def test_self_test_count_matches_the_guard_list():
     passed, total, failures = run_self_test()
-    assert total == 34
+    assert total == 35
     assert failures == []
-    assert passed == 34
+    assert passed == 35
 
 
 def test_production_context_ignores_agent_environment(monkeypatch):
@@ -473,22 +500,64 @@ def test_production_context_ignores_agent_environment(monkeypatch):
     source = inspect.getsource(production_context)
     assert "AFS_OPS_" not in source
     assert "os.environ" not in source
+    assert ".resolve(" not in source
     with pytest.raises(OwnershipError):
         production_context()
     assert not Path("/tmp/pwned-tokens").exists()
     assert TOKEN_DIR == "/var/lib/afs-ops/tokens"
 
 
+class _Owned:
+    def __init__(self, mode: int, uid: int, dev: int, ino: int) -> None:
+        self.st_mode = mode
+        self.st_uid = uid
+        self.st_dev = dev
+        self.st_ino = ino
+
+
+def _fstat_ancestors(root: Path, uid: int):
+    """Present directories above ``root`` as owned by ``uid`` and mode 0755.
+
+    ``/tmp`` is world-writable, so a real walk stops there. Tests of a temp
+    tree still see the real mode and owner of every fd inside ``root``.
+    """
+    real_fstat = os.fstat
+    root_text = str(root)
+
+    def fstat(fd: int):
+        current = real_fstat(fd)
+        try:
+            link = os.readlink(f"/proc/self/fd/{fd}")
+        except OSError:
+            return current
+        if link.startswith(root_text):
+            return current
+        if stat.S_ISDIR(current.st_mode):
+            return _Owned(stat.S_IFDIR | 0o755, uid, current.st_dev, current.st_ino)
+        return current
+
+    return fstat
+
+
+def test_world_writable_ancestor_is_refused_without_a_fake(tmp_path):
+    with pytest.raises(OwnershipError) as refused:
+        assert_directory(str(tmp_path), uid=0)
+    assert refused.value.code == "ownership"
+
+
 def test_ownership_guard_rejects_group_writable_and_non_root(tmp_path):
     directory = tmp_path / "tokens"
     directory.mkdir(mode=0o755)
-    assert_directory(str(directory), uid=os.getuid())
+    uid = os.getuid()
+    assert_directory(str(directory), uid=uid, fstat=_fstat_ancestors(tmp_path, uid))
     directory.chmod(0o775)
-    with pytest.raises(OwnershipError):
-        assert_directory(str(directory), uid=os.getuid())
+    with pytest.raises(OwnershipError) as writable:
+        assert_directory(str(directory), uid=uid, fstat=_fstat_ancestors(tmp_path, uid))
+    assert writable.value.code == "ownership"
     directory.chmod(0o755)
-    with pytest.raises(OwnershipError):
-        assert_directory(str(directory), uid=0)
+    with pytest.raises(OwnershipError) as not_root:
+        assert_directory(str(directory), uid=0, fstat=_fstat_ancestors(tmp_path, 0))
+    assert not_root.value.code == "ownership"
 
 
 def _release_tree(tmp_path: Path, name: str, *, mode: int = 0o755) -> Path:
@@ -505,6 +574,7 @@ def _release_tree(tmp_path: Path, name: str, *, mode: int = 0o755) -> Path:
 
 def test_release_pin_detects_symlink_swap_and_writable_tree(tmp_path):
     uid = os.getuid()
+    fstat = _fstat_ancestors(tmp_path, uid)
     prefix = tmp_path / "afs-releases"
     good = _release_tree(tmp_path, "good")
     evil = _release_tree(tmp_path, "evil")
@@ -512,25 +582,29 @@ def test_release_pin_detects_symlink_swap_and_writable_tree(tmp_path):
     parent.mkdir(mode=0o755)
     link = parent / "current"
     link.symlink_to(good)
-    pinned = pin_release(str(link), str(prefix), uid=uid)
-    assert pinned.real == str(good.resolve())
+    pinned = pin_release(str(link), str(prefix), uid=uid, fstat=fstat)
+    assert pinned.real == str(good)
     link.unlink()
     link.symlink_to(evil)
     with pytest.raises(OwnershipError) as swapped:
-        pinned.reverify(uid=uid)
+        pinned.reverify()
     assert swapped.value.code == "release-toctou"
     outside = tmp_path / "outside.sh"
     outside.write_text("#!/bin/sh\nexit 0\n")
+    outside.chmod(0o755)
     swapped_script = good / "scripts" / "ops" / "baseline_reset.sh"
     swapped_script.unlink()
     swapped_script.symlink_to(outside)
-    with pytest.raises(OwnershipError):
-        open_verified(str(good), "scripts/ops/baseline_reset.sh", uid=uid)
+    with pytest.raises(OwnershipError) as linked:
+        open_verified(str(good), "scripts/ops/baseline_reset.sh", uid=uid, fstat=fstat)
+    assert linked.value.code == "release-symlink"
+    pinned.close()
     good.chmod(0o775)
     fresh = parent / "fresh"
     fresh.symlink_to(good)
-    with pytest.raises(OwnershipError):
-        pin_release(str(fresh), str(prefix), uid=uid)
+    with pytest.raises(OwnershipError) as writable:
+        pin_release(str(fresh), str(prefix), uid=uid, fstat=fstat)
+    assert writable.value.code == "ownership"
 
 
 def test_zero_and_expired_tokens_refuse_without_typeerror(tmp_path):
@@ -608,9 +682,169 @@ def test_install_and_uninstall_round_trip(tmp_path):
     assert "AFS_OPS_" not in promote
     assert "ops.grok_ops.actions promote" in promote
     proc = subprocess.run(["bash", str(self_test)], check=True, env=env, capture_output=True, text=True)
-    assert "34/34" in proc.stdout
+    assert "35/35" in proc.stdout
     audit = root / "var" / "lib" / "afs-ops" / "audit.log"
     audit.write_text('{"kept":true}\n')
     subprocess.run(["bash", str(uninstall)], check=True, env=env)
     assert not (root / "etc" / "sudoers.d" / "grok-ops").exists()
     assert audit.read_text() == '{"kept":true}\n'
+
+
+def test_install_ignores_env_interpreter_and_relative_cwd(tmp_path):
+    key = tmp_path / "id.pub"
+    key.write_text(PUBKEY + "\n")
+    marker = tmp_path / "evil-ran"
+    evil = tmp_path / "evil-python"
+    evil.write_text("#!/bin/sh\n" + f"touch {marker}\n" + "exit 99\n")
+    evil.chmod(0o755)
+    env = os.environ.copy()
+    env["AFS_OPS_ROOT"] = str(tmp_path / "root")
+    env["AFS_OPS_PYTHON"] = str(evil)
+    env["AFS_PYTHON"] = str(evil)
+    env["PYTHONPATH"] = "/tmp/not-the-repo"
+    install = ROOT / "scripts" / "ops" / "install_grok_ops.sh"
+    relative = subprocess.run(
+        ["bash", "scripts/ops/install_grok_ops.sh", "--public-key", str(key)],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert relative.returncode != 0
+    assert "cwd" in relative.stderr
+    assert not marker.exists()
+    linked = tmp_path / "install-link.sh"
+    linked.symlink_to(install)
+    via_link = subprocess.run(
+        ["bash", str(linked), "--public-key", str(key)],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert via_link.returncode != 0
+    assert "symlink" in via_link.stderr
+    assert not marker.exists()
+    subprocess.run(["bash", str(install), "--public-key", str(key)], check=True, env=env)
+    assert not marker.exists()
+    promote = (tmp_path / "root" / "usr" / "local" / "sbin" / "afs-ops-promote").read_text()
+    assert "env -i" in promote
+    assert "/usr/bin/python3" in promote
+    assert str(evil) not in promote
+    text = install.read_text()
+    assert "AFS_OPS_PYTHON:-" not in text
+    assert "pwd" not in text
+    root_branch = text.split("if [[ \"$(id -u)\" -eq 0 ]]; then", 1)[1].split("else", 1)[0]
+    assert "unset AFS_OPS_ROOT" in root_branch
+
+
+def test_null_and_expired_token_reads_are_refusals(tmp_path):
+    store = TokenStore(tmp_path / "tokens")
+    token_id = "ab" * 16
+    (store.root).mkdir()
+    (store.root / f"{token_id}.json").write_text("null\n")
+    with pytest.raises(TokenError) as null_token:
+        store.read(token_id)
+    assert null_token.value.reason == "malformed"
+    (store.root / f"{token_id}.json").write_text("[]\n")
+    with pytest.raises(TokenError) as listed:
+        store.read(token_id)
+    assert listed.value.reason == "malformed"
+    ctx = _ctx(tmp_path / "verb", lambda argv, env: 0)
+    ctx.token_store = store
+    rc = run_verb(parse_command("baseline-reset"), ctx, token_id=token_id)
+    assert rc == 3
+    assert "malformed" in ctx.audit.path.read_text()
+    assert ctx.calls == []
+    start = datetime(2026, 11, 6, 18, 0, tzinfo=timezone.utc)
+    clock = {"now": start}
+    timed = TokenStore(tmp_path / "timed", clock=lambda: clock["now"])
+    live = timed.authorize(SHA_A, "AFS-1", FP)
+    clock["now"] = start + TOKEN_TTL + timedelta(seconds=1)
+    with pytest.raises(TokenError) as expired:
+        timed.read(live)
+    assert expired.value.reason == "expired"
+    assert not (timed.root / f"{live}.json").exists()
+    link_target = tmp_path / "other.json"
+    link_target.write_text('{"token_id":"%s"}\n' % ("cd" * 16))
+    alias = "cd" * 16
+    (timed.root / f"{alias}.json").symlink_to(link_target)
+    with pytest.raises(TokenError):
+        timed.read(alias)
+    expired_ctx = _ctx(tmp_path / "expired-verb", lambda argv, env: 0)
+    expired_ctx.token_store = timed
+    rc = run_verb(parse_command("baseline-reset"), expired_ctx, token_id=live)
+    assert rc == 3
+    assert "expired" in expired_ctx.audit.path.read_text() or "missing" in expired_ctx.audit.path.read_text()
+    assert expired_ctx.calls == []
+
+
+def test_lane_reset_argv_parses_with_merged_baseline_reset(tmp_path, monkeypatch):
+    argv = baseline_reset_argv(
+        "scripts/ops/baseline_reset.sh",
+        sha=SHA_A,
+        ledger_id="LEDGER-1",
+        release_fingerprint=FP,
+        dry_run=False,
+    )
+    flags = [item for item in argv[1:] if item.startswith("--")]
+    assert flags == list(RESET_CLI_FLAGS)
+    captured: dict = {}
+
+    def fake_reset(**kwargs):
+        captured.update(kwargs)
+        return {"dry_run": True}
+
+    monkeypatch.setattr(
+        "ops.baseline_reset._read_env",
+        lambda path: "LIVE_TRADING_ENABLED=false\nTRADOVATE_ENV=demo\n",
+    )
+    monkeypatch.setattr(
+        "ops.baseline_reset._load_status",
+        lambda path: {"has_open_position": False, "open_orders": []},
+    )
+    monkeypatch.setattr("ops.baseline_reset.reset", fake_reset)
+    code = baseline_reset_main(argv[1:])
+    assert code == 0
+    assert captured["target_sha"] == SHA_A
+    assert captured["release_fingerprint"] == FP
+    assert captured["ticket"] == "LEDGER-1"
+    assert captured["approval_path"] == Path(APPROVAL_FILE)
+    assert captured["signature_path"] == Path(SIGNATURE_FILE)
+    assert "operator_token" not in captured
+    for path in (ROOT / "ops" / "grok_ops").glob("*.py"):
+        text = path.read_text()
+        assert "ssh-keygen -Y" not in text
+        assert "canonical_approval(" not in text
+
+
+def test_pinned_inode_binds_a_later_open(tmp_path):
+    uid = os.getuid()
+    fstat = _fstat_ancestors(tmp_path, uid)
+    good = _release_tree(tmp_path, "good")
+    pinned = hold_directory(str(good), uid=uid, fstat=fstat)
+    opened = open_verified(
+        pinned.real,
+        "scripts/ops/baseline_reset.sh",
+        uid=uid,
+        pin=pinned,
+        fstat=fstat,
+    )
+    assert opened.endswith("scripts/ops/baseline_reset.sh")
+    os.close(pinned.dirfd)
+    pinned.dirfd = os.open(tmp_path, os.O_RDONLY | os.O_DIRECTORY)
+    with pytest.raises(OwnershipError) as moved:
+        open_verified(pinned.real, "scripts/ops/baseline_reset.sh", uid=uid, pin=pinned, fstat=fstat)
+    assert moved.value.code == "release-toctou"
+    pinned.close()
+
+
+def test_expected_uid_is_required_and_paths_do_not_resolve():
+    from dataclasses import MISSING
+
+    assert ActionContext.__dataclass_fields__["expected_uid"].default is MISSING
+    source = (ROOT / "ops" / "grok_ops" / "paths.py").read_text()
+    assert "realpath" not in source
+    assert ".resolve(" not in source
+    actions = (ROOT / "ops" / "grok_ops" / "actions.py").read_text()
+    assert "Path.resolve" not in actions
+    assert "AFS_OPS_PYTHON" not in actions

@@ -23,6 +23,7 @@ from ops.grok_ops.auditlog import AuditLog
 from ops.grok_ops.dispatcher import _ACTOR
 from ops.grok_ops.gates import FlatSnapshot, evaluate_gates, parse_env
 from ops.grok_ops.paths import (
+    APPROVAL_FILE,
     ATOMIC_REL,
     AUDIT_LOG,
     BASELINE_REL,
@@ -37,11 +38,13 @@ from ops.grok_ops.paths import (
     RELEASES_PREFIX,
     RELEASE_ENV,
     SHARED_DIR,
+    SIGNATURE_FILE,
     TOKEN_DIR,
     VARIANTS_REL,
     OwnershipError,
+    PinnedRelease,
     assert_directory,
-    assert_owned,
+    file_identity,
     open_verified,
     pin_release,
 )
@@ -92,9 +95,10 @@ class ActionContext:
     runner: Callable[[list[str], dict[str, str]], int]
     actor: str
     git_ancestor: Callable[[str], bool]
+    expected_uid: int
+    release_pin: PinnedRelease
     calls: list = field(default_factory=list)
     python: str = PYTHON
-    expected_uid: int | None = None
     release_prefix: str = RELEASES_PREFIX
 
 
@@ -105,8 +109,11 @@ def baseline_reset_argv(
     ledger_id: str,
     release_fingerprint: str,
     dry_run: bool,
+    approval: str = APPROVAL_FILE,
+    signature: str = SIGNATURE_FILE,
 ) -> list[str]:
-    # The digest is the operator's approved-manifest value. Do not hash the tree.
+    # The digest and the signed files come from the operator. Do not hash the
+    # tree and do not build or sign an approval record here.
     argv = [
         script,
         "reset",
@@ -116,14 +123,14 @@ def baseline_reset_argv(
         release_fingerprint,
         "--ticket",
         ledger_id,
-        "--operator-token",
-        f"AUTHORIZE BASELINE RESET {sha} {release_fingerprint} {ledger_id}",
+        "--approval",
+        approval,
+        "--signature",
+        signature,
         "--status-file",
         EXPOSURE_FILE,
         "--shared-dir",
         SHARED_DIR,
-        "--env-file",
-        ENV_FILE,
     ]
     if dry_run:
         argv.append("--dry-run")
@@ -144,6 +151,9 @@ def run_verb(parsed: ParsedCommand, ctx: ActionContext, token_id: str = "") -> i
         _audit(ctx, parsed, token_id, f"refused:{exc.code}", "")
         if exc.code == "dependency-missing":
             return 78
+        return 3
+    except TokenError as exc:
+        _audit(ctx, parsed, token_id, f"refused:{exc.reason}", "")
         return 3
 
 
@@ -223,6 +233,8 @@ def _baseline(ctx: ActionContext, parsed: ParsedCommand, token_id: str, *, dry_r
         ledger_id=ledger_id,
         release_fingerprint=fingerprint,
         dry_run=dry_run,
+        approval=APPROVAL_FILE,
+        signature=SIGNATURE_FILE,
     )
     if dry_run:
         return _invoke(ctx, parsed, peeked, argv, _runner_env({}))
@@ -278,14 +290,13 @@ def _peek_token(ctx: ActionContext, token_id: str) -> dict:
 
 
 def _baseline_script(ctx: ActionContext) -> Path:
-    root = ctx.repo_root.resolve()
-    if ctx.expected_uid is None:
-        script = (root / BASELINE_RESET_REL).resolve()
-        if not script.is_file() or not script.is_relative_to(root):
-            raise ActionError("dependency-missing")
-        return script
     try:
-        verified = open_verified(str(root), BASELINE_RESET_REL, uid=ctx.expected_uid)
+        verified = open_verified(
+            ctx.release_pin.real,
+            BASELINE_RESET_REL,
+            uid=ctx.expected_uid,
+            pin=ctx.release_pin,
+        )
     except FileNotFoundError as exc:
         raise ActionError("dependency-missing") from exc
     except OwnershipError as exc:
@@ -355,9 +366,18 @@ def _runner_env(values: dict[str, str]) -> dict[str, str]:
 
 def _read_text(path: Path) -> tuple[str | None, bool]:
     try:
-        return path.read_text(encoding="utf-8"), False
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
     except OSError:
         return None, True
+    try:
+        current = os.fstat(fd)
+        if stat.S_ISLNK(current.st_mode) or not stat.S_ISREG(current.st_mode):
+            return None, True
+        return os.read(fd, 1_000_000).decode("utf-8"), False
+    except (OSError, UnicodeError):
+        return None, True
+    finally:
+        os.close(fd)
 
 
 def _audit(
@@ -379,9 +399,11 @@ def _audit(
 
 
 def _default_flat_reader() -> FlatSnapshot:
-    path = Path(FLAT_FILE)
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        text, unreadable = _read_text(Path(FLAT_FILE))
+        if unreadable or text is None:
+            raise OSError("flatness snapshot unreadable")
+        data = json.loads(text)
         checked = datetime.fromisoformat(str(data["checked_at"]))
         if checked.tzinfo is None:
             checked = checked.replace(tzinfo=timezone.utc)
@@ -421,46 +443,45 @@ def _ancestor_in(repo: str) -> Callable[[str], bool]:
 
 def production_context() -> ActionContext:
     """Build the root context from fixed paths. Ignores the process environment."""
-    code = Path(__file__).resolve()
-    installed = Path(INSTALLED_CODE).resolve()
-    if not str(code).startswith(str(installed) + os.sep):
+    code = __file__
+    if not isinstance(code, str) or not code.startswith("/"):
+        raise OwnershipError("code-path")
+    installed = INSTALLED_CODE + "/ops/grok_ops/actions.py"
+    if file_identity(code, uid=0) != file_identity(installed, uid=0):
         raise OwnershipError("code-path")
     assert_directory(INSTALLED_CODE, uid=0)
-    assert_owned_file(code, uid=0)
     release = pin_release(CURRENT_LINK, RELEASES_PREFIX, uid=0)
-    release.reverify(uid=0)
-    assert_directory(TOKEN_DIR, uid=0)
-    assert_directory(str(Path(AUDIT_LOG).parent), uid=0)
-    for fixed in (ENV_FILE, RELEASE_ENV, FLAT_FILE, EXPOSURE_FILE, PREVIOUS_FILE):
-        if os.path.lexists(fixed):
-            assert_owned_file(Path(fixed), uid=0)
-            assert_directory(os.path.dirname(fixed), uid=0)
-    root = Path(release.real)
-    return ActionContext(
-        repo_root=root,
-        token_store=TokenStore(Path(TOKEN_DIR)),
-        audit=AuditLog(Path(AUDIT_LOG)),
-        env_file=Path(ENV_FILE),
-        lock_dir=Path(LOCK_DIR),
-        variants_file=root / VARIANTS_REL,
-        previous_release_file=Path(PREVIOUS_FILE),
-        atomic_release=root / ATOMIC_REL,
-        release_env=Path(RELEASE_ENV),
-        flat_reader=_default_flat_reader,
-        runner=_default_runner,
-        actor="grok-ops",
-        git_ancestor=_ancestor_in(release.real),
-        python=PYTHON,
-        expected_uid=0,
-        release_prefix=RELEASES_PREFIX,
-    )
-
-
-def assert_owned_file(path: Path, *, uid: int) -> None:
-    listed = os.lstat(path)
-    if stat.S_ISLNK(listed.st_mode):
-        raise OwnershipError("ownership")
-    assert_owned(listed, uid=uid)
+    try:
+        release.reverify()
+        assert_directory(TOKEN_DIR, uid=0)
+        assert_directory(os.path.dirname(AUDIT_LOG), uid=0)
+        for fixed in (ENV_FILE, RELEASE_ENV, FLAT_FILE, EXPOSURE_FILE, PREVIOUS_FILE):
+            if os.path.lexists(fixed):
+                assert_directory(os.path.dirname(fixed), uid=0)
+                file_identity(fixed, uid=0)
+        root = Path(release.real)
+        return ActionContext(
+            repo_root=root,
+            token_store=TokenStore(Path(TOKEN_DIR)),
+            audit=AuditLog(Path(AUDIT_LOG)),
+            env_file=Path(ENV_FILE),
+            lock_dir=Path(LOCK_DIR),
+            variants_file=root / VARIANTS_REL,
+            previous_release_file=Path(PREVIOUS_FILE),
+            atomic_release=root / ATOMIC_REL,
+            release_env=Path(RELEASE_ENV),
+            flat_reader=_default_flat_reader,
+            runner=_default_runner,
+            actor="grok-ops",
+            git_ancestor=_ancestor_in(release.real),
+            expected_uid=0,
+            release_pin=release,
+            python=PYTHON,
+            release_prefix=RELEASES_PREFIX,
+        )
+    except Exception:
+        release.close()
+        raise
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -1,13 +1,19 @@
 #!/bin/bash
 # Remove grok-ops privilege. The append-only audit log is kept.
+# Root ignores AFS_OPS_*. A non-root run is the test prefix only.
 set -euo pipefail
 
-if [[ -z "${AFS_OPS_ROOT:-}" && "$(id -u)" -ne 0 ]]; then
-  echo "uninstall_grok_ops.sh must run as root" >&2
-  exit 1
+if [[ "$(id -u)" -eq 0 ]]; then
+  unset AFS_OPS_ROOT AFS_OPS_PYTHON AFS_PYTHON AFS_OPS_FLAT_FILE
+  PREFIX=""
+else
+  PREFIX="${AFS_OPS_ROOT:-}"
+  if [[ -z "$PREFIX" ]]; then
+    echo "uninstall_grok_ops.sh must run as root" >&2
+    exit 1
+  fi
 fi
 
-PREFIX="${AFS_OPS_ROOT:-}"
 rm -f \
   "$PREFIX/etc/sudoers.d/grok-ops" \
   "$PREFIX/usr/local/sbin/afs-grok-ops" \

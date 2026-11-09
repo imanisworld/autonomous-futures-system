@@ -10,6 +10,7 @@ import json
 import os
 import re
 import secrets
+import stat
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -25,6 +26,14 @@ class TokenError(Exception):
     def __init__(self, reason: str) -> None:
         super().__init__(reason)
         self.reason = reason
+
+
+def _is_regular(path: Path) -> bool:
+    try:
+        current = path.lstat()
+    except OSError:
+        return False
+    return stat.S_ISREG(current.st_mode)
 
 
 def _utcnow() -> datetime:
@@ -145,11 +154,44 @@ class TokenStore:
         self._check_id(token_id)
         path = self.root / f"{token_id}.json"
         consumed = self.root / "consumed" / f"{token_id}.json"
-        if consumed.is_file() and not path.is_file():
+        if _is_regular(consumed) and not _is_regular(path):
             raise TokenError("reused")
-        if not path.is_file():
-            raise TokenError("missing")
-        return json.loads(path.read_text(encoding="utf-8"))
+        data = self._read_checked(path)
+        if self._is_expired(data):
+            self._mark_expired(path, data)
+            raise TokenError("expired")
+        return data
+
+    def _read_checked(self, path: Path) -> dict:
+        try:
+            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        except FileNotFoundError as exc:
+            raise TokenError("missing") from exc
+        except OSError as exc:
+            raise TokenError("missing") from exc
+        try:
+            current = os.fstat(fd)
+            if stat.S_ISLNK(current.st_mode):
+                raise TokenError("missing")
+            if not stat.S_ISREG(current.st_mode):
+                raise TokenError("missing")
+            listed = os.lstat(path)
+            if stat.S_ISLNK(listed.st_mode) or (listed.st_dev, listed.st_ino) != (current.st_dev, current.st_ino):
+                raise TokenError("missing")
+            raw = os.read(fd, 1_000_000).decode("utf-8")
+        except TokenError:
+            raise
+        except (OSError, UnicodeError) as exc:
+            raise TokenError("missing") from exc
+        finally:
+            os.close(fd)
+        try:
+            data = json.loads(raw)
+        except (json.JSONDecodeError, UnicodeError, TypeError, ValueError) as exc:
+            raise TokenError("malformed") from exc
+        if not isinstance(data, dict):
+            raise TokenError("malformed")
+        return data
 
     def consume(self, token_id: str, sha: str) -> dict:
         self._check_id(token_id)
