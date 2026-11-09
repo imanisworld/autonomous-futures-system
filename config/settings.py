@@ -368,9 +368,12 @@ class SystemConfig:
     # closed. "market_at_reference" is a strict research market fill: callers
     # must supply a positive, finite, causally available execution price
     # (historical next-bar open), then adverse slippage is applied. It never
-    # fills at the planned order.entry. Default "market" remains legacy for
-    # frozen-result reproduction; do not treat it as honest-fill proof.
-    entry_fill_model: str = "market"  # market | market_at_reference | ioc_limit | stop_market
+    # fills at the planned order.entry. Default is "ioc_limit" (mirrors the
+    # live entry leg) so an unconfigured run can never produce the legacy
+    # plan-price result by accident (docs/ioc-faithful-baseline-622d-2026-07-06.md:
+    # the legacy "market" edge was a fill artifact). Frozen-result
+    # reproduction must request ENTRY_FILL_MODEL=market explicitly.
+    entry_fill_model: str = "ioc_limit"  # market | market_at_reference | ioc_limit | stop_market
     # Round-turn commission subtracted from replay strict-reference P&L only.
     research_commission_round_trip: float = 1.48
     # Per-root tolerance ticks for ioc_limit — read from the SAME env names the
@@ -928,8 +931,8 @@ def load_config(risk_rules_path: str = "risk_rules.yaml") -> SystemConfig:
             os.getenv("RUNNER_TRAIL_R", fill_model.get("runner_trail_r", 0.5)) or 0.5
         ),
         entry_fill_model=str(
-            os.getenv("ENTRY_FILL_MODEL", fill_model.get("entry_fill_model", "market"))
-            or "market"
+            os.getenv("ENTRY_FILL_MODEL", fill_model.get("entry_fill_model", "ioc_limit"))
+            or "ioc_limit"
         ).strip().lower(),
         entry_tolerance_ticks_by_root=_entry_tolerance_map(),
 

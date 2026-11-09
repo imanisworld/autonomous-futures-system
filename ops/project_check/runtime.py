@@ -180,7 +180,7 @@ def runtime_snapshot(
     lanes = active_lanes(rules)
 
     # Mirrors config/settings.py's load_config(): env, then risk_rules.yaml
-    # fill_model.entry_fill_model, then the code default "market" -- reporting
+    # fill_model.entry_fill_model, then the code default "ioc_limit" -- reporting
     # the code default (rather than UNKNOWN) here is not a guess, it is what
     # load_config() actually computes when both are absent.
     entry_fill_model_source = "env"
@@ -190,7 +190,7 @@ def runtime_snapshot(
         entry_fill_model = (rules or {}).get("fill_model", {}).get("entry_fill_model")
     if entry_fill_model is None:
         entry_fill_model_source = "code_default"
-        entry_fill_model = "market"
+        entry_fill_model = "ioc_limit"
     execution_mode = _env("TRADOVATE_ENTRY_EXECUTION_MODE") or UNKNOWN
 
     return {
