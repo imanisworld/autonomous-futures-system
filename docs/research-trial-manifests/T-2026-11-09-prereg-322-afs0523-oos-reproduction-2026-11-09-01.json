@@ -1,0 +1,9 @@
+{
+  "trial_id": "T-2026-11-09-prereg-322-afs0523-oos-reproduction-2026-11-09-01",
+  "variants": [
+    {"id": "mnq-2019-05-to-2024-06"},
+    {"id": "nq-2010-06-to-2019-05"},
+    {"id": "combined"}
+  ],
+  "results_sha256": null
+}

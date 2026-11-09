@@ -1,6 +1,15 @@
 # Agent Work State
 
-## START HERE — 2026-11-06 baseline-reset procedure
+## START HERE — 2026-11-09 AFS-0523 preregistration (source only, not authorized to run)
+
+| Item | State |
+|---|---|
+| **Branch** | `cursor/322-repro-comparison-oct4` |
+| **Scope** | Preregistered wrapper and Databento bar adapter. Frozen harness and `check_repro()` are not edited. Reproduction gate compares to the Oct 4 ledger `0d0d8d72c48b3c9dd1e7065b23a5422176a765ac7b1eb594e2833b72f5d5a9b1`. |
+| **Runtime** | Not exercised. No vendor download. `RUN_AUTHORIZED` is false. |
+| **NEXT** | Claude reviews the preregistration before any new data runs. Do not merge from this checkpoint. Inventory wording is a separate docs branch. |
+
+## Previous — 2026-11-06 baseline-reset procedure
 
 Source only. Do not deploy, restart, reset a box, or place a demo order from this checkpoint.
 

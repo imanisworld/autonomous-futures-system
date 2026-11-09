@@ -1,0 +1,61 @@
+# Preregistration — MNQ 60M 3-2-2 — AFS-0523 reproduction gate and out-of-sample slices — 2026-11-09
+
+trial_id: T-2026-11-09-prereg-322-afs0523-oos-reproduction-2026-11-09-01
+
+Operator ledger id: **AFS-0523**. This file is the repository registration for that study. It is a preregistration only. Claude's review is required before any new data runs through the wrapper. `research/afs0523_322_repro_wrapper.py` sets `RUN_AUTHORIZED = False`, and `run_declared_slices()` refuses every call.
+
+No vendor download, no corpus fetch, and no scoring run is part of this registration. The frozen strategy rules, the frozen harness, and `check_repro()` are not edited.
+
+## Why the frozen pins are obsolete
+
+`scripts/322_trigger_timing_ab_2026_09_18.py::check_repro()` still pins the pre-#1057 1-tick totals: plan net **2532.66** and IOC net **1859.40**. Those totals were produced by the resolver that could walk same-date evening bars when the exact 15:55 ET bar was missing. The corrected Oct 4 rerun (`T-2026-10-04-prereg-322-corrected-eod-rerun-2026-10-04-01`) replaced them with plan net **2293.64** and IOC net **1622.38**. The harness file was left unchanged on purpose. Calling or patching `check_repro()` would either demand the obsolete totals or silently move the pin. This wrapper does neither.
+
+## Reproduction gate of record
+
+The gate of record for AFS-0523 is `compare_replay_to_oct4()` against the already committed ledger, not a new copy of the 34 rows:
+
+`docs/research-evidence/T-2026-10-04-prereg-322-corrected-eod-rerun-2026-10-04-01/result.json`
+
+SHA-256 `0d0d8d72c48b3c9dd1e7065b23a5422176a765ac7b1eb594e2833b72f5d5a9b1` (commit `cf2ac0724a266198629a363fde23364ef00ce721`).
+
+The comparison is every candidate × three fill models × three slippage levels:
+
+| Wrapper label | Frozen ledger key | Fill model |
+|---|---|---|
+| original | `plan` | `market` |
+| honest IOC | `ioc_close` | `ioc_limit`, tolerance 32 ticks |
+| pre-armed | `prearmed_touch` | `stop_market` |
+
+Slippage levels are 1, 2, and 3 adverse ticks. Each cell compares date, direction, trigger, stop, target, status, exit reason, fill price, exit price, and net. Any difference fails the gate.
+
+2025-01-20 stays `UNRESOLVED` / `EOD_BAR_MISSING` on every model and every slippage. It is not given an exit price, a net, or a WIN/LOSS result. An entry price may be present because the entry triggered; that row is still unscored.
+
+## What the wrapper may change
+
+The wrapper imports the frozen detection and accounting modules and pins their file hashes. It does not reimplement them and it does not assign a point value. The only parameters are:
+
+- the date window;
+- the expected-count check (`None` reports the count; an integer aborts on any other count);
+- the research 15-minute path and the audit 5-minute path.
+
+The reproduction window is the frozen harness window, 2024-07-02 through 2026-06-26, expected count 34. NQ bars, when a later reviewed run supplies them, are read through the MNQ path and the unchanged MNQ lane. Dollars are MNQ-equivalent ($2/point). Point-value code is not touched.
+
+## Declared slices (not authorized to run)
+
+Reported separately. No retune. May 2019 belongs to the MNQ slice only, so the two windows do not overlap. The NQ window is best available evidence, not fully clean.
+
+| Variant id | Window | Price source |
+|---|---|---|
+| `mnq-2019-05-to-2024-06` | 2019-05-01 through 2024-06-30 | MNQ |
+| `nq-2010-06-to-2019-05` | 2010-06-01 through 2019-04-30 | NQ, MNQ-equivalent dollars; best available evidence, not fully clean |
+| `combined` | the two slices side by side | no third detection and no retune |
+
+These windows end before the frozen 34-candidate sample (first candidate 2024-08-02). They are not a rescore of that sample.
+
+## Data adapter
+
+`research/databento_322_bar_adapter.py` accepts Databento GLBX.MDP3 ohlcv-1m rows plus definition rows (parent symbology) that the caller already has. It does not open a network client. It resamples 1-minute bars into the 15-minute research tree and the 5-minute audit tree, using bar-start UTC timestamps, America/New_York session boundaries, and the exact 15:55 ET bar the harness treats as the day-only close. The front contract is `sources.polygon_client.front_contract` with `roll_days=8`, not a Databento continuous symbol. A 5-minute or 15-minute bar is written only when every constituent minute is present. Missing minutes are recorded and never price-filled.
+
+## Prohibited until Claude's review
+
+No new-vendor run, no slice score, no parameter change, no edit to the frozen harness or `check_repro()`, no edit to strategy rules, and no promotion. A passing mechanical test on synthetic bars is not AFS-0523 evidence.
