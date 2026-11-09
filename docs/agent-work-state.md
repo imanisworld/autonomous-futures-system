@@ -7,8 +7,8 @@ Source only. Do not merge, deploy, restart, or install from this checkpoint.
 | Item | State |
 |---|---|
 | **Branch** | `cursor/audit-expose-entry-fill-model` |
-| **Scope** | `ops/grok_audit_runtime_pins.py` adds `ENTRY_FILL_MODEL` to the read-only audit `runtime-pins` allowlist. Process value or `<unset>`, plus the `config/settings.py` fallback. No fill-model default change and no trading-path change. |
-| **Install** | Not done. Root steps are in the PR body. The live dispatcher is unchanged until Imani runs them. |
+| **Scope** | `ops/grok_audit_runtime_pins.py` adds `ENTRY_FILL_MODEL` to the read-only audit `runtime-pins` allowlist. Process value or `<unset>` (absent at exec, not after `.env` load), plus the `config/settings.py` fallback. QA AFS-0526 R1–R6 are in this branch. No fill-model default change and no trading-path change. |
+| **Install** | Not done. Root steps, including `--expect-sha256` and the sha-checked rollback, are in the PR body. The live dispatcher is unchanged until Imani runs them. |
 | **Clock test** | `#1261` froze that 212R clock on `main`. This branch now contains that commit. The earlier failure is not expected on this head. |
 | **NEXT** | Independent review. Imani installs only after review. Do not merge from this checkpoint. |
 

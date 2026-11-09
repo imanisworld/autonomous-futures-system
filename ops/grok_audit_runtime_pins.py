@@ -3,12 +3,20 @@
 
 The futures-bot dispatcher prints an allowlist of process environment keys.
 ENTRY_FILL_MODEL is one of those keys. This module also reports the default
-``config/settings.py`` uses when that variable is absent.
+``config/settings.py`` uses when that variable is absent from the process
+environment captured at exec.
 
-It does not import ``config.settings``. ``load_config()`` calls ``load_dotenv``
-and can raise ``LiveTradingBlockedError``. The default is read from the
-release tree the running process is using: the ``os.getenv`` fallback in
-``config/settings.py``, then ``risk_rules.yaml`` ``fill_model.entry_fill_model``.
+``<unset>`` means the key is absent from ``/proc/<pid>/environ``, which is the
+environment the process received at exec. It does not mean ``load_config()``
+would leave the setting unset. ``load_config()`` also calls ``load_dotenv`` on
+a ``.env`` file in the process working directory, and those values are not in
+this report. A key that is present but empty still prints as ``KEY=``.
+
+It does not import ``config.settings``. Importing that module is avoided
+because ``load_config()`` reads ``.env`` and can raise ``LiveTradingBlockedError``.
+The default is read from the release tree the running process is using: the
+``os.getenv`` fallback in ``config/settings.py``, then ``risk_rules.yaml``
+``fill_model.entry_fill_model``.
 
 Nothing here places an order, restarts a service, or opens ``.env``.
 """
@@ -16,12 +24,14 @@ Nothing here places an order, restarts a service, or opens ``.env``.
 from __future__ import annotations
 
 import ast
+import hashlib
 import os
 import re
 import stat
 import subprocess
 import sys
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -41,8 +51,12 @@ RUNTIME_PIN_KEYS = (
 
 UNSET = "<unset>"
 UNREADABLE = "<unreadable>"
+UNPRINTABLE = "<unprintable>"
 INSTALLED_LIB = Path("/usr/local/lib/afs-runtime-pins")
+BACKUP_DIR = Path("/root/afs-runtime-pins-backups")
+SBIN_DIR = Path("/usr/local/sbin")
 _DISPATCHER_BASENAME = re.compile(r"afs-[a-z0-9-]{1,64}")
+_SHA256 = re.compile(r"[0-9a-f]{64}")
 _MAX_TEXT = 2_000_000
 _MAX_ENVIRON = 1_000_000
 _PATCH_REFUSAL = (
@@ -89,7 +103,9 @@ print(
 """
 
 _OLD_INVOCATION = '/usr/bin/python3 - "/proc/$pid/environ" <<\'PYENV\''
-_NEW_INVOCATION = '/usr/bin/python3 -B - "/proc/$pid/environ" <<\'PYENV\''
+# -I drops the caller cwd from sys.path (and ignores PYTHON* vars). cd / is
+# the second lock so a root shell does not import stdlib from the caller's folder.
+_NEW_INVOCATION = 'cd / && /usr/bin/python3 -I -B - "/proc/$pid/environ" <<\'PYENV\''
 _NEW_PYTHON = """\
 import sys
 
@@ -104,13 +120,17 @@ _BARE_SCALAR = re.compile(r"[A-Za-z0-9_./+-]+")
 
 
 def parse_environ(raw: bytes) -> dict[str, str]:
-    """Split a NUL-delimited process environ. Values are not filtered here."""
+    """Split a NUL-delimited process environ. The first copy of a key wins.
+
+    That matches a Python process: ``os.environ`` and ``getenv`` keep the first
+    value when the same name appears twice. Values are not filtered here.
+    """
     env: dict[str, str] = {}
     for item in raw.split(b"\0"):
         if b"=" not in item:
             continue
         key, value = item.split(b"=", 1)
-        env[key.decode(errors="replace")] = value.decode(errors="replace")
+        env.setdefault(key.decode(errors="replace"), value.decode(errors="replace"))
     return env
 
 
@@ -119,11 +139,12 @@ def format_runtime_pins(env: Mapping[str, str], resolved_default: str) -> str:
 
     Account ids are not printed. Keys outside ``RUNTIME_PIN_KEYS`` are not
     printed. ``resolved_default`` is the settings fallback, not the process value.
+    A value containing a control character is replaced with ``<unprintable>``
+    so it cannot forge another output line.
     """
-    if "\n" in resolved_default or "\r" in resolved_default:
-        resolved_default = UNREADABLE
-    lines = [f"{key}={env.get(key, UNSET)}" for key in RUNTIME_PIN_KEYS]
-    lines.append(f"ENTRY_FILL_MODEL_RESOLVED_DEFAULT={resolved_default}")
+    shown_default = _shown_value(resolved_default)
+    lines = [f"{key}={_shown_value(env.get(key, UNSET))}" for key in RUNTIME_PIN_KEYS]
+    lines.append(f"ENTRY_FILL_MODEL_RESOLVED_DEFAULT={shown_default}")
     actual = env.get("TRADOVATE_EXPECTED_ACCOUNT_ID")
     proof = env.get("EXPECTED_TRADOVATE_ACCOUNT_ID")
     lines.append(f"TRADOVATE_ACCOUNT_PIN_SET={bool(actual)}")
@@ -171,7 +192,7 @@ def apply_settings_default(
     """
     chosen = code_default if yaml_value is None else yaml_value
     text = str(chosen or empty_fallback or "market").strip().lower()
-    if "\n" in text or "\r" in text or len(text) > 64:
+    if any(ord(char) < 32 or ord(char) == 127 for char in text) or len(text) > 64:
         return UNREADABLE
     return text or "market"
 
@@ -266,6 +287,18 @@ def patch_dispatcher_text(text: str) -> str:
     )
 
 
+@dataclass(frozen=True)
+class InstallResult:
+    """Sha256s and the preserved dispatcher identity from one install."""
+
+    backup: str
+    dispatcher_sha256: str
+    module_sha256: str
+    original_mode: int
+    original_uid: int
+    original_gid: int
+
+
 def install_runtime_pins(
     dispatcher: Path,
     *,
@@ -273,40 +306,63 @@ def install_runtime_pins(
     dest_lib: Path,
     euid: int,
     stamp: str,
-) -> str:
+    expect_sha256: str,
+    backup_dir: Path,
+) -> InstallResult:
     """Copy this module into ``dest_lib`` and patch one audit dispatcher.
 
-    Returns the backup path. An already patched dispatcher is left in place
-    and the module file is still refreshed. Non-root callers write nothing.
+    ``expect_sha256`` is the full-file digest of the dispatcher before the
+    write. A mismatch writes nothing. The original owner and mode are kept.
+    The backup is mode 0600 and must sit outside ``/usr/local/sbin``.
+    Non-root callers write nothing.
     """
     if euid != 0:
         raise PermissionError("install must run as root")
     if not _STAMP.fullmatch(stamp):
         raise ValueError("install stamp is not a UTC timestamp")
+    if _SHA256.fullmatch(expect_sha256) is None:
+        raise ValueError("expect-sha256 is not 64 lowercase hex")
     if _DISPATCHER_BASENAME.fullmatch(dispatcher.name) is None:
         raise ValueError(
             "dispatcher basename must match afs-<name>; dispatcher left unchanged"
         )
     if dispatcher.is_symlink():
         raise ValueError("refusing to patch a symlink; dispatcher left unchanged")
-    original = dispatcher.read_text(encoding="utf-8")
-    patched = patch_dispatcher_text(original)
+    _refuse_sbin_backup(backup_dir)
+    original_bytes = dispatcher.read_bytes()
+    observed = hashlib.sha256(original_bytes).hexdigest()
+    if observed != expect_sha256:
+        raise ValueError("dispatcher sha256 does not match expect-sha256; dispatcher left unchanged")
+    identity = dispatcher.lstat()
+    mode = stat.S_IMODE(identity.st_mode)
+    uid = identity.st_uid
+    gid = identity.st_gid
+    patched = patch_dispatcher_text(original_bytes.decode("utf-8"))
     source_bytes = module_source.read_bytes()
     if len(source_bytes) > _MAX_TEXT:
         raise ValueError("module source is too large")
-    dest_lib.mkdir(parents=True, exist_ok=True)
-    os.chmod(dest_lib, 0o755)
+    backup = backup_dir / f"{dispatcher.name}.bak-{stamp}"
+    if patched.encode("utf-8") != original_bytes and (backup.exists() or backup.is_symlink()):
+        raise ValueError(f"backup already exists: {backup.name}")
+    if not dest_lib.exists():
+        dest_lib.mkdir(parents=True, exist_ok=False)
+        os.chmod(dest_lib, 0o755)
+        if os.geteuid() == 0:
+            os.chown(dest_lib, 0, 0)
+    _assert_lib_dir(dest_lib)
     module_dest = dest_lib / "runtime_pins.py"
     if module_dest.is_symlink():
         raise ValueError("refusing to replace a symlinked runtime_pins.py")
-    _write_bytes(module_dest, source_bytes, 0o644)
-    if patched == original:
-        return ""
-    backup = dispatcher.with_name(f"{dispatcher.name}.bak-{stamp}")
-    if backup.exists():
-        raise ValueError(f"backup already exists: {backup.name}")
-    _write_bytes(backup, original.encode("utf-8"), 0o755)
-    _write_bytes(dispatcher, patched.encode("utf-8"), 0o755)
+    _replace_file(module_dest, source_bytes, mode=0o644, uid=0, gid=0)
+    module_sha = hashlib.sha256(module_dest.read_bytes()).hexdigest()
+    if patched.encode("utf-8") == original_bytes:
+        return InstallResult("", observed, module_sha, mode, uid, gid)
+    created_backup_dir = not backup_dir.exists()
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    if created_backup_dir:
+        os.chmod(backup_dir, 0o700)
+    _replace_file(backup, original_bytes, mode=0o600, uid=0, gid=0)
+    _replace_file(dispatcher, patched.encode("utf-8"), mode=mode, uid=uid, gid=gid)
     check = subprocess.run(
         ["bash", "-n", str(dispatcher)],
         check=False,
@@ -314,46 +370,95 @@ def install_runtime_pins(
         text=True,
     )
     if check.returncode != 0:
-        _write_bytes(dispatcher, original.encode("utf-8"), 0o755)
+        _replace_file(dispatcher, original_bytes, mode=mode, uid=uid, gid=gid)
         raise ValueError("patched dispatcher failed bash -n; original restored")
-    return str(backup)
+    after = hashlib.sha256(dispatcher.read_bytes()).hexdigest()
+    return InstallResult(str(backup), after, module_sha, mode, uid, gid)
+
+
+def restore_checked(
+    backup: Path,
+    dispatcher: Path,
+    *,
+    expect_sha256: str,
+    mode: int,
+    uid: int,
+    gid: int,
+    euid: int,
+) -> str:
+    """Restore a dispatcher from a backup only when its sha256 matches.
+
+    The backup is left in place. The restored file keeps the mode and owner
+    recorded at install time, not the backup file's 0600 mode.
+    """
+    if euid != 0:
+        raise PermissionError("rollback must run as root")
+    if _SHA256.fullmatch(expect_sha256) is None:
+        raise ValueError("expect-sha256 is not 64 lowercase hex")
+    if backup.is_symlink() or dispatcher.is_symlink():
+        raise ValueError("refusing a symlink; dispatcher left unchanged")
+    data = backup.read_bytes()
+    got = hashlib.sha256(data).hexdigest()
+    if got != expect_sha256:
+        raise ValueError("backup sha256 does not match expect-sha256; dispatcher left unchanged")
+    _replace_file(dispatcher, data, mode=mode, uid=uid, gid=gid)
+    after = hashlib.sha256(dispatcher.read_bytes()).hexdigest()
+    if after != expect_sha256:
+        raise ValueError("dispatcher sha256 does not match after rollback")
+    return after
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Install the helper onto the VPS dispatcher. Root only.
+    """Install or roll back the helper. Root only.
 
     The dispatcher must live in ``/usr/local/sbin`` and its basename must
-    match ``afs-<name>``. The caller passes that path. This file does not
-    name the account.
+    match ``afs-<name>``. The caller passes that path and the full-file
+    sha256. This file does not name the account.
     """
     args = list(sys.argv[1:] if argv is None else argv)
     usage = (
         "usage: python3 -B -m ops.grok_audit_runtime_pins "
-        "install --dispatcher /usr/local/sbin/<afs-dispatcher>"
+        "install --dispatcher /usr/local/sbin/<afs-dispatcher> "
+        "--expect-sha256 <64-lowercase-hex>\n"
+        "       python3 -B -m ops.grok_audit_runtime_pins "
+        "rollback --backup <backup-file> "
+        "--dispatcher /usr/local/sbin/<afs-dispatcher> "
+        "--expect-sha256 <64-lowercase-hex> --mode <octal> --owner <uid>:<gid>"
     )
-    if len(args) != 3 or args[0] != "install" or args[1] != "--dispatcher":
-        print(usage, file=sys.stderr)
-        return 2
-    dispatcher = Path(args[2])
-    if dispatcher.parent != Path("/usr/local/sbin") or _DISPATCHER_BASENAME.fullmatch(dispatcher.name) is None:
-        print(usage, file=sys.stderr)
-        return 2
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     try:
-        backup = install_runtime_pins(
+        if args[:1] == ["rollback"]:
+            return _rollback_main(args, usage)
+        if (
+            len(args) != 5
+            or args[0] != "install"
+            or args[1] != "--dispatcher"
+            or args[3] != "--expect-sha256"
+        ):
+            print(usage, file=sys.stderr)
+            return 2
+        dispatcher = Path(args[2])
+        expect = args[4]
+        if not _dispatcher_path_ok(dispatcher) or _SHA256.fullmatch(expect) is None:
+            print(usage, file=sys.stderr)
+            return 2
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        result = install_runtime_pins(
             dispatcher,
             module_source=Path(__file__),
             dest_lib=INSTALLED_LIB,
             euid=os.geteuid(),
             stamp=stamp,
+            expect_sha256=expect,
+            backup_dir=BACKUP_DIR,
         )
     except (PermissionError, ValueError, OSError) as exc:
         print(exc, file=sys.stderr)
         return 1
-    if backup:
-        print(f"patched {args[2]}; backup={backup}")
-    else:
-        print(f"dispatcher already patched; refreshed {INSTALLED_LIB / 'runtime_pins.py'}")
+    print(f"backup={result.backup}")
+    print(f"dispatcher_sha256={result.dispatcher_sha256}")
+    print(f"module_sha256={result.module_sha256}")
+    print(f"original_mode={result.original_mode:04o}")
+    print(f"original_owner={result.original_uid}:{result.original_gid}")
     return 0
 
 
@@ -427,20 +532,98 @@ def _read_release_text(root: Path, relative: str) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def _write_bytes(path: Path, data: bytes, mode: int) -> None:
-    temporary = path.with_name(f".{path.name}.tmp")
-    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0)
+def _shown_value(value: str) -> str:
+    """Replace a value that contains a control character so it cannot forge a line."""
+    if any(ord(char) < 32 or ord(char) == 127 for char in value):
+        return UNPRINTABLE
+    return value
+
+
+def _dispatcher_path_ok(dispatcher: Path) -> bool:
+    return dispatcher.parent == SBIN_DIR and _DISPATCHER_BASENAME.fullmatch(dispatcher.name) is not None
+
+
+def _refuse_sbin_backup(backup_dir: Path) -> None:
+    resolved = backup_dir.resolve()
+    sbin = SBIN_DIR.resolve()
+    if resolved == sbin or sbin in resolved.parents:
+        raise ValueError("backup directory must be outside /usr/local/sbin")
+
+
+def _assert_lib_dir(path: Path) -> None:
+    if path.is_symlink() or not path.is_dir():
+        raise ValueError("refusing a symlinked runtime-pins lib dir")
+    info = path.lstat()
+    if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+        raise ValueError("refusing a symlinked runtime-pins lib dir")
+    if info.st_uid != 0 or info.st_gid != 0:
+        raise ValueError("runtime-pins lib dir must be root:root")
+    if stat.S_IMODE(info.st_mode) & 0o022:
+        raise ValueError("runtime-pins lib dir must not be group or world writable")
+
+
+def _replace_file(path: Path, data: bytes, *, mode: int, uid: int, gid: int) -> None:
+    """Write ``path`` without chmod of the live inode before the replace."""
+    if path.is_symlink():
+        raise ValueError("refusing to replace a symlink")
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
     fd = os.open(str(temporary), flags, mode)
     try:
         os.write(fd, data)
         os.fchmod(fd, mode)
+        if os.geteuid() == 0:
+            os.fchown(fd, uid, gid)
         os.fsync(fd)
-    finally:
+    except Exception:
         os.close(fd)
-    if path.exists() or path.is_symlink():
-        os.chmod(path, stat.S_IMODE(mode))
+        temporary.unlink(missing_ok=True)
+        raise
+    else:
+        os.close(fd)
     os.replace(temporary, path)
-    os.chmod(path, mode)
+
+
+def _rollback_main(args: list[str], usage: str) -> int:
+    if (
+        len(args) != 11
+        or args[1] != "--backup"
+        or args[3] != "--dispatcher"
+        or args[5] != "--expect-sha256"
+        or args[7] != "--mode"
+        or args[9] != "--owner"
+    ):
+        print(usage, file=sys.stderr)
+        return 2
+    dispatcher = Path(args[4])
+    expect = args[6]
+    if not _dispatcher_path_ok(dispatcher) or _SHA256.fullmatch(expect) is None:
+        print(usage, file=sys.stderr)
+        return 2
+    try:
+        mode = int(args[8], 8)
+    except ValueError:
+        print(usage, file=sys.stderr)
+        return 2
+    owner = args[10].split(":")
+    if len(owner) != 2 or not owner[0].isdigit() or not owner[1].isdigit():
+        print(usage, file=sys.stderr)
+        return 2
+    try:
+        after = restore_checked(
+            Path(args[2]),
+            dispatcher,
+            expect_sha256=expect,
+            mode=mode,
+            uid=int(owner[0]),
+            gid=int(owner[1]),
+            euid=os.geteuid(),
+        )
+    except (PermissionError, ValueError, OSError) as exc:
+        print(exc, file=sys.stderr)
+        return 1
+    print(f"dispatcher_sha256={after}")
+    return 0
 
 
 if __name__ == "__main__":
