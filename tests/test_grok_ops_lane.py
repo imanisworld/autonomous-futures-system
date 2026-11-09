@@ -1246,6 +1246,57 @@ def test_gitless_real_atomic_release_refuses_before_consume(tmp_path):
     assert (ctx.token_store.root / f"{token}.json").is_file()
 
 
+def test_gitless_verify_refuses_before_consume(tmp_path):
+    ctx = _ctx(tmp_path, lambda argv, env: 0)
+    shutil.rmtree(ctx.repo_root / ".git")
+    ctx.env_file.write_text(_quiet_env() + f"EXPECTED_LIVE_COMMIT={SHA_A}\n")
+    token = ctx.token_store.authorize(SHA_A, "AFS-1", FP)
+    rc = run_verb(parse_command("verify"), ctx, token_id=token)
+    assert rc == 3
+    assert "unsupported-release-model" in ctx.audit.path.read_text()
+    assert ctx.calls == []
+    assert (ctx.token_store.root / f"{token}.json").is_file()
+
+
+def test_gitless_rollback_refuses_before_consume(tmp_path):
+    ctx = _ctx(tmp_path, lambda argv, env: 0)
+    shutil.rmtree(ctx.repo_root / ".git")
+    token = ctx.token_store.authorize(SHA_A, "AFS-1", FP)
+    rc = run_verb(parse_command("rollback rel-1"), ctx, token_id=token)
+    assert rc == 3
+    assert "unsupported-release-model" in ctx.audit.path.read_text()
+    assert ctx.calls == []
+    assert (ctx.token_store.root / f"{token}.json").is_file()
+
+
+def test_nested_repo_target_is_refused_before_consume(tmp_path):
+    ctx = _ctx(tmp_path, lambda argv, env: 0)
+    target = Path(ctx.releases_root) / SHA_A
+    subprocess.run(
+        ["git", "config", "core.worktree", str(tmp_path)],
+        cwd=target,
+        check=True,
+        capture_output=True,
+    )
+    token = ctx.token_store.authorize(SHA_A, "AFS-1", FP)
+    rc = run_verb(parse_command(f"promote {SHA_A}"), ctx, token_id=token)
+    assert rc == 3
+    assert "unsupported-release-model" in ctx.audit.path.read_text()
+    assert ctx.calls == []
+    assert (ctx.token_store.root / f"{token}.json").is_file()
+
+
+def test_baseline_fingerprint_must_match_the_manifest(tmp_path):
+    ctx = _ctx(tmp_path, lambda argv, env: 0)
+    other = "cd" * 32
+    token = ctx.token_store.authorize(SHA_A, "LEDGER-1", other)
+    rc = run_verb(parse_command("baseline-reset"), ctx, token_id=token)
+    assert rc == 3
+    assert "record-mismatch" in ctx.audit.path.read_text()
+    assert ctx.calls == []
+    assert (ctx.token_store.root / f"{token}.json").is_file()
+
+
 def test_token_fingerprint_must_match_the_manifest(tmp_path):
     ctx = _ctx(tmp_path, lambda argv, env: 0)
     other = "cd" * 32
