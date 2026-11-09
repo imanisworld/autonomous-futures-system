@@ -103,10 +103,11 @@ class TokenStore:
             data = self._read_record(path)
             if data is None or data.get("consumed_at") or data.get("expired_at"):
                 continue
-            if self._is_expired(data):
-                self._mark_expired(path, data)
-                continue
-            if not isinstance(data.get("token_id"), str):
+            try:
+                self._require_fresh(data)
+            except TokenError as exc:
+                if exc.reason == "expired":
+                    self._mark_expired(path, data)
                 continue
             records.append(data)
         return records
@@ -125,30 +126,59 @@ class TokenStore:
             return None
         return data
 
-    def _is_expired(self, data: dict) -> bool:
-        raw = data.get("expires_at")
+    def _aware(self, raw: object) -> datetime | None:
         if not isinstance(raw, str):
-            return True
+            return None
         try:
-            expires = datetime.fromisoformat(raw)
+            parsed = datetime.fromisoformat(raw)
         except ValueError:
-            return True
-        if expires.tzinfo is None:
-            expires = expires.replace(tzinfo=timezone.utc)
-        return self.clock() > expires
+            return None
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed
+
+    def _require_fresh(self, data: dict) -> None:
+        token_id = data.get("token_id")
+        sha = data.get("sha")
+        ledger_id = data.get("ledger_id")
+        fingerprint = data.get("release_fingerprint")
+        if not isinstance(token_id, str) or not _TOKEN_ID.fullmatch(token_id):
+            raise TokenError("malformed")
+        if not isinstance(sha, str) or not _SHA.fullmatch(sha):
+            raise TokenError("malformed")
+        if not isinstance(ledger_id, str) or not _LEDGER.fullmatch(ledger_id):
+            raise TokenError("malformed")
+        if not isinstance(fingerprint, str) or not _FINGERPRINT.fullmatch(fingerprint):
+            raise TokenError("malformed")
+        created = self._aware(data.get("created_at"))
+        expires = self._aware(data.get("expires_at"))
+        if created is None or expires is None or expires - created != TOKEN_TTL:
+            raise TokenError("malformed")
+        if self.clock() > created + TOKEN_TTL:
+            raise TokenError("expired")
+
+    def _is_expired(self, data: dict) -> bool:
+        try:
+            self._require_fresh(data)
+        except TokenError as exc:
+            return exc.reason == "expired"
+        return False
 
     def _mark_expired(self, path: Path, data: dict) -> None:
-        token_id = data.get("token_id")
-        name = f"{token_id}.json" if isinstance(token_id, str) and _TOKEN_ID.fullmatch(token_id) else path.name
-        marked = dict(data)
-        marked["expired_at"] = self.clock().isoformat()
-        dest_dir = self.root / "expired"
-        dest_dir.mkdir(mode=0o700, exist_ok=True)
-        temporary = self.root / f".{name}.expired"
-        temporary.write_text(json.dumps(marked) + "\n", encoding="utf-8")
-        os.chmod(temporary, 0o600)
-        os.replace(temporary, dest_dir / name)
-        path.unlink(missing_ok=True)
+        try:
+            token_id = data.get("token_id")
+            name = f"{token_id}.json" if isinstance(token_id, str) and _TOKEN_ID.fullmatch(token_id) else path.name
+            marked = dict(data)
+            marked["expired_at"] = self.clock().isoformat()
+            dest_dir = self.root / "expired"
+            dest_dir.mkdir(mode=0o700, exist_ok=True)
+            temporary = self.root / f".{name}.expired"
+            temporary.write_text(json.dumps(marked) + "\n", encoding="utf-8")
+            os.chmod(temporary, 0o600)
+            os.replace(temporary, dest_dir / name)
+            path.unlink(missing_ok=True)
+        except OSError:
+            return
 
     def read(self, token_id: str) -> dict:
         self._check_id(token_id)
@@ -157,9 +187,12 @@ class TokenStore:
         if _is_regular(consumed) and not _is_regular(path):
             raise TokenError("reused")
         data = self._read_checked(path)
-        if self._is_expired(data):
-            self._mark_expired(path, data)
-            raise TokenError("expired")
+        try:
+            self._require_fresh(data)
+        except TokenError as exc:
+            if exc.reason == "expired":
+                self._mark_expired(path, data)
+            raise
         return data
 
     def _read_checked(self, path: Path) -> dict:
@@ -221,9 +254,12 @@ class TokenStore:
             raise TokenError("missing")
         if data.get("consumed_at"):
             raise TokenError("reused")
-        if self._is_expired(data):
-            self._mark_expired(path, data)
-            raise TokenError("expired")
+        try:
+            self._require_fresh(data)
+        except TokenError as exc:
+            if exc.reason == "expired":
+                self._mark_expired(path, data)
+            raise
         if data.get("sha") != sha:
             raise TokenError("mismatch")
         data["consumed_at"] = self.clock().isoformat()

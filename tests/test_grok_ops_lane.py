@@ -26,7 +26,10 @@ from ops.grok_ops.actions import (
     SIGNATURE_FILE,
     ActionContext,
     baseline_reset_argv,
+    box_release_matches,
+    pinned_runner,
     production_context,
+    require_same_file,
     run_verb,
 )
 from ops.grok_ops.paths import (
@@ -262,9 +265,12 @@ def _ctx(tmp_path: Path, runner, flat=None, env_text=None, variants=None, lock=F
     script = baseline / "baseline_reset.sh"
     script.write_text("#!/bin/sh\nexit 0\n")
     script.chmod(0o755)
-    atomic = tmp_path / "atomic_release.sh"
+    atomic = repo / "scripts" / "atomic_release.sh"
     atomic.write_text("#!/bin/sh\nexit 0\n")
     atomic.chmod(0o755)
+    deploy_lock = repo / "scripts" / "deploy_lock.sh"
+    deploy_lock.write_text("#!/bin/sh\nexit 0\n")
+    deploy_lock.chmod(0o755)
     calls = []
 
     def _runner(argv, env):
@@ -678,6 +684,8 @@ def test_install_and_uninstall_round_trip(tmp_path):
     assert "/usr/sbin/nologin" in (root / "etc" / "passwd").read_text()
     promote = (root / "usr" / "local" / "sbin" / "afs-ops-promote").read_text()
     assert "env -i" in promote
+    assert "cd /" in promote
+    assert " -P " in promote
     assert "/usr/bin/python3" in promote
     assert "AFS_OPS_" not in promote
     assert "ops.grok_ops.actions promote" in promote
@@ -836,6 +844,149 @@ def test_pinned_inode_binds_a_later_open(tmp_path):
         open_verified(pinned.real, "scripts/ops/baseline_reset.sh", uid=uid, pin=pinned, fstat=fstat)
     assert moved.value.code == "release-toctou"
     pinned.close()
+
+
+def test_python_dash_p_ignores_hostile_cwd_module(tmp_path):
+    hostile = tmp_path / "cwd"
+    hostile.mkdir()
+    (hostile / "json.py").write_text("raise SystemExit('shadowed')\n")
+    isolated = subprocess.run(
+        ["/usr/bin/python3", "-B", "-P", "-c", "import json; print(json.dumps({'ok': True}))"],
+        cwd=hostile,
+        capture_output=True,
+        text=True,
+    )
+    assert isolated.returncode == 0
+    assert "shadowed" not in isolated.stderr
+    assert "true" in isolated.stdout
+    shadowed = subprocess.run(
+        ["/usr/bin/python3", "-B", "-c", "import json; print(json.dumps({'ok': True}))"],
+        cwd=hostile,
+        capture_output=True,
+        text=True,
+    )
+    assert shadowed.returncode != 0
+
+
+def test_sudoers_rejects_empty_command_path():
+    text = render_sudoers() + "grok-ops ALL=(root) NOPASSWD: \n"
+    with pytest.raises(ValueError, match="empty"):
+        validate_sudoers_text(text)
+
+
+def test_token_ttl_is_bound_to_created_at(tmp_path):
+    start = datetime(2026, 11, 6, 18, 0, tzinfo=timezone.utc)
+    clock = {"now": start}
+    store = TokenStore(tmp_path, clock=lambda: clock["now"])
+    token_id = store.authorize(SHA_A, "AFS-1", FP)
+    path = store.root / f"{token_id}.json"
+    payload = json.loads(path.read_text())
+    payload["expires_at"] = (start + TOKEN_TTL + timedelta(hours=5)).isoformat()
+    path.write_text(json.dumps(payload) + "\n")
+    with pytest.raises(TokenError) as stretched:
+        store.read(token_id)
+    assert stretched.value.reason == "malformed"
+    payload["expires_at"] = (start + TOKEN_TTL).isoformat()
+    payload["ledger_id"] = ""
+    path.write_text(json.dumps(payload) + "\n")
+    with pytest.raises(TokenError) as blank:
+        store.read(token_id)
+    assert blank.value.reason == "malformed"
+
+
+def test_mark_expired_oserror_still_refuses(tmp_path, monkeypatch):
+    start = datetime(2026, 11, 6, 18, 0, tzinfo=timezone.utc)
+    clock = {"now": start}
+    store = TokenStore(tmp_path, clock=lambda: clock["now"])
+    token_id = store.authorize(SHA_A, "AFS-1", FP)
+    clock["now"] = start + TOKEN_TTL + timedelta(seconds=1)
+
+    def boom(*_args, **_kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(os, "replace", boom)
+    with pytest.raises(TokenError) as expired:
+        store.read(token_id)
+    assert expired.value.reason == "expired"
+
+
+def test_require_same_file_rejects_a_different_inode(tmp_path):
+    uid = os.getuid()
+    fstat = _fstat_ancestors(tmp_path, uid)
+    installed = tmp_path / "installed.py"
+    running = tmp_path / "running.py"
+    installed.write_text("print('installed')\n")
+    running.write_text("print('running')\n")
+    with pytest.raises(OwnershipError) as mismatch:
+        require_same_file(str(running), str(installed), uid=uid, fstat=fstat)
+    assert mismatch.value.code == "code-path"
+    require_same_file(str(installed), str(installed), uid=uid, fstat=fstat)
+    assert "require_same_file(" in inspect.getsource(production_context)
+
+
+def test_box_release_needs_no_git(tmp_path):
+    sha = "c" * 40
+    assert box_release_matches(str(tmp_path / sha), sha)
+    assert not box_release_matches(str(tmp_path / "repo"), sha)
+
+
+def test_symlink_atomic_release_never_runs(tmp_path):
+    ctx = _ctx(tmp_path, lambda argv, env: 0)
+    outside = tmp_path / "outside.sh"
+    marker = tmp_path / "pwned"
+    outside.write_text(f"#!/bin/sh\ntouch {marker}\n")
+    outside.chmod(0o777)
+    target = ctx.repo_root / "scripts" / "atomic_release.sh"
+    target.unlink()
+    target.symlink_to(outside)
+    ctx.env_file.write_text(_quiet_env() + f"EXPECTED_LIVE_COMMIT={SHA_A}\n")
+    rc = run_verb(parse_command("verify"), ctx)
+    assert rc == 3
+    assert not marker.exists()
+    assert "release-symlink" in ctx.audit.path.read_text()
+    assert ctx.calls == []
+
+
+def test_unmocked_atomic_release_uses_pinned_root(tmp_path):
+    sha = "d" * 40
+    release = tmp_path / "afs-releases" / sha
+    scripts = release / "scripts"
+    scripts.mkdir(parents=True)
+    real_atomic = ROOT / "scripts" / "atomic_release.sh"
+    real_lock = ROOT / "scripts" / "deploy_lock.sh"
+    (scripts / "atomic_release.sh").write_text(real_atomic.read_text())
+    (scripts / "atomic_release.sh").chmod(0o755)
+    marker = tmp_path / "sourced-root"
+    prelude = f"printf 'root=%s\\npwd=%s\\n' \"$ROOT\" \"$(pwd)\" > {marker}\n"
+    (scripts / "deploy_lock.sh").write_text(prelude + real_lock.read_text())
+    (scripts / "deploy_lock.sh").chmod(0o644)
+    for path in (release, scripts):
+        path.chmod(0o755)
+    fd = os.open(release, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    held = os.fstat(fd)
+    pin = PinnedRelease(
+        link="",
+        real=str(release),
+        prefix=str(release),
+        dev=held.st_dev,
+        ino=held.st_ino,
+        dirfd=fd,
+        uid=os.getuid(),
+    )
+    ctx = _ctx(tmp_path / "lane", lambda argv, env: 0)
+    ctx.release_pin.close()
+    ctx.release_pin = pin
+    ctx.repo_root = release
+    ctx.runner = pinned_runner(pin)
+    ctx.env_file.write_text(_quiet_env() + f"EXPECTED_LIVE_COMMIT={sha}\n")
+    # Caller cwd is this git checkout. The pinned tree has no .git.
+    assert not (release / ".git").exists()
+    rc = run_verb(parse_command("verify"), ctx)
+    assert rc != 128
+    recorded = marker.read_text()
+    assert f"root={release}" in recorded
+    assert f"pwd={release}" in recorded
+    pin.close()
 
 
 def test_expected_uid_is_required_and_paths_do_not_resolve():

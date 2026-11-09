@@ -28,6 +28,7 @@ from ops.grok_ops.paths import (
     AUDIT_LOG,
     BASELINE_REL,
     CURRENT_LINK,
+    DEPLOY_LOCK_REL,
     ENV_FILE,
     EXPOSURE_FILE,
     FLAT_FILE,
@@ -144,6 +145,30 @@ def promote_argv(atomic: str, sha: str) -> list[str]:
     return argv
 
 
+def box_release_matches(root: str, sha: str) -> bool:
+    """A box release is the directory named by the SHA. It has no .git."""
+    if len(sha) != 40 or any(char not in "0123456789abcdef" for char in sha):
+        return False
+    return os.path.basename(root.rstrip("/")) == sha
+
+
+def pinned_runner(pin: PinnedRelease):
+    """Exec an absolute program with cwd fixed at the pinned release."""
+
+    def run(argv: list[str], env: dict[str, str]) -> int:
+        pin.reverify()
+        if not argv or not argv[0].startswith("/"):
+            return 3
+        program = argv[0]
+        root = pin.real.rstrip("/")
+        if program != PYTHON and not program.startswith(root + "/"):
+            return 3
+        completed = subprocess.run(argv, env=env, cwd=root, check=False)
+        return completed.returncode
+
+    return run
+
+
 def run_verb(parsed: ParsedCommand, ctx: ActionContext, token_id: str = "") -> int:
     try:
         return _run(parsed, ctx, token_id)
@@ -202,13 +227,15 @@ def _gate_status(ctx: ActionContext):
 
 def _promote(ctx: ActionContext, parsed: ParsedCommand, token_id: str) -> int:
     sha = parsed.sha or ""
-    if not _is_ancestor(ctx, sha):
+    if not _release_authorizes(ctx, sha):
         raise ActionError("ancestor")
     release_env = _load_release_env(ctx.release_env)
     token_id = _resolve_promote_token(ctx, token_id, sha)
     record = _consume(ctx, token_id, sha)
-    argv = promote_argv(str(ctx.atomic_release), sha)
-    return _invoke(ctx, parsed, record, argv, release_env)
+    atomic = _pinned_script(ctx, ATOMIC_REL)
+    _pinned_script(ctx, DEPLOY_LOCK_REL)
+    argv = promote_argv(atomic, sha)
+    return _invoke(ctx, parsed, record, argv, _release_script_env(ctx, release_env))
 
 
 def _baseline(ctx: ActionContext, parsed: ParsedCommand, token_id: str, *, dry_run: bool) -> int:
@@ -225,7 +252,7 @@ def _baseline(ctx: ActionContext, parsed: ParsedCommand, token_id: str, *, dry_r
         raise ActionError("fingerprint-missing")
     if any(char not in "0123456789abcdef" for char in fingerprint):
         raise ActionError("fingerprint-missing")
-    if not _is_ancestor(ctx, sha):
+    if not _release_authorizes(ctx, sha):
         raise ActionError("ancestor")
     argv = baseline_reset_argv(
         str(script),
@@ -250,10 +277,12 @@ def _verify(ctx: ActionContext, parsed: ParsedCommand, token_id: str) -> int:
     if len(sha) != 40 or any(char not in "0123456789abcdef" for char in sha):
         raise ActionError("verify-unreadable")
     release_env = _load_release_env(ctx.release_env)
-    argv = [str(ctx.atomic_release), "verify", sha]
+    atomic = _pinned_script(ctx, ATOMIC_REL)
+    _pinned_script(ctx, DEPLOY_LOCK_REL)
+    argv = [atomic, "verify", sha]
     if "--force-lock" in argv:
         raise ActionError("force-lock")
-    return _invoke(ctx, parsed, {"token_id": token_id, "ledger_id": "", "sha": sha}, argv, release_env)
+    return _invoke(ctx, parsed, {"token_id": token_id, "ledger_id": "", "sha": sha}, argv, _release_script_env(ctx, release_env))
 
 
 def _rollback(ctx: ActionContext, parsed: ParsedCommand, token_id: str) -> int:
@@ -264,16 +293,21 @@ def _rollback(ctx: ActionContext, parsed: ParsedCommand, token_id: str) -> int:
     if recorded != parsed.release:
         raise ActionError("rollback-mismatch")
     release_env = _load_release_env(ctx.release_env)
-    argv = [str(ctx.atomic_release), "rollback"]
-    return _invoke(ctx, parsed, {"token_id": token_id, "ledger_id": "", "sha": ""}, argv, release_env)
+    atomic = _pinned_script(ctx, ATOMIC_REL)
+    _pinned_script(ctx, DEPLOY_LOCK_REL)
+    argv = [atomic, "rollback"]
+    return _invoke(ctx, parsed, {"token_id": token_id, "ledger_id": "", "sha": ""}, argv, _release_script_env(ctx, release_env))
 
 
 def _backup(ctx: ActionContext, parsed: ParsedCommand, token_id: str) -> int:
     release_env = _load_release_env(ctx.release_env)
     if "LOG_DIR" not in release_env or "PROOF_BACKUP_DIR" not in release_env:
         raise ActionError("backup-unconfigured")
-    argv = [ctx.python, "-B", "-m", "scripts.backup_proof_data"]
-    return _invoke(ctx, parsed, {"token_id": token_id, "ledger_id": "", "sha": ""}, argv, release_env)
+    root = ctx.release_pin.real.rstrip("/")
+    env = dict(release_env)
+    env["PYTHONPATH"] = root
+    argv = [ctx.python, "-B", "-P", "-m", "scripts.backup_proof_data"]
+    return _invoke(ctx, parsed, {"token_id": token_id, "ledger_id": "", "sha": ""}, argv, env)
 
 
 def _is_ancestor(ctx: ActionContext, sha: str) -> bool:
@@ -289,11 +323,11 @@ def _peek_token(ctx: ActionContext, token_id: str) -> dict:
     return ctx.token_store.find_single_open()
 
 
-def _baseline_script(ctx: ActionContext) -> Path:
+def _pinned_script(ctx: ActionContext, relative: str) -> str:
     try:
-        verified = open_verified(
+        return open_verified(
             ctx.release_pin.real,
-            BASELINE_RESET_REL,
+            relative,
             uid=ctx.expected_uid,
             pin=ctx.release_pin,
         )
@@ -301,7 +335,22 @@ def _baseline_script(ctx: ActionContext) -> Path:
         raise ActionError("dependency-missing") from exc
     except OwnershipError as exc:
         raise ActionError(exc.code) from exc
-    return Path(verified)
+
+
+def _baseline_script(ctx: ActionContext) -> Path:
+    return Path(_pinned_script(ctx, BASELINE_RESET_REL))
+
+
+def _release_authorizes(ctx: ActionContext, sha: str) -> bool:
+    if box_release_matches(ctx.release_pin.real, sha):
+        return True
+    return _is_ancestor(ctx, sha)
+
+
+def _release_script_env(ctx: ActionContext, base: dict[str, str]) -> dict[str, str]:
+    env = dict(base)
+    env["AFS_RELEASE_ROOT"] = ctx.release_pin.real.rstrip("/")
+    return env
 
 
 def _resolve_promote_token(ctx: ActionContext, token_id: str, sha: str) -> str:
@@ -325,6 +374,9 @@ def _consume(ctx: ActionContext, token_id: str, sha: str) -> dict:
 def _invoke(ctx: ActionContext, parsed: ParsedCommand, record: dict, argv: list[str], env: dict[str, str]) -> int:
     if "--force-lock" in argv:
         raise ActionError("force-lock")
+    if argv and not argv[0].startswith("/"):
+        raise ActionError("relative-program")
+    ctx.release_pin.reverify()
     code = ctx.runner(argv, env)
     result = "ok" if code == 0 else "failed"
     _audit(
@@ -419,11 +471,6 @@ def _default_flat_reader() -> FlatSnapshot:
         raise OSError("flatness snapshot unreadable") from exc
 
 
-def _default_runner(argv: list[str], env: dict[str, str]) -> int:
-    completed = subprocess.run(argv, env=env, check=False)
-    return completed.returncode
-
-
 def _ancestor_in(repo: str) -> Callable[[str], bool]:
     def _check(sha: str) -> bool:
         try:
@@ -441,14 +488,19 @@ def _ancestor_in(repo: str) -> Callable[[str], bool]:
     return _check
 
 
+def require_same_file(running: str, installed: str, *, uid: int, fstat=os.fstat) -> None:
+    """Refuse when the running file is not the installed file."""
+    if file_identity(running, uid=uid, fstat=fstat) != file_identity(installed, uid=uid, fstat=fstat):
+        raise OwnershipError("code-path")
+
+
 def production_context() -> ActionContext:
     """Build the root context from fixed paths. Ignores the process environment."""
     code = __file__
     if not isinstance(code, str) or not code.startswith("/"):
         raise OwnershipError("code-path")
     installed = INSTALLED_CODE + "/ops/grok_ops/actions.py"
-    if file_identity(code, uid=0) != file_identity(installed, uid=0):
-        raise OwnershipError("code-path")
+    require_same_file(code, installed, uid=0)
     assert_directory(INSTALLED_CODE, uid=0)
     release = pin_release(CURRENT_LINK, RELEASES_PREFIX, uid=0)
     try:
@@ -471,7 +523,7 @@ def production_context() -> ActionContext:
             atomic_release=root / ATOMIC_REL,
             release_env=Path(RELEASE_ENV),
             flat_reader=_default_flat_reader,
-            runner=_default_runner,
+            runner=pinned_runner(release),
             actor="grok-ops",
             git_ancestor=_ancestor_in(release.real),
             expected_uid=0,

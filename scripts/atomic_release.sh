@@ -23,8 +23,43 @@ RELEASES="${AFS_RELEASES_DIR:-/root/afs-releases}"
 SHARED="${AFS_SHARED_DIR:-/root/afs-shared}"
 CURRENT="${AFS_CURRENT_LINK:-/root/autonomous-futures-system}"
 SERVICE="${AFS_SERVICE:-futures-bot}"
-ROOT="$(git rev-parse --show-toplevel)"
+# The caller's git toplevel is not the release. A box tree has no .git, and
+# `git rev-parse --show-toplevel` from another cwd sourced that repo's
+# deploy_lock.sh (or exited 128). AFS_RELEASE_ROOT is set by the grok-ops
+# lane only after it has opened this script from the pinned release. Other
+# callers keep the git toplevel.
+_afs_script=${BASH_SOURCE[0]}
+if [[ -n "${AFS_RELEASE_ROOT:-}" ]]; then
+  ROOT=$AFS_RELEASE_ROOT
+  _script_root=$(dirname "$(dirname "$_afs_script")")
+  if [[ "$ROOT" != "$_script_root" ]]; then
+    echo "atomic_release.sh: AFS_RELEASE_ROOT does not match this script" >&2
+    exit 2
+  fi
+  if [[ -L "$_afs_script" || -L "$ROOT/scripts/deploy_lock.sh" ]]; then
+    echo "atomic_release.sh: refusing a symlink" >&2
+    exit 2
+  fi
+else
+  ROOT="$(git rev-parse --show-toplevel)"
+fi
 LOCK_DIR="$SHARED/deploy.lock"
+
+_require_merged_sha() {
+  local sha="$1"
+  if [[ ! -e "$ROOT/.git" ]]; then
+    if [[ "$(basename "$ROOT")" != "$sha" ]]; then
+      echo "promotion refused: git-less release directory is not named $sha" >&2
+      return 66
+    fi
+    return 0
+  fi
+  git fetch -q origin '+refs/heads/main:refs/remotes/origin/main'
+  if ! git merge-base --is-ancestor "$sha" origin/main; then
+    echo "promotion refused: release SHA $sha is not merged into origin/main" >&2
+    return 66
+  fi
+}
 
 # rollback takes no ref — let a bare --force-lock land in $2 for that action.
 if [[ "$ACTION" == "rollback" && "$REF" == "--force-lock" ]]; then
@@ -290,6 +325,10 @@ _promote_gate_check() {
     return 1
   fi
 
+  if [[ ! -e "$ROOT/.git" ]]; then
+    echo "promotion refused: behavior-neutral check needs a git checkout" >&2
+    return 1
+  fi
   git -C "$ROOT" fetch -q origin
   if ! python3 -m ops.behavior_neutral_gate --repo-root "$ROOT" --baseline-sha "$live_sha" --candidate-sha "$sha"; then
     echo "promotion refused: candidate is not behavior-neutral relative to the live commit ($live_sha) -- box stays on the approved operational posture (not the reset baseline), so only operational-only changes may promote without a full strategy-observation reset" >&2
@@ -309,11 +348,7 @@ promote_release() {
   fi
   local sha="$REF" ci_proof
   ci_proof="$(cd "$(dirname "$RELEASE_CI_PROOF")" && pwd)/$(basename "$RELEASE_CI_PROOF")"
-  git fetch -q origin '+refs/heads/main:refs/remotes/origin/main'
-  if ! git merge-base --is-ancestor "$sha" origin/main; then
-    echo "promotion refused: release SHA $sha is not merged into origin/main" >&2
-    exit 66
-  fi
+  _require_merged_sha "$sha" || exit $?
   PYTHONDONTWRITEBYTECODE=1 python3 -m ops.release_ci_proof verify-live \
     --sha "$sha" --proof "$ci_proof"
 

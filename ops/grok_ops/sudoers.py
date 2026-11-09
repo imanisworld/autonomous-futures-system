@@ -56,10 +56,12 @@ def validate_sudoers_text(text: str) -> None:
         stripped = line.strip()
         if not stripped or stripped.startswith("#") or stripped.startswith("Defaults"):
             continue
-        prefix = "grok-ops ALL=(root) NOPASSWD: "
+        prefix = "grok-ops ALL=(root) NOPASSWD:"
         if not stripped.startswith(prefix):
             raise ValueError("sudoers command line is not an exact grok-ops path")
-        path = stripped[len(prefix):]
+        path = stripped[len(prefix):].strip()
+        if path == "":
+            raise ValueError("sudoers path is empty")
         if path not in SUDO_PATHS or " " in path:
             raise ValueError("sudoers path is not an allowlisted script")
         found.append(path)

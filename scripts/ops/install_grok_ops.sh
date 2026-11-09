@@ -132,7 +132,7 @@ write_root() {
   chmod 755 "$dest"
 }
 
-root_exec='/usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/usr/local/lib/afs-ops /usr/bin/python3 -B -m'
+root_exec='cd / && exec /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/usr/local/lib/afs-ops /usr/bin/python3 -B -P -m'
 write_root afs-ops-preflight "exec $root_exec ops.grok_ops.actions preflight"
 write_root afs-ops-backup "exec $root_exec ops.grok_ops.actions backup"
 write_root afs-ops-baseline-reset-dry-run "exec $root_exec ops.grok_ops.actions baseline-reset-dry-run"
@@ -143,7 +143,7 @@ write_root afs-ops-rollback "exec $root_exec ops.grok_ops.actions rollback"
 write_root afs-ops-status "exec $root_exec ops.grok_ops.actions status"
 write_root afs-ops-record-refusal "exec $root_exec ops.grok_ops.dispatcher record-refusal"
 write_root afs-ops-authorize "exec $root_exec ops.grok_ops.authorize \"\$@\""
-write_root afs-grok-ops "exec /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/usr/local/lib/afs-ops SSH_ORIGINAL_COMMAND=\"\$SSH_ORIGINAL_COMMAND\" SSH_CLIENT=\"\$SSH_CLIENT\" /usr/bin/python3 -B -m ops.grok_ops.dispatcher"
+write_root afs-grok-ops "cd / && exec /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/usr/local/lib/afs-ops SSH_ORIGINAL_COMMAND=\"\$SSH_ORIGINAL_COMMAND\" SSH_CLIENT=\"\$SSH_CLIENT\" /usr/bin/python3 -B -P -m ops.grok_ops.dispatcher"
 
 if [[ -z "$PREFIX" ]]; then
   chown -R grok-ops:grok-ops /var/lib/afs-ops/.ssh

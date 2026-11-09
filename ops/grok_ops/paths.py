@@ -30,6 +30,7 @@ INSTALLED_CODE = "/usr/local/lib/afs-ops"
 PYTHON = "/usr/bin/python3"
 BASELINE_REL = "scripts/ops/baseline_reset.sh"
 ATOMIC_REL = "scripts/atomic_release.sh"
+DEPLOY_LOCK_REL = "scripts/deploy_lock.sh"
 VARIANTS_REL = "research/trend_r3_forward/trend_variants_shadow.py"
 # Operator-signed files. The lane passes these paths through and does not
 # write, mint, or sign them.
