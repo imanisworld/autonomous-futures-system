@@ -2,7 +2,7 @@
 
 trial_id: T-2026-11-09-prereg-322-afs0523-oos-reproduction-2026-11-09-01
 
-Operator ledger id: **AFS-0523**. This file is the repository registration for that study. It is a preregistration only. Claude's review is required before any new data runs through the wrapper. `research/afs0523_322_repro_wrapper.py` sets `RUN_AUTHORIZED = False`, and `run_declared_slices()` refuses every call.
+Operator ledger id: **AFS-0523**. This file is the repository registration for that study. It is a preregistration only. Claude's review is required before any new data runs through the wrapper. `RUN_AUTHORIZED` is true, and the only scoring path is `run_reproduction_gate`. `run_declared_slices()` still refuses until a hash-verified PASS gate artifact exists and Claude has reviewed that result.
 
 No vendor download, no corpus fetch, and no scoring run is part of this registration. The frozen strategy rules, the frozen harness, and `check_repro()` are not edited.
 
@@ -73,6 +73,14 @@ A gap-open whose 10AM open is already outside the target-to-stop range is not sc
 1-3 tick slippage sensitivity tests fill-price sensitivity only, not whether fills would have happened; spread, depth and fill probability remain separate unquantified uncertainties.
 
 The break-even win rate is one shared rate for a fill model and a slippage level. Each resolved fill is priced twice, once at its own target and once at its own stop, with adverse slippage and round-turn commission on both exits. The rate is the value that sets the sum of those nets to zero. It is not the average of the per-trade break-even percentages. Unresolved rows, including 2025-01-20, are not trades in that rate. On the Oct 4 ledger at 3 ticks the reference is about 77.6% for the 32 pre-armed trades and about 73.8% for the 19 honest-IOC trades.
+
+## Reproduction gate
+
+`run_reproduction_gate(research_15m, audit_5m, data_manifest)` is the only path that scores the Databento reproduction window. It reads `RUN_AUTHORIZED` and refuses when that is false. The window is fixed at 2024-07-02 through 2026-06-26 and the expected count is fixed at 34. A caller cannot override either. It checks the download record's pulled-file checksums and the hashes of the generated 15-minute and 5-minute trees, and it refuses any day file outside that window. It then calls the private scorer and `compare_replay_to_oct4`, and writes a gate artifact with pass/fail, the 306 comparisons, mismatches, DATA_GAPs, invalid brackets, the gap-open count, and the adapter report. It appends a `GATE` line to the trial ledger. A DATA_GAP that removes a candidate fails this gate through the 34-count check.
+
+`run_window` does not score. A window other than the reproduction window is refused, and a hash-verified PASS artifact does not open it. The reproduction window itself is scored only by `run_reproduction_gate`.
+
+`run_declared_slices` stays refused until a committed gate artifact shows PASS and the artifact bytes match the ledger hash. A boolean is not the unlock. Claude's written review of that gate result has to be in the artifact before the older slices are admitted, and this build does not score those slices.
 
 ## Prohibited until Claude's review
 

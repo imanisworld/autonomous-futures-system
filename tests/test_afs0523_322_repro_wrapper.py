@@ -17,8 +17,15 @@ import pytest
 
 from config.futures_contracts import contract_economics
 from research.afs0523_322_repro_wrapper import (
+    REPRO_END,
+    REPRO_START,
+    TRIAL_ID,
+    _tree_sha256,
     invalid_brackets_outside_data_gaps,
     partition_invalid_gap_opens,
+    run_declared_slices,
+    run_reproduction_gate,
+    run_window,
 )
 from strategy.strat_322_first_live import advance_strat_322_first_live
 
@@ -51,6 +58,7 @@ def _wrapper():
         SLICES,
         assemble_slice_report,
         compare_replay_to_oct4,
+        _run_window,
         run_declared_slices,
         run_window,
     )
@@ -66,6 +74,7 @@ def _wrapper():
         "SLICES": SLICES,
         "assemble_slice_report": assemble_slice_report,
         "compare_replay_to_oct4": compare_replay_to_oct4,
+        "_run_window": _run_window,
         "run_declared_slices": run_declared_slices,
         "run_window": run_window,
     }
@@ -214,7 +223,7 @@ def test_expected_count_is_a_wrapper_parameter_and_new_slices_are_refused(tmp_pa
     (target / "MNQ_2024-08-02.jsonl").write_text(json.dumps(bar) + "\n", encoding="utf-8")
 
     with pytest.raises(RuntimeError, match="expected-count"):
-        wrapper["run_window"](
+        wrapper["_run_window"](
             research,
             audit,
             start=day,
@@ -222,7 +231,7 @@ def test_expected_count_is_a_wrapper_parameter_and_new_slices_are_refused(tmp_pa
             expected_count=34,
         )
 
-    empty = wrapper["run_window"](
+    empty = wrapper["_run_window"](
         research,
         audit,
         start=day,
@@ -472,7 +481,7 @@ def test_data_gap_days_are_reported_and_not_scored(tmp_path):
         "volume": 1,
     }
     (audit / "MNQ" / "MNQ_2024-08-02.jsonl").write_text(json.dumps(bar) + "\n", encoding="utf-8")
-    result = _wrapper()["run_window"](research, audit, start=day, end=day, expected_count=None)
+    result = _wrapper()["_run_window"](research, audit, start=day, end=day, expected_count=None)
     assert result["candidate_count"] == 0
     assert result["data_gap_count"] >= 1
     assert result["gap_open_count"] == 0
@@ -566,3 +575,161 @@ def test_break_even_does_not_average_two_different_trades():
         )
         / 2
     )
+
+
+def _bar_file(root: Path, day: date) -> None:
+    folder = root / "MNQ"
+    folder.mkdir(parents=True, exist_ok=True)
+    bar = {
+        "timestamp": f"{day.isoformat()}T14:00:00+00:00",
+        "open": 1.0,
+        "high": 1.25,
+        "low": 0.75,
+        "close": 1.0,
+        "volume": 1,
+    }
+    (folder / f"MNQ_{day.isoformat()}.jsonl").write_text(json.dumps(bar) + "\n", encoding="utf-8")
+
+
+def _manifest(tmp_path: Path, research: Path, audit: Path) -> dict:
+    pulled = tmp_path / "pulled.dbn"
+    pulled.write_bytes(b"synthetic-download-record")
+    return {
+        "pulled_files": [{"path": str(pulled), "sha256": hashlib.sha256(pulled.read_bytes()).hexdigest()}],
+        "research_15m_sha256": _tree_sha256(research),
+        "audit_5m_sha256": _tree_sha256(audit),
+        "adapter_report": {"contracts": ["MNQH5"], "missing_minutes": []},
+    }
+
+
+def _patch_gate_paths(monkeypatch, tmp_path: Path) -> tuple[Path, Path]:
+    artifact = tmp_path / "reproduction-gate.json"
+    ledger = tmp_path / "ledger.jsonl"
+    ledger.write_bytes((ROOT / "docs/research-trial-ledger.jsonl").read_bytes())
+    monkeypatch.setattr("research.afs0523_322_repro_wrapper.GATE_ARTIFACT", artifact)
+    monkeypatch.setattr("research.afs0523_322_repro_wrapper.TRIAL_LEDGER", ledger)
+    return artifact, ledger
+
+
+def test_reproduction_gate_refuses_when_the_flag_is_false(monkeypatch, tmp_path):
+    monkeypatch.setattr("research.afs0523_322_repro_wrapper.RUN_AUTHORIZED", False)
+    with pytest.raises(RuntimeError, match="RUN_AUTHORIZED"):
+        run_reproduction_gate(tmp_path, tmp_path, {})
+
+
+def test_reproduction_gate_refuses_a_day_file_outside_the_window(tmp_path):
+    research = tmp_path / "research"
+    audit = tmp_path / "audit"
+    _bar_file(research, date(2020, 1, 2))
+    _bar_file(audit, date(2024, 8, 2))
+    manifest = _manifest(tmp_path, research, audit)
+    with pytest.raises(RuntimeError, match="outside"):
+        run_reproduction_gate(research, audit, manifest)
+
+
+def test_reproduction_gate_refuses_a_checksum_or_tree_hash_mismatch(tmp_path):
+    research = tmp_path / "research"
+    audit = tmp_path / "audit"
+    _bar_file(research, date(2024, 8, 2))
+    _bar_file(audit, date(2024, 8, 2))
+    manifest = _manifest(tmp_path, research, audit)
+    manifest["pulled_files"][0]["sha256"] = "0" * 64
+    with pytest.raises(RuntimeError, match="checksum mismatch"):
+        run_reproduction_gate(research, audit, manifest)
+    manifest = _manifest(tmp_path, research, audit)
+    manifest["research_15m_sha256"] = "0" * 64
+    with pytest.raises(RuntimeError, match="tree hash mismatch"):
+        run_reproduction_gate(research, audit, manifest)
+
+
+def test_reproduction_gate_refuses_a_caller_window_or_count_override(tmp_path):
+    with pytest.raises(TypeError):
+        run_reproduction_gate(
+            tmp_path,
+            tmp_path,
+            {},
+            start=date(2019, 5, 1),
+            end=date(2024, 6, 30),
+            expected_count=1,
+        )
+
+
+def test_run_window_refuses_a_call_outside_the_reproduction_window(tmp_path):
+    with pytest.raises(RuntimeError, match="window other than the reproduction window"):
+        run_window(
+            tmp_path,
+            tmp_path,
+            start=date(2019, 5, 1),
+            end=date(2024, 6, 30),
+            expected_count=None,
+        )
+    with pytest.raises(RuntimeError, match="run_reproduction_gate"):
+        run_window(
+            tmp_path,
+            tmp_path,
+            start=REPRO_START,
+            end=REPRO_END,
+            expected_count=34,
+        )
+
+
+def _write_gate(artifact: Path, ledger: Path, payload: dict, *, tamper: bool = False) -> None:
+    text = json.dumps(payload, indent=2) + "\n"
+    artifact.write_text(text, encoding="utf-8")
+    digest = hashlib.sha256(text.encode()).hexdigest()
+    if tamper:
+        artifact.write_text(text + " ", encoding="utf-8")
+    line = {
+        "trial_id": TRIAL_ID,
+        "event": "GATE",
+        "gate_pass": payload["pass"],
+        "gate_artifact_sha256": digest,
+    }
+    ledger.write_text(json.dumps(line) + "\n", encoding="utf-8")
+
+
+def test_declared_slices_refuse_without_a_verified_pass_artifact(monkeypatch, tmp_path):
+    artifact, ledger = _patch_gate_paths(monkeypatch, tmp_path)
+    with pytest.raises(RuntimeError, match="Claude"):
+        run_declared_slices()
+    _write_gate(artifact, ledger, {"pass": False, "claude_review": None}, tamper=True)
+    with pytest.raises(RuntimeError, match="hash mismatch"):
+        run_declared_slices()
+    _write_gate(artifact, ledger, {"pass": False, "claude_review": None})
+    with pytest.raises(RuntimeError, match="did not PASS"):
+        run_declared_slices()
+    _write_gate(artifact, ledger, {"pass": True, "claude_review": True})
+    with pytest.raises(RuntimeError, match="Claude's review"):
+        run_declared_slices()
+    _write_gate(
+        artifact,
+        ledger,
+        {"pass": True, "claude_review": "Claude reviewed the committed gate artifact."},
+    )
+    assert run_declared_slices() is None
+
+
+def test_reproduction_gate_records_a_count_failure_on_a_synthetic_fixture(monkeypatch, tmp_path):
+    research = tmp_path / "research"
+    audit = tmp_path / "audit"
+    day = date(2024, 8, 2)
+    _bar_file(research, day)
+    _bar_file(audit, day)
+    manifest = _manifest(tmp_path, research, audit)
+    artifact, ledger = _patch_gate_paths(monkeypatch, tmp_path)
+    real_ledger = (ROOT / "docs/research-trial-ledger.jsonl").read_bytes()
+    result = run_reproduction_gate(research, audit, manifest)
+    assert result["pass"] is False
+    assert "expected-count" in result["error"]
+    assert result["comparisons"] is None
+    assert result["outcome_records"] == 306
+    assert result["adapter_report"]["contracts"] == ["MNQH5"]
+    assert result["data_gap_count"] >= 1
+    assert any(item["date"] == day.isoformat() and item["scored"] is False for item in result["data_gaps"])
+    written = json.loads(artifact.read_text(encoding="utf-8"))
+    assert written["pass"] is False
+    last = json.loads(ledger.read_text(encoding="utf-8").splitlines()[-1])
+    assert last["event"] == "GATE"
+    assert last["gate_pass"] is False
+    assert last["trial_id"] == TRIAL_ID
+    assert (ROOT / "docs/research-trial-ledger.jsonl").read_bytes() == real_ledger

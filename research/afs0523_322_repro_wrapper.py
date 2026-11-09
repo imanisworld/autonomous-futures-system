@@ -19,9 +19,11 @@ window, the expected-count check, and the data paths. NQ prices, when a later
 reviewed run supplies them on the MNQ path, are accounted with the unchanged
 MNQ lane ($2/point). This module does not assign a point value.
 
-``RUN_AUTHORIZED`` is true. ``run_declared_slices()`` still refuses every call.
-A mechanical ``run_window()`` call is not a study result and must not be
-committed as evidence.
+``RUN_AUTHORIZED`` is true and is checked by ``run_reproduction_gate``. That
+function is the only path that scores Databento data, and only the fixed
+reproduction window. ``run_window`` scores nothing. ``run_declared_slices()``
+stays refused until a hash-verified PASS artifact contains Claude's written
+review, and even then it does not score the older slices.
 """
 from __future__ import annotations
 
@@ -30,7 +32,7 @@ import hashlib
 import importlib.util
 import json
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from config.futures_contracts import contract_economics
@@ -53,6 +55,23 @@ OCT4_LEDGER_SHA256 = "0d0d8d72c48b3c9dd1e7065b23a5422176a765ac7b1eb594e2833b72f5
 OCT4_LEDGER_COMMIT = "cf2ac0724a266198629a363fde23364ef00ce721"
 EOD_DATE = "2025-01-20"
 RUN_AUTHORIZED = True
+TRIAL_ID = "T-2026-11-09-prereg-322-afs0523-oos-reproduction-2026-11-09-01"
+TRIAL_LEDGER = REPO / "docs/research-trial-ledger.jsonl"
+GATE_ARTIFACT = (
+    REPO
+    / "docs/research-evidence"
+    / TRIAL_ID
+    / "reproduction-gate.json"
+)
+_FROZEN_LEDGER_FIELDS = (
+    "prereg_path",
+    "prereg_commit",
+    "family_id",
+    "family_label",
+    "population",
+    "variant_set",
+    "prior_exposed",
+)
 REPRO_START = date(2024, 7, 2)
 REPRO_END = date(2026, 6, 26)
 REPRO_EXPECTED_COUNT = 34
@@ -489,7 +508,7 @@ def _parity(
     return state, triggers, bars, invalid_brackets
 
 
-def run_window(
+def _run_window(
     research_15m: Path,
     audit_5m: Path,
     *,
@@ -557,17 +576,209 @@ def run_window(
     }
 
 
-def run_declared_slices(*_args: object, **_kwargs: object) -> None:
-    """Refuse the declared MNQ / NQ / combined slices.
+def _tree_sha256(root: Path) -> str:
+    folder = root / "MNQ"
+    digest = hashlib.sha256()
+    if folder.is_dir():
+        for path in sorted(folder.glob("MNQ_*.jsonl")):
+            digest.update(path.name.encode())
+            digest.update(b"\0")
+            digest.update(path.read_bytes())
+    return digest.hexdigest()
 
-    Claude's review of the preregistration is required before any new data
-    runs through this wrapper. Flipping ``RUN_AUTHORIZED`` in a later commit
-    is part of that review; this function still refuses in this registration.
-    """
-    raise RuntimeError(
-        "AFS-0523 preregistration is not authorized to score new data. "
-        "Claude's review is required before any new-vendor run."
+
+def _day_file_dates(root: Path) -> list[date]:
+    folder = root / "MNQ"
+    if not folder.is_dir():
+        return []
+    found = []
+    for path in sorted(folder.glob("MNQ_*.jsonl")):
+        found.append(date.fromisoformat(path.name.removeprefix("MNQ_").removesuffix(".jsonl")))
+    return found
+
+
+def _refuse_outside_reproduction_window(root: Path, label: str) -> None:
+    outside = [
+        day.isoformat()
+        for day in _day_file_dates(root)
+        if day < REPRO_START or day > REPRO_END
+    ]
+    if outside:
+        raise RuntimeError(
+            f"{label} day file outside the reproduction window "
+            f"{REPRO_START.isoformat()}..{REPRO_END.isoformat()}: {outside[:8]}"
+        )
+
+
+def _verify_download_record(research_15m: Path, audit_5m: Path, manifest: dict) -> None:
+    pulled = manifest.get("pulled_files")
+    if not isinstance(pulled, list) or not pulled:
+        raise RuntimeError("download record is missing pulled-file checksums")
+    for item in pulled:
+        path = Path(item["path"])
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        if digest != item["sha256"]:
+            raise RuntimeError(f"checksum mismatch for {path}")
+    _refuse_outside_reproduction_window(research_15m, "15m")
+    _refuse_outside_reproduction_window(audit_5m, "5m")
+    research_hash = _tree_sha256(research_15m)
+    audit_hash = _tree_sha256(audit_5m)
+    if research_hash != manifest.get("research_15m_sha256"):
+        raise RuntimeError("research 15m tree hash mismatch")
+    if audit_hash != manifest.get("audit_5m_sha256"):
+        raise RuntimeError("audit 5m tree hash mismatch")
+
+
+def _gate_payload(scored: dict | None, comparison: dict | None, manifest: dict, error: str | None) -> dict:
+    passed = comparison is not None and comparison.get("ok") is True and error is None
+    return {
+        "pass": passed,
+        "comparisons": None if comparison is None else comparison.get("comparisons"),
+        "outcome_records": OUTCOME_RECORD_COUNT,
+        "mismatches": [] if comparison is None else comparison.get("mismatches"),
+        "data_gaps": [] if scored is None else scored.get("data_gaps"),
+        "data_gap_count": 0 if scored is None else scored.get("data_gap_count"),
+        "invalid_entry_brackets": [] if scored is None else scored.get("invalid_entry_brackets"),
+        "invalid_entry_bracket_count": 0 if scored is None else scored.get("invalid_entry_bracket_count"),
+        "gap_open_count": 0 if scored is None else scored.get("gap_open_count"),
+        "adapter_report": manifest.get("adapter_report"),
+        "error": error,
+        "claude_review": None,
+    }
+
+
+def _write_gate_artifact(payload: dict) -> str:
+    GATE_ARTIFACT.parent.mkdir(parents=True, exist_ok=True)
+    text = json.dumps(payload, indent=2, default=str) + "\n"
+    GATE_ARTIFACT.write_text(text, encoding="utf-8")
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def _append_gate_event(payload: dict, artifact_sha256: str) -> None:
+    lines = TRIAL_LEDGER.read_text(encoding="utf-8").splitlines()
+    rows = [json.loads(line) for line in lines if line.strip()]
+    first = next(row for row in rows if row.get("trial_id") == TRIAL_ID)
+    stamp = datetime.now(timezone.utc).replace(microsecond=0)
+    for row in rows:
+        if row.get("trial_id") != TRIAL_ID:
+            continue
+        previous = datetime.fromisoformat(row["recorded_at"].replace("Z", "+00:00"))
+        if stamp <= previous:
+            stamp = previous + timedelta(seconds=1)
+    event = {key: first.get(key) for key in _FROZEN_LEDGER_FIELDS}
+    event.update(
+        {
+            "trial_id": TRIAL_ID,
+            "event": "GATE",
+            "recorded_at": stamp.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "recorded_by": "reproduction-gate",
+            "gate_pass": payload["pass"],
+            "gate_artifact": str(GATE_ARTIFACT.relative_to(REPO)) if GATE_ARTIFACT.is_relative_to(REPO) else str(GATE_ARTIFACT),
+            "gate_artifact_sha256": artifact_sha256,
+            "notes": "Reproduction gate only. Older slices stay blocked until Claude reviews this result.",
+        }
     )
+    with TRIAL_LEDGER.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(event, separators=(",", ":")) + "\n")
+
+
+def _latest_gate_line() -> dict | None:
+    if not TRIAL_LEDGER.is_file():
+        return None
+    found = None
+    for line in TRIAL_LEDGER.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        if row.get("trial_id") == TRIAL_ID and row.get("event") == "GATE":
+            found = row
+    return found
+
+
+def run_reproduction_gate(research_15m: Path, audit_5m: Path, data_manifest: dict) -> dict:
+    """Score only the reproduction window, and only on the recorded download.
+
+    The window and the expected count are fixed. Callers cannot override them.
+    A DATA_GAP that removes a candidate fails this gate through the 34-count check.
+    """
+    if not RUN_AUTHORIZED:
+        raise RuntimeError("RUN_AUTHORIZED is false; reproduction gate refused")
+    verify_frozen_modules()
+    _verify_download_record(research_15m, audit_5m, data_manifest)
+    try:
+        scored = _run_window(
+            research_15m,
+            audit_5m,
+            start=REPRO_START,
+            end=REPRO_END,
+            expected_count=REPRO_EXPECTED_COUNT,
+        )
+    except RuntimeError as exc:
+        gap_report = data_gap_dates_from_trees(research_15m, audit_5m, REPRO_START, REPRO_END)
+        payload = _gate_payload(None, None, data_manifest, str(exc))
+        payload["data_gaps"] = gap_report["data_gaps"]
+        payload["data_gap_count"] = gap_report["data_gap_count"]
+        digest = _write_gate_artifact(payload)
+        _append_gate_event(payload, digest)
+        return payload
+    comparison = compare_replay_to_oct4(scored)
+    payload = _gate_payload(scored, comparison, data_manifest, None)
+    digest = _write_gate_artifact(payload)
+    _append_gate_event(payload, digest)
+    return payload
+
+
+def run_window(
+    research_15m: Path,
+    audit_5m: Path,
+    *,
+    start: date,
+    end: date,
+    expected_count: int | None,
+) -> dict:
+    """Refuse every window. Scoring goes through ``run_reproduction_gate``.
+
+    A window other than the reproduction window is refused here. A
+    hash-verified PASS artifact does not open it: the older slices stay
+    on ``run_declared_slices`` until Claude reviews that result.
+    """
+    if (start, end) != (REPRO_START, REPRO_END) or expected_count != REPRO_EXPECTED_COUNT:
+        raise RuntimeError(
+            "run_window refuses a window other than the reproduction window"
+        )
+    raise RuntimeError("score the reproduction window through run_reproduction_gate")
+
+
+def _verified_gate_artifact() -> dict:
+    line = _latest_gate_line()
+    if line is None or not GATE_ARTIFACT.is_file():
+        raise RuntimeError(
+            "no committed reproduction-gate artifact; Claude's review of a PASS "
+            "gate is required before the older slices run"
+        )
+    text = GATE_ARTIFACT.read_text(encoding="utf-8")
+    digest = hashlib.sha256(text.encode()).hexdigest()
+    if digest != line.get("gate_artifact_sha256"):
+        raise RuntimeError("reproduction-gate artifact hash mismatch")
+    return json.loads(text)
+
+
+def run_declared_slices(*_args: object, **_kwargs: object) -> None:
+    """Admit the older slices only after the gate evidence and Claude's review.
+
+    A passing boolean is not enough. The artifact must be the hash-verified
+    PASS record, and ``claude_review`` must be Claude's written review of that
+    result. This function does not score those slices.
+    """
+    artifact = _verified_gate_artifact()
+    if artifact.get("pass") is not True:
+        raise RuntimeError("reproduction gate did not PASS")
+    review = artifact.get("claude_review")
+    if not isinstance(review, str) or not review.strip():
+        raise RuntimeError(
+            "Claude's review of the gate result is required before the older slices run"
+        )
+    return None
 
 
 def _target_and_stop_nets(
