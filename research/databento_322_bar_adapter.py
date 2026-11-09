@@ -35,6 +35,7 @@ ET = ZoneInfo("America/New_York")
 OUTPUT_INSTRUMENT = "MNQ"
 DOLLAR_BASIS = "MNQ-equivalent ($2/point)"
 NQ_LABEL = "best available evidence, not fully clean"
+NQ_RESEARCH_LABEL = "MNQ-equivalent research, not executable historical MNQ"
 OUTRIGHT_RE = re.compile(r"^(?:MNQ|NQ|MES|ES|MYM|YM|M2K|RTY)[HMUZ]\d$")
 
 
@@ -234,7 +235,7 @@ def adapt_ohlcv_1m(
     _write_tree(written[15], research_15m)
     _write_tree(written[5], audit_5m)
     label = NQ_LABEL if symbol_root == "NQ" else "MNQ"
-    return {
+    report = {
         "price_source": symbol_root,
         "output_instrument": OUTPUT_INSTRUMENT,
         "dollar_basis": DOLLAR_BASIS,
@@ -246,3 +247,6 @@ def adapt_ohlcv_1m(
         "bars_5m": len(written[5]),
         "bars_15m": len(written[15]),
     }
+    if symbol_root == "NQ":
+        report["result_label"] = NQ_RESEARCH_LABEL
+    return report

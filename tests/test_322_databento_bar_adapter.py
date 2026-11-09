@@ -217,6 +217,7 @@ def test_nq_parent_bars_are_written_on_the_mnq_harness_path(tmp_path):
     assert report["output_instrument"] == "MNQ"
     assert report["dollar_basis"] == "MNQ-equivalent ($2/point)"
     assert report["label"] == "best available evidence, not fully clean"
+    assert report["result_label"] == "MNQ-equivalent research, not executable historical MNQ"
     assert all(row["open"] != 8.0 for row in rows)
 
 

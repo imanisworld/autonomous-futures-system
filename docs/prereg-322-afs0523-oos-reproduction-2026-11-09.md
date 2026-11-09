@@ -18,7 +18,7 @@ The gate of record for AFS-0523 is `compare_replay_to_oct4()` against the alread
 
 SHA-256 `0d0d8d72c48b3c9dd1e7065b23a5422176a765ac7b1eb594e2833b72f5d5a9b1` (commit `cf2ac0724a266198629a363fde23364ef00ce721`).
 
-The comparison is every candidate × three fill models × three slippage levels:
+The comparison is all **306** outcome records: 34 candidates × 3 fill models × 3 slippage levels. The gate passes only when that count is present and every compared field matches the hash-verified file. Any difference fails.
 
 | Wrapper label | Frozen ledger key | Fill model |
 |---|---|---|
@@ -47,7 +47,7 @@ Reported separately. No retune. May 2019 belongs to the MNQ slice only, so the t
 | Variant id | Window | Price source |
 |---|---|---|
 | `mnq-2019-05-to-2024-06` | 2019-05-01 through 2024-06-30 | MNQ |
-| `nq-2010-06-to-2019-05` | 2010-06-01 through 2019-04-30 | NQ, MNQ-equivalent dollars; best available evidence, not fully clean |
+| `nq-2010-06-to-2019-05` | 2010-06-01 through 2019-04-30 | NQ proxy. Every result in this window is labeled **MNQ-equivalent research, not executable historical MNQ**. It is best available evidence, not fully clean, and it is not executable historical MNQ. |
 | `combined` | the two slices side by side | no third detection and no retune |
 
 These windows end before the frozen 34-candidate sample (first candidate 2024-08-02). They are not a rescore of that sample.
@@ -55,6 +55,12 @@ These windows end before the frozen 34-candidate sample (first candidate 2024-08
 ## Data adapter
 
 `research/databento_322_bar_adapter.py` accepts Databento GLBX.MDP3 ohlcv-1m rows plus definition rows (parent symbology) that the caller already has. It does not open a network client. It resamples 1-minute bars into the 15-minute research tree and the 5-minute audit tree, using bar-start UTC timestamps, America/New_York session boundaries, and the exact 15:55 ET bar the harness treats as the day-only close. The front contract is `sources.polygon_client.front_contract` with `roll_days=8`, not a Databento continuous symbol. A 5-minute or 15-minute bar is written only when every constituent minute is present. Missing minutes are recorded and never price-filled.
+
+## Slippage sensitivity and break-even
+
+1-3 tick slippage sensitivity tests fill-price sensitivity only, not whether fills would have happened; spread, depth and fill probability remain separate unquantified uncertainties.
+
+The break-even win rate is one shared rate for a fill model and a slippage level. Each resolved fill is priced twice, once at its own target and once at its own stop, with adverse slippage and round-turn commission on both exits. The rate is the value that sets the sum of those nets to zero. It is not the average of the per-trade break-even percentages. Unresolved rows, including 2025-01-20, are not trades in that rate. On the Oct 4 ledger at 3 ticks the reference is about 77.6% for the 32 pre-armed trades and about 73.8% for the 19 honest-IOC trades.
 
 ## Prohibited until Claude's review
 

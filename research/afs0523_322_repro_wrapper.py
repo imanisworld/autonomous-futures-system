@@ -32,8 +32,10 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
+from config.futures_contracts import contract_economics
 from research.run_322_expanded_evidence import detect_candidates
 from scripts.edge_decomposition_audit import (
+    COMMISSION_ROUND_TRIP,
     LANES,
     extract_state_machine,
     load_bars,
@@ -52,6 +54,13 @@ RUN_AUTHORIZED = False
 REPRO_START = date(2024, 7, 2)
 REPRO_END = date(2026, 6, 26)
 REPRO_EXPECTED_COUNT = 34
+OUTCOME_RECORD_COUNT = 34 * 3 * 3
+NQ_RESEARCH_LABEL = "MNQ-equivalent research, not executable historical MNQ"
+SLIPPAGE_SENSITIVITY_NOTE = (
+    "1-3 tick slippage sensitivity tests fill-price sensitivity only, "
+    "not whether fills would have happened; spread, depth and fill probability "
+    "remain separate unquantified uncertainties."
+)
 
 FROZEN_MODULE_SHA256 = {
     "scripts/322_trigger_timing_ab_2026_09_18.py":
@@ -294,7 +303,13 @@ def compare_replay_to_oct4(replay: dict, ledger_path: Path | None = None) -> dic
         for cell in slip_cells.values()
     )
     return {
-        "ok": not mismatches and eod_ok and len(reference_dates) == REPRO_EXPECTED_COUNT,
+        "ok": (
+            not mismatches
+            and eod_ok
+            and len(reference_dates) == REPRO_EXPECTED_COUNT
+            and comparisons == OUTCOME_RECORD_COUNT
+        ),
+        "outcome_records": OUTCOME_RECORD_COUNT,
         "ledger_sha256": OCT4_LEDGER_SHA256,
         "rows": len(reference_dates),
         "comparisons": comparisons,
@@ -418,26 +433,113 @@ def run_declared_slices(*_args: object, **_kwargs: object) -> None:
     )
 
 
+def _target_and_stop_nets(
+    direction: str,
+    fill_price: float,
+    stop: float,
+    target: float,
+    slippage_ticks: float,
+) -> tuple[float, float]:
+    """Net dollars if this fill hits its own target, and if it hits its own stop.
+
+    Entry is the actual fill. Adverse slippage is applied to both exits, and
+    the round-turn commission is charged on both. The dollar scale is the
+    unchanged MNQ contract economics.
+    """
+    tick, tick_value = contract_economics("MNQ")
+    slip = float(slippage_ticks) * tick
+    dollars_per_point = tick_value / tick
+    if direction == "LONG":
+        win_points = (target - slip) - fill_price
+        loss_points = (stop - slip) - fill_price
+    elif direction == "SHORT":
+        win_points = fill_price - (target + slip)
+        loss_points = fill_price - (stop + slip)
+    else:
+        raise RuntimeError(f"unsupported direction {direction!r}")
+    win_net = win_points * dollars_per_point - COMMISSION_ROUND_TRIP
+    loss_net = loss_points * dollars_per_point - COMMISSION_ROUND_TRIP
+    return win_net, loss_net
+
+
+def aggregate_break_even(ledger: dict) -> dict:
+    """Shared win rate at which aggregate net P&L is zero.
+
+    One rate is solved from the sums of each trade's target net and stop net.
+    It is not the average of the per-trade break-even percentages. Only
+    resolved fills are trades. 2025-01-20 stays out of the rate while it is
+    unresolved.
+    """
+    by_model: dict[str, dict] = {}
+    for slippage in SLIPPAGES:
+        ticks = float(slippage.removesuffix("tick"))
+        rows = list(ledger[slippage])
+        for model_key, label in MODEL_LABELS:
+            reward = 0.0
+            risk = 0.0
+            trades = 0
+            for row in rows:
+                model = row["models"][model_key]
+                if model.get("status") != "RESOLVED" or model.get("fill_entry") is None:
+                    continue
+                win_net, loss_net = _target_and_stop_nets(
+                    str(row["direction"]),
+                    float(model["fill_entry"]),
+                    float(row["stop"]),
+                    float(row["target"]),
+                    ticks,
+                )
+                reward += win_net
+                risk += loss_net
+                trades += 1
+            denominator = reward - risk
+            if trades == 0 or denominator == 0:
+                rate = None
+                expectancy = None
+            else:
+                rate = -risk / denominator
+                expectancy = rate * reward + (1.0 - rate) * risk
+            by_model.setdefault(label, {})[slippage] = {
+                "trades": trades,
+                "reward_net_total": round(reward, 2),
+                "risk_net_total": round(risk, 2),
+                "break_even_win_rate": None if rate is None else rate,
+                "aggregate_net_expectancy": None if expectancy is None else round(expectancy, 10),
+                "averaged_per_trade_rates": False,
+            }
+    return {
+        "method": "single_shared_win_rate",
+        "slippage_sensitivity": SLIPPAGE_SENSITIVITY_NOTE,
+        "by_model": by_model,
+    }
+
+
 def assemble_slice_report(mnq_summary: dict, nq_summary: dict) -> dict:
     """Place the two slice summaries next to a combined count. No retune."""
     nq = next(item for item in SLICES if item.price_source == "NQ")
+    nq_block = {
+        **nq_summary,
+        "price_source": "NQ",
+        "label": nq.label,
+        "dollar_basis": "MNQ-equivalent ($2/point)",
+        "result_label": NQ_RESEARCH_LABEL,
+        "slippage_sensitivity": SLIPPAGE_SENSITIVITY_NOTE,
+    }
     return {
         "mnq-2019-05-to-2024-06": {
             **mnq_summary,
             "price_source": "MNQ",
             "dollar_basis": "MNQ-equivalent ($2/point)",
+            "slippage_sensitivity": SLIPPAGE_SENSITIVITY_NOTE,
         },
-        "nq-2010-06-to-2019-05": {
-            **nq_summary,
-            "price_source": "NQ",
-            "label": nq.label,
-            "dollar_basis": "MNQ-equivalent ($2/point)",
-        },
+        "nq-2010-06-to-2019-05": nq_block,
         "combined": {
             "label": "reported separately; no retuning",
             "retuned": False,
             "parts": ["mnq-2019-05-to-2024-06", "nq-2010-06-to-2019-05"],
             "candidate_count": int(mnq_summary.get("candidate_count") or 0)
             + int(nq_summary.get("candidate_count") or 0),
+            "result_label": NQ_RESEARCH_LABEL,
+            "slippage_sensitivity": SLIPPAGE_SENSITIVITY_NOTE,
         },
     }
