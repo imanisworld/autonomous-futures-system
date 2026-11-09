@@ -1551,10 +1551,16 @@ def test_dashboard_strategy_inventory_keeps_evidence_and_authority_separate(monk
     by_name = {row["name"]: row for row in inventory["rows"]}
 
     four_hr = by_name["4HR Re-Trigger (MNQ)"]
-    assert four_hr["classification"] == "PROMISING BUT UNPROVEN"
+    assert four_hr["classification"] == "WAIT"
     assert "GUARDED DEMO" in four_hr["posture"].upper()
     assert "PARKED FOR REAL-ACCOUNT EXECUTION" in four_hr["posture"].upper()
     assert four_hr["authority"] == "CURRENT-ACCOUNT INCOMPATIBLE"
+
+    first_live = by_name["60M 3-2-2 First Live"]
+    assert first_live["classification"] == "PROMISING BUT UNPROVEN"
+    assert "PARKED" in first_live["posture"].upper()
+    assert "GUARDED DEMO" in first_live["posture"].upper()
+    assert first_live["authority"] == "NO LIVE AUTHORITY"
     assert "PAPER" not in four_hr["verdict"].upper()
 
     mes_122 = by_name["MES 1-2-2 (`strat_122`)"]
