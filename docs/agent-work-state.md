@@ -5,11 +5,23 @@
 | Item | State |
 |---|---|
 | **Branch** | `cursor/322-repro-comparison-oct4` |
-| **Scope** | Preregistered wrapper and Databento bar adapter. Frozen harness and `check_repro()` are not edited. Reproduction gate compares all 306 Oct 4 outcome records. Pre-2019 NQ results are labeled MNQ-equivalent research, not executable historical MNQ. Break-even is one shared win rate per fill model and slippage. |
+| **Scope** | Preregistered wrapper and Databento bar adapter. Frozen harness and `check_repro()` are not edited. Reproduction gate compares all 306 Oct 4 outcome records. Pre-2019 NQ results are labeled MNQ-equivalent research, not executable historical MNQ. Break-even is one shared win rate per fill model and slippage. Gap-open days are scored at the 10AM open and counted. DATA_GAP days are not scored. |
 | **Runtime** | Not exercised. No vendor download. `RUN_AUTHORIZED` is false. |
 | **NEXT** | Claude reviews the preregistration before any new data runs. Do not merge from this checkpoint. Inventory wording is a separate docs branch. |
 
-## START HERE — 2026-11-09 AFS handoff
+## START HERE — 2026-11-09 read-only audit ENTRY_FILL_MODEL pin
+
+Source only. Do not merge, deploy, restart, or install from this checkpoint.
+
+| Item | State |
+|---|---|
+| **Branch** | `cursor/audit-expose-entry-fill-model` |
+| **Scope** | `ops/grok_audit_runtime_pins.py` adds `ENTRY_FILL_MODEL` to the read-only audit `runtime-pins` allowlist. Process value or `<unset>` (absent at exec, not after `.env` load), plus the `config/settings.py` fallback. QA AFS-0526 R1–R6 are in this branch. No fill-model default change and no trading-path change. |
+| **Install** | Not done. Root steps, including `--expect-sha256` and the sha-checked rollback, are in the PR body. The live dispatcher is unchanged until Imani runs them. |
+| **Clock test** | `#1261` froze that 212R clock on `main`. This branch now contains that commit. The earlier failure is not expected on this head. |
+| **NEXT** | Independent review. Imani installs only after review. Do not merge from this checkpoint. |
+
+## Previous — 2026-11-09 AFS handoff
 
 Docs-only coordination record. Claude breaker/QA, verified by ChatGPT. Source `main` at `d703232b7c9df3bf2b942f1437235dc5488a0890`. This checkpoint does not deploy, restart, merge, change strategy inventory, change risk rules, or change fill-model code. The 2026-11-06 baseline-reset procedure below is unchanged and is not closed by this handoff.
 
@@ -26,18 +38,30 @@ Docs-only coordination record. Claude breaker/QA, verified by ChatGPT. Source `m
 | **UNVERIFIED** | Server env and effective `ENTRY_FILL_MODEL`; deployed runtime enforcement; Tradovate connection; preflight state. Claude's 8,988 pass / 30 fail was not independently reproduced. |
 | **NEXT** | Cursor: spec and test classification only (no fix). Claude: falsify 60M 3-2-2 and 4HR concentration. Grok: independent review only. New strategy research: HOLD. Operator: confirm account size. Do not merge the WIP fill-model branch. |
 
-## Previous — 2026-11-06 baseline-reset procedure
+## Merged — 2026-11-06 baseline-reset procedure
 
-Source only. Do not deploy, restart, reset a box, or place a demo order from this checkpoint.
+Source merged in #1257 at `d703232b`. Do not deploy, restart, reset a box, or place a demo order from this note.
 
 | Item | State |
 |---|---|
-| **Branch** | `cursor/baseline-reset-procedure-6c72` |
+| **Branch** | `cursor/baseline-reset-procedure-6c72` (PR #1257), merged |
 | **Scope** | Nonce claim and outcome appends hold an exclusive flock on the store lock file across the ledger read, the check, the append, and the fsync. |
 | **Runbook** | `docs/ops/baseline_reset_runbook.md` |
 | **Runtime** | Not exercised. No server was contacted. |
 | **Tests** | `python -B -m pytest -q` after the nonce lock: 9018 passed, 8 skipped, exit 0. The 8-process spawn test then passed on its own in 27.61s. |
-| **NEXT** | Independent review. Operator GO is still required before any host command in the runbook. Do not merge from this checkpoint. |
+| **NEXT** | Operator GO is still required before any host command in the runbook. |
+
+## grok-ops deploy lane (source only, PR #1258)
+
+Code and docs only. Do not install the account, deploy, or restart from this change.
+
+| Item | State |
+|---|---|
+| **Branch** | `cursor/grok-ops-deploy-lane-40d9` (PR #1258), merged with `main` at `8089073` (#1259 and #1261). Do not merge this PR or install from this note. |
+| **Scope** | Restricted `grok-ops` forced-command user. Wrappers `cd /` and use `python3 -P`. Promote and baseline-reset pin `/root/afs-releases/<target-sha>` after `release-complete/<sha>` matches the manifest fingerprint and `repo.commit`, and the GO token fingerprint matches that digest. Promote, verify, and rollback refuse a git-less tree before the token is consumed. `scripts/atomic_release.sh`, `scripts/deploy_lock.sh`, and `baseline_reset.*` stay byte-identical to `main`. Install doc: `docs/grok-ops-deploy-lane.md`. |
+| **Dependency** | `baseline-reset` calls `scripts/ops/baseline_reset.sh` from merged #1257 (`d703232b`). The lane argv is `reset --target-sha --release-fingerprint --ticket --approval --signature --status-file --shared-dir`. The approval and signature files are passed through from `/root/afs-maint/`. The lane does not sign them. A missing script still exits 78 and does not consume a token. |
+| **Runtime** | Not installed. The October HOLD still governs the box. |
+| **NEXT** | QA re-review of AFS-0528 (H1, M2, M3, L4) on this branch. Do not merge or install from this note. A git-less promote still needs a separate Imani-approved change to `scripts/atomic_release.sh`. |
 
 ## Previous — 2026-11-06 AFS-0500 submission-evidence follow-up
 
