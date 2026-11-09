@@ -18,6 +18,8 @@ import pytest
 from config.futures_contracts import contract_economics
 from research.afs0523_322_repro_wrapper import (
     DATA_MANIFEST_SHA256,
+    _refuse_changed_gate_data,
+    _same_data,
     REPRO_END,
     REPRO_START,
     TRIAL_ID,
@@ -1205,6 +1207,55 @@ def test_superseded_trial_refuses_the_reproduction_gate(monkeypatch, tmp_path):
     assert ledger.read_bytes() == before
     assert not (tmp_path / "reproduction-gate.json").exists()
     assert (ROOT / "docs/research-trial-ledger.jsonl").read_bytes() == real_ledger
+
+
+def test_recorded_gate_fail_is_the_pinned_download_and_not_different_data(tmp_path):
+    artifact_path = (
+        ROOT
+        / "docs/research-evidence/T-2026-11-09-prereg-322-afs0523-oos-reproduction-2026-11-09-01/reproduction-gate.json"
+    )
+    digest = hashlib.sha256(artifact_path.read_bytes()).hexdigest()
+    assert digest == "ede35c326057ba4fa39cebfeaad8851d97ad60df9de1c2ddedd9b888dcd1dfeb"
+    artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert artifact["manifest_sha256"] == DATA_MANIFEST_SHA256
+    assert artifact["research_15m_sha256"] == "461384bc2c638e849ebcdbd4c1fed09fde79fbc9c48dee7656a1151c259e3339"
+    assert artifact["audit_5m_sha256"] == "a08d909274fa5a06e9234b1c0975977d91a00b1f749c0560fd6d41859410c1e3"
+    gate_line = (ROOT / "docs/research-trial-ledger.jsonl").read_text(encoding="utf-8").splitlines()[-1]
+    gate = json.loads(gate_line)
+    assert gate["event"] == "GATE"
+    assert gate["gate_pass"] is False
+    assert gate["gate_artifact_sha256"] == digest
+    assert _same_data(gate, artifact)
+    later = {
+        "pass": True,
+        "manifest_sha256": gate["manifest_sha256"],
+        "research_15m_sha256": gate["research_15m_sha256"],
+        "audit_5m_sha256": gate["audit_5m_sha256"],
+        "prior_attempts": [
+            {
+                "manifest_sha256": gate["manifest_sha256"],
+                "research_15m_sha256": gate["research_15m_sha256"],
+                "audit_5m_sha256": gate["audit_5m_sha256"],
+            }
+        ],
+    }
+    ledger = tmp_path / "ledger.jsonl"
+    follow = {
+        "trial_id": TRIAL_ID,
+        "event": "GATE",
+        "gate_pass": True,
+        "manifest_sha256": later["manifest_sha256"],
+        "research_15m_sha256": later["research_15m_sha256"],
+        "audit_5m_sha256": later["audit_5m_sha256"],
+        "gate_artifact_sha256": "ab" * 32,
+    }
+    ledger.write_text(gate_line + "\n" + json.dumps(follow) + "\n", encoding="utf-8")
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr("research.afs0523_322_repro_wrapper.TRIAL_LEDGER", ledger)
+    try:
+        _refuse_changed_gate_data(later)
+    finally:
+        monkeypatch.undo()
 
 
 def test_superseded_trial_refuses_a_gate_review(monkeypatch, tmp_path):

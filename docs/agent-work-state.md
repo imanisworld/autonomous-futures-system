@@ -1,6 +1,16 @@
 # Agent Work State
 
-## START HERE — 2026-11-09 AFS-0523 preregistration (source only, not authorized to run)
+## START HERE — 2026-11-09 AFS-0580 reproduction gate FAIL record
+
+| Item | State |
+|---|---|
+| **Run** | AFS-0579 authorized one `run_reproduction_gate`. It ran once on the box at `5d97af25`. AFS-0580 is the FAIL. Not retried. |
+| **Cause** | The process environment lacked `MAX_CONTRACTS_HARD_CAP=1`. Every bracket returned `NO_FILL` with `MAX_CONTRACTS_HARD_CAP is missing or empty; refusing to trade` (`config/settings.py`). |
+| **Identity** | Matched the pin: manifest `6c9d5ab3c29a7aeade90e95c84e0128795afc1bdd19aa165e18d364760b7f43d`, 15m `461384bc2c638e849ebcdbd4c1fed09fde79fbc9c48dee7656a1151c259e3339`, 5m `a08d909274fa5a06e9234b1c0975977d91a00b1f749c0560fd6d41859410c1e3`. |
+| **Mismatches** | 1569 cells. All are exit fields. Zero mismatches on date, direction, trigger, stop, or target. |
+| **NEXT** | Do not rerun this attempt. A separate change must refuse a missing cap before scoring. Do not merge from this checkpoint. |
+
+## Previous — 2026-11-09 AFS-0523 preregistration (source only, not authorized to run)
 
 | Item | State |
 |---|---|
