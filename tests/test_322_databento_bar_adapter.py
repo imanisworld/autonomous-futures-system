@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import ast
 import json
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -125,7 +125,12 @@ def test_partial_bucket_is_recorded_and_never_price_filled(tmp_path):
     five = _rows(audit / "MNQ" / "MNQ_2024-08-02.jsonl")
     stamps = [row["timestamp"] for row in five]
     assert "2024-08-02T19:50:00+00:00" in stamps
-    assert "2024-08-02T19:55:00+00:00" not in stamps
+    partial_bar = next(row for row in five if row["timestamp"] == "2024-08-02T19:55:00+00:00")
+    assert partial_bar["open"] == 80.0
+    assert partial_bar["high"] == 80.5
+    assert partial_bar["low"] == 79.5
+    assert partial_bar["close"] == 80.25
+    assert partial_bar["volume"] == 4
     missing = report["missing_bars"]
     partial = next(item for item in missing if item["bar_start"] == "2024-08-02T19:55:00+00:00")
     assert partial["timeframe_minutes"] == 5
@@ -219,6 +224,74 @@ def test_nq_parent_bars_are_written_on_the_mnq_harness_path(tmp_path):
     assert report["label"] == "best available evidence, not fully clean"
     assert report["result_label"] == "MNQ-equivalent research, not executable historical MNQ"
     assert all(row["open"] != 8.0 for row in rows)
+
+
+def _required_rows(day: date) -> tuple[list[dict], list[dict]]:
+    from research.databento_322_bar_adapter import _required_starts
+
+    def row(moment: datetime) -> dict:
+        return {
+            "timestamp": moment.astimezone(timezone.utc).replace(microsecond=0).isoformat(),
+            "open": 1.0,
+            "high": 1.0,
+            "low": 1.0,
+            "close": 1.0,
+            "volume": 1,
+        }
+
+    starts_15, starts_5 = _required_starts(day)
+    return [row(moment) for moment in starts_15], [row(moment) for moment in starts_5]
+
+
+def test_missing_15m_bar_in_the_morning_window_is_a_data_gap():
+    from research.databento_322_bar_adapter import classify_written_bars
+
+    day = date(2024, 8, 2)
+    rows_15, rows_5 = _required_rows(day)
+    rows_15 = [row for row in rows_15 if not row["timestamp"].endswith("T12:00:00+00:00")]
+    report = classify_written_bars(rows_15, rows_5, day, day)
+    assert report["data_gap_count"] == 1
+    gap = report["data_gaps"][0]
+    assert gap["status"] == "DATA_GAP"
+    assert gap["scored"] is False
+    assert "08:00" in gap["missing_15m"]
+    assert gap["missing_5m"] == []
+
+
+def test_missing_5m_bar_in_the_session_window_is_a_data_gap():
+    from research.databento_322_bar_adapter import classify_written_bars
+
+    day = date(2024, 8, 2)
+    rows_15, rows_5 = _required_rows(day)
+    rows_5 = [row for row in rows_5 if not row["timestamp"].endswith("T18:00:00+00:00")]
+    report = classify_written_bars(rows_15, rows_5, day, day)
+    assert report["data_gap_count"] == 1
+    gap = report["data_gaps"][0]
+    assert gap["scored"] is False
+    assert "14:00" in gap["missing_5m"]
+    assert gap["missing_15m"] == []
+
+
+def test_early_close_does_not_treat_the_1555_bar_as_a_data_gap():
+    from research.databento_322_bar_adapter import cme_equity_index_session, classify_written_bars
+
+    day = date(2025, 1, 20)
+    assert cme_equity_index_session(day) == "early_close"
+    rows_15, rows_5 = _required_rows(day)
+    report = classify_written_bars(rows_15, rows_5, day, day)
+    assert report["data_gap_count"] == 0
+    assert report["expected_holiday_closures"] == [{"date": "2025-01-20", "kind": "early_close"}]
+    assert all(row["timestamp"] < "2025-01-20T18:00:00+00:00" for row in rows_5)
+
+
+def test_full_holiday_closure_is_not_a_data_gap():
+    from research.databento_322_bar_adapter import cme_equity_index_session, classify_written_bars
+
+    day = date(2024, 12, 25)
+    assert cme_equity_index_session(day) == "closed"
+    report = classify_written_bars([], [], day, day)
+    assert report["data_gap_count"] == 0
+    assert report["expected_holiday_closures"] == [{"date": "2024-12-25", "kind": "closed"}]
 
 
 def test_adapter_source_does_not_open_a_network_client():

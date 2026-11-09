@@ -25,6 +25,7 @@ a study result and must not be committed as evidence.
 """
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import importlib.util
 import json
@@ -33,6 +34,7 @@ from datetime import date
 from pathlib import Path
 
 from config.futures_contracts import contract_economics
+from research.databento_322_bar_adapter import data_gap_dates_from_trees
 from research.run_322_expanded_evidence import detect_candidates
 from scripts.edge_decomposition_audit import (
     COMMISSION_ROUND_TRIP,
@@ -56,6 +58,7 @@ REPRO_END = date(2026, 6, 26)
 REPRO_EXPECTED_COUNT = 34
 OUTCOME_RECORD_COUNT = 34 * 3 * 3
 NQ_RESEARCH_LABEL = "MNQ-equivalent research, not executable historical MNQ"
+GAP_OPEN_POLICY = "score_at_10am_open"
 SLIPPAGE_SENSITIVITY_NOTE = (
     "1-3 tick slippage sensitivity tests fill-price sensitivity only, "
     "not whether fills would have happened; spread, depth and fill probability "
@@ -140,6 +143,53 @@ harness = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(harness)
 
 
+def verify_frozen_modules(expected: dict[str, str] | None = None) -> None:
+    """Refuse to run when an imported frozen file no longer matches its pin."""
+    pins = FROZEN_MODULE_SHA256 if expected is None else expected
+    for rel, pinned in pins.items():
+        digest = hashlib.sha256((REPO / rel).read_bytes()).hexdigest()
+        if digest != pinned:
+            raise RuntimeError(f"frozen module hash mismatch {rel}: {digest} != {pinned}")
+
+
+def assert_5m_window(audit_5m: Path, start: date, end: date) -> None:
+    """The 5-minute tree's day files must be exactly the declared window.
+
+    A wider tree is a window error. It is not an expected-count failure and
+    it is not ignored.
+    """
+    folder = audit_5m / "MNQ"
+    if not folder.is_dir():
+        return
+    outside: list[str] = []
+    for path in sorted(folder.glob("MNQ_*.jsonl")):
+        day = date.fromisoformat(path.name.removeprefix("MNQ_").removesuffix(".jsonl"))
+        if day < start or day > end:
+            outside.append(day.isoformat())
+    if outside:
+        raise RuntimeError(
+            "5m tree does not match the declared window "
+            f"{start.isoformat()}..{end.isoformat()}: {outside[:8]}"
+        )
+
+
+def comparison_entry(research_row: dict) -> float:
+    """Entry the parity check uses. Gap-open days use the 10AM open."""
+    if research_row["gap_open"]:
+        return float(research_row["entry_price"])
+    return float(research_row["entry_trigger"])
+
+
+def summarize_gap_opens(rows: list[dict]) -> dict:
+    """Every gap-open candidate is scored. The count is reported beside it."""
+    count = sum(1 for row in rows if row.get("gap_open"))
+    return {
+        "policy": GAP_OPEN_POLICY,
+        "gap_open_count": count,
+        "scored_count": len(rows),
+    }
+
+
 def _load_verified_ledger(path: Path | None = None) -> dict:
     ledger_path = path or (REPO / OCT4_LEDGER_REL)
     raw = ledger_path.read_bytes()
@@ -196,10 +246,14 @@ def _index_rows(rows: list[dict], slippage: str) -> dict[str, dict]:
 def compare_replay_to_oct4(replay: dict, ledger_path: Path | None = None) -> dict:
     """Compare one replay ledger to the Oct 4 reference, field by field.
 
+    Frozen-file hashes are checked before the comparison. Gap-open handling
+    does not change this gate: the Oct 4 population has no gap-open rows.
+
     34 candidates x 3 models (original / honest IOC / pre-armed) x 1/2/3 ticks.
     2025-01-20 must stay UNRESOLVED / EOD_BAR_MISSING, with no exit price, no
     net, and no WIN/LOSS result. Any difference fails the gate.
     """
+    verify_frozen_modules()
     reference = _load_verified_ledger(ledger_path)
     actual_ledger = replay.get("ledger") or {}
     mismatches: list[dict] = []
@@ -323,15 +377,30 @@ def compare_replay_to_oct4(replay: dict, ledger_path: Path | None = None) -> dic
     }
 
 
-def _parity(research_15m: Path, audit_5m: Path, start: date, end: date, expected_count: int | None):
+def _parity(
+    research_15m: Path,
+    audit_5m: Path,
+    start: date,
+    end: date,
+    expected_count: int | None,
+    gap_dates: set[str],
+):
     """Same research-vs-state-machine check as the frozen harness.
 
     The window, the expected-count check, and the two data paths are the only
-    differences. ``check_repro()`` is not involved.
+    differences. ``check_repro()`` is not involved. DATA_GAP days are removed
+    before the count check and are not scored. A gap-open candidate is kept
+    and compared at the 10AM open.
     """
-    research = detect_candidates(research_15m, "MNQ", start, end)
+    verify_frozen_modules()
+    assert_5m_window(audit_5m, start, end)
+    research = [
+        row for row in detect_candidates(research_15m, "MNQ", start, end)
+        if row["date"].isoformat() not in gap_dates
+    ]
     bars = load_bars(audit_5m, "MNQ")
     state = extract_state_machine(LANES["322_mnq"], bars)
+    state = [candidate for candidate in state if candidate.date not in gap_dates]
     state.sort(key=lambda candidate: candidate.bar_idx)
     if expected_count is not None and (
         len(research) != expected_count or len(state) != expected_count
@@ -348,7 +417,7 @@ def _parity(research_15m: Path, audit_5m: Path, start: date, end: date, expected
         research_key = (
             research_row["date"].isoformat(),
             research_row["direction"],
-            round(float(research_row["entry_trigger"]), 8),
+            round(comparison_entry(research_row), 8),
             round(float(research_row["stop"]), 8),
             round(float(research_row["target"]), 8),
         )
@@ -363,12 +432,11 @@ def _parity(research_15m: Path, audit_5m: Path, start: date, end: date, expected
             mismatches.append({"research": research_key, "state": state_key})
         triggers[state_row.date] = {
             "trigger": float(research_row["entry_trigger"]),
+            "entry_price": float(research_row["entry_price"]),
             "gap_open": bool(research_row["gap_open"]),
         }
     if mismatches:
         raise RuntimeError(f"candidate parity failed: {mismatches[:5]}")
-    if any(item["gap_open"] for item in triggers.values()):
-        raise RuntimeError("accepted baseline should contain zero gap-open candidates")
     return state, triggers, bars
 
 
@@ -384,9 +452,23 @@ def run_window(
 
     This is mechanical. It is not authorization to score a declared slice.
     """
-    candidates, triggers, bars = _parity(research_15m, audit_5m, start, end, expected_count)
-    originals = {candidate.date: candidate for candidate in candidates}
+    gap_report = data_gap_dates_from_trees(research_15m, audit_5m, start, end)
+    gap_dates = {item["date"] for item in gap_report["data_gaps"]}
+    candidates, triggers, bars = _parity(
+        research_15m, audit_5m, start, end, expected_count, gap_dates
+    )
     prearmed = harness.make_prearmed(candidates, triggers, bars) if candidates else []
+    scored_prearmed = []
+    for candidate in prearmed:
+        info = triggers[candidate.date]
+        if info["gap_open"]:
+            scored_prearmed.append(dataclasses.replace(candidate, entry=float(info["entry_price"])))
+        else:
+            scored_prearmed.append(candidate)
+    prearmed = scored_prearmed
+    gap_summary = summarize_gap_opens(
+        [{"gap_open": info["gap_open"]} for info in triggers.values()]
+    )
     ledgers: dict[str, list] = {}
     for slip in (1.0, 2.0, 3.0):
         key = f"{int(slip)}tick"
@@ -417,6 +499,10 @@ def run_window(
         "accounting_instrument": LANES["322_mnq"].instrument,
         "dollar_basis": "MNQ-equivalent ($2/point)",
         "ledger": ledgers,
+        "gap_open_policy": GAP_OPEN_POLICY,
+        "gap_open_count": gap_summary["gap_open_count"],
+        "data_gaps": gap_report["data_gaps"],
+        "data_gap_count": gap_report["data_gap_count"],
     }
 
 

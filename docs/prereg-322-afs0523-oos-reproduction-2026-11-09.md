@@ -50,11 +50,21 @@ Reported separately. No retune. May 2019 belongs to the MNQ slice only, so the t
 | `nq-2010-06-to-2019-05` | 2010-06-01 through 2019-04-30 | NQ proxy. Every result in this window is labeled **MNQ-equivalent research, not executable historical MNQ**. It is best available evidence, not fully clean, and it is not executable historical MNQ. |
 | `combined` | the two slices side by side | no third detection and no retune |
 
-These windows end before the frozen 34-candidate sample (first candidate 2024-08-02). They are not a rescore of that sample.
+These windows end before the frozen 34-candidate sample (first candidate 2024-08-02). They are not a rescore of that sample. The machine manifest's three variant ids stay frozen. `DATA_GAP` handling and the 10AM-open gap policy apply to every variant. They are not extra variants.
 
 ## Data adapter
 
-`research/databento_322_bar_adapter.py` accepts Databento GLBX.MDP3 ohlcv-1m rows plus definition rows (parent symbology) that the caller already has. It does not open a network client. It resamples 1-minute bars into the 15-minute research tree and the 5-minute audit tree, using bar-start UTC timestamps, America/New_York session boundaries, and the exact 15:55 ET bar the harness treats as the day-only close. The front contract is `sources.polygon_client.front_contract` with `roll_days=8`, not a Databento continuous symbol. A 5-minute or 15-minute bar is written only when every constituent minute is present. Missing minutes are recorded and never price-filled.
+`research/databento_322_bar_adapter.py` accepts Databento GLBX.MDP3 ohlcv-1m rows plus definition rows (parent symbology) that the caller already has. It does not open a network client. It resamples 1-minute bars into the 15-minute research tree and the 5-minute audit tree, using bar-start UTC timestamps, America/New_York session boundaries, and the exact 15:55 ET bar the harness treats as the day-only close. The front contract is `sources.polygon_client.front_contract` with `roll_days=8`, not a Databento continuous symbol. Roll dates stay on the civil ET date of the bar start. That is not the CME session date and it is not Databento's continuous roll.
+
+Databento omits no-trade minutes. A 5-minute or 15-minute bar is built from the minutes that exist, as the Polygon resampler builds a higher-timeframe bar from the sub-bars that exist. A missing minute is recorded and is not given a price. A bucket with no minutes is not written.
+
+Any weekday missing a 15-minute bar in 07:00-11:00 ET, or a 5-minute bar in 10:00-16:00 ET, is `DATA_GAP`: counted, reported, and never scored. Full CME equity-index closures, and the session after a 13:00 ET early close, are `expected_holiday_closure` and are not data gaps. 2025-01-20 is an early close, so its missing 15:55 bar is a holiday closure. The Oct 4 reproduction comparison still requires that day to stay `UNRESOLVED` / `EOD_BAR_MISSING` when it is scored.
+
+The wrapper checks the pinned frozen-file hashes at runtime and refuses on a mismatch. The 5-minute tree's day files must match the declared window. A wider tree is a window error. It does not fall through to the expected-count check and it is not ignored.
+
+## Gap-open policy
+
+Imani, 2026-11-09 10:10 America/New_York: gap-open days are scored at the 10AM open (`score_at_10am_open`), per the 3-2-2 rules, and the gap-open count is reported. This replaces the open decision. The production path does not offer exclude-and-count as a reporting variant. The Oct 4 population has no gap-open candidates, so the 306-record reproduction gate is unchanged under this policy.
 
 ## Slippage sensitivity and break-even
 

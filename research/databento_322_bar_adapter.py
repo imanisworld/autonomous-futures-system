@@ -13,9 +13,19 @@ Output paths match the harness readers:
 - ``{audit_5m}/MNQ/MNQ_{utc-date}.jsonl`` for ``load_bars``
 
 Timestamps are bar-start instants in UTC, the same convention as
-``scripts/polygon_to_replay.py``. A 5-minute or 15-minute bar is written only
-when every constituent 1-minute bar is present. Missing minutes are recorded
-and never price-filled. The 17:00-18:00 ET halt is not an expected bucket.
+``scripts/polygon_to_replay.py``. A 5-minute or 15-minute bar is built from
+the 1-minute bars that exist in that bucket, the same way the frozen
+15-minute-to-60-minute resampler keeps a candle when some sub-bars are
+absent. A bucket with zero 1-minute bars is not written. Missing minutes are
+recorded and never given a synthesized price. The 17:00-18:00 ET halt is not
+an expected bucket.
+
+A weekday that is missing a 15-minute bar in 07:00-11:00 ET, or a 5-minute
+bar in 10:00-16:00 ET, is ``DATA_GAP``: counted, reported, and not scored.
+Bars that the CME equity-index calendar does not list for that day (a full
+closure, or the session after a 13:00 ET early close) are
+``expected_holiday_closure`` and are not data gaps. Front-month selection
+still uses the civil ET date and ``roll_days=8``.
 
 NQ prices are written onto the MNQ path so the unchanged detector and the
 unchanged $2/point accounting can read them. The report labels those dollars
@@ -37,6 +47,193 @@ DOLLAR_BASIS = "MNQ-equivalent ($2/point)"
 NQ_LABEL = "best available evidence, not fully clean"
 NQ_RESEARCH_LABEL = "MNQ-equivalent research, not executable historical MNQ"
 OUTRIGHT_RE = re.compile(r"^(?:MNQ|NQ|MES|ES|MYM|YM|M2K|RTY)[HMUZ]\d$")
+EARLY_CLOSE_ET = (13, 0)
+DATA_GAP = "DATA_GAP"
+
+
+def _observed_fixed_holiday(year: int, month: int, day: int) -> date:
+    holiday = date(year, month, day)
+    if holiday.weekday() == 5:
+        return holiday - timedelta(days=1)
+    if holiday.weekday() == 6:
+        return holiday + timedelta(days=1)
+    return holiday
+
+
+def _nth_weekday(year: int, month: int, weekday: int, occurrence: int) -> date:
+    first = date(year, month, 1)
+    return first + timedelta(days=(weekday - first.weekday()) % 7 + 7 * (occurrence - 1))
+
+
+def _last_weekday(year: int, month: int, weekday: int) -> date:
+    if month == 12:
+        cursor = date(year + 1, 1, 1) - timedelta(days=1)
+    else:
+        cursor = date(year, month + 1, 1) - timedelta(days=1)
+    return cursor - timedelta(days=(cursor.weekday() - weekday) % 7)
+
+
+def _easter_sunday(year: int) -> date:
+    year_mod = year % 19
+    century, century_mod = divmod(year, 100)
+    century_quad, century_quad_mod = divmod(century, 4)
+    leap_correction, leap_mod = divmod(century + 8, 25)
+    paschal = (year_mod * 19 + century - century_quad - leap_correction + 15) % 30
+    century_leap, century_leap_mod = divmod(century_mod, 4)
+    weekday_shift = (32 + 2 * century_quad_mod + 2 * century_leap - paschal - century_leap_mod) % 7
+    correction = (year_mod + 11 * paschal + 22 * weekday_shift) // 451
+    month, day = divmod(paschal + weekday_shift - 7 * correction + 114, 31)
+    return date(year, month, day + 1)
+
+
+def _previous_weekday(day: date) -> date:
+    cursor = day - timedelta(days=1)
+    while cursor.weekday() >= 5:
+        cursor -= timedelta(days=1)
+    return cursor
+
+
+def cme_equity_index_session(day: date) -> str:
+    """CME equity-index session kind for one civil ET date.
+
+    ``closed`` and ``early_close`` (13:00 ET) follow the equity-index futures
+    holiday schedule. 2025-01-20 is an early close: the last RTH bar is 12:55.
+    This does not change ``front_contract`` roll dates.
+    """
+    year = day.year
+    closed = {
+        _observed_fixed_holiday(year, 1, 1),
+        _easter_sunday(year) - timedelta(days=2),
+        _nth_weekday(year, 11, 3, 4),
+        _observed_fixed_holiday(year, 7, 4),
+        _observed_fixed_holiday(year, 12, 25),
+    }
+    if day in closed:
+        return "closed"
+    early = {
+        _nth_weekday(year, 1, 0, 3),
+        _nth_weekday(year, 2, 0, 3),
+        _last_weekday(year, 5, 0),
+        _nth_weekday(year, 9, 0, 1),
+        _nth_weekday(year, 11, 3, 4) + timedelta(days=1),
+        _previous_weekday(_observed_fixed_holiday(year, 12, 25)),
+        _previous_weekday(_observed_fixed_holiday(year, 7, 4)),
+    }
+    if year >= 2022:
+        early.add(_observed_fixed_holiday(year, 6, 19))
+    early -= closed
+    if day in early:
+        return "early_close"
+    return "regular"
+
+
+def _session_close_minutes(day: date) -> int | None:
+    kind = cme_equity_index_session(day)
+    if kind == "closed":
+        return None
+    if kind == "early_close":
+        return EARLY_CLOSE_ET[0] * 60 + EARLY_CLOSE_ET[1]
+    return 16 * 60
+
+
+def _required_starts(day: date) -> tuple[list[datetime], list[datetime]]:
+    """15-minute starts in [07:00, 11:00) and 5-minute starts in [10:00, close)."""
+    if day.weekday() >= 5:
+        return [], []
+    close = _session_close_minutes(day)
+    if close is None:
+        return [], []
+    starts_15: list[datetime] = []
+    minute = 7 * 60
+    while minute < 11 * 60 and minute < close:
+        starts_15.append(datetime(day.year, day.month, day.day, minute // 60, minute % 60, tzinfo=ET))
+        minute += 15
+    starts_5: list[datetime] = []
+    minute = 10 * 60
+    while minute < close:
+        starts_5.append(datetime(day.year, day.month, day.day, minute // 60, minute % 60, tzinfo=ET))
+        minute += 5
+    return starts_15, starts_5
+
+
+def _et_starts(rows: list[dict]) -> set[tuple[date, int, int]]:
+    found: set[tuple[date, int, int]] = set()
+    for row in rows:
+        local = datetime.fromisoformat(row["timestamp"]).astimezone(ET)
+        found.add((local.date(), local.hour, local.minute))
+    return found
+
+
+def classify_written_bars(rows_15m: list[dict], rows_5m: list[dict], start: date, end: date) -> dict:
+    """Mark weekdays whose required 15-minute or 5-minute bars are absent.
+
+    A missing bar means no 1-minute print fell in that bucket. Holiday closures
+    and the session after a 13:00 ET early close are reported separately and
+    are not ``DATA_GAP``.
+    """
+    present_15 = _et_starts(rows_15m)
+    present_5 = _et_starts(rows_5m)
+    gaps: list[dict] = []
+    closures: list[dict] = []
+    day = start
+    while day <= end:
+        kind = cme_equity_index_session(day) if day.weekday() < 5 else "weekend"
+        if kind in {"closed", "early_close"}:
+            closures.append({"date": day.isoformat(), "kind": kind})
+        required_15, required_5 = _required_starts(day)
+        missing_15 = [
+            moment.strftime("%H:%M")
+            for moment in required_15
+            if (day, moment.hour, moment.minute) not in present_15
+        ]
+        missing_5 = [
+            moment.strftime("%H:%M")
+            for moment in required_5
+            if (day, moment.hour, moment.minute) not in present_5
+        ]
+        if missing_15 or missing_5:
+            gaps.append(
+                {
+                    "date": day.isoformat(),
+                    "status": DATA_GAP,
+                    "missing_15m": missing_15,
+                    "missing_5m": missing_5,
+                    "scored": False,
+                }
+            )
+        day += timedelta(days=1)
+    return {
+        "data_gaps": gaps,
+        "data_gap_count": len(gaps),
+        "expected_holiday_closures": closures,
+    }
+
+
+def data_gap_dates_from_trees(research_15m: Path, audit_5m: Path, start: date, end: date) -> dict:
+    """Read harness trees and return the same DATA_GAP report as the adapter."""
+    rows_15: list[dict] = []
+    rows_5: list[dict] = []
+    for folder, sink in ((research_15m, rows_15), (audit_5m, rows_5)):
+        tree = folder / OUTPUT_INSTRUMENT
+        if not tree.is_dir():
+            continue
+        for path in sorted(tree.glob(f"{OUTPUT_INSTRUMENT}_*.jsonl")):
+            for line in path.read_text(encoding="utf-8").splitlines():
+                if line.strip():
+                    sink.append(json.loads(line))
+    return classify_written_bars(rows_15, rows_5, start, end)
+
+
+def _closure_kind(moment: datetime) -> str | None:
+    local = moment.astimezone(ET)
+    kind = cme_equity_index_session(local.date())
+    if kind == "closed":
+        return "closed"
+    if kind == "early_close":
+        close = EARLY_CLOSE_ET[0] * 60 + EARLY_CLOSE_ET[1]
+        if local.hour * 60 + local.minute >= close:
+            return "early_close"
+    return None
 
 
 def in_cme_equity_session(moment: datetime) -> bool:
@@ -148,11 +345,13 @@ def _select_bars(bars: list[dict], outrights: dict[str, dict], root: str) -> tup
     return selected, [contracts[key] for key in sorted(contracts)]
 
 
-def _aggregate(members: list[datetime], selected: dict[str, dict]) -> dict | list[str]:
+def _aggregate(members: list[datetime], selected: dict[str, dict]) -> tuple[dict | None, list[str]]:
+    """Build one bar from the minutes that exist. Never synthesize a missing minute."""
     missing = [_utc_iso(moment) for moment in members if _utc_iso(moment) not in selected]
-    if missing:
-        return missing
-    ordered = [selected[_utc_iso(moment)] for moment in members]
+    present = [moment for moment in members if _utc_iso(moment) in selected]
+    if not present:
+        return None, missing
+    ordered = [selected[_utc_iso(moment)] for moment in present]
     return {
         "timestamp": _utc_iso(members[0]),
         "open": float(ordered[0]["open"]),
@@ -160,7 +359,7 @@ def _aggregate(members: list[datetime], selected: dict[str, dict]) -> dict | lis
         "low": min(float(row["low"]) for row in ordered),
         "close": float(ordered[-1]["close"]),
         "volume": int(sum(int(row["volume"]) for row in ordered)),
-    }
+    }, missing
 
 
 def _write_tree(rows: list[dict], root: Path) -> None:
@@ -189,7 +388,8 @@ def adapt_ohlcv_1m(
 
     ``root`` is the parent used for the roll (``MNQ`` or ``NQ``). Files are
     always written under ``MNQ/`` because that is the path the frozen harness
-    reads. No missing minute is given an open, high, low, or close.
+    reads. A missing minute is recorded and is not given a price. A bucket
+    with at least one minute is still written.
     """
     if end < start:
         raise RuntimeError(f"end {end} before start {start}")
@@ -220,17 +420,21 @@ def adapt_ohlcv_1m(
     written: dict[int, list[dict]] = {5: [], 15: []}
     for width in (5, 15):
         for members in _bucket_starts(minutes, width):
-            aggregate = _aggregate(members, selected)
-            if isinstance(aggregate, list):
+            aggregate, missing_minutes = _aggregate(members, selected)
+            closure = _closure_kind(members[0])
+            if missing_minutes:
                 missing.append(
                     {
                         "timeframe_minutes": width,
                         "bar_start": _utc_iso(members[0]),
-                        "missing_minutes": aggregate,
+                        "missing_minutes": missing_minutes,
+                        "expected_holiday_closure": closure is not None,
+                        "closure_kind": closure,
                     }
                 )
-                continue
-            written[width].append(aggregate)
+            if aggregate is not None:
+                written[width].append(aggregate)
+    gap_report = classify_written_bars(written[15], written[5], start, end)
 
     _write_tree(written[15], research_15m)
     _write_tree(written[5], audit_5m)
@@ -246,6 +450,10 @@ def adapt_ohlcv_1m(
         "missing_bars": sorted(missing, key=lambda item: (item["timeframe_minutes"], item["bar_start"])),
         "bars_5m": len(written[5]),
         "bars_15m": len(written[15]),
+        "data_gaps": gap_report["data_gaps"],
+        "data_gap_count": gap_report["data_gap_count"],
+        "expected_holiday_closures": gap_report["expected_holiday_closures"],
+        "roll_date_basis": "civil ET date of the bar start; roll_days=8; not the CME session date",
     }
     if symbol_root == "NQ":
         report["result_label"] = NQ_RESEARCH_LABEL

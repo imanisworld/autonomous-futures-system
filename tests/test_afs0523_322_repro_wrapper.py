@@ -291,7 +291,81 @@ def test_preregistration_cites_the_trial_and_blocks_a_new_data_run():
     assert "MNQ-equivalent research, not executable historical MNQ" in text
     assert "fill-price sensitivity only" in text
     assert "306" in text
+    assert "score_at_10am_open" in text
+    assert "DATA_GAP" in text
+    assert "roll_days=8" in text
     assert not (ROOT / "docs/research-evidence/afs0523-322-row-copy.json").exists()
+
+
+def test_frozen_hashes_are_refused_at_runtime_and_the_5m_window_is_exact(tmp_path):
+    from research.afs0523_322_repro_wrapper import assert_5m_window, verify_frozen_modules
+
+    verify_frozen_modules()
+    with pytest.raises(RuntimeError, match="frozen module hash mismatch"):
+        verify_frozen_modules({"scripts/322_trigger_timing_ab_2026_09_18.py": "0" * 64})
+
+    day = date(2024, 8, 2)
+    audit = tmp_path / "audit"
+    (audit / "MNQ").mkdir(parents=True)
+    (audit / "MNQ" / "MNQ_2024-08-02.jsonl").write_text("{}\n", encoding="utf-8")
+    (audit / "MNQ" / "MNQ_2024-08-01.jsonl").write_text("{}\n", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="declared window"):
+        assert_5m_window(audit, day, day)
+    assert_5m_window(audit, date(2024, 8, 1), day)
+
+
+def test_gap_open_days_are_scored_at_the_10am_open_and_counted():
+    from research.afs0523_322_repro_wrapper import (
+        GAP_OPEN_POLICY,
+        comparison_entry,
+        summarize_gap_opens,
+    )
+
+    gap = {
+        "gap_open": True,
+        "entry_trigger": 100.0,
+        "entry_price": 101.25,
+    }
+    touched = {
+        "gap_open": False,
+        "entry_trigger": 100.0,
+        "entry_price": 100.0,
+    }
+    assert comparison_entry(gap) == 101.25
+    assert comparison_entry(touched) == 100.0
+    summary = summarize_gap_opens([gap, touched])
+    assert summary["policy"] == GAP_OPEN_POLICY == "score_at_10am_open"
+    assert summary["gap_open_count"] == 1
+    assert summary["scored_count"] == 2
+
+    def exclude_gap_opens_for_tests(rows: list[dict]) -> list[dict]:
+        return [row for row in rows if not row["gap_open"]]
+
+    assert len(exclude_gap_opens_for_tests([gap, touched])) == 1
+
+
+def test_data_gap_days_are_reported_and_not_scored(tmp_path):
+    day = date(2024, 8, 2)
+    audit = tmp_path / "audit"
+    research = tmp_path / "research"
+    (audit / "MNQ").mkdir(parents=True)
+    (research / "MNQ").mkdir(parents=True)
+    bar = {
+        "timestamp": "2024-08-02T16:00:00+00:00",
+        "open": 1.0,
+        "high": 1.25,
+        "low": 0.75,
+        "close": 1.0,
+        "volume": 1,
+    }
+    (audit / "MNQ" / "MNQ_2024-08-02.jsonl").write_text(json.dumps(bar) + "\n", encoding="utf-8")
+    result = _wrapper()["run_window"](research, audit, start=day, end=day, expected_count=None)
+    assert result["candidate_count"] == 0
+    assert result["data_gap_count"] >= 1
+    assert result["gap_open_count"] == 0
+    assert result["gap_open_policy"] == "score_at_10am_open"
+    assert all(item["scored"] is False for item in result["data_gaps"])
+    assert "2024-08-02" in {item["date"] for item in result["data_gaps"]}
 
 
 def test_break_even_uses_one_shared_rate_on_the_oct4_ledger():
