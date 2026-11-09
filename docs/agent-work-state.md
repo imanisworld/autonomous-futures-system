@@ -9,6 +9,23 @@
 | **Runtime** | Not exercised. No vendor download. `RUN_AUTHORIZED` is false. |
 | **NEXT** | Claude reviews the preregistration before any new data runs. Do not merge from this checkpoint. Inventory wording is a separate docs branch. |
 
+## START HERE — 2026-11-09 AFS handoff
+
+Docs-only coordination record. Claude breaker/QA, verified by ChatGPT. Source `main` at `d703232b7c9df3bf2b942f1437235dc5488a0890`. This checkpoint does not deploy, restart, merge, change strategy inventory, change risk rules, or change fill-model code. The 2026-11-06 baseline-reset procedure below is unchanged and is not closed by this handoff.
+
+| Item | State |
+|---|---|
+| **Pine repainting audit** | PASS. `tradingview/risksentinel_context.pine`: confirmed-bar alerts; HTF `request.security` uses `[1]`/`[2]` with `lookahead_on`; confirmed pivots/BOS. |
+| **VWAP anchor** | Resolved. Pine and replay reset at the CME trading day. The `RTH VWAP` comment in `research/futures_non_strat_coverage.py` is misleading and research-only. |
+| **Fill model** | `main` still defaults `ENTRY_FILL_MODEL=market`. Legacy market edge is a fill artifact per `docs/ioc-faithful-baseline-622d-2026-07-06.md`. Operator chose option (a): flip to honest IOC eventually. HOLD until a spec and a test classification exist. |
+| **WIP fill-model branch** | `claude/honest-default-entry-fill-model` @ `6fb01c9` (`6fb01c935b7591dde5e9340351a16658b3ce79ee`) is WIP / DO NOT MERGE. It breaks ~34 tests and could change server paper behavior if `ENTRY_FILL_MODEL` is unset. |
+| **strategy_permission_gate** | Default and all listed strategies are `SHADOW_ONLY` in `risk_rules.yaml` (source-level). |
+| **Six-micro TSMOM** | RETIRED Oct 18 (ABORTED/NOT_RUN, DO NOT REDO). |
+| **Trend R3 variant shadow** | NOT_ACTIVATED. Design/holdout results are not in the repo (UNVERIFIED). |
+| **Re-baseline** | Already done (DO NOT REDO). Only 4HR Re-Trigger (MNQ) and 60M 3-2-2 are PROMISING BUT UNPROVEN. Both are blocked by `RISK_GATES_REMOVE_EDGE` (account cap, R:R floor). 60M 3-2-2 is 32-0 with zero stop hits and needs falsification. This file does not change `docs/strategy-rules/Strategy_Inventory.md`. |
+| **UNVERIFIED** | Server env and effective `ENTRY_FILL_MODEL`; deployed runtime enforcement; Tradovate connection; preflight state. Claude's 8,988 pass / 30 fail was not independently reproduced. |
+| **NEXT** | Cursor: spec and test classification only (no fix). Claude: falsify 60M 3-2-2 and 4HR concentration. Grok: independent review only. New strategy research: HOLD. Operator: confirm account size. Do not merge the WIP fill-model branch. |
+
 ## Previous — 2026-11-06 baseline-reset procedure
 
 Source only. Do not deploy, restart, reset a box, or place a demo order from this checkpoint.
