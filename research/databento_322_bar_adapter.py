@@ -435,12 +435,10 @@ def _instrument_for_front(indexed: dict[str, list[dict]], symbol: str, expiry: d
         raise RuntimeError(f"ambiguous outright {symbol} {wanted[0]}-{wanted[1]:02d}: {ids}")
     if len(matched) == 1:
         return matched[0]["instrument_id"]
-    undated = [item for item in items if item["year_month"] is None]
-    if len(items) == 1 and len(undated) == 1:
-        return undated[0]["instrument_id"]
-    if len(undated) > 1:
+    if any(item["year_month"] is None for item in items):
         raise RuntimeError(
-            f"ambiguous outright {symbol}: duplicate raw symbol without a distinct expiration"
+            f"missing outright {symbol} for {wanted[0]}-{wanted[1]:02d}: "
+            "definition has no expiration or maturity month and year"
         )
     raise RuntimeError(f"missing outright {symbol} for {wanted[0]}-{wanted[1]:02d}")
 

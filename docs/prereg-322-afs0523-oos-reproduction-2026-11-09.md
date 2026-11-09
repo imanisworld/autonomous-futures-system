@@ -52,7 +52,7 @@ Reported separately. No retune. May 2019 belongs to the MNQ slice only, so the t
 
 These windows end before the frozen 34-candidate sample (first candidate 2024-08-02). They are not a rescore of that sample. The machine manifest's three variant ids stay frozen. `DATA_GAP` handling and the 10AM-open gap policy apply to every variant. They are not extra variants.
 
-NQ starts on 2010-06-06, not 2010-06-01. Databento GLBX.MDP3 ohlcv-1m returns 422 for any earlier start. Imani approved that clamp as AFS-0572 on 2026-11-09, before any scoring. 2010-06-01 through 2010-06-04 had no bars, and the tree hash covers the built files rather than empty dates, so the recorded 15-minute and 5-minute hashes are unchanged. `combined` starts on 2010-06-06 for the same reason: it is those two slices side by side, not a third tree.
+NQ starts on 2010-06-06, not 2010-06-01. Databento GLBX.MDP3 ohlcv-1m returns 422 for any earlier start. Imani approved that clamp as AFS-0572 on 2026-11-09, before any scoring. Databento has no data for 2010-06-01..04 (they were trading days), and the tree hash covers the built files rather than those dates, so the recorded 15-minute and 5-minute hashes are unchanged. `combined` starts on 2010-06-06 for the same reason: it is those two slices side by side, not a third tree.
 
 ## Data adapter
 
@@ -79,6 +79,18 @@ The break-even win rate is one shared rate for a fill model and a slippage level
 ## Reproduction gate
 
 `run_reproduction_gate(research_15m, audit_5m)` is the only path that scores the Databento reproduction window. It reads `RUN_AUTHORIZED` and refuses when that is false. The window is fixed at 2024-07-02 through 2026-06-26 and the expected count is fixed at 34. A caller cannot override either, and a caller cannot pass a manifest. The manifest is loaded from the committed path `docs/research-evidence/T-2026-11-09-prereg-322-afs0523-oos-reproduction-2026-11-09-01/databento-download-manifest.json`. Its SHA-256 is the module constant `DATA_MANIFEST_SHA256`, `6c9d5ab3c29a7aeade90e95c84e0128795afc1bdd19aa165e18d364760b7f43d`, the hash of that committed file. The gate refuses while the constant is a placeholder and on any other byte mismatch. The schema is `docs/schemas/afs0523-databento-download-manifest.schema.json`. It lists every pulled file and a 15-minute and 5-minute tree hash for the reproduction window and for each of the two real slices, `mnq-2019-05-to-2024-06` and `nq-2010-06-to-2019-05`. `combined` is the two slice results side by side. It has no tree, no detection, and no admission. A manifest that declares a combined window is refused. The gate checks the scored trees against the `reproduction` entry only, and it refuses any day file outside that window. It calls the private scorer and `compare_replay_to_oct4`. The artifact and the appended `GATE` line both record pass/fail, the 306 comparisons, mismatches, DATA_GAPs, invalid brackets, the gap-open count, the adapter report, `pulled_files`, both scored tree hashes, the manifest SHA-256, and every prior GATE attempt. A DATA_GAP that removes a candidate fails this gate through the 34-count check. Any exception during scoring is written as a FAIL artifact and a GATE line.
+
+Run the gate from any working directory. `data_root` is required and is not the current directory:
+
+```
+run_reproduction_gate(
+    Path("/workspace/afs-shared/data/databento_afs0523_2026-11-09"),
+    Path("reproduction/research_15m"),
+    Path("reproduction/audit_5m"),
+)
+```
+
+`reproduction/research_15m` and `reproduction/audit_5m` are the directories under that root that contain `MNQ/`. Pulled-file paths in the manifest are also relative to that same root. An absolute path, a `..` segment, or a symlink that leaves the root is refused.
 
 `run_window` does not score. A window other than the reproduction window is refused, and a hash-verified PASS artifact does not open it. The reproduction window itself is scored only by `run_reproduction_gate`.
 

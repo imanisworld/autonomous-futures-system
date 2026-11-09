@@ -69,7 +69,7 @@ def _rows(path: Path) -> list[dict]:
 def test_resample_uses_bar_start_and_emits_the_exact_1555_bar(tmp_path):
     day = date(2024, 8, 2)
     definitions = [
-        {"instrument_id": 7, "raw_symbol": "MNQU4", "asset": "MNQ.FUT"},
+        {"instrument_id": 7, "raw_symbol": "MNQU4", "asset": "MNQ.FUT", "expiration": "2024-09-20"},
     ]
     bars = _minutes(7, day, 15, 45, 15, 100.0)
     research, audit, report = _adapt(
@@ -101,7 +101,7 @@ def test_resample_uses_bar_start_and_emits_the_exact_1555_bar(tmp_path):
 
 def test_est_1555_bar_starts_at_2055_utc(tmp_path):
     day = date(2024, 1, 16)
-    definitions = [{"instrument_id": 3, "raw_symbol": "MNQH4", "parent": "MNQ"}]
+    definitions = [{"instrument_id": 3, "raw_symbol": "MNQH4", "parent": "MNQ", "expiration": "2024-03-15"}]
     bars = _minutes(3, day, 15, 55, 5, 50.0)
     _research, audit, _report = _adapt(
         tmp_path, definitions, bars, root="MNQ", start=day, end=day
@@ -115,7 +115,7 @@ def test_est_1555_bar_starts_at_2055_utc(tmp_path):
 
 def test_partial_bucket_is_recorded_and_never_price_filled(tmp_path):
     day = date(2024, 8, 2)
-    definitions = [{"instrument_id": 7, "raw_symbol": "MNQU4", "asset": "MNQ"}]
+    definitions = [{"instrument_id": 7, "raw_symbol": "MNQU4", "asset": "MNQ", "expiration": "2024-09-20"}]
     bars = _minutes(7, day, 15, 50, 5, 10.0)
     bars.extend(
         _bar(7, _minute(day, 15, minute), 80.0)
@@ -143,7 +143,7 @@ def test_partial_bucket_is_recorded_and_never_price_filled(tmp_path):
 
 def test_absent_interior_bucket_is_recorded_not_filled(tmp_path):
     day = date(2024, 8, 2)
-    definitions = [{"instrument_id": 7, "raw_symbol": "MNQU4", "asset": "MNQ"}]
+    definitions = [{"instrument_id": 7, "raw_symbol": "MNQU4", "asset": "MNQ", "expiration": "2024-09-20"}]
     bars = _minutes(7, day, 10, 0, 5, 1.0) + _minutes(7, day, 10, 10, 5, 2.0)
     _research, audit, report = _adapt(
         tmp_path, definitions, bars, root="MNQ", start=day, end=day
@@ -158,7 +158,7 @@ def test_absent_interior_bucket_is_recorded_not_filled(tmp_path):
 
 def test_session_boundary_does_not_cross_the_1700_halt(tmp_path):
     day = date(2024, 8, 1)  # Thursday
-    definitions = [{"instrument_id": 7, "raw_symbol": "MNQU4", "asset": "MNQ"}]
+    definitions = [{"instrument_id": 7, "raw_symbol": "MNQU4", "asset": "MNQ", "expiration": "2024-09-20"}]
     bars = _minutes(7, day, 16, 55, 5, 30.0) + _minutes(7, day, 18, 0, 5, 90.0)
     _research, audit, report = _adapt(
         tmp_path, definitions, bars, root="MNQ", start=day, end=day
@@ -177,8 +177,8 @@ def test_session_boundary_does_not_cross_the_1700_halt(tmp_path):
 
 def test_roll_follows_front_contract_and_ignores_the_continuous_symbol(tmp_path):
     definitions = [
-        {"instrument_id": 1, "raw_symbol": "MNQM4", "asset": "MNQ"},
-        {"instrument_id": 2, "raw_symbol": "MNQU4", "asset": "MNQ"},
+        {"instrument_id": 1, "raw_symbol": "MNQM4", "asset": "MNQ", "expiration": "2024-06-21"},
+        {"instrument_id": 2, "raw_symbol": "MNQU4", "asset": "MNQ", "expiration": "2024-09-20"},
         {"instrument_id": 99, "raw_symbol": "MNQ.c.0", "asset": "MNQ"},
     ]
     before = date(2024, 6, 12)
@@ -210,8 +210,8 @@ def test_roll_follows_front_contract_and_ignores_the_continuous_symbol(tmp_path)
 def test_nq_parent_bars_are_written_on_the_mnq_harness_path(tmp_path):
     day = date(2014, 6, 11)
     definitions = [
-        {"instrument_id": 5, "raw_symbol": "NQM4", "parent": "NQ.FUT"},
-        {"instrument_id": 6, "raw_symbol": "MNQM4", "asset": "MNQ"},
+        {"instrument_id": 5, "raw_symbol": "NQM4", "parent": "NQ.FUT", "expiration": "2014-06-20"},
+        {"instrument_id": 6, "raw_symbol": "MNQM4", "asset": "MNQ", "expiration": "2014-06-20"},
     ]
     bars = _minutes(5, day, 15, 55, 5, 70.0) + _minutes(6, day, 15, 55, 5, 8.0)
     _research, audit, report = _adapt(
@@ -294,6 +294,13 @@ def test_full_holiday_closure_is_not_a_data_gap():
     report = classify_written_bars([], [], day, day)
     assert report["data_gap_count"] == 0
     assert report["expected_holiday_closures"] == [{"date": "2024-12-25", "kind": "closed"}]
+
+
+def test_definition_without_a_contract_month_is_refused(tmp_path):
+    day = date(2024, 8, 2)
+    definitions = [{"instrument_id": 7, "raw_symbol": "MNQU4", "asset": "MNQ"}]
+    with pytest.raises(RuntimeError, match="no expiration or maturity"):
+        _adapt(tmp_path, definitions, _minutes(7, day, 10, 0, 5, 1.0), root="MNQ", start=day, end=day)
 
 
 def test_decade_symbol_collision_resolves_by_expiration_and_fails_closed(tmp_path):

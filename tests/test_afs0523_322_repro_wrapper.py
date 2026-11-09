@@ -617,7 +617,7 @@ def _manifest(tmp_path: Path, research: Path, audit: Path, *, slices: dict | Non
     mnq = pair("mnq-2019-05-to-2024-06")
     nq = pair("nq-2010-06-to-2019-05")
     return {
-        "pulled_files": [{"path": str(pulled), "sha256": hashlib.sha256(pulled.read_bytes()).hexdigest()}],
+        "pulled_files": [{"path": "pulled.dbn", "sha256": hashlib.sha256(pulled.read_bytes()).hexdigest()}],
         "windows": [
             _window("reproduction", "2024-07-02", "2026-06-26", _tree_sha256(research), _tree_sha256(audit)),
             _window("mnq-2019-05-to-2024-06", "2019-05-01", "2024-06-30", mnq[0], mnq[1]),
@@ -641,6 +641,14 @@ def _pin_manifest(monkeypatch, tmp_path: Path, manifest: dict) -> str:
     return pin
 
 
+def _call_gate(data_root: Path, research: Path, audit: Path):
+    return run_reproduction_gate(
+        data_root,
+        research.relative_to(data_root),
+        audit.relative_to(data_root),
+    )
+
+
 def _patch_gate_paths(monkeypatch, tmp_path: Path) -> tuple[Path, Path]:
     artifact = tmp_path / "reproduction-gate.json"
     ledger = tmp_path / "ledger.jsonl"
@@ -653,7 +661,7 @@ def _patch_gate_paths(monkeypatch, tmp_path: Path) -> tuple[Path, Path]:
 def test_reproduction_gate_refuses_when_the_flag_is_false(monkeypatch, tmp_path):
     monkeypatch.setattr("research.afs0523_322_repro_wrapper.RUN_AUTHORIZED", False)
     with pytest.raises(RuntimeError, match="RUN_AUTHORIZED"):
-        run_reproduction_gate(tmp_path, tmp_path)
+        run_reproduction_gate(tmp_path, Path("."), Path("."))
 
 
 def test_reproduction_gate_refuses_a_day_file_outside_the_window(monkeypatch, tmp_path):
@@ -663,7 +671,7 @@ def test_reproduction_gate_refuses_a_day_file_outside_the_window(monkeypatch, tm
     _bar_file(audit, date(2024, 8, 2))
     _pin_manifest(monkeypatch, tmp_path, _manifest(tmp_path, research, audit))
     with pytest.raises(RuntimeError, match="outside"):
-        run_reproduction_gate(research, audit)
+        _call_gate(tmp_path, research, audit)
 
 
 def test_reproduction_gate_refuses_a_checksum_or_tree_hash_mismatch(monkeypatch, tmp_path):
@@ -675,12 +683,12 @@ def test_reproduction_gate_refuses_a_checksum_or_tree_hash_mismatch(monkeypatch,
     bad_checksum["pulled_files"][0]["sha256"] = "0" * 64
     _pin_manifest(monkeypatch, tmp_path, bad_checksum)
     with pytest.raises(RuntimeError, match="checksum mismatch"):
-        run_reproduction_gate(research, audit)
+        _call_gate(tmp_path, research, audit)
     bad_tree = _manifest(tmp_path, research, audit)
     _repro(bad_tree)["research_15m_sha256"] = "0" * 64
     _pin_manifest(monkeypatch, tmp_path, bad_tree)
     with pytest.raises(RuntimeError, match="tree hash mismatch"):
-        run_reproduction_gate(research, audit)
+        _call_gate(tmp_path, research, audit)
 
 
 def test_reproduction_gate_refuses_a_caller_window_or_count_override(tmp_path):
@@ -706,12 +714,52 @@ def test_reproduction_gate_refuses_a_caller_manifest_or_placeholder_pin(monkeypa
         run_reproduction_gate(research, audit, data_manifest=_manifest(tmp_path, research, audit))
     monkeypatch.setattr("research.afs0523_322_repro_wrapper.DATA_MANIFEST_SHA256", "PLACEHOLDER")
     with pytest.raises(RuntimeError, match="placeholder"):
-        run_reproduction_gate(research, audit)
+        _call_gate(tmp_path, research, audit)
     manifest = _manifest(tmp_path, research, audit)
     _pin_manifest(monkeypatch, tmp_path, manifest)
     monkeypatch.setattr("research.afs0523_322_repro_wrapper.DATA_MANIFEST_SHA256", "0" * 64)
     with pytest.raises(RuntimeError, match="manifest hash mismatch"):
-        run_reproduction_gate(research, audit)
+        _call_gate(tmp_path, research, audit)
+    assert (ROOT / "docs/research-trial-ledger.jsonl").read_bytes() == real_ledger
+
+
+def test_reproduction_gate_resolves_paths_under_data_root(monkeypatch, tmp_path):
+    with pytest.raises(RuntimeError, match="data_root is missing"):
+        run_reproduction_gate(tmp_path / "missing-root", Path("research"), Path("audit"))
+    research = tmp_path / "research"
+    audit = tmp_path / "audit"
+    _bar_file(research, date(2024, 8, 2))
+    _bar_file(audit, date(2024, 8, 2))
+    escaped = _manifest(tmp_path, research, audit)
+    escaped["pulled_files"][0]["path"] = "../pulled.dbn"
+    _pin_manifest(monkeypatch, tmp_path, escaped)
+    with pytest.raises(RuntimeError, match="escapes data_root"):
+        _call_gate(tmp_path, research, audit)
+    absolute = _manifest(tmp_path, research, audit)
+    absolute["pulled_files"][0]["path"] = str(tmp_path / "pulled.dbn")
+    _pin_manifest(monkeypatch, tmp_path, absolute)
+    with pytest.raises(RuntimeError, match="escapes data_root"):
+        _call_gate(tmp_path, research, audit)
+    outside = tmp_path.parent / f"outside-{tmp_path.name}"
+    outside.mkdir()
+    (outside / "secret").write_bytes(b"secret")
+    (tmp_path / "escape").symlink_to(outside, target_is_directory=True)
+    linked = _manifest(tmp_path, research, audit)
+    linked["pulled_files"][0]["path"] = "escape/secret"
+    _pin_manifest(monkeypatch, tmp_path, linked)
+    with pytest.raises(RuntimeError, match="escapes data_root"):
+        _call_gate(tmp_path, research, audit)
+    manifest = _manifest(tmp_path, research, audit)
+    _pin_manifest(monkeypatch, tmp_path, manifest)
+    _patch_gate_paths(monkeypatch, tmp_path)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    real_ledger = (ROOT / "docs/research-trial-ledger.jsonl").read_bytes()
+    result = _call_gate(tmp_path, research, audit)
+    assert result["pass"] is False
+    assert result["data_root"] == str(tmp_path.resolve())
+    assert "expected-count" in result["error"]
     assert (ROOT / "docs/research-trial-ledger.jsonl").read_bytes() == real_ledger
 
 
@@ -807,11 +855,21 @@ def test_declared_slices_refuse_without_a_verified_pass_artifact(monkeypatch, tm
         "pr_head_sha": "a" * 40,
     }
     ledger.write_text(ledger.read_text(encoding="utf-8") + json.dumps(review) + "\n", encoding="utf-8")
-    assert run_declared_slices(slice_research, slice_audit, slice_id="mnq-2019-05-to-2024-06") is None
+    assert run_declared_slices(
+        Path("slice-research"),
+        Path("slice-audit"),
+        data_root=tmp_path,
+        slice_id="mnq-2019-05-to-2024-06",
+    ) is None
     other = tmp_path / "other"
     _bar_file(other, date(2020, 1, 7))
     with pytest.raises(RuntimeError, match="does not match the PASS gate"):
-        run_declared_slices(other, slice_audit, slice_id="mnq-2019-05-to-2024-06")
+        run_declared_slices(
+            Path("other"),
+            Path("slice-audit"),
+            data_root=tmp_path,
+            slice_id="mnq-2019-05-to-2024-06",
+        )
 
 
 def test_reproduction_gate_records_a_count_failure_on_a_synthetic_fixture(monkeypatch, tmp_path):
@@ -824,7 +882,7 @@ def test_reproduction_gate_records_a_count_failure_on_a_synthetic_fixture(monkey
     pin = _pin_manifest(monkeypatch, tmp_path, manifest)
     artifact, ledger = _patch_gate_paths(monkeypatch, tmp_path)
     real_ledger = (ROOT / "docs/research-trial-ledger.jsonl").read_bytes()
-    result = run_reproduction_gate(research, audit)
+    result = _call_gate(tmp_path, research, audit)
     assert result["pass"] is False
     assert "expected-count" in result["error"]
     assert result["comparisons"] is None
@@ -848,7 +906,7 @@ def test_reproduction_gate_records_a_count_failure_on_a_synthetic_fixture(monkey
     assert result["pulled_files"] == manifest["pulled_files"]
     assert result["prior_attempts"] == []
     assert written["manifest_sha256"] == pin
-    again = run_reproduction_gate(research, audit)
+    again = _call_gate(tmp_path, research, audit)
     assert again["pass"] is False
     assert len(again["prior_attempts"]) == 1
     assert again["prior_attempts"][0]["manifest_sha256"] == pin
@@ -928,7 +986,7 @@ def test_scoring_exception_is_recorded_as_fail(monkeypatch, tmp_path):
         raise ValueError("not a runtime error")
 
     monkeypatch.setattr("research.afs0523_322_repro_wrapper._run_window", boom)
-    result = run_reproduction_gate(research, audit)
+    result = _call_gate(tmp_path, research, audit)
     assert result["pass"] is False
     assert "not a runtime error" in result["error"]
     assert result["manifest_sha256"] == pin
@@ -991,10 +1049,10 @@ def test_download_manifest_schema_requires_each_window(monkeypatch, tmp_path):
     _pin_manifest(monkeypatch, tmp_path, broken)
     real_ledger = (ROOT / "docs/research-trial-ledger.jsonl").read_bytes()
     with pytest.raises(RuntimeError, match="download manifest schema"):
-        run_reproduction_gate(research, audit)
+        _call_gate(tmp_path, research, audit)
     _pin_manifest(monkeypatch, tmp_path, combined)
     with pytest.raises(RuntimeError, match="combined is report-only"):
-        run_reproduction_gate(research, audit)
+        _call_gate(tmp_path, research, audit)
     with pytest.raises(RuntimeError, match="combined is report-only"):
         run_declared_slices(research, audit, slice_id="combined")
     assert (ROOT / "docs/research-trial-ledger.jsonl").read_bytes() == real_ledger
@@ -1037,7 +1095,7 @@ def test_gate_review_admits_a_slice_without_scoring_and_rejects_a_different_arti
         "research.afs0523_322_repro_wrapper.compare_replay_to_oct4",
         lambda *_args, **_kwargs: {"ok": True, "comparisons": [], "mismatches": []},
     )
-    result = run_reproduction_gate(repro_research, repro_audit)
+    result = _call_gate(tmp_path, repro_research, repro_audit)
     assert result["pass"] is True
     assert result["research_15m_sha256"] != _tree_sha256(slice_research)
     wrong = {
@@ -1054,7 +1112,12 @@ def test_gate_review_admits_a_slice_without_scoring_and_rejects_a_different_arti
     assert reviewed["event"] == "GATE_REVIEW"
     assert reviewed["gate_artifact_sha256"] == hashlib.sha256(artifact.read_bytes()).hexdigest()
     assert reviewed["pr_head_sha"] == "c" * 40
-    assert run_declared_slices(slice_research, slice_audit, slice_id="mnq-2019-05-to-2024-06") is None
+    assert run_declared_slices(
+        Path("slice-research"),
+        Path("slice-audit"),
+        data_root=tmp_path,
+        slice_id="mnq-2019-05-to-2024-06",
+    ) is None
     gate_events = [
         json.loads(line)["event"]
         for line in ledger.read_text(encoding="utf-8").splitlines()
@@ -1138,7 +1201,7 @@ def test_superseded_trial_refuses_the_reproduction_gate(monkeypatch, tmp_path):
     ledger, before = _superseded_ledger(monkeypatch, tmp_path)
     real_ledger = (ROOT / "docs/research-trial-ledger.jsonl").read_bytes()
     with pytest.raises(RuntimeError, match="SUPERSEDED"):
-        run_reproduction_gate(tmp_path, tmp_path)
+        run_reproduction_gate(tmp_path, Path("."), Path("."))
     assert ledger.read_bytes() == before
     assert not (tmp_path / "reproduction-gate.json").exists()
     assert (ROOT / "docs/research-trial-ledger.jsonl").read_bytes() == real_ledger

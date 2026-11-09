@@ -708,32 +708,67 @@ def _window_entry(manifest: dict, window_id: str) -> dict:
     raise RuntimeError(f"download manifest schema: missing {window_id}")
 
 
-def _verify_download_record(research_15m: Path, audit_5m: Path, manifest: dict) -> None:
+def _resolved_data_root(data_root: Path) -> Path:
+    """Require a real directory. Callers cannot omit it or inherit the working directory."""
+    if not isinstance(data_root, Path):
+        data_root = Path(data_root)
+    if not data_root.exists() or not data_root.is_dir():
+        raise RuntimeError(f"data_root is missing: {data_root}")
+    return data_root.resolve()
+
+
+def _resolve_under_root(data_root: Path, raw: str | Path) -> Path:
+    """Resolve one manifest or tree path under data_root and nowhere else."""
+    path = Path(raw)
+    if path.is_absolute() or ".." in path.parts:
+        raise RuntimeError(f"path escapes data_root: {raw}")
+    candidate = data_root / path
+    if not candidate.exists():
+        raise RuntimeError(f"path is missing under data_root: {raw}")
+    resolved = candidate.resolve()
+    if not resolved.is_relative_to(data_root):
+        raise RuntimeError(f"path escapes data_root: {raw}")
+    return resolved
+
+
+def _verify_download_record(
+    data_root: Path, research_15m: Path, audit_5m: Path, manifest: dict
+) -> tuple[Path, Path]:
     pulled = manifest.get("pulled_files")
     if not isinstance(pulled, list) or not pulled:
         raise RuntimeError("download record is missing pulled-file checksums")
     for item in pulled:
-        path = Path(item["path"])
+        path = _resolve_under_root(data_root, item["path"])
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
         if digest != item["sha256"]:
             raise RuntimeError(f"checksum mismatch for {path}")
-    _refuse_outside_reproduction_window(research_15m, "15m")
-    _refuse_outside_reproduction_window(audit_5m, "5m")
+    research = _resolve_under_root(data_root, research_15m)
+    audit = _resolve_under_root(data_root, audit_5m)
+    _refuse_outside_reproduction_window(research, "15m")
+    _refuse_outside_reproduction_window(audit, "5m")
     entry = _window_entry(manifest, "reproduction")
-    research_hash = _tree_sha256(research_15m)
-    audit_hash = _tree_sha256(audit_5m)
+    research_hash = _tree_sha256(research)
+    audit_hash = _tree_sha256(audit)
     if research_hash != entry.get("research_15m_sha256"):
         raise RuntimeError("research 15m tree hash mismatch")
     if audit_hash != entry.get("audit_5m_sha256"):
         raise RuntimeError("audit 5m tree hash mismatch")
+    return research, audit
 
 
-def _data_identity(manifest: dict, manifest_sha256: str, research_15m: Path, audit_5m: Path) -> dict:
+def _data_identity(
+    manifest: dict,
+    manifest_sha256: str,
+    research_15m: Path,
+    audit_5m: Path,
+    data_root: Path,
+) -> dict:
     return {
         "pulled_files": manifest.get("pulled_files"),
         "research_15m_sha256": _tree_sha256(research_15m),
         "audit_5m_sha256": _tree_sha256(audit_5m),
         "manifest_sha256": manifest_sha256,
+        "data_root": str(data_root),
     }
 
 
@@ -797,6 +832,7 @@ def _append_gate_event(payload: dict, artifact_sha256: str) -> None:
             "research_15m_sha256": payload.get("research_15m_sha256"),
             "audit_5m_sha256": payload.get("audit_5m_sha256"),
             "manifest_sha256": payload.get("manifest_sha256"),
+            "data_root": payload.get("data_root"),
             "prior_attempts": payload.get("prior_attempts"),
             "notes": "Reproduction gate only. Older slices stay blocked until Claude reviews this result on the pull request.",
         }
@@ -867,33 +903,36 @@ def _record_scoring_failure(
     return payload
 
 
-def run_reproduction_gate(research_15m: Path, audit_5m: Path) -> dict:
+def run_reproduction_gate(data_root: Path, research_15m: Path, audit_5m: Path) -> dict:
     """Score only the reproduction window, and only on the pinned download.
 
-    The manifest path and its SHA-256 are module constants. The window and the
-    expected count are fixed. Tree hashes are checked against the reproduction
-    window entry in that manifest. A DATA_GAP that removes a candidate fails
-    this gate through the 34-count check. Any scoring exception is stored as a
-    FAIL artifact and a GATE line, then returned as that FAIL.
+    ``data_root`` is required. Pulled files and both trees are resolved under
+    it. The working directory is not used. The manifest path and its SHA-256
+    are module constants. The window and the expected count are fixed. Tree
+    hashes are checked against the reproduction window entry. A DATA_GAP that
+    removes a candidate fails this gate through the 34-count check. Any
+    scoring exception is stored as a FAIL artifact and a GATE line, then
+    returned as that FAIL.
     """
     _refuse_if_superseded()
     if not RUN_AUTHORIZED:
         raise RuntimeError("RUN_AUTHORIZED is false; reproduction gate refused")
+    root = _resolved_data_root(data_root)
     verify_frozen_modules()
     manifest, manifest_sha256 = _load_pinned_manifest()
-    _verify_download_record(research_15m, audit_5m, manifest)
-    identity = _data_identity(manifest, manifest_sha256, research_15m, audit_5m)
+    research, audit = _verify_download_record(root, research_15m, audit_5m, manifest)
+    identity = _data_identity(manifest, manifest_sha256, research, audit, root)
     try:
         scored = _run_window(
-            research_15m,
-            audit_5m,
+            research,
+            audit,
             start=REPRO_START,
             end=REPRO_END,
             expected_count=REPRO_EXPECTED_COUNT,
         )
         comparison = compare_replay_to_oct4(scored)
     except Exception as exc:
-        return _record_scoring_failure(research_15m, audit_5m, manifest, identity, str(exc))
+        return _record_scoring_failure(research, audit, manifest, identity, str(exc))
     payload = _gate_payload(scored, comparison, manifest, None, identity, _prior_attempts())
     digest = _write_gate_artifact(payload)
     _append_gate_event(payload, digest)
@@ -1084,6 +1123,7 @@ def run_declared_slices(
     research_15m: Path | None = None,
     audit_5m: Path | None = None,
     *,
+    data_root: Path | None = None,
     slice_id: str | None = None,
 ) -> None:
     """Check a slice against the pinned download record. This function does not score.
@@ -1120,9 +1160,12 @@ def run_declared_slices(
     _refuse_if_superseded()
     text = GATE_ARTIFACT.read_text(encoding="utf-8")
     _require_gate_review(hashlib.sha256(text.encode()).hexdigest())
-    if research_15m is None or audit_5m is None or slice_id is None:
-        raise RuntimeError("slice admission requires the slice id and its trees")
-    _refuse_slice_data_mismatch(artifact, research_15m, audit_5m, slice_id)
+    if data_root is None or research_15m is None or audit_5m is None or slice_id is None:
+        raise RuntimeError("slice admission requires data_root, the slice id, and its trees")
+    root = _resolved_data_root(data_root)
+    research = _resolve_under_root(root, research_15m)
+    audit = _resolve_under_root(root, audit_5m)
+    _refuse_slice_data_mismatch(artifact, research, audit, slice_id)
     return None
 
 
