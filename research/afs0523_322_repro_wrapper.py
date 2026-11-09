@@ -162,7 +162,7 @@ SLICES = (
     ),
 )
 DOWNLOAD_WINDOWS = (("reproduction", REPRO_START, REPRO_END),) + tuple(
-    (item.id, item.start, item.end) for item in SLICES
+    (item.id, item.start, item.end) for item in SLICES if item.id != "combined"
 )
 
 _SPEC = importlib.util.spec_from_file_location("frozen_322_trigger_timing_ab", HARNESS_PATH)
@@ -667,7 +667,8 @@ def _is_sha40(value: object) -> bool:
 def validate_download_manifest(manifest: dict) -> None:
     """Require every pulled file and a tree hash for every declared window.
 
-    The reproduction window and each declared slice share this one record.
+    The reproduction window and the two real slices share this one record.
+    ``combined`` is a report of those two slices and is not a download window.
     Slice trees are not required to hash to the reproduction trees.
     """
     if not isinstance(manifest, dict):
@@ -688,9 +689,11 @@ def validate_download_manifest(manifest: dict) -> None:
         if not isinstance(item, dict) or not isinstance(item.get("id"), str) or item["id"] in found:
             raise RuntimeError("download manifest schema: window id")
         found[item["id"]] = item
+    if "combined" in found:
+        raise RuntimeError("download manifest schema: combined is report-only and is not a download window")
     expected = {window_id for window_id, _start, _end in DOWNLOAD_WINDOWS}
     if set(found) != expected:
-        raise RuntimeError("download manifest schema: windows must be the reproduction window and the declared slices")
+        raise RuntimeError("download manifest schema: windows must be the reproduction window and the two real slices")
     for window_id, start, end in DOWNLOAD_WINDOWS:
         item = found[window_id]
         if item.get("start") != start.isoformat() or item.get("end") != end.isoformat():
@@ -874,6 +877,7 @@ def run_reproduction_gate(research_15m: Path, audit_5m: Path) -> dict:
     this gate through the 34-count check. Any scoring exception is stored as a
     FAIL artifact and a GATE line, then returned as that FAIL.
     """
+    _refuse_if_superseded()
     if not RUN_AUTHORIZED:
         raise RuntimeError("RUN_AUTHORIZED is false; reproduction gate refused")
     verify_frozen_modules()
@@ -999,6 +1003,8 @@ def _refuse_slice_data_mismatch(
     manifest, manifest_sha256 = _load_pinned_manifest()
     if manifest_sha256 != artifact.get("manifest_sha256"):
         raise RuntimeError("slice manifest hash does not match the PASS gate")
+    if slice_id == "combined":
+        raise RuntimeError("combined is report-only and is not admitted")
     allowed = {window_id for window_id, _start, _end in DOWNLOAD_WINDOWS if window_id != "reproduction"}
     if slice_id not in allowed:
         raise RuntimeError(f"unknown slice {slice_id}")
@@ -1043,6 +1049,7 @@ def record_gate_review(pr_head_sha: str) -> dict:
     The event references that artifact's SHA-256 and the reviewed pull-request
     head. It is not a GATE attempt, so the prior-attempt count ignores it.
     """
+    _refuse_if_superseded()
     if not _is_sha40(pr_head_sha):
         raise RuntimeError("GATE_REVIEW requires the reviewed pull request head SHA")
     lines = _gate_lines()
@@ -1100,6 +1107,8 @@ def run_declared_slices(
     A download change does not unlock this trial. Mark it SUPERSEDED and
     preregister a new trial id.
     """
+    if slice_id == "combined":
+        raise RuntimeError("combined is report-only and is not admitted")
     artifact = _verified_gate_artifact()
     if artifact.get("pass") is not True:
         raise RuntimeError("reproduction gate did not PASS")

@@ -616,14 +616,12 @@ def _manifest(tmp_path: Path, research: Path, audit: Path, *, slices: dict | Non
         return found
     mnq = pair("mnq-2019-05-to-2024-06")
     nq = pair("nq-2010-06-to-2019-05")
-    combined = pair("combined")
     return {
         "pulled_files": [{"path": str(pulled), "sha256": hashlib.sha256(pulled.read_bytes()).hexdigest()}],
         "windows": [
             _window("reproduction", "2024-07-02", "2026-06-26", _tree_sha256(research), _tree_sha256(audit)),
             _window("mnq-2019-05-to-2024-06", "2019-05-01", "2024-06-30", mnq[0], mnq[1]),
             _window("nq-2010-06-to-2019-05", "2010-06-01", "2019-04-30", nq[0], nq[1]),
-            _window("combined", "2010-06-01", "2024-06-30", combined[0], combined[1]),
         ],
         "adapter_report": {"contracts": ["MNQH5"], "missing_minutes": []},
     }
@@ -950,18 +948,31 @@ def test_download_manifest_schema_requires_each_window(monkeypatch, tmp_path):
     manifest = _manifest(tmp_path, research, audit)
     validate_download_manifest(manifest)
     broken = json.loads(json.dumps(manifest))
-    broken["windows"] = [item for item in broken["windows"] if item["id"] != "combined"]
+    broken["windows"] = [item for item in broken["windows"] if item["id"] != "nq-2010-06-to-2019-05"]
     with pytest.raises(RuntimeError, match="download manifest schema"):
         validate_download_manifest(broken)
+    combined = json.loads(json.dumps(manifest))
+    combined["windows"].append(
+        _window("combined", "2010-06-01", "2024-06-30", "ab" * 32, "cd" * 32)
+    )
+    with pytest.raises(RuntimeError, match="combined is report-only"):
+        validate_download_manifest(combined)
     schema = json.loads(
         (ROOT / "docs/schemas/afs0523-databento-download-manifest.schema.json").read_text(encoding="utf-8")
     )
     assert schema["required"] == ["pulled_files", "windows"]
-    assert "mnq-2019-05-to-2024-06" in schema["properties"]["windows"]["items"]["properties"]["id"]["enum"]
+    window_ids = schema["properties"]["windows"]["items"]["properties"]["id"]["enum"]
+    assert "mnq-2019-05-to-2024-06" in window_ids
+    assert "combined" not in window_ids
     _pin_manifest(monkeypatch, tmp_path, broken)
     real_ledger = (ROOT / "docs/research-trial-ledger.jsonl").read_bytes()
     with pytest.raises(RuntimeError, match="download manifest schema"):
         run_reproduction_gate(research, audit)
+    _pin_manifest(monkeypatch, tmp_path, combined)
+    with pytest.raises(RuntimeError, match="combined is report-only"):
+        run_reproduction_gate(research, audit)
+    with pytest.raises(RuntimeError, match="combined is report-only"):
+        run_declared_slices(research, audit, slice_id="combined")
     assert (ROOT / "docs/research-trial-ledger.jsonl").read_bytes() == real_ledger
 
 
@@ -1079,4 +1090,40 @@ def test_superseded_trial_stays_refused(monkeypatch, tmp_path):
     real_ledger = (ROOT / "docs/research-trial-ledger.jsonl").read_bytes()
     with pytest.raises(RuntimeError, match="SUPERSEDED"):
         run_declared_slices(slice_research, slice_audit, slice_id="mnq-2019-05-to-2024-06")
+    assert (ROOT / "docs/research-trial-ledger.jsonl").read_bytes() == real_ledger
+
+
+def _superseded_ledger(monkeypatch, tmp_path: Path) -> tuple[Path, bytes]:
+    ledger = tmp_path / "ledger.jsonl"
+    ledger.write_bytes((ROOT / "docs/research-trial-ledger.jsonl").read_bytes())
+    ledger.write_text(
+        ledger.read_text(encoding="utf-8")
+        + json.dumps({"trial_id": TRIAL_ID, "event": "SUPERSEDED", "recorded_at": "2026-11-09T18:00:00Z"})
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("research.afs0523_322_repro_wrapper.TRIAL_LEDGER", ledger)
+    monkeypatch.setattr(
+        "research.afs0523_322_repro_wrapper.GATE_ARTIFACT",
+        tmp_path / "reproduction-gate.json",
+    )
+    return ledger, ledger.read_bytes()
+
+
+def test_superseded_trial_refuses_the_reproduction_gate(monkeypatch, tmp_path):
+    ledger, before = _superseded_ledger(monkeypatch, tmp_path)
+    real_ledger = (ROOT / "docs/research-trial-ledger.jsonl").read_bytes()
+    with pytest.raises(RuntimeError, match="SUPERSEDED"):
+        run_reproduction_gate(tmp_path, tmp_path)
+    assert ledger.read_bytes() == before
+    assert not (tmp_path / "reproduction-gate.json").exists()
+    assert (ROOT / "docs/research-trial-ledger.jsonl").read_bytes() == real_ledger
+
+
+def test_superseded_trial_refuses_a_gate_review(monkeypatch, tmp_path):
+    ledger, before = _superseded_ledger(monkeypatch, tmp_path)
+    real_ledger = (ROOT / "docs/research-trial-ledger.jsonl").read_bytes()
+    with pytest.raises(RuntimeError, match="SUPERSEDED"):
+        record_gate_review("c" * 40)
+    assert ledger.read_bytes() == before
     assert (ROOT / "docs/research-trial-ledger.jsonl").read_bytes() == real_ledger
