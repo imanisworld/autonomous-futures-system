@@ -25,7 +25,7 @@ REFUSAL_PATH = "/usr/local/sbin/afs-ops-record-refusal"
 SUDO_PATHS = VERB_PATHS + (REFUSAL_PATH,)
 
 _SHELLS = ("/bin/sh", "/bin/bash", "/usr/bin/bash", "/bin/dash", "/usr/bin/sh", "sudoedit")
-_LINE = "grok-ops ALL=(root) NOPASSWD: {path}"
+_LINE = 'grok-ops ALL=(root) NOPASSWD: {path} ""'
 
 
 def render_sudoers() -> str:
@@ -59,7 +59,12 @@ def validate_sudoers_text(text: str) -> None:
         prefix = "grok-ops ALL=(root) NOPASSWD:"
         if not stripped.startswith(prefix):
             raise ValueError("sudoers command line is not an exact grok-ops path")
-        path = stripped[len(prefix):].strip()
+        rest = stripped[len(prefix):].strip()
+        if rest == "":
+            raise ValueError("sudoers path is empty")
+        if not rest.endswith('""'):
+            raise ValueError("sudoers command allows arguments")
+        path = rest[: -2].strip()
         if path == "":
             raise ValueError("sudoers path is empty")
         if path not in SUDO_PATHS or " " in path:

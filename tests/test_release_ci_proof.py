@@ -220,9 +220,48 @@ def test_release_installs_only_the_lock_and_verifies_it():
     assert build.index("verify-live") < build.index("deploy_lock_acquire")
     promote = text.split("promote_release() {", 1)[1].split("rollback_release() {", 1)[0]
     assert 'ops.release_ci_proof verify-live' in promote
-    assert '_require_merged_sha "$sha"' in promote
-    assert promote.index("_require_merged_sha") < promote.index("deploy_lock_acquire")
+    assert 'git merge-base --is-ancestor "$sha" origin/main' in promote
+    assert "exit 66" in promote
+    assert promote.index("git merge-base") < promote.index("deploy_lock_acquire")
     assert promote.index("verify-live") < promote.index("deploy_lock_acquire")
-    merged = text.split("_require_merged_sha() {", 1)[1].split("promote_release() {", 1)[0]
-    assert 'git merge-base --is-ancestor "$sha" origin/main' in merged
-    assert 'git-less release directory is not named' in merged
+    assert "AFS_RELEASE_ROOT" not in text
+
+
+def test_promote_unmerged_sha_exits_66(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    scripts = repo / "scripts"
+    scripts.mkdir()
+    (scripts / "deploy_lock.sh").write_text("# stub\n")
+
+    def git(*args):
+        subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True, text=True)
+
+    git("init", "-q", "-b", "main")
+    git("config", "user.email", "test@example.com")
+    git("config", "user.name", "Test")
+    (repo / "README").write_text("base\n")
+    git("add", "README")
+    git("commit", "-q", "-m", "base")
+    git("checkout", "-q", "-b", "feature")
+    (repo / "README").write_text("unmerged\n")
+    git("add", "README")
+    git("commit", "-q", "-m", "unmerged")
+    sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    git("remote", "add", "origin", str(repo))
+    proof = tmp_path / "proof.json"
+    proof.write_text("{}\n")
+    env = os.environ.copy()
+    env["AFS_BOX"] = "unused"
+    env["RELEASE_CI_PROOF"] = str(proof)
+    proc = subprocess.run(
+        ["bash", str(ROOT / "scripts" / "atomic_release.sh"), "promote", sha],
+        cwd=repo,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 66
+    assert "not merged into origin/main" in proc.stderr

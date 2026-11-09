@@ -119,6 +119,21 @@ def _parts(path: str) -> list[str]:
     return parts
 
 
+def _refuse_if_symlink(name: str, dirfd: int, exc: OSError) -> None:
+    """A directory symlink fails open with ENOTDIR here; a file symlink fails with ELOOP.
+
+    lstat the name and refuse the link before any mode or owner check.
+    """
+    if exc.errno not in (errno.ELOOP, errno.ENOTDIR):
+        return
+    try:
+        listed = os.stat(name, dir_fd=dirfd, follow_symlinks=False)
+    except OSError:
+        return
+    if stat.S_ISLNK(listed.st_mode):
+        raise OwnershipError("release-symlink") from exc
+
+
 def _walk_dir(path: str, *, uid: int, fstat: _Fstat) -> int:
     """Open ``path`` from ``/`` and return the directory fd. Caller closes it."""
     dirfd = os.open("/", _DIR_FLAGS)
@@ -128,8 +143,7 @@ def _walk_dir(path: str, *, uid: int, fstat: _Fstat) -> int:
             try:
                 nextfd = os.open(part, _DIR_FLAGS, dir_fd=dirfd)
             except OSError as exc:
-                if exc.errno == errno.ELOOP:
-                    raise OwnershipError("release-symlink") from exc
+                _refuse_if_symlink(part, dirfd, exc)
                 raise OwnershipError("ownership") from exc
             os.close(dirfd)
             dirfd = nextfd
@@ -260,8 +274,7 @@ def _open_from(pin: PinnedRelease, relative: str) -> str:
             try:
                 nextfd = os.open(part, _DIR_FLAGS, dir_fd=directory)
             except OSError as exc:
-                if exc.errno == errno.ELOOP:
-                    raise OwnershipError("release-symlink") from exc
+                _refuse_if_symlink(part, directory, exc)
                 raise OwnershipError("ownership") from exc
             opened.append(nextfd)
             directory = nextfd
@@ -271,8 +284,7 @@ def _open_from(pin: PinnedRelease, relative: str) -> str:
         except FileNotFoundError:
             raise
         except OSError as exc:
-            if exc.errno == errno.ELOOP:
-                raise OwnershipError("release-symlink") from exc
+            _refuse_if_symlink(parts[-1], directory, exc)
             raise OwnershipError("ownership") from exc
         current = pin.fstat(filefd)
         if stat.S_ISLNK(current.st_mode):
@@ -280,6 +292,78 @@ def _open_from(pin: PinnedRelease, relative: str) -> str:
         _require_file(current, uid=pin.uid)
         pin._held_matches()
         return pin.real.rstrip("/") + "/" + "/".join(parts)
+    finally:
+        if filefd >= 0:
+            os.close(filefd)
+        for fd in opened:
+            os.close(fd)
+
+
+def read_verified(
+    root_real: str,
+    relative: str,
+    *,
+    uid: int,
+    pin: PinnedRelease | None = None,
+    fstat: _Fstat = os.fstat,
+) -> bytes:
+    """Read a regular file through the pinned directory fd."""
+    owns = pin is None
+    if pin is None:
+        pin = hold_directory(root_real, uid=uid, fstat=fstat)
+    try:
+        if pin.real.rstrip("/") != root_real.rstrip("/"):
+            raise OwnershipError("release-prefix")
+        if pin.uid != uid:
+            raise OwnershipError("ownership")
+        pin.reverify()
+        return _read_from(pin, relative)
+    finally:
+        if owns and pin is not None:
+            pin.close()
+
+
+def _read_from(pin: PinnedRelease, relative: str) -> bytes:
+    if relative.startswith("/") or not relative:
+        raise OwnershipError("path")
+    parts = [part for part in relative.split("/") if part]
+    if not parts or any(part in {".", ".."} for part in parts):
+        raise OwnershipError("path")
+    pin._held_matches()
+    directory = pin.dirfd
+    opened: list[int] = []
+    filefd = -1
+    try:
+        for part in parts[:-1]:
+            try:
+                nextfd = os.open(part, _DIR_FLAGS, dir_fd=directory)
+            except OSError as exc:
+                _refuse_if_symlink(part, directory, exc)
+                raise OwnershipError("ownership") from exc
+            opened.append(nextfd)
+            directory = nextfd
+            _require_directory(pin.fstat(directory), uid=pin.uid)
+        try:
+            filefd = os.open(parts[-1], _FILE_FLAGS, dir_fd=directory)
+        except FileNotFoundError:
+            raise
+        except OSError as exc:
+            _refuse_if_symlink(parts[-1], directory, exc)
+            raise OwnershipError("ownership") from exc
+        current = pin.fstat(filefd)
+        if stat.S_ISLNK(current.st_mode):
+            raise OwnershipError("release-symlink")
+        _require_file(current, uid=pin.uid)
+        pin._held_matches()
+        chunks: list[bytes] = []
+        while True:
+            block = os.read(filefd, 65536)
+            if not block:
+                break
+            chunks.append(block)
+            if sum(len(item) for item in chunks) > 1_000_000:
+                raise OwnershipError("ownership")
+        return b"".join(chunks)
     finally:
         if filefd >= 0:
             os.close(filefd)
@@ -297,8 +381,7 @@ def file_identity(path: str, *, uid: int, fstat: _Fstat = os.fstat) -> tuple[int
         try:
             filefd = os.open(name, _FILE_FLAGS, dir_fd=dirfd)
         except OSError as exc:
-            if exc.errno == errno.ELOOP:
-                raise OwnershipError("release-symlink") from exc
+            _refuse_if_symlink(name, dirfd, exc)
             raise OwnershipError("code-path") from exc
         current = fstat(filefd)
         if stat.S_ISLNK(current.st_mode):

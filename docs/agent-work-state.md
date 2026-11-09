@@ -7,10 +7,10 @@ Code and docs only. Do not install the account, deploy, or restart from this cha
 | Item | State |
 |---|---|
 | **Branch** | `cursor/grok-ops-deploy-lane-40d9` (PR #1258), rebased onto `main` at `d703232b`. Do not merge or install from this note. |
-| **Scope** | Restricted `grok-ops` forced-command user. Wrappers `cd /` and use `python3 -P`. The release runner cwd is the pinned release. Install doc: `docs/grok-ops-deploy-lane.md`. |
+| **Scope** | Restricted `grok-ops` forced-command user. Wrappers `cd /` and use `python3 -P`. Promote and baseline-reset pin `/root/afs-releases/<target-sha>` after `release-complete/<sha>` matches the manifest fingerprint and `repo.commit`. `scripts/atomic_release.sh` matches `main` (no `AFS_RELEASE_ROOT`, merged-SHA gate stays `git merge-base` against `origin/main`). Install doc: `docs/grok-ops-deploy-lane.md`. |
 | **Dependency** | `baseline-reset` calls `scripts/ops/baseline_reset.sh` from merged #1257 (`d703232b`). The lane argv is `reset --target-sha --release-fingerprint --ticket --approval --signature --status-file --shared-dir`. The approval and signature files are passed through from `/root/afs-maint/`. The lane does not sign them. A missing script still exits 78 and does not consume a token. |
 | **Runtime** | Not installed. The October HOLD still governs the box. |
-| **NEXT** | Independent review of the lane. Operator installs only after that review and a separate GO. Do not merge from this note. |
+| **NEXT** | QA re-review of AFS-0525 (G1–G7) on this branch. Do not merge or install from this note. Operator installs only after that review and a separate GO. |
 
 ## Merged — 2026-11-06 baseline-reset procedure
 

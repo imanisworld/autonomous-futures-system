@@ -1,9 +1,9 @@
 """Privileged grok-ops verbs.
 
 Gates run before any sanctioned script. promote and baseline-reset consume a
-GO token only after the gates, the SHA ancestry check, and the dependency
-check have passed. This module never writes the trading env and never passes
---force-lock.
+GO token only after the gates, the target-release record check, and the
+dependency check have passed. This module never writes the trading env and
+never passes --force-lock.
 """
 
 from __future__ import annotations
@@ -46,8 +46,10 @@ from ops.grok_ops.paths import (
     PinnedRelease,
     assert_directory,
     file_identity,
+    hold_directory,
     open_verified,
     pin_release,
+    read_verified,
 )
 from ops.grok_ops.tokens import TokenError, TokenStore
 
@@ -101,6 +103,10 @@ class ActionContext:
     calls: list = field(default_factory=list)
     python: str = PYTHON
     release_prefix: str = RELEASES_PREFIX
+    releases_root: str = RELEASES_PREFIX
+    shared_root: str = SHARED_DIR
+    exec_pin: PinnedRelease | None = None
+    fstat: Callable = os.fstat
 
 
 def baseline_reset_argv(
@@ -143,30 +149,6 @@ def promote_argv(atomic: str, sha: str) -> list[str]:
     if "--force-lock" in argv:
         raise ActionError("force-lock")
     return argv
-
-
-def box_release_matches(root: str, sha: str) -> bool:
-    """A box release is the directory named by the SHA. It has no .git."""
-    if len(sha) != 40 or any(char not in "0123456789abcdef" for char in sha):
-        return False
-    return os.path.basename(root.rstrip("/")) == sha
-
-
-def pinned_runner(pin: PinnedRelease):
-    """Exec an absolute program with cwd fixed at the pinned release."""
-
-    def run(argv: list[str], env: dict[str, str]) -> int:
-        pin.reverify()
-        if not argv or not argv[0].startswith("/"):
-            return 3
-        program = argv[0]
-        root = pin.real.rstrip("/")
-        if program != PYTHON and not program.startswith(root + "/"):
-            return 3
-        completed = subprocess.run(argv, env=env, cwd=root, check=False)
-        return completed.returncode
-
-    return run
 
 
 def run_verb(parsed: ParsedCommand, ctx: ActionContext, token_id: str = "") -> int:
@@ -227,19 +209,24 @@ def _gate_status(ctx: ActionContext):
 
 def _promote(ctx: ActionContext, parsed: ParsedCommand, token_id: str) -> int:
     sha = parsed.sha or ""
-    if not _release_authorizes(ctx, sha):
-        raise ActionError("ancestor")
-    release_env = _load_release_env(ctx.release_env)
-    token_id = _resolve_promote_token(ctx, token_id, sha)
-    record = _consume(ctx, token_id, sha)
-    atomic = _pinned_script(ctx, ATOMIC_REL)
-    _pinned_script(ctx, DEPLOY_LOCK_REL)
-    argv = promote_argv(atomic, sha)
-    return _invoke(ctx, parsed, record, argv, _release_script_env(ctx, release_env))
+    target = prove_target_release(
+        ctx.releases_root, ctx.shared_root, sha, uid=ctx.expected_uid, fstat=ctx.fstat
+    )
+    ctx.exec_pin = target
+    try:
+        atomic = _pinned_script(ctx, ATOMIC_REL)
+        _pinned_script(ctx, DEPLOY_LOCK_REL)
+        release_env = _load_release_env(ctx.release_env)
+        token_id = _resolve_promote_token(ctx, token_id, sha)
+        record = _consume(ctx, token_id, sha)
+        argv = promote_argv(atomic, sha)
+        return _invoke(ctx, parsed, record, argv, release_env)
+    finally:
+        ctx.exec_pin = None
+        target.close()
 
 
 def _baseline(ctx: ActionContext, parsed: ParsedCommand, token_id: str, *, dry_run: bool) -> int:
-    script = _baseline_script(ctx)
     try:
         peeked = _peek_token(ctx, token_id)
     except TokenError as exc:
@@ -252,21 +239,28 @@ def _baseline(ctx: ActionContext, parsed: ParsedCommand, token_id: str, *, dry_r
         raise ActionError("fingerprint-missing")
     if any(char not in "0123456789abcdef" for char in fingerprint):
         raise ActionError("fingerprint-missing")
-    if not _release_authorizes(ctx, sha):
-        raise ActionError("ancestor")
-    argv = baseline_reset_argv(
-        str(script),
-        sha=sha,
-        ledger_id=ledger_id,
-        release_fingerprint=fingerprint,
-        dry_run=dry_run,
-        approval=APPROVAL_FILE,
-        signature=SIGNATURE_FILE,
+    target = prove_target_release(
+        ctx.releases_root, ctx.shared_root, sha, uid=ctx.expected_uid, fstat=ctx.fstat
     )
-    if dry_run:
-        return _invoke(ctx, parsed, peeked, argv, _runner_env({}))
-    record = _consume(ctx, token_id, sha)
-    return _invoke(ctx, parsed, record, argv, _runner_env({}))
+    ctx.exec_pin = target
+    try:
+        script = _baseline_script(ctx)
+        argv = baseline_reset_argv(
+            str(script),
+            sha=sha,
+            ledger_id=ledger_id,
+            release_fingerprint=fingerprint,
+            dry_run=dry_run,
+            approval=APPROVAL_FILE,
+            signature=SIGNATURE_FILE,
+        )
+        if dry_run:
+            return _invoke(ctx, parsed, peeked, argv, _runner_env({}))
+        record = _consume(ctx, token_id, sha)
+        return _invoke(ctx, parsed, record, argv, _runner_env({}))
+    finally:
+        ctx.exec_pin = None
+        target.close()
 
 
 def _verify(ctx: ActionContext, parsed: ParsedCommand, token_id: str) -> int:
@@ -282,7 +276,7 @@ def _verify(ctx: ActionContext, parsed: ParsedCommand, token_id: str) -> int:
     argv = [atomic, "verify", sha]
     if "--force-lock" in argv:
         raise ActionError("force-lock")
-    return _invoke(ctx, parsed, {"token_id": token_id, "ledger_id": "", "sha": sha}, argv, _release_script_env(ctx, release_env))
+    return _invoke(ctx, parsed, {"token_id": token_id, "ledger_id": "", "sha": sha}, argv, release_env)
 
 
 def _rollback(ctx: ActionContext, parsed: ParsedCommand, token_id: str) -> int:
@@ -296,7 +290,7 @@ def _rollback(ctx: ActionContext, parsed: ParsedCommand, token_id: str) -> int:
     atomic = _pinned_script(ctx, ATOMIC_REL)
     _pinned_script(ctx, DEPLOY_LOCK_REL)
     argv = [atomic, "rollback"]
-    return _invoke(ctx, parsed, {"token_id": token_id, "ledger_id": "", "sha": ""}, argv, _release_script_env(ctx, release_env))
+    return _invoke(ctx, parsed, {"token_id": token_id, "ledger_id": "", "sha": ""}, argv, release_env)
 
 
 def _backup(ctx: ActionContext, parsed: ParsedCommand, token_id: str) -> int:
@@ -310,26 +304,24 @@ def _backup(ctx: ActionContext, parsed: ParsedCommand, token_id: str) -> int:
     return _invoke(ctx, parsed, {"token_id": token_id, "ledger_id": "", "sha": ""}, argv, env)
 
 
-def _is_ancestor(ctx: ActionContext, sha: str) -> bool:
-    try:
-        return bool(ctx.git_ancestor(sha))
-    except Exception as exc:
-        raise ActionError("ancestor") from exc
-
-
 def _peek_token(ctx: ActionContext, token_id: str) -> dict:
     if token_id:
         return ctx.token_store.read(token_id)
     return ctx.token_store.find_single_open()
 
 
+def _active_pin(ctx: ActionContext) -> PinnedRelease:
+    return ctx.exec_pin if ctx.exec_pin is not None else ctx.release_pin
+
+
 def _pinned_script(ctx: ActionContext, relative: str) -> str:
+    pin = _active_pin(ctx)
     try:
         return open_verified(
-            ctx.release_pin.real,
+            pin.real,
             relative,
             uid=ctx.expected_uid,
-            pin=ctx.release_pin,
+            pin=pin,
         )
     except FileNotFoundError as exc:
         raise ActionError("dependency-missing") from exc
@@ -341,16 +333,67 @@ def _baseline_script(ctx: ActionContext) -> Path:
     return Path(_pinned_script(ctx, BASELINE_RESET_REL))
 
 
-def _release_authorizes(ctx: ActionContext, sha: str) -> bool:
-    if box_release_matches(ctx.release_pin.real, sha):
-        return True
-    return _is_ancestor(ctx, sha)
+def prove_target_release(
+    releases_root: str,
+    shared_root: str,
+    sha: str,
+    *,
+    uid: int,
+    fstat=os.fstat,
+) -> PinnedRelease:
+    """Authorize sha from the build's release-complete record and manifest.
 
-
-def _release_script_env(ctx: ActionContext, base: dict[str, str]) -> dict[str, str]:
-    env = dict(base)
-    env["AFS_RELEASE_ROOT"] = ctx.release_pin.real.rstrip("/")
-    return env
+    The directory name and any caller environment are not evidence. A symlink
+    in the release path or its ancestors is refused by the directory walk.
+    """
+    if len(sha) != 40 or any(char not in "0123456789abcdef" for char in sha):
+        raise ActionError("ancestor")
+    target = releases_root.rstrip("/") + "/" + sha
+    try:
+        pin = hold_directory(target, uid=uid, fstat=fstat)
+    except OwnershipError as exc:
+        raise ActionError("ancestor") from exc
+    try:
+        try:
+            raw = read_verified(pin.real, "release_manifest.json", uid=uid, pin=pin, fstat=fstat)
+            manifest = json.loads(raw)
+        except (FileNotFoundError, OwnershipError, json.JSONDecodeError, UnicodeError) as exc:
+            raise ActionError("record-mismatch") from exc
+        if not isinstance(manifest, dict):
+            raise ActionError("record-mismatch")
+        repo = manifest.get("repo")
+        commit = repo.get("commit") if isinstance(repo, dict) else None
+        fingerprint = manifest.get("fingerprint_sha256")
+        if commit != sha or not isinstance(fingerprint, str) or len(fingerprint) != 64:
+            raise ActionError("record-mismatch")
+        if any(char not in "0123456789abcdef" for char in fingerprint):
+            raise ActionError("record-mismatch")
+        try:
+            shared = hold_directory(shared_root, uid=uid, fstat=fstat)
+        except OwnershipError as exc:
+            raise ActionError("record-mismatch") from exc
+        try:
+            recorded = read_verified(
+                shared.real,
+                "release-complete/" + sha,
+                uid=uid,
+                pin=shared,
+                fstat=fstat,
+            )
+        except (FileNotFoundError, OwnershipError) as exc:
+            raise ActionError("record-mismatch") from exc
+        finally:
+            shared.close()
+        try:
+            recorded_text = recorded.decode("utf-8")
+        except UnicodeError as exc:
+            raise ActionError("record-mismatch") from exc
+        if recorded_text.strip() != fingerprint:
+            raise ActionError("record-mismatch")
+        return pin
+    except Exception:
+        pin.close()
+        raise
 
 
 def _resolve_promote_token(ctx: ActionContext, token_id: str, sha: str) -> str:
@@ -376,7 +419,7 @@ def _invoke(ctx: ActionContext, parsed: ParsedCommand, record: dict, argv: list[
         raise ActionError("force-lock")
     if argv and not argv[0].startswith("/"):
         raise ActionError("relative-program")
-    ctx.release_pin.reverify()
+    _active_pin(ctx).reverify()
     code = ctx.runner(argv, env)
     result = "ok" if code == 0 else "failed"
     _audit(
@@ -512,7 +555,7 @@ def production_context() -> ActionContext:
                 assert_directory(os.path.dirname(fixed), uid=0)
                 file_identity(fixed, uid=0)
         root = Path(release.real)
-        return ActionContext(
+        ctx = ActionContext(
             repo_root=root,
             token_store=TokenStore(Path(TOKEN_DIR)),
             audit=AuditLog(Path(AUDIT_LOG)),
@@ -523,7 +566,7 @@ def production_context() -> ActionContext:
             atomic_release=root / ATOMIC_REL,
             release_env=Path(RELEASE_ENV),
             flat_reader=_default_flat_reader,
-            runner=pinned_runner(release),
+            runner=lambda argv, env: 3,
             actor="grok-ops",
             git_ancestor=_ancestor_in(release.real),
             expected_uid=0,
@@ -531,9 +574,26 @@ def production_context() -> ActionContext:
             python=PYTHON,
             release_prefix=RELEASES_PREFIX,
         )
+        ctx.runner = _production_runner(ctx)
+        return ctx
     except Exception:
         release.close()
         raise
+
+
+def _production_runner(ctx: ActionContext):
+    def run(argv: list[str], env: dict[str, str]) -> int:
+        pin = _active_pin(ctx)
+        pin.reverify()
+        if not argv or not argv[0].startswith("/"):
+            return 3
+        root = pin.real.rstrip("/")
+        if argv[0] != ctx.python and not argv[0].startswith(root + "/"):
+            return 3
+        completed = subprocess.run(argv, env=env, cwd=root, check=False)
+        return completed.returncode
+
+    return run
 
 
 def main(argv: list[str] | None = None) -> int:

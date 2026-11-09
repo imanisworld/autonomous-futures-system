@@ -25,10 +25,13 @@ from ops.grok_ops.actions import (
     APPROVAL_FILE,
     SIGNATURE_FILE,
     ActionContext,
+    ActionError,
+    _invoke,
+    _production_runner,
+    _runner_env,
     baseline_reset_argv,
-    box_release_matches,
-    pinned_runner,
     production_context,
+    prove_target_release,
     require_same_file,
     run_verb,
 )
@@ -36,6 +39,7 @@ from ops.grok_ops.paths import (
     TOKEN_DIR,
     OwnershipError,
     PinnedRelease,
+    _open_from,
     assert_directory,
     hold_directory,
     open_verified,
@@ -66,6 +70,35 @@ SHA_B = "b" * 40
 FP = "ab" * 32
 PUBKEY = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGrokOpsTestKeyMaterialOnly grok-ops"
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def _seal_target(releases: Path, shared: Path, sha: str, source: Path) -> None:
+    target = releases / sha
+    for relative in (
+        "scripts/atomic_release.sh",
+        "scripts/deploy_lock.sh",
+        "scripts/ops/baseline_reset.sh",
+    ):
+        src = source / relative
+        dest = target / relative
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        if src.is_file() and not src.is_symlink():
+            dest.write_bytes(src.read_bytes())
+        else:
+            dest.write_text("#!/bin/sh\nexit 0\n")
+        dest.chmod(0o755)
+    manifest = {
+        "repo": {"commit": sha},
+        "fingerprint_sha256": FP,
+    }
+    (target / "release_manifest.json").write_text(json.dumps(manifest))
+    (target / "release_manifest.json").chmod(0o644)
+    complete = shared / "release-complete"
+    complete.mkdir(parents=True, exist_ok=True)
+    (complete / sha).write_text(FP + "\n")
+    (complete / sha).chmod(0o644)
+    for path in (releases, target, target / "scripts", target / "scripts" / "ops", shared, complete):
+        path.chmod(0o755)
 
 
 def _flat(**overrides) -> FlatSnapshot:
@@ -288,6 +321,9 @@ def _ctx(tmp_path: Path, runner, flat=None, env_text=None, variants=None, lock=F
         dirfd=fd,
         uid=os.getuid(),
     )
+    releases = tmp_path / "afs-releases"
+    shared = tmp_path / "afs-shared"
+    _seal_target(releases, shared, SHA_A, repo)
     ctx = ActionContext(
         repo_root=repo,
         token_store=TokenStore(tmp_path / "tokens"),
@@ -304,6 +340,9 @@ def _ctx(tmp_path: Path, runner, flat=None, env_text=None, variants=None, lock=F
         git_ancestor=lambda sha: sha == SHA_A,
         expected_uid=os.getuid(),
         release_pin=pin,
+        releases_root=str(releases),
+        shared_root=str(shared),
+        fstat=_fstat_ancestors(tmp_path, os.getuid()),
     )
     ctx.calls = calls
     return ctx
@@ -358,7 +397,8 @@ def test_promote_consumes_token_and_requires_ancestor(tmp_path):
     token = ctx.token_store.authorize(SHA_A, "AFS-9", FP)
     rc = run_verb(parse_command(f"promote {SHA_A}"), ctx, token_id=token)
     assert rc == 0
-    assert ctx.calls[0][0][:3] == [str(ctx.atomic_release), "promote", SHA_A]
+    assert ctx.calls[0][0][1:] == ["promote", SHA_A]
+    assert ctx.calls[0][0][0].endswith(f"/{SHA_A}/scripts/atomic_release.sh")
     assert "--force-lock" not in ctx.calls[0][0]
     assert "AFS_BOX" in ctx.calls[0][1]
     with pytest.raises(TokenError) as reused:
@@ -367,7 +407,7 @@ def test_promote_consumes_token_and_requires_ancestor(tmp_path):
     other = ctx.token_store.authorize(SHA_B, "AFS-9", FP)
     rc = run_verb(parse_command(f"promote {SHA_B}"), ctx, token_id=other)
     assert rc != 0
-    assert "ancestor" in ctx.audit.path.read_text()
+    assert "ancestor" in ctx.audit.path.read_text() or "record-mismatch" in ctx.audit.path.read_text()
     assert not any(call[0][2:3] == [SHA_B] for call in ctx.calls if len(call[0]) > 2)
 
 
@@ -423,7 +463,7 @@ def test_baseline_reset_calls_sibling_script_and_dry_run_skips_token(tmp_path):
 
 def test_baseline_reset_missing_script_is_a_documented_dependency(tmp_path):
     ctx = _ctx(tmp_path, lambda argv, env: 0)
-    (ctx.repo_root / "scripts" / "ops" / "baseline_reset.sh").unlink()
+    (Path(ctx.releases_root) / SHA_A / "scripts" / "ops" / "baseline_reset.sh").unlink()
     token = ctx.token_store.authorize(SHA_A, "LEDGER-1", FP)
     rc = run_verb(parse_command("baseline-reset"), ctx, token_id=token)
     assert rc == 78
@@ -872,6 +912,11 @@ def test_sudoers_rejects_empty_command_path():
     text = render_sudoers() + "grok-ops ALL=(root) NOPASSWD: \n"
     with pytest.raises(ValueError, match="empty"):
         validate_sudoers_text(text)
+    for path in SUDO_PATHS:
+        assert f"{path} \"\"" in render_sudoers()
+    bare = render_sudoers().replace(' ""', "", 1)
+    with pytest.raises(ValueError, match="arguments"):
+        validate_sudoers_text(bare)
 
 
 def test_token_ttl_is_bound_to_created_at(tmp_path):
@@ -924,69 +969,243 @@ def test_require_same_file_rejects_a_different_inode(tmp_path):
     assert "require_same_file(" in inspect.getsource(production_context)
 
 
-def test_box_release_needs_no_git(tmp_path):
+def test_folder_name_is_not_authorization(tmp_path):
+    uid = os.getuid()
+    fstat = _fstat_ancestors(tmp_path, uid)
     sha = "c" * 40
-    assert box_release_matches(str(tmp_path / sha), sha)
-    assert not box_release_matches(str(tmp_path / "repo"), sha)
+    releases = tmp_path / "afs-releases"
+    shared = tmp_path / "afs-shared"
+    target = releases / sha
+    (target / "scripts").mkdir(parents=True)
+    manifest = {"repo": {"commit": sha}, "fingerprint_sha256": FP}
+    (target / "release_manifest.json").write_text(json.dumps(manifest))
+    (target / "release_manifest.json").chmod(0o644)
+    complete = shared / "release-complete"
+    complete.mkdir(parents=True)
+    (complete / sha).write_text(("d" * 64) + "\n")
+    (complete / sha).chmod(0o644)
+    for path in (releases, target, shared, complete):
+        path.chmod(0o755)
+    with pytest.raises(ActionError) as mismatch:
+        prove_target_release(str(releases), str(shared), sha, uid=uid, fstat=fstat)
+    assert mismatch.value.code == "record-mismatch"
 
 
-def test_symlink_atomic_release_never_runs(tmp_path):
+def test_symlinked_release_root_is_refused(tmp_path):
+    uid = os.getuid()
+    fstat = _fstat_ancestors(tmp_path, uid)
+    sha = "e" * 40
+    real = tmp_path / "real-releases" / sha
+    real.mkdir(parents=True)
+    link_root = tmp_path / "linked-releases"
+    link_root.symlink_to(tmp_path / "real-releases")
+    with pytest.raises(OwnershipError) as ancestor:
+        hold_directory(str(link_root / sha), uid=uid, fstat=fstat)
+    assert ancestor.value.code == "release-symlink"
+    releases = tmp_path / "afs-releases"
+    releases.mkdir(mode=0o755)
+    (releases / sha).symlink_to(real)
+    with pytest.raises(OwnershipError) as leaf:
+        hold_directory(str(releases / sha), uid=uid, fstat=fstat)
+    assert leaf.value.code == "release-symlink"
+
+
+@pytest.mark.parametrize("verb", ["verify", "rollback", "promote"])
+def test_symlink_atomic_release_never_runs(tmp_path, verb):
     ctx = _ctx(tmp_path, lambda argv, env: 0)
     outside = tmp_path / "outside.sh"
     marker = tmp_path / "pwned"
     outside.write_text(f"#!/bin/sh\ntouch {marker}\n")
     outside.chmod(0o777)
-    target = ctx.repo_root / "scripts" / "atomic_release.sh"
-    target.unlink()
-    target.symlink_to(outside)
-    ctx.env_file.write_text(_quiet_env() + f"EXPECTED_LIVE_COMMIT={SHA_A}\n")
-    rc = run_verb(parse_command("verify"), ctx)
+    if verb == "promote":
+        script = Path(ctx.releases_root) / SHA_A / "scripts" / "atomic_release.sh"
+        token = ctx.token_store.authorize(SHA_A, "AFS-1", FP)
+        command = f"promote {SHA_A}"
+    else:
+        script = ctx.repo_root / "scripts" / "atomic_release.sh"
+        token = ""
+        ctx.env_file.write_text(_quiet_env() + f"EXPECTED_LIVE_COMMIT={SHA_A}\n")
+        command = "verify" if verb == "verify" else "rollback rel-1"
+    script.unlink()
+    script.symlink_to(outside)
+    rc = run_verb(parse_command(command), ctx, token_id=token)
     assert rc == 3
     assert not marker.exists()
     assert "release-symlink" in ctx.audit.path.read_text()
     assert ctx.calls == []
+    if verb == "promote":
+        assert (ctx.token_store.root / f"{token}.json").is_file()
 
 
-def test_unmocked_atomic_release_uses_pinned_root(tmp_path):
-    sha = "d" * 40
-    release = tmp_path / "afs-releases" / sha
-    scripts = release / "scripts"
-    scripts.mkdir(parents=True)
-    real_atomic = ROOT / "scripts" / "atomic_release.sh"
-    real_lock = ROOT / "scripts" / "deploy_lock.sh"
-    (scripts / "atomic_release.sh").write_text(real_atomic.read_text())
-    (scripts / "atomic_release.sh").chmod(0o755)
-    marker = tmp_path / "sourced-root"
-    prelude = f"printf 'root=%s\\npwd=%s\\n' \"$ROOT\" \"$(pwd)\" > {marker}\n"
-    (scripts / "deploy_lock.sh").write_text(prelude + real_lock.read_text())
-    (scripts / "deploy_lock.sh").chmod(0o644)
-    for path in (release, scripts):
-        path.chmod(0o755)
-    fd = os.open(release, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+def test_promote_b_while_running_a(tmp_path):
+    sha_b = "b" * 40
+    ctx = _ctx(tmp_path, lambda argv, env: 0)
+    running_marker = tmp_path / "from-a"
+    (ctx.repo_root / "scripts" / "atomic_release.sh").write_text(
+        f"#!/bin/sh\ntouch {running_marker}\n"
+    )
+    _seal_target(Path(ctx.releases_root), Path(ctx.shared_root), sha_b, ctx.repo_root)
+    target_script = Path(ctx.releases_root) / sha_b / "scripts" / "atomic_release.sh"
+    target_marker = tmp_path / "from-b"
+    target_script.write_text(f"#!/bin/sh\necho B > {target_marker}\n")
+    target_script.chmod(0o755)
+    ctx.runner = _production_runner(ctx)
+    token = ctx.token_store.authorize(sha_b, "AFS-9", FP)
+    rc = run_verb(parse_command(f"promote {sha_b}"), ctx, token_id=token)
+    assert rc == 0
+    assert target_marker.read_text().strip() == "B"
+    assert not running_marker.exists()
+
+
+def test_group_writable_file_is_refused(tmp_path):
+    uid = os.getuid()
+    root = tmp_path / "tree"
+    root.mkdir(mode=0o755)
+    leaf = root / "leaf.sh"
+    leaf.write_text("#!/bin/sh\n")
+    leaf.chmod(0o666)
+    with pytest.raises(OwnershipError) as refused:
+        open_verified(str(root), "leaf.sh", uid=uid, fstat=_fstat_ancestors(tmp_path, uid))
+    assert refused.value.code == "ownership"
+
+
+def test_pin_release_restats_the_symlink(tmp_path, monkeypatch):
+    uid = os.getuid()
+    fstat = _fstat_ancestors(tmp_path, uid)
+    prefix = tmp_path / "afs-releases"
+    good = _release_tree(tmp_path, "good")
+    parent = tmp_path / "links"
+    parent.mkdir(mode=0o755)
+    link = parent / "current"
+    link.symlink_to(good)
+    real_stat = os.stat
+    seen = {"n": 0}
+
+    def counting(path, *args, dir_fd=None, follow_symlinks=True, **kwargs):
+        result = real_stat(path, *args, dir_fd=dir_fd, follow_symlinks=follow_symlinks, **kwargs)
+        if path == "current" and follow_symlinks is False:
+            seen["n"] += 1
+            if seen["n"] >= 2:
+                swapped = type("Swapped", (), {})()
+                swapped.st_mode = result.st_mode
+                swapped.st_ino = result.st_ino + 1
+                swapped.st_dev = result.st_dev
+                swapped.st_uid = result.st_uid
+                swapped.st_gid = result.st_gid
+                return swapped
+        return result
+
+    monkeypatch.setattr(os, "stat", counting)
+    with pytest.raises(OwnershipError) as raced:
+        pin_release(str(link), str(prefix), uid=uid, fstat=fstat)
+    assert raced.value.code == "release-toctou"
+    assert seen["n"] >= 2
+
+
+def test_open_verified_rechecks_the_release_symlink(tmp_path):
+    uid = os.getuid()
+    fstat = _fstat_ancestors(tmp_path, uid)
+    prefix = tmp_path / "afs-releases"
+    good = _release_tree(tmp_path, "good")
+    evil = _release_tree(tmp_path, "evil")
+    parent = tmp_path / "links"
+    parent.mkdir(mode=0o755)
+    link = parent / "current"
+    link.symlink_to(good)
+    pinned = pin_release(str(link), str(prefix), uid=uid, fstat=fstat)
+    link.unlink()
+    link.symlink_to(evil)
+    with pytest.raises(OwnershipError) as swapped:
+        open_verified(pinned.real, "scripts/ops/baseline_reset.sh", uid=uid, pin=pinned, fstat=fstat)
+    assert swapped.value.code == "release-toctou"
+    pinned.close()
+
+
+def test_open_from_rechecks_the_held_directory(tmp_path):
+    uid = os.getuid()
+    good = _release_tree(tmp_path, "held")
+    fd = os.open(good, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     held = os.fstat(fd)
     pin = PinnedRelease(
         link="",
-        real=str(release),
-        prefix=str(release),
+        real=str(good),
+        prefix=str(good),
         dev=held.st_dev,
         ino=held.st_ino,
         dirfd=fd,
-        uid=os.getuid(),
+        uid=uid,
     )
-    ctx = _ctx(tmp_path / "lane", lambda argv, env: 0)
-    ctx.release_pin.close()
-    ctx.release_pin = pin
-    ctx.repo_root = release
-    ctx.runner = pinned_runner(pin)
-    ctx.env_file.write_text(_quiet_env() + f"EXPECTED_LIVE_COMMIT={sha}\n")
-    # Caller cwd is this git checkout. The pinned tree has no .git.
-    assert not (release / ".git").exists()
-    rc = run_verb(parse_command("verify"), ctx)
-    assert rc != 128
-    recorded = marker.read_text()
-    assert f"root={release}" in recorded
-    assert f"pwd={release}" in recorded
+    os.close(pin.dirfd)
+    pin.dirfd = os.open(tmp_path, os.O_RDONLY | os.O_DIRECTORY)
+    with pytest.raises(OwnershipError) as moved:
+        _open_from(pin, "scripts/ops/baseline_reset.sh")
+    assert moved.value.code == "release-toctou"
     pin.close()
+
+
+def test_runner_env_refuses_afs_ops_keys():
+    with pytest.raises(ActionError) as refused:
+        _runner_env({"AFS_OPS_TOKEN_DIR": "/tmp/not-used"})
+    assert refused.value.code == "env-forbidden"
+
+
+def test_release_env_refuses_unknown_keys(tmp_path):
+    ctx = _ctx(tmp_path, lambda argv, env: 0)
+    ctx.release_env.write_text("AFS_BOX=box.example\nEVIL=1\n")
+    token = ctx.token_store.authorize(SHA_A, "AFS-1", FP)
+    rc = run_verb(parse_command(f"promote {SHA_A}"), ctx, token_id=token)
+    assert rc == 3
+    assert "release-env-forbidden" in ctx.audit.path.read_text()
+    assert ctx.calls == []
+    assert (ctx.token_store.root / f"{token}.json").is_file()
+
+
+def test_runner_refuses_program_outside_the_pin(tmp_path):
+    ctx = _ctx(tmp_path, lambda argv, env: 0)
+    evil = tmp_path / "evil.sh"
+    marker = tmp_path / "ran"
+    evil.write_text(f"#!/bin/sh\ntouch {marker}\n")
+    evil.chmod(0o755)
+    ctx.runner = _production_runner(ctx)
+    code = ctx.runner([str(evil)], {})
+    assert code == 3
+    assert not marker.exists()
+
+
+def test_runner_rechecks_the_pin_before_exec(tmp_path):
+    ctx = _ctx(tmp_path, lambda argv, env: 0)
+    script = ctx.repo_root / "scripts" / "atomic_release.sh"
+    marker = tmp_path / "ran"
+    script.write_text(f"#!/bin/sh\ntouch {marker}\n")
+    script.chmod(0o755)
+    ctx.runner = _production_runner(ctx)
+    os.close(ctx.release_pin.dirfd)
+    ctx.release_pin.dirfd = os.open(tmp_path, os.O_RDONLY | os.O_DIRECTORY)
+    with pytest.raises(OwnershipError):
+        ctx.runner([str(script)], {})
+    assert not marker.exists()
+
+
+def test_backup_argv_uses_isolated_python(tmp_path):
+    ctx = _ctx(tmp_path, lambda argv, env: 0)
+    assert run_verb(parse_command("backup"), ctx) == 0
+    assert ctx.calls[0][0][:4] == [ctx.python, "-B", "-P", "-m"]
+
+
+def test_relative_program_is_refused(tmp_path):
+    ctx = _ctx(tmp_path, lambda argv, env: 0)
+    with pytest.raises(ActionError) as refused:
+        _invoke(ctx, parse_command("status"), {}, ["scripts/atomic_release.sh"], {})
+    assert refused.value.code == "relative-program"
+    assert ctx.calls == []
+
+
+def test_release_script_does_not_trust_an_env_root():
+    text = (ROOT / "scripts" / "atomic_release.sh").read_text()
+    assert "AFS_RELEASE_ROOT" not in text
+    assert "git-less release directory is not named" not in text
+    assert "behavior-neutral check needs a git checkout" not in text
+    assert 'git -C "$ROOT" fetch -q origin' in text
 
 
 def test_expected_uid_is_required_and_paths_do_not_resolve():
