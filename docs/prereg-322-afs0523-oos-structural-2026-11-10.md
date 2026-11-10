@@ -15,7 +15,11 @@ This document was written after AFS-0586. It is post-hoc. AFS-0586 already ran `
 - Honest IOC may differ only on `fill_price` and `net`, and only on a day where the committed bar evidence records a vendor close difference while open, high, and low agree.
 - That difference must equal the recorded close delta, and the same delta applies at every slippage. The net difference must equal that close delta times the MNQ dollars per point from `config/futures_contracts.py`.
 - `exit_price`, `status`, `result`, and `exit_reason` still match.
-- A decision bar whose open, high, or low disagree refuses the structural gate. Matching fill fields do not excuse it. 2026-03-06 is that case.
+- A decision bar whose open, high, or low disagree is classified from pinned 1-minute evidence. There is no caller override.
+  - Databento-side cause (wrong contract, shifted timestamp, bad bar, or adapter bug): the trial FAILs. Fix the adapter and register a new trial.
+  - Reference defect: Databento's own 1-minute bars for the selected contract rebuild its 5-minute bar exactly, and the reference bar is the odd one out. Count it, flag it, back it with the pinned evidence, and exclude it from the open/high/low comparison. Outcome fields on that date are still compared.
+  - Unexplained, or no pinned 1-minute evidence: the trial FAILs.
+- This root-cause rule was written after AFS-0594 classified 2026-03-06 as `REFERENCE_DEFECT`. The matching IOC no-fills on that day are not the reason it is excluded.
 
 The allowlist is built from `docs/research-evidence/T-2026-11-09-prereg-322-afs0523-oos-reproduction-2026-11-09-01/BAR_EVIDENCE.json`. The current close-delta days are 2024-09-06 (close delta +0.75) and 2026-06-11 (close delta -0.25). Those two days have agreeing open, high, and low. 2026-03-06 is not a close-delta day.
 
@@ -29,11 +33,11 @@ The Oct 4 ledger, `data/replay_polygon_5m/MNQ/MNQ_2026-03-06.jsonl`, and `data/r
 
 `front_contract("MNQ", 2026-03-06, roll_days=8)` is MNQH6. The March 2026 third Friday is 2026-03-20, so the 8-day roll window starts 2026-03-12. This session is before that window. It is not the 2026-06-11 case, where the roll had already moved to MNQU6.
 
-The committed evidence does not record the Databento open, high, low, volume, or instrument id for this bar, and that parent file is not in this checkout. A shifted Databento timestamp, a different Databento contract, and a bad Databento bar all remain possible. The rule refuses the day until one of those is shown.
+AFS-0594, written after that limit, pinned `MAR06_BAR_EVIDENCE.json` and `MAR06_BAR_EVIDENCE.md`. The five MNQH6 1-minute bars at 15:00–15:04 UTC rebuild the Databento 5-minute bar exactly (open 24691.5, high 24777.75, low 24687.75, close 24764.5, volume 51008). The Oct 4 / Polygon bar does not match that rebuild, and no other contract or shifted window does either. The classification is recomputed from those pinned rows. It is `REFERENCE_DEFECT`. The day is excluded from the open/high/low comparison and reported. Both vendors' honest-IOC results were `NO_FILL` only because both closes sat beyond the 32-tick cap. That match is not the reason the day is excluded.
 
 ## Older slices
 
-Older-slice IOC results depend on Databento closing prints. A documented decision-bar close difference moves honest-IOC fill_price and net by that close delta and does not by itself fail the structural gate. A decision bar whose open, high, or low disagree refuses the structural gate, including on the older slices. Matching fill fields do not excuse that bar.
+The reproduction gate is the only check of Databento bar quality. Older-slice results depend on Databento's bars and closing prints.
 
 ## What this commit changes, and what it leaves
 

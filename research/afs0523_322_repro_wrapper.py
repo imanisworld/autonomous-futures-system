@@ -142,11 +142,8 @@ SLIPPAGES = ("1tick", "2tick", "3tick")
 WINDOW_SLIPPAGE_TICKS = (1.0, 2.0, 3.0)
 WINDOW_ENTRY_FILL_MODELS = ("market", "ioc_limit", "stop_market")
 OLDER_SLICE_IOC_NOTE = (
-    "Older-slice IOC results depend on Databento closing prints. "
-    "A documented decision-bar close difference moves honest-IOC fill_price and net "
-    "by that close delta and does not by itself fail the structural gate. "
-    "A decision bar whose open, high, or low disagree refuses the structural gate, "
-    "including on the older slices. Matching fill fields do not excuse that bar."
+    "The reproduction gate is the only check of Databento bar quality. "
+    "Older-slice results depend on Databento's bars and closing prints."
 )
 BAR_EVIDENCE_REL = (
     "docs/research-evidence/"
@@ -154,6 +151,11 @@ BAR_EVIDENCE_REL = (
 )
 BAR_EVIDENCE_PATH = REPO / BAR_EVIDENCE_REL
 BAR_EVIDENCE_SHA256 = "9bbd516d8c7a43b8c42d829723bc6f800b1dabe3f372ed8d20295f839017931d"
+MAR06_EVIDENCE_DIR = BAR_EVIDENCE_PATH.parent
+MAR06_BAR_EVIDENCE_PATH = MAR06_EVIDENCE_DIR / "MAR06_BAR_EVIDENCE.json"
+MAR06_BAR_EVIDENCE_MD_PATH = MAR06_EVIDENCE_DIR / "MAR06_BAR_EVIDENCE.md"
+MAR06_BAR_EVIDENCE_SHA256 = "408cebf65e72a4bf43685ad80b406b6bc6b18081c2c07658154c84e0a1ef00a7"
+MAR06_BAR_EVIDENCE_MD_SHA256 = "6f970effb72bb573fe5bd5a38d4d45e14ae7e483a64bac204ef0605c7d080c15"
 COMPARE_FIELDS = (
     "date",
     "direction",
@@ -409,7 +411,7 @@ def _ohl_disagreement_days() -> set[str]:
     """Decision days whose pinned bars do not share open, high, and low.
 
     The ``ohl_agree`` flag is not read. A day without both numeric triples
-    cannot be shown to agree, so 2026-03-06 stays refused.
+    cannot be shown to agree.
     """
     found: set[str] = set()
     for day in _decision_bar_records(_load_bar_evidence()):
@@ -420,41 +422,189 @@ def _ohl_disagreement_days() -> set[str]:
     return found
 
 
-def _ohl_mismatch(day: str) -> dict:
+def _read_pinned_bytes(path: Path, expected: str, label: str) -> bytes:
+    raw = path.read_bytes()
+    digest = hashlib.sha256(raw).hexdigest()
+    if digest != expected:
+        raise RuntimeError(f"{label} hash mismatch: {digest} != {expected}")
+    return raw
+
+
+def _load_mar06_evidence() -> dict:
+    """Read the Mar 6 evidence and refuse any other bytes."""
+    _read_pinned_bytes(
+        MAR06_BAR_EVIDENCE_MD_PATH,
+        MAR06_BAR_EVIDENCE_MD_SHA256,
+        "MAR06_BAR_EVIDENCE.md",
+    )
+    raw = _read_pinned_bytes(
+        MAR06_BAR_EVIDENCE_PATH,
+        MAR06_BAR_EVIDENCE_SHA256,
+        "MAR06_BAR_EVIDENCE.json",
+    )
+    return json.loads(raw)
+
+
+def _decimal_field(bar: dict, field: str) -> Decimal | None:
+    if field not in bar:
+        return None
+    try:
+        return Decimal(str(bar[field]))
+    except (TypeError, ValueError):
+        return None
+
+
+def _ohlcv(bar: object) -> dict[str, Decimal | int] | None:
+    if not isinstance(bar, dict):
+        return None
+    values: dict[str, Decimal | int] = {}
+    for field in ("open", "high", "low", "close"):
+        number = _decimal_field(bar, field)
+        if number is None:
+            return None
+        values[field] = number
+    if "volume" not in bar:
+        return None
+    try:
+        values["volume"] = int(bar["volume"])
+    except (TypeError, ValueError):
+        return None
+    return values
+
+
+def _aggregate_minutes(rows: list[dict]) -> dict[str, Decimal | int] | None:
+    if len(rows) != 5:
+        return None
+    ordered = sorted(rows, key=lambda row: str(row.get("ts_utc")))
+    parts = [_ohlcv(row) for row in ordered]
+    if any(part is None for part in parts):
+        return None
+    return {
+        "open": parts[0]["open"],
+        "high": max(part["high"] for part in parts),
+        "low": min(part["low"] for part in parts),
+        "close": parts[-1]["close"],
+        "volume": sum(int(part["volume"]) for part in parts),
+    }
+
+
+def _expected_minute_stamps(start: str) -> list[str] | None:
+    try:
+        stamp = datetime.fromisoformat(start)
+    except ValueError:
+        return None
+    return [(stamp + timedelta(minutes=offset)).isoformat() for offset in range(5)]
+
+
+def _classify_mar06(payload: dict) -> str:
+    """Recompute the Mar 6 label from the pinned 1-minute rows.
+
+    ``classification`` and the match flags are not read. Five selected-contract
+    minutes must rebuild the Databento 5-minute bar exactly. The reference bar
+    is a defect only when that rebuild is exact and its open, high, or low
+    still differs.
+    """
+    decision = payload.get("decision_bar")
+    window = payload.get("mnqh6_1m_15_00_to_15_04")
+    adapter = payload.get("adapter")
+    if not isinstance(decision, dict) or not isinstance(window, dict) or not isinstance(adapter, dict):
+        return "UNEXPLAINED"
+    rows = window.get("rows")
+    databento = _ohlcv(decision.get("databento_5m"))
+    reference = _ohl_triple(decision.get("oct4"))
+    selected = adapter.get("selected_instrument_id")
+    stamps = _expected_minute_stamps(str(decision.get("timestamp_utc")))
+    if not isinstance(rows, list) or databento is None or reference is None or stamps is None:
+        return "UNEXPLAINED"
+    if not isinstance(selected, int):
+        return "UNEXPLAINED"
+    ordered = sorted(
+        (row for row in rows if isinstance(row, dict)),
+        key=lambda row: str(row.get("ts_utc")),
+    )
+    if [row.get("ts_utc") for row in ordered] != stamps:
+        return "DATABENTO_SIDE"
+    if any(row.get("instrument_id") != selected for row in ordered):
+        return "DATABENTO_SIDE"
+    aggregate = _aggregate_minutes(ordered)
+    if aggregate is None or aggregate != databento:
+        return "DATABENTO_SIDE"
+    rebuilt = (aggregate["open"], aggregate["high"], aggregate["low"])
+    if rebuilt == reference:
+        return "UNEXPLAINED"
+    return "REFERENCE_DEFECT"
+
+
+def _ohl_resolution() -> dict[str, list[dict[str, str]]]:
+    """Classify every open/high/low disagreement. There is no caller override."""
+    excluded: list[dict[str, str]] = []
+    failed: list[dict[str, str]] = []
+    mar06: dict | None = None
+    for day in sorted(_ohl_disagreement_days()):
+        if day == "2026-03-06":
+            if mar06 is None:
+                mar06 = _load_mar06_evidence()
+            label = _classify_mar06(mar06)
+        else:
+            label = "UNEXPLAINED"
+        row = {"date": day, "classification": label}
+        if label == "REFERENCE_DEFECT":
+            excluded.append(row)
+        else:
+            failed.append(row)
+    return {"exclude": excluded, "fail": failed}
+
+
+def _exclusion_report(resolution: dict[str, list[dict[str, str]]]) -> dict:
+    dates = [row["date"] for row in resolution["exclude"]]
+    return {"count": len(dates), "dates": dates}
+
+
+def _ohl_mismatch(day: str, classification: str) -> dict:
     return {
         "date": day,
         "slippage": "decision_bar",
         "model": "decision_bar",
         "field": "open_high_low",
-        "expected": "open, high, and low agree",
-        "actual": "open, high, or low disagree",
+        "expected": "open, high, and low agree, or a pinned reference defect",
+        "actual": classification,
     }
 
 
 def _refuse_ohl_disagreement() -> None:
-    days = _ohl_disagreement_days()
-    if days:
+    failed = _ohl_resolution()["fail"]
+    if failed:
         raise RuntimeError(
-            "decision bar open, high, or low disagree: " + ", ".join(sorted(days))
+            "decision bar open, high, or low disagree: "
+            + ", ".join(f"{row['date']} {row['classification']}" for row in failed)
         )
 
 
 def _fail_closed_on_ohl_disagreement(comparison: dict) -> dict:
-    """Force a gate failure from the pinned bars, even when fills match."""
-    days = _ohl_disagreement_days()
-    if not days:
-        return comparison
-    mismatches = list(comparison.get("mismatches") or [])
+    """Apply the pinned-evidence rule even when the fill comparison matched."""
+    resolution = _ohl_resolution()
+    excluded = {row["date"] for row in resolution["exclude"]}
+    mismatches = [
+        item
+        for item in list(comparison.get("mismatches") or [])
+        if not (
+            isinstance(item, dict)
+            and item.get("field") == "open_high_low"
+            and item.get("date") in excluded
+        )
+    ]
     present = {
         item.get("date")
         for item in mismatches
         if isinstance(item, dict) and item.get("field") == "open_high_low"
     }
-    for day in sorted(days):
-        if day not in present:
-            mismatches.append(_ohl_mismatch(day))
-    comparison["ok"] = False
+    for row in resolution["fail"]:
+        if row["date"] not in present:
+            mismatches.append(_ohl_mismatch(row["date"], row["classification"]))
+    if resolution["fail"]:
+        comparison["ok"] = False
     comparison["mismatches"] = mismatches
+    comparison["ohl_reference_exclusions"] = _exclusion_report(resolution)
     return comparison
 
 
@@ -624,9 +774,21 @@ def compare_replay_to_oct4(
                 }
             )
 
+    exclusions = None
     if structural:
-        for day in sorted(_ohl_disagreement_days() & reference_dates):
-            mismatches.append(_ohl_mismatch(day))
+        resolution = _ohl_resolution()
+        excluded = {row["date"] for row in resolution["exclude"]}
+        for row in resolution["fail"]:
+            if row["date"] in reference_dates:
+                mismatches.append(_ohl_mismatch(row["date"], row["classification"]))
+        mismatches = [
+            item
+            for item in mismatches
+            if not (
+                item.get("field") == "open_high_low" and item.get("date") in excluded
+            )
+        ]
+        exclusions = _exclusion_report(resolution)
 
     mismatches.sort(key=lambda item: (item["date"] or "", item["slippage"], item["model"], item["field"]))
     eod_ok = (not eod_scored) and all(
@@ -634,7 +796,7 @@ def compare_replay_to_oct4(
         for slip_cells in eod_cells.values()
         for cell in slip_cells.values()
     )
-    return {
+    report = {
         "ok": (
             not mismatches
             and eod_ok
@@ -653,6 +815,9 @@ def compare_replay_to_oct4(
             "cells": eod_cells,
         },
     }
+    if exclusions is not None:
+        report["ohl_reference_exclusions"] = exclusions
+    return report
 
 
 def _parity(
@@ -1006,6 +1171,11 @@ def _gate_payload(
         "error": error,
         "claude_review": None,
         "prior_attempts": prior_attempts,
+        "ohl_reference_exclusions": (
+            {"count": 0, "dates": []}
+            if comparison is None
+            else comparison.get("ohl_reference_exclusions") or {"count": 0, "dates": []}
+        ),
     }
     payload.update(identity)
     return payload

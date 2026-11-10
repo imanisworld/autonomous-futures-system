@@ -1,0 +1,2506 @@
+{
+  "title": "Mar 6 decision-bar vendor diagnosis",
+  "ledger_follow_up": "AFS-0593",
+  "question": "Which vendor's bar is wrong for the 2026-03-06 15:00 UTC 5-minute MNQ decision bar?",
+  "classification": "REFERENCE_DEFECT",
+  "classification_rule": {
+    "DATABENTO_SIDE": "wrong contract, shifted timestamp, bad bar, or adapter bug",
+    "REFERENCE_DEFECT": "Databento MNQH6 1m rebuilds its 5m bar consistently and Polygon/Oct4 is the odd one out",
+    "UNEXPLAINED": "evidence mixed or cause not isolated",
+    "chosen": "REFERENCE_DEFECT",
+    "why": "The five MNQH6 1-minute bars at 15:00-15:04 UTC aggregate exactly to the committed Databento 5m bar (O/H/L/C/volume). The last 1m close equals the 5m close. Every aligned 5m bar from 14:30 through 15:30 UTC also rebuilds exactly from MNQH6 1m. The adapter at 7fdc9252 selects MNQH6 that day (roll_days=8; third Friday 2026-03-20; roll window starts 2026-03-12) and uses UTC bar-start timestamps. No other contract (MNQM6, MNQU6, or the MNQH6-MNQM6 spread) and no shifted 1-5 minute window reproduces either the Databento 5m bar or the Polygon/Oct4 bar. Polygon/Oct4 OHLC is not any prefix of the MNQH6 1m series. The transition-export Polygon 5m file then has a 50-minute hole (missing 15:05 through 15:50) after a thin 15:00 bar (volume 7616 vs Databento 51008)."
+  },
+  "read_only": true,
+  "no_scoring": true,
+  "no_gate_run": true,
+  "no_api": true,
+  "data_root_modified": false,
+  "existing_bar_evidence_modified": false,
+  "decoder": {
+    "package": "databento",
+    "version": "0.90.0",
+    "method": "local DBNStore decode of a byte-identical tmp copy of the parent ohlcv-1m DBN; definitions used only to map instrument_id -> raw_symbol",
+    "tmp_copy": "/workspace/tmp/afs0523-1m-decode",
+    "python_flag": "-B"
+  },
+  "hashes_verified_before_decode": {
+    "DOWNLOAD_RECORD.json": "4b1ad258b53f3074f9ffde70a22f91ad66bba5ba292f4822844752bb4711cecc",
+    "DOWNLOAD_RECORD.sha256_pin_matched": true,
+    "pulled_files_all_matched": true,
+    "reproduction_ohlcv_1m": "be71c84c49a3fc0c58c178fa9cbc40ccfc16a762606663872872e2fb57936ba4",
+    "reproduction_definition": "b7c7ae39f0c703df972884cecdc9771b2d5425122e3e1c2228ae4cd7a2dc1e38",
+    "tmp_copy_ohlcv_matches_pin": true,
+    "tmp_copy_definition_matches_pin": true
+  },
+  "paths": {
+    "data_root": "/workspace/afs-shared/data/databento_afs0523_2026-11-09",
+    "parent_ohlcv_1m": "/workspace/afs-shared/data/databento_afs0523_2026-11-09/reproduction/MNQ.FUT_ohlcv-1m_20240702_20260627.parent.dbn.zst",
+    "parent_definition": "/workspace/afs-shared/data/databento_afs0523_2026-11-09/reproduction/MNQ.FUT_definition_20240702_20260627.parent.dbn.zst",
+    "databento_5m_day": "/workspace/afs-shared/data/databento_afs0523_2026-11-09/reproduction/audit_5m/MNQ/MNQ_2026-03-06.jsonl",
+    "databento_5m_day_sha256": "4ad0397cc94e098e347180a6a6fe59cfb858f647f7917870ecfdb2917ccec053",
+    "databento_15m_day": "/workspace/afs-shared/data/databento_afs0523_2026-11-09/reproduction/research_15m/MNQ/MNQ_2026-03-06.jsonl",
+    "databento_15m_day_sha256": "4d6a88980ba6d2e2e412ab55100b227375fb099baaee58820db694cc5fd46464",
+    "databento_5m_tree_pin": "a08d909274fa5a06e9234b1c0975977d91a00b1f749c0560fd6d41859410c1e3",
+    "databento_15m_tree_pin": "461384bc2c638e849ebcdbd4c1fed09fde79fbc9c48dee7656a1151c259e3339",
+    "polygon_5m_used": "/workspace/transition_export_2026-10-01/repo/data/replay_polygon_5m/MNQ",
+    "polygon_5m_day": "/workspace/transition_export_2026-10-01/repo/data/replay_polygon_5m/MNQ/MNQ_2026-03-06.jsonl",
+    "polygon_5m_day_sha256": "02f4bafc3739213e635be3705750c5bafee03fd186484955a0be93208dfd85ce",
+    "polygon_5m_tree_sha256": "a290d0c45089ce49d7750adccce0b20f6a56725d740a51e2382649701b7e9fbd",
+    "official_polygon_5m_path": "data/replay_corpus_v1_5m_4hr_audit/MNQ",
+    "official_polygon_5m_pin": "7f09a7f82ee282e892f5db9b86be3130e6a5c1210d86828a56b9666bb06afd35",
+    "official_path_present_on_box": false,
+    "oct4_result": "docs/research-evidence/T-2026-10-04-prereg-322-corrected-eod-rerun-2026-10-04-01/result.json",
+    "oct4_result_sha256": "0d0d8d72c48b3c9dd1e7065b23a5422176a765ac7b1eb594e2833b72f5d5a9b1",
+    "adapter_checkout": "/workspace/tmp/afs-review-1269-7fdc9252",
+    "adapter_head": "7fdc9252f1d74903eab2e0a8ebfac9154e3d2aae"
+  },
+  "decision_bar": {
+    "date": "2026-03-06",
+    "timestamp_utc": "2026-03-06T15:00:00+00:00",
+    "timestamp_et": "2026-03-06 10:00 EST",
+    "direction": "LONG",
+    "trigger": 24742.5,
+    "tick_size": 0.25,
+    "ioc_cap_ticks": 32,
+    "ioc_cap_points": 8.0,
+    "ioc_long_max_fill": 24750.5,
+    "oct4": {
+      "timestamp": "2026-03-06T15:00:00+00:00",
+      "open": 24692.0,
+      "high": 24754.75,
+      "low": 24687.75,
+      "close": 24751.5,
+      "direction": "LONG",
+      "trigger": 24742.5,
+      "ioc_status": "NO_FILL",
+      "ioc_reason": "ENTRY_NOT_FILLED"
+    },
+    "polygon_5m": {
+      "timestamp": "2026-03-06T15:00:00+00:00",
+      "open": 24692.0,
+      "high": 24754.75,
+      "low": 24687.75,
+      "close": 24751.5,
+      "volume": 7616,
+      "instrument": "MNQ"
+    },
+    "databento_5m": {
+      "timestamp": "2026-03-06T15:00:00+00:00",
+      "open": 24691.5,
+      "high": 24777.75,
+      "low": 24687.75,
+      "close": 24764.5,
+      "volume": 51008
+    },
+    "databento_15m": {
+      "timestamp": "2026-03-06T15:00:00+00:00",
+      "open": 24691.5,
+      "high": 24796.25,
+      "low": 24664.25,
+      "close": 24789.25,
+      "volume": 136202
+    },
+    "deltas_databento_minus_oct4": {
+      "open": -0.5,
+      "high": 23.0,
+      "low": 0.0,
+      "close": 13.0,
+      "volume": 43392
+    },
+    "ohl_agree": false,
+    "close_agree": false,
+    "volume_agree": false,
+    "low_agree": true,
+    "polygon_export_matches_oct4_ohlc": true,
+    "ioc": {
+      "oct4_status": "NO_FILL",
+      "oct4_reason": "ENTRY_NOT_FILLED",
+      "oct4_close_minus_trigger_ticks": 36.0,
+      "databento_close_minus_trigger_ticks": 88.0,
+      "both_beyond_32_tick_cap": true,
+      "note": "Both closes are beyond the 32-tick IOC cap, so both vendors are NO_FILL. That matching outcome is not evidence the bars agree."
+    }
+  },
+  "adapter": {
+    "head": "7fdc9252f1d74903eab2e0a8ebfac9154e3d2aae",
+    "file": "research/databento_322_bar_adapter.py",
+    "front_contract": "sources.polygon_client.front_contract",
+    "roll_days": 8,
+    "front_on_2026_03_06": "MNQH6",
+    "third_friday_march_2026": "2026-03-20",
+    "roll_window_starts": "2026-03-12",
+    "first_day_front_is_MNQM6": "2026-03-12",
+    "date_basis": "civil ET date of the bar-start timestamp (15:00 UTC = 10:00 EST on 2026-03-06)",
+    "timestamp_convention": "UTC bar-start instants",
+    "aggregation": "open=first 1m open; high=max; low=min; close=last 1m close; volume=sum; never synthesize a missing minute",
+    "continuous_symbols_ignored": true,
+    "spreads_ignored": true,
+    "selected_instrument_id": 42004946,
+    "mnqh6_expiration_in_definitions": "2026-03-20T13:30:00+00:00",
+    "wrong_contract": false,
+    "shifted_timestamp": false,
+    "adapter_bug": false,
+    "code_refs": [
+      "research/databento_322_bar_adapter.py:4-8 front_contract + roll_days=8; ignore non-outrights",
+      "research/databento_322_bar_adapter.py:15-16 timestamps are UTC bar-start instants",
+      "research/databento_322_bar_adapter.py:361-388 _front_symbol_and_expiry",
+      "research/databento_322_bar_adapter.py:429-449 _instrument_for_front",
+      "research/databento_322_bar_adapter.py:452-474 _select_bars filters to that instrument_id using civil ET date",
+      "research/databento_322_bar_adapter.py:477-491 _aggregate first/max/min/last/sum",
+      "sources/polygon_client.py:46 DEFAULT_ROLL_DAYS = 8",
+      "sources/polygon_client.py:62-86 front_contract; rolls when on_date >= third_friday - 8"
+    ]
+  },
+  "mnqh6_1m_15_00_to_15_04": {
+    "instrument_id": 42004946,
+    "raw_symbol": "MNQH6",
+    "rows": [
+      {
+        "ts_utc": "2026-03-06T15:00:00+00:00",
+        "ts_et": "2026-03-06T10:00:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24691.5,
+        "high": 24773.75,
+        "low": 24687.75,
+        "close": 24738.25,
+        "volume": 18917
+      },
+      {
+        "ts_utc": "2026-03-06T15:01:00+00:00",
+        "ts_et": "2026-03-06T10:01:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24738.0,
+        "high": 24765.75,
+        "low": 24727.75,
+        "close": 24740.5,
+        "volume": 8735
+      },
+      {
+        "ts_utc": "2026-03-06T15:02:00+00:00",
+        "ts_et": "2026-03-06T10:02:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24740.5,
+        "high": 24777.75,
+        "low": 24740.0,
+        "close": 24768.5,
+        "volume": 9515
+      },
+      {
+        "ts_utc": "2026-03-06T15:03:00+00:00",
+        "ts_et": "2026-03-06T10:03:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24768.75,
+        "high": 24770.0,
+        "low": 24746.5,
+        "close": 24753.0,
+        "volume": 6798
+      },
+      {
+        "ts_utc": "2026-03-06T15:04:00+00:00",
+        "ts_et": "2026-03-06T10:04:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24753.25,
+        "high": 24766.75,
+        "low": 24736.0,
+        "close": 24764.5,
+        "volume": 7043
+      }
+    ],
+    "aggregate": {
+      "open": 24691.5,
+      "high": 24777.75,
+      "low": 24687.75,
+      "close": 24764.5,
+      "volume": 51008,
+      "n": 5,
+      "first_ts": "2026-03-06T15:00:00+00:00",
+      "last_ts": "2026-03-06T15:04:00+00:00"
+    },
+    "matches_committed_databento_5m_ohlcv": true,
+    "matches_polygon_5m_ohlc": false,
+    "matches_polygon_5m_ohlcv": false,
+    "last_1m_close_equals_5m_close": true,
+    "prefix_of_mnqh6_from_1500_matches_polygon": [],
+    "aligned_5m_rebuilds_in_14_30_to_15_30": {
+      "windows": [
+        "14:30",
+        "14:35",
+        "14:40",
+        "14:45",
+        "14:50",
+        "14:55",
+        "15:00",
+        "15:05",
+        "15:10",
+        "15:15",
+        "15:20",
+        "15:25",
+        "15:30"
+      ],
+      "all_match_committed_databento_5m_ohlcv": true
+    }
+  },
+  "window_search": {
+    "description": "For every instrument present in 14:25-15:35 UTC, every clock-contiguous window of 1, 2, 3, 4, or 5 minutes was aggregated (start-label) and compared to both target bars. Named end-label windows 14:56-15:00 and 15:01-15:05 were also checked.",
+    "matches": [
+      {
+        "symbol": "MNQH6",
+        "window_start": "2026-03-06T15:00:00+00:00",
+        "window_end": "2026-03-06T15:04:00+00:00",
+        "kind": "clock_contiguous_5m_start_label",
+        "flags": [
+          "DB_OHLCV"
+        ],
+        "agg": {
+          "open": 24691.5,
+          "high": 24777.75,
+          "low": 24687.75,
+          "close": 24764.5,
+          "volume": 51008
+        }
+      }
+    ],
+    "only_match": "MNQH6 15:00-15:04 start-label equals the committed Databento 5m OHLCV",
+    "no_window_reproduces_polygon": true,
+    "no_other_contract_reproduces_databento_5m": true,
+    "no_1m_bar_closes_at_24751.5": true,
+    "only_1m_close_at_24764.5": {
+      "raw_symbol": "MNQH6",
+      "ts_utc": "2026-03-06T15:04:00+00:00",
+      "close": 24764.5,
+      "note": "This is the last minute of the decision window, as required for a consistent 5m close."
+    },
+    "named_windows": {
+      "MNQM6": {
+        "14:55-14:59": {
+          "present": 5,
+          "missing": [],
+          "agg": {
+            "open": 24897.5,
+            "high": 24914.0,
+            "low": 24848.25,
+            "close": 24913.75,
+            "volume": 211,
+            "n": 5,
+            "first_ts": "2026-03-06T14:55:00+00:00",
+            "last_ts": "2026-03-06T14:59:00+00:00"
+          }
+        },
+        "15:00-15:04": {
+          "present": 5,
+          "missing": [],
+          "agg": {
+            "open": 24920.0,
+            "high": 24990.0,
+            "low": 24911.5,
+            "close": 24977.75,
+            "volume": 246,
+            "n": 5,
+            "first_ts": "2026-03-06T15:00:00+00:00",
+            "last_ts": "2026-03-06T15:04:00+00:00"
+          }
+        },
+        "15:05-15:09": {
+          "present": 5,
+          "missing": [],
+          "agg": {
+            "open": 24981.75,
+            "high": 24985.0,
+            "low": 24885.0,
+            "close": 24890.0,
+            "volume": 145,
+            "n": 5,
+            "first_ts": "2026-03-06T15:05:00+00:00",
+            "last_ts": "2026-03-06T15:09:00+00:00"
+          }
+        },
+        "14:56-15:00_end_label": {
+          "present": 5,
+          "missing": [],
+          "agg": {
+            "open": 24880.5,
+            "high": 24984.5,
+            "low": 24848.25,
+            "close": 24956.0,
+            "volume": 276,
+            "n": 5,
+            "first_ts": "2026-03-06T14:56:00+00:00",
+            "last_ts": "2026-03-06T15:00:00+00:00"
+          }
+        },
+        "15:01-15:05_end_label": {
+          "present": 5,
+          "missing": [],
+          "agg": {
+            "open": 24977.0,
+            "high": 24990.0,
+            "low": 24937.0,
+            "close": 24952.0,
+            "volume": 203,
+            "n": 5,
+            "first_ts": "2026-03-06T15:01:00+00:00",
+            "last_ts": "2026-03-06T15:05:00+00:00"
+          }
+        },
+        "14:54-14:58": {
+          "present": 5,
+          "missing": [],
+          "agg": {
+            "open": 24911.75,
+            "high": 24916.0,
+            "low": 24859.0,
+            "close": 24859.0,
+            "volume": 103,
+            "n": 5,
+            "first_ts": "2026-03-06T14:54:00+00:00",
+            "last_ts": "2026-03-06T14:58:00+00:00"
+          }
+        },
+        "14:59-15:03": {
+          "present": 5,
+          "missing": [],
+          "agg": {
+            "open": 24855.0,
+            "high": 24990.0,
+            "low": 24848.25,
+            "close": 24969.0,
+            "volume": 345,
+            "n": 5,
+            "first_ts": "2026-03-06T14:59:00+00:00",
+            "last_ts": "2026-03-06T15:03:00+00:00"
+          }
+        }
+      },
+      "MNQH6": {
+        "14:55-14:59": {
+          "present": 5,
+          "missing": [],
+          "agg": {
+            "open": 24686.0,
+            "high": 24704.25,
+            "low": 24631.75,
+            "close": 24691.0,
+            "volume": 32586,
+            "n": 5,
+            "first_ts": "2026-03-06T14:55:00+00:00",
+            "last_ts": "2026-03-06T14:59:00+00:00"
+          }
+        },
+        "15:00-15:04": {
+          "present": 5,
+          "missing": [],
+          "agg": {
+            "open": 24691.5,
+            "high": 24777.75,
+            "low": 24687.75,
+            "close": 24764.5,
+            "volume": 51008,
+            "n": 5,
+            "first_ts": "2026-03-06T15:00:00+00:00",
+            "last_ts": "2026-03-06T15:04:00+00:00"
+          }
+        },
+        "15:05-15:09": {
+          "present": 5,
+          "missing": [],
+          "agg": {
+            "open": 24765.0,
+            "high": 24774.0,
+            "low": 24670.25,
+            "close": 24676.0,
+            "volume": 40749,
+            "n": 5,
+            "first_ts": "2026-03-06T15:05:00+00:00",
+            "last_ts": "2026-03-06T15:09:00+00:00"
+          }
+        },
+        "14:56-15:00_end_label": {
+          "present": 5,
+          "missing": [],
+          "agg": {
+            "open": 24671.5,
+            "high": 24773.75,
+            "low": 24631.75,
+            "close": 24738.25,
+            "volume": 45464,
+            "n": 5,
+            "first_ts": "2026-03-06T14:56:00+00:00",
+            "last_ts": "2026-03-06T15:00:00+00:00"
+          }
+        },
+        "15:01-15:05_end_label": {
+          "present": 5,
+          "missing": [],
+          "agg": {
+            "open": 24738.0,
+            "high": 24777.75,
+            "low": 24718.5,
+            "close": 24740.75,
+            "volume": 42100,
+            "n": 5,
+            "first_ts": "2026-03-06T15:01:00+00:00",
+            "last_ts": "2026-03-06T15:05:00+00:00"
+          }
+        },
+        "14:54-14:58": {
+          "present": 5,
+          "missing": [],
+          "agg": {
+            "open": 24688.75,
+            "high": 24706.5,
+            "low": 24643.0,
+            "close": 24646.25,
+            "volume": 27048,
+            "n": 5,
+            "first_ts": "2026-03-06T14:54:00+00:00",
+            "last_ts": "2026-03-06T14:58:00+00:00"
+          }
+        },
+        "14:59-15:03": {
+          "present": 5,
+          "missing": [],
+          "agg": {
+            "open": 24646.5,
+            "high": 24777.75,
+            "low": 24631.75,
+            "close": 24753.0,
+            "volume": 54695,
+            "n": 5,
+            "first_ts": "2026-03-06T14:59:00+00:00",
+            "last_ts": "2026-03-06T15:03:00+00:00"
+          }
+        }
+      },
+      "MNQU6": {
+        "14:55-14:59": {
+          "present": 2,
+          "missing": [
+            "2026-03-06T14:57:00+00:00",
+            "2026-03-06T14:58:00+00:00",
+            "2026-03-06T14:59:00+00:00"
+          ],
+          "agg": {
+            "open": 25120.0,
+            "high": 25120.0,
+            "low": 25100.0,
+            "close": 25100.0,
+            "volume": 3,
+            "n": 2,
+            "first_ts": "2026-03-06T14:55:00+00:00",
+            "last_ts": "2026-03-06T14:56:00+00:00"
+          }
+        },
+        "15:00-15:04": {
+          "present": 2,
+          "missing": [
+            "2026-03-06T15:00:00+00:00",
+            "2026-03-06T15:01:00+00:00",
+            "2026-03-06T15:04:00+00:00"
+          ],
+          "agg": {
+            "open": 25203.75,
+            "high": 25203.75,
+            "low": 25200.5,
+            "close": 25200.5,
+            "volume": 2,
+            "n": 2,
+            "first_ts": "2026-03-06T15:02:00+00:00",
+            "last_ts": "2026-03-06T15:03:00+00:00"
+          }
+        },
+        "15:05-15:09": {
+          "present": 0,
+          "missing": [
+            "2026-03-06T15:05:00+00:00",
+            "2026-03-06T15:06:00+00:00",
+            "2026-03-06T15:07:00+00:00",
+            "2026-03-06T15:08:00+00:00",
+            "2026-03-06T15:09:00+00:00"
+          ],
+          "agg": null
+        },
+        "14:56-15:00_end_label": {
+          "present": 1,
+          "missing": [
+            "2026-03-06T14:57:00+00:00",
+            "2026-03-06T14:58:00+00:00",
+            "2026-03-06T14:59:00+00:00",
+            "2026-03-06T15:00:00+00:00"
+          ],
+          "agg": {
+            "open": 25100.0,
+            "high": 25100.0,
+            "low": 25100.0,
+            "close": 25100.0,
+            "volume": 1,
+            "n": 1,
+            "first_ts": "2026-03-06T14:56:00+00:00",
+            "last_ts": "2026-03-06T14:56:00+00:00"
+          }
+        },
+        "15:01-15:05_end_label": {
+          "present": 2,
+          "missing": [
+            "2026-03-06T15:01:00+00:00",
+            "2026-03-06T15:04:00+00:00",
+            "2026-03-06T15:05:00+00:00"
+          ],
+          "agg": {
+            "open": 25203.75,
+            "high": 25203.75,
+            "low": 25200.5,
+            "close": 25200.5,
+            "volume": 2,
+            "n": 2,
+            "first_ts": "2026-03-06T15:02:00+00:00",
+            "last_ts": "2026-03-06T15:03:00+00:00"
+          }
+        },
+        "14:54-14:58": {
+          "present": 2,
+          "missing": [
+            "2026-03-06T14:54:00+00:00",
+            "2026-03-06T14:57:00+00:00",
+            "2026-03-06T14:58:00+00:00"
+          ],
+          "agg": {
+            "open": 25120.0,
+            "high": 25120.0,
+            "low": 25100.0,
+            "close": 25100.0,
+            "volume": 3,
+            "n": 2,
+            "first_ts": "2026-03-06T14:55:00+00:00",
+            "last_ts": "2026-03-06T14:56:00+00:00"
+          }
+        },
+        "14:59-15:03": {
+          "present": 2,
+          "missing": [
+            "2026-03-06T14:59:00+00:00",
+            "2026-03-06T15:00:00+00:00",
+            "2026-03-06T15:01:00+00:00"
+          ],
+          "agg": {
+            "open": 25203.75,
+            "high": 25203.75,
+            "low": 25200.5,
+            "close": 25200.5,
+            "volume": 2,
+            "n": 2,
+            "first_ts": "2026-03-06T15:02:00+00:00",
+            "last_ts": "2026-03-06T15:03:00+00:00"
+          }
+        }
+      },
+      "MNQH6-MNQM6": {
+        "14:55-14:59": {
+          "present": 1,
+          "missing": [
+            "2026-03-06T14:56:00+00:00",
+            "2026-03-06T14:57:00+00:00",
+            "2026-03-06T14:58:00+00:00",
+            "2026-03-06T14:59:00+00:00"
+          ],
+          "agg": {
+            "open": 212.9,
+            "high": 212.9,
+            "low": 212.9,
+            "close": 212.9,
+            "volume": 1,
+            "n": 1,
+            "first_ts": "2026-03-06T14:55:00+00:00",
+            "last_ts": "2026-03-06T14:55:00+00:00"
+          }
+        },
+        "15:00-15:04": {
+          "present": 0,
+          "missing": [
+            "2026-03-06T15:00:00+00:00",
+            "2026-03-06T15:01:00+00:00",
+            "2026-03-06T15:02:00+00:00",
+            "2026-03-06T15:03:00+00:00",
+            "2026-03-06T15:04:00+00:00"
+          ],
+          "agg": null
+        },
+        "15:05-15:09": {
+          "present": 0,
+          "missing": [
+            "2026-03-06T15:05:00+00:00",
+            "2026-03-06T15:06:00+00:00",
+            "2026-03-06T15:07:00+00:00",
+            "2026-03-06T15:08:00+00:00",
+            "2026-03-06T15:09:00+00:00"
+          ],
+          "agg": null
+        },
+        "14:56-15:00_end_label": {
+          "present": 0,
+          "missing": [
+            "2026-03-06T14:56:00+00:00",
+            "2026-03-06T14:57:00+00:00",
+            "2026-03-06T14:58:00+00:00",
+            "2026-03-06T14:59:00+00:00",
+            "2026-03-06T15:00:00+00:00"
+          ],
+          "agg": null
+        },
+        "15:01-15:05_end_label": {
+          "present": 0,
+          "missing": [
+            "2026-03-06T15:01:00+00:00",
+            "2026-03-06T15:02:00+00:00",
+            "2026-03-06T15:03:00+00:00",
+            "2026-03-06T15:04:00+00:00",
+            "2026-03-06T15:05:00+00:00"
+          ],
+          "agg": null
+        },
+        "14:54-14:58": {
+          "present": 1,
+          "missing": [
+            "2026-03-06T14:54:00+00:00",
+            "2026-03-06T14:56:00+00:00",
+            "2026-03-06T14:57:00+00:00",
+            "2026-03-06T14:58:00+00:00"
+          ],
+          "agg": {
+            "open": 212.9,
+            "high": 212.9,
+            "low": 212.9,
+            "close": 212.9,
+            "volume": 1,
+            "n": 1,
+            "first_ts": "2026-03-06T14:55:00+00:00",
+            "last_ts": "2026-03-06T14:55:00+00:00"
+          }
+        },
+        "14:59-15:03": {
+          "present": 0,
+          "missing": [
+            "2026-03-06T14:59:00+00:00",
+            "2026-03-06T15:00:00+00:00",
+            "2026-03-06T15:01:00+00:00",
+            "2026-03-06T15:02:00+00:00",
+            "2026-03-06T15:03:00+00:00"
+          ],
+          "agg": null
+        }
+      }
+    },
+    "other_contracts_at_15_00_15_04": {
+      "MNQM6": {
+        "instrument_id": 42004936,
+        "aggregate": {
+          "open": 24920.0,
+          "high": 24990.0,
+          "low": 24911.5,
+          "close": 24977.75,
+          "volume": 246,
+          "n": 5,
+          "first_ts": "2026-03-06T15:00:00+00:00",
+          "last_ts": "2026-03-06T15:04:00+00:00"
+        },
+        "note": "About +220 points above MNQH6 (calendar back month); volume 246 vs MNQH6 51008."
+      },
+      "MNQU6": {
+        "instrument_id": 42004800,
+        "aggregate": {
+          "open": 25203.75,
+          "high": 25203.75,
+          "low": 25200.5,
+          "close": 25200.5,
+          "volume": 2,
+          "n": 2,
+          "first_ts": "2026-03-06T15:02:00+00:00",
+          "last_ts": "2026-03-06T15:03:00+00:00"
+        },
+        "note": "Sparse back-month prints around 25200; only two of five minutes present (15:02 and 15:03), total volume 2."
+      },
+      "MNQH6-MNQM6": {
+        "instrument_id": 42011456,
+        "instrument_class": "S",
+        "aggregate": null,
+        "note": "Calendar spread; no prints in 15:00-15:04. Two prints in the wider window at 212.9 and 214.5."
+      }
+    }
+  },
+  "polygon_context_14_30_to_15_30": {
+    "source": "/workspace/transition_export_2026-10-01/repo/data/replay_polygon_5m/MNQ/MNQ_2026-03-06.jsonl",
+    "bars_present": [
+      {
+        "timestamp": "2026-03-06T14:30:00+00:00",
+        "open": 24685.25,
+        "high": 24732.25,
+        "low": 24652.25,
+        "close": 24705.5,
+        "volume": 55672
+      },
+      {
+        "timestamp": "2026-03-06T14:35:00+00:00",
+        "open": 24706.0,
+        "high": 24716.75,
+        "low": 24611.75,
+        "close": 24680.0,
+        "volume": 59179
+      },
+      {
+        "timestamp": "2026-03-06T14:40:00+00:00",
+        "open": 24680.25,
+        "high": 24730.5,
+        "low": 24669.0,
+        "close": 24680.5,
+        "volume": 47500
+      },
+      {
+        "timestamp": "2026-03-06T14:45:00+00:00",
+        "open": 24681.0,
+        "high": 24716.75,
+        "low": 24635.5,
+        "close": 24675.25,
+        "volume": 41181
+      },
+      {
+        "timestamp": "2026-03-06T14:50:00+00:00",
+        "open": 24675.0,
+        "high": 24742.5,
+        "low": 24665.5,
+        "close": 24686.0,
+        "volume": 38554
+      },
+      {
+        "timestamp": "2026-03-06T14:55:00+00:00",
+        "open": 24686.0,
+        "high": 24704.25,
+        "low": 24631.75,
+        "close": 24691.5,
+        "volume": 32588
+      },
+      {
+        "timestamp": "2026-03-06T15:00:00+00:00",
+        "open": 24692.0,
+        "high": 24754.75,
+        "low": 24687.75,
+        "close": 24751.5,
+        "volume": 7616
+      }
+    ],
+    "next_polygon_bar_after_15_00": {
+      "timestamp": "2026-03-06T15:55:00+00:00",
+      "open": 24873.0,
+      "high": 24884.5,
+      "low": 24851.5,
+      "close": 24858.5,
+      "volume": 16957
+    },
+    "missing_5m_bars_15_05_through_15_50": [
+      "2026-03-06T15:05:00+00:00",
+      "2026-03-06T15:10:00+00:00",
+      "2026-03-06T15:15:00+00:00",
+      "2026-03-06T15:20:00+00:00",
+      "2026-03-06T15:25:00+00:00",
+      "2026-03-06T15:30:00+00:00",
+      "2026-03-06T15:35:00+00:00",
+      "2026-03-06T15:40:00+00:00",
+      "2026-03-06T15:45:00+00:00",
+      "2026-03-06T15:50:00+00:00"
+    ],
+    "polygon_vs_databento_in_window": {
+      "14:30_through_14:50": "OHLCV identical on all five bars",
+      "14:55": "OHL identical; Polygon close 24691.5 vs Databento 24691.0 (+0.50); volume 32588 vs 32586 (+2). Same last-print pattern as the 2024-09-06 and 2026-06-11 IOC mismatch days.",
+      "15:00": "material disagreement: open +0.50 (Polygon 24692.0 vs 24691.5), high -23.00 (24754.75 vs 24777.75), low identical 24687.75, close -13.00 (24751.5 vs 24764.5), volume 7616 vs 51008",
+      "15:05_through_15:50": "present only in Databento (10 bars)"
+    },
+    "first_mnqh6_1m_vs_polygon_15_00": {
+      "mnqh6_15_00_1m": {
+        "open": 24691.5,
+        "high": 24773.75,
+        "low": 24687.75,
+        "close": 24738.25,
+        "volume": 18917
+      },
+      "polygon_15_00_5m": {
+        "timestamp": "2026-03-06T15:00:00+00:00",
+        "open": 24692.0,
+        "high": 24754.75,
+        "low": 24687.75,
+        "close": 24751.5,
+        "volume": 7616,
+        "instrument": "MNQ"
+      },
+      "note": "Polygon volume 7616 is less than the first MNQH6 1m volume 18917. Polygon high 24754.75 is below the first 1m high 24773.75. Polygon close 24751.5 is not the first 1m close 24738.25. No 1-5 minute prefix of MNQH6 from 15:00 aggregates to the Polygon OHLC. This is not a complete-minute truncation of the Databento series."
+    },
+    "resume_bar_15_55_note": "The next shared timestamp after the hole also disagrees materially: Polygon 15:55 O 24873.0 H 24884.5 L 24851.5 C 24858.5 V 16957 vs Databento O 24790.0 L 24790.0 V 40852 (open +83.0, low +61.5, volume -23895). That bar is outside the requested 14:30-15:30 window and was not used for classification; it is recorded as context that the hole is bookended by two disagreeing Polygon bars.",
+    "day_wide_shared_timestamp_disagreements": 32,
+    "day_wide_note": "Across the 254 timestamps present in both files, 32 disagree. Most are last-print style close deltas of \u00b10.25 or \u00b10.50 (and a few neighboring volume hand-offs). The only material OHL disagreements on 2026-03-06 are 15:00 and 15:55.",
+    "no_polygon_bar_that_day_closes_at_24764.5": true
+  },
+  "instruments_in_parent_file_14_30_to_15_30": {
+    "MNQH6": {
+      "instrument_id": 42004946,
+      "n_report": 61,
+      "n_wide": 71,
+      "meta": {
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "maturity_year": 2026,
+        "maturity_month": 3,
+        "expiration": "2026-03-20T13:30:00+00:00",
+        "asset": "MNQ"
+      }
+    },
+    "MNQM6": {
+      "instrument_id": 42004936,
+      "n_report": 61,
+      "n_wide": 71,
+      "meta": {
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "maturity_year": 2026,
+        "maturity_month": 6,
+        "expiration": "2026-06-18T13:30:00+00:00",
+        "asset": "MNQ"
+      }
+    },
+    "MNQU6": {
+      "instrument_id": 42004800,
+      "n_report": 8,
+      "n_wide": 10,
+      "meta": {
+        "instrument_id": 42004800,
+        "raw_symbol": "MNQU6",
+        "instrument_class": "F",
+        "maturity_year": 2026,
+        "maturity_month": 9,
+        "expiration": "2026-09-18T13:30:00+00:00",
+        "asset": "MNQ"
+      }
+    },
+    "MNQH6-MNQM6": {
+      "instrument_id": 42011456,
+      "n_report": 2,
+      "n_wide": 2,
+      "meta": {
+        "instrument_id": 42011456,
+        "raw_symbol": "MNQH6-MNQM6",
+        "instrument_class": "S",
+        "maturity_year": 2026,
+        "maturity_month": 3,
+        "expiration": "2026-03-20T13:30:00+00:00",
+        "asset": "MNQ"
+      }
+    }
+  },
+  "one_minute_rows_14_30_to_15_30": {
+    "MNQH6": [
+      {
+        "ts_utc": "2026-03-06T14:30:00+00:00",
+        "ts_et": "2026-03-06T09:30:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24685.25,
+        "high": 24720.5,
+        "low": 24670.0,
+        "close": 24682.25,
+        "volume": 14462
+      },
+      {
+        "ts_utc": "2026-03-06T14:31:00+00:00",
+        "ts_et": "2026-03-06T09:31:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24681.25,
+        "high": 24702.25,
+        "low": 24652.25,
+        "close": 24677.5,
+        "volume": 11609
+      },
+      {
+        "ts_utc": "2026-03-06T14:32:00+00:00",
+        "ts_et": "2026-03-06T09:32:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24677.75,
+        "high": 24710.0,
+        "low": 24663.0,
+        "close": 24705.25,
+        "volume": 9103
+      },
+      {
+        "ts_utc": "2026-03-06T14:33:00+00:00",
+        "ts_et": "2026-03-06T09:33:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24704.25,
+        "high": 24732.25,
+        "low": 24688.0,
+        "close": 24697.5,
+        "volume": 12957
+      },
+      {
+        "ts_utc": "2026-03-06T14:34:00+00:00",
+        "ts_et": "2026-03-06T09:34:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24697.25,
+        "high": 24708.0,
+        "low": 24681.75,
+        "close": 24705.5,
+        "volume": 7541
+      },
+      {
+        "ts_utc": "2026-03-06T14:35:00+00:00",
+        "ts_et": "2026-03-06T09:35:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24706.0,
+        "high": 24716.75,
+        "low": 24638.75,
+        "close": 24650.5,
+        "volume": 14606
+      },
+      {
+        "ts_utc": "2026-03-06T14:36:00+00:00",
+        "ts_et": "2026-03-06T09:36:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24651.25,
+        "high": 24654.25,
+        "low": 24611.75,
+        "close": 24624.0,
+        "volume": 13592
+      },
+      {
+        "ts_utc": "2026-03-06T14:37:00+00:00",
+        "ts_et": "2026-03-06T09:37:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24624.5,
+        "high": 24645.0,
+        "low": 24616.25,
+        "close": 24633.0,
+        "volume": 9021
+      },
+      {
+        "ts_utc": "2026-03-06T14:38:00+00:00",
+        "ts_et": "2026-03-06T09:38:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24632.25,
+        "high": 24699.75,
+        "low": 24627.0,
+        "close": 24687.5,
+        "volume": 12132
+      },
+      {
+        "ts_utc": "2026-03-06T14:39:00+00:00",
+        "ts_et": "2026-03-06T09:39:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24687.5,
+        "high": 24705.0,
+        "low": 24674.25,
+        "close": 24680.0,
+        "volume": 9828
+      },
+      {
+        "ts_utc": "2026-03-06T14:40:00+00:00",
+        "ts_et": "2026-03-06T09:40:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24680.25,
+        "high": 24713.0,
+        "low": 24671.25,
+        "close": 24673.75,
+        "volume": 10285
+      },
+      {
+        "ts_utc": "2026-03-06T14:41:00+00:00",
+        "ts_et": "2026-03-06T09:41:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24672.75,
+        "high": 24712.25,
+        "low": 24669.0,
+        "close": 24705.0,
+        "volume": 8506
+      },
+      {
+        "ts_utc": "2026-03-06T14:42:00+00:00",
+        "ts_et": "2026-03-06T09:42:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24704.5,
+        "high": 24717.0,
+        "low": 24677.0,
+        "close": 24696.75,
+        "volume": 8011
+      },
+      {
+        "ts_utc": "2026-03-06T14:43:00+00:00",
+        "ts_et": "2026-03-06T09:43:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24695.75,
+        "high": 24730.5,
+        "low": 24679.75,
+        "close": 24685.5,
+        "volume": 12723
+      },
+      {
+        "ts_utc": "2026-03-06T14:44:00+00:00",
+        "ts_et": "2026-03-06T09:44:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24686.25,
+        "high": 24721.5,
+        "low": 24673.25,
+        "close": 24680.5,
+        "volume": 7975
+      },
+      {
+        "ts_utc": "2026-03-06T14:45:00+00:00",
+        "ts_et": "2026-03-06T09:45:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24681.0,
+        "high": 24716.75,
+        "low": 24661.25,
+        "close": 24688.5,
+        "volume": 10343
+      },
+      {
+        "ts_utc": "2026-03-06T14:46:00+00:00",
+        "ts_et": "2026-03-06T09:46:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24688.0,
+        "high": 24701.25,
+        "low": 24661.5,
+        "close": 24663.75,
+        "volume": 6782
+      },
+      {
+        "ts_utc": "2026-03-06T14:47:00+00:00",
+        "ts_et": "2026-03-06T09:47:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24663.5,
+        "high": 24676.75,
+        "low": 24635.5,
+        "close": 24664.75,
+        "volume": 10986
+      },
+      {
+        "ts_utc": "2026-03-06T14:48:00+00:00",
+        "ts_et": "2026-03-06T09:48:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24663.5,
+        "high": 24689.0,
+        "low": 24651.5,
+        "close": 24681.25,
+        "volume": 7020
+      },
+      {
+        "ts_utc": "2026-03-06T14:49:00+00:00",
+        "ts_et": "2026-03-06T09:49:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24681.0,
+        "high": 24694.25,
+        "low": 24660.5,
+        "close": 24675.25,
+        "volume": 6050
+      },
+      {
+        "ts_utc": "2026-03-06T14:50:00+00:00",
+        "ts_et": "2026-03-06T09:50:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24675.0,
+        "high": 24700.0,
+        "low": 24665.5,
+        "close": 24691.5,
+        "volume": 6794
+      },
+      {
+        "ts_utc": "2026-03-06T14:51:00+00:00",
+        "ts_et": "2026-03-06T09:51:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24693.5,
+        "high": 24742.5,
+        "low": 24693.0,
+        "close": 24723.75,
+        "volume": 11569
+      },
+      {
+        "ts_utc": "2026-03-06T14:52:00+00:00",
+        "ts_et": "2026-03-06T09:52:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24723.5,
+        "high": 24724.25,
+        "low": 24685.25,
+        "close": 24698.25,
+        "volume": 8383
+      },
+      {
+        "ts_utc": "2026-03-06T14:53:00+00:00",
+        "ts_et": "2026-03-06T09:53:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24698.5,
+        "high": 24713.5,
+        "low": 24681.75,
+        "close": 24689.0,
+        "volume": 6616
+      },
+      {
+        "ts_utc": "2026-03-06T14:54:00+00:00",
+        "ts_et": "2026-03-06T09:54:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24688.75,
+        "high": 24706.5,
+        "low": 24684.25,
+        "close": 24686.0,
+        "volume": 5192
+      },
+      {
+        "ts_utc": "2026-03-06T14:55:00+00:00",
+        "ts_et": "2026-03-06T09:55:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24686.0,
+        "high": 24693.5,
+        "low": 24669.0,
+        "close": 24672.25,
+        "volume": 6039
+      },
+      {
+        "ts_utc": "2026-03-06T14:56:00+00:00",
+        "ts_et": "2026-03-06T09:56:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24671.5,
+        "high": 24673.5,
+        "low": 24653.25,
+        "close": 24672.25,
+        "volume": 6027
+      },
+      {
+        "ts_utc": "2026-03-06T14:57:00+00:00",
+        "ts_et": "2026-03-06T09:57:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24672.5,
+        "high": 24679.75,
+        "low": 24656.5,
+        "close": 24661.25,
+        "volume": 4376
+      },
+      {
+        "ts_utc": "2026-03-06T14:58:00+00:00",
+        "ts_et": "2026-03-06T09:58:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24661.25,
+        "high": 24665.25,
+        "low": 24643.0,
+        "close": 24646.25,
+        "volume": 5414
+      },
+      {
+        "ts_utc": "2026-03-06T14:59:00+00:00",
+        "ts_et": "2026-03-06T09:59:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24646.5,
+        "high": 24704.25,
+        "low": 24631.75,
+        "close": 24691.0,
+        "volume": 10730
+      },
+      {
+        "ts_utc": "2026-03-06T15:00:00+00:00",
+        "ts_et": "2026-03-06T10:00:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24691.5,
+        "high": 24773.75,
+        "low": 24687.75,
+        "close": 24738.25,
+        "volume": 18917
+      },
+      {
+        "ts_utc": "2026-03-06T15:01:00+00:00",
+        "ts_et": "2026-03-06T10:01:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24738.0,
+        "high": 24765.75,
+        "low": 24727.75,
+        "close": 24740.5,
+        "volume": 8735
+      },
+      {
+        "ts_utc": "2026-03-06T15:02:00+00:00",
+        "ts_et": "2026-03-06T10:02:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24740.5,
+        "high": 24777.75,
+        "low": 24740.0,
+        "close": 24768.5,
+        "volume": 9515
+      },
+      {
+        "ts_utc": "2026-03-06T15:03:00+00:00",
+        "ts_et": "2026-03-06T10:03:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24768.75,
+        "high": 24770.0,
+        "low": 24746.5,
+        "close": 24753.0,
+        "volume": 6798
+      },
+      {
+        "ts_utc": "2026-03-06T15:04:00+00:00",
+        "ts_et": "2026-03-06T10:04:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24753.25,
+        "high": 24766.75,
+        "low": 24736.0,
+        "close": 24764.5,
+        "volume": 7043
+      },
+      {
+        "ts_utc": "2026-03-06T15:05:00+00:00",
+        "ts_et": "2026-03-06T10:05:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24765.0,
+        "high": 24774.0,
+        "low": 24718.5,
+        "close": 24740.75,
+        "volume": 10009
+      },
+      {
+        "ts_utc": "2026-03-06T15:06:00+00:00",
+        "ts_et": "2026-03-06T10:06:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24741.25,
+        "high": 24768.25,
+        "low": 24728.5,
+        "close": 24760.5,
+        "volume": 7058
+      },
+      {
+        "ts_utc": "2026-03-06T15:07:00+00:00",
+        "ts_et": "2026-03-06T10:07:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24760.25,
+        "high": 24766.5,
+        "low": 24731.0,
+        "close": 24733.0,
+        "volume": 6086
+      },
+      {
+        "ts_utc": "2026-03-06T15:08:00+00:00",
+        "ts_et": "2026-03-06T10:08:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24734.5,
+        "high": 24737.5,
+        "low": 24708.75,
+        "close": 24718.75,
+        "volume": 6978
+      },
+      {
+        "ts_utc": "2026-03-06T15:09:00+00:00",
+        "ts_et": "2026-03-06T10:09:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24719.0,
+        "high": 24720.0,
+        "low": 24670.25,
+        "close": 24676.0,
+        "volume": 10618
+      },
+      {
+        "ts_utc": "2026-03-06T15:10:00+00:00",
+        "ts_et": "2026-03-06T10:10:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24676.0,
+        "high": 24691.5,
+        "low": 24664.25,
+        "close": 24671.5,
+        "volume": 8105
+      },
+      {
+        "ts_utc": "2026-03-06T15:11:00+00:00",
+        "ts_et": "2026-03-06T10:11:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24671.5,
+        "high": 24727.0,
+        "low": 24671.5,
+        "close": 24726.75,
+        "volume": 9653
+      },
+      {
+        "ts_utc": "2026-03-06T15:12:00+00:00",
+        "ts_et": "2026-03-06T10:12:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24726.0,
+        "high": 24756.0,
+        "low": 24721.5,
+        "close": 24750.5,
+        "volume": 9070
+      },
+      {
+        "ts_utc": "2026-03-06T15:13:00+00:00",
+        "ts_et": "2026-03-06T10:13:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24750.0,
+        "high": 24792.0,
+        "low": 24748.25,
+        "close": 24789.0,
+        "volume": 9353
+      },
+      {
+        "ts_utc": "2026-03-06T15:14:00+00:00",
+        "ts_et": "2026-03-06T10:14:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24788.25,
+        "high": 24796.25,
+        "low": 24761.0,
+        "close": 24789.25,
+        "volume": 8264
+      },
+      {
+        "ts_utc": "2026-03-06T15:15:00+00:00",
+        "ts_et": "2026-03-06T10:15:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24789.25,
+        "high": 24798.0,
+        "low": 24773.0,
+        "close": 24790.25,
+        "volume": 7933
+      },
+      {
+        "ts_utc": "2026-03-06T15:16:00+00:00",
+        "ts_et": "2026-03-06T10:16:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24789.5,
+        "high": 24800.0,
+        "low": 24763.5,
+        "close": 24766.25,
+        "volume": 7153
+      },
+      {
+        "ts_utc": "2026-03-06T15:17:00+00:00",
+        "ts_et": "2026-03-06T10:17:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24767.0,
+        "high": 24792.5,
+        "low": 24760.0,
+        "close": 24784.5,
+        "volume": 6824
+      },
+      {
+        "ts_utc": "2026-03-06T15:18:00+00:00",
+        "ts_et": "2026-03-06T10:18:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24784.5,
+        "high": 24793.0,
+        "low": 24776.5,
+        "close": 24781.5,
+        "volume": 4287
+      },
+      {
+        "ts_utc": "2026-03-06T15:19:00+00:00",
+        "ts_et": "2026-03-06T10:19:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24782.5,
+        "high": 24789.0,
+        "low": 24776.25,
+        "close": 24783.0,
+        "volume": 3233
+      },
+      {
+        "ts_utc": "2026-03-06T15:20:00+00:00",
+        "ts_et": "2026-03-06T10:20:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24782.25,
+        "high": 24797.0,
+        "low": 24775.5,
+        "close": 24780.25,
+        "volume": 5188
+      },
+      {
+        "ts_utc": "2026-03-06T15:21:00+00:00",
+        "ts_et": "2026-03-06T10:21:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24779.25,
+        "high": 24799.5,
+        "low": 24773.25,
+        "close": 24792.75,
+        "volume": 5386
+      },
+      {
+        "ts_utc": "2026-03-06T15:22:00+00:00",
+        "ts_et": "2026-03-06T10:22:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24793.0,
+        "high": 24798.75,
+        "low": 24780.5,
+        "close": 24797.25,
+        "volume": 4527
+      },
+      {
+        "ts_utc": "2026-03-06T15:23:00+00:00",
+        "ts_et": "2026-03-06T10:23:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24797.0,
+        "high": 24822.25,
+        "low": 24794.25,
+        "close": 24802.75,
+        "volume": 9835
+      },
+      {
+        "ts_utc": "2026-03-06T15:24:00+00:00",
+        "ts_et": "2026-03-06T10:24:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24802.0,
+        "high": 24822.25,
+        "low": 24802.0,
+        "close": 24811.25,
+        "volume": 5826
+      },
+      {
+        "ts_utc": "2026-03-06T15:25:00+00:00",
+        "ts_et": "2026-03-06T10:25:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24811.75,
+        "high": 24820.25,
+        "low": 24796.5,
+        "close": 24813.0,
+        "volume": 6857
+      },
+      {
+        "ts_utc": "2026-03-06T15:26:00+00:00",
+        "ts_et": "2026-03-06T10:26:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24812.25,
+        "high": 24828.75,
+        "low": 24805.75,
+        "close": 24807.0,
+        "volume": 5991
+      },
+      {
+        "ts_utc": "2026-03-06T15:27:00+00:00",
+        "ts_et": "2026-03-06T10:27:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24807.75,
+        "high": 24823.75,
+        "low": 24797.0,
+        "close": 24807.5,
+        "volume": 5742
+      },
+      {
+        "ts_utc": "2026-03-06T15:28:00+00:00",
+        "ts_et": "2026-03-06T10:28:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24808.25,
+        "high": 24823.0,
+        "low": 24798.0,
+        "close": 24805.5,
+        "volume": 5354
+      },
+      {
+        "ts_utc": "2026-03-06T15:29:00+00:00",
+        "ts_et": "2026-03-06T10:29:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24806.5,
+        "high": 24825.75,
+        "low": 24791.5,
+        "close": 24822.25,
+        "volume": 6798
+      },
+      {
+        "ts_utc": "2026-03-06T15:30:00+00:00",
+        "ts_et": "2026-03-06T10:30:00-05:00",
+        "instrument_id": 42004946,
+        "raw_symbol": "MNQH6",
+        "instrument_class": "F",
+        "open": 24821.75,
+        "high": 24844.25,
+        "low": 24820.75,
+        "close": 24829.25,
+        "volume": 10007
+      }
+    ],
+    "MNQM6": [
+      {
+        "ts_utc": "2026-03-06T14:30:00+00:00",
+        "ts_et": "2026-03-06T09:30:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24900.0,
+        "high": 24930.5,
+        "low": 24889.5,
+        "close": 24889.5,
+        "volume": 77
+      },
+      {
+        "ts_utc": "2026-03-06T14:31:00+00:00",
+        "ts_et": "2026-03-06T09:31:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24887.25,
+        "high": 24905.0,
+        "low": 24868.0,
+        "close": 24885.0,
+        "volume": 48
+      },
+      {
+        "ts_utc": "2026-03-06T14:32:00+00:00",
+        "ts_et": "2026-03-06T09:32:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24884.5,
+        "high": 24922.25,
+        "low": 24875.5,
+        "close": 24917.75,
+        "volume": 148
+      },
+      {
+        "ts_utc": "2026-03-06T14:33:00+00:00",
+        "ts_et": "2026-03-06T09:33:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24914.0,
+        "high": 24945.25,
+        "low": 24906.0,
+        "close": 24912.0,
+        "volume": 162
+      },
+      {
+        "ts_utc": "2026-03-06T14:34:00+00:00",
+        "ts_et": "2026-03-06T09:34:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24910.0,
+        "high": 24920.0,
+        "low": 24897.75,
+        "close": 24913.5,
+        "volume": 26
+      },
+      {
+        "ts_utc": "2026-03-06T14:35:00+00:00",
+        "ts_et": "2026-03-06T09:35:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24922.0,
+        "high": 24925.75,
+        "low": 24852.75,
+        "close": 24859.5,
+        "volume": 58
+      },
+      {
+        "ts_utc": "2026-03-06T14:36:00+00:00",
+        "ts_et": "2026-03-06T09:36:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24865.5,
+        "high": 24865.5,
+        "low": 24826.0,
+        "close": 24834.75,
+        "volume": 136
+      },
+      {
+        "ts_utc": "2026-03-06T14:37:00+00:00",
+        "ts_et": "2026-03-06T09:37:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24835.0,
+        "high": 24847.75,
+        "low": 24829.5,
+        "close": 24837.0,
+        "volume": 22
+      },
+      {
+        "ts_utc": "2026-03-06T14:38:00+00:00",
+        "ts_et": "2026-03-06T09:38:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24847.75,
+        "high": 24906.0,
+        "low": 24840.25,
+        "close": 24903.25,
+        "volume": 57
+      },
+      {
+        "ts_utc": "2026-03-06T14:39:00+00:00",
+        "ts_et": "2026-03-06T09:39:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24897.25,
+        "high": 24915.0,
+        "low": 24885.5,
+        "close": 24893.0,
+        "volume": 59
+      },
+      {
+        "ts_utc": "2026-03-06T14:40:00+00:00",
+        "ts_et": "2026-03-06T09:40:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24900.0,
+        "high": 24930.0,
+        "low": 24892.0,
+        "close": 24892.0,
+        "volume": 29
+      },
+      {
+        "ts_utc": "2026-03-06T14:41:00+00:00",
+        "ts_et": "2026-03-06T09:41:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24882.75,
+        "high": 24924.75,
+        "low": 24882.75,
+        "close": 24924.75,
+        "volume": 21
+      },
+      {
+        "ts_utc": "2026-03-06T14:42:00+00:00",
+        "ts_et": "2026-03-06T09:42:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24922.75,
+        "high": 24922.75,
+        "low": 24893.25,
+        "close": 24905.75,
+        "volume": 15
+      },
+      {
+        "ts_utc": "2026-03-06T14:43:00+00:00",
+        "ts_et": "2026-03-06T09:43:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24908.75,
+        "high": 24943.25,
+        "low": 24897.75,
+        "close": 24904.0,
+        "volume": 57
+      },
+      {
+        "ts_utc": "2026-03-06T14:44:00+00:00",
+        "ts_et": "2026-03-06T09:44:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24908.0,
+        "high": 24931.5,
+        "low": 24884.25,
+        "close": 24884.25,
+        "volume": 11
+      },
+      {
+        "ts_utc": "2026-03-06T14:45:00+00:00",
+        "ts_et": "2026-03-06T09:45:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24887.0,
+        "high": 24925.25,
+        "low": 24877.25,
+        "close": 24901.25,
+        "volume": 41
+      },
+      {
+        "ts_utc": "2026-03-06T14:46:00+00:00",
+        "ts_et": "2026-03-06T09:46:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24904.75,
+        "high": 24906.75,
+        "low": 24879.25,
+        "close": 24885.25,
+        "volume": 25
+      },
+      {
+        "ts_utc": "2026-03-06T14:47:00+00:00",
+        "ts_et": "2026-03-06T09:47:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24875.0,
+        "high": 24878.25,
+        "low": 24850.0,
+        "close": 24871.5,
+        "volume": 47
+      },
+      {
+        "ts_utc": "2026-03-06T14:48:00+00:00",
+        "ts_et": "2026-03-06T09:48:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24881.75,
+        "high": 24900.0,
+        "low": 24870.0,
+        "close": 24893.75,
+        "volume": 30
+      },
+      {
+        "ts_utc": "2026-03-06T14:49:00+00:00",
+        "ts_et": "2026-03-06T09:49:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24894.75,
+        "high": 24905.0,
+        "low": 24877.75,
+        "close": 24888.0,
+        "volume": 16
+      },
+      {
+        "ts_utc": "2026-03-06T14:50:00+00:00",
+        "ts_et": "2026-03-06T09:50:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24906.25,
+        "high": 24912.25,
+        "low": 24880.0,
+        "close": 24907.0,
+        "volume": 20
+      },
+      {
+        "ts_utc": "2026-03-06T14:51:00+00:00",
+        "ts_et": "2026-03-06T09:51:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24917.0,
+        "high": 24953.75,
+        "low": 24915.75,
+        "close": 24936.5,
+        "volume": 96
+      },
+      {
+        "ts_utc": "2026-03-06T14:52:00+00:00",
+        "ts_et": "2026-03-06T09:52:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24935.0,
+        "high": 24935.0,
+        "low": 24900.0,
+        "close": 24909.25,
+        "volume": 26
+      },
+      {
+        "ts_utc": "2026-03-06T14:53:00+00:00",
+        "ts_et": "2026-03-06T09:53:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24910.0,
+        "high": 24920.25,
+        "low": 24895.0,
+        "close": 24904.25,
+        "volume": 8
+      },
+      {
+        "ts_utc": "2026-03-06T14:54:00+00:00",
+        "ts_et": "2026-03-06T09:54:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24911.75,
+        "high": 24916.0,
+        "low": 24901.0,
+        "close": 24903.75,
+        "volume": 10
+      },
+      {
+        "ts_utc": "2026-03-06T14:55:00+00:00",
+        "ts_et": "2026-03-06T09:55:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24897.5,
+        "high": 24899.5,
+        "low": 24885.0,
+        "close": 24885.0,
+        "volume": 18
+      },
+      {
+        "ts_utc": "2026-03-06T14:56:00+00:00",
+        "ts_et": "2026-03-06T09:56:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24880.5,
+        "high": 24880.5,
+        "low": 24868.5,
+        "close": 24870.25,
+        "volume": 30
+      },
+      {
+        "ts_utc": "2026-03-06T14:57:00+00:00",
+        "ts_et": "2026-03-06T09:57:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24888.25,
+        "high": 24893.25,
+        "low": 24870.25,
+        "close": 24873.0,
+        "volume": 22
+      },
+      {
+        "ts_utc": "2026-03-06T14:58:00+00:00",
+        "ts_et": "2026-03-06T09:58:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24875.25,
+        "high": 24875.25,
+        "low": 24859.0,
+        "close": 24859.0,
+        "volume": 23
+      },
+      {
+        "ts_utc": "2026-03-06T14:59:00+00:00",
+        "ts_et": "2026-03-06T09:59:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24855.0,
+        "high": 24914.0,
+        "low": 24848.25,
+        "close": 24913.75,
+        "volume": 118
+      },
+      {
+        "ts_utc": "2026-03-06T15:00:00+00:00",
+        "ts_et": "2026-03-06T10:00:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24920.0,
+        "high": 24984.5,
+        "low": 24911.5,
+        "close": 24956.0,
+        "volume": 83
+      },
+      {
+        "ts_utc": "2026-03-06T15:01:00+00:00",
+        "ts_et": "2026-03-06T10:01:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24977.0,
+        "high": 24984.5,
+        "low": 24945.5,
+        "close": 24955.75,
+        "volume": 43
+      },
+      {
+        "ts_utc": "2026-03-06T15:02:00+00:00",
+        "ts_et": "2026-03-06T10:02:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24956.0,
+        "high": 24990.0,
+        "low": 24956.0,
+        "close": 24983.75,
+        "volume": 63
+      },
+      {
+        "ts_utc": "2026-03-06T15:03:00+00:00",
+        "ts_et": "2026-03-06T10:03:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24979.5,
+        "high": 24980.0,
+        "low": 24963.75,
+        "close": 24969.0,
+        "volume": 38
+      },
+      {
+        "ts_utc": "2026-03-06T15:04:00+00:00",
+        "ts_et": "2026-03-06T10:04:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24972.0,
+        "high": 24977.75,
+        "low": 24952.75,
+        "close": 24977.75,
+        "volume": 19
+      },
+      {
+        "ts_utc": "2026-03-06T15:05:00+00:00",
+        "ts_et": "2026-03-06T10:05:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24981.75,
+        "high": 24985.0,
+        "low": 24937.0,
+        "close": 24952.0,
+        "volume": 40
+      },
+      {
+        "ts_utc": "2026-03-06T15:06:00+00:00",
+        "ts_et": "2026-03-06T10:06:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24950.25,
+        "high": 24980.0,
+        "low": 24950.25,
+        "close": 24974.25,
+        "volume": 20
+      },
+      {
+        "ts_utc": "2026-03-06T15:07:00+00:00",
+        "ts_et": "2026-03-06T10:07:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24972.75,
+        "high": 24972.75,
+        "low": 24950.0,
+        "close": 24950.0,
+        "volume": 10
+      },
+      {
+        "ts_utc": "2026-03-06T15:08:00+00:00",
+        "ts_et": "2026-03-06T10:08:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24943.25,
+        "high": 24947.0,
+        "low": 24924.5,
+        "close": 24924.5,
+        "volume": 29
+      },
+      {
+        "ts_utc": "2026-03-06T15:09:00+00:00",
+        "ts_et": "2026-03-06T10:09:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24921.0,
+        "high": 24921.0,
+        "low": 24885.0,
+        "close": 24890.0,
+        "volume": 46
+      },
+      {
+        "ts_utc": "2026-03-06T15:10:00+00:00",
+        "ts_et": "2026-03-06T10:10:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24893.5,
+        "high": 24901.75,
+        "low": 24875.0,
+        "close": 24875.0,
+        "volume": 38
+      },
+      {
+        "ts_utc": "2026-03-06T15:11:00+00:00",
+        "ts_et": "2026-03-06T10:11:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24889.5,
+        "high": 24939.75,
+        "low": 24889.5,
+        "close": 24939.75,
+        "volume": 37
+      },
+      {
+        "ts_utc": "2026-03-06T15:12:00+00:00",
+        "ts_et": "2026-03-06T10:12:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24947.25,
+        "high": 24968.5,
+        "low": 24944.5,
+        "close": 24961.75,
+        "volume": 29
+      },
+      {
+        "ts_utc": "2026-03-06T15:13:00+00:00",
+        "ts_et": "2026-03-06T10:13:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24970.0,
+        "high": 25002.75,
+        "low": 24969.25,
+        "close": 25000.75,
+        "volume": 79
+      },
+      {
+        "ts_utc": "2026-03-06T15:14:00+00:00",
+        "ts_et": "2026-03-06T10:14:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 25006.75,
+        "high": 25007.5,
+        "low": 24975.0,
+        "close": 24999.0,
+        "volume": 26
+      },
+      {
+        "ts_utc": "2026-03-06T15:15:00+00:00",
+        "ts_et": "2026-03-06T10:15:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24995.25,
+        "high": 25010.5,
+        "low": 24990.0,
+        "close": 25004.75,
+        "volume": 30
+      },
+      {
+        "ts_utc": "2026-03-06T15:16:00+00:00",
+        "ts_et": "2026-03-06T10:16:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 25003.0,
+        "high": 25010.0,
+        "low": 24979.5,
+        "close": 24979.5,
+        "volume": 25
+      },
+      {
+        "ts_utc": "2026-03-06T15:17:00+00:00",
+        "ts_et": "2026-03-06T10:17:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24979.5,
+        "high": 25004.0,
+        "low": 24976.5,
+        "close": 25000.0,
+        "volume": 34
+      },
+      {
+        "ts_utc": "2026-03-06T15:18:00+00:00",
+        "ts_et": "2026-03-06T10:18:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 25000.0,
+        "high": 25009.0,
+        "low": 24993.25,
+        "close": 25000.0,
+        "volume": 32
+      },
+      {
+        "ts_utc": "2026-03-06T15:19:00+00:00",
+        "ts_et": "2026-03-06T10:19:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 24998.25,
+        "high": 24998.25,
+        "low": 24992.5,
+        "close": 24994.0,
+        "volume": 17
+      },
+      {
+        "ts_utc": "2026-03-06T15:20:00+00:00",
+        "ts_et": "2026-03-06T10:20:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 25000.25,
+        "high": 25012.25,
+        "low": 24991.0,
+        "close": 25000.0,
+        "volume": 30
+      },
+      {
+        "ts_utc": "2026-03-06T15:21:00+00:00",
+        "ts_et": "2026-03-06T10:21:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 25010.0,
+        "high": 25013.75,
+        "low": 24999.75,
+        "close": 25013.75,
+        "volume": 11
+      },
+      {
+        "ts_utc": "2026-03-06T15:22:00+00:00",
+        "ts_et": "2026-03-06T10:22:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 25002.75,
+        "high": 25002.75,
+        "low": 24995.25,
+        "close": 24998.25,
+        "volume": 5
+      },
+      {
+        "ts_utc": "2026-03-06T15:23:00+00:00",
+        "ts_et": "2026-03-06T10:23:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 25009.0,
+        "high": 25035.25,
+        "low": 25009.0,
+        "close": 25018.0,
+        "volume": 44
+      },
+      {
+        "ts_utc": "2026-03-06T15:24:00+00:00",
+        "ts_et": "2026-03-06T10:24:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 25025.75,
+        "high": 25033.0,
+        "low": 25025.25,
+        "close": 25033.0,
+        "volume": 12
+      },
+      {
+        "ts_utc": "2026-03-06T15:25:00+00:00",
+        "ts_et": "2026-03-06T10:25:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 25018.5,
+        "high": 25041.5,
+        "low": 25018.5,
+        "close": 25041.5,
+        "volume": 68
+      },
+      {
+        "ts_utc": "2026-03-06T15:26:00+00:00",
+        "ts_et": "2026-03-06T10:26:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 25034.25,
+        "high": 25042.0,
+        "low": 25028.75,
+        "close": 25028.75,
+        "volume": 72
+      },
+      {
+        "ts_utc": "2026-03-06T15:27:00+00:00",
+        "ts_et": "2026-03-06T10:27:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 25036.25,
+        "high": 25036.25,
+        "low": 25016.0,
+        "close": 25020.25,
+        "volume": 5
+      },
+      {
+        "ts_utc": "2026-03-06T15:28:00+00:00",
+        "ts_et": "2026-03-06T10:28:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 25026.25,
+        "high": 25027.25,
+        "low": 25015.0,
+        "close": 25015.0,
+        "volume": 10
+      },
+      {
+        "ts_utc": "2026-03-06T15:29:00+00:00",
+        "ts_et": "2026-03-06T10:29:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 25011.25,
+        "high": 25030.0,
+        "low": 25010.75,
+        "close": 25030.0,
+        "volume": 14
+      },
+      {
+        "ts_utc": "2026-03-06T15:30:00+00:00",
+        "ts_et": "2026-03-06T10:30:00-05:00",
+        "instrument_id": 42004936,
+        "raw_symbol": "MNQM6",
+        "instrument_class": "F",
+        "open": 25038.0,
+        "high": 25057.0,
+        "low": 25038.0,
+        "close": 25045.0,
+        "volume": 39
+      }
+    ],
+    "MNQU6": [
+      {
+        "ts_utc": "2026-03-06T14:35:00+00:00",
+        "ts_et": "2026-03-06T09:35:00-05:00",
+        "instrument_id": 42004800,
+        "raw_symbol": "MNQU6",
+        "instrument_class": "F",
+        "open": 25126.75,
+        "high": 25126.75,
+        "low": 25112.75,
+        "close": 25112.75,
+        "volume": 3
+      },
+      {
+        "ts_utc": "2026-03-06T14:36:00+00:00",
+        "ts_et": "2026-03-06T09:36:00-05:00",
+        "instrument_id": 42004800,
+        "raw_symbol": "MNQU6",
+        "instrument_class": "F",
+        "open": 25050.0,
+        "high": 25050.0,
+        "low": 25050.0,
+        "close": 25050.0,
+        "volume": 2
+      },
+      {
+        "ts_utc": "2026-03-06T14:43:00+00:00",
+        "ts_et": "2026-03-06T09:43:00-05:00",
+        "instrument_id": 42004800,
+        "raw_symbol": "MNQU6",
+        "instrument_class": "F",
+        "open": 25134.75,
+        "high": 25134.75,
+        "low": 25134.75,
+        "close": 25134.75,
+        "volume": 5
+      },
+      {
+        "ts_utc": "2026-03-06T14:55:00+00:00",
+        "ts_et": "2026-03-06T09:55:00-05:00",
+        "instrument_id": 42004800,
+        "raw_symbol": "MNQU6",
+        "instrument_class": "F",
+        "open": 25120.0,
+        "high": 25120.0,
+        "low": 25119.5,
+        "close": 25119.5,
+        "volume": 2
+      },
+      {
+        "ts_utc": "2026-03-06T14:56:00+00:00",
+        "ts_et": "2026-03-06T09:56:00-05:00",
+        "instrument_id": 42004800,
+        "raw_symbol": "MNQU6",
+        "instrument_class": "F",
+        "open": 25100.0,
+        "high": 25100.0,
+        "low": 25100.0,
+        "close": 25100.0,
+        "volume": 1
+      },
+      {
+        "ts_utc": "2026-03-06T15:02:00+00:00",
+        "ts_et": "2026-03-06T10:02:00-05:00",
+        "instrument_id": 42004800,
+        "raw_symbol": "MNQU6",
+        "instrument_class": "F",
+        "open": 25203.75,
+        "high": 25203.75,
+        "low": 25203.75,
+        "close": 25203.75,
+        "volume": 1
+      },
+      {
+        "ts_utc": "2026-03-06T15:03:00+00:00",
+        "ts_et": "2026-03-06T10:03:00-05:00",
+        "instrument_id": 42004800,
+        "raw_symbol": "MNQU6",
+        "instrument_class": "F",
+        "open": 25200.5,
+        "high": 25200.5,
+        "low": 25200.5,
+        "close": 25200.5,
+        "volume": 1
+      },
+      {
+        "ts_utc": "2026-03-06T15:16:00+00:00",
+        "ts_et": "2026-03-06T10:16:00-05:00",
+        "instrument_id": 42004800,
+        "raw_symbol": "MNQU6",
+        "instrument_class": "F",
+        "open": 25224.0,
+        "high": 25224.0,
+        "low": 25216.5,
+        "close": 25216.5,
+        "volume": 2
+      }
+    ],
+    "MNQH6-MNQM6": [
+      {
+        "ts_utc": "2026-03-06T14:55:00+00:00",
+        "ts_et": "2026-03-06T09:55:00-05:00",
+        "instrument_id": 42011456,
+        "raw_symbol": "MNQH6-MNQM6",
+        "instrument_class": "S",
+        "open": 212.9,
+        "high": 212.9,
+        "low": 212.9,
+        "close": 212.9,
+        "volume": 1
+      },
+      {
+        "ts_utc": "2026-03-06T15:21:00+00:00",
+        "ts_et": "2026-03-06T10:21:00-05:00",
+        "instrument_id": 42011456,
+        "raw_symbol": "MNQH6-MNQM6",
+        "instrument_class": "S",
+        "open": 214.5,
+        "high": 214.5,
+        "low": 214.5,
+        "close": 214.5,
+        "volume": 10
+      }
+    ]
+  },
+  "caveats": [
+    "The official pinned Polygon 5m tree 7f09a7f8 is not on this box. Reference OHLC comes from the Oct 4 ledger (sha 0d0d8d72\u2026) and the transition-export Polygon 5m copy, whose 15:00 bar matches that ledger exactly. The 50-minute hole (15:05-15:50) is observed in that export copy; the official tree was not compared.",
+    "No Polygon 1-minute bars were decoded, so the exact construction of the thin Polygon 15:00 bar is not recovered. It is enough that no Databento 1m combination reproduces it and that Databento MNQH6 1m rebuilds its own 5m bar.",
+    "Existing BAR_EVIDENCE.md and BAR_EVIDENCE.json were not modified."
+  ]
+}

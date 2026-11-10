@@ -21,7 +21,13 @@ from research.afs0523_322_repro_wrapper import (
     BAR_EVIDENCE_PATH,
     BAR_EVIDENCE_SHA256,
     DATA_MANIFEST_SHA256,
+    MAR06_BAR_EVIDENCE_PATH,
+    MAR06_BAR_EVIDENCE_SHA256,
+    _classify_mar06,
+    _fail_closed_on_ohl_disagreement,
     _load_bar_evidence,
+    _load_mar06_evidence,
+    _ohl_resolution,
     _refuse_changed_gate_data,
     REPRO_END,
     REPRO_START,
@@ -912,13 +918,12 @@ def test_declared_slices_refuse_without_a_verified_pass_artifact(monkeypatch, tm
         "pr_head_sha": "a" * 40,
     }
     ledger.write_text(ledger.read_text(encoding="utf-8") + json.dumps(review) + "\n", encoding="utf-8")
-    with pytest.raises(RuntimeError, match="2026-03-06"):
-        run_declared_slices(
-            Path("slice-research"),
-            Path("slice-audit"),
-            data_root=tmp_path,
-            slice_id="mnq-2019-05-to-2024-06",
-        )
+    assert run_declared_slices(
+        Path("slice-research"),
+        Path("slice-audit"),
+        data_root=tmp_path,
+        slice_id="mnq-2019-05-to-2024-06",
+    ) is None
     other = tmp_path / "other"
     _bar_file(other, date(2020, 1, 7))
     with pytest.raises(RuntimeError, match="does not match the PASS gate"):
@@ -1436,12 +1441,9 @@ def test_structural_gate_allows_only_documented_close_deltas():
     exact = compare_replay_to_oct4({"ledger": reference["ledger"]})
     structural = compare_replay_structural({"ledger": reference["ledger"]})
     assert exact["ok"] is True
-    assert structural["ok"] is False
-    assert {
-        row["date"]
-        for row in structural["mismatches"]
-        if row["field"] == "open_high_low"
-    } == {"2026-03-06"}
+    assert structural["ok"] is True
+    assert structural["ohl_reference_exclusions"] == {"count": 1, "dates": ["2026-03-06"]}
+    assert not any(row["field"] == "open_high_low" for row in structural["mismatches"])
     allowlist = _ioc_close_allowlist()
     assert set(allowlist) == {"2024-09-06", "2026-06-11"}
     assert "2026-03-06" not in allowlist
@@ -1453,7 +1455,8 @@ def test_structural_gate_allows_only_documented_close_deltas():
                 row["models"]["ioc_close"]["net"] = float(row["models"]["ioc_close"]["net"]) + 1.50
     assert compare_replay_to_oct4({"ledger": moved["ledger"]})["ok"] is False
     moved_structural = compare_replay_structural({"ledger": moved["ledger"]})
-    assert moved_structural["ok"] is False
+    assert moved_structural["ok"] is True
+    assert moved_structural["ohl_reference_exclusions"]["dates"] == ["2026-03-06"]
     assert not any(
         row["date"] == "2024-09-06" and row["field"] in {"fill_price", "net"}
         for row in moved_structural["mismatches"]
@@ -1475,6 +1478,8 @@ def test_structural_gate_allows_only_documented_close_deltas():
     assert compare_replay_structural({"ledger": pre_state["ledger"]})["ok"] is False
     prereg = (ROOT / "docs/prereg-322-afs0523-oos-structural-2026-11-10.md").read_text(encoding="utf-8")
     assert "written after AFS-0586" in prereg
+    assert "written after AFS-0594" in prereg
+    assert "not the reason it is excluded" in prereg
     assert "Original and pre-armed match exactly" in prereg
     assert OLDER_SLICE_IOC_NOTE in prereg
     assert "data-gap count goes from 3 to 2" in prereg
@@ -1544,11 +1549,9 @@ def test_gate_and_slice_refuse_ohl_disagreement_when_fills_match(monkeypatch, tm
         lambda *_args, **_kwargs: {"ok": True, "comparisons": 306, "mismatches": []},
     )
     result = _call_gate(monkeypatch, tmp_path, research, audit)
-    assert result["pass"] is False
-    assert any(
-        row["date"] == "2026-03-06" and row["field"] == "open_high_low"
-        for row in result["mismatches"]
-    )
+    assert result["pass"] is True
+    assert result["ohl_reference_exclusions"] == {"count": 1, "dates": ["2026-03-06"]}
+    assert not any(row.get("field") == "open_high_low" for row in result["mismatches"])
     review = {
         "trial_id": TRIAL_ID,
         "event": "GATE_REVIEW",
@@ -1574,10 +1577,70 @@ def test_gate_and_slice_refuse_ohl_disagreement_when_fills_match(monkeypatch, tm
         "prior_attempts": passing["prior_attempts"],
     }
     _ledger.write_text(json.dumps(gate_line) + "\n" + json.dumps(review) + "\n", encoding="utf-8")
-    with pytest.raises(RuntimeError, match="2026-03-06"):
-        run_declared_slices(
-            Path("slice-research"),
-            Path("slice-audit"),
-            data_root=tmp_path,
-            slice_id="mnq-2019-05-to-2024-06",
-        )
+    assert run_declared_slices(
+        Path("slice-research"),
+        Path("slice-audit"),
+        data_root=tmp_path,
+        slice_id="mnq-2019-05-to-2024-06",
+    ) is None
+
+
+def test_tampered_mar06_evidence_fails_the_pin(monkeypatch, tmp_path):
+    raw = MAR06_BAR_EVIDENCE_PATH.read_bytes()
+    assert hashlib.sha256(raw).hexdigest() == MAR06_BAR_EVIDENCE_SHA256
+    edited = tmp_path / "MAR06_BAR_EVIDENCE.json"
+    edited.write_bytes(raw.replace(b"REFERENCE_DEFECT", b"UNEXPLAINEDXXXXX", 1))
+    monkeypatch.setattr("research.afs0523_322_repro_wrapper.MAR06_BAR_EVIDENCE_PATH", edited)
+    with pytest.raises(RuntimeError, match="MAR06_BAR_EVIDENCE.json hash mismatch"):
+        _load_mar06_evidence()
+
+
+def test_ohl_disagreement_without_1m_evidence_fails(monkeypatch):
+    monkeypatch.setattr(
+        "research.afs0523_322_repro_wrapper._ohl_disagreement_days",
+        lambda: {"2024-08-02"},
+    )
+    resolution = _ohl_resolution()
+    assert resolution["exclude"] == []
+    assert resolution["fail"] == [{"date": "2024-08-02", "classification": "UNEXPLAINED"}]
+    comparison = _fail_closed_on_ohl_disagreement({"ok": True, "mismatches": []})
+    assert comparison["ok"] is False
+    assert comparison["ohl_reference_exclusions"] == {"count": 0, "dates": []}
+    assert any(
+        row["date"] == "2024-08-02" and row["actual"] == "UNEXPLAINED"
+        for row in comparison["mismatches"]
+    )
+
+
+def test_1m_rows_that_do_not_rebuild_the_5m_bar_fail(monkeypatch):
+    payload = json.loads(MAR06_BAR_EVIDENCE_PATH.read_text(encoding="utf-8"))
+    payload["classification"] = "REFERENCE_DEFECT"
+    payload["mnqh6_1m_15_00_to_15_04"]["matches_committed_databento_5m_ohlcv"] = True
+    payload["mnqh6_1m_15_00_to_15_04"]["rows"][0]["open"] = 1.0
+    monkeypatch.setattr(
+        "research.afs0523_322_repro_wrapper._load_mar06_evidence",
+        lambda: payload,
+    )
+    resolution = _ohl_resolution()
+    assert resolution["exclude"] == []
+    assert {"date": "2026-03-06", "classification": "DATABENTO_SIDE"} in resolution["fail"]
+    comparison = _fail_closed_on_ohl_disagreement({"ok": True, "mismatches": []})
+    assert comparison["ok"] is False
+    assert any(
+        row["date"] == "2026-03-06" and row["actual"] == "DATABENTO_SIDE"
+        for row in comparison["mismatches"]
+    )
+
+
+def test_real_2026_03_06_is_excluded_and_the_label_is_not_trusted():
+    payload = json.loads(MAR06_BAR_EVIDENCE_PATH.read_text(encoding="utf-8"))
+    payload["classification"] = "DATABENTO_SIDE"
+    payload["mnqh6_1m_15_00_to_15_04"]["matches_committed_databento_5m_ohlcv"] = False
+    assert _classify_mar06(payload) == "REFERENCE_DEFECT"
+    structural = compare_replay_structural(
+        {"ledger": json.loads(LEDGER.read_text(encoding="utf-8"))["ledger"]}
+    )
+    assert structural["ok"] is True
+    assert structural["ohl_reference_exclusions"] == {"count": 1, "dates": ["2026-03-06"]}
+    assert not any(row["field"] == "open_high_low" for row in structural["mismatches"])
+    assert "exclude" not in run_reproduction_gate.__code__.co_varnames
