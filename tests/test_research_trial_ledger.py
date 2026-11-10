@@ -349,13 +349,29 @@ def test_canonical_research_evidence_is_registered_before_counting() -> None:
             gate_rows = [
                 row
                 for row in by_trial[trial_id]
-                if row.get("event") == "GATE" and row.get("gate_artifact") == rel
+                if row.get("event") == "GATE"
+                and row.get("gate_artifact") == rel
+                and row.get("gate_artifact_sha256") == digest
             ]
             assert len(gate_rows) == 1, f"{rel}: reproduction gate artifact needs one GATE line"
-            assert gate_rows[0].get("gate_artifact_sha256") == digest, (
-                f"{rel}: GATE line hash does not match the artifact bytes"
-            )
             assert gate_rows[0].get("gate_pass") is False
+            continue
+
+        if path.name.startswith("reproduction-gate.attempt-") and path.suffix == ".json":
+            digest = hashlib.sha256((ROOT / rel).read_bytes()).hexdigest()
+            gate_rows = [
+                row
+                for row in by_trial[trial_id]
+                if row.get("event") == "GATE" and row.get("gate_artifact_sha256") == digest
+            ]
+            assert len(gate_rows) == 1, f"{rel}: attempt artifact needs one GATE line"
+            assert gate_rows[0].get("gate_pass") is False
+            continue
+
+        if path.name in {"BAR_EVIDENCE.md", "BAR_EVIDENCE.json"}:
+            digest = hashlib.sha256((ROOT / rel).read_bytes()).hexdigest()
+            cited = (ROOT / "docs/agent-work-state.md").read_text(encoding="utf-8")
+            assert digest in cited, f"{rel}: bar evidence sha256 is not cited in agent-work-state"
             continue
 
         matching = [

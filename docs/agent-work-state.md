@@ -1,6 +1,16 @@
 # Agent Work State
 
-## START HERE — 2026-11-09 AFS-0580 reproduction gate FAIL record
+## START HERE — 2026-11-10 AFS-0586 reproduction gate rerun FAIL record
+
+| Item | State |
+|---|---|
+| **Run** | AFS-0586, one authorized rerun at `000f43128764aedfc6a5702d9fb11847f8a58d1c` with `MAX_CONTRACTS_HARD_CAP=1`. Recorded FAIL. Not a GATE_REVIEW. Not retried. |
+| **Result** | 306 comparisons, 12 mismatches, all honest-IOC `fill_price` and `net` on 2024-09-06 and 2026-06-11. Artifact sha256 `255f669c785a7396c773f6143ecf8b82afe7292cd012566cda879c880e0d1a0f`. GATE `recorded_at` `2026-11-10T01:29:32Z`. `prior_attempts` lists the AFS-0580 FAIL. |
+| **Files** | AFS-0580 stays at `reproduction-gate.json` (`ede35c326057ba4fa39cebfeaad8851d97ad60df9de1c2ddedd9b888dcd1dfeb`). The rerun bytes are `reproduction-gate.attempt-02.json`. The GATE line still names the path the box wrote. It was not edited. |
+| **Bars** | AFS-0588 CONFIRMED. Decision-bar close only: 2024-09-06 Polygon 18754.0 vs Databento 18754.75; 2026-06-11 28928.75 vs 28928.5. `BAR_EVIDENCE.md` sha256 `d2fc3db045bfc90e66cd99c55b39baa26cbe96fdb0010aa5ef034c3bdc449d56`. `BAR_EVIDENCE.json` sha256 `43b8f5d6e4cf406e2ac45b38340fcb85905c4dd10618f7a3a318366978b1a8d3`. |
+| **NEXT** | Do not score again from this record. A later change writes each attempt to its own file and preregisters the post-hoc structural trial. |
+
+## Previous — 2026-11-09 AFS-0580 reproduction gate FAIL record
 
 | Item | State |
 |---|---|
