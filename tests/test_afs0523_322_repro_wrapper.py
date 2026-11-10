@@ -1412,9 +1412,15 @@ def test_structural_gate_allows_only_documented_close_deltas():
     exact = compare_replay_to_oct4({"ledger": reference["ledger"]})
     structural = compare_replay_structural({"ledger": reference["ledger"]})
     assert exact["ok"] is True
-    assert structural["ok"] is True
+    assert structural["ok"] is False
+    assert {
+        row["date"]
+        for row in structural["mismatches"]
+        if row["field"] == "open_high_low"
+    } == {"2026-03-06"}
     allowlist = _ioc_close_allowlist()
     assert set(allowlist) == {"2024-09-06", "2026-06-11"}
+    assert "2026-03-06" not in allowlist
     moved = json.loads(json.dumps(reference))
     for rows in moved["ledger"].values():
         for row in rows:
@@ -1422,7 +1428,21 @@ def test_structural_gate_allows_only_documented_close_deltas():
                 row["models"]["ioc_close"]["fill_entry"] = float(row["models"]["ioc_close"]["fill_entry"]) + 0.75
                 row["models"]["ioc_close"]["net"] = float(row["models"]["ioc_close"]["net"]) + 1.50
     assert compare_replay_to_oct4({"ledger": moved["ledger"]})["ok"] is False
-    assert compare_replay_structural({"ledger": moved["ledger"]})["ok"] is True
+    moved_structural = compare_replay_structural({"ledger": moved["ledger"]})
+    assert moved_structural["ok"] is False
+    assert not any(
+        row["date"] == "2024-09-06" and row["field"] in {"fill_price", "net"}
+        for row in moved_structural["mismatches"]
+    )
+    wrong = json.loads(json.dumps(reference))
+    for rows in wrong["ledger"].values():
+        for row in rows:
+            if row["date"] == "2024-09-06":
+                row["models"]["ioc_close"]["fill_entry"] = float(row["models"]["ioc_close"]["fill_entry"]) + 1.0
+    assert any(
+        row["date"] == "2024-09-06" and row["field"] == "fill_price"
+        for row in compare_replay_structural({"ledger": wrong["ledger"]})["mismatches"]
+    )
     pre_state = json.loads(json.dumps(reference))
     for rows in pre_state["ledger"].values():
         for row in rows:

@@ -138,7 +138,9 @@ WINDOW_ENTRY_FILL_MODELS = ("market", "ioc_limit", "stop_market")
 OLDER_SLICE_IOC_NOTE = (
     "Older-slice IOC results depend on Databento closing prints. "
     "A documented decision-bar close difference moves honest-IOC fill_price and net "
-    "by that close delta and does not by itself fail the structural gate."
+    "by that close delta and does not by itself fail the structural gate. "
+    "A decision bar whose open, high, or low disagree refuses the structural gate, "
+    "including on the older slices. Matching fill fields do not excuse that bar."
 )
 BAR_EVIDENCE_REL = (
     "docs/research-evidence/"
@@ -351,11 +353,35 @@ def _index_rows(rows: list[dict], slippage: str) -> dict[str, dict]:
     return indexed
 
 
+def _record_ohl_disagrees(day: dict) -> bool:
+    left = day.get("oct4_trigger_bar")
+    right = day.get("databento_5m")
+    if isinstance(left, dict) and isinstance(right, dict):
+        if any(left.get(field) != right.get(field) for field in ("open", "high", "low")):
+            return True
+    return day.get("ohl_agree") is False
+
+
+def _ohl_disagreement_days() -> set[str]:
+    """Decision days whose committed bar evidence is not the same bar.
+
+    A close-only difference stays out of this set when open, high, and low agree.
+    """
+    payload = json.loads((REPO / BAR_EVIDENCE_REL).read_text(encoding="utf-8"))
+    found: set[str] = set()
+    for key in ("mismatch_days", "other_decision_bar_close_disagreements"):
+        for day in payload.get(key) or []:
+            if _record_ohl_disagrees(day):
+                found.add(str(day["date"]))
+    return found
+
+
 def _ioc_close_allowlist() -> dict[str, Decimal]:
     """Days whose honest-IOC fill may move by the recorded vendor close delta.
 
     Open, high, and low must agree. A day whose open, high, or low differs,
-    including 2026-03-06, is not on this list.
+    including 2026-03-06, is not on this list. That day still fails the
+    structural gate through ``_ohl_disagreement_days``.
     """
     payload = json.loads((REPO / BAR_EVIDENCE_REL).read_text(encoding="utf-8"))
     allowed: dict[str, Decimal] = {}
@@ -519,6 +545,19 @@ def compare_replay_to_oct4(
                     "field": "row",
                     "expected": None,
                     "actual": day,
+                }
+            )
+
+    if structural:
+        for day in sorted(_ohl_disagreement_days() & reference_dates):
+            mismatches.append(
+                {
+                    "date": day,
+                    "slippage": "decision_bar",
+                    "model": "decision_bar",
+                    "field": "open_high_low",
+                    "expected": "open, high, and low agree",
+                    "actual": "open, high, or low disagree",
                 }
             )
 
