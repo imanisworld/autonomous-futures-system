@@ -19,9 +19,11 @@ window, the expected-count check, and the data paths. NQ prices, when a later
 reviewed run supplies them on the MNQ path, are accounted with the unchanged
 MNQ lane ($2/point). This module does not assign a point value.
 
-``RUN_AUTHORIZED`` is true and is checked by ``run_reproduction_gate``. That
-function is the only path that scores Databento data, and only the fixed
-reproduction window on the committed manifest at ``DATA_MANIFEST_PATH``.
+``RUN_AUTHORIZED`` is false. The superseded reproduction trial has no run
+path. ``run_reproduction_gate`` belongs to the structural trial and calls
+``compare_replay_structural``. It is the only path that scores Databento
+data, and only the fixed reproduction window on the committed manifest at
+``DATA_MANIFEST_PATH``.
 ``DATA_MANIFEST_SHA256`` is the SHA-256 of that committed file. The gate
 refuses a placeholder pin and any other byte mismatch. ``run_window`` scores nothing.
 ``run_declared_slices()`` does not score. A ``claude_review`` string is
@@ -59,8 +61,9 @@ OCT4_LEDGER_REL = (
 OCT4_LEDGER_SHA256 = "0d0d8d72c48b3c9dd1e7065b23a5422176a765ac7b1eb594e2833b72f5d5a9b1"
 OCT4_LEDGER_COMMIT = "cf2ac0724a266198629a363fde23364ef00ce721"
 EOD_DATE = "2025-01-20"
-RUN_AUTHORIZED = True
-TRIAL_ID = "T-2026-11-09-prereg-322-afs0523-oos-reproduction-2026-11-09-01"
+SUPERSEDED_TRIAL_ID = "T-2026-11-09-prereg-322-afs0523-oos-reproduction-2026-11-09-01"
+TRIAL_ID = "T-2026-11-10-prereg-322-afs0523-oos-structural-2026-11-10-01"
+RUN_AUTHORIZED = False
 TRIAL_LEDGER = REPO / "docs/research-trial-ledger.jsonl"
 GATE_ARTIFACT = (
     REPO
@@ -68,7 +71,10 @@ GATE_ARTIFACT = (
     / TRIAL_ID
     / "reproduction-gate.json"
 )
-DATA_MANIFEST_REL = f"docs/research-evidence/{TRIAL_ID}/databento-download-manifest.json"
+DATA_MANIFEST_REL = (
+    "docs/research-evidence/"
+    f"{SUPERSEDED_TRIAL_ID}/databento-download-manifest.json"
+)
 DATA_MANIFEST_PATH = REPO / DATA_MANIFEST_REL
 # SHA-256 of the committed download manifest. The gate refuses on any other bytes.
 DATA_MANIFEST_SHA256 = "6c9d5ab3c29a7aeade90e95c84e0128795afc1bdd19aa165e18d364760b7f43d"
@@ -146,6 +152,8 @@ BAR_EVIDENCE_REL = (
     "docs/research-evidence/"
     "T-2026-11-09-prereg-322-afs0523-oos-reproduction-2026-11-09-01/BAR_EVIDENCE.json"
 )
+BAR_EVIDENCE_PATH = REPO / BAR_EVIDENCE_REL
+BAR_EVIDENCE_SHA256 = "9bbd516d8c7a43b8c42d829723bc6f800b1dabe3f372ed8d20295f839017931d"
 COMPARE_FIELDS = (
     "date",
     "direction",
@@ -353,54 +361,122 @@ def _index_rows(rows: list[dict], slippage: str) -> dict[str, dict]:
     return indexed
 
 
-def _record_ohl_disagrees(day: dict) -> bool:
-    left = day.get("oct4_trigger_bar")
-    right = day.get("databento_5m")
-    if isinstance(left, dict) and isinstance(right, dict):
-        if any(left.get(field) != right.get(field) for field in ("open", "high", "low")):
-            return True
-    return day.get("ohl_agree") is False
+def _load_bar_evidence() -> dict:
+    """Read the committed bar evidence and refuse any other bytes."""
+    raw = BAR_EVIDENCE_PATH.read_bytes()
+    digest = hashlib.sha256(raw).hexdigest()
+    if digest != BAR_EVIDENCE_SHA256:
+        raise RuntimeError(
+            "BAR_EVIDENCE.json hash mismatch: "
+            f"{digest} != {BAR_EVIDENCE_SHA256}"
+        )
+    return json.loads(raw)
+
+
+def _ohl_triple(bar: object) -> tuple[Decimal, Decimal, Decimal] | None:
+    if not isinstance(bar, dict):
+        return None
+    try:
+        return (
+            Decimal(str(bar["open"])),
+            Decimal(str(bar["high"])),
+            Decimal(str(bar["low"])),
+        )
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _close_delta(day: dict) -> Decimal | None:
+    oct4 = day.get("oct4_trigger_bar")
+    databento = day.get("databento_5m")
+    if not isinstance(oct4, dict) or not isinstance(databento, dict):
+        return None
+    if "close" not in oct4 or "close" not in databento:
+        return None
+    return Decimal(str(databento["close"])) - Decimal(str(oct4["close"]))
+
+
+def _decision_bar_records(payload: dict) -> list[dict]:
+    records: list[dict] = []
+    for key in ("mismatch_days", "other_decision_bar_close_disagreements"):
+        rows = payload.get(key) or []
+        if isinstance(rows, list):
+            records.extend(row for row in rows if isinstance(row, dict))
+    return records
 
 
 def _ohl_disagreement_days() -> set[str]:
-    """Decision days whose committed bar evidence is not the same bar.
+    """Decision days whose pinned bars do not share open, high, and low.
 
-    A close-only difference stays out of this set when open, high, and low agree.
+    The ``ohl_agree`` flag is not read. A day without both numeric triples
+    cannot be shown to agree, so 2026-03-06 stays refused.
     """
-    payload = json.loads((REPO / BAR_EVIDENCE_REL).read_text(encoding="utf-8"))
     found: set[str] = set()
-    for key in ("mismatch_days", "other_decision_bar_close_disagreements"):
-        for day in payload.get(key) or []:
-            if _record_ohl_disagrees(day):
-                found.add(str(day["date"]))
+    for day in _decision_bar_records(_load_bar_evidence()):
+        left = _ohl_triple(day.get("oct4_trigger_bar"))
+        right = _ohl_triple(day.get("databento_5m"))
+        if left is None or right is None or left != right:
+            found.add(str(day["date"]))
     return found
 
 
-def _ioc_close_allowlist() -> dict[str, Decimal]:
-    """Days whose honest-IOC fill may move by the recorded vendor close delta.
+def _ohl_mismatch(day: str) -> dict:
+    return {
+        "date": day,
+        "slippage": "decision_bar",
+        "model": "decision_bar",
+        "field": "open_high_low",
+        "expected": "open, high, and low agree",
+        "actual": "open, high, or low disagree",
+    }
 
-    Open, high, and low must agree. A day whose open, high, or low differs,
-    including 2026-03-06, is not on this list. That day still fails the
-    structural gate through ``_ohl_disagreement_days``.
+
+def _refuse_ohl_disagreement() -> None:
+    days = _ohl_disagreement_days()
+    if days:
+        raise RuntimeError(
+            "decision bar open, high, or low disagree: " + ", ".join(sorted(days))
+        )
+
+
+def _fail_closed_on_ohl_disagreement(comparison: dict) -> dict:
+    """Force a gate failure from the pinned bars, even when fills match."""
+    days = _ohl_disagreement_days()
+    if not days:
+        return comparison
+    mismatches = list(comparison.get("mismatches") or [])
+    present = {
+        item.get("date")
+        for item in mismatches
+        if isinstance(item, dict) and item.get("field") == "open_high_low"
+    }
+    for day in sorted(days):
+        if day not in present:
+            mismatches.append(_ohl_mismatch(day))
+    comparison["ok"] = False
+    comparison["mismatches"] = mismatches
+    return comparison
+
+
+def _ioc_close_allowlist() -> dict[str, Decimal]:
+    """Days whose honest-IOC fill may move by the recomputed close delta.
+
+    Open, high, and low must agree as numbers. The delta is Databento close
+    minus the Oct 4 close. ``databento_minus_oct4`` is not trusted.
     """
-    payload = json.loads((REPO / BAR_EVIDENCE_REL).read_text(encoding="utf-8"))
+    payload = _load_bar_evidence()
     allowed: dict[str, Decimal] = {}
     for day in payload["mismatch_days"]:
-        if (
-            day.get("ohl_agree") is not True
-            or day.get("close_agree") is not False
-            or day.get("has_ioc_fill") is not True
-        ):
+        if day.get("has_ioc_fill") is not True:
             continue
-        oct4 = day["oct4_trigger_bar"]
-        databento = day["databento_5m"]
-        if (
-            oct4["open"] != databento["open"]
-            or oct4["high"] != databento["high"]
-            or oct4["low"] != databento["low"]
-        ):
+        left = _ohl_triple(day.get("oct4_trigger_bar"))
+        right = _ohl_triple(day.get("databento_5m"))
+        if left is None or right is None or left != right:
             raise RuntimeError(f"bar evidence {day['date']} disagrees on open, high, or low")
-        allowed[str(day["date"])] = Decimal(str(day["databento_minus_oct4"]))
+        delta = _close_delta(day)
+        if delta is None:
+            raise RuntimeError(f"bar evidence {day['date']} is missing a close")
+        allowed[str(day["date"])] = delta
     return allowed
 
 
@@ -550,16 +626,7 @@ def compare_replay_to_oct4(
 
     if structural:
         for day in sorted(_ohl_disagreement_days() & reference_dates):
-            mismatches.append(
-                {
-                    "date": day,
-                    "slippage": "decision_bar",
-                    "model": "decision_bar",
-                    "field": "open_high_low",
-                    "expected": "open, high, and low agree",
-                    "actual": "open, high, or low disagree",
-                }
-            )
+            mismatches.append(_ohl_mismatch(day))
 
     mismatches.sort(key=lambda item: (item["date"] or "", item["slippage"], item["model"], item["field"]))
     eod_ok = (not eod_scored) and all(
@@ -1143,7 +1210,7 @@ def run_reproduction_gate(data_root: Path, research_15m: Path, audit_5m: Path) -
             end=REPRO_END,
             expected_count=REPRO_EXPECTED_COUNT,
         )
-        comparison = compare_replay_to_oct4(scored)
+        comparison = _fail_closed_on_ohl_disagreement(compare_replay_structural(scored))
     except Exception as exc:
         return _record_scoring_failure(research, audit, manifest, identity, str(exc))
     payload = _gate_payload(scored, comparison, manifest, None, identity, _prior_attempts())
@@ -1244,6 +1311,8 @@ def _refuse_changed_gate_data(artifact: dict) -> None:
 
 
 def _refuse_if_superseded() -> None:
+    if TRIAL_ID == SUPERSEDED_TRIAL_ID:
+        raise RuntimeError("superseded trial has no run path")
     if any(row.get("event") == "SUPERSEDED" for row in _trial_rows()):
         raise RuntimeError("trial is SUPERSEDED; preregister a new trial id")
 
@@ -1398,6 +1467,7 @@ def run_declared_slices(
     research = _resolve_under_root(root, research_15m)
     audit = _resolve_under_root(root, audit_5m)
     _refuse_slice_data_mismatch(artifact, research, audit, slice_id)
+    _refuse_ohl_disagreement()
     return None
 
 
@@ -1492,6 +1562,7 @@ def assemble_slice_report(mnq_summary: dict, nq_summary: dict) -> dict:
         "dollar_basis": "MNQ-equivalent ($2/point)",
         "result_label": NQ_RESEARCH_LABEL,
         "slippage_sensitivity": SLIPPAGE_SENSITIVITY_NOTE,
+        "older_slice_ioc_note": OLDER_SLICE_IOC_NOTE,
     }
     return {
         "mnq-2019-05-to-2024-06": {
@@ -1499,6 +1570,7 @@ def assemble_slice_report(mnq_summary: dict, nq_summary: dict) -> dict:
             "price_source": "MNQ",
             "dollar_basis": "MNQ-equivalent ($2/point)",
             "slippage_sensitivity": SLIPPAGE_SENSITIVITY_NOTE,
+            "older_slice_ioc_note": OLDER_SLICE_IOC_NOTE,
         },
         "nq-2010-06-to-2019-05": nq_block,
         "combined": {
@@ -1509,5 +1581,6 @@ def assemble_slice_report(mnq_summary: dict, nq_summary: dict) -> dict:
             + int(nq_summary.get("candidate_count") or 0),
             "result_label": NQ_RESEARCH_LABEL,
             "slippage_sensitivity": SLIPPAGE_SENSITIVITY_NOTE,
+            "older_slice_ioc_note": OLDER_SLICE_IOC_NOTE,
         },
     }

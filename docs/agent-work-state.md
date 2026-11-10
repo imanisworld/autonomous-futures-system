@@ -5,9 +5,9 @@
 | Item | State |
 |---|---|
 | **Trial** | `T-2026-11-09-prereg-322-afs0523-oos-reproduction-2026-11-09-01` is SUPERSEDED. The new trial is `T-2026-11-10-prereg-322-afs0523-oos-structural-2026-11-10-01`. It was written after AFS-0586. `RUN_AUTHORIZED` is false. No scoring run. |
-| **Fixed** | Each attempt gets its own artifact file and an existing file is refused. The structural compare allows honest-IOC `fill_price` and `net` only on a documented vendor close difference. The profile reads `_run_window`'s slippage and fill models, the frozen `resolve_bracket` literals, and MNQ tick size and tick value. That check guards `_run_window` and slice admission. Easter 2026 is 2026-04-05, so Good Friday 2026-04-03 is closed. |
-| **Deferred** | Early-close pre-open 15-minute bars stay `DATA_GAP`. The adapter carries a TODO. Do not label them in this change. |
-| **NEXT** | Review the draft. Do not run the gate and do not merge from this checkpoint. |
+| **Fixed** | AFS-0592 on this draft. The wrapper is bound to the structural trial and `RUN_AUTHORIZED` is false, so the superseded trial has no run path. `BAR_EVIDENCE.json` is pinned at `9bbd516d8c7a43b8c42d829723bc6f800b1dabe3f372ed8d20295f839017931d`. Close deltas are recomputed from the two committed closes. The gate and the slice path both refuse a decision bar whose open, high, and low cannot be shown to agree, including 2026-03-06. Every slice artifact carries `OLDER_SLICE_IOC_NOTE`. The prereg states the Easter fix moves the AFS-0586 data-gap count from 3 to 2 and lists the 2010-2023 Good Friday label shifts. The contract-cap tests use `monkeypatch.setenv`. |
+| **Deferred** | Early-close pre-open 15-minute bars stay `DATA_GAP`. The adapter carries a TODO. Do not label them in this change. 2026-03-06 still has no Databento open, high, or low in the pinned evidence file. |
+| **NEXT** | Re-review this commit. Do not run the gate and do not merge from this checkpoint. |
 
 ## Previous — 2026-11-10 AFS-0586 reproduction gate rerun FAIL record
 
