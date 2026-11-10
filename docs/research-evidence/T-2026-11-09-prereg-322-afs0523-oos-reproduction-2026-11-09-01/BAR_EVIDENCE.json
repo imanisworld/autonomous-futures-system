@@ -19,8 +19,9 @@
     "raw_1m_dbn_zst": "/workspace/afs-shared/data/databento_afs0523_2026-11-09/reproduction/MNQ.FUT_ohlcv-1m_20240702_20260627.parent.dbn.zst",
     "raw_1m_exists": true,
     "decoded_1m_jsonl_present": false,
-    "databento_python_decoder_installed": false,
-    "one_minute_bars_extracted": false
+    "databento_python_decoder_installed": true,
+    "one_minute_bars_extracted": true,
+    "one_minute_decode_note": "Decoded locally from a copy of the parent ohlcv-1m DBN in /workspace/tmp/afs0523-1m-decode; data root not modified."
   },
   "mismatch_days": [
     {
@@ -399,5 +400,169 @@
       "ohl_agree": false,
       "note": "IOC did not fill on either vendor close, so this day produced no fill_price mismatch."
     }
-  ]
+  ],
+  "one_minute_bars": {
+    "verdict": "CONSISTENT",
+    "decoder": "databento 0.90.0 in /workspace/tmp/afs0523-databento-venv; local DBNStore.from_file only; no API",
+    "source_copy": "/workspace/tmp/afs0523-1m-decode/MNQ.FUT_ohlcv-1m_20240702_20260627.parent.dbn.zst",
+    "source_original": "/workspace/afs-shared/data/databento_afs0523_2026-11-09/reproduction/MNQ.FUT_ohlcv-1m_20240702_20260627.parent.dbn.zst",
+    "definition_copy": "/workspace/tmp/afs0523-1m-decode/MNQ.FUT_definition_20240702_20260627.parent.dbn.zst",
+    "data_root_modified": false,
+    "days": [
+      {
+        "date": "2024-09-06",
+        "symbol": "MNQU4",
+        "instrument_id": 13941,
+        "window_utc": "2024-09-06T14:00:00+00:00/2024-09-06T14:04:00+00:00",
+        "window_et": "2024-09-06 10:00-10:04 EDT",
+        "bars": [
+          {
+            "ts_utc": "2024-09-06T14:00:00+00:00",
+            "ts_et": "2024-09-06 10:00:00 EDT",
+            "open": 18745.75,
+            "high": 18747.25,
+            "low": 18709.5,
+            "close": 18732.0,
+            "volume": 12266
+          },
+          {
+            "ts_utc": "2024-09-06T14:01:00+00:00",
+            "ts_et": "2024-09-06 10:01:00 EDT",
+            "open": 18731.25,
+            "high": 18760.75,
+            "low": 18726.0,
+            "close": 18750.25,
+            "volume": 7315
+          },
+          {
+            "ts_utc": "2024-09-06T14:02:00+00:00",
+            "ts_et": "2024-09-06 10:02:00 EDT",
+            "open": 18750.25,
+            "high": 18761.5,
+            "low": 18741.75,
+            "close": 18748.0,
+            "volume": 4344
+          },
+          {
+            "ts_utc": "2024-09-06T14:03:00+00:00",
+            "ts_et": "2024-09-06 10:03:00 EDT",
+            "open": 18747.5,
+            "high": 18768.0,
+            "low": 18740.25,
+            "close": 18754.75,
+            "volume": 4889
+          },
+          {
+            "ts_utc": "2024-09-06T14:04:00+00:00",
+            "ts_et": "2024-09-06 10:04:00 EDT",
+            "open": 18755.25,
+            "high": 18765.75,
+            "low": 18743.0,
+            "close": 18754.75,
+            "volume": 3705
+          }
+        ],
+        "aggregated": {
+          "open": 18745.75,
+          "high": 18768.0,
+          "low": 18709.5,
+          "close": 18754.75,
+          "volume": 32519
+        },
+        "databento_5m_expected": {
+          "open": 18745.75,
+          "high": 18768.0,
+          "low": 18709.5,
+          "close": 18754.75,
+          "volume": 32519
+        },
+        "aggregation_matches_5m": true,
+        "last_1m_close": 18754.75,
+        "last_1m_close_equals_5m_close": true,
+        "polygon_5m_close": 18754.0,
+        "databento_5m_minus_polygon_5m": 0.75,
+        "other_symbols_in_same_window": [
+          "MNQZ4",
+          "MNQH5"
+        ]
+      },
+      {
+        "date": "2026-06-11",
+        "symbol": "MNQU6",
+        "instrument_id": 42004800,
+        "window_utc": "2026-06-11T14:55:00+00:00/2026-06-11T14:59:00+00:00",
+        "window_et": "2026-06-11 10:55-10:59 EDT",
+        "bars": [
+          {
+            "ts_utc": "2026-06-11T14:55:00+00:00",
+            "ts_et": "2026-06-11 10:55:00 EDT",
+            "open": 29029.5,
+            "high": 29034.75,
+            "low": 28968.0,
+            "close": 28972.0,
+            "volume": 138
+          },
+          {
+            "ts_utc": "2026-06-11T14:56:00+00:00",
+            "ts_et": "2026-06-11 10:56:00 EDT",
+            "open": 28969.25,
+            "high": 28991.75,
+            "low": 28940.0,
+            "close": 28952.25,
+            "volume": 219
+          },
+          {
+            "ts_utc": "2026-06-11T14:57:00+00:00",
+            "ts_et": "2026-06-11 10:57:00 EDT",
+            "open": 28953.5,
+            "high": 28963.0,
+            "low": 28931.0,
+            "close": 28952.25,
+            "volume": 73
+          },
+          {
+            "ts_utc": "2026-06-11T14:58:00+00:00",
+            "ts_et": "2026-06-11 10:58:00 EDT",
+            "open": 28959.0,
+            "high": 28977.25,
+            "low": 28884.0,
+            "close": 28902.75,
+            "volume": 191
+          },
+          {
+            "ts_utc": "2026-06-11T14:59:00+00:00",
+            "ts_et": "2026-06-11 10:59:00 EDT",
+            "open": 28904.25,
+            "high": 28929.0,
+            "low": 28895.25,
+            "close": 28928.5,
+            "volume": 107
+          }
+        ],
+        "aggregated": {
+          "open": 29029.5,
+          "high": 29034.75,
+          "low": 28884.0,
+          "close": 28928.5,
+          "volume": 728
+        },
+        "databento_5m_expected": {
+          "open": 29029.5,
+          "high": 29034.75,
+          "low": 28884.0,
+          "close": 28928.5,
+          "volume": 728
+        },
+        "aggregation_matches_5m": true,
+        "last_1m_close": 28928.5,
+        "last_1m_close_equals_5m_close": true,
+        "polygon_5m_close": 28928.75,
+        "databento_5m_minus_polygon_5m": -0.25,
+        "other_symbols_in_same_window": [
+          "MNQM6",
+          "MNQZ6"
+        ]
+      }
+    ]
+  }
 }

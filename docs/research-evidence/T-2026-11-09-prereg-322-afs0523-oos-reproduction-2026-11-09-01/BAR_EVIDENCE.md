@@ -112,6 +112,42 @@ One other candidate day has a different decision-bar close: **2026-03-06** LONG 
 
 ## What this does not include
 
-- The five Databento 1-minute bars inside each 5-minute window were not read. Raw 1m parent DBN exists; no local decoder.
+- The five Databento 1-minute bars inside each decision window were later decoded from a tmp copy of the local parent DBN; see the section below. Data root was not modified.
 - The official `replay_corpus_v1_5m_4hr_audit` directory was not found. Reference OHLC comes from the Oct 4 ledger and a Polygon 5m export whose decision-bar prices match that ledger exactly.
+
+## Databento 1-minute bars inside the decision 5m windows
+
+Verdict: **CONSISTENT.** Both days' five 1-minute MNQ outright bars aggregate exactly to the Databento 5m tree bar (O/H/L/C/volume). The last 1-minute close equals the 5m close. Decoded locally with `databento` 0.90.0 from a copy of `MNQ.FUT_ohlcv-1m_20240702_20260627.parent.dbn.zst` under `/workspace/tmp/afs0523-1m-decode`. No API call, data root unchanged.
+
+### 2024-09-06 MNQU4 (instrument_id 13941), 14:00-14:04 UTC / 10:00-10:04 EDT
+
+| ts UTC | ts ET | open | high | low | close | volume |
+|---|---|---:|---:|---:|---:|---:|
+| 2024-09-06T14:00:00+00:00 | 2024-09-06 10:00:00 EDT | 18745.75 | 18747.25 | 18709.5 | 18732.0 | 12266 |
+| 2024-09-06T14:01:00+00:00 | 2024-09-06 10:01:00 EDT | 18731.25 | 18760.75 | 18726.0 | 18750.25 | 7315 |
+| 2024-09-06T14:02:00+00:00 | 2024-09-06 10:02:00 EDT | 18750.25 | 18761.5 | 18741.75 | 18748.0 | 4344 |
+| 2024-09-06T14:03:00+00:00 | 2024-09-06 10:03:00 EDT | 18747.5 | 18768.0 | 18740.25 | 18754.75 | 4889 |
+| 2024-09-06T14:04:00+00:00 | 2024-09-06 10:04:00 EDT | 18755.25 | 18765.75 | 18743.0 | 18754.75 | 3705 |
+| **aggregate / Databento 5m** | | **18745.75** | **18768.0** | **18709.5** | **18754.75** | **32519** |
+
+- Aggregated O/H/L/C/vol equals the Databento 5m tree bar: yes.
+- Last 1m close 18754.75 equals the 5m close: yes.
+- Polygon 5m close: 18754.0. Databento − Polygon = **+0.75**.
+- Same parent-file window also had MNQZ4 and MNQH5; those were not used. Volume 32519 is MNQU4 only.
+
+### 2026-06-11 MNQU6 (instrument_id 42004800), 14:55-14:59 UTC / 10:55-10:59 EDT
+
+| ts UTC | ts ET | open | high | low | close | volume |
+|---|---|---:|---:|---:|---:|---:|
+| 2026-06-11T14:55:00+00:00 | 2026-06-11 10:55:00 EDT | 29029.5 | 29034.75 | 28968.0 | 28972.0 | 138 |
+| 2026-06-11T14:56:00+00:00 | 2026-06-11 10:56:00 EDT | 28969.25 | 28991.75 | 28940.0 | 28952.25 | 219 |
+| 2026-06-11T14:57:00+00:00 | 2026-06-11 10:57:00 EDT | 28953.5 | 28963.0 | 28931.0 | 28952.25 | 73 |
+| 2026-06-11T14:58:00+00:00 | 2026-06-11 10:58:00 EDT | 28959.0 | 28977.25 | 28884.0 | 28902.75 | 191 |
+| 2026-06-11T14:59:00+00:00 | 2026-06-11 10:59:00 EDT | 28904.25 | 28929.0 | 28895.25 | 28928.5 | 107 |
+| **aggregate / Databento 5m** | | **29029.5** | **29034.75** | **28884.0** | **28928.5** | **728** |
+
+- Aggregated O/H/L/C/vol equals the Databento 5m tree bar: yes.
+- Last 1m close 28928.5 equals the 5m close: yes.
+- Polygon 5m close: 28928.75. Databento − Polygon = **−0.25**.
+- Same parent-file window also had MNQM6 (much higher volume; past the 8-day roll) and MNQZ6; those were not used. Volume 728 is MNQU6 only, matching the adapter's front-month rule.
 
