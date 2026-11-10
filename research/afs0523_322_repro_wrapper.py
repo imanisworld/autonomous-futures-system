@@ -36,6 +36,7 @@ import json
 import os
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 from pathlib import Path
 
 from config.futures_contracts import contract_economics
@@ -85,6 +86,8 @@ OCT4_SCORING_PROFILE = {
     "slippage_ticks": [1.0, 2.0, 3.0],
     "entry_fill_models": ["market", "ioc_limit", "stop_market"],
     "commission_round_trip": 1.48,
+    "tick_size": 0.25,
+    "tick_value": 0.50,
 }
 _FROZEN_LEDGER_FIELDS = (
     "prereg_path",
@@ -130,6 +133,17 @@ MODEL_LABELS = (
     ("prearmed_touch", "prearmed"),
 )
 SLIPPAGES = ("1tick", "2tick", "3tick")
+WINDOW_SLIPPAGE_TICKS = (1.0, 2.0, 3.0)
+WINDOW_ENTRY_FILL_MODELS = ("market", "ioc_limit", "stop_market")
+OLDER_SLICE_IOC_NOTE = (
+    "Older-slice IOC results depend on Databento closing prints. "
+    "A documented decision-bar close difference moves honest-IOC fill_price and net "
+    "by that close delta and does not by itself fail the structural gate."
+)
+BAR_EVIDENCE_REL = (
+    "docs/research-evidence/"
+    "T-2026-11-09-prereg-322-afs0523-oos-reproduction-2026-11-09-01/BAR_EVIDENCE.json"
+)
 COMPARE_FIELDS = (
     "date",
     "direction",
@@ -337,7 +351,65 @@ def _index_rows(rows: list[dict], slippage: str) -> dict[str, dict]:
     return indexed
 
 
-def compare_replay_to_oct4(replay: dict, ledger_path: Path | None = None) -> dict:
+def _ioc_close_allowlist() -> dict[str, Decimal]:
+    """Days whose honest-IOC fill may move by the recorded vendor close delta.
+
+    Open, high, and low must agree. A day whose open, high, or low differs,
+    including 2026-03-06, is not on this list.
+    """
+    payload = json.loads((REPO / BAR_EVIDENCE_REL).read_text(encoding="utf-8"))
+    allowed: dict[str, Decimal] = {}
+    for day in payload["mismatch_days"]:
+        if (
+            day.get("ohl_agree") is not True
+            or day.get("close_agree") is not False
+            or day.get("has_ioc_fill") is not True
+        ):
+            continue
+        oct4 = day["oct4_trigger_bar"]
+        databento = day["databento_5m"]
+        if (
+            oct4["open"] != databento["open"]
+            or oct4["high"] != databento["high"]
+            or oct4["low"] != databento["low"]
+        ):
+            raise RuntimeError(f"bar evidence {day['date']} disagrees on open, high, or low")
+        allowed[str(day["date"])] = Decimal(str(day["databento_minus_oct4"]))
+    return allowed
+
+
+def _ioc_close_delta_is_exact(
+    day: str,
+    label: str,
+    field: str,
+    expected: object,
+    actual: object,
+    allowlist: dict[str, Decimal],
+) -> bool:
+    if label != "honest_ioc" or field not in {"fill_price", "net"} or day not in allowlist:
+        return False
+    if expected is None or actual is None:
+        return False
+    delta = Decimal(str(actual)) - Decimal(str(expected))
+    close_delta = allowlist[day]
+    if field == "fill_price":
+        return delta == close_delta
+    tick, value = contract_economics("MNQ")
+    point = Decimal(str(value)) / Decimal(str(tick))
+    return delta == close_delta * point
+
+
+def compare_replay_structural(replay: dict, ledger_path: Path | None = None) -> dict:
+    """Post-hoc structural comparison. It does not score and it does not authorize a run."""
+    return compare_replay_to_oct4(replay, ledger_path, structural=True)
+
+
+def compare_replay_to_oct4(
+    replay: dict,
+    ledger_path: Path | None = None,
+    *,
+    structural: bool = False,
+) -> dict:
     """Compare one replay ledger to the Oct 4 reference, field by field.
 
     Frozen-file hashes are checked before the comparison. Gap-open handling
@@ -348,6 +420,7 @@ def compare_replay_to_oct4(replay: dict, ledger_path: Path | None = None) -> dic
     net, and no WIN/LOSS result. Any difference fails the gate.
     """
     verify_frozen_modules()
+    allowlist = _ioc_close_allowlist() if structural else {}
     reference = _load_verified_ledger(ledger_path)
     actual_ledger = replay.get("ledger") or {}
     mismatches: list[dict] = []
@@ -404,8 +477,13 @@ def compare_replay_to_oct4(replay: dict, ledger_path: Path | None = None) -> dic
                 expected = _project(reference_row, model_key)
                 actual = _project(actual_row, model_key)
                 for field in COMPARE_FIELDS:
-                    if not _equal(expected[field], actual[field]):
-                        mismatches.append(
+                    if _equal(expected[field], actual[field]):
+                        continue
+                    if structural and _ioc_close_delta_is_exact(
+                        day, label, field, expected[field], actual[field], allowlist
+                    ):
+                        continue
+                    mismatches.append(
                             {
                                 "date": day,
                                 "slippage": slippage,
@@ -545,7 +623,9 @@ def _run_window(
     """Run the frozen detection and bracket accounting on caller-supplied trees.
 
     This is mechanical. It is not authorization to score a declared slice.
+    The Oct 4 profile is required here so a slice cannot score around the gate.
     """
+    _scoring_profile_or_refuse()
     gap_report = data_gap_dates_from_trees(research_15m, audit_5m, start, end)
     gap_dates = {item["date"] for item in gap_report["data_gaps"]}
     candidates, triggers, bars, invalid_brackets = _parity(
@@ -564,22 +644,28 @@ def _run_window(
         [{"gap_open": info["gap_open"]} for info in triggers.values()]
     )
     ledgers: dict[str, list] = {}
-    for slip in (1.0, 2.0, 3.0):
+    for slip in WINDOW_SLIPPAGE_TICKS:
         key = f"{int(slip)}tick"
         if not candidates:
             ledgers[key] = []
             continue
         plan_rows = run_bracket_stage(
             LANES["322_mnq"], bars, candidates,
-            fill_model="market", slippage_ticks=slip, tolerance_ticks=harness.IOC_TOLERANCE,
+            fill_model=WINDOW_ENTRY_FILL_MODELS[0],
+            slippage_ticks=slip,
+            tolerance_ticks=harness.IOC_TOLERANCE,
         )
         ioc_rows = run_bracket_stage(
             LANES["322_mnq"], bars, candidates,
-            fill_model="ioc_limit", slippage_ticks=slip, tolerance_ticks=harness.IOC_TOLERANCE,
+            fill_model=WINDOW_ENTRY_FILL_MODELS[1],
+            slippage_ticks=slip,
+            tolerance_ticks=harness.IOC_TOLERANCE,
         )
         pre_rows = run_bracket_stage(
             LANES["322_mnq"], bars, prearmed,
-            fill_model="stop_market", slippage_ticks=slip, tolerance_ticks=harness.IOC_TOLERANCE,
+            fill_model=WINDOW_ENTRY_FILL_MODELS[2],
+            slippage_ticks=slip,
+            tolerance_ticks=harness.IOC_TOLERANCE,
         )
         ledgers[key] = harness.ledger(
             candidates,
@@ -819,14 +905,29 @@ def _gate_payload(
     return payload
 
 
-def _write_gate_artifact(payload: dict) -> str:
-    GATE_ARTIFACT.parent.mkdir(parents=True, exist_ok=True)
+def _attempt_artifact_path(attempt_number: int) -> Path:
+    if attempt_number < 1:
+        raise RuntimeError(f"gate attempt {attempt_number} is not a positive attempt number")
+    if attempt_number == 1:
+        return GATE_ARTIFACT
+    return GATE_ARTIFACT.with_name(f"reproduction-gate.attempt-{attempt_number:02d}.json")
+
+
+def _write_gate_artifact(payload: dict) -> tuple[str, str]:
+    path = _attempt_artifact_path(len(_gate_lines()) + 1)
+    if path.exists():
+        raise RuntimeError(f"refusing to overwrite gate artifact {path}")
+    path.parent.mkdir(parents=True, exist_ok=True)
     text = json.dumps(payload, indent=2, default=str) + "\n"
-    GATE_ARTIFACT.write_text(text, encoding="utf-8")
-    return hashlib.sha256(text.encode()).hexdigest()
+    path.write_text(text, encoding="utf-8")
+    if path.is_relative_to(REPO):
+        rel = str(path.relative_to(REPO))
+    else:
+        rel = str(path)
+    return hashlib.sha256(text.encode()).hexdigest(), rel
 
 
-def _append_gate_event(payload: dict, artifact_sha256: str) -> None:
+def _append_gate_event(payload: dict, artifact_sha256: str, artifact_rel: str) -> None:
     lines = TRIAL_LEDGER.read_text(encoding="utf-8").splitlines()
     rows = [json.loads(line) for line in lines if line.strip()]
     first = next(row for row in rows if row.get("trial_id") == TRIAL_ID)
@@ -845,7 +946,7 @@ def _append_gate_event(payload: dict, artifact_sha256: str) -> None:
             "recorded_at": stamp.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "recorded_by": "reproduction-gate",
             "gate_pass": payload["pass"],
-            "gate_artifact": str(GATE_ARTIFACT.relative_to(REPO)) if GATE_ARTIFACT.is_relative_to(REPO) else str(GATE_ARTIFACT),
+            "gate_artifact": artifact_rel,
             "gate_artifact_sha256": artifact_sha256,
             "pulled_files": payload.get("pulled_files"),
             "research_15m_sha256": payload.get("research_15m_sha256"),
@@ -918,24 +1019,47 @@ def _record_scoring_failure(
     payload = _gate_payload(None, None, manifest, error, identity, _prior_attempts())
     payload["data_gaps"] = gaps
     payload["data_gap_count"] = gap_count
-    digest = _write_gate_artifact(payload)
-    _append_gate_event(payload, digest)
+    digest, artifact_rel = _write_gate_artifact(payload)
+    _append_gate_event(payload, digest, artifact_rel)
     return payload
+
+
+def _frozen_bracket_literals() -> dict[str, object]:
+    """Read the Oct 4 broker literals from frozen resolve_bracket. Do not edit that file."""
+    text = (REPO / "scripts/edge_decomposition_audit.py").read_text(encoding="utf-8")
+    start = text.index("def resolve_bracket")
+    body = text[start:text.index("\ndef ", start + 1)]
+    if (
+        "starting_balance=100_000.0" not in body
+        or "pessimistic_both_hit=True" not in body
+        or "contracts=1" not in body
+    ):
+        raise RuntimeError(
+            "bad config: frozen resolve_bracket no longer states the Oct 4 "
+            "contracts, starting balance, and pessimistic same-bar handling"
+        )
+    return {
+        "contracts": 1,
+        "starting_balance": 100000.0,
+        "pessimistic_both_hit": True,
+    }
 
 
 def _effective_scoring_profile() -> dict:
     """Read the settings the frozen bracket path consults. Do not assign them."""
-    return {
+    tick, tick_value = contract_economics("MNQ")
+    profile = {
         "MAX_CONTRACTS_HARD_CAP": os.environ.get("MAX_CONTRACTS_HARD_CAP"),
         "risk_rules_contract_ceiling": per_instrument_contract_ceiling(),
-        "contracts": 1,
-        "starting_balance": 100000.0,
-        "pessimistic_both_hit": True,
         "entry_tolerance_ticks": float(harness.IOC_TOLERANCE),
-        "slippage_ticks": [1.0, 2.0, 3.0],
-        "entry_fill_models": ["market", "ioc_limit", "stop_market"],
+        "slippage_ticks": [float(item) for item in WINDOW_SLIPPAGE_TICKS],
+        "entry_fill_models": list(WINDOW_ENTRY_FILL_MODELS),
         "commission_round_trip": float(COMMISSION_ROUND_TRIP),
+        "tick_size": tick,
+        "tick_value": tick_value,
     }
+    profile.update(_frozen_bracket_literals())
+    return profile
 
 
 def _scoring_profile_or_refuse() -> dict:
@@ -984,8 +1108,8 @@ def run_reproduction_gate(data_root: Path, research_15m: Path, audit_5m: Path) -
     except Exception as exc:
         return _record_scoring_failure(research, audit, manifest, identity, str(exc))
     payload = _gate_payload(scored, comparison, manifest, None, identity, _prior_attempts())
-    digest = _write_gate_artifact(payload)
-    _append_gate_event(payload, digest)
+    digest, artifact_rel = _write_gate_artifact(payload)
+    _append_gate_event(payload, digest, artifact_rel)
     return payload
 
 
@@ -1010,18 +1134,35 @@ def run_window(
     raise RuntimeError("score the reproduction window through run_reproduction_gate")
 
 
+def _matching_attempt_file(digest: object) -> Path | None:
+    if not isinstance(digest, str):
+        return None
+    candidates = [GATE_ARTIFACT]
+    folder = GATE_ARTIFACT.parent
+    if folder.is_dir():
+        candidates.extend(sorted(folder.glob("reproduction-gate*.json")))
+    seen: set[str] = set()
+    for path in candidates:
+        key = str(path)
+        if key in seen or not path.is_file():
+            continue
+        seen.add(key)
+        if hashlib.sha256(path.read_bytes()).hexdigest() == digest:
+            return path
+    return None
+
+
 def _verified_gate_artifact() -> dict:
     lines = _gate_lines()
-    if not lines or not GATE_ARTIFACT.is_file():
+    if not lines:
         raise RuntimeError(
             "no committed reproduction-gate artifact; Claude's review of a PASS "
             "gate is required before the older slices run"
         )
-    text = GATE_ARTIFACT.read_text(encoding="utf-8")
-    digest = hashlib.sha256(text.encode()).hexdigest()
-    if digest != lines[-1].get("gate_artifact_sha256"):
+    path = _matching_attempt_file(lines[-1].get("gate_artifact_sha256"))
+    if path is None:
         raise RuntimeError("reproduction-gate artifact hash mismatch")
-    return json.loads(text)
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _same_data(left: dict, right: dict) -> bool:
@@ -1143,12 +1284,11 @@ def record_gate_review(pr_head_sha: str) -> dict:
     lines = _gate_lines()
     if not lines or lines[-1].get("gate_pass") is not True:
         raise RuntimeError("GATE_REVIEW requires a PASS gate line")
-    if not GATE_ARTIFACT.is_file():
-        raise RuntimeError("GATE_REVIEW requires the PASS artifact")
-    text = GATE_ARTIFACT.read_text(encoding="utf-8")
-    digest = hashlib.sha256(text.encode()).hexdigest()
-    if digest != lines[-1].get("gate_artifact_sha256"):
+    path = _matching_attempt_file(lines[-1].get("gate_artifact_sha256"))
+    if path is None:
         raise RuntimeError("GATE_REVIEW artifact hash mismatch")
+    text = path.read_text(encoding="utf-8")
+    digest = hashlib.sha256(text.encode()).hexdigest()
     raw_lines = TRIAL_LEDGER.read_text(encoding="utf-8").splitlines()
     rows = [json.loads(line) for line in raw_lines if line.strip()]
     first = next(row for row in rows if row.get("trial_id") == TRIAL_ID)
@@ -1198,6 +1338,7 @@ def run_declared_slices(
     """
     if slice_id == "combined":
         raise RuntimeError("combined is report-only and is not admitted")
+    _scoring_profile_or_refuse()
     artifact = _verified_gate_artifact()
     if artifact.get("pass") is not True:
         raise RuntimeError("reproduction gate did not PASS")
@@ -1208,8 +1349,10 @@ def run_declared_slices(
         )
     _refuse_changed_gate_data(artifact)
     _refuse_if_superseded()
-    text = GATE_ARTIFACT.read_text(encoding="utf-8")
-    _require_gate_review(hashlib.sha256(text.encode()).hexdigest())
+    path = _matching_attempt_file(_gate_lines()[-1].get("gate_artifact_sha256"))
+    if path is None:
+        raise RuntimeError("reproduction-gate artifact hash mismatch")
+    _require_gate_review(hashlib.sha256(path.read_bytes()).hexdigest())
     if data_root is None or research_15m is None or audit_5m is None or slice_id is None:
         raise RuntimeError("slice admission requires data_root, the slice id, and its trees")
     root = _resolved_data_root(data_root)

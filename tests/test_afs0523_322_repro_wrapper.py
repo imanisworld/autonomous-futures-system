@@ -27,6 +27,11 @@ from research.afs0523_322_repro_wrapper import (
     invalid_brackets_outside_data_gaps,
     partition_invalid_gap_opens,
     record_gate_review,
+    OLDER_SLICE_IOC_NOTE,
+    _ioc_close_allowlist,
+    _write_gate_artifact,
+    compare_replay_structural,
+    compare_replay_to_oct4,
     run_declared_slices,
     run_reproduction_gate,
     run_window,
@@ -227,6 +232,7 @@ def test_expected_count_is_a_wrapper_parameter_and_new_slices_are_refused(tmp_pa
     }
     (target / "MNQ_2024-08-02.jsonl").write_text(json.dumps(bar) + "\n", encoding="utf-8")
 
+    os.environ["MAX_CONTRACTS_HARD_CAP"] = "1"
     with pytest.raises(RuntimeError, match="expected-count"):
         wrapper["_run_window"](
             research,
@@ -250,7 +256,8 @@ def test_expected_count_is_a_wrapper_parameter_and_new_slices_are_refused(tmp_pa
     assert any(item["field"] == "row" for item in refused["mismatches"])
 
     assert wrapper["RUN_AUTHORIZED"] is True
-    with pytest.raises(RuntimeError, match="artifact hash mismatch"):
+    os.environ["MAX_CONTRACTS_HARD_CAP"] = "1"
+    with pytest.raises(RuntimeError, match="did not PASS"):
         wrapper["run_declared_slices"](research, audit)
 
 
@@ -486,6 +493,7 @@ def test_data_gap_days_are_reported_and_not_scored(tmp_path):
         "volume": 1,
     }
     (audit / "MNQ" / "MNQ_2024-08-02.jsonl").write_text(json.dumps(bar) + "\n", encoding="utf-8")
+    os.environ["MAX_CONTRACTS_HARD_CAP"] = "1"
     result = _wrapper()["_run_window"](research, audit, start=day, end=day, expected_count=None)
     assert result["candidate_count"] == 0
     assert result["data_gap_count"] >= 1
@@ -659,22 +667,35 @@ def _call_gate(data_root: Path, research: Path, audit: Path):
             os.environ["MAX_CONTRACTS_HARD_CAP"] = previous
 
 
+def _open_trial_ledger_text() -> str:
+    kept = []
+    for line in (ROOT / "docs/research-trial-ledger.jsonl").read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            row = json.loads(line)
+            if row.get("trial_id") == TRIAL_ID and row.get("event") == "SUPERSEDED":
+                continue
+        kept.append(line)
+    return "\n".join(kept) + "\n"
+
+
 def _patch_gate_paths(monkeypatch, tmp_path: Path) -> tuple[Path, Path]:
     artifact = tmp_path / "reproduction-gate.json"
     ledger = tmp_path / "ledger.jsonl"
-    ledger.write_bytes((ROOT / "docs/research-trial-ledger.jsonl").read_bytes())
+    ledger.write_text(_open_trial_ledger_text(), encoding="utf-8")
     monkeypatch.setattr("research.afs0523_322_repro_wrapper.GATE_ARTIFACT", artifact)
     monkeypatch.setattr("research.afs0523_322_repro_wrapper.TRIAL_LEDGER", ledger)
     return artifact, ledger
 
 
 def test_reproduction_gate_refuses_when_the_flag_is_false(monkeypatch, tmp_path):
+    _patch_gate_paths(monkeypatch, tmp_path)
     monkeypatch.setattr("research.afs0523_322_repro_wrapper.RUN_AUTHORIZED", False)
     with pytest.raises(RuntimeError, match="RUN_AUTHORIZED"):
         run_reproduction_gate(tmp_path, Path("."), Path("."))
 
 
 def test_reproduction_gate_refuses_a_day_file_outside_the_window(monkeypatch, tmp_path):
+    _patch_gate_paths(monkeypatch, tmp_path)
     research = tmp_path / "research"
     audit = tmp_path / "audit"
     _bar_file(research, date(2020, 1, 2))
@@ -685,6 +706,7 @@ def test_reproduction_gate_refuses_a_day_file_outside_the_window(monkeypatch, tm
 
 
 def test_reproduction_gate_refuses_a_checksum_or_tree_hash_mismatch(monkeypatch, tmp_path):
+    _patch_gate_paths(monkeypatch, tmp_path)
     research = tmp_path / "research"
     audit = tmp_path / "audit"
     _bar_file(research, date(2024, 8, 2))
@@ -714,6 +736,7 @@ def test_reproduction_gate_refuses_a_caller_window_or_count_override(tmp_path):
 
 
 def test_reproduction_gate_refuses_a_caller_manifest_or_placeholder_pin(monkeypatch, tmp_path):
+    _patch_gate_paths(monkeypatch, tmp_path)
     assert DATA_MANIFEST_SHA256 != "PLACEHOLDER"
     research = tmp_path / "research"
     audit = tmp_path / "audit"
@@ -734,6 +757,7 @@ def test_reproduction_gate_refuses_a_caller_manifest_or_placeholder_pin(monkeypa
 
 
 def test_reproduction_gate_resolves_paths_under_data_root(monkeypatch, tmp_path):
+    _patch_gate_paths(monkeypatch, tmp_path)
     monkeypatch.setenv("MAX_CONTRACTS_HARD_CAP", "1")
     with pytest.raises(RuntimeError, match="data_root is missing"):
         run_reproduction_gate(tmp_path / "missing-root", Path("research"), Path("audit"))
@@ -815,6 +839,15 @@ def _write_gate(artifact: Path, ledger: Path, payload: dict, *, tamper: bool = F
 
 def test_declared_slices_refuse_without_a_verified_pass_artifact(monkeypatch, tmp_path):
     artifact, ledger = _patch_gate_paths(monkeypatch, tmp_path)
+    kept = [
+        line
+        for line in ledger.read_text(encoding="utf-8").splitlines()
+        if not line.strip()
+        or json.loads(line).get("trial_id") != TRIAL_ID
+        or json.loads(line).get("event") != "GATE"
+    ]
+    ledger.write_text("\n".join(kept) + "\n", encoding="utf-8")
+    monkeypatch.setenv("MAX_CONTRACTS_HARD_CAP", "1")
     with pytest.raises(RuntimeError, match="Claude"):
         run_declared_slices()
     _write_gate(artifact, ledger, {"pass": False, "claude_review": None}, tamper=True)
@@ -901,7 +934,7 @@ def test_reproduction_gate_records_a_count_failure_on_a_synthetic_fixture(monkey
     assert result["adapter_report"]["contracts"] == ["MNQH5"]
     assert result["data_gap_count"] >= 1
     assert any(item["date"] == day.isoformat() and item["scored"] is False for item in result["data_gaps"])
-    written = json.loads(artifact.read_text(encoding="utf-8"))
+    written = json.loads(artifact.with_name("reproduction-gate.attempt-03.json").read_text(encoding="utf-8"))
     assert written["pass"] is False
     last = json.loads(ledger.read_text(encoding="utf-8").splitlines()[-1])
     assert last["event"] == "GATE"
@@ -1014,7 +1047,7 @@ def test_scoring_exception_is_recorded_as_fail(monkeypatch, tmp_path):
     assert last["event"] == "GATE"
     assert last["gate_pass"] is False
     assert last["manifest_sha256"] == pin
-    written = json.loads(artifact.read_text(encoding="utf-8"))
+    written = json.loads(artifact.with_name("reproduction-gate.attempt-03.json").read_text(encoding="utf-8"))
     assert written["pass"] is False
     assert (ROOT / "docs/research-trial-ledger.jsonl").read_bytes() == real_ledger
 
@@ -1043,6 +1076,7 @@ def test_pinned_manifest_hash_matches_the_committed_file_and_june_1_is_refused(t
 
 
 def test_download_manifest_schema_requires_each_window(monkeypatch, tmp_path):
+    _patch_gate_paths(monkeypatch, tmp_path)
     research = tmp_path / "research"
     audit = tmp_path / "audit"
     _bar_file(research, date(2024, 8, 2))
@@ -1237,7 +1271,7 @@ def test_superseded_trial_refuses_the_reproduction_gate(monkeypatch, tmp_path):
 
 def test_bad_scoring_profile_refuses_before_a_gate_line(monkeypatch, tmp_path):
     ledger = tmp_path / "ledger.jsonl"
-    ledger.write_bytes((ROOT / "docs/research-trial-ledger.jsonl").read_bytes())
+    ledger.write_text(_open_trial_ledger_text(), encoding="utf-8")
     artifact = tmp_path / "reproduction-gate.json"
     monkeypatch.setattr("research.afs0523_322_repro_wrapper.TRIAL_LEDGER", ledger)
     monkeypatch.setattr("research.afs0523_322_repro_wrapper.GATE_ARTIFACT", artifact)
@@ -1346,3 +1380,56 @@ def test_superseded_trial_refuses_a_gate_review(monkeypatch, tmp_path):
         record_gate_review("c" * 40)
     assert ledger.read_bytes() == before
     assert (ROOT / "docs/research-trial-ledger.jsonl").read_bytes() == real_ledger
+
+
+def test_writer_refuses_an_existing_attempt_file(monkeypatch, tmp_path):
+    artifact, ledger = _patch_gate_paths(monkeypatch, tmp_path)
+    path = artifact.with_name("reproduction-gate.attempt-03.json")
+    path.write_text("{}\n", encoding="utf-8")
+    before = ledger.read_bytes()
+    with pytest.raises(RuntimeError, match="overwrite"):
+        _write_gate_artifact({"pass": False})
+    assert path.read_text(encoding="utf-8") == "{}\n"
+    assert ledger.read_bytes() == before
+    assert not artifact.exists()
+
+
+def test_slice_admission_refuses_a_missing_cap(monkeypatch, tmp_path):
+    _artifact, ledger = _patch_gate_paths(monkeypatch, tmp_path)
+    monkeypatch.delenv("MAX_CONTRACTS_HARD_CAP", raising=False)
+    before = ledger.read_bytes()
+    with pytest.raises(RuntimeError, match="MAX_CONTRACTS_HARD_CAP"):
+        run_declared_slices()
+    assert ledger.read_bytes() == before
+
+
+def test_structural_gate_allows_only_documented_close_deltas():
+    reference = json.loads(
+        (ROOT / "docs/research-evidence/T-2026-10-04-prereg-322-corrected-eod-rerun-2026-10-04-01/result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    exact = compare_replay_to_oct4({"ledger": reference["ledger"]})
+    structural = compare_replay_structural({"ledger": reference["ledger"]})
+    assert exact["ok"] is True
+    assert structural["ok"] is True
+    allowlist = _ioc_close_allowlist()
+    assert set(allowlist) == {"2024-09-06", "2026-06-11"}
+    moved = json.loads(json.dumps(reference))
+    for rows in moved["ledger"].values():
+        for row in rows:
+            if row["date"] == "2024-09-06":
+                row["models"]["ioc_close"]["fill_entry"] = float(row["models"]["ioc_close"]["fill_entry"]) + 0.75
+                row["models"]["ioc_close"]["net"] = float(row["models"]["ioc_close"]["net"]) + 1.50
+    assert compare_replay_to_oct4({"ledger": moved["ledger"]})["ok"] is False
+    assert compare_replay_structural({"ledger": moved["ledger"]})["ok"] is True
+    pre_state = json.loads(json.dumps(reference))
+    for rows in pre_state["ledger"].values():
+        for row in rows:
+            if row["date"] == "2026-03-06":
+                row["direction"] = "SHORT" if row["direction"] == "LONG" else "LONG"
+    assert compare_replay_structural({"ledger": pre_state["ledger"]})["ok"] is False
+    prereg = (ROOT / "docs/prereg-322-afs0523-oos-structural-2026-11-10.md").read_text(encoding="utf-8")
+    assert "written after AFS-0586" in prereg
+    assert "Original and pre-armed match exactly" in prereg
+    assert OLDER_SLICE_IOC_NOTE in prereg

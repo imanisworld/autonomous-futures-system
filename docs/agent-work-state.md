@@ -1,6 +1,15 @@
 # Agent Work State
 
-## START HERE — 2026-11-10 AFS-0586 reproduction gate rerun FAIL record
+## START HERE — 2026-11-10 post-hoc structural trial
+
+| Item | State |
+|---|---|
+| **Trial** | `T-2026-11-09-prereg-322-afs0523-oos-reproduction-2026-11-09-01` is SUPERSEDED. The new trial is `T-2026-11-10-prereg-322-afs0523-oos-structural-2026-11-10-01`. It was written after AFS-0586. `RUN_AUTHORIZED` is false. No scoring run. |
+| **Fixed** | Each attempt gets its own artifact file and an existing file is refused. The structural compare allows honest-IOC `fill_price` and `net` only on a documented vendor close difference. The profile reads `_run_window`'s slippage and fill models, the frozen `resolve_bracket` literals, and MNQ tick size and tick value. That check guards `_run_window` and slice admission. Easter 2026 is 2026-04-05, so Good Friday 2026-04-03 is closed. |
+| **Deferred** | Early-close pre-open 15-minute bars stay `DATA_GAP`. The adapter carries a TODO. Do not label them in this change. |
+| **NEXT** | Review the draft. Do not run the gate and do not merge from this checkpoint. |
+
+## Previous — 2026-11-10 AFS-0586 reproduction gate rerun FAIL record
 
 | Item | State |
 |---|---|

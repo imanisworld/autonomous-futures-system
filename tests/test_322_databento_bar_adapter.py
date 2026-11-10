@@ -12,6 +12,7 @@ import pytest
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from research.databento_322_bar_adapter import _easter_sunday, cme_equity_index_session
 from scripts.edge_decomposition_audit import _is_eod_bar
 
 ET = ZoneInfo("America/New_York")
@@ -272,6 +273,12 @@ def test_missing_5m_bar_in_the_session_window_is_a_data_gap():
     assert gap["scored"] is False
     assert "14:00" in gap["missing_5m"]
     assert gap["missing_15m"] == []
+
+
+def test_good_friday_2026_is_a_closed_session():
+    assert _easter_sunday(2026) == date(2026, 4, 5)
+    assert _easter_sunday(2025) == date(2025, 4, 20)
+    assert cme_equity_index_session(date(2026, 4, 3)) == "closed"
 
 
 def test_early_close_does_not_treat_the_1555_bar_as_a_data_gap():

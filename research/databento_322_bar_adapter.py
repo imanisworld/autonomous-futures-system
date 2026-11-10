@@ -77,8 +77,9 @@ def _easter_sunday(year: int) -> date:
     year_mod = year % 19
     century, century_mod = divmod(year, 100)
     century_quad, century_quad_mod = divmod(century, 4)
-    leap_correction, leap_mod = divmod(century + 8, 25)
-    paschal = (year_mod * 19 + century - century_quad - leap_correction + 15) % 30
+    leap_correction = (century + 8) // 25
+    lunar_correction = (century - leap_correction + 1) // 3
+    paschal = (year_mod * 19 + century - century_quad - lunar_correction + 15) % 30
     century_leap, century_leap_mod = divmod(century_mod, 4)
     weekday_shift = (32 + 2 * century_quad_mod + 2 * century_leap - paschal - century_leap_mod) % 7
     correction = (year_mod + 11 * paschal + 22 * weekday_shift) // 451
@@ -170,6 +171,11 @@ def classify_written_bars(rows_15m: list[dict], rows_5m: list[dict], start: date
     A missing bar means no 1-minute print fell in that bucket. Holiday closures
     and the session after a 13:00 ET early close are reported separately and
     are not ``DATA_GAP``.
+
+    TODO: an early-close day still requires 15-minute bars from 07:00. The
+    shortened session's missing pre-open bars (2025-11-28, 07:00 through 08:15)
+    stay ``DATA_GAP``. Label those ``expected_holiday_closure`` before slice
+    runs. This commit does not change that label.
     """
     present_15 = _et_starts(rows_15m)
     present_5 = _et_starts(rows_5m)
