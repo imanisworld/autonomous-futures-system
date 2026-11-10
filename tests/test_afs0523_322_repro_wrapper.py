@@ -19,6 +19,8 @@ import pytest
 from config.futures_contracts import contract_economics
 from research.afs0523_322_repro_wrapper import (
     DATA_MANIFEST_SHA256,
+    _refuse_changed_gate_data,
+    _same_data,
     REPRO_END,
     REPRO_START,
     TRIAL_ID,
@@ -249,7 +251,7 @@ def test_expected_count_is_a_wrapper_parameter_and_new_slices_are_refused(tmp_pa
     assert any(item["field"] == "row" for item in refused["mismatches"])
 
     assert wrapper["RUN_AUTHORIZED"] is True
-    with pytest.raises(RuntimeError, match="Claude"):
+    with pytest.raises(RuntimeError, match="did not PASS"):
         wrapper["run_declared_slices"](research, audit)
 
 
@@ -918,13 +920,15 @@ def test_reproduction_gate_records_a_count_failure_on_a_synthetic_fixture(monkey
     assert result["research_15m_sha256"] == _repro(manifest)["research_15m_sha256"]
     assert result["audit_5m_sha256"] == _repro(manifest)["audit_5m_sha256"]
     assert result["pulled_files"] == manifest["pulled_files"]
-    assert result["prior_attempts"] == []
+    assert len(result["prior_attempts"]) == 1
+    assert result["prior_attempts"][0]["manifest_sha256"] == DATA_MANIFEST_SHA256
+    assert result["prior_attempts"][0]["research_15m_sha256"] == "461384bc2c638e849ebcdbd4c1fed09fde79fbc9c48dee7656a1151c259e3339"
     assert written["manifest_sha256"] == pin
     again = _call_gate(tmp_path, research, audit)
     assert again["pass"] is False
-    assert len(again["prior_attempts"]) == 1
-    assert again["prior_attempts"][0]["manifest_sha256"] == pin
-    assert again["prior_attempts"][0]["research_15m_sha256"] == _repro(manifest)["research_15m_sha256"]
+    assert len(again["prior_attempts"]) == 2
+    assert again["prior_attempts"][0]["manifest_sha256"] == DATA_MANIFEST_SHA256
+    assert again["prior_attempts"][0]["research_15m_sha256"] == "461384bc2c638e849ebcdbd4c1fed09fde79fbc9c48dee7656a1151c259e3339"
     assert (ROOT / "docs/research-trial-ledger.jsonl").read_bytes() == real_ledger
 
 
@@ -1094,6 +1098,14 @@ def test_gate_review_admits_a_slice_without_scoring_and_rejects_a_different_arti
     )
     _pin_manifest(monkeypatch, tmp_path, manifest)
     artifact, ledger = _patch_gate_paths(monkeypatch, tmp_path)
+    kept = [
+        line
+        for line in ledger.read_text(encoding="utf-8").splitlines()
+        if not line.strip()
+        or json.loads(line).get("event") != "GATE"
+        or json.loads(line).get("trial_id") != TRIAL_ID
+    ]
+    ledger.write_text("\n".join(kept) + "\n", encoding="utf-8")
     real_ledger = (ROOT / "docs/research-trial-ledger.jsonl").read_bytes()
     monkeypatch.setattr(
         "research.afs0523_322_repro_wrapper._run_window",
@@ -1246,6 +1258,64 @@ def test_bad_scoring_profile_refuses_before_a_gate_line(monkeypatch, tmp_path):
     assert ledger.read_bytes() == before
     assert not artifact.exists()
     assert (ROOT / "docs/research-trial-ledger.jsonl").read_bytes() == real_ledger
+
+
+def test_recorded_gate_fail_is_the_pinned_download_and_not_different_data(tmp_path):
+    artifact_path = (
+        ROOT
+        / "docs/research-evidence/T-2026-11-09-prereg-322-afs0523-oos-reproduction-2026-11-09-01/reproduction-gate.json"
+    )
+    digest = hashlib.sha256(artifact_path.read_bytes()).hexdigest()
+    assert digest == "ede35c326057ba4fa39cebfeaad8851d97ad60df9de1c2ddedd9b888dcd1dfeb"
+    artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert artifact["manifest_sha256"] == DATA_MANIFEST_SHA256
+    assert artifact["research_15m_sha256"] == "461384bc2c638e849ebcdbd4c1fed09fde79fbc9c48dee7656a1151c259e3339"
+    assert artifact["audit_5m_sha256"] == "a08d909274fa5a06e9234b1c0975977d91a00b1f749c0560fd6d41859410c1e3"
+    fail_sha = "ede35c326057ba4fa39cebfeaad8851d97ad60df9de1c2ddedd9b888dcd1dfeb"
+    matches = []
+    for line in (ROOT / "docs/research-trial-ledger.jsonl").read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        if row.get("event") == "GATE" and row.get("gate_artifact_sha256") == fail_sha:
+            matches.append(line)
+    assert len(matches) == 1
+    gate_line = matches[0]
+    gate = json.loads(gate_line)
+    assert gate["event"] == "GATE"
+    assert gate["gate_pass"] is False
+    assert gate["gate_artifact_sha256"] == digest
+    assert _same_data(gate, artifact)
+    later = {
+        "pass": True,
+        "manifest_sha256": gate["manifest_sha256"],
+        "research_15m_sha256": gate["research_15m_sha256"],
+        "audit_5m_sha256": gate["audit_5m_sha256"],
+        "prior_attempts": [
+            {
+                "manifest_sha256": gate["manifest_sha256"],
+                "research_15m_sha256": gate["research_15m_sha256"],
+                "audit_5m_sha256": gate["audit_5m_sha256"],
+            }
+        ],
+    }
+    ledger = tmp_path / "ledger.jsonl"
+    follow = {
+        "trial_id": TRIAL_ID,
+        "event": "GATE",
+        "gate_pass": True,
+        "manifest_sha256": later["manifest_sha256"],
+        "research_15m_sha256": later["research_15m_sha256"],
+        "audit_5m_sha256": later["audit_5m_sha256"],
+        "gate_artifact_sha256": "ab" * 32,
+    }
+    ledger.write_text(gate_line + "\n" + json.dumps(follow) + "\n", encoding="utf-8")
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr("research.afs0523_322_repro_wrapper.TRIAL_LEDGER", ledger)
+    try:
+        _refuse_changed_gate_data(later)
+    finally:
+        monkeypatch.undo()
 
 
 def test_superseded_trial_refuses_a_gate_review(monkeypatch, tmp_path):

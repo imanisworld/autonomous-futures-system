@@ -344,6 +344,20 @@ def test_canonical_research_evidence_is_registered_before_counting() -> None:
             )
             continue
 
+        if path.name == "reproduction-gate.json":
+            digest = hashlib.sha256((ROOT / rel).read_bytes()).hexdigest()
+            gate_rows = [
+                row
+                for row in by_trial[trial_id]
+                if row.get("event") == "GATE" and row.get("gate_artifact") == rel
+            ]
+            assert len(gate_rows) == 1, f"{rel}: reproduction gate artifact needs one GATE line"
+            assert gate_rows[0].get("gate_artifact_sha256") == digest, (
+                f"{rel}: GATE line hash does not match the artifact bytes"
+            )
+            assert gate_rows[0].get("gate_pass") is False
+            continue
+
         matching = [
             row
             for row in by_trial[trial_id]
