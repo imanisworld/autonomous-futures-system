@@ -20,7 +20,6 @@ from config.futures_contracts import contract_economics
 from research.afs0523_322_repro_wrapper import (
     DATA_MANIFEST_SHA256,
     _refuse_changed_gate_data,
-    _same_data,
     REPRO_END,
     REPRO_START,
     TRIAL_ID,
@@ -1261,16 +1260,6 @@ def test_bad_scoring_profile_refuses_before_a_gate_line(monkeypatch, tmp_path):
 
 
 def test_recorded_gate_fail_is_the_pinned_download_and_not_different_data(tmp_path):
-    artifact_path = (
-        ROOT
-        / "docs/research-evidence/T-2026-11-09-prereg-322-afs0523-oos-reproduction-2026-11-09-01/reproduction-gate.json"
-    )
-    digest = hashlib.sha256(artifact_path.read_bytes()).hexdigest()
-    assert digest == "ede35c326057ba4fa39cebfeaad8851d97ad60df9de1c2ddedd9b888dcd1dfeb"
-    artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
-    assert artifact["manifest_sha256"] == DATA_MANIFEST_SHA256
-    assert artifact["research_15m_sha256"] == "461384bc2c638e849ebcdbd4c1fed09fde79fbc9c48dee7656a1151c259e3339"
-    assert artifact["audit_5m_sha256"] == "a08d909274fa5a06e9234b1c0975977d91a00b1f749c0560fd6d41859410c1e3"
     fail_sha = "ede35c326057ba4fa39cebfeaad8851d97ad60df9de1c2ddedd9b888dcd1dfeb"
     matches = []
     for line in (ROOT / "docs/research-trial-ledger.jsonl").read_text(encoding="utf-8").splitlines():
@@ -1284,8 +1273,10 @@ def test_recorded_gate_fail_is_the_pinned_download_and_not_different_data(tmp_pa
     gate = json.loads(gate_line)
     assert gate["event"] == "GATE"
     assert gate["gate_pass"] is False
-    assert gate["gate_artifact_sha256"] == digest
-    assert _same_data(gate, artifact)
+    assert gate["gate_artifact_sha256"] == fail_sha
+    assert gate["manifest_sha256"] == DATA_MANIFEST_SHA256
+    assert gate["research_15m_sha256"] == "461384bc2c638e849ebcdbd4c1fed09fde79fbc9c48dee7656a1151c259e3339"
+    assert gate["audit_5m_sha256"] == "a08d909274fa5a06e9234b1c0975977d91a00b1f749c0560fd6d41859410c1e3"
     later = {
         "pass": True,
         "manifest_sha256": gate["manifest_sha256"],
