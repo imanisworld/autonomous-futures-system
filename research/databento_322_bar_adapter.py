@@ -35,13 +35,15 @@ early-close halt requirement stays 13:00 ET, the cutoff that recorded
 2025-01-09 and 2025-11-28 as the only gaps. This module does not change that
 list.
 
-Any other window is the slice path. Its early-close halt is the published
-CME Globex equity halt, 12:15 CT (13:15 ET). A complete early-close day is
-labeled ``EARLY_CLOSE`` and, while ``EARLY_CLOSE_DISPOSITION`` is
-``exclude``, kept out of scoring. The frozen replay flattens only at 15:55
-ET, so this is not a 13:00 exit. A missing required bar on that day is still
-``DATA_GAP``. Front-month selection still uses the civil ET date and
-``roll_days=8``.
+Any other window is the slice path. CME Globex equity futures halt at
+12:15 CT (13:15 ET) on the day after Thanksgiving, Jul 3, and Dec 24, and at
+12:00 CT (13:00 ET) on MLK, Presidents' Day, Memorial Day, Labor Day, and
+Juneteenth. A complete early-close day is labeled ``EARLY_CLOSE``. While
+``EARLY_CLOSE_DISPOSITION`` is ``exclude``, that day is kept out of scoring.
+``include`` keeps the label and the count and lets the day through. The
+frozen replay flattens only at 15:55 ET, so neither setting is a halt-time
+exit. A missing required bar is still ``DATA_GAP``. Front-month selection
+still uses the civil ET date and ``roll_days=8``.
 
 NQ prices are written onto the MNQ path so the unchanged detector and the
 unchanged $2/point accounting can read them. The report labels those dollars
@@ -63,15 +65,14 @@ DOLLAR_BASIS = "MNQ-equivalent ($2/point)"
 NQ_LABEL = "best available evidence, not fully clean"
 NQ_RESEARCH_LABEL = "MNQ-equivalent research, not executable historical MNQ"
 OUTRIGHT_RE = re.compile(r"^(?:MNQ|NQ|MES|ES|MYM|YM|M2K|RTY)[HMUZ]\d$")
-# Recorded reproduction-window requirement. Do not move this: the structural
-# PASS required 5-minute bars only until 13:00 ET.
+# Recorded reproduction-window requirement. Every early close in that window
+# stops at 13:00 ET, which is what left gaps at 2025-01-09 and 2025-11-28.
 GATE_EARLY_CLOSE_MINUTES = 13 * 60
-# CME Globex equity-index holiday halt is 12:15 CT, which is 13:15 ET.
-# Source: CME Group Holiday and Trading Hours, Globex product schedule,
-# https://www.cmegroup.com/trading-hours.html (equity index early close on
-# the day after Thanksgiving and on Christmas Eve). The trading-floor table
-# on that page closes at 12:00 CT and is not this halt.
-SLICE_EARLY_CLOSE_MINUTES = 13 * 60 + 15
+# CME Globex equity schedule, https://www.cmegroup.com/trading-hours.html
+# 12:15 CT (13:15 ET): day after Thanksgiving, Jul 3, and Dec 24.
+# 12:00 CT (13:00 ET): MLK, Presidents' Day, Memorial Day, Labor Day, Juneteenth.
+SLICE_LATE_HALT_MINUTES = 13 * 60 + 15
+SLICE_NOON_HALT_MINUTES = 13 * 60
 DATA_GAP = "DATA_GAP"
 EARLY_CLOSE_STATUS = "EARLY_CLOSE"
 # Slice path. "exclude" holds a complete early-close day out of scoring
@@ -169,12 +170,29 @@ def cme_equity_index_session(day: date) -> str:
     return "regular"
 
 
-def _early_close_minutes(policy: str) -> int:
+def _late_halt_dates(year: int) -> set[date]:
+    """Days whose Globex equity halt is 12:15 CT, when they are early closes."""
+    dates = {_nth_weekday(year, 11, 3, 4) + timedelta(days=1)}
+    for eve in (_weekday_half_day(year, 7, 3), _weekday_half_day(year, 12, 24)):
+        if eve is not None:
+            dates.add(eve)
+    return dates
+
+
+def early_close_halt_minutes(day: date, *, policy: str) -> int:
+    """Minutes from midnight ET when the early-close session halts.
+
+    The reproduction window uses 13:00 ET for every early close. The slice
+    path uses 13:15 ET for the day after Thanksgiving, Jul 3, and Dec 24,
+    and 13:00 ET for the Monday holidays and Juneteenth.
+    """
     if policy == "gate":
         return GATE_EARLY_CLOSE_MINUTES
-    if policy == "slice":
-        return SLICE_EARLY_CLOSE_MINUTES
-    raise RuntimeError(f"unknown session policy {policy!r}")
+    if policy != "slice":
+        raise RuntimeError(f"unknown session policy {policy!r}")
+    if day in _late_halt_dates(day.year):
+        return SLICE_LATE_HALT_MINUTES
+    return SLICE_NOON_HALT_MINUTES
 
 
 def early_close_excluded() -> bool:
@@ -194,7 +212,7 @@ def _session_close_minutes(day: date, *, policy: str = "gate") -> int | None:
     if kind == "closed":
         return None
     if kind == "early_close":
-        return _early_close_minutes(policy)
+        return early_close_halt_minutes(day, policy=policy)
     return 16 * 60
 
 
@@ -221,8 +239,8 @@ def _clock_starts(day: date, first: int, stop: int, step: int) -> list[datetime]
 def _required_starts(day: date, *, policy: str = "gate") -> tuple[list[datetime], list[datetime]]:
     """15-minute starts from 07:00 ET and 5-minute starts in [10:00, close).
 
-    Both policies require 07:00. The gate close is 13:00 ET. The slice close
-    is the published 13:15 ET Globex halt.
+    Both policies require 07:00. The gate halt is 13:00 ET for every early
+    close. The slice halt is 13:15 ET or 13:00 ET by holiday.
     """
     if policy not in {"gate", "slice"}:
         raise RuntimeError(f"unknown session policy {policy!r}")
@@ -297,13 +315,14 @@ def classify_written_bars(
                     "scored": False,
                 }
             )
-        elif policy == "slice" and kind == "early_close" and early_close_excluded():
+        elif policy == "slice" and kind == "early_close":
+            excluded = early_close_excluded()
             early_sessions.append(
                 {
                     "date": day.isoformat(),
                     "status": EARLY_CLOSE_STATUS,
-                    "scored": False,
-                    "disposition": "exclude",
+                    "scored": not excluded,
+                    "disposition": "exclude" if excluded else "include",
                 }
             )
         day += timedelta(days=1)
@@ -345,7 +364,7 @@ def _closure_kind(moment: datetime) -> str | None:
     if kind == "closed":
         return "closed"
     if kind == "early_close":
-        if local.hour * 60 + local.minute >= SLICE_EARLY_CLOSE_MINUTES:
+        if local.hour * 60 + local.minute >= early_close_halt_minutes(local.date(), policy="slice"):
             return "early_close"
     return None
 

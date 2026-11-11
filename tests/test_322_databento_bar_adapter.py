@@ -17,6 +17,7 @@ from research.databento_322_bar_adapter import (
     EARLY_CLOSE_STATUS,
     REPRODUCTION_WINDOW_END,
     REPRODUCTION_WINDOW_START,
+    _closure_kind,
     _easter_sunday,
     _required_starts,
     classify_written_bars,
@@ -512,8 +513,35 @@ def test_half_days_come_from_the_cme_calendar_and_2025_01_09_does_not():
     assert "07:00" in [
         moment.strftime("%H:%M") for moment in _required_starts(date(2025, 1, 20), policy="slice")[0]
     ]
-    assert slice_5[-1] == "13:10"
-    assert "13:15" not in slice_5
+    assert slice_5[-1] == "12:55"
+    assert "13:00" not in slice_5
+
+
+@pytest.mark.parametrize(
+    ("day", "last_bar"),
+    [
+        (date(2025, 1, 20), "12:55"),
+        (date(2025, 2, 17), "12:55"),
+        (date(2025, 5, 26), "12:55"),
+        (date(2025, 9, 1), "12:55"),
+        (date(2025, 6, 19), "12:55"),
+        (date(2025, 11, 28), "13:10"),
+        (date(2024, 12, 24), "13:10"),
+        (date(2014, 7, 3), "13:10"),
+    ],
+)
+def test_each_holiday_uses_its_cme_halt(day, last_bar):
+    assert cme_equity_index_session(day) == "early_close"
+    slice_bars = [moment.strftime("%H:%M") for moment in _required_starts(day, policy="slice")[1]]
+    gate_bars = [moment.strftime("%H:%M") for moment in _required_starts(day)[1]]
+    assert slice_bars[-1] == last_bar
+    assert gate_bars[-1] == "12:55"
+    local = datetime(day.year, day.month, day.day, 13, 0, tzinfo=ET)
+    if last_bar == "12:55":
+        assert _closure_kind(local) == "early_close"
+    else:
+        assert _closure_kind(local) is None
+        assert _closure_kind(local.replace(minute=15)) == "early_close"
 
 
 def test_missing_0700_bar_on_an_early_close_day_is_a_data_gap():
@@ -656,8 +684,16 @@ def test_include_disposition_does_not_invent_an_early_close_exit(monkeypatch):
     )
     report = classify_written_bars(rows_15, rows_5, day, day, policy="slice")
     assert report["data_gap_count"] == 0
-    assert report["early_close_sessions"] == []
-    assert report["early_close_count"] == 0
+    assert report["early_close_count"] == 1
+    assert report["early_close_sessions"] == [
+        {
+            "date": "2014-07-03",
+            "status": EARLY_CLOSE_STATUS,
+            "scored": True,
+            "disposition": "include",
+        }
+    ]
+    assert "session_close_et" not in report["early_close_sessions"][0]
     monkeypatch.setattr(
         "research.databento_322_bar_adapter.EARLY_CLOSE_DISPOSITION",
         "flatten",

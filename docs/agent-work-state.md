@@ -8,9 +8,9 @@ Evidence only. The reproduction gate was not rerun. No Databento slice was score
 |---|---|
 | **Branch** | `cursor/322-early-close-slice-ba8e` |
 | **Scope** | Every day requires 07:00 ET. A missing 07:00-08:15 bar is `DATA_GAP`. A complete early-close day on a slice window is `EARLY_CLOSE` and `EARLY_CLOSE_DISPOSITION=exclude` holds it out of scoring. Jul 3 and Dec 24 are half-days only when that date is a weekday and not the observed closure. |
-| **Gate labels** | Reproduction window still requires bars until 13:00 ET. Gaps stay 2025-01-09 and 2025-11-28, count 2. The slice halt is the published 13:15 ET Globex halt. |
+| **Gate labels** | Reproduction window still requires bars until 13:00 ET on every early close. Gaps stay 2025-01-09 and 2025-11-28, count 2. Slice halt is 13:15 ET for Thanksgiving Friday, Jul 3, and Dec 24, and 13:00 ET for Monday holidays and Juneteenth. |
 | **Gate run** | Not rerun. The recorded PASS bytes are untouched. |
-| **Tests** | `python3 -B -m pytest -q tests/test_322_databento_bar_adapter.py tests/test_afs0523_322_repro_wrapper.py`: 74 passed. |
+| **Tests** | `python3 -B -m pytest -q tests/test_322_databento_bar_adapter.py tests/test_afs0523_322_repro_wrapper.py`: 82 passed. |
 | **NEXT** | Independent review. Do not merge from this checkpoint. Slice scoring is a separate change and stays unauthorized. |
 
 ## Previous — 2026-11-11 structural reproduction gate PASS record
