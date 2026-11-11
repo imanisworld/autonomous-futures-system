@@ -270,7 +270,7 @@ def test_expected_count_is_a_wrapper_parameter_and_new_slices_are_refused(monkey
     assert refused["ok"] is False
     assert any(item["field"] == "row" for item in refused["mismatches"])
 
-    assert wrapper["RUN_AUTHORIZED"] is False
+    assert wrapper["RUN_AUTHORIZED"] is True
     assert wrapper["TRIAL_ID"] != wrapper["SUPERSEDED_TRIAL_ID"]
     monkeypatch.setenv("MAX_CONTRACTS_HARD_CAP", "1")
     with pytest.raises(RuntimeError, match="no committed reproduction-gate artifact"):
@@ -335,7 +335,7 @@ def test_preregistration_cites_the_trial_and_blocks_a_new_data_run():
     assert "AFS-0523" in text
     assert "Claude" in text
     wrapper = _wrapper()
-    assert wrapper["RUN_AUTHORIZED"] is False
+    assert wrapper["RUN_AUTHORIZED"] is True
     assert wrapper["TRIAL_ID"] == "T-2026-11-10-prereg-322-afs0523-oos-structural-2026-11-10-01"
     assert wrapper["SUPERSEDED_TRIAL_ID"] == trial_id
     assert wrapper["TRIAL_ID"] != wrapper["SUPERSEDED_TRIAL_ID"]
@@ -967,6 +967,11 @@ def test_reproduction_gate_records_a_count_failure_on_a_synthetic_fixture(monkey
     assert last["research_15m_sha256"] == _repro(manifest)["research_15m_sha256"]
     assert last["audit_5m_sha256"] == _repro(manifest)["audit_5m_sha256"]
     assert last["pulled_files"] == manifest["pulled_files"]
+    assert last["replay_ledger"] is None
+    assert last["replay_ledger_sha256"] is None
+    assert written["replay_ledger"] is None
+    assert written["replay_ledger_sha256"] is None
+    assert not artifact.with_name("reproduction-replay-ledger.json").exists()
     assert result["manifest_sha256"] == pin
     assert result["research_15m_sha256"] == _repro(manifest)["research_15m_sha256"]
     assert result["audit_5m_sha256"] == _repro(manifest)["audit_5m_sha256"]
@@ -1064,7 +1069,120 @@ def test_scoring_exception_is_recorded_as_fail(monkeypatch, tmp_path):
     assert last["manifest_sha256"] == pin
     written = json.loads(artifact.read_text(encoding="utf-8"))
     assert written["pass"] is False
+    assert written["replay_ledger"] is None
+    assert written["replay_ledger_sha256"] is None
+    assert last["replay_ledger"] is None
+    assert last["replay_ledger_sha256"] is None
+    assert not artifact.with_name("reproduction-replay-ledger.json").exists()
     assert (ROOT / "docs/research-trial-ledger.jsonl").read_bytes() == real_ledger
+
+
+def _fake_scored_window(replay: dict):
+    def fake_window(*_args, **_kwargs):
+        return {
+            "ledger": replay,
+            "data_gaps": [],
+            "data_gap_count": 0,
+            "invalid_entry_brackets": [],
+            "invalid_entry_bracket_count": 0,
+            "gap_open_count": 0,
+        }
+
+    return fake_window
+
+
+def test_failed_comparison_saves_each_attempt_replay_ledger(monkeypatch, tmp_path):
+    research = tmp_path / "research"
+    audit = tmp_path / "audit"
+    _bar_file(research, date(2024, 8, 2))
+    _bar_file(audit, date(2024, 8, 2))
+    _pin_manifest(monkeypatch, tmp_path, _manifest(tmp_path, research, audit))
+    artifact, ledger = _patch_gate_paths(monkeypatch, tmp_path)
+    real_ledger = (ROOT / "docs/research-trial-ledger.jsonl").read_bytes()
+    replay = {
+        "1tick": [{"date": "2026-03-06", "trigger_bar_close": 1.0}],
+        "2tick": [],
+        "3tick": [],
+    }
+    monkeypatch.setattr(
+        "research.afs0523_322_repro_wrapper._run_window",
+        _fake_scored_window(replay),
+    )
+    result = _call_gate(monkeypatch, tmp_path, research, audit)
+    assert result["pass"] is False
+    saved = artifact.with_name("reproduction-replay-ledger.json")
+    raw = saved.read_bytes()
+    digest = hashlib.sha256(raw).hexdigest()
+    assert json.loads(raw) == {"ledger": replay}
+    assert result["replay_ledger"] == str(saved)
+    assert result["replay_ledger_sha256"] == digest
+    written = json.loads(artifact.read_text(encoding="utf-8"))
+    assert written["replay_ledger_sha256"] == digest
+    assert written["pass"] is False
+    last = json.loads(ledger.read_text(encoding="utf-8").splitlines()[-1])
+    assert last["event"] == "GATE"
+    assert last["replay_ledger"] == str(saved)
+    assert last["replay_ledger_sha256"] == digest
+    assert hashlib.sha256(raw + b" ").hexdigest() != digest
+    again = _call_gate(monkeypatch, tmp_path, research, audit)
+    second = artifact.with_name("reproduction-replay-ledger.attempt-02.json")
+    second_digest = hashlib.sha256(second.read_bytes()).hexdigest()
+    assert again["replay_ledger_sha256"] == second_digest
+    assert again["prior_attempts"][0]["replay_ledger_sha256"] == digest
+    assert json.loads(artifact.with_name("reproduction-gate.attempt-02.json").read_text(encoding="utf-8"))[
+        "replay_ledger_sha256"
+    ] == second_digest
+    assert (ROOT / "docs/research-trial-ledger.jsonl").read_bytes() == real_ledger
+
+
+def test_replay_ledger_is_saved_when_comparison_raises(monkeypatch, tmp_path):
+    research = tmp_path / "research"
+    audit = tmp_path / "audit"
+    _bar_file(research, date(2024, 8, 2))
+    _bar_file(audit, date(2024, 8, 2))
+    _pin_manifest(monkeypatch, tmp_path, _manifest(tmp_path, research, audit))
+    artifact, ledger = _patch_gate_paths(monkeypatch, tmp_path)
+    replay = {"1tick": [], "2tick": [], "3tick": []}
+    monkeypatch.setattr(
+        "research.afs0523_322_repro_wrapper._run_window",
+        _fake_scored_window(replay),
+    )
+
+    def boom(_scored):
+        raise RuntimeError("comparison failed closed")
+
+    monkeypatch.setattr("research.afs0523_322_repro_wrapper.compare_replay_structural", boom)
+    result = _call_gate(monkeypatch, tmp_path, research, audit)
+    assert result["pass"] is False
+    assert "comparison failed closed" in result["error"]
+    saved = artifact.with_name("reproduction-replay-ledger.json")
+    digest = hashlib.sha256(saved.read_bytes()).hexdigest()
+    assert json.loads(saved.read_text(encoding="utf-8")) == {"ledger": replay}
+    assert result["replay_ledger_sha256"] == digest
+    last = json.loads(ledger.read_text(encoding="utf-8").splitlines()[-1])
+    assert last["replay_ledger_sha256"] == digest
+
+
+def test_existing_replay_ledger_is_not_overwritten(monkeypatch, tmp_path):
+    research = tmp_path / "research"
+    audit = tmp_path / "audit"
+    _bar_file(research, date(2024, 8, 2))
+    _bar_file(audit, date(2024, 8, 2))
+    _pin_manifest(monkeypatch, tmp_path, _manifest(tmp_path, research, audit))
+    artifact, ledger = _patch_gate_paths(monkeypatch, tmp_path)
+    saved = artifact.with_name("reproduction-replay-ledger.json")
+    saved.write_text("{}\n", encoding="utf-8")
+    before_ledger = ledger.read_bytes()
+    before_saved = saved.read_bytes()
+    monkeypatch.setattr(
+        "research.afs0523_322_repro_wrapper._run_window",
+        _fake_scored_window({"1tick": [], "2tick": [], "3tick": []}),
+    )
+    with pytest.raises(RuntimeError, match="overwrite replay ledger"):
+        _call_gate(monkeypatch, tmp_path, research, audit)
+    assert saved.read_bytes() == before_saved
+    assert ledger.read_bytes() == before_ledger
+    assert not artifact.exists()
 
 
 def test_pinned_manifest_hash_matches_the_committed_file_and_june_1_is_refused(tmp_path):

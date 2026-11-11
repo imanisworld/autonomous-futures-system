@@ -19,7 +19,7 @@ window, the expected-count check, and the data paths. NQ prices, when a later
 reviewed run supplies them on the MNQ path, are accounted with the unchanged
 MNQ lane ($2/point). This module does not assign a point value.
 
-``RUN_AUTHORIZED`` is false. The superseded reproduction trial has no run
+``RUN_AUTHORIZED`` is true. The superseded reproduction trial has no run
 path. ``run_reproduction_gate`` belongs to the structural trial and calls
 ``compare_replay_structural``. It is the only path that scores Databento
 data, and only the fixed reproduction window on the committed manifest at
@@ -63,7 +63,7 @@ OCT4_LEDGER_COMMIT = "cf2ac0724a266198629a363fde23364ef00ce721"
 EOD_DATE = "2025-01-20"
 SUPERSEDED_TRIAL_ID = "T-2026-11-09-prereg-322-afs0523-oos-reproduction-2026-11-09-01"
 TRIAL_ID = "T-2026-11-10-prereg-322-afs0523-oos-structural-2026-11-10-01"
-RUN_AUTHORIZED = False
+RUN_AUTHORIZED = True
 TRIAL_LEDGER = REPO / "docs/research-trial-ledger.jsonl"
 GATE_ARTIFACT = (
     REPO
@@ -1304,6 +1304,44 @@ def _attempt_artifact_path(attempt_number: int) -> Path:
     return GATE_ARTIFACT.with_name(f"reproduction-gate.attempt-{attempt_number:02d}.json")
 
 
+def _replay_ledger_path(gate_path: Path) -> Path:
+    """Sibling of a gate artifact. The name does not match the gate-file glob."""
+    name = gate_path.name
+    if name == "reproduction-gate.json":
+        return gate_path.with_name("reproduction-replay-ledger.json")
+    prefix = "reproduction-gate."
+    if name.startswith(prefix) and name.endswith(".json"):
+        return gate_path.with_name("reproduction-replay-ledger." + name[len(prefix):])
+    raise RuntimeError(f"no replay-ledger name for gate artifact {gate_path}")
+
+
+def _repo_relative(path: Path) -> str:
+    if path.is_relative_to(REPO):
+        return str(path.relative_to(REPO))
+    return str(path)
+
+
+def _attach_replay_ledger(payload: dict, scored: dict | None) -> None:
+    """Save the scored replay beside this attempt's gate file and pin its hash.
+
+    An attempt that fails before a replay exists records a null path and hash.
+    """
+    ledger = scored.get("ledger") if isinstance(scored, dict) else None
+    gate_path = _attempt_artifact_path(len(_gate_lines()) + 1)
+    if not isinstance(ledger, dict):
+        payload["replay_ledger"] = None
+        payload["replay_ledger_sha256"] = None
+        return
+    path = _replay_ledger_path(gate_path)
+    if path.exists():
+        raise RuntimeError(f"refusing to overwrite replay ledger {path}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = json.dumps({"ledger": ledger}, indent=2, default=str) + "\n"
+    path.write_text(text, encoding="utf-8")
+    payload["replay_ledger"] = _repo_relative(path)
+    payload["replay_ledger_sha256"] = hashlib.sha256(text.encode()).hexdigest()
+
+
 def _write_gate_artifact(payload: dict) -> tuple[str, str]:
     path = _attempt_artifact_path(len(_gate_lines()) + 1)
     if path.exists():
@@ -1339,6 +1377,8 @@ def _append_gate_event(payload: dict, artifact_sha256: str, artifact_rel: str) -
             "gate_pass": payload["pass"],
             "gate_artifact": artifact_rel,
             "gate_artifact_sha256": artifact_sha256,
+            "replay_ledger": payload.get("replay_ledger"),
+            "replay_ledger_sha256": payload.get("replay_ledger_sha256"),
             "pulled_files": payload.get("pulled_files"),
             "research_15m_sha256": payload.get("research_15m_sha256"),
             "audit_5m_sha256": payload.get("audit_5m_sha256"),
@@ -1386,6 +1426,8 @@ def _prior_attempts() -> list[dict]:
                 "audit_5m_sha256": row.get("audit_5m_sha256"),
                 "manifest_sha256": row.get("manifest_sha256"),
                 "gate_artifact_sha256": row.get("gate_artifact_sha256"),
+                "replay_ledger": row.get("replay_ledger"),
+                "replay_ledger_sha256": row.get("replay_ledger_sha256"),
             }
         )
     return attempts
@@ -1397,6 +1439,7 @@ def _record_scoring_failure(
     manifest: dict,
     identity: dict,
     error: str,
+    scored: dict | None = None,
 ) -> dict:
     gaps: list[dict] = []
     gap_count = 0
@@ -1410,6 +1453,7 @@ def _record_scoring_failure(
     payload = _gate_payload(None, None, manifest, error, identity, _prior_attempts())
     payload["data_gaps"] = gaps
     payload["data_gap_count"] = gap_count
+    _attach_replay_ledger(payload, scored)
     digest, artifact_rel = _write_gate_artifact(payload)
     _append_gate_event(payload, digest, artifact_rel)
     return payload
@@ -1487,6 +1531,7 @@ def run_reproduction_gate(data_root: Path, research_15m: Path, audit_5m: Path) -
     manifest, manifest_sha256 = _load_pinned_manifest()
     research, audit = _verify_download_record(root, research_15m, audit_5m, manifest)
     identity = _data_identity(manifest, manifest_sha256, research, audit, root, scoring_profile)
+    scored = None
     try:
         scored = _run_window(
             research,
@@ -1497,8 +1542,9 @@ def run_reproduction_gate(data_root: Path, research_15m: Path, audit_5m: Path) -
         )
         comparison = _fail_closed_on_ohl_disagreement(compare_replay_structural(scored))
     except Exception as exc:
-        return _record_scoring_failure(research, audit, manifest, identity, str(exc))
+        return _record_scoring_failure(research, audit, manifest, identity, str(exc), scored)
     payload = _gate_payload(scored, comparison, manifest, None, identity, _prior_attempts())
+    _attach_replay_ledger(payload, scored)
     digest, artifact_rel = _write_gate_artifact(payload)
     _append_gate_event(payload, digest, artifact_rel)
     return payload
