@@ -15,7 +15,7 @@ Docs only. No code, config, ledger, or execution change. Do not deploy from this
 | **Trend R3** | #1253 merged. `VARIANTS_START` is None. NOT_ACTIVATED. Design/holdout P&L UNVERIFIED. |
 | **Fill / risk / Tradovate** | Paper and replay default `entry_fill_model` is `market`. Tradovate IOC depends on a positive slippage tolerance; the live env is UNVERIFIED. `$150` daily loss scales by contracts. Order pin is required; read-only may use `accounts[0]` only when the pin is unset. |
 | **Options** | #1250: empty or missing options journal is `NO_DATA`; a missing or garbled observer tool fails. Scanner default provider is `public`. Polygon access ended 2026-10-18 is operator-reported; the vendor account is UNVERIFIED. |
-| **Tests** | `.venv/bin/python -m pytest -q` before the rebase: 9248 passed, 8 skipped, exit 0, Python 3.13.15, on the pre-#1278 tree. Re-run after the rebase is the number that counts. |
+| **Tests** | `.venv/bin/python -m pytest -q` after the rebase onto `834e8f52`: 9274 passed, 8 skipped, exit 0, Python 3.13.15. |
 | **NEXT** | Independent review of the docs diff. Do not merge #1262. Do not score. Do not deploy. |
 
 ## Previous — 2026-11-11 slice-success evaluator, merged at 834e8f52
