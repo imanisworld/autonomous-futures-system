@@ -719,19 +719,27 @@ def _handle_alert_blocking(payload: AlertPayload) -> None:
             try:
                 from notifications.decision_queue import enqueue_decision
 
-                def _deliver_decision() -> None:
+                def _deliver_decision() -> bool:
+                    # The original market/session gate applies at delivery too:
+                    # an alert queued near the close must not post after close.
+                    allowed_now, _, _ = _decision_notification_market_gate(payload, result)
+                    if not allowed_now:
+                        logger.info("Queued decision Discord message expired at market gate")
+                        return False
                     try:
                         from notifications.discord_router import DiscordRouter as _DR
                         from notifications.discord_notifier import _discord_payload as _card
                         _router = _DR()
                         if _router.is_enabled("signal") and _wants_decision_notification:
                             # Same paper-decision card the legacy webhook path sends.
-                            _router.send("signal", _card(payload, result))
+                            return bool(_router.send("signal", _card(payload, result)))
                         else:
-                            notify_discord(payload=payload, result=result, config=_config)
+                            outcome = notify_discord(payload=payload, result=result, config=_config)
+                            return bool(getattr(outcome, "sent", False))
                     except Exception as _disc_exc:
                         logger.warning("Discord notification error: %s", type(_disc_exc).__name__)
-                        notify_discord(payload=payload, result=result, config=_config)
+                        outcome = notify_discord(payload=payload, result=result, config=_config)
+                        return bool(getattr(outcome, "sent", False))
 
                 if not enqueue_decision(_deliver_decision):
                     logger.error(
