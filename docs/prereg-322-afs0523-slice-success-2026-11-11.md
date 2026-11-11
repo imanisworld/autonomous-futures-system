@@ -1,6 +1,13 @@
-# DRAFT — not registered, for Operator (Imani) review then Claude
+# REGISTRATION-READY — becomes registered when the PLANNED line is written to docs/research-trial-ledger.jsonl
 
 ## Change log
+- **v8, 2026-11-11 ~17:00 ET.** Text-only fixes from Claude's CHANGES REQUIRED on v7 (#1277 @ f5953cb8). Exactly five changes:
+  - (1) Provenance: main is 3cff609d (#1276 merged, verified); #1272 recorded as MERGED (head abaa1a4b → e9e1d041, 14:39 EST); stale f612049f / not-merged text removed.
+  - (2) Part 2 metadata cites #1272 as merged commit e9e1d041.
+  - (3) Header changed to REGISTRATION-READY. `docs/research-trial-ledger.jsonl` was confirmed on main.
+  - (4) A4 now uses the code's names `holiday_closed_unscored` / `holiday_closed_unscored_count` (grep at 3cff609d).
+  - (5) Added the NQ-cell post-exposure note for A5.
+  - Pre-edit copy: `PREREG_322_SLICE_SUCCESS_DRAFT_2026-11-11_v7_pre.md` (sha256 0b394f4a…4495). Diff: `PREREG_322_SLICE_SUCCESS_DRAFT_2026-11-11_v7_to_v8.diff`.
 - **v7, 2026-11-11 ~16:50 ET.** PM ruling: the MNQ caution is descriptive, not a decision rule. Only the caution was rewritten.
   - Base case is now the measured in-sample IOC fill rate, 20/34 = 0.588: 77 → ≈ 45 fills → ≈ 43 resolved → **37/43** wins needed at BE 0.738, verified with Clopper-Pearson.
   - 0.41 is kept only as a labeled stress case: ≈ 30 resolved, needing 27/30 or 28/31.
@@ -45,9 +52,9 @@ Author: Strategy Lab (research-only). Written 2026-11-11 ~14:40 ET. Nothing scor
 
 ## Provenance
 
-- Repo: imanisworld/autonomous-futures-system, main **f612049fcd891a65a0834870b698a8141af1e3b1** (#1273 merged; read-only clone).
-- PR #1272: was reviewed at 09a6612caec10897d006f14fc2c3920e9f5fb1a8. The live head is now **abaa1a4b2a07a25f1580ff6b36dfd85498f0608f**, a merge of main f612049f into 09a6612c, dated 2026-11-11 14:17 ET. `research/databento_322_bar_adapter.py` is byte-identical between 09a6612c and abaa1a4b (VERIFIED, empty git diff). The PR is not merged and needs a fresh Claude PASS at abaa1a4b.
-- Files read. Line numbers are at f612049f unless "@PR" is shown; @PR means abaa1a4b.
+- Repo: imanisworld/autonomous-futures-system, main **3cff609d9ef3f9877a40c3bb5e2e2298fe4a0333** (#1276 merged; verified as the current origin/main head on GitHub).
+- PR #1272: **MERGED**. Head abaa1a4b2a07a25f1580ff6b36dfd85498f0608f; merge commit **e9e1d041e1defac8b4bc96e31c877e31d96229cd**, merged 2026-11-11 14:39 EST (AFS-0623; verified on GitHub). `research/databento_322_bar_adapter.py` is byte-identical between 09a6612c and abaa1a4b (VERIFIED, empty git diff).
+- Files read. Line numbers were read on the #1273-merge tree, before #1274 and #1276 merged, so wrapper line numbers may have shifted on 3cff609d. "@PR" means #1272 head abaa1a4b, merged as e9e1d041.
   - `docs/prereg-322-afs0523-oos-structural-2026-11-10.md` :3, :38-40, :47-49
   - `docs/prereg-322-afs0523-oos-reproduction-2026-11-09.md` :23-29, :41-55, :59-63, :69-71, :73-77, :97
   - `research/afs0523_322_repro_wrapper.py` :20, :69-71, :91-103, :119-123, :142-153, :181-211, :944-1004, :1007-1064, :1778-1799, :1823-1899, :1910-1950, :2058, :2065-2118, :2121-2199, :2202-2233 (same line numbers @PR for the functions cited)
@@ -150,6 +157,7 @@ Author: Strategy Lab (research-only). Written 2026-11-11 ~14:40 ET. Nothing scor
   - gap-open candidates armed at the 10AM open (wrapper :1028-1033).
 - **Slippage:** 3 adverse ticks = 0.75 pt = $1.50 MNQ-equivalent per side where applied.
 - **Decisive cells: 2.** `nq-2010-06-to-2019-05/honest_ioc/3tick` and `mnq-2019-05-to-2024-06/honest_ioc/3tick`. **Both must PASS.**
+- **NQ cell note:** A5 (the strict-bracket drop) was registered after candidate-level slice data had been seen (no outcomes). This note travels with any NQ result.
 - **Report-only (never gates):**
   - pre-armed @3;
   - `original` (`plan`, wrapper :143);
@@ -557,7 +565,7 @@ The A5 bracket rule lives in the wrapper's candidate path, not in the evaluator.
   - `SLICE_SCORING_AUTHORIZED = False` (wrapper :71, main and @PR);
   - 0 SLICE events in `docs/research-trial-ledger.jsonl`.
 - The gate artifact `41d76ab1…` and its DATA_GAPs (2025-01-09, 2025-11-28; count 2) are untouched: the gate policy keeps 13:00 ET for every early close (adapter @PR :68-70, :189-190, :219-227; AFS-0618).
-- This amendment must be committed before the `SLICE_SCORING_AUTHORIZED` flip PR. It cites #1272 at abaa1a4b; re-verify line numbers if it merges at another SHA.
+- This amendment must be committed before the `SLICE_SCORING_AUTHORIZED` flip PR. It cites #1272 as merged commit e9e1d041.
 
 **A1. Replace stale line 49.**
 
@@ -601,7 +609,7 @@ Source: adapter @PR :23-31, :33-36, :239-255, :291. This supersedes main adapter
 - Globex LIKELY traded abbreviated mornings on several of these days. Examples:
   - the Jul 4 and Thanksgiving mornings;
   - the **Good Friday NFP mornings** 2012-04-06 and 2015-04-03 (NQ slice) and 2021-04-02 and 2023-04-07 (MNQ slice). Coincidence with NFP is LIKELY; the BLS schedule was not checked.
-- Registration: **no candidate dated on a `closed` weekday is scored**, even if bars exist. These dates are reported as `CLOSED_SESSION` with a count.
+- Registration: **no candidate dated on a `closed` weekday is scored**, even if bars exist. These dates are reported as `holiday_closed_unscored`, with the count in `holiday_closed_unscored_count`.
 - **CONFLICT-1 (must-fix before the flip):**
   - Code at f612049f/abaa1a4b does **not** enforce A4.
   - `_unscored_dates` (wrapper :1792-1798) only holds DATA_GAP and excluded EARLY_CLOSE dates.
