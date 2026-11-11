@@ -1,6 +1,19 @@
 # Agent Work State
 
-## START HERE — 2026-11-11 slice scoring, refused by default
+## START HERE — 2026-11-11 holiday closures held out of slice candidates
+
+Evidence only. The reproduction gate was not rerun. No real slice was scored. Do not merge, deploy, or change execution from this note.
+
+| Item | State |
+|---|---|
+| **Branch** | `cursor/322-holiday-closed-unscored` |
+| **Scope** | On a slice window, every `expected_holiday_closures` date is unscored. The reproduction window does not add those dates. `SLICE_SCORING_AUTHORIZED` stays false. |
+| **Report** | The slice artifact and the SLICE event carry `holiday_closed_unscored` and `holiday_closed_unscored_count`. |
+| **Gate** | Recorded gaps stay 2025-01-09 and 2025-11-28, count 2, 306 comparisons. The window's 10 full closures are not in that gap list. |
+| **Tests** | `python3 -B -m pytest -q tests/test_afs0523_322_repro_wrapper.py`: 62 passed. Synthetic bars only. |
+| **NEXT** | Independent review. Do not score a real slice from this checkpoint. |
+
+## Previous — 2026-11-11 slice scoring, refused by default
 
 Evidence only. No slice was scored against real Databento data. The reproduction gate was not rerun. Do not merge, deploy, or change execution from this note.
 
