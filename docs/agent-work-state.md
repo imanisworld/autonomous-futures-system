@@ -1,17 +1,31 @@
 # Agent Work State
 
-## START HERE — 2026-11-11 holiday closures held out of slice candidates
+## START HERE — 2026-11-11 strict bracket drop on research candidates
+
+Evidence only. The reproduction gate was not rerun. No real slice was scored. Do not merge, deploy, or change execution from this note.
+
+| Item | State |
+|---|---|
+| **Branch** | `cursor/322-strict-bracket-drop` |
+| **Base** | `e5d3b780` (`#1274` merged). |
+| **Scope** | `partition_invalid_gap_opens` drops every research candidate whose entry fails the strict bracket in `strategy/strat_322_first_live.py` lines 193-198. SHORT requires `target < entry_price < stop`. LONG requires `stop < entry_price < target`. `INVALID_ENTRY_BRACKET` is the label at line 200. Gap-open and non-gap-open drops are counted separately on the slice report, the slice artifact, and the SLICE event. `SLICE_SCORING_AUTHORIZED` stays false. |
+| **Gate** | Not rerun. The committed replay still compares 306 records with 0 mismatches. Derived candidate count stays 34 (306/9). Recorded invalid-bracket drops stay 0, and the widened check drops none of those 34. Gaps stay 2025-01-09 and 2025-11-28, count 2. |
+| **Tests** | `python3 -B -m pytest -q tests/test_afs0523_322_repro_wrapper.py tests/test_322_databento_bar_adapter.py tests/test_research_trial_ledger.py`: 106 passed. |
+| **NEXT** | Independent review. Do not score a real slice from this checkpoint. |
+
+## Previous — 2026-11-11 holiday closures held out of slice candidates, merged at e5d3b780
 
 Evidence only. The reproduction gate was not rerun. No real slice was scored. Do not merge, deploy, or change execution from this note.
 
 | Item | State |
 |---|---|
 | **Branch** | `cursor/322-holiday-closed-unscored` |
+| **Merged** | `#1274` at `e5d3b780` |
 | **Scope** | On a slice window, only `expected_holiday_closures` rows with `kind` `closed` are unscored. Early-close rows stay on `EARLY_CLOSE_DISPOSITION`. The reproduction window does not add closure dates. `SLICE_SCORING_AUTHORIZED` stays false. |
 | **Report** | The slice artifact and the SLICE event carry `holiday_closed_unscored` and `holiday_closed_unscored_count`. |
 | **Gate** | Recorded gaps stay 2025-01-09 and 2025-11-28, count 2, 306 comparisons (34 candidates). |
 | **Tests** | `python3 -B -m pytest -q tests/test_afs0523_322_repro_wrapper.py tests/test_322_databento_bar_adapter.py tests/test_research_trial_ledger.py`: 101 passed. |
-| **NEXT** | Independent review. Do not score a real slice from this checkpoint. |
+| **NEXT** | Merged. Do not score a real slice from this checkpoint. |
 
 ## Previous — 2026-11-11 early-close slice classification, merged at e9e1d041
 

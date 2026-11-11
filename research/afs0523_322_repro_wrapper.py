@@ -251,46 +251,52 @@ def assert_5m_window(audit_5m: Path, start: date, end: date) -> None:
 
 
 def entry_inside_bracket(direction: str, entry_price: float, stop: float, target: float) -> bool:
-    """Production bracket rule from ``strategy/strat_322_first_live.py``.
+    """Strict bracket from ``strategy/strat_322_first_live.py`` lines 193-198.
 
-    Equality at either boundary is outside the bracket. SHORT requires
-    ``target < entry < stop``. LONG requires ``stop < entry < target``.
+    SHORT requires ``target < entry_price < stop``. LONG requires
+    ``stop < entry_price < target``. Equality at either boundary is outside.
+    Line 200 labels a failed check ``INVALID_ENTRY_BRACKET``. Line 191 only
+    assigns ``stop``.
     """
     if direction == "SHORT":
-        return target < entry_price < stop
-    if direction == "LONG":
-        return stop < entry_price < target
-    raise RuntimeError(f"unsupported direction {direction!r}")
+        bracket_valid = target < entry_price < stop
+    elif direction == "LONG":
+        bracket_valid = stop < entry_price < target
+    else:
+        raise RuntimeError(f"unsupported direction {direction!r}")
+    return bracket_valid
 
 
 def partition_invalid_gap_opens(rows: list[dict]) -> tuple[list[dict], list[dict]]:
-    """Drop gap-opens the production state machine labels INVALID_ENTRY_BRACKET.
+    """Drop every research row outside the strict bracket at lines 193-198.
 
-    The research detector keeps those rows. Removing them before the count
-    check is what lets parity agree with the state machine.
+    SHORT requires ``target < entry_price < stop``. LONG requires
+    ``stop < entry_price < target``. Gap-open and non-gap-open rows use that
+    same check. The detector keeps the rows this removes, and the state
+    machine labels them ``INVALID_ENTRY_BRACKET`` at line 200.
     """
     kept: list[dict] = []
     invalid: list[dict] = []
     for row in rows:
-        if row.get("gap_open") and not entry_inside_bracket(
-            str(row["direction"]),
-            float(row["entry_price"]),
-            float(row["stop"]),
-            float(row["target"]),
-        ):
-            day = row["date"]
-            invalid.append(
-                {
-                    "date": day.isoformat() if hasattr(day, "isoformat") else str(day),
-                    "direction": row["direction"],
-                    "entry_price": float(row["entry_price"]),
-                    "stop": float(row["stop"]),
-                    "target": float(row["target"]),
-                    "invalidation": "INVALID_ENTRY_BRACKET",
-                }
-            )
+        direction = str(row["direction"])
+        entry_price = float(row["entry_price"])
+        stop = float(row["stop"])
+        target = float(row["target"])
+        if entry_inside_bracket(direction, entry_price, stop, target):
+            kept.append(row)
             continue
-        kept.append(row)
+        day = row["date"]
+        invalid.append(
+            {
+                "date": day.isoformat() if hasattr(day, "isoformat") else str(day),
+                "direction": direction,
+                "entry_price": entry_price,
+                "stop": stop,
+                "target": target,
+                "gap_open": bool(row.get("gap_open")),
+                "invalidation": "INVALID_ENTRY_BRACKET",
+            }
+        )
     return kept, invalid
 
 
@@ -953,8 +959,8 @@ def _parity(
 
     The window, the expected-count check, and the two data paths are the only
     differences. ``check_repro()`` is not involved. DATA_GAP days are removed
-    before the count check and are not scored. A gap-open candidate is kept
-    and compared at the 10AM open.
+    before the count check and are not scored. A gap-open candidate inside
+    the strict bracket is kept and compared at the 10AM open.
     """
     verify_frozen_modules()
     assert_5m_window(audit_5m, start, end)
@@ -1076,6 +1082,12 @@ def _run_window(
         "gap_open_policy": GAP_OPEN_POLICY,
         "gap_open_count": gap_summary["gap_open_count"],
         "invalid_entry_bracket_count": len(invalid_brackets),
+        "invalid_entry_bracket_gap_open_count": sum(
+            1 for row in invalid_brackets if row.get("gap_open")
+        ),
+        "invalid_entry_bracket_non_gap_open_count": sum(
+            1 for row in invalid_brackets if not row.get("gap_open")
+        ),
         "invalid_entry_brackets": invalid_brackets,
         "data_gaps": gap_report["data_gaps"],
         "data_gap_count": gap_report["data_gap_count"],
@@ -2018,6 +2030,13 @@ def _score_admitted_slice(
         "early_close_sessions": scored.get("early_close_sessions") or [],
         "holiday_closed_unscored": list(scored.get("holiday_closed_unscored") or []),
         "holiday_closed_unscored_count": int(scored.get("holiday_closed_unscored_count") or 0),
+        "invalid_entry_bracket_count": int(scored.get("invalid_entry_bracket_count") or 0),
+        "invalid_entry_bracket_gap_open_count": int(
+            scored.get("invalid_entry_bracket_gap_open_count") or 0
+        ),
+        "invalid_entry_bracket_non_gap_open_count": int(
+            scored.get("invalid_entry_bracket_non_gap_open_count") or 0
+        ),
         "slippage_sensitivity": SLIPPAGE_SENSITIVITY_NOTE,
     }
     payload.update(identity)
@@ -2078,6 +2097,12 @@ def _append_slice_event(
             "MAX_CONTRACTS_HARD_CAP": payload.get("MAX_CONTRACTS_HARD_CAP"),
             "holiday_closed_unscored": payload.get("holiday_closed_unscored"),
             "holiday_closed_unscored_count": payload.get("holiday_closed_unscored_count"),
+            "invalid_entry_bracket_gap_open_count": payload.get(
+                "invalid_entry_bracket_gap_open_count"
+            ),
+            "invalid_entry_bracket_non_gap_open_count": payload.get(
+                "invalid_entry_bracket_non_gap_open_count"
+            ),
             "error": payload.get("error"),
             "notes": "Raw slice results. No pass/fail criterion is applied.",
         }
