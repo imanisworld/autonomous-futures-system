@@ -113,7 +113,10 @@ def _run(monkeypatch, state, findings, tick):
     monkeypatch.setattr(w, "capture_snapshot", lambda *_a: Path("/tmp/afs_watcher/snapshots/x"))
     monkeypatch.setattr(w, "state_append", lambda *_a: None)
     monkeypatch.setattr(w, "log", lambda *_a: None)
-    monkeypatch.setattr(w, "notify", lambda _s, route, text, _d: notifications.append((route, text)))
+    def delivered(target_state, route, text, dedupe_key):
+        notifications.append((route, text))
+        target_state["notified"][dedupe_key] = w.iso(w.now_utc())
+    monkeypatch.setattr(w, "notify", delivered)
     monkeypatch.setattr(w, "RELEASE_SHA", "28f79a65a395")
     w.handle_blocked(state, findings, tick)
     return notifications
@@ -163,6 +166,41 @@ def test_exposure_appearing_later_promotes_to_a_card_once(monkeypatch):
     # and only once — the reminder cadence takes over from here
     third = _run(monkeypatch, state, findings, _tick(("daily_22_5k",)))
     assert third == []
+
+
+def test_blocked_delivery_failure_retries_next_tick_not_after_six_hours(monkeypatch):
+    """An unsuccessful Discord POST cannot advance the reminder clock."""
+    state = {"blocked": {}, "blocked_last_notified": {}, "notified": {}}
+    findings = w.Findings()
+    findings.add("BLOCKED", "watcher_release_stale", "Release version does not match")
+    calls = []
+
+    monkeypatch.setattr(w, "capture_snapshot", lambda *_a: Path("/tmp/afs_watcher/snapshots/x"))
+    monkeypatch.setattr(w, "state_append", lambda *_a: None)
+    monkeypatch.setattr(w, "log", lambda *_a: None)
+
+    def fail_once(target_state, route, text, dedupe):
+        calls.append((route, text, dedupe))
+        if len(calls) == 2:
+            # This is notify()'s existing delivery-success marker.
+            target_state["notified"][dedupe] = w.iso(w.now_utc())
+
+    monkeypatch.setattr(w, "notify", fail_once)
+    tick = _tick(())
+
+    w.handle_blocked(state, findings, tick)
+    assert len(calls) == 1
+    assert "watcher_release_stale" not in state["blocked_last_notified"]
+    assert "blocked:watcher_release_stale" not in state["notified"]
+
+    # The next tick retries the same continuing incident.
+    w.handle_blocked(state, findings, tick)
+    assert len(calls) == 2
+    assert "watcher_release_stale" in state["blocked_last_notified"]
+
+    # A delivered incident respects the existing six-hour cadence.
+    w.handle_blocked(state, findings, tick)
+    assert len(calls) == 2
 
 
 @pytest.mark.parametrize("key", ["watcher_release_stale", "post_epoch_spans_releases"])
