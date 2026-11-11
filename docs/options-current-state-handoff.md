@@ -1,6 +1,6 @@
 # Options — Current State Handoff
 
-_Source state reconciled 2026-11-11 on `main` `5cc08f593b2551b9ed4283319e8c54f8c3c38830`. The 2026-10-11 research section remains the options-edge HOLD. Earlier dated checkpoints are provenance. The latest separately verified box-specific records, not `main`, govern runtime; no deployment or runtime recheck was performed by this documentation update. This is the single current-state authority for the options lane._
+_Source state reconciled 2026-11-11 on `main` `834e8f52` (#1278). The 2026-10-11 research section remains the options-edge HOLD. Earlier dated checkpoints are provenance. The latest separately verified box-specific records, not `main`, govern runtime; no deployment or runtime recheck was performed by this documentation update. This is the single current-state authority for the options lane._
 
 Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`; the read-only coverage evidence lane (observer, reducer, outcome study, after-close collector) is described in `docs/options-coverage-observer.md`. The observation-only **setup-capture** lifecycle (`WATCHING` → `TRIGGERED` / `MISSED_LATE`) is described in `docs/options-setup-capture-observer.md`.
 
@@ -8,7 +8,7 @@ Historical dated notes and old/closed PRs are provenance only. They do not overr
 
 ## Source refresh — 2026-11-11
 
-Source `main` at `5cc08f593b2551b9ed4283319e8c54f8c3c38830`. This section is source only. It does not deploy, restart a collector, or read the box. Older sections that still say Polygon is the current options market-data authority, or that say not to cancel Polygon, are the 2026-09-20 reading. They are superseded for current posture by this section. They stay in the file as provenance.
+Source `main` at `834e8f52` (#1278 on top of `5cc08f59`). This section is source only. It does not deploy, restart a collector, or read the box. Older sections that still say Polygon is the current options market-data authority, or that say not to cancel Polygon, are the 2026-09-20 reading. They are superseded for current posture by this section. They stay in the file as provenance.
 
 **Scanner.** The advisory scanner's market-data provider defaults to `public` (`alert_ranker/config.py:241`). `.env.example` sets `OPTIONS_MARKET_DATA_PROVIDER=public`. The scanner README describes the same provider. It does not place orders. The Public client allowlist is unchanged by this note.
 

@@ -146,7 +146,7 @@ Execution posture is recorded separately and may include **research only**, **ob
 **Evidence verdict:** **PROMISING BUT UNPROVEN** (AFS-0523)  
 **Execution posture:** hypothetical paper + guarded DEMO evidence; parked for real-account execution under current risk constraints. Unchanged on 2026-11-11. The registered slice-success trial has not been scored.
 
-- **2026-11-11 slice-success registration:** trial `T-2026-11-11-prereg-322-afs0523-slice-success-2026-11-11-01` is registered in `docs/prereg-322-afs0523-slice-success-2026-11-11.md` and as a PLANNED line in `docs/research-trial-ledger.jsonl` (the line's note says nothing was scored and `SLICE_SCORING_AUTHORIZED` stays false). The wrapper constant is False (`research/afs0523_322_repro_wrapper.py:71`). This row does not promote the family.
+- **2026-11-11 slice-success registration:** trial `T-2026-11-11-prereg-322-afs0523-slice-success-2026-11-11-01` is registered in `docs/prereg-322-afs0523-slice-success-2026-11-11.md` and as a PLANNED line in `docs/research-trial-ledger.jsonl` (the line's note says nothing was scored and `SLICE_SCORING_AUTHORIZED` stays false). The wrapper constant is False (`research/afs0523_322_repro_wrapper.py:71`). #1278 added `research/afs0523_322_slice_evaluator.py`, which does not score a slice, read a file, or authorize a run. This row does not promote the family.
 - **2026-11-09 evidence note:** the evidence verdict stays **PROMISING BUT UNPROVEN**. The 2026-11-09 falsification report is kept private and is not committed; it does not change this verdict or the execution posture.
 
 - Binding executable-parity closure: PR #367.
