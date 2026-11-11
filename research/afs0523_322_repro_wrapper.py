@@ -1794,10 +1794,10 @@ def _scoring_provenance() -> dict:
 
 
 def _holiday_closed_dates(gap_report: dict) -> list[str]:
-    """Every date the adapter lists as an expected holiday closure."""
+    """Full closures only. Early-close rows stay on the early-close disposition."""
     found: set[str] = set()
     for item in gap_report.get("expected_holiday_closures") or []:
-        if isinstance(item, dict) and item.get("date"):
+        if isinstance(item, dict) and item.get("kind") == "closed" and item.get("date"):
             found.add(str(item["date"]))
     return sorted(found)
 
