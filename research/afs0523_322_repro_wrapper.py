@@ -28,8 +28,9 @@ reproduction window, and only on the committed manifest at
 refuses a placeholder pin and any other byte mismatch. ``run_window`` scores nothing.
 ``run_declared_slices()`` scores one admitted slice only when
 ``SLICE_SCORING_AUTHORIZED`` is true. This commit sets that constant
-true and stamps the slice-success evaluator on each scored slice. A slice
-result has no pass/fail criterion. A ``claude_review``
+true and stamps the slice-success evaluator on each scored slice. Raw slice
+results plus the registered decisive cell (honest IOC, 3 ticks). The gate
+verdict is the COMBINE artifact. A ``claude_review``
 string is self-attested; pull-request review is the real gate.
 """
 from __future__ import annotations
@@ -76,6 +77,7 @@ RUN_AUTHORIZED = True
 # The registered slice-success trial authorizes scoring. The evaluator does not promote.
 SLICE_SCORING_AUTHORIZED = True
 EVALUATOR_REL = "research/afs0523_322_slice_evaluator.py"
+EXPECTED_EVALUATOR_SHA256 = "68a5f01326135fbd7bf0420d50337726580f074b9de11d26f058838affb0e07e"
 TRIAL_LEDGER = REPO / "docs/research-trial-ledger.jsonl"
 GATE_ARTIFACT = (
     REPO
@@ -2002,9 +2004,18 @@ def _market_for_slice(spec: SliceSpec) -> str:
     raise RuntimeError(f"slice {spec.id} has no decisive market")
 
 
+def _require_pinned_evaluator() -> str:
+    digest = _evaluator_file_sha256()
+    if digest != EXPECTED_EVALUATOR_SHA256:
+        raise RuntimeError(
+            "refusing to score: evaluator file hash does not match EXPECTED_EVALUATOR_SHA256"
+        )
+    return digest
+
+
 def _decisive_cell(ledger: dict, slice_id: str, market: str) -> dict:
     """Score the 3-tick honest-IOC rows and stamp the evaluator file hash."""
-    digest = _evaluator_file_sha256()
+    digest = _require_pinned_evaluator()
     records = trade_records_from_ledger(ledger, slice_id=slice_id, market=market)
     cell = evaluate_cell(records, cell_id=f"{slice_id}/honest_ioc/3tick", market=market)
     cell["evaluator_sha256"] = digest
@@ -2082,7 +2093,8 @@ def _score_admitted_slice(
     *,
     data_root: Path,
 ) -> dict:
-    """Score one admitted slice and write a new attempt. No pass/fail rule."""
+    """Raw slice results plus the registered decisive cell (honest IOC, 3 ticks). The gate verdict is the COMBINE artifact."""
+    _require_pinned_evaluator()
     provenance = _scoring_provenance()
     identity = _slice_data_identity(research_15m, audit_5m, data_root)
     spec = next((item for item in SLICES if item.id == slice_id), None)
@@ -2209,7 +2221,7 @@ def _append_slice_event(
             "evaluator_path": payload.get("evaluator_path"),
             "evaluator_sha256": payload.get("evaluator_sha256"),
             "error": payload.get("error"),
-            "notes": "Raw slice results. No pass/fail criterion is applied.",
+            "notes": "Raw slice results plus the registered decisive cell (honest IOC, 3 ticks). The gate verdict is the COMBINE artifact.",
         }
     )
     with TRIAL_LEDGER.open("a", encoding="utf-8") as handle:

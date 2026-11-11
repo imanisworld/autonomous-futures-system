@@ -2699,3 +2699,29 @@ def test_scored_slice_stamps_the_evaluator_and_combine_waits_for_both(monkeypatc
     assert combine["verdict"]
     assert "VALIDATED" not in combine["verdict"]
     assert (ROOT / "docs/research-trial-ledger.jsonl").read_bytes() == real_ledger
+
+
+def test_changed_evaluator_hash_is_refused_and_records_nothing(monkeypatch, tmp_path):
+    _slice_research, _slice_audit, ledger = _prepare_admitted_slice(monkeypatch, tmp_path)
+    before = ledger.read_bytes()
+    calls = []
+    monkeypatch.setattr(
+        "research.afs0523_322_repro_wrapper._run_window",
+        lambda *_args, **_kwargs: calls.append(True),
+    )
+    monkeypatch.setattr(
+        "research.afs0523_322_repro_wrapper.EXPECTED_EVALUATOR_SHA256",
+        "0" * 64,
+    )
+    real_ledger = (ROOT / "docs/research-trial-ledger.jsonl").read_bytes()
+    with pytest.raises(RuntimeError, match="EXPECTED_EVALUATOR_SHA256"):
+        run_declared_slices(
+            Path("slice-research"),
+            Path("slice-audit"),
+            data_root=tmp_path,
+            slice_id="mnq-2019-05-to-2024-06",
+        )
+    assert calls == []
+    assert ledger.read_bytes() == before
+    assert not (tmp_path / "slices").exists()
+    assert (ROOT / "docs/research-trial-ledger.jsonl").read_bytes() == real_ledger
