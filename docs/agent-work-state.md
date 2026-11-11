@@ -13,6 +13,7 @@ Evidence only. The reproduction gate was not rerun. Nothing was scored. Do not m
 | **Artifact** | `gate_artifact_sha256` `41d76ab1ef549316eebe58b1c8f5878184f43a181bb2164802805974f6f54da8` |
 | **Review** | `pr_head_sha` `a21ee24e277e53f1d0909ea583fa91b5bc4b4e82`. Imani GO, AFS-0624. PM recorded it on the box. |
 | **Line** | sha256 including the trailing newline `d500a8be448e46de9ce97506aa7afe70cf71491552cc209e78a17f90dda04e31`. Main's ledger is a byte prefix. |
+| **Tests** | `python3 -B -m pytest -q tests/test_afs0523_322_repro_wrapper.py tests/test_research_trial_ledger.py`: 76 passed. A temporary ledger with no `GATE_REVIEW` line refuses slice admission. |
 | **NEXT** | Independent review of the ledger append. Do not score from this checkpoint. |
 
 ## Previous — 2026-11-11 strict bracket drop on research candidates, merged at 3cff609d
