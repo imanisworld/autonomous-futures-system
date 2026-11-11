@@ -21,13 +21,15 @@ MNQ lane ($2/point). This module does not assign a point value.
 
 ``RUN_AUTHORIZED`` is true. The superseded reproduction trial has no run
 path. ``run_reproduction_gate`` belongs to the structural trial and calls
-``compare_replay_structural``. It is the only path that scores Databento
-data, and only the fixed reproduction window on the committed manifest at
+``compare_replay_structural``. It is the only path that scores the
+reproduction window, and only on the committed manifest at
 ``DATA_MANIFEST_PATH``.
 ``DATA_MANIFEST_SHA256`` is the SHA-256 of that committed file. The gate
 refuses a placeholder pin and any other byte mismatch. ``run_window`` scores nothing.
-``run_declared_slices()`` does not score. A ``claude_review`` string is
-self-attested; pull-request review is the real gate.
+``run_declared_slices()`` scores one admitted slice only when
+``SLICE_SCORING_AUTHORIZED`` is true. This commit leaves that constant
+false. A slice result has no pass/fail criterion. A ``claude_review``
+string is self-attested; pull-request review is the real gate.
 """
 from __future__ import annotations
 
@@ -36,6 +38,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import subprocess
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
@@ -64,6 +67,8 @@ EOD_DATE = "2025-01-20"
 SUPERSEDED_TRIAL_ID = "T-2026-11-09-prereg-322-afs0523-oos-reproduction-2026-11-09-01"
 TRIAL_ID = "T-2026-11-10-prereg-322-afs0523-oos-structural-2026-11-10-01"
 RUN_AUTHORIZED = True
+# Slice scoring stays off until a separate preregistration sets this true.
+SLICE_SCORING_AUTHORIZED = False
 TRIAL_LEDGER = REPO / "docs/research-trial-ledger.jsonl"
 GATE_ARTIFACT = (
     REPO
@@ -71,6 +76,7 @@ GATE_ARTIFACT = (
     / TRIAL_ID
     / "reproduction-gate.json"
 )
+SLICE_ARTIFACT_DIR = REPO / "docs/research-evidence" / TRIAL_ID / "slices"
 DATA_MANIFEST_REL = (
     "docs/research-evidence/"
     f"{SUPERSEDED_TRIAL_ID}/databento-download-manifest.json"
@@ -1071,6 +1077,7 @@ def _run_window(
         "invalid_entry_brackets": invalid_brackets,
         "data_gaps": gap_report["data_gaps"],
         "data_gap_count": gap_report["data_gap_count"],
+        "early_close_sessions": gap_report.get("early_close_sessions", []),
     }
 
 
@@ -1748,32 +1755,243 @@ def record_gate_review(pr_head_sha: str) -> dict:
     return event
 
 
+def _git_head_and_clean(repo: Path) -> tuple[str, bool]:
+    """HEAD commit and whether ``git status`` is empty. Status text is not returned."""
+    try:
+        head = subprocess.run(
+            ["git", "-C", str(repo), "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        status = subprocess.run(
+            ["git", "-C", str(repo), "status", "--porcelain", "--untracked-files=all"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise RuntimeError("refusing to score without a clean git checkout") from exc
+    return head, status == ""
+
+
+def _scoring_provenance() -> dict:
+    """Refuse a dirty checkout before a slice is scored."""
+    head, clean = _git_head_and_clean(REPO)
+    if not _is_sha40(head):
+        raise RuntimeError("refusing to score without a git HEAD commit")
+    if not clean:
+        raise RuntimeError("refusing to score a dirty checkout")
+    return {
+        "git_head": head,
+        "clean_tree": True,
+        "wrapper_sha256": hashlib.sha256(Path(__file__).resolve().read_bytes()).hexdigest(),
+    }
+
+
+def _resolved_trade(cell: dict) -> tuple[str, float] | None:
+    """A resolved fill is a trade. No-fills and unresolved rows are not."""
+    if not isinstance(cell, dict) or cell.get("status") != "RESOLVED":
+        return None
+    result = cell.get("result")
+    net = cell.get("net")
+    if result not in {"WIN", "LOSS", "BREAKEVEN"}:
+        return None
+    if isinstance(net, bool) or not isinstance(net, (int, float)):
+        return None
+    return str(result), float(net)
+
+
+def summarize_slice_ledger(ledger: dict) -> dict:
+    """Raw per-model results at each slippage. No pass/fail threshold.
+
+    Win rate is wins divided by resolved trades. A breakeven trade is a
+    trade and is not a win. Drawdown is the largest peak-to-trough of the
+    cumulative net, starting from zero. The losing streak counts consecutive
+    ``LOSS`` results.
+    """
+    by_slippage: dict[str, dict] = {}
+    for slippage in SLIPPAGES:
+        rows = list(ledger.get(slippage) or [])
+        models: dict[str, dict] = {}
+        for model_key, label in MODEL_LABELS:
+            trades: list[dict] = []
+            for row in rows:
+                cell = (row.get("models") or {}).get(model_key) or {}
+                resolved = _resolved_trade(cell)
+                if resolved is None:
+                    continue
+                result, net = resolved
+                trades.append({"date": row.get("date"), "result": result, "net": round(net, 2)})
+            equity = 0.0
+            peak = 0.0
+            max_drawdown = 0.0
+            streak = 0
+            longest = 0
+            wins = 0
+            total = 0.0
+            for trade in trades:
+                total += float(trade["net"])
+                equity += float(trade["net"])
+                if equity > peak:
+                    peak = equity
+                drawdown = peak - equity
+                if drawdown > max_drawdown:
+                    max_drawdown = drawdown
+                if trade["result"] == "WIN":
+                    wins += 1
+                    streak = 0
+                elif trade["result"] == "LOSS":
+                    streak += 1
+                    if streak > longest:
+                        longest = streak
+                else:
+                    streak = 0
+            count = len(trades)
+            models[label] = {
+                "trades": count,
+                "trade_list": trades,
+                "net_pnl": round(total, 2),
+                "win_rate": None if count == 0 else wins / count,
+                "drawdown": round(max_drawdown, 2),
+                "longest_losing_streak": longest,
+            }
+        by_slippage[slippage] = models
+    return by_slippage
+
+
+def _slice_event_lines(slice_id: str) -> list[dict]:
+    return [
+        row
+        for row in _trial_rows()
+        if row.get("event") == "SLICE" and row.get("slice_id") == slice_id
+    ]
+
+
+def _slice_attempt_paths(slice_id: str) -> tuple[int, Path, Path]:
+    attempt = len(_slice_event_lines(slice_id)) + 1
+    if attempt < 1:
+        raise RuntimeError(f"slice attempt {attempt} is not a positive attempt number")
+    artifact = SLICE_ARTIFACT_DIR / f"{slice_id}.attempt-{attempt:02d}.json"
+    ledger = SLICE_ARTIFACT_DIR / f"{slice_id}.replay-ledger.attempt-{attempt:02d}.json"
+    if artifact.exists() or ledger.exists():
+        raise RuntimeError(f"refusing to overwrite slice attempt {attempt} for {slice_id}")
+    return attempt, artifact, ledger
+
+
+def _score_admitted_slice(research_15m: Path, audit_5m: Path, slice_id: str) -> dict:
+    """Score one admitted slice and write a new attempt. No pass/fail rule."""
+    provenance = _scoring_provenance()
+    spec = next((item for item in SLICES if item.id == slice_id), None)
+    if spec is None or spec.id == "combined":
+        raise RuntimeError(f"unknown slice {slice_id}")
+    _attempt, artifact_path, ledger_path = _slice_attempt_paths(slice_id)
+    scored = _run_window(
+        research_15m,
+        audit_5m,
+        start=spec.start,
+        end=spec.end,
+        expected_count=None,
+    )
+    ledger = scored.get("ledger") if isinstance(scored, dict) else None
+    if not isinstance(ledger, dict):
+        raise RuntimeError("slice scoring produced no replay ledger")
+    payload = {
+        "slice_id": spec.id,
+        "start": spec.start.isoformat(),
+        "end": spec.end.isoformat(),
+        "price_source": spec.price_source,
+        "label": spec.label,
+        "dollar_basis": "MNQ-equivalent ($2/point)",
+        "older_slice_ioc_note": OLDER_SLICE_IOC_NOTE,
+        "git_head": provenance["git_head"],
+        "clean_tree": provenance["clean_tree"],
+        "wrapper_sha256": provenance["wrapper_sha256"],
+        "by_slippage": summarize_slice_ledger(ledger),
+        "data_gaps": scored.get("data_gaps") or [],
+        "data_gap_count": scored.get("data_gap_count") or 0,
+        "early_close_sessions": scored.get("early_close_sessions") or [],
+        "slippage_sensitivity": SLIPPAGE_SENSITIVITY_NOTE,
+    }
+    if spec.price_source == "NQ":
+        payload["result_label"] = NQ_RESEARCH_LABEL
+    if ledger_path.exists() or artifact_path.exists():
+        raise RuntimeError(f"refusing to overwrite slice attempt for {slice_id}")
+    ledger_path.parent.mkdir(parents=True, exist_ok=True)
+    ledger_text = json.dumps({"ledger": ledger}, indent=2, default=str) + "\n"
+    ledger_path.write_text(ledger_text, encoding="utf-8")
+    payload["replay_ledger"] = _repo_relative(ledger_path)
+    payload["replay_ledger_sha256"] = hashlib.sha256(ledger_text.encode()).hexdigest()
+    artifact_text = json.dumps(payload, indent=2, default=str) + "\n"
+    artifact_path.write_text(artifact_text, encoding="utf-8")
+    digest = hashlib.sha256(artifact_text.encode()).hexdigest()
+    _append_slice_event(payload, digest, _repo_relative(artifact_path))
+    return payload
+
+
+def _slice_stamp(rows: list[dict]) -> datetime:
+    stamp = datetime.now(timezone.utc).replace(microsecond=0)
+    for row in rows:
+        if row.get("trial_id") != TRIAL_ID or not isinstance(row.get("recorded_at"), str):
+            continue
+        previous = datetime.fromisoformat(row["recorded_at"].replace("Z", "+00:00"))
+        if stamp <= previous:
+            stamp = previous + timedelta(seconds=1)
+    return stamp
+
+
+def _append_slice_event(payload: dict, artifact_sha256: str, artifact_rel: str) -> None:
+    lines = TRIAL_LEDGER.read_text(encoding="utf-8").splitlines()
+    rows = [json.loads(line) for line in lines if line.strip()]
+    first = next(row for row in rows if row.get("trial_id") == TRIAL_ID)
+    event = {key: first.get(key) for key in _FROZEN_LEDGER_FIELDS}
+    event.update(
+        {
+            "trial_id": TRIAL_ID,
+            "event": "SLICE",
+            "slice_id": payload["slice_id"],
+            "recorded_at": _slice_stamp(rows).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "recorded_by": "slice-scoring",
+            "slice_artifact": artifact_rel,
+            "slice_artifact_sha256": artifact_sha256,
+            "replay_ledger": payload.get("replay_ledger"),
+            "replay_ledger_sha256": payload.get("replay_ledger_sha256"),
+            "git_head": payload.get("git_head"),
+            "clean_tree": payload.get("clean_tree"),
+            "wrapper_sha256": payload.get("wrapper_sha256"),
+            "notes": "Raw slice results. No pass/fail criterion is applied.",
+        }
+    )
+    with TRIAL_LEDGER.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(event, separators=(",", ":")) + "\n")
+
+
 def run_declared_slices(
     research_15m: Path | None = None,
     audit_5m: Path | None = None,
     *,
     data_root: Path | None = None,
     slice_id: str | None = None,
-) -> None:
-    """Check a slice against the pinned download record. This function does not score.
+) -> dict | None:
+    """Admit one slice, then score it only when ``SLICE_SCORING_AUTHORIZED`` is true.
 
-    A ``claude_review`` string in the artifact is self-attested and is not
-    authorization. The review record is a ``GATE_REVIEW`` ledger event that
-    cites the PASS artifact SHA-256 and the reviewed pull-request head.
-    Pull-request review is the real gate.
+    Every admission check still runs: the pinned manifest, the slice tree
+    hashes, refusal of ``combined``, the SUPERSEDED check, and
+    ``MAX_CONTRACTS_HARD_CAP`` exactly equal to ``1``. The authorization
+    constant is false in this commit, so an admitted slice returns None and
+    writes nothing.
 
-    Procedure for adding a review, in a later commit, not this one:
-    1. A reviewed commit replaces placeholder ``DATA_MANIFEST_SHA256`` with
-       the SHA-256 of the committed manifest file.
-    2. ``run_reproduction_gate`` writes the artifact with ``claude_review``
-       null and appends one GATE line for that file's hash.
-    3. Claude reviews that artifact on the pull request.
-    4. ``record_gate_review`` appends a GATE_REVIEW event. It does not append
-       another GATE line and it does not change the artifact hash.
-    5. This function still returns without scoring.
+    When the constant is true, the checkout must be clean. The artifact
+    records git HEAD, that clean-tree check, and this file's sha256. The
+    attempt writes its own artifact and replay ledger. An existing attempt
+    file is refused. The ledger event records both sha256 values. Results
+    are raw trades, net P&L, win rate, drawdown, and the longest losing
+    streak at each slippage. There is no pass/fail criterion.
 
-    A download change does not unlock this trial. Mark it SUPERSEDED and
-    preregister a new trial id.
+    A ``claude_review`` string in the gate artifact is self-attested and is
+    not authorization. The review record is a ``GATE_REVIEW`` ledger event.
+    Pull-request review is the real gate. A download change does not unlock
+    this trial. Mark it SUPERSEDED and preregister a new trial id.
     """
     if slice_id == "combined":
         raise RuntimeError("combined is report-only and is not admitted")
@@ -1799,7 +2017,9 @@ def run_declared_slices(
     audit = _resolve_under_root(root, audit_5m)
     _refuse_slice_data_mismatch(artifact, research, audit, slice_id)
     _refuse_ohl_disagreement()
-    return None
+    if not SLICE_SCORING_AUTHORIZED:
+        return None
+    return _score_admitted_slice(research, audit, slice_id)
 
 
 def _target_and_stop_nets(
