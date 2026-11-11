@@ -1,6 +1,9 @@
 # REGISTRATION-READY — becomes registered when the PLANNED line is written to docs/research-trial-ledger.jsonl
 
+Trial ID for this registration: T-2026-11-11-prereg-322-afs0523-slice-success-2026-11-11-01
+
 ## Change log
+- **v9, 2026-11-11 ~17:10 ET.** Claude approved v9 as prereg-only. Additions only, nothing removed: the trial ID line under the header (`T-2026-11-11-prereg-322-afs0523-slice-success-2026-11-11-01`), plus this bullet. The repo ledger test requires the trial ID to appear in the prereg text. Pre-edit copy: `PREREG_322_SLICE_SUCCESS_DRAFT_2026-11-11_v8_pre.md` (sha256 8370cf89…5c59). Diff: `PREREG_322_SLICE_SUCCESS_DRAFT_2026-11-11_v8_to_v9.diff`.
 - **v8, 2026-11-11 ~17:00 ET.** Text-only fixes from Claude's CHANGES REQUIRED on v7 (#1277 @ f5953cb8). Exactly five changes:
   - (1) Provenance: main is 3cff609d (#1276 merged, verified); #1272 recorded as MERGED (head abaa1a4b → e9e1d041, 14:39 EST); stale f612049f / not-merged text removed.
   - (2) Part 2 metadata cites #1272 as merged commit e9e1d041.
