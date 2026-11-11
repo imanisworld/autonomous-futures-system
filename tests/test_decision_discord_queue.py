@@ -92,3 +92,84 @@ def test_stale_message_is_not_sent():
     assert dispatcher.join(3)
     assert seen == []
     assert dispatcher.dropped == 1
+
+
+def test_false_transport_result_is_not_counted_as_delivered():
+    dispatcher = DecisionDispatcher(sleep=lambda _: None)
+    assert dispatcher.enqueue(lambda: False)
+    assert dispatcher.join(3)
+    assert dispatcher.delivered == 0
+    assert dispatcher.dropped == 1
+
+
+def test_webhook_alert_processing_does_not_wait_for_signal_http(monkeypatch, tmp_path):
+    """The journal/decision path returns while the Discord POST is still blocked."""
+    from datetime import datetime
+    from types import SimpleNamespace
+    from zoneinfo import ZoneInfo
+
+    import notifications.decision_queue as delivery
+    import notifications.futures_advisory as advisory
+    import notifications.discord_router as router_module
+    import webhook.app as app
+    from webhook.payload import AlertPayload
+
+    dispatcher = DecisionDispatcher(sleep=lambda _: None)
+    monkeypatch.setattr(delivery, "DISPATCHER", dispatcher)
+
+    result = {"decision": "TRADE", "context": {"instrument": "MNQ", "session": "new_york"}}
+    payload = AlertPayload(
+        ticker="MNQ1!",
+        timestamp=datetime(2026, 9, 21, 10, 0, tzinfo=ZoneInfo("America/New_York")).isoformat(),
+        timeframe="15",
+        open=25000.0,
+        high=25010.0,
+        low=24990.0,
+        close=25005.0,
+    )
+    monkeypatch.setattr(
+        app, "_config",
+        SimpleNamespace(
+            log_dir=str(tmp_path),
+            live_quote_enabled=False,
+            discord_notify_decisions=["TRADE"],
+            discord_notifications_enabled=True,
+        )
+    )
+    calls = []
+    monkeypatch.setattr(app, "process_alert", lambda *a, **k: calls.append("decided") or result)
+    monkeypatch.setattr(app, "_record_latest_webhook", lambda *a, **k: None)
+    monkeypatch.setattr(app, "append_observer_response_audit", lambda *a, **k: None)
+    monkeypatch.setattr(
+        app, "_decision_notification_market_gate",
+        lambda *a, **k: (True, None, "MNQ"),
+    )
+    monkeypatch.setattr(advisory, "notify_futures_advisory", lambda *a, **k: 0)
+
+    started = threading.Event()
+    release = threading.Event()
+    routes = []
+
+    class SlowRouter:
+        def is_enabled(self, name):
+            return name == "signal"
+
+        def send(self, name, body):
+            started.set()
+            release.wait(2)
+            routes.append(name)
+            return True
+
+    monkeypatch.setattr(router_module, "DiscordRouter", SlowRouter)
+
+    started_at = time.monotonic()
+    app._handle_alert_blocking(payload)
+    elapsed = time.monotonic() - started_at
+    assert elapsed < 0.5
+    assert calls == ["decided"]
+    assert started.wait(1)
+
+    release.set()
+    assert dispatcher.join(3)
+    assert routes == ["signal"]
+    assert dispatcher.delivered == 1
