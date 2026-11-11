@@ -560,6 +560,111 @@ def _exclusion_report(resolution: dict[str, list[dict[str, str]]]) -> dict:
     return {"count": len(dates), "dates": dates}
 
 
+def _replay_rows_by_date(actual_ledger: dict) -> dict[str, list[dict]]:
+    found: dict[str, list[dict]] = {}
+    for slippage in SLIPPAGES:
+        for row in actual_ledger.get(slippage) or []:
+            if isinstance(row, dict):
+                found.setdefault(str(row.get("date")), []).append(row)
+    return found
+
+
+def _as_decimal(value: object) -> Decimal | None:
+    if value is None:
+        return None
+    try:
+        return Decimal(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _scored_bar_mismatch(day: str, actual: str, expected: str) -> dict:
+    return {
+        "date": day,
+        "slippage": "decision_bar",
+        "model": "decision_bar",
+        "field": "scored_bar",
+        "expected": expected,
+        "actual": actual,
+    }
+
+
+def _pinned_databento_closes() -> dict[str, Decimal]:
+    """Databento closes for allowlisted days, read from the bar objects."""
+    payload = _load_bar_evidence()
+    closes: dict[str, Decimal] = {}
+    for day in payload["mismatch_days"]:
+        bar = day.get("databento_5m")
+        close = _as_decimal(bar.get("close") if isinstance(bar, dict) else None)
+        if close is None:
+            continue
+        closes[str(day["date"])] = close
+    return closes
+
+
+def _scored_bar_mismatches(
+    actual_ledger: dict,
+    resolution: dict[str, list[dict[str, str]]],
+    allowlist: dict[str, Decimal],
+) -> tuple[list[dict], set[str]]:
+    """Bind pinned evidence to the decision bar the replay actually scored.
+
+    An exclusion is valid only when that scored bar is the pinned Databento
+    bar. A close-delta day is valid only when the scored close is the pinned
+    Databento close. Anything else fails.
+    """
+    rows = _replay_rows_by_date(actual_ledger)
+    mismatches: list[dict] = []
+    revoked: set[str] = set()
+    mar06 = _load_mar06_evidence()
+    decision = mar06.get("decision_bar") if isinstance(mar06, dict) else None
+    databento = decision.get("databento_5m") if isinstance(decision, dict) else None
+    mar06_day = str(decision.get("date")) if isinstance(decision, dict) else ""
+    expected_ohlc = {
+        field: _as_decimal(databento.get(field))
+        for field in ("open", "high", "low", "close")
+    } if isinstance(databento, dict) else {}
+    for item in resolution["exclude"]:
+        day = item["date"]
+        day_rows = rows.get(day) or []
+        matches = (
+            day == mar06_day
+            and all(value is not None for value in expected_ohlc.values())
+            and bool(day_rows)
+            and all(
+                _as_decimal(row.get(f"trigger_bar_{field}")) == expected_ohlc[field]
+                for row in day_rows
+                for field in ("open", "high", "low", "close")
+            )
+        )
+        if matches:
+            continue
+        revoked.add(day)
+        mismatches.append(
+            _scored_bar_mismatch(
+                day,
+                "DATABENTO_SIDE",
+                "scored trigger bar equals the pinned Databento bar",
+            )
+        )
+    closes = _pinned_databento_closes()
+    for day in sorted(allowlist):
+        expected = closes.get(day)
+        day_rows = rows.get(day) or []
+        if expected is not None and day_rows and all(
+            _as_decimal(row.get("trigger_bar_close")) == expected for row in day_rows
+        ):
+            continue
+        mismatches.append(
+            _scored_bar_mismatch(
+                day,
+                "close_mismatch",
+                "missing" if expected is None else str(expected),
+            )
+        )
+    return mismatches, revoked
+
+
 def _ohl_mismatch(day: str, classification: str) -> dict:
     return {
         "date": day,
@@ -583,7 +688,12 @@ def _refuse_ohl_disagreement() -> None:
 def _fail_closed_on_ohl_disagreement(comparison: dict) -> dict:
     """Apply the pinned-evidence rule even when the fill comparison matched."""
     resolution = _ohl_resolution()
-    excluded = {row["date"] for row in resolution["exclude"]}
+    scored_failures = {
+        item.get("date")
+        for item in list(comparison.get("mismatches") or [])
+        if isinstance(item, dict) and item.get("field") == "scored_bar"
+    }
+    excluded = {row["date"] for row in resolution["exclude"] if row["date"] not in scored_failures}
     mismatches = [
         item
         for item in list(comparison.get("mismatches") or [])
@@ -601,10 +711,13 @@ def _fail_closed_on_ohl_disagreement(comparison: dict) -> dict:
     for row in resolution["fail"]:
         if row["date"] not in present:
             mismatches.append(_ohl_mismatch(row["date"], row["classification"]))
-    if resolution["fail"]:
+    if resolution["fail"] or scored_failures:
         comparison["ok"] = False
     comparison["mismatches"] = mismatches
-    comparison["ohl_reference_exclusions"] = _exclusion_report(resolution)
+    comparison["ohl_reference_exclusions"] = {
+        "count": len(excluded),
+        "dates": sorted(excluded),
+    }
     return comparison
 
 
@@ -777,7 +890,9 @@ def compare_replay_to_oct4(
     exclusions = None
     if structural:
         resolution = _ohl_resolution()
-        excluded = {row["date"] for row in resolution["exclude"]}
+        scored, revoked = _scored_bar_mismatches(actual_ledger, resolution, allowlist)
+        mismatches.extend(scored)
+        excluded = {row["date"] for row in resolution["exclude"] if row["date"] not in revoked}
         for row in resolution["fail"]:
             if row["date"] in reference_dates:
                 mismatches.append(_ohl_mismatch(row["date"], row["classification"]))
@@ -788,7 +903,7 @@ def compare_replay_to_oct4(
                 item.get("field") == "open_high_low" and item.get("date") in excluded
             )
         ]
-        exclusions = _exclusion_report(resolution)
+        exclusions = {"count": len(excluded), "dates": sorted(excluded)}
 
     mismatches.sort(key=lambda item: (item["date"] or "", item["slippage"], item["model"], item["field"]))
     eod_ok = (not eod_scored) and all(

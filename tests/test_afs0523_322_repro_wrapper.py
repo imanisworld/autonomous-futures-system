@@ -1432,6 +1432,23 @@ def test_slice_admission_refuses_a_missing_cap(monkeypatch, tmp_path):
     assert ledger.read_bytes() == before
 
 
+def _stamp_scored_databento_bars(ledger: dict) -> dict:
+    """Give the replay the pinned Databento decision bars the structural gate requires."""
+    mar06 = json.loads(MAR06_BAR_EVIDENCE_PATH.read_text(encoding="utf-8"))["decision_bar"]["databento_5m"]
+    evidence = json.loads(BAR_EVIDENCE_PATH.read_text(encoding="utf-8"))
+    closes = {day["date"]: day["databento_5m"]["close"] for day in evidence["mismatch_days"]}
+    for rows in ledger.values():
+        for row in rows:
+            if row["date"] == "2026-03-06":
+                row["trigger_bar_open"] = mar06["open"]
+                row["trigger_bar_high"] = mar06["high"]
+                row["trigger_bar_low"] = mar06["low"]
+                row["trigger_bar_close"] = mar06["close"]
+            elif row["date"] in closes:
+                row["trigger_bar_close"] = closes[row["date"]]
+    return ledger
+
+
 def test_structural_gate_allows_only_documented_close_deltas():
     reference = json.loads(
         (ROOT / "docs/research-evidence/T-2026-10-04-prereg-322-corrected-eod-rerun-2026-10-04-01/result.json").read_text(
@@ -1439,8 +1456,13 @@ def test_structural_gate_allows_only_documented_close_deltas():
         )
     )
     exact = compare_replay_to_oct4({"ledger": reference["ledger"]})
-    structural = compare_replay_structural({"ledger": reference["ledger"]})
+    unbound = compare_replay_structural({"ledger": reference["ledger"]})
     assert exact["ok"] is True
+    assert unbound["ok"] is False
+    assert any(row["field"] == "scored_bar" and row["date"] == "2026-03-06" for row in unbound["mismatches"])
+    scored = json.loads(json.dumps(reference))
+    _stamp_scored_databento_bars(scored["ledger"])
+    structural = compare_replay_structural({"ledger": scored["ledger"]})
     assert structural["ok"] is True
     assert structural["ohl_reference_exclusions"] == {"count": 1, "dates": ["2026-03-06"]}
     assert not any(row["field"] == "open_high_low" for row in structural["mismatches"])
@@ -1448,6 +1470,7 @@ def test_structural_gate_allows_only_documented_close_deltas():
     assert set(allowlist) == {"2024-09-06", "2026-06-11"}
     assert "2026-03-06" not in allowlist
     moved = json.loads(json.dumps(reference))
+    _stamp_scored_databento_bars(moved["ledger"])
     for rows in moved["ledger"].values():
         for row in rows:
             if row["date"] == "2024-09-06":
@@ -1462,6 +1485,7 @@ def test_structural_gate_allows_only_documented_close_deltas():
         for row in moved_structural["mismatches"]
     )
     wrong = json.loads(json.dumps(reference))
+    _stamp_scored_databento_bars(wrong["ledger"])
     for rows in wrong["ledger"].values():
         for row in rows:
             if row["date"] == "2024-09-06":
@@ -1637,10 +1661,41 @@ def test_real_2026_03_06_is_excluded_and_the_label_is_not_trusted():
     payload["classification"] = "DATABENTO_SIDE"
     payload["mnqh6_1m_15_00_to_15_04"]["matches_committed_databento_5m_ohlcv"] = False
     assert _classify_mar06(payload) == "REFERENCE_DEFECT"
-    structural = compare_replay_structural(
-        {"ledger": json.loads(LEDGER.read_text(encoding="utf-8"))["ledger"]}
-    )
+    ledger = json.loads(LEDGER.read_text(encoding="utf-8"))["ledger"]
+    _stamp_scored_databento_bars(ledger)
+    structural = compare_replay_structural({"ledger": ledger})
     assert structural["ok"] is True
     assert structural["ohl_reference_exclusions"] == {"count": 1, "dates": ["2026-03-06"]}
     assert not any(row["field"] == "open_high_low" for row in structural["mismatches"])
     assert "exclude" not in run_reproduction_gate.__code__.co_varnames
+
+
+def test_excluded_day_fails_when_the_scored_bar_is_not_the_pinned_databento_bar():
+    reference = json.loads(LEDGER.read_text(encoding="utf-8"))
+    _stamp_scored_databento_bars(reference["ledger"])
+    for rows in reference["ledger"].values():
+        for row in rows:
+            if row["date"] == "2026-03-06":
+                row["trigger_bar_high"] = float(row["trigger_bar_high"]) + 0.25
+    structural = compare_replay_structural({"ledger": reference["ledger"]})
+    assert structural["ok"] is False
+    assert structural["ohl_reference_exclusions"] == {"count": 0, "dates": []}
+    assert any(
+        row["date"] == "2026-03-06" and row["field"] == "scored_bar" and row["actual"] == "DATABENTO_SIDE"
+        for row in structural["mismatches"]
+    )
+
+
+def test_close_delta_day_fails_when_the_scored_close_is_not_the_pinned_databento_close():
+    reference = json.loads(LEDGER.read_text(encoding="utf-8"))
+    _stamp_scored_databento_bars(reference["ledger"])
+    for rows in reference["ledger"].values():
+        for row in rows:
+            if row["date"] == "2024-09-06":
+                row["trigger_bar_close"] = float(row["trigger_bar_close"]) + 0.25
+    structural = compare_replay_structural({"ledger": reference["ledger"]})
+    assert structural["ok"] is False
+    assert any(
+        row["date"] == "2024-09-06" and row["field"] == "scored_bar" and row["actual"] == "close_mismatch"
+        for row in structural["mismatches"]
+    )

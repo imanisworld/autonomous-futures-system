@@ -8,7 +8,8 @@
 | **Fixed** | AFS-0592 on this draft. The wrapper is bound to the structural trial and `RUN_AUTHORIZED` is false, so the superseded trial has no run path. `BAR_EVIDENCE.json` is pinned at `9bbd516d8c7a43b8c42d829723bc6f800b1dabe3f372ed8d20295f839017931d`. Close deltas are recomputed from the two committed closes. Every slice artifact carries `OLDER_SLICE_IOC_NOTE`. The prereg states the Easter fix moves the AFS-0586 data-gap count from 3 to 2 and lists the 2010-2023 Good Friday label shifts. The contract-cap tests use `monkeypatch.setenv`. 2026-03-06 is not refused; AFS-0594 excludes it as `REFERENCE_DEFECT`. |
 | **Deferred** | Early-close pre-open 15-minute bars stay `DATA_GAP`. The adapter carries a TODO. Do not label them in this change. |
 | **AFS-0594** | 2026-03-06 is excluded as `REFERENCE_DEFECT`, not refused. The 1-minute rows rebuild the Databento 5-minute bar. `MAR06_BAR_EVIDENCE.json` sha256 `408cebf65e72a4bf43685ad80b406b6bc6b18081c2c07658154c84e0a1ef00a7`. `MAR06_BAR_EVIDENCE.md` sha256 `6f970effb72bb573fe5bd5a38d4d45e14ae7e483a64bac204ef0605c7d080c15`. `RUN_AUTHORIZED` stays false. Do not run the gate. No `COMPLETED` line was added for the superseded trial. |
-| **NEXT** | Re-review this commit. Do not run the gate and do not merge from this checkpoint. |
+| **Scored bar** | A reference-defect exclusion stands only when the replay `trigger_bar_open/high/low/close` equals the pinned Databento bar. A close-delta day stands only when `trigger_bar_close` equals the pinned Databento close. Otherwise the structural comparison fails. `RUN_AUTHORIZED` stays false. |
+| **NEXT** | Re-review only this scored-bar delta. Do not run the gate and do not merge from this checkpoint. |
 
 ## Previous — 2026-11-10 AFS-0586 reproduction gate rerun FAIL record
 

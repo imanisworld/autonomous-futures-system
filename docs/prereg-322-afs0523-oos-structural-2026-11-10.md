@@ -17,7 +17,7 @@ This document was written after AFS-0586. It is post-hoc. AFS-0586 already ran `
 - `exit_price`, `status`, `result`, and `exit_reason` still match.
 - A decision bar whose open, high, or low disagree is classified from pinned 1-minute evidence. There is no caller override.
   - Databento-side cause (wrong contract, shifted timestamp, bad bar, or adapter bug): the trial FAILs. Fix the adapter and register a new trial.
-  - Reference defect: Databento's own 1-minute bars for the selected contract rebuild its 5-minute bar exactly, and the reference bar is the odd one out. Count it, flag it, back it with the pinned evidence, and exclude it from the open/high/low comparison. Outcome fields on that date are still compared.
+  - Reference defect: Databento's own 1-minute bars for the selected contract rebuild its 5-minute bar exactly, and the reference bar is the odd one out. Count it, flag it, back it with the pinned evidence, and exclude it from the open/high/low comparison only when the replay's scored `trigger_bar_open/high/low/close` equals that pinned Databento bar. Otherwise the day is `DATABENTO_SIDE` and the trial fails. Outcome fields on that date are still compared. A close-delta day fails unless the replay's `trigger_bar_close` equals the pinned Databento close.
   - Unexplained, or no pinned 1-minute evidence: the trial FAILs.
 - This root-cause rule was written after AFS-0594 classified 2026-03-06 as `REFERENCE_DEFECT`. The matching IOC no-fills on that day are not the reason it is excluded.
 
