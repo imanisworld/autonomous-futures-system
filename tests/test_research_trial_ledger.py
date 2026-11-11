@@ -368,7 +368,12 @@ def test_canonical_research_evidence_is_registered_before_counting() -> None:
             assert gate_rows[0].get("gate_pass") is False
             continue
 
-        if path.name in {"BAR_EVIDENCE.md", "BAR_EVIDENCE.json"}:
+        if path.name in {
+            "BAR_EVIDENCE.md",
+            "BAR_EVIDENCE.json",
+            "MAR06_BAR_EVIDENCE.md",
+            "MAR06_BAR_EVIDENCE.json",
+        }:
             digest = hashlib.sha256((ROOT / rel).read_bytes()).hexdigest()
             cited = (ROOT / "docs/agent-work-state.md").read_text(encoding="utf-8")
             assert digest in cited, f"{rel}: bar evidence sha256 is not cited in agent-work-state"

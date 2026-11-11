@@ -19,9 +19,11 @@ window, the expected-count check, and the data paths. NQ prices, when a later
 reviewed run supplies them on the MNQ path, are accounted with the unchanged
 MNQ lane ($2/point). This module does not assign a point value.
 
-``RUN_AUTHORIZED`` is true and is checked by ``run_reproduction_gate``. That
-function is the only path that scores Databento data, and only the fixed
-reproduction window on the committed manifest at ``DATA_MANIFEST_PATH``.
+``RUN_AUTHORIZED`` is false. The superseded reproduction trial has no run
+path. ``run_reproduction_gate`` belongs to the structural trial and calls
+``compare_replay_structural``. It is the only path that scores Databento
+data, and only the fixed reproduction window on the committed manifest at
+``DATA_MANIFEST_PATH``.
 ``DATA_MANIFEST_SHA256`` is the SHA-256 of that committed file. The gate
 refuses a placeholder pin and any other byte mismatch. ``run_window`` scores nothing.
 ``run_declared_slices()`` does not score. A ``claude_review`` string is
@@ -36,6 +38,7 @@ import json
 import os
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 from pathlib import Path
 
 from config.futures_contracts import contract_economics
@@ -58,8 +61,9 @@ OCT4_LEDGER_REL = (
 OCT4_LEDGER_SHA256 = "0d0d8d72c48b3c9dd1e7065b23a5422176a765ac7b1eb594e2833b72f5d5a9b1"
 OCT4_LEDGER_COMMIT = "cf2ac0724a266198629a363fde23364ef00ce721"
 EOD_DATE = "2025-01-20"
-RUN_AUTHORIZED = True
-TRIAL_ID = "T-2026-11-09-prereg-322-afs0523-oos-reproduction-2026-11-09-01"
+SUPERSEDED_TRIAL_ID = "T-2026-11-09-prereg-322-afs0523-oos-reproduction-2026-11-09-01"
+TRIAL_ID = "T-2026-11-10-prereg-322-afs0523-oos-structural-2026-11-10-01"
+RUN_AUTHORIZED = False
 TRIAL_LEDGER = REPO / "docs/research-trial-ledger.jsonl"
 GATE_ARTIFACT = (
     REPO
@@ -67,7 +71,10 @@ GATE_ARTIFACT = (
     / TRIAL_ID
     / "reproduction-gate.json"
 )
-DATA_MANIFEST_REL = f"docs/research-evidence/{TRIAL_ID}/databento-download-manifest.json"
+DATA_MANIFEST_REL = (
+    "docs/research-evidence/"
+    f"{SUPERSEDED_TRIAL_ID}/databento-download-manifest.json"
+)
 DATA_MANIFEST_PATH = REPO / DATA_MANIFEST_REL
 # SHA-256 of the committed download manifest. The gate refuses on any other bytes.
 DATA_MANIFEST_SHA256 = "6c9d5ab3c29a7aeade90e95c84e0128795afc1bdd19aa165e18d364760b7f43d"
@@ -85,6 +92,8 @@ OCT4_SCORING_PROFILE = {
     "slippage_ticks": [1.0, 2.0, 3.0],
     "entry_fill_models": ["market", "ioc_limit", "stop_market"],
     "commission_round_trip": 1.48,
+    "tick_size": 0.25,
+    "tick_value": 0.50,
 }
 _FROZEN_LEDGER_FIELDS = (
     "prereg_path",
@@ -130,6 +139,23 @@ MODEL_LABELS = (
     ("prearmed_touch", "prearmed"),
 )
 SLIPPAGES = ("1tick", "2tick", "3tick")
+WINDOW_SLIPPAGE_TICKS = (1.0, 2.0, 3.0)
+WINDOW_ENTRY_FILL_MODELS = ("market", "ioc_limit", "stop_market")
+OLDER_SLICE_IOC_NOTE = (
+    "The reproduction gate is the only check of Databento bar quality. "
+    "Older-slice results depend on Databento's bars and closing prints."
+)
+BAR_EVIDENCE_REL = (
+    "docs/research-evidence/"
+    "T-2026-11-09-prereg-322-afs0523-oos-reproduction-2026-11-09-01/BAR_EVIDENCE.json"
+)
+BAR_EVIDENCE_PATH = REPO / BAR_EVIDENCE_REL
+BAR_EVIDENCE_SHA256 = "9bbd516d8c7a43b8c42d829723bc6f800b1dabe3f372ed8d20295f839017931d"
+MAR06_EVIDENCE_DIR = BAR_EVIDENCE_PATH.parent
+MAR06_BAR_EVIDENCE_PATH = MAR06_EVIDENCE_DIR / "MAR06_BAR_EVIDENCE.json"
+MAR06_BAR_EVIDENCE_MD_PATH = MAR06_EVIDENCE_DIR / "MAR06_BAR_EVIDENCE.md"
+MAR06_BAR_EVIDENCE_SHA256 = "408cebf65e72a4bf43685ad80b406b6bc6b18081c2c07658154c84e0a1ef00a7"
+MAR06_BAR_EVIDENCE_MD_SHA256 = "6f970effb72bb573fe5bd5a38d4d45e14ae7e483a64bac204ef0605c7d080c15"
 COMPARE_FIELDS = (
     "date",
     "direction",
@@ -337,7 +363,418 @@ def _index_rows(rows: list[dict], slippage: str) -> dict[str, dict]:
     return indexed
 
 
-def compare_replay_to_oct4(replay: dict, ledger_path: Path | None = None) -> dict:
+def _load_bar_evidence() -> dict:
+    """Read the committed bar evidence and refuse any other bytes."""
+    raw = BAR_EVIDENCE_PATH.read_bytes()
+    digest = hashlib.sha256(raw).hexdigest()
+    if digest != BAR_EVIDENCE_SHA256:
+        raise RuntimeError(
+            "BAR_EVIDENCE.json hash mismatch: "
+            f"{digest} != {BAR_EVIDENCE_SHA256}"
+        )
+    return json.loads(raw)
+
+
+def _ohl_triple(bar: object) -> tuple[Decimal, Decimal, Decimal] | None:
+    if not isinstance(bar, dict):
+        return None
+    try:
+        return (
+            Decimal(str(bar["open"])),
+            Decimal(str(bar["high"])),
+            Decimal(str(bar["low"])),
+        )
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _close_delta(day: dict) -> Decimal | None:
+    oct4 = day.get("oct4_trigger_bar")
+    databento = day.get("databento_5m")
+    if not isinstance(oct4, dict) or not isinstance(databento, dict):
+        return None
+    if "close" not in oct4 or "close" not in databento:
+        return None
+    return Decimal(str(databento["close"])) - Decimal(str(oct4["close"]))
+
+
+def _decision_bar_records(payload: dict) -> list[dict]:
+    records: list[dict] = []
+    for key in ("mismatch_days", "other_decision_bar_close_disagreements"):
+        rows = payload.get(key) or []
+        if isinstance(rows, list):
+            records.extend(row for row in rows if isinstance(row, dict))
+    return records
+
+
+def _ohl_disagreement_days() -> set[str]:
+    """Decision days whose pinned bars do not share open, high, and low.
+
+    The ``ohl_agree`` flag is not read. A day without both numeric triples
+    cannot be shown to agree.
+    """
+    found: set[str] = set()
+    for day in _decision_bar_records(_load_bar_evidence()):
+        left = _ohl_triple(day.get("oct4_trigger_bar"))
+        right = _ohl_triple(day.get("databento_5m"))
+        if left is None or right is None or left != right:
+            found.add(str(day["date"]))
+    return found
+
+
+def _read_pinned_bytes(path: Path, expected: str, label: str) -> bytes:
+    raw = path.read_bytes()
+    digest = hashlib.sha256(raw).hexdigest()
+    if digest != expected:
+        raise RuntimeError(f"{label} hash mismatch: {digest} != {expected}")
+    return raw
+
+
+def _load_mar06_evidence() -> dict:
+    """Read the Mar 6 evidence and refuse any other bytes."""
+    _read_pinned_bytes(
+        MAR06_BAR_EVIDENCE_MD_PATH,
+        MAR06_BAR_EVIDENCE_MD_SHA256,
+        "MAR06_BAR_EVIDENCE.md",
+    )
+    raw = _read_pinned_bytes(
+        MAR06_BAR_EVIDENCE_PATH,
+        MAR06_BAR_EVIDENCE_SHA256,
+        "MAR06_BAR_EVIDENCE.json",
+    )
+    return json.loads(raw)
+
+
+def _decimal_field(bar: dict, field: str) -> Decimal | None:
+    if field not in bar:
+        return None
+    try:
+        return Decimal(str(bar[field]))
+    except (TypeError, ValueError):
+        return None
+
+
+def _ohlcv(bar: object) -> dict[str, Decimal | int] | None:
+    if not isinstance(bar, dict):
+        return None
+    values: dict[str, Decimal | int] = {}
+    for field in ("open", "high", "low", "close"):
+        number = _decimal_field(bar, field)
+        if number is None:
+            return None
+        values[field] = number
+    if "volume" not in bar:
+        return None
+    try:
+        values["volume"] = int(bar["volume"])
+    except (TypeError, ValueError):
+        return None
+    return values
+
+
+def _aggregate_minutes(rows: list[dict]) -> dict[str, Decimal | int] | None:
+    if len(rows) != 5:
+        return None
+    ordered = sorted(rows, key=lambda row: str(row.get("ts_utc")))
+    parts = [_ohlcv(row) for row in ordered]
+    if any(part is None for part in parts):
+        return None
+    return {
+        "open": parts[0]["open"],
+        "high": max(part["high"] for part in parts),
+        "low": min(part["low"] for part in parts),
+        "close": parts[-1]["close"],
+        "volume": sum(int(part["volume"]) for part in parts),
+    }
+
+
+def _expected_minute_stamps(start: str) -> list[str] | None:
+    try:
+        stamp = datetime.fromisoformat(start)
+    except ValueError:
+        return None
+    return [(stamp + timedelta(minutes=offset)).isoformat() for offset in range(5)]
+
+
+def _classify_mar06(payload: dict) -> str:
+    """Recompute the Mar 6 label from the pinned 1-minute rows.
+
+    ``classification`` and the match flags are not read. Five selected-contract
+    minutes must rebuild the Databento 5-minute bar exactly. The reference bar
+    is a defect only when that rebuild is exact and its open, high, or low
+    still differs.
+    """
+    decision = payload.get("decision_bar")
+    window = payload.get("mnqh6_1m_15_00_to_15_04")
+    adapter = payload.get("adapter")
+    if not isinstance(decision, dict) or not isinstance(window, dict) or not isinstance(adapter, dict):
+        return "UNEXPLAINED"
+    rows = window.get("rows")
+    databento = _ohlcv(decision.get("databento_5m"))
+    reference = _ohl_triple(decision.get("oct4"))
+    selected = adapter.get("selected_instrument_id")
+    stamps = _expected_minute_stamps(str(decision.get("timestamp_utc")))
+    if not isinstance(rows, list) or databento is None or reference is None or stamps is None:
+        return "UNEXPLAINED"
+    if not isinstance(selected, int):
+        return "UNEXPLAINED"
+    ordered = sorted(
+        (row for row in rows if isinstance(row, dict)),
+        key=lambda row: str(row.get("ts_utc")),
+    )
+    if [row.get("ts_utc") for row in ordered] != stamps:
+        return "DATABENTO_SIDE"
+    if any(row.get("instrument_id") != selected for row in ordered):
+        return "DATABENTO_SIDE"
+    aggregate = _aggregate_minutes(ordered)
+    if aggregate is None or aggregate != databento:
+        return "DATABENTO_SIDE"
+    rebuilt = (aggregate["open"], aggregate["high"], aggregate["low"])
+    if rebuilt == reference:
+        return "UNEXPLAINED"
+    return "REFERENCE_DEFECT"
+
+
+def _ohl_resolution() -> dict[str, list[dict[str, str]]]:
+    """Classify every open/high/low disagreement. There is no caller override."""
+    excluded: list[dict[str, str]] = []
+    failed: list[dict[str, str]] = []
+    mar06: dict | None = None
+    for day in sorted(_ohl_disagreement_days()):
+        if day == "2026-03-06":
+            if mar06 is None:
+                mar06 = _load_mar06_evidence()
+            label = _classify_mar06(mar06)
+        else:
+            label = "UNEXPLAINED"
+        row = {"date": day, "classification": label}
+        if label == "REFERENCE_DEFECT":
+            excluded.append(row)
+        else:
+            failed.append(row)
+    return {"exclude": excluded, "fail": failed}
+
+
+def _exclusion_report(resolution: dict[str, list[dict[str, str]]]) -> dict:
+    dates = [row["date"] for row in resolution["exclude"]]
+    return {"count": len(dates), "dates": dates}
+
+
+def _replay_rows_by_date(actual_ledger: dict) -> dict[str, list[dict]]:
+    found: dict[str, list[dict]] = {}
+    for slippage in SLIPPAGES:
+        for row in actual_ledger.get(slippage) or []:
+            if isinstance(row, dict):
+                found.setdefault(str(row.get("date")), []).append(row)
+    return found
+
+
+def _as_decimal(value: object) -> Decimal | None:
+    if value is None:
+        return None
+    try:
+        return Decimal(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _scored_bar_mismatch(day: str, actual: str, expected: str) -> dict:
+    return {
+        "date": day,
+        "slippage": "decision_bar",
+        "model": "decision_bar",
+        "field": "scored_bar",
+        "expected": expected,
+        "actual": actual,
+    }
+
+
+def _pinned_databento_closes() -> dict[str, Decimal]:
+    """Databento closes for allowlisted days, read from the bar objects."""
+    payload = _load_bar_evidence()
+    closes: dict[str, Decimal] = {}
+    for day in payload["mismatch_days"]:
+        bar = day.get("databento_5m")
+        close = _as_decimal(bar.get("close") if isinstance(bar, dict) else None)
+        if close is None:
+            continue
+        closes[str(day["date"])] = close
+    return closes
+
+
+def _scored_bar_mismatches(
+    actual_ledger: dict,
+    resolution: dict[str, list[dict[str, str]]],
+    allowlist: dict[str, Decimal],
+) -> tuple[list[dict], set[str]]:
+    """Bind pinned evidence to the decision bar the replay actually scored.
+
+    An exclusion is valid only when that scored bar is the pinned Databento
+    bar. A close-delta day is valid only when the scored close is the pinned
+    Databento close. Anything else fails.
+    """
+    rows = _replay_rows_by_date(actual_ledger)
+    mismatches: list[dict] = []
+    revoked: set[str] = set()
+    mar06 = _load_mar06_evidence()
+    decision = mar06.get("decision_bar") if isinstance(mar06, dict) else None
+    databento = decision.get("databento_5m") if isinstance(decision, dict) else None
+    mar06_day = str(decision.get("date")) if isinstance(decision, dict) else ""
+    expected_ohlc = {
+        field: _as_decimal(databento.get(field))
+        for field in ("open", "high", "low", "close")
+    } if isinstance(databento, dict) else {}
+    for item in resolution["exclude"]:
+        day = item["date"]
+        day_rows = rows.get(day) or []
+        matches = (
+            day == mar06_day
+            and all(value is not None for value in expected_ohlc.values())
+            and bool(day_rows)
+            and all(
+                _as_decimal(row.get(f"trigger_bar_{field}")) == expected_ohlc[field]
+                for row in day_rows
+                for field in ("open", "high", "low", "close")
+            )
+        )
+        if matches:
+            continue
+        revoked.add(day)
+        mismatches.append(
+            _scored_bar_mismatch(
+                day,
+                "DATABENTO_SIDE",
+                "scored trigger bar equals the pinned Databento bar",
+            )
+        )
+    closes = _pinned_databento_closes()
+    for day in sorted(allowlist):
+        expected = closes.get(day)
+        day_rows = rows.get(day) or []
+        if expected is not None and day_rows and all(
+            _as_decimal(row.get("trigger_bar_close")) == expected for row in day_rows
+        ):
+            continue
+        mismatches.append(
+            _scored_bar_mismatch(
+                day,
+                "close_mismatch",
+                "missing" if expected is None else str(expected),
+            )
+        )
+    return mismatches, revoked
+
+
+def _ohl_mismatch(day: str, classification: str) -> dict:
+    return {
+        "date": day,
+        "slippage": "decision_bar",
+        "model": "decision_bar",
+        "field": "open_high_low",
+        "expected": "open, high, and low agree, or a pinned reference defect",
+        "actual": classification,
+    }
+
+
+def _refuse_ohl_disagreement() -> None:
+    failed = _ohl_resolution()["fail"]
+    if failed:
+        raise RuntimeError(
+            "decision bar open, high, or low disagree: "
+            + ", ".join(f"{row['date']} {row['classification']}" for row in failed)
+        )
+
+
+def _fail_closed_on_ohl_disagreement(comparison: dict) -> dict:
+    """Apply the pinned-evidence rule even when the fill comparison matched."""
+    resolution = _ohl_resolution()
+    scored_failures = {
+        item.get("date")
+        for item in list(comparison.get("mismatches") or [])
+        if isinstance(item, dict) and item.get("field") == "scored_bar"
+    }
+    excluded = {row["date"] for row in resolution["exclude"] if row["date"] not in scored_failures}
+    mismatches = [
+        item
+        for item in list(comparison.get("mismatches") or [])
+        if not (
+            isinstance(item, dict)
+            and item.get("field") == "open_high_low"
+            and item.get("date") in excluded
+        )
+    ]
+    present = {
+        item.get("date")
+        for item in mismatches
+        if isinstance(item, dict) and item.get("field") == "open_high_low"
+    }
+    for row in resolution["fail"]:
+        if row["date"] not in present:
+            mismatches.append(_ohl_mismatch(row["date"], row["classification"]))
+    if resolution["fail"] or scored_failures:
+        comparison["ok"] = False
+    comparison["mismatches"] = mismatches
+    comparison["ohl_reference_exclusions"] = {
+        "count": len(excluded),
+        "dates": sorted(excluded),
+    }
+    return comparison
+
+
+def _ioc_close_allowlist() -> dict[str, Decimal]:
+    """Days whose honest-IOC fill may move by the recomputed close delta.
+
+    Open, high, and low must agree as numbers. The delta is Databento close
+    minus the Oct 4 close. ``databento_minus_oct4`` is not trusted.
+    """
+    payload = _load_bar_evidence()
+    allowed: dict[str, Decimal] = {}
+    for day in payload["mismatch_days"]:
+        if day.get("has_ioc_fill") is not True:
+            continue
+        left = _ohl_triple(day.get("oct4_trigger_bar"))
+        right = _ohl_triple(day.get("databento_5m"))
+        if left is None or right is None or left != right:
+            raise RuntimeError(f"bar evidence {day['date']} disagrees on open, high, or low")
+        delta = _close_delta(day)
+        if delta is None:
+            raise RuntimeError(f"bar evidence {day['date']} is missing a close")
+        allowed[str(day["date"])] = delta
+    return allowed
+
+
+def _ioc_close_delta_is_exact(
+    day: str,
+    label: str,
+    field: str,
+    expected: object,
+    actual: object,
+    allowlist: dict[str, Decimal],
+) -> bool:
+    if label != "honest_ioc" or field not in {"fill_price", "net"} or day not in allowlist:
+        return False
+    if expected is None or actual is None:
+        return False
+    delta = Decimal(str(actual)) - Decimal(str(expected))
+    close_delta = allowlist[day]
+    if field == "fill_price":
+        return delta == close_delta
+    tick, value = contract_economics("MNQ")
+    point = Decimal(str(value)) / Decimal(str(tick))
+    return delta == close_delta * point
+
+
+def compare_replay_structural(replay: dict, ledger_path: Path | None = None) -> dict:
+    """Post-hoc structural comparison. It does not score and it does not authorize a run."""
+    return compare_replay_to_oct4(replay, ledger_path, structural=True)
+
+
+def compare_replay_to_oct4(
+    replay: dict,
+    ledger_path: Path | None = None,
+    *,
+    structural: bool = False,
+) -> dict:
     """Compare one replay ledger to the Oct 4 reference, field by field.
 
     Frozen-file hashes are checked before the comparison. Gap-open handling
@@ -348,6 +785,7 @@ def compare_replay_to_oct4(replay: dict, ledger_path: Path | None = None) -> dic
     net, and no WIN/LOSS result. Any difference fails the gate.
     """
     verify_frozen_modules()
+    allowlist = _ioc_close_allowlist() if structural else {}
     reference = _load_verified_ledger(ledger_path)
     actual_ledger = replay.get("ledger") or {}
     mismatches: list[dict] = []
@@ -404,8 +842,13 @@ def compare_replay_to_oct4(replay: dict, ledger_path: Path | None = None) -> dic
                 expected = _project(reference_row, model_key)
                 actual = _project(actual_row, model_key)
                 for field in COMPARE_FIELDS:
-                    if not _equal(expected[field], actual[field]):
-                        mismatches.append(
+                    if _equal(expected[field], actual[field]):
+                        continue
+                    if structural and _ioc_close_delta_is_exact(
+                        day, label, field, expected[field], actual[field], allowlist
+                    ):
+                        continue
+                    mismatches.append(
                             {
                                 "date": day,
                                 "slippage": slippage,
@@ -444,13 +887,31 @@ def compare_replay_to_oct4(replay: dict, ledger_path: Path | None = None) -> dic
                 }
             )
 
+    exclusions = None
+    if structural:
+        resolution = _ohl_resolution()
+        scored, revoked = _scored_bar_mismatches(actual_ledger, resolution, allowlist)
+        mismatches.extend(scored)
+        excluded = {row["date"] for row in resolution["exclude"] if row["date"] not in revoked}
+        for row in resolution["fail"]:
+            if row["date"] in reference_dates:
+                mismatches.append(_ohl_mismatch(row["date"], row["classification"]))
+        mismatches = [
+            item
+            for item in mismatches
+            if not (
+                item.get("field") == "open_high_low" and item.get("date") in excluded
+            )
+        ]
+        exclusions = {"count": len(excluded), "dates": sorted(excluded)}
+
     mismatches.sort(key=lambda item: (item["date"] or "", item["slippage"], item["model"], item["field"]))
     eod_ok = (not eod_scored) and all(
         cell["status"] == "UNRESOLVED" and cell["exit_reason"] == "EOD_BAR_MISSING"
         for slip_cells in eod_cells.values()
         for cell in slip_cells.values()
     )
-    return {
+    report = {
         "ok": (
             not mismatches
             and eod_ok
@@ -469,6 +930,9 @@ def compare_replay_to_oct4(replay: dict, ledger_path: Path | None = None) -> dic
             "cells": eod_cells,
         },
     }
+    if exclusions is not None:
+        report["ohl_reference_exclusions"] = exclusions
+    return report
 
 
 def _parity(
@@ -545,7 +1009,9 @@ def _run_window(
     """Run the frozen detection and bracket accounting on caller-supplied trees.
 
     This is mechanical. It is not authorization to score a declared slice.
+    The Oct 4 profile is required here so a slice cannot score around the gate.
     """
+    _scoring_profile_or_refuse()
     gap_report = data_gap_dates_from_trees(research_15m, audit_5m, start, end)
     gap_dates = {item["date"] for item in gap_report["data_gaps"]}
     candidates, triggers, bars, invalid_brackets = _parity(
@@ -564,22 +1030,28 @@ def _run_window(
         [{"gap_open": info["gap_open"]} for info in triggers.values()]
     )
     ledgers: dict[str, list] = {}
-    for slip in (1.0, 2.0, 3.0):
+    for slip in WINDOW_SLIPPAGE_TICKS:
         key = f"{int(slip)}tick"
         if not candidates:
             ledgers[key] = []
             continue
         plan_rows = run_bracket_stage(
             LANES["322_mnq"], bars, candidates,
-            fill_model="market", slippage_ticks=slip, tolerance_ticks=harness.IOC_TOLERANCE,
+            fill_model=WINDOW_ENTRY_FILL_MODELS[0],
+            slippage_ticks=slip,
+            tolerance_ticks=harness.IOC_TOLERANCE,
         )
         ioc_rows = run_bracket_stage(
             LANES["322_mnq"], bars, candidates,
-            fill_model="ioc_limit", slippage_ticks=slip, tolerance_ticks=harness.IOC_TOLERANCE,
+            fill_model=WINDOW_ENTRY_FILL_MODELS[1],
+            slippage_ticks=slip,
+            tolerance_ticks=harness.IOC_TOLERANCE,
         )
         pre_rows = run_bracket_stage(
             LANES["322_mnq"], bars, prearmed,
-            fill_model="stop_market", slippage_ticks=slip, tolerance_ticks=harness.IOC_TOLERANCE,
+            fill_model=WINDOW_ENTRY_FILL_MODELS[2],
+            slippage_ticks=slip,
+            tolerance_ticks=harness.IOC_TOLERANCE,
         )
         ledgers[key] = harness.ledger(
             candidates,
@@ -814,19 +1286,39 @@ def _gate_payload(
         "error": error,
         "claude_review": None,
         "prior_attempts": prior_attempts,
+        "ohl_reference_exclusions": (
+            {"count": 0, "dates": []}
+            if comparison is None
+            else comparison.get("ohl_reference_exclusions") or {"count": 0, "dates": []}
+        ),
     }
     payload.update(identity)
     return payload
 
 
-def _write_gate_artifact(payload: dict) -> str:
-    GATE_ARTIFACT.parent.mkdir(parents=True, exist_ok=True)
+def _attempt_artifact_path(attempt_number: int) -> Path:
+    if attempt_number < 1:
+        raise RuntimeError(f"gate attempt {attempt_number} is not a positive attempt number")
+    if attempt_number == 1:
+        return GATE_ARTIFACT
+    return GATE_ARTIFACT.with_name(f"reproduction-gate.attempt-{attempt_number:02d}.json")
+
+
+def _write_gate_artifact(payload: dict) -> tuple[str, str]:
+    path = _attempt_artifact_path(len(_gate_lines()) + 1)
+    if path.exists():
+        raise RuntimeError(f"refusing to overwrite gate artifact {path}")
+    path.parent.mkdir(parents=True, exist_ok=True)
     text = json.dumps(payload, indent=2, default=str) + "\n"
-    GATE_ARTIFACT.write_text(text, encoding="utf-8")
-    return hashlib.sha256(text.encode()).hexdigest()
+    path.write_text(text, encoding="utf-8")
+    if path.is_relative_to(REPO):
+        rel = str(path.relative_to(REPO))
+    else:
+        rel = str(path)
+    return hashlib.sha256(text.encode()).hexdigest(), rel
 
 
-def _append_gate_event(payload: dict, artifact_sha256: str) -> None:
+def _append_gate_event(payload: dict, artifact_sha256: str, artifact_rel: str) -> None:
     lines = TRIAL_LEDGER.read_text(encoding="utf-8").splitlines()
     rows = [json.loads(line) for line in lines if line.strip()]
     first = next(row for row in rows if row.get("trial_id") == TRIAL_ID)
@@ -845,7 +1337,7 @@ def _append_gate_event(payload: dict, artifact_sha256: str) -> None:
             "recorded_at": stamp.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "recorded_by": "reproduction-gate",
             "gate_pass": payload["pass"],
-            "gate_artifact": str(GATE_ARTIFACT.relative_to(REPO)) if GATE_ARTIFACT.is_relative_to(REPO) else str(GATE_ARTIFACT),
+            "gate_artifact": artifact_rel,
             "gate_artifact_sha256": artifact_sha256,
             "pulled_files": payload.get("pulled_files"),
             "research_15m_sha256": payload.get("research_15m_sha256"),
@@ -918,24 +1410,47 @@ def _record_scoring_failure(
     payload = _gate_payload(None, None, manifest, error, identity, _prior_attempts())
     payload["data_gaps"] = gaps
     payload["data_gap_count"] = gap_count
-    digest = _write_gate_artifact(payload)
-    _append_gate_event(payload, digest)
+    digest, artifact_rel = _write_gate_artifact(payload)
+    _append_gate_event(payload, digest, artifact_rel)
     return payload
+
+
+def _frozen_bracket_literals() -> dict[str, object]:
+    """Read the Oct 4 broker literals from frozen resolve_bracket. Do not edit that file."""
+    text = (REPO / "scripts/edge_decomposition_audit.py").read_text(encoding="utf-8")
+    start = text.index("def resolve_bracket")
+    body = text[start:text.index("\ndef ", start + 1)]
+    if (
+        "starting_balance=100_000.0" not in body
+        or "pessimistic_both_hit=True" not in body
+        or "contracts=1" not in body
+    ):
+        raise RuntimeError(
+            "bad config: frozen resolve_bracket no longer states the Oct 4 "
+            "contracts, starting balance, and pessimistic same-bar handling"
+        )
+    return {
+        "contracts": 1,
+        "starting_balance": 100000.0,
+        "pessimistic_both_hit": True,
+    }
 
 
 def _effective_scoring_profile() -> dict:
     """Read the settings the frozen bracket path consults. Do not assign them."""
-    return {
+    tick, tick_value = contract_economics("MNQ")
+    profile = {
         "MAX_CONTRACTS_HARD_CAP": os.environ.get("MAX_CONTRACTS_HARD_CAP"),
         "risk_rules_contract_ceiling": per_instrument_contract_ceiling(),
-        "contracts": 1,
-        "starting_balance": 100000.0,
-        "pessimistic_both_hit": True,
         "entry_tolerance_ticks": float(harness.IOC_TOLERANCE),
-        "slippage_ticks": [1.0, 2.0, 3.0],
-        "entry_fill_models": ["market", "ioc_limit", "stop_market"],
+        "slippage_ticks": [float(item) for item in WINDOW_SLIPPAGE_TICKS],
+        "entry_fill_models": list(WINDOW_ENTRY_FILL_MODELS),
         "commission_round_trip": float(COMMISSION_ROUND_TRIP),
+        "tick_size": tick,
+        "tick_value": tick_value,
     }
+    profile.update(_frozen_bracket_literals())
+    return profile
 
 
 def _scoring_profile_or_refuse() -> dict:
@@ -980,12 +1495,12 @@ def run_reproduction_gate(data_root: Path, research_15m: Path, audit_5m: Path) -
             end=REPRO_END,
             expected_count=REPRO_EXPECTED_COUNT,
         )
-        comparison = compare_replay_to_oct4(scored)
+        comparison = _fail_closed_on_ohl_disagreement(compare_replay_structural(scored))
     except Exception as exc:
         return _record_scoring_failure(research, audit, manifest, identity, str(exc))
     payload = _gate_payload(scored, comparison, manifest, None, identity, _prior_attempts())
-    digest = _write_gate_artifact(payload)
-    _append_gate_event(payload, digest)
+    digest, artifact_rel = _write_gate_artifact(payload)
+    _append_gate_event(payload, digest, artifact_rel)
     return payload
 
 
@@ -1010,18 +1525,35 @@ def run_window(
     raise RuntimeError("score the reproduction window through run_reproduction_gate")
 
 
+def _matching_attempt_file(digest: object) -> Path | None:
+    if not isinstance(digest, str):
+        return None
+    candidates = [GATE_ARTIFACT]
+    folder = GATE_ARTIFACT.parent
+    if folder.is_dir():
+        candidates.extend(sorted(folder.glob("reproduction-gate*.json")))
+    seen: set[str] = set()
+    for path in candidates:
+        key = str(path)
+        if key in seen or not path.is_file():
+            continue
+        seen.add(key)
+        if hashlib.sha256(path.read_bytes()).hexdigest() == digest:
+            return path
+    return None
+
+
 def _verified_gate_artifact() -> dict:
     lines = _gate_lines()
-    if not lines or not GATE_ARTIFACT.is_file():
+    if not lines:
         raise RuntimeError(
             "no committed reproduction-gate artifact; Claude's review of a PASS "
             "gate is required before the older slices run"
         )
-    text = GATE_ARTIFACT.read_text(encoding="utf-8")
-    digest = hashlib.sha256(text.encode()).hexdigest()
-    if digest != lines[-1].get("gate_artifact_sha256"):
+    path = _matching_attempt_file(lines[-1].get("gate_artifact_sha256"))
+    if path is None:
         raise RuntimeError("reproduction-gate artifact hash mismatch")
-    return json.loads(text)
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _same_data(left: dict, right: dict) -> bool:
@@ -1064,6 +1596,8 @@ def _refuse_changed_gate_data(artifact: dict) -> None:
 
 
 def _refuse_if_superseded() -> None:
+    if TRIAL_ID == SUPERSEDED_TRIAL_ID:
+        raise RuntimeError("superseded trial has no run path")
     if any(row.get("event") == "SUPERSEDED" for row in _trial_rows()):
         raise RuntimeError("trial is SUPERSEDED; preregister a new trial id")
 
@@ -1143,12 +1677,11 @@ def record_gate_review(pr_head_sha: str) -> dict:
     lines = _gate_lines()
     if not lines or lines[-1].get("gate_pass") is not True:
         raise RuntimeError("GATE_REVIEW requires a PASS gate line")
-    if not GATE_ARTIFACT.is_file():
-        raise RuntimeError("GATE_REVIEW requires the PASS artifact")
-    text = GATE_ARTIFACT.read_text(encoding="utf-8")
-    digest = hashlib.sha256(text.encode()).hexdigest()
-    if digest != lines[-1].get("gate_artifact_sha256"):
+    path = _matching_attempt_file(lines[-1].get("gate_artifact_sha256"))
+    if path is None:
         raise RuntimeError("GATE_REVIEW artifact hash mismatch")
+    text = path.read_text(encoding="utf-8")
+    digest = hashlib.sha256(text.encode()).hexdigest()
     raw_lines = TRIAL_LEDGER.read_text(encoding="utf-8").splitlines()
     rows = [json.loads(line) for line in raw_lines if line.strip()]
     first = next(row for row in rows if row.get("trial_id") == TRIAL_ID)
@@ -1198,6 +1731,7 @@ def run_declared_slices(
     """
     if slice_id == "combined":
         raise RuntimeError("combined is report-only and is not admitted")
+    _scoring_profile_or_refuse()
     artifact = _verified_gate_artifact()
     if artifact.get("pass") is not True:
         raise RuntimeError("reproduction gate did not PASS")
@@ -1208,14 +1742,17 @@ def run_declared_slices(
         )
     _refuse_changed_gate_data(artifact)
     _refuse_if_superseded()
-    text = GATE_ARTIFACT.read_text(encoding="utf-8")
-    _require_gate_review(hashlib.sha256(text.encode()).hexdigest())
+    path = _matching_attempt_file(_gate_lines()[-1].get("gate_artifact_sha256"))
+    if path is None:
+        raise RuntimeError("reproduction-gate artifact hash mismatch")
+    _require_gate_review(hashlib.sha256(path.read_bytes()).hexdigest())
     if data_root is None or research_15m is None or audit_5m is None or slice_id is None:
         raise RuntimeError("slice admission requires data_root, the slice id, and its trees")
     root = _resolved_data_root(data_root)
     research = _resolve_under_root(root, research_15m)
     audit = _resolve_under_root(root, audit_5m)
     _refuse_slice_data_mismatch(artifact, research, audit, slice_id)
+    _refuse_ohl_disagreement()
     return None
 
 
@@ -1310,6 +1847,7 @@ def assemble_slice_report(mnq_summary: dict, nq_summary: dict) -> dict:
         "dollar_basis": "MNQ-equivalent ($2/point)",
         "result_label": NQ_RESEARCH_LABEL,
         "slippage_sensitivity": SLIPPAGE_SENSITIVITY_NOTE,
+        "older_slice_ioc_note": OLDER_SLICE_IOC_NOTE,
     }
     return {
         "mnq-2019-05-to-2024-06": {
@@ -1317,6 +1855,7 @@ def assemble_slice_report(mnq_summary: dict, nq_summary: dict) -> dict:
             "price_source": "MNQ",
             "dollar_basis": "MNQ-equivalent ($2/point)",
             "slippage_sensitivity": SLIPPAGE_SENSITIVITY_NOTE,
+            "older_slice_ioc_note": OLDER_SLICE_IOC_NOTE,
         },
         "nq-2010-06-to-2019-05": nq_block,
         "combined": {
@@ -1327,5 +1866,6 @@ def assemble_slice_report(mnq_summary: dict, nq_summary: dict) -> dict:
             + int(nq_summary.get("candidate_count") or 0),
             "result_label": NQ_RESEARCH_LABEL,
             "slippage_sensitivity": SLIPPAGE_SENSITIVITY_NOTE,
+            "older_slice_ioc_note": OLDER_SLICE_IOC_NOTE,
         },
     }
