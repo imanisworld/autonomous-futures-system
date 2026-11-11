@@ -1,6 +1,19 @@
 # Agent Work State
 
-## START HERE — 2026-11-11 GATE_REVIEW recorded
+## START HERE — 2026-11-11 slice-success evaluator
+
+Evidence only. No slice was scored. `SLICE_SCORING_AUTHORIZED` stays false. Do not merge, deploy, or change execution from this note.
+
+| Item | State |
+|---|---|
+| **Branch** | `cursor/322-slice-evaluator-ba8e` |
+| **Base** | `5cc08f59` (`#1277` merged). |
+| **Trial** | `T-2026-11-11-prereg-322-afs0523-slice-success-2026-11-11-01` |
+| **Module** | `research/afs0523_322_slice_evaluator.py`. Checks run INSUFFICIENT, FAIL, WAIT_UNRESOLVED, FAIL_DRAWDOWN, WAIT_CI, PASS. Nothing is labeled VALIDATED. |
+| **Tests** | T1–T20 and N1. T16 reads the committed reproduction replay only. `python3 -B -m pytest -q`: 9274 passed, 8 skipped. |
+| **NEXT** | Independent review. Do not flip `SLICE_SCORING_AUTHORIZED` from this checkpoint. |
+
+## Previous — 2026-11-11 GATE_REVIEW recorded
 
 Evidence only. The reproduction gate was not rerun. Nothing was scored. Do not merge, deploy, or change execution from this note.
 
