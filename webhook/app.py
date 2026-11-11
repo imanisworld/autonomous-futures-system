@@ -713,19 +713,37 @@ def _handle_alert_blocking(payload: AlertPayload) -> None:
                     payload.timestamp,
                 )
 
-        if _notify_allowed:
+        # Decision-channel Discord is presentation-only. Do not hold _alert_lock
+        # across network sends or 429 waits; the decision/journal already exist.
+        if _notify_allowed and _wants_decision_notification:
             try:
-                from notifications.discord_router import DiscordRouter as _DR
-                from notifications.discord_notifier import _discord_payload as _card
-                _router = _DR()
-                if _router.is_enabled("signal") and _wants_decision_notification:
-                    # Same paper-decision card the legacy webhook path sends.
-                    _router.send("signal", _card(payload, result))
-                else:
-                    notify_discord(payload=payload, result=result, config=_config)
-            except Exception as _disc_exc:
-                logger.warning("Discord notification error: %s", _disc_exc)
-                notify_discord(payload=payload, result=result, config=_config)
+                from notifications.decision_queue import enqueue_decision
+
+                def _deliver_decision() -> None:
+                    try:
+                        from notifications.discord_router import DiscordRouter as _DR
+                        from notifications.discord_notifier import _discord_payload as _card
+                        _router = _DR()
+                        if _router.is_enabled("signal") and _wants_decision_notification:
+                            # Same paper-decision card the legacy webhook path sends.
+                            _router.send("signal", _card(payload, result))
+                        else:
+                            notify_discord(payload=payload, result=result, config=_config)
+                    except Exception as _disc_exc:
+                        logger.warning("Discord notification error: %s", type(_disc_exc).__name__)
+                        notify_discord(payload=payload, result=result, config=_config)
+
+                if not enqueue_decision(_deliver_decision):
+                    logger.error(
+                        "Decision Discord queue unavailable; notification not delivered "
+                        "event_id=%s decision=%s",
+                        getattr(payload, "event_id", None), _decision,
+                    )
+            except Exception as _queue_exc:
+                logger.error(
+                    "Decision Discord enqueue failed: %s event_id=%s",
+                    type(_queue_exc).__name__, getattr(payload, "event_id", None),
+                )
         # Advisory Discord is presentation-only. Gate on the same market/session
         # permission as decision-channel cards, then enqueue so HTTP/retries
         # cannot hold _alert_lock or delay later futures bars.
