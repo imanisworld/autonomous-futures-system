@@ -6,17 +6,19 @@ from __future__ import annotations
 
 import ast
 import json
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from research.databento_322_bar_adapter import (
+    EARLY_CLOSE_DISPOSITION,
     EARLY_CLOSE_STATUS,
     REPRODUCTION_WINDOW_END,
     REPRODUCTION_WINDOW_START,
     _easter_sunday,
+    _required_starts,
     classify_written_bars,
     cme_equity_index_session,
     data_gap_dates_from_trees,
@@ -239,9 +241,7 @@ def test_nq_parent_bars_are_written_on_the_mnq_harness_path(tmp_path):
     assert all(row["open"] != 8.0 for row in rows)
 
 
-def _required_rows(day: date) -> tuple[list[dict], list[dict]]:
-    from research.databento_322_bar_adapter import _required_starts
-
+def _required_rows(day: date, *, policy: str = "gate") -> tuple[list[dict], list[dict]]:
     def row(moment: datetime) -> dict:
         return {
             "timestamp": moment.astimezone(timezone.utc).replace(microsecond=0).isoformat(),
@@ -252,7 +252,7 @@ def _required_rows(day: date) -> tuple[list[dict], list[dict]]:
             "volume": 1,
         }
 
-    starts_15, starts_5 = _required_starts(day)
+    starts_15, starts_5 = _required_starts(day, policy=policy)
     return [row(moment) for moment in starts_15], [row(moment) for moment in starts_5]
 
 
@@ -455,29 +455,81 @@ def _write_classified_trees(root: Path, rows_15: list[dict], rows_5: list[dict])
     return research, audit
 
 
+_MISLABELED_REGULAR_DAYS = (
+    date(2010, 7, 2),
+    date(2011, 7, 1),
+    date(2015, 7, 2),
+    date(2016, 7, 1),
+    date(2020, 7, 2),
+    date(2021, 7, 2),
+    date(2022, 7, 1),
+    date(2010, 12, 23),
+    date(2011, 12, 23),
+    date(2016, 12, 23),
+    date(2017, 12, 22),
+    date(2021, 12, 23),
+    date(2022, 12, 23),
+    date(2023, 12, 22),
+)
+
+
 def test_half_days_come_from_the_cme_calendar_and_2025_01_09_does_not():
     assert cme_equity_index_session(date(2014, 7, 3)) == "early_close"
     assert cme_equity_index_session(date(2018, 12, 24)) == "early_close"
+    assert cme_equity_index_session(date(2012, 12, 24)) == "early_close"
+    assert cme_equity_index_session(date(2019, 7, 3)) == "early_close"
+    assert cme_equity_index_session(date(2024, 12, 24)) == "early_close"
     assert cme_equity_index_session(date(2025, 11, 28)) == "early_close"
     assert cme_equity_index_session(date(2025, 1, 9)) == "regular"
+    assert cme_equity_index_session(date(2015, 7, 3)) == "closed"
+    assert cme_equity_index_session(date(2010, 12, 24)) == "closed"
+    assert cme_equity_index_session(date(2021, 12, 24)) == "closed"
+    for day in _MISLABELED_REGULAR_DAYS:
+        assert cme_equity_index_session(day) == "regular"
+    for year in range(2010, 2025):
+        july_3 = date(year, 7, 3)
+        december_24 = date(year, 12, 24)
+        for eve, holiday in ((july_3, date(year, 7, 4)), (december_24, date(year, 12, 25))):
+            observed = holiday
+            if holiday.weekday() == 5:
+                observed = holiday - timedelta(days=1)
+            elif holiday.weekday() == 6:
+                observed = holiday + timedelta(days=1)
+            if eve.weekday() < 5 and eve != observed:
+                assert cme_equity_index_session(eve) == "early_close"
+            elif eve == observed:
+                assert cme_equity_index_session(eve) == "closed"
+    assert EARLY_CLOSE_DISPOSITION == "exclude"
     assert (REPRODUCTION_WINDOW_START, REPRODUCTION_WINDOW_END) == (REPRO_START, REPRO_END)
     assert session_policy_for_window(REPRO_START, REPRO_END) == "gate"
     assert session_policy_for_window(date(2010, 6, 6), date(2019, 4, 30)) == "slice"
+    gate_5 = [moment.strftime("%H:%M") for moment in _required_starts(date(2025, 1, 20))[1]]
+    slice_5 = [
+        moment.strftime("%H:%M")
+        for moment in _required_starts(date(2025, 1, 20), policy="slice")[1]
+    ]
+    assert gate_5[0] == "10:00" and gate_5[-1] == "12:55"
+    assert "07:00" in [
+        moment.strftime("%H:%M") for moment in _required_starts(date(2025, 1, 20), policy="slice")[0]
+    ]
+    assert slice_5[-1] == "13:10"
+    assert "13:15" not in slice_5
 
 
-def test_early_close_day_is_scored_on_the_slice_path_and_not_a_data_gap():
+def test_missing_0700_bar_on_an_early_close_day_is_a_data_gap():
     day = date(2014, 7, 3)
     rows_15, rows_5 = _required_rows(day)
     rows_15 = _drop_et(rows_15, _preopen_clocks())
     report = classify_written_bars(rows_15, rows_5, day, day, policy="slice")
-    assert report["data_gap_count"] == 0
-    assert report["data_gaps"] == []
-    session = report["early_close_sessions"][0]
-    assert session["date"] == "2014-07-03"
-    assert session["status"] == EARLY_CLOSE_STATUS
-    assert session["scored"] is True
-    assert session["unprinted_preopen_15m"] == ["07:00", "07:15", "07:30", "07:45", "08:00", "08:15"]
-    assert "early_close_sessions" not in classify_written_bars(rows_15, rows_5, day, day)
+    assert report["data_gap_count"] == 1
+    assert report["data_gaps"][0]["status"] == "DATA_GAP"
+    assert report["data_gaps"][0]["scored"] is False
+    assert report["data_gaps"][0]["missing_15m"] == ["07:00", "07:15", "07:30", "07:45", "08:00", "08:15"]
+    assert report["early_close_sessions"] == []
+    assert report["early_close_count"] == 0
+    gate = classify_written_bars(rows_15, rows_5, day, day)
+    assert gate["data_gaps"][0]["status"] == "DATA_GAP"
+    assert "early_close_sessions" not in gate
 
 
 def test_true_gap_stays_a_data_gap_on_the_slice_path():
@@ -492,14 +544,14 @@ def test_true_gap_stays_a_data_gap_on_the_slice_path():
     assert regular_report["early_close_sessions"] == []
 
     early = date(2018, 12, 24)
-    early_15, early_5 = _required_rows(early)
-    early_15 = _drop_et(early_15, _preopen_clocks() | {(9, 30)})
+    early_15, early_5 = _required_rows(early, policy="slice")
+    early_15 = _drop_et(early_15, {(9, 30)})
     early_report = classify_written_bars(early_15, early_5, early, early, policy="slice")
     assert early_report["data_gap_count"] == 1
     gap = early_report["data_gaps"][0]
     assert gap["status"] == "DATA_GAP"
     assert gap["scored"] is False
-    assert gap["missing_15m"] == ["09:30"]
+    assert "09:30" in gap["missing_15m"]
     assert "07:00" not in gap["missing_15m"]
     assert early_report["early_close_sessions"] == []
 
@@ -517,9 +569,11 @@ def test_2025_11_28_is_an_early_close_on_the_slice_path_and_a_gate_gap():
     assert "early_close_sessions" not in gate
 
     sliced = classify_written_bars(rows_15, rows_5, day, day, policy="slice")
-    assert sliced["data_gap_count"] == 0
-    assert sliced["early_close_sessions"][0]["status"] == EARLY_CLOSE_STATUS
-    assert sliced["early_close_sessions"][0]["scored"] is True
+    assert sliced["data_gap_count"] == 1
+    assert sliced["data_gaps"][0]["status"] == "DATA_GAP"
+    assert sliced["data_gaps"][0]["missing_15m"] == ["07:00", "07:15", "07:30", "07:45", "08:00", "08:15"]
+    assert sliced["early_close_sessions"] == []
+    assert sliced["early_close_count"] == 0
 
 
 def test_reproduction_window_keeps_the_recorded_gap_labels(tmp_path):
@@ -568,17 +622,48 @@ def test_reproduction_window_keeps_the_recorded_gap_labels(tmp_path):
     assert "early_close_sessions" not in gate_report
 
     slice_report = data_gap_dates_from_trees(research, audit, thanksgiving, thanksgiving)
-    assert slice_report["data_gap_count"] == 0
-    assert slice_report["early_close_sessions"][0]["status"] == EARLY_CLOSE_STATUS
-    assert slice_report["early_close_sessions"][0]["scored"] is True
+    assert slice_report["data_gaps"][0]["status"] == "DATA_GAP"
+    assert slice_report["data_gaps"][0]["date"] == "2025-11-28"
+    assert slice_report["early_close_count"] == 0
     mourning_report = data_gap_dates_from_trees(research, audit, mourning, mourning)
     assert mourning_report["data_gaps"][0]["status"] == "DATA_GAP"
     assert mourning_report["data_gaps"][0]["date"] == "2025-01-09"
     assert mourning_report["early_close_sessions"] == []
-    mlk_report = data_gap_dates_from_trees(research, audit, mlk, mlk)
+    complete_15, complete_5 = _required_rows(mlk, policy="slice")
+    complete_research, complete_audit = _write_classified_trees(
+        tmp_path / "complete", complete_15, complete_5
+    )
+    mlk_report = data_gap_dates_from_trees(complete_research, complete_audit, mlk, mlk)
     assert mlk_report["data_gap_count"] == 0
-    assert mlk_report["early_close_sessions"][0]["status"] == EARLY_CLOSE_STATUS
-    assert mlk_report["early_close_sessions"][0]["unprinted_preopen_15m"] == []
+    assert mlk_report["early_close_count"] == 1
+    assert mlk_report["early_close_sessions"] == [
+        {
+            "date": "2025-01-20",
+            "status": EARLY_CLOSE_STATUS,
+            "scored": False,
+            "disposition": "exclude",
+        }
+    ]
+    assert "session_close_et" not in mlk_report["early_close_sessions"][0]
+
+
+def test_include_disposition_does_not_invent_an_early_close_exit(monkeypatch):
+    day = date(2014, 7, 3)
+    rows_15, rows_5 = _required_rows(day, policy="slice")
+    monkeypatch.setattr(
+        "research.databento_322_bar_adapter.EARLY_CLOSE_DISPOSITION",
+        "include",
+    )
+    report = classify_written_bars(rows_15, rows_5, day, day, policy="slice")
+    assert report["data_gap_count"] == 0
+    assert report["early_close_sessions"] == []
+    assert report["early_close_count"] == 0
+    monkeypatch.setattr(
+        "research.databento_322_bar_adapter.EARLY_CLOSE_DISPOSITION",
+        "flatten",
+    )
+    with pytest.raises(RuntimeError, match="EARLY_CLOSE_DISPOSITION"):
+        classify_written_bars(rows_15, rows_5, day, day, policy="slice")
 
 
 def test_unknown_session_policy_is_refused():
