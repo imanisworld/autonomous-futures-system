@@ -12,6 +12,8 @@ import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path, PurePosixPath
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 LEDGER_REL = "docs/research-trial-ledger.jsonl"
 LEDGER = ROOT / LEDGER_REL
@@ -46,6 +48,8 @@ TRIAL_RE = re.compile(r"^T-\d{4}-\d{2}-\d{2}-[a-z0-9][a-z0-9-]*-\d{2}$")
 FAMILY_RE = re.compile(r"^[a-z0-9_]+$")
 SHA40_RE = re.compile(r"^[0-9a-f]{40}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+REPLAY_LEDGER_RE = re.compile(r"^reproduction-replay-ledger(?:\.attempt-\d{2,})?\.json$")
+RUN_PROVENANCE = frozenset({"gate_run.log", "run_gate.py", "sha256sums.txt"})
 
 REQUIRED = {
     "trial_id",
@@ -322,6 +326,102 @@ def test_trial_variant_manifests_are_frozen_and_machine_checkable() -> None:
             )
 
 
+def _assert_gate_outcome(row: dict, rel: str) -> None:
+    assert row.get("gate_pass") in (True, False), f"{rel}: gate outcome must be PASS or FAIL"
+
+
+def _registered_gate_row(
+    rel: str,
+    digest: str,
+    trial_rows: list[dict],
+    *,
+    match_artifact_path: bool,
+) -> dict:
+    gate_rows = [
+        row
+        for row in trial_rows
+        if row.get("event") == "GATE"
+        and row.get("gate_artifact_sha256") == digest
+        and (not match_artifact_path or row.get("gate_artifact") == rel)
+    ]
+    kind = "reproduction gate artifact" if match_artifact_path else "attempt artifact"
+    assert len(gate_rows) == 1, f"{rel}: {kind} needs one GATE line"
+    _assert_gate_outcome(gate_rows[0], rel)
+    return gate_rows[0]
+
+
+def _assert_replay_pin_matches_bytes(rel: str, row: dict, artifact: dict, root: Path) -> None:
+    """A pinned replay ledger must match the gate artifact and the file bytes.
+
+    GATE lines written before replay ledgers omit both fields. A null path and
+    hash means the attempt failed before a ledger existed.
+    """
+    if "replay_ledger" not in row and "replay_ledger_sha256" not in row:
+        return
+    row_path = row.get("replay_ledger")
+    row_hash = row.get("replay_ledger_sha256")
+    assert artifact.get("replay_ledger") == row_path, f"{rel}: gate artifact replay path mismatch"
+    assert artifact.get("replay_ledger_sha256") == row_hash, (
+        f"{rel}: gate artifact replay hash mismatch"
+    )
+    if row_path is None and row_hash is None:
+        return
+    assert isinstance(row_path, str) and row_path, f"{rel}: replay ledger path missing"
+    assert isinstance(row_hash, str) and SHA256_RE.fullmatch(row_hash), (
+        f"{rel}: replay ledger hash missing"
+    )
+    digest = hashlib.sha256((root / row_path).read_bytes()).hexdigest()
+    assert digest == row_hash, f"{rel}: replay ledger bytes do not match the recorded sha256"
+
+
+def _assert_replay_ledger_registered(
+    rel: str,
+    digest: str,
+    trial_rows: list[dict],
+    root: Path,
+) -> None:
+    matches = [
+        row
+        for row in trial_rows
+        if row.get("event") == "GATE"
+        and row.get("replay_ledger") == rel
+        and row.get("replay_ledger_sha256") == digest
+    ]
+    assert len(matches) == 1, f"{rel}: replay ledger needs one GATE line with its sha256"
+    row = matches[0]
+    _assert_gate_outcome(row, rel)
+    artifact_rel = row.get("gate_artifact")
+    assert isinstance(artifact_rel, str) and artifact_rel, f"{rel}: GATE line missing gate artifact"
+    artifact = json.loads((root / artifact_rel).read_bytes())
+    assert isinstance(artifact, dict), f"{rel}: gate artifact must be an object"
+    assert artifact.get("replay_ledger") == rel, f"{rel}: gate artifact replay path mismatch"
+    assert artifact.get("replay_ledger_sha256") == digest, (
+        f"{rel}: gate artifact replay hash mismatch"
+    )
+
+
+def _assert_run_provenance(
+    rel: str,
+    name: str,
+    trial_id: str,
+    trial_rows: list[dict],
+    root: Path,
+) -> None:
+    assert any(row.get("event") == "GATE" for row in trial_rows), (
+        f"{rel}: supporting run provenance requires a GATE line"
+    )
+    sums_rel = f"{EVIDENCE_PREFIX}{trial_id}/run/sha256sums.txt"
+    sums = (root / sums_rel).read_text(encoding="utf-8")
+    if name == "sha256sums.txt":
+        for sibling in ("reproduction-gate.json", "reproduction-replay-ledger.json"):
+            sibling_rel = f"{EVIDENCE_PREFIX}{trial_id}/{sibling}"
+            digest = hashlib.sha256((root / sibling_rel).read_bytes()).hexdigest()
+            assert digest in sums, f"{rel}: {sibling} sha256 is not listed in sha256sums.txt"
+        return
+    digest = hashlib.sha256((root / rel).read_bytes()).hexdigest()
+    assert digest in sums, f"{rel}: sha256 is not listed in sha256sums.txt"
+
+
 def test_canonical_research_evidence_is_registered_before_counting() -> None:
     rows = _rows()
     first = _first_rows(rows)
@@ -344,28 +444,28 @@ def test_canonical_research_evidence_is_registered_before_counting() -> None:
             )
             continue
 
-        if path.name == "reproduction-gate.json":
+        is_first_gate = path.name == "reproduction-gate.json"
+        is_later_gate = path.name.startswith("reproduction-gate.attempt-") and path.suffix == ".json"
+        if is_first_gate or is_later_gate:
             digest = hashlib.sha256((ROOT / rel).read_bytes()).hexdigest()
-            gate_rows = [
-                row
-                for row in by_trial[trial_id]
-                if row.get("event") == "GATE"
-                and row.get("gate_artifact") == rel
-                and row.get("gate_artifact_sha256") == digest
-            ]
-            assert len(gate_rows) == 1, f"{rel}: reproduction gate artifact needs one GATE line"
-            assert gate_rows[0].get("gate_pass") is False
+            row = _registered_gate_row(
+                rel,
+                digest,
+                by_trial[trial_id],
+                match_artifact_path=is_first_gate,
+            )
+            artifact = json.loads((ROOT / rel).read_bytes())
+            assert isinstance(artifact, dict), f"{rel}: gate artifact must be an object"
+            _assert_replay_pin_matches_bytes(rel, row, artifact, ROOT)
             continue
 
-        if path.name.startswith("reproduction-gate.attempt-") and path.suffix == ".json":
+        if REPLAY_LEDGER_RE.fullmatch(path.name):
             digest = hashlib.sha256((ROOT / rel).read_bytes()).hexdigest()
-            gate_rows = [
-                row
-                for row in by_trial[trial_id]
-                if row.get("event") == "GATE" and row.get("gate_artifact_sha256") == digest
-            ]
-            assert len(gate_rows) == 1, f"{rel}: attempt artifact needs one GATE line"
-            assert gate_rows[0].get("gate_pass") is False
+            _assert_replay_ledger_registered(rel, digest, by_trial[trial_id], ROOT)
+            continue
+
+        if len(path.parts) == 5 and path.parts[3] == "run" and path.name in RUN_PROVENANCE:
+            _assert_run_provenance(rel, path.name, trial_id, by_trial[trial_id], ROOT)
             continue
 
         if path.name in {
@@ -457,3 +557,102 @@ def test_new_preregs_after_ledger_start_are_linked_to_planned_trials() -> None:
         assert linked, f"{rel}: new prereg has no PLANNED ledger entry"
         text = prereg.read_text(encoding="utf-8")
         assert any(trial_id in text for trial_id in linked), f"{rel}: prereg does not cite its trial_id"
+
+
+def _write_gate_pair(
+    root: Path,
+    trial: str,
+    *,
+    attempt: str | None,
+    gate_pass: bool,
+) -> tuple[str, str, str, dict]:
+    suffix = "" if attempt is None else f".attempt-{attempt}"
+    gate_rel = f"docs/research-evidence/{trial}/reproduction-gate{suffix}.json"
+    replay_rel = f"docs/research-evidence/{trial}/reproduction-replay-ledger{suffix}.json"
+    label = attempt or "01"
+    replay_bytes = (json.dumps({"ledger": {"attempt": label}}) + "\n").encode()
+    digest = hashlib.sha256(replay_bytes).hexdigest()
+    artifact = {
+        "pass": gate_pass,
+        "replay_ledger": replay_rel,
+        "replay_ledger_sha256": digest,
+    }
+    gate_bytes = (json.dumps(artifact, separators=(",", ":")) + "\n").encode()
+    (root / replay_rel).parent.mkdir(parents=True, exist_ok=True)
+    (root / replay_rel).write_bytes(replay_bytes)
+    (root / gate_rel).write_bytes(gate_bytes)
+    row = {
+        "event": "GATE",
+        "gate_pass": gate_pass,
+        "gate_artifact": gate_rel,
+        "gate_artifact_sha256": hashlib.sha256(gate_bytes).hexdigest(),
+        "replay_ledger": replay_rel,
+        "replay_ledger_sha256": digest,
+    }
+    return gate_rel, replay_rel, digest, row
+
+
+def test_pass_gate_with_matching_replay_ledger_is_accepted(tmp_path: Path) -> None:
+    trial = "T-2026-11-11-example-pass-01"
+    gate_rel, replay_rel, digest, row = _write_gate_pair(
+        tmp_path, trial, attempt=None, gate_pass=True
+    )
+    registered = _registered_gate_row(
+        gate_rel,
+        row["gate_artifact_sha256"],
+        [row],
+        match_artifact_path=True,
+    )
+    assert registered["gate_pass"] is True
+    artifact = json.loads((tmp_path / gate_rel).read_bytes())
+    _assert_replay_pin_matches_bytes(gate_rel, registered, artifact, tmp_path)
+    _assert_replay_ledger_registered(replay_rel, digest, [row], tmp_path)
+
+    later_gate, later_replay, later_digest, later_row = _write_gate_pair(
+        tmp_path, trial, attempt="02", gate_pass=False
+    )
+    later = _registered_gate_row(
+        later_gate,
+        later_row["gate_artifact_sha256"],
+        [later_row],
+        match_artifact_path=False,
+    )
+    assert later["gate_pass"] is False
+    _assert_replay_ledger_registered(later_replay, later_digest, [later_row], tmp_path)
+
+    undecided = dict(row)
+    undecided["gate_pass"] = "PASS"
+    with pytest.raises(AssertionError, match="PASS or FAIL"):
+        _registered_gate_row(
+            gate_rel,
+            row["gate_artifact_sha256"],
+            [undecided],
+            match_artifact_path=True,
+        )
+
+
+def test_replay_ledger_hash_mismatch_is_rejected(tmp_path: Path) -> None:
+    trial = "T-2026-11-11-example-mismatch-01"
+    gate_rel, replay_rel, digest, row = _write_gate_pair(
+        tmp_path, trial, attempt=None, gate_pass=True
+    )
+    wrong = "0" * 64
+    assert wrong != digest
+
+    with pytest.raises(AssertionError, match="one GATE line"):
+        _assert_replay_ledger_registered(replay_rel, wrong, [row], tmp_path)
+
+    with pytest.raises(AssertionError, match="one GATE line"):
+        _assert_replay_ledger_registered(replay_rel, digest, [], tmp_path)
+
+    artifact = json.loads((tmp_path / gate_rel).read_bytes())
+    artifact["replay_ledger_sha256"] = wrong
+    (tmp_path / gate_rel).write_bytes((json.dumps(artifact) + "\n").encode())
+    with pytest.raises(AssertionError, match="gate artifact replay hash mismatch"):
+        _assert_replay_ledger_registered(replay_rel, digest, [row], tmp_path)
+
+    mismatched = dict(row)
+    mismatched["replay_ledger_sha256"] = wrong
+    artifact["replay_ledger_sha256"] = wrong
+    with pytest.raises(AssertionError, match="do not match"):
+        _assert_replay_pin_matches_bytes(gate_rel, mismatched, artifact, tmp_path)
