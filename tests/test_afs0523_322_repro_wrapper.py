@@ -10,7 +10,7 @@ import hashlib
 import importlib.util
 import json
 import subprocess
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -42,6 +42,10 @@ from research.afs0523_322_repro_wrapper import (
     _write_gate_artifact,
     SLICE_SCORING_AUTHORIZED,
     _git_head_and_clean,
+    OUTCOME_RECORD_COUNT,
+    REPRO_EXPECTED_COUNT,
+    _holiday_closed_dates,
+    _run_window,
     _unscored_dates,
     compare_replay_structural,
     compare_replay_to_oct4,
@@ -2210,6 +2214,176 @@ def test_unscored_dates_include_an_excluded_early_close():
     )
     assert dates == {"2020-01-02", "2020-07-03"}
     assert _unscored_dates({"data_gaps": []}) == set()
+    held = _unscored_dates(
+        {
+            "data_gaps": [],
+            "expected_holiday_closures": [{"date": "2014-07-04", "kind": "closed"}],
+        },
+        include_holiday_closures=True,
+    )
+    assert held == {"2014-07-04"}
+    assert _unscored_dates(
+        {
+            "data_gaps": [{"date": "2025-01-09"}],
+            "expected_holiday_closures": [{"date": "2025-07-04", "kind": "closed"}],
+        },
+        include_holiday_closures=False,
+    ) == {"2025-01-09"}
+
+
+def test_early_close_stays_out_of_the_holiday_closed_count():
+    closures = [
+        {"date": "2014-07-04", "kind": "closed"},
+        {"date": "2014-07-03", "kind": "early_close"},
+    ]
+    excluded = {
+        "data_gaps": [],
+        "expected_holiday_closures": closures,
+        "early_close_sessions": [
+            {"date": "2014-07-03", "scored": False, "disposition": "exclude"},
+        ],
+    }
+    included = {
+        "data_gaps": [],
+        "expected_holiday_closures": closures,
+        "early_close_sessions": [
+            {"date": "2014-07-03", "scored": True, "disposition": "include"},
+        ],
+    }
+    assert _holiday_closed_dates(excluded) == ["2014-07-04"]
+    assert len(_holiday_closed_dates(excluded)) == 1
+    assert _unscored_dates(excluded, include_holiday_closures=True) == {"2014-07-04", "2014-07-03"}
+    assert _holiday_closed_dates(included) == ["2014-07-04"]
+    assert len(_holiday_closed_dates(included)) == 1
+    assert _unscored_dates(included, include_holiday_closures=True) == {"2014-07-04"}
+
+
+def test_slice_holiday_closure_with_bars_yields_no_candidate(monkeypatch, tmp_path):
+    from research.databento_322_bar_adapter import cme_equity_index_session
+
+    day = date(2014, 7, 4)
+    assert cme_equity_index_session(day) == "closed"
+    research = tmp_path / "research"
+    audit = tmp_path / "audit"
+    _bar_file(research, day)
+    _bar_file(audit, day)
+    monkeypatch.setenv("MAX_CONTRACTS_HARD_CAP", "1")
+    monkeypatch.setattr(
+        "research.afs0523_322_repro_wrapper.detect_candidates",
+        lambda *_args, **_kwargs: [
+            {
+                "date": day,
+                "direction": "LONG",
+                "entry_trigger": 10.0,
+                "entry_price": 10.0,
+                "stop": 9.0,
+                "target": 12.0,
+                "gap_open": False,
+            }
+        ],
+    )
+
+    class _State:
+        date = day.isoformat()
+        bar_idx = 0
+        direction = "SHORT"
+        entry = 1.0
+        stop = 2.0
+        target = 3.0
+
+    monkeypatch.setattr(
+        "research.afs0523_322_repro_wrapper.extract_state_machine",
+        lambda *_args, **_kwargs: [_State()],
+    )
+    result = _run_window(research, audit, start=day, end=day, expected_count=None)
+    assert result["candidate_count"] == 0
+    assert result["data_gap_count"] == 0
+    assert result["holiday_closed_unscored"] == ["2014-07-04"]
+    assert result["holiday_closed_unscored_count"] == 1
+    assert SLICE_SCORING_AUTHORIZED is False
+
+
+def test_holiday_closed_list_is_on_the_slice_artifact_and_event(monkeypatch, tmp_path):
+    slice_research, slice_audit, ledger = _prepare_admitted_slice(monkeypatch, tmp_path)
+    monkeypatch.setattr("research.afs0523_322_repro_wrapper.SLICE_SCORING_AUTHORIZED", True)
+    monkeypatch.setattr(
+        "research.afs0523_322_repro_wrapper._git_head_and_clean",
+        lambda _repo: ("ab" * 20, True),
+    )
+    monkeypatch.setattr(
+        "research.afs0523_322_repro_wrapper._run_window",
+        lambda *_args, **_kwargs: {
+            "ledger": {"1tick": [], "2tick": [], "3tick": []},
+            "data_gaps": [],
+            "data_gap_count": 0,
+            "holiday_closed_unscored": ["2014-07-04", "2014-11-27"],
+            "holiday_closed_unscored_count": 2,
+        },
+    )
+    result = run_declared_slices(
+        Path("slice-research"),
+        Path("slice-audit"),
+        data_root=tmp_path,
+        slice_id="mnq-2019-05-to-2024-06",
+    )
+    assert result["holiday_closed_unscored"] == ["2014-07-04", "2014-11-27"]
+    assert result["holiday_closed_unscored_count"] == 2
+    event = _slice_events(ledger)[-1]
+    assert event["holiday_closed_unscored"] == result["holiday_closed_unscored"]
+    assert event["holiday_closed_unscored_count"] == 2
+
+
+def test_reproduction_window_keeps_recorded_gaps_and_computes_candidate_count():
+    from research.databento_322_bar_adapter import cme_equity_index_session
+
+    artifact = json.loads(
+        (
+            ROOT
+            / "docs/research-evidence/T-2026-11-10-prereg-322-afs0523-oos-structural-2026-11-10-01/reproduction-gate.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert artifact["pass"] is True
+    assert artifact["data_gap_count"] == 2
+    assert [row["date"] for row in artifact["data_gaps"]] == ["2025-01-09", "2025-11-28"]
+    assert artifact["comparisons"] == OUTCOME_RECORD_COUNT
+    assert artifact["outcome_records"] == OUTCOME_RECORD_COUNT
+    cells_per_candidate = OUTCOME_RECORD_COUNT // REPRO_EXPECTED_COUNT
+    assert OUTCOME_RECORD_COUNT % REPRO_EXPECTED_COUNT == 0
+    candidate_count = artifact["comparisons"] // cells_per_candidate
+    assert artifact["comparisons"] % cells_per_candidate == 0
+    assert candidate_count == REPRO_EXPECTED_COUNT == 34
+    closures = []
+    day = REPRO_START
+    while day <= REPRO_END:
+        if day.weekday() < 5:
+            kind = cme_equity_index_session(day)
+            if kind in {"closed", "early_close"}:
+                closures.append({"date": day.isoformat(), "kind": kind})
+        day += timedelta(days=1)
+    closed = [item["date"] for item in closures if item["kind"] == "closed"]
+    early = [item["date"] for item in closures if item["kind"] == "early_close"]
+    assert closed == [
+        "2024-07-04",
+        "2024-11-28",
+        "2024-12-25",
+        "2025-01-01",
+        "2025-04-18",
+        "2025-07-04",
+        "2025-11-27",
+        "2025-12-25",
+        "2026-01-01",
+        "2026-04-03",
+    ]
+    assert "2025-12-26" not in closed
+    report = {"data_gaps": artifact["data_gaps"], "expected_holiday_closures": closures}
+    assert _holiday_closed_dates(report) == closed
+    gate_unscored = _unscored_dates(report, include_holiday_closures=False)
+    assert gate_unscored == {"2025-01-09", "2025-11-28"}
+    assert set(closed).isdisjoint(gate_unscored)
+    slice_unscored = _unscored_dates(report, include_holiday_closures=True)
+    assert set(closed) <= slice_unscored
+    gap_dates = {row["date"] for row in artifact["data_gaps"]}
+    assert set(early).isdisjoint(slice_unscored - gap_dates)
 
 
 def test_close_delta_day_fails_when_the_scored_close_is_not_the_pinned_databento_close():

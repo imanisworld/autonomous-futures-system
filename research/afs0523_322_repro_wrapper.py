@@ -1019,7 +1019,9 @@ def _run_window(
     """
     _scoring_profile_or_refuse()
     gap_report = data_gap_dates_from_trees(research_15m, audit_5m, start, end)
-    gap_dates = _unscored_dates(gap_report)
+    slice_window = (start, end) != (REPRO_START, REPRO_END)
+    holiday_closed = _holiday_closed_dates(gap_report) if slice_window else []
+    gap_dates = _unscored_dates(gap_report, include_holiday_closures=slice_window)
     candidates, triggers, bars, invalid_brackets = _parity(
         research_15m, audit_5m, start, end, expected_count, gap_dates
     )
@@ -1078,6 +1080,8 @@ def _run_window(
         "data_gaps": gap_report["data_gaps"],
         "data_gap_count": gap_report["data_gap_count"],
         "early_close_sessions": gap_report.get("early_close_sessions", []),
+        "holiday_closed_unscored": holiday_closed,
+        "holiday_closed_unscored_count": len(holiday_closed),
     }
 
 
@@ -1789,12 +1793,28 @@ def _scoring_provenance() -> dict:
     }
 
 
-def _unscored_dates(gap_report: dict) -> set[str]:
-    """DATA_GAP days, plus early-close days the disposition holds out."""
+def _holiday_closed_dates(gap_report: dict) -> list[str]:
+    """Full closures only. Early-close rows stay on the early-close disposition."""
+    found: set[str] = set()
+    for item in gap_report.get("expected_holiday_closures") or []:
+        if isinstance(item, dict) and item.get("kind") == "closed" and item.get("date"):
+            found.add(str(item["date"]))
+    return sorted(found)
+
+
+def _unscored_dates(gap_report: dict, *, include_holiday_closures: bool = False) -> set[str]:
+    """DATA_GAP days, held-out early closes, and slice holiday closures.
+
+    The reproduction window leaves holiday closures eligible. A full closure
+    can still have a short noon session in the trees, and a slice must not
+    turn that session into a candidate.
+    """
     dates = {item["date"] for item in gap_report.get("data_gaps") or [] if item.get("date")}
     for item in gap_report.get("early_close_sessions") or []:
         if isinstance(item, dict) and item.get("scored") is False and item.get("date"):
             dates.add(str(item["date"]))
+    if include_holiday_closures:
+        dates.update(_holiday_closed_dates(gap_report))
     return dates
 
 
@@ -1996,6 +2016,8 @@ def _score_admitted_slice(
         "data_gaps": scored.get("data_gaps") or [],
         "data_gap_count": scored.get("data_gap_count") or 0,
         "early_close_sessions": scored.get("early_close_sessions") or [],
+        "holiday_closed_unscored": list(scored.get("holiday_closed_unscored") or []),
+        "holiday_closed_unscored_count": int(scored.get("holiday_closed_unscored_count") or 0),
         "slippage_sensitivity": SLIPPAGE_SENSITIVITY_NOTE,
     }
     payload.update(identity)
@@ -2054,6 +2076,8 @@ def _append_slice_event(
             "audit_5m_sha256": payload.get("audit_5m_sha256"),
             "data_root": payload.get("data_root"),
             "MAX_CONTRACTS_HARD_CAP": payload.get("MAX_CONTRACTS_HARD_CAP"),
+            "holiday_closed_unscored": payload.get("holiday_closed_unscored"),
+            "holiday_closed_unscored_count": payload.get("holiday_closed_unscored_count"),
             "error": payload.get("error"),
             "notes": "Raw slice results. No pass/fail criterion is applied.",
         }
