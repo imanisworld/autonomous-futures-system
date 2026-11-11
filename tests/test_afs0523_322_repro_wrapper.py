@@ -282,8 +282,31 @@ def test_expected_count_is_a_wrapper_parameter_and_new_slices_are_refused(monkey
     assert wrapper["RUN_AUTHORIZED"] is True
     assert wrapper["TRIAL_ID"] != wrapper["SUPERSEDED_TRIAL_ID"]
     monkeypatch.setenv("MAX_CONTRACTS_HARD_CAP", "1")
-    with pytest.raises(RuntimeError, match="Claude's review of the gate result is required"):
+    with pytest.raises(RuntimeError, match="slice admission requires data_root"):
         wrapper["run_declared_slices"](research, audit)
+
+
+def test_slice_admission_refuses_a_temporary_ledger_with_no_gate_review(monkeypatch, tmp_path):
+    """A ledger with no GATE_REVIEW line must still refuse. Deleting that check fails here."""
+    source = ROOT / "docs/research-trial-ledger.jsonl"
+    kept = []
+    for line in source.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        if json.loads(line).get("event") == "GATE_REVIEW":
+            continue
+        kept.append(line)
+    text = "\n".join(kept) + "\n"
+    assert not any(json.loads(line).get("event") == "GATE_REVIEW" for line in kept)
+    ledger = tmp_path / "ledger.jsonl"
+    ledger.write_text(text, encoding="utf-8")
+    monkeypatch.setattr("research.afs0523_322_repro_wrapper.TRIAL_LEDGER", ledger)
+    monkeypatch.setenv("MAX_CONTRACTS_HARD_CAP", "1")
+    real_before = source.read_bytes()
+    with pytest.raises(RuntimeError, match="Claude's review of the gate result is required"):
+        run_declared_slices(tmp_path / "research", tmp_path / "audit")
+    assert source.read_bytes() == real_before
+    assert ledger.read_text(encoding="utf-8") == text
 
 
 def test_declared_slices_stay_separate_and_nq_is_mnq_equivalent_dollars():
