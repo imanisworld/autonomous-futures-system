@@ -1,0 +1,176 @@
+{
+  "pass": true,
+  "comparisons": 306,
+  "outcome_records": 306,
+  "mismatches": [],
+  "data_gaps": [
+    {
+      "date": "2025-01-09",
+      "status": "DATA_GAP",
+      "missing_15m": [
+        "09:30",
+        "09:45",
+        "10:00",
+        "10:15",
+        "10:30",
+        "10:45"
+      ],
+      "missing_5m": [
+        "10:00",
+        "10:05",
+        "10:10",
+        "10:15",
+        "10:20",
+        "10:25",
+        "10:30",
+        "10:35",
+        "10:40",
+        "10:45",
+        "10:50",
+        "10:55",
+        "11:00",
+        "11:05",
+        "11:10",
+        "11:15",
+        "11:20",
+        "11:25",
+        "11:30",
+        "11:35",
+        "11:40",
+        "11:45",
+        "11:50",
+        "11:55",
+        "12:00",
+        "12:05",
+        "12:10",
+        "12:15",
+        "12:20",
+        "12:25",
+        "12:30",
+        "12:35",
+        "12:40",
+        "12:45",
+        "12:50",
+        "12:55",
+        "13:00",
+        "13:05",
+        "13:10",
+        "13:15",
+        "13:20",
+        "13:25",
+        "13:30",
+        "13:35",
+        "13:40",
+        "13:45",
+        "13:50",
+        "13:55",
+        "14:00",
+        "14:05",
+        "14:10",
+        "14:15",
+        "14:20",
+        "14:25",
+        "14:30",
+        "14:35",
+        "14:40",
+        "14:45",
+        "14:50",
+        "14:55",
+        "15:00",
+        "15:05",
+        "15:10",
+        "15:15",
+        "15:20",
+        "15:25",
+        "15:30",
+        "15:35",
+        "15:40",
+        "15:45",
+        "15:50",
+        "15:55"
+      ],
+      "scored": false
+    },
+    {
+      "date": "2025-11-28",
+      "status": "DATA_GAP",
+      "missing_15m": [
+        "07:00",
+        "07:15",
+        "07:30",
+        "07:45",
+        "08:00",
+        "08:15"
+      ],
+      "missing_5m": [],
+      "scored": false
+    }
+  ],
+  "data_gap_count": 2,
+  "invalid_entry_brackets": [],
+  "invalid_entry_bracket_count": 0,
+  "gap_open_count": 0,
+  "adapter_report": null,
+  "error": null,
+  "claude_review": null,
+  "prior_attempts": [],
+  "ohl_reference_exclusions": {
+    "count": 1,
+    "dates": [
+      "2026-03-06"
+    ]
+  },
+  "pulled_files": [
+    {
+      "path": "reproduction/MNQ.FUT_ohlcv-1m_20240702_20260627.parent.dbn.zst",
+      "sha256": "be71c84c49a3fc0c58c178fa9cbc40ccfc16a762606663872872e2fb57936ba4"
+    },
+    {
+      "path": "reproduction/MNQ.FUT_definition_20240702_20260627.parent.dbn.zst",
+      "sha256": "b7c7ae39f0c703df972884cecdc9771b2d5425122e3e1c2228ae4cd7a2dc1e38"
+    },
+    {
+      "path": "mnq-2019-05-to-2024-06/MNQ.FUT_ohlcv-1m_20190501_20240701.parent.dbn.zst",
+      "sha256": "34658accfbf4a26267ddda1a2a7907b0cb9804d2f7a7e4fe0287a67938319e81"
+    },
+    {
+      "path": "mnq-2019-05-to-2024-06/MNQ.FUT_definition_20190501_20240701.parent.dbn.zst",
+      "sha256": "42d9552c597bd26bc7e135a2e28301c5ff5b6fba5dfb0c0ea27bc7d2842dc6b7"
+    },
+    {
+      "path": "nq-2010-06-to-2019-05/NQ.FUT_ohlcv-1m_20100606_20190501.parent.dbn.zst",
+      "sha256": "18ed25e813ab14020a2340499433f618f1b453dd79e5eee9dbdcc5d6a260b5e8"
+    },
+    {
+      "path": "nq-2010-06-to-2019-05/NQ.FUT_definition_20100606_20190501.parent.dbn.zst",
+      "sha256": "8f81483c9b8437acdf4371f29e5b054f045201d809d1ef306dfa3a3eef66ca28"
+    }
+  ],
+  "research_15m_sha256": "461384bc2c638e849ebcdbd4c1fed09fde79fbc9c48dee7656a1151c259e3339",
+  "audit_5m_sha256": "a08d909274fa5a06e9234b1c0975977d91a00b1f749c0560fd6d41859410c1e3",
+  "manifest_sha256": "6c9d5ab3c29a7aeade90e95c84e0128795afc1bdd19aa165e18d364760b7f43d",
+  "data_root": "/workspace/afs-shared/data/databento_afs0523_2026-11-09",
+  "scoring_profile": {
+    "MAX_CONTRACTS_HARD_CAP": "1",
+    "risk_rules_contract_ceiling": 6,
+    "entry_tolerance_ticks": 32.0,
+    "slippage_ticks": [
+      1.0,
+      2.0,
+      3.0
+    ],
+    "entry_fill_models": [
+      "market",
+      "ioc_limit",
+      "stop_market"
+    ],
+    "commission_round_trip": 1.48,
+    "tick_size": 0.25,
+    "tick_value": 0.5,
+    "contracts": 1,
+    "starting_balance": 100000.0,
+    "pessimistic_both_hit": true
+  },
+  "replay_ledger": "docs/research-evidence/T-2026-11-10-prereg-322-afs0523-oos-structural-2026-11-10-01/reproduction-replay-ledger.json",
+  "replay_ledger_sha256": "6c6b0141e4936795db1dd19c87efb3a257684943d0e637d7c7143f52530ae573"
+}

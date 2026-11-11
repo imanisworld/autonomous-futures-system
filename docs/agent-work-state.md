@@ -1,6 +1,19 @@
 # Agent Work State
 
-## START HERE — 2026-11-10 post-hoc structural trial
+## START HERE — 2026-11-11 structural reproduction gate PASS record
+
+Evidence only. The gate was not rerun from this checkout. Do not score older slices. Do not merge, deploy, or change execution from this note.
+
+| Item | State |
+|---|---|
+| **Trial** | `T-2026-11-10-prereg-322-afs0523-oos-structural-2026-11-10-01` |
+| **Attempt** | First structural attempt. No `.attempt-NN` suffix. PASS at 11:05 ET. `recorded_at` `2026-11-11T16:05:35Z`. 306 of 306 comparisons, 0 mismatches. |
+| **Bytes** | `reproduction-gate.json` sha256 `41d76ab1ef549316eebe58b1c8f5878184f43a181bb2164802805974f6f54da8`. `reproduction-replay-ledger.json` sha256 `6c6b0141e4936795db1dd19c87efb3a257684943d0e637d7c7143f52530ae573`. GATE line sha256 including its trailing newline `9e7d29978a0d1a1d006fc4e6dceaa1dc166bd88c395aebe0a3052a8b78f3b1a1`. |
+| **Provenance** | `docs/research-evidence/<trial>/run/` holds `gate_run.log` `6e9c9a2a884fb19f1c97c12b80ba7b4169ef45891a042fbb66861a283cc13264`, `run_gate.py` `bbebf832c7fdf08155e1b67f550b2392c8201f00537faf0ff5a3414cca3efc02`, and `sha256sums.txt` `a4cd030543c83b6487fb03d2872eb109646575636fd06bfd40c423c00f449a3d`. |
+| **Base** | Source `ac334f5eb73722b3f4f70ab058bd655dff916971`. |
+| **NEXT** | Claude reviews this record. Do not merge from this checkpoint. Older slices stay blocked. |
+
+## Previous — 2026-11-10 post-hoc structural trial
 
 | Item | State |
 |---|---|
@@ -10,7 +23,7 @@
 | **AFS-0594** | 2026-03-06 is excluded as `REFERENCE_DEFECT`, not refused. The 1-minute rows rebuild the Databento 5-minute bar. `MAR06_BAR_EVIDENCE.json` sha256 `408cebf65e72a4bf43685ad80b406b6bc6b18081c2c07658154c84e0a1ef00a7`. `MAR06_BAR_EVIDENCE.md` sha256 `6f970effb72bb573fe5bd5a38d4d45e14ae7e483a64bac204ef0605c7d080c15`. `RUN_AUTHORIZED` stays false. Do not run the gate. No `COMPLETED` line was added for the superseded trial. |
 | **Scored bar** | A reference-defect exclusion stands only when the replay `trigger_bar_open/high/low/close` equals the pinned Databento bar. A close-delta day stands only when `trigger_bar_close` equals the pinned Databento close. Otherwise the structural comparison fails. `RUN_AUTHORIZED` stays false. |
 | **Replay ledger** | Each gate attempt writes its replay ledger beside the gate artifact. The artifact and the GATE line record that file's path and SHA-256. An attempt that fails before a ledger exists records both as null. |
-| **NEXT** | Claude reviews this change. Do not run the gate until Imani's typed GO after that review. Do not merge from this checkpoint. |
+| **NEXT** | The first attempt is recorded in the 2026-11-11 section above. This block is the pre-run checkpoint. Do not merge from this checkpoint. |
 
 ## Previous — 2026-11-10 AFS-0586 reproduction gate rerun FAIL record
 

@@ -273,7 +273,7 @@ def test_expected_count_is_a_wrapper_parameter_and_new_slices_are_refused(monkey
     assert wrapper["RUN_AUTHORIZED"] is True
     assert wrapper["TRIAL_ID"] != wrapper["SUPERSEDED_TRIAL_ID"]
     monkeypatch.setenv("MAX_CONTRACTS_HARD_CAP", "1")
-    with pytest.raises(RuntimeError, match="no committed reproduction-gate artifact"):
+    with pytest.raises(RuntimeError, match="Claude's review of the gate result is required"):
         wrapper["run_declared_slices"](research, audit)
 
 
@@ -953,7 +953,9 @@ def test_reproduction_gate_records_a_count_failure_on_a_synthetic_fixture(monkey
     assert result["adapter_report"]["contracts"] == ["MNQH5"]
     assert result["data_gap_count"] >= 1
     assert any(item["date"] == day.isoformat() and item["scored"] is False for item in result["data_gaps"])
-    written = json.loads(artifact.read_text(encoding="utf-8"))
+    written_path = artifact.with_name("reproduction-gate.attempt-02.json")
+    assert not artifact.exists()
+    written = json.loads(written_path.read_text(encoding="utf-8"))
     assert written["pass"] is False
     last = json.loads(ledger.read_text(encoding="utf-8").splitlines()[-1])
     assert last["event"] == "GATE"
@@ -972,17 +974,22 @@ def test_reproduction_gate_records_a_count_failure_on_a_synthetic_fixture(monkey
     assert written["replay_ledger"] is None
     assert written["replay_ledger_sha256"] is None
     assert not artifact.with_name("reproduction-replay-ledger.json").exists()
+    assert not written_path.with_name("reproduction-replay-ledger.attempt-02.json").exists()
     assert result["manifest_sha256"] == pin
     assert result["research_15m_sha256"] == _repro(manifest)["research_15m_sha256"]
     assert result["audit_5m_sha256"] == _repro(manifest)["audit_5m_sha256"]
     assert result["pulled_files"] == manifest["pulled_files"]
-    assert result["prior_attempts"] == []
+    assert len(result["prior_attempts"]) == 1
+    assert result["prior_attempts"][0]["gate_pass"] is True
+    assert result["prior_attempts"][0]["gate_artifact_sha256"] == (
+        "41d76ab1ef549316eebe58b1c8f5878184f43a181bb2164802805974f6f54da8"
+    )
     assert written["manifest_sha256"] == pin
     again = _call_gate(monkeypatch, tmp_path, research, audit)
     assert again["pass"] is False
-    assert len(again["prior_attempts"]) == 1
-    assert again["prior_attempts"][0]["manifest_sha256"] == pin
-    assert again["prior_attempts"][0]["research_15m_sha256"] == _repro(manifest)["research_15m_sha256"]
+    assert len(again["prior_attempts"]) == 2
+    assert again["prior_attempts"][1]["manifest_sha256"] == pin
+    assert again["prior_attempts"][1]["research_15m_sha256"] == _repro(manifest)["research_15m_sha256"]
     assert (ROOT / "docs/research-trial-ledger.jsonl").read_bytes() == real_ledger
 
 
@@ -1067,13 +1074,16 @@ def test_scoring_exception_is_recorded_as_fail(monkeypatch, tmp_path):
     assert last["event"] == "GATE"
     assert last["gate_pass"] is False
     assert last["manifest_sha256"] == pin
-    written = json.loads(artifact.read_text(encoding="utf-8"))
+    written_path = artifact.with_name("reproduction-gate.attempt-02.json")
+    assert not artifact.exists()
+    written = json.loads(written_path.read_text(encoding="utf-8"))
     assert written["pass"] is False
     assert written["replay_ledger"] is None
     assert written["replay_ledger_sha256"] is None
     assert last["replay_ledger"] is None
     assert last["replay_ledger_sha256"] is None
     assert not artifact.with_name("reproduction-replay-ledger.json").exists()
+    assert not written_path.with_name("reproduction-replay-ledger.attempt-02.json").exists()
     assert (ROOT / "docs/research-trial-ledger.jsonl").read_bytes() == real_ledger
 
 
@@ -1110,13 +1120,13 @@ def test_failed_comparison_saves_each_attempt_replay_ledger(monkeypatch, tmp_pat
     )
     result = _call_gate(monkeypatch, tmp_path, research, audit)
     assert result["pass"] is False
-    saved = artifact.with_name("reproduction-replay-ledger.json")
+    saved = artifact.with_name("reproduction-replay-ledger.attempt-02.json")
     raw = saved.read_bytes()
     digest = hashlib.sha256(raw).hexdigest()
     assert json.loads(raw) == {"ledger": replay}
     assert result["replay_ledger"] == str(saved)
     assert result["replay_ledger_sha256"] == digest
-    written = json.loads(artifact.read_text(encoding="utf-8"))
+    written = json.loads(artifact.with_name("reproduction-gate.attempt-02.json").read_text(encoding="utf-8"))
     assert written["replay_ledger_sha256"] == digest
     assert written["pass"] is False
     last = json.loads(ledger.read_text(encoding="utf-8").splitlines()[-1])
@@ -1125,11 +1135,11 @@ def test_failed_comparison_saves_each_attempt_replay_ledger(monkeypatch, tmp_pat
     assert last["replay_ledger_sha256"] == digest
     assert hashlib.sha256(raw + b" ").hexdigest() != digest
     again = _call_gate(monkeypatch, tmp_path, research, audit)
-    second = artifact.with_name("reproduction-replay-ledger.attempt-02.json")
+    second = artifact.with_name("reproduction-replay-ledger.attempt-03.json")
     second_digest = hashlib.sha256(second.read_bytes()).hexdigest()
     assert again["replay_ledger_sha256"] == second_digest
-    assert again["prior_attempts"][0]["replay_ledger_sha256"] == digest
-    assert json.loads(artifact.with_name("reproduction-gate.attempt-02.json").read_text(encoding="utf-8"))[
+    assert again["prior_attempts"][1]["replay_ledger_sha256"] == digest
+    assert json.loads(artifact.with_name("reproduction-gate.attempt-03.json").read_text(encoding="utf-8"))[
         "replay_ledger_sha256"
     ] == second_digest
     assert (ROOT / "docs/research-trial-ledger.jsonl").read_bytes() == real_ledger
@@ -1155,7 +1165,7 @@ def test_replay_ledger_is_saved_when_comparison_raises(monkeypatch, tmp_path):
     result = _call_gate(monkeypatch, tmp_path, research, audit)
     assert result["pass"] is False
     assert "comparison failed closed" in result["error"]
-    saved = artifact.with_name("reproduction-replay-ledger.json")
+    saved = artifact.with_name("reproduction-replay-ledger.attempt-02.json")
     digest = hashlib.sha256(saved.read_bytes()).hexdigest()
     assert json.loads(saved.read_text(encoding="utf-8")) == {"ledger": replay}
     assert result["replay_ledger_sha256"] == digest
@@ -1170,7 +1180,7 @@ def test_existing_replay_ledger_is_not_overwritten(monkeypatch, tmp_path):
     _bar_file(audit, date(2024, 8, 2))
     _pin_manifest(monkeypatch, tmp_path, _manifest(tmp_path, research, audit))
     artifact, ledger = _patch_gate_paths(monkeypatch, tmp_path)
-    saved = artifact.with_name("reproduction-replay-ledger.json")
+    saved = artifact.with_name("reproduction-replay-ledger.attempt-02.json")
     saved.write_text("{}\n", encoding="utf-8")
     before_ledger = ledger.read_bytes()
     before_saved = saved.read_bytes()
@@ -1531,7 +1541,7 @@ def test_writer_refuses_an_existing_attempt_file(monkeypatch, tmp_path):
         json.dumps({"trial_id": TRIAL_ID, "event": "GATE", "gate_pass": False, "gate_artifact_sha256": "b" * 64}),
     ]
     ledger.write_text(ledger.read_text(encoding="utf-8") + "\n".join(prior) + "\n", encoding="utf-8")
-    path = artifact.with_name("reproduction-gate.attempt-03.json")
+    path = artifact.with_name("reproduction-gate.attempt-04.json")
     path.write_text("{}\n", encoding="utf-8")
     before = ledger.read_bytes()
     with pytest.raises(RuntimeError, match="overwrite"):
@@ -1694,15 +1704,17 @@ def test_gate_and_slice_refuse_ohl_disagreement_when_fills_match(monkeypatch, tm
     assert result["pass"] is True
     assert result["ohl_reference_exclusions"] == {"count": 1, "dates": ["2026-03-06"]}
     assert not any(row.get("field") == "open_high_low" for row in result["mismatches"])
+    written_gate = artifact.with_name("reproduction-gate.attempt-02.json")
     review = {
         "trial_id": TRIAL_ID,
         "event": "GATE_REVIEW",
-        "gate_artifact_sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+        "gate_artifact_sha256": hashlib.sha256(written_gate.read_bytes()).hexdigest(),
         "pr_head_sha": "d" * 40,
     }
-    passing = json.loads(artifact.read_text(encoding="utf-8"))
+    passing = json.loads(written_gate.read_text(encoding="utf-8"))
     passing["pass"] = True
     passing["mismatches"] = []
+    passing["prior_attempts"] = []
     text = json.dumps(passing, indent=2) + "\n"
     artifact.write_text(text, encoding="utf-8")
     digest = hashlib.sha256(text.encode()).hexdigest()
