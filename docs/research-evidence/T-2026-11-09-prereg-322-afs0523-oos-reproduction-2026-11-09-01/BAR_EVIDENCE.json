@@ -1,0 +1,568 @@
+{
+  "verdict": "CONFIRMED",
+  "question": "Do the 12 honest_ioc mismatches come from the two vendors disagreeing on the IOC decision bar's 5m close?",
+  "code_path": {
+    "decision_bar": "research/afs0523_322_repro_wrapper.py _run_window loads audit_5m via load_bars and scores ioc_limit through run_bracket_stage. scripts/edge_decomposition_audit.py resolve_bracket uses bars.rows[cand.bar_idx] and passes market_price=float(row['close']) into PaperBroker.execute_bracket. scripts/322_trigger_timing_ab_2026_09_18.py ledger() records that same bar as trigger_bar_ts / trigger_bar_OHLC.",
+    "fill_formula": "execution/paper_broker.py ioc_limit: LONG fill=min(entry+32ticks, close+slip); SHORT fill=max(entry-32ticks, close-slip). MNQ tick=0.25. Honest-IOC is the only model that fills at the decision-bar close.",
+    "reference": "docs/research-evidence/T-2026-10-04-prereg-322-corrected-eod-rerun-2026-10-04-01/result.json sha256 0d0d8d72c48b3c9dd1e7065b23a5422176a765ac7b1eb594e2833b72f5d5a9b1"
+  },
+  "corpora": {
+    "official_polygon_5m_path": "data/replay_corpus_v1_5m_4hr_audit/MNQ",
+    "official_polygon_5m_pin": "7f09a7f82ee282e892f5db9b86be3130e6a5c1210d86828a56b9666bb06afd35",
+    "official_path_present_on_box": false,
+    "polygon_5m_used": "/workspace/transition_export_2026-10-01/repo/data/replay_polygon_5m/MNQ",
+    "polygon_5m_tree_sha256": "a290d0c45089ce49d7750adccce0b20f6a56725d740a51e2382649701b7e9fbd",
+    "polygon_5m_tree_matches_official_pin": false,
+    "polygon_export_note": "Official directory name is absent. This 621-file Polygon 5m export does not byte-match the official tree pin (files carry indicator fields). Its decision-bar OHLC matches the Oct 4 ledger trigger_bar OHLC on all 34 candidate dates.",
+    "databento_5m": "/workspace/afs-shared/data/databento_afs0523_2026-11-09/reproduction/audit_5m/MNQ",
+    "databento_5m_tree_pin": "a08d909274fa5a06e9234b1c0975977d91a00b1f749c0560fd6d41859410c1e3",
+    "raw_1m_dbn_zst": "/workspace/afs-shared/data/databento_afs0523_2026-11-09/reproduction/MNQ.FUT_ohlcv-1m_20240702_20260627.parent.dbn.zst",
+    "raw_1m_exists": true,
+    "decoded_1m_jsonl_present": false,
+    "databento_python_decoder_installed": true,
+    "one_minute_bars_extracted": true,
+    "one_minute_decode_note": "Decoded locally from a copy of the parent ohlcv-1m DBN in /workspace/tmp/afs0523-1m-decode; data root not modified."
+  },
+  "mismatch_days": [
+    {
+      "date": "2024-09-06",
+      "direction": "SHORT",
+      "trigger": 18741.5,
+      "decision_bar_ts_utc": "2024-09-06T14:00:00+00:00",
+      "decision_bar_et": "2024-09-06 10:00 EDT",
+      "front_contract_calendar": "MNQU4",
+      "ioc_status": "RESOLVED",
+      "ioc_reason": "TARGET_HIT",
+      "ioc_fill_entry_1tick": 18753.75,
+      "oct4_trigger_bar": {
+        "timestamp": "2024-09-06T14:00:00+00:00",
+        "open": 18745.75,
+        "high": 18768.0,
+        "low": 18709.5,
+        "close": 18754.0
+      },
+      "polygon_5m_export": {
+        "timestamp": "2024-09-06T14:00:00+00:00",
+        "open": 18745.75,
+        "high": 18768.0,
+        "low": 18709.5,
+        "close": 18754.0,
+        "volume": 32519,
+        "instrument": "MNQ"
+      },
+      "databento_5m": {
+        "timestamp": "2024-09-06T14:00:00+00:00",
+        "open": 18745.75,
+        "high": 18768.0,
+        "low": 18709.5,
+        "close": 18754.75,
+        "volume": 32519,
+        "instrument": "MNQ"
+      },
+      "oct4_close": 18754.0,
+      "polygon_export_close": 18754.0,
+      "databento_close": 18754.75,
+      "databento_minus_oct4": 0.75,
+      "ohl_agree": true,
+      "volume_agree": true,
+      "close_agree": false,
+      "polygon_export_matches_oct4_ohlc": true,
+      "has_ioc_fill": true,
+      "slippage_reconstruction": {
+        "1tick": {
+          "expected": 18753.75,
+          "actual": 18754.5,
+          "net_expected": 60.02,
+          "net_actual": 61.52,
+          "implied_from_oct4_close": 18753.75,
+          "implied_from_databento_close": 18754.5,
+          "implied_matches_observed": true,
+          "fill_delta": 0.75,
+          "net_delta": 1.5
+        },
+        "2tick": {
+          "expected": 18753.5,
+          "actual": 18754.25,
+          "net_expected": 59.52,
+          "net_actual": 61.02,
+          "implied_from_oct4_close": 18753.5,
+          "implied_from_databento_close": 18754.25,
+          "implied_matches_observed": true,
+          "fill_delta": 0.75,
+          "net_delta": 1.5
+        },
+        "3tick": {
+          "expected": 18753.25,
+          "actual": 18754.0,
+          "net_expected": 59.02,
+          "net_actual": 60.52,
+          "implied_from_oct4_close": 18753.25,
+          "implied_from_databento_close": 18754.0,
+          "implied_matches_observed": true,
+          "fill_delta": 0.75,
+          "net_delta": 1.5
+        }
+      }
+    },
+    {
+      "date": "2026-06-11",
+      "direction": "SHORT",
+      "trigger": 28927.75,
+      "decision_bar_ts_utc": "2026-06-11T14:55:00+00:00",
+      "decision_bar_et": "2026-06-11 10:55 EDT",
+      "front_contract_calendar": "MNQU6",
+      "ioc_status": "RESOLVED",
+      "ioc_reason": "TARGET_HIT",
+      "ioc_fill_entry_1tick": 28928.5,
+      "oct4_trigger_bar": {
+        "timestamp": "2026-06-11T14:55:00+00:00",
+        "open": 29029.5,
+        "high": 29034.75,
+        "low": 28884.0,
+        "close": 28928.75
+      },
+      "polygon_5m_export": {
+        "timestamp": "2026-06-11T14:55:00+00:00",
+        "open": 29029.5,
+        "high": 29034.75,
+        "low": 28884.0,
+        "close": 28928.75,
+        "volume": 728,
+        "instrument": "MNQ"
+      },
+      "databento_5m": {
+        "timestamp": "2026-06-11T14:55:00+00:00",
+        "open": 29029.5,
+        "high": 29034.75,
+        "low": 28884.0,
+        "close": 28928.5,
+        "volume": 728,
+        "instrument": "MNQ"
+      },
+      "oct4_close": 28928.75,
+      "polygon_export_close": 28928.75,
+      "databento_close": 28928.5,
+      "databento_minus_oct4": -0.25,
+      "ohl_agree": true,
+      "volume_agree": true,
+      "close_agree": false,
+      "polygon_export_matches_oct4_ohlc": true,
+      "has_ioc_fill": true,
+      "slippage_reconstruction": {
+        "1tick": {
+          "expected": 28928.5,
+          "actual": 28928.25,
+          "net_expected": 10.02,
+          "net_actual": 9.52,
+          "implied_from_oct4_close": 28928.5,
+          "implied_from_databento_close": 28928.25,
+          "implied_matches_observed": true,
+          "fill_delta": -0.25,
+          "net_delta": -0.5
+        },
+        "2tick": {
+          "expected": 28928.25,
+          "actual": 28928.0,
+          "net_expected": 9.52,
+          "net_actual": 9.02,
+          "implied_from_oct4_close": 28928.25,
+          "implied_from_databento_close": 28928.0,
+          "implied_matches_observed": true,
+          "fill_delta": -0.25,
+          "net_delta": -0.5
+        },
+        "3tick": {
+          "expected": 28928.0,
+          "actual": 28927.75,
+          "net_expected": 9.02,
+          "net_actual": 8.52,
+          "implied_from_oct4_close": 28928.0,
+          "implied_from_databento_close": 28927.75,
+          "implied_matches_observed": true,
+          "fill_delta": -0.25,
+          "net_delta": -0.5
+        }
+      }
+    }
+  ],
+  "matched_ioc_fills": [
+    {
+      "date": "2024-09-11",
+      "direction": "SHORT",
+      "ioc_status": "RESOLVED",
+      "decision_bar_ts_utc": "2024-09-11T14:00:00+00:00",
+      "decision_bar_et": "2024-09-11 10:00 EDT",
+      "oct4_close": 18800.0,
+      "databento_close": 18800.0,
+      "closes_agree": true,
+      "ohl_agree": true
+    },
+    {
+      "date": "2024-10-10",
+      "direction": "LONG",
+      "ioc_status": "RESOLVED",
+      "decision_bar_ts_utc": "2024-10-10T14:05:00+00:00",
+      "decision_bar_et": "2024-10-10 10:05 EDT",
+      "oct4_close": 20385.5,
+      "databento_close": 20385.5,
+      "closes_agree": true,
+      "ohl_agree": true
+    },
+    {
+      "date": "2024-10-11",
+      "direction": "LONG",
+      "ioc_status": "RESOLVED",
+      "decision_bar_ts_utc": "2024-10-11T14:00:00+00:00",
+      "decision_bar_et": "2024-10-11 10:00 EDT",
+      "oct4_close": 20361.5,
+      "databento_close": 20361.5,
+      "closes_agree": true,
+      "ohl_agree": true
+    },
+    {
+      "date": "2024-11-26",
+      "direction": "SHORT",
+      "ioc_status": "RESOLVED",
+      "decision_bar_ts_utc": "2024-11-26T15:15:00+00:00",
+      "decision_bar_et": "2024-11-26 10:15 EST",
+      "oct4_close": 20924.5,
+      "databento_close": 20924.5,
+      "closes_agree": true,
+      "ohl_agree": true
+    },
+    {
+      "date": "2025-01-20",
+      "direction": "SHORT",
+      "ioc_status": "UNRESOLVED",
+      "decision_bar_ts_utc": "2025-01-20T15:40:00+00:00",
+      "decision_bar_et": "2025-01-20 10:40 EST",
+      "oct4_close": 21657.5,
+      "databento_close": 21657.5,
+      "closes_agree": true,
+      "ohl_agree": true
+    },
+    {
+      "date": "2025-02-26",
+      "direction": "LONG",
+      "ioc_status": "RESOLVED",
+      "decision_bar_ts_utc": "2025-02-26T15:00:00+00:00",
+      "decision_bar_et": "2025-02-26 10:00 EST",
+      "oct4_close": 21303.0,
+      "databento_close": 21303.0,
+      "closes_agree": true,
+      "ohl_agree": true
+    },
+    {
+      "date": "2025-03-17",
+      "direction": "SHORT",
+      "ioc_status": "RESOLVED",
+      "decision_bar_ts_utc": "2025-03-17T14:35:00+00:00",
+      "decision_bar_et": "2025-03-17 10:35 EDT",
+      "oct4_close": 19945.0,
+      "databento_close": 19945.0,
+      "closes_agree": true,
+      "ohl_agree": true
+    },
+    {
+      "date": "2025-03-21",
+      "direction": "LONG",
+      "ioc_status": "RESOLVED",
+      "decision_bar_ts_utc": "2025-03-21T14:20:00+00:00",
+      "decision_bar_et": "2025-03-21 10:20 EDT",
+      "oct4_close": 19759.75,
+      "databento_close": 19759.75,
+      "closes_agree": true,
+      "ohl_agree": true
+    },
+    {
+      "date": "2025-05-01",
+      "direction": "LONG",
+      "ioc_status": "RESOLVED",
+      "decision_bar_ts_utc": "2025-05-01T14:25:00+00:00",
+      "decision_bar_et": "2025-05-01 10:25 EDT",
+      "oct4_close": 19999.75,
+      "databento_close": 19999.75,
+      "closes_agree": true,
+      "ohl_agree": true
+    },
+    {
+      "date": "2025-06-04",
+      "direction": "SHORT",
+      "ioc_status": "RESOLVED",
+      "decision_bar_ts_utc": "2025-06-04T14:00:00+00:00",
+      "decision_bar_et": "2025-06-04 10:00 EDT",
+      "oct4_close": 21694.5,
+      "databento_close": 21694.5,
+      "closes_agree": true,
+      "ohl_agree": true
+    },
+    {
+      "date": "2025-06-05",
+      "direction": "LONG",
+      "ioc_status": "RESOLVED",
+      "decision_bar_ts_utc": "2025-06-05T14:40:00+00:00",
+      "decision_bar_et": "2025-06-05 10:40 EDT",
+      "oct4_close": 21831.5,
+      "databento_close": 21831.5,
+      "closes_agree": true,
+      "ohl_agree": true
+    },
+    {
+      "date": "2025-06-26",
+      "direction": "LONG",
+      "ioc_status": "RESOLVED",
+      "decision_bar_ts_utc": "2025-06-26T14:00:00+00:00",
+      "decision_bar_et": "2025-06-26 10:00 EDT",
+      "oct4_close": 22564.0,
+      "databento_close": 22564.0,
+      "closes_agree": true,
+      "ohl_agree": true
+    },
+    {
+      "date": "2025-08-11",
+      "direction": "LONG",
+      "ioc_status": "RESOLVED",
+      "decision_bar_ts_utc": "2025-08-11T14:00:00+00:00",
+      "decision_bar_et": "2025-08-11 10:00 EDT",
+      "oct4_close": 23726.25,
+      "databento_close": 23726.25,
+      "closes_agree": true,
+      "ohl_agree": true
+    },
+    {
+      "date": "2025-09-05",
+      "direction": "SHORT",
+      "ioc_status": "RESOLVED",
+      "decision_bar_ts_utc": "2025-09-05T14:00:00+00:00",
+      "decision_bar_et": "2025-09-05 10:00 EDT",
+      "oct4_close": 23837.25,
+      "databento_close": 23837.25,
+      "closes_agree": true,
+      "ohl_agree": true
+    },
+    {
+      "date": "2025-09-30",
+      "direction": "LONG",
+      "ioc_status": "RESOLVED",
+      "decision_bar_ts_utc": "2025-09-30T14:45:00+00:00",
+      "decision_bar_et": "2025-09-30 10:45 EDT",
+      "oct4_close": 24828.75,
+      "databento_close": 24828.75,
+      "closes_agree": true,
+      "ohl_agree": true
+    },
+    {
+      "date": "2025-10-16",
+      "direction": "SHORT",
+      "ioc_status": "RESOLVED",
+      "decision_bar_ts_utc": "2025-10-16T14:10:00+00:00",
+      "decision_bar_et": "2025-10-16 10:10 EDT",
+      "oct4_close": 25043.5,
+      "databento_close": 25043.5,
+      "closes_agree": true,
+      "ohl_agree": true
+    },
+    {
+      "date": "2026-04-01",
+      "direction": "LONG",
+      "ioc_status": "RESOLVED",
+      "decision_bar_ts_utc": "2026-04-01T14:20:00+00:00",
+      "decision_bar_et": "2026-04-01 10:20 EDT",
+      "oct4_close": 24176.75,
+      "databento_close": 24176.75,
+      "closes_agree": true,
+      "ohl_agree": true
+    },
+    {
+      "date": "2026-05-13",
+      "direction": "LONG",
+      "ioc_status": "RESOLVED",
+      "decision_bar_ts_utc": "2026-05-13T14:50:00+00:00",
+      "decision_bar_et": "2026-05-13 10:50 EDT",
+      "oct4_close": 29310.25,
+      "databento_close": 29310.25,
+      "closes_agree": true,
+      "ohl_agree": true
+    }
+  ],
+  "matched_ioc_fill_count": 18,
+  "resolved_matched_ioc_fill_count": 17,
+  "other_decision_bar_close_disagreements": [
+    {
+      "date": "2026-03-06",
+      "direction": "LONG",
+      "ioc_status": "NO_FILL",
+      "ioc_reason": "ENTRY_NOT_FILLED",
+      "decision_bar_ts_utc": "2026-03-06T15:00:00+00:00",
+      "oct4_close": 24751.5,
+      "databento_close": 24764.5,
+      "databento_minus_oct4": 13.0,
+      "ohl_agree": false,
+      "note": "IOC did not fill on either vendor close, so this day produced no fill_price mismatch."
+    }
+  ],
+  "one_minute_bars": {
+    "verdict": "CONSISTENT",
+    "decoder": "databento 0.90.0 in /workspace/tmp/afs0523-databento-venv; local DBNStore.from_file only; no API",
+    "source_copy": "/workspace/tmp/afs0523-1m-decode/MNQ.FUT_ohlcv-1m_20240702_20260627.parent.dbn.zst",
+    "source_original": "/workspace/afs-shared/data/databento_afs0523_2026-11-09/reproduction/MNQ.FUT_ohlcv-1m_20240702_20260627.parent.dbn.zst",
+    "definition_copy": "/workspace/tmp/afs0523-1m-decode/MNQ.FUT_definition_20240702_20260627.parent.dbn.zst",
+    "data_root_modified": false,
+    "days": [
+      {
+        "date": "2024-09-06",
+        "symbol": "MNQU4",
+        "instrument_id": 13941,
+        "window_utc": "2024-09-06T14:00:00+00:00/2024-09-06T14:04:00+00:00",
+        "window_et": "2024-09-06 10:00-10:04 EDT",
+        "bars": [
+          {
+            "ts_utc": "2024-09-06T14:00:00+00:00",
+            "ts_et": "2024-09-06 10:00:00 EDT",
+            "open": 18745.75,
+            "high": 18747.25,
+            "low": 18709.5,
+            "close": 18732.0,
+            "volume": 12266
+          },
+          {
+            "ts_utc": "2024-09-06T14:01:00+00:00",
+            "ts_et": "2024-09-06 10:01:00 EDT",
+            "open": 18731.25,
+            "high": 18760.75,
+            "low": 18726.0,
+            "close": 18750.25,
+            "volume": 7315
+          },
+          {
+            "ts_utc": "2024-09-06T14:02:00+00:00",
+            "ts_et": "2024-09-06 10:02:00 EDT",
+            "open": 18750.25,
+            "high": 18761.5,
+            "low": 18741.75,
+            "close": 18748.0,
+            "volume": 4344
+          },
+          {
+            "ts_utc": "2024-09-06T14:03:00+00:00",
+            "ts_et": "2024-09-06 10:03:00 EDT",
+            "open": 18747.5,
+            "high": 18768.0,
+            "low": 18740.25,
+            "close": 18754.75,
+            "volume": 4889
+          },
+          {
+            "ts_utc": "2024-09-06T14:04:00+00:00",
+            "ts_et": "2024-09-06 10:04:00 EDT",
+            "open": 18755.25,
+            "high": 18765.75,
+            "low": 18743.0,
+            "close": 18754.75,
+            "volume": 3705
+          }
+        ],
+        "aggregated": {
+          "open": 18745.75,
+          "high": 18768.0,
+          "low": 18709.5,
+          "close": 18754.75,
+          "volume": 32519
+        },
+        "databento_5m_expected": {
+          "open": 18745.75,
+          "high": 18768.0,
+          "low": 18709.5,
+          "close": 18754.75,
+          "volume": 32519
+        },
+        "aggregation_matches_5m": true,
+        "last_1m_close": 18754.75,
+        "last_1m_close_equals_5m_close": true,
+        "polygon_5m_close": 18754.0,
+        "databento_5m_minus_polygon_5m": 0.75,
+        "other_symbols_in_same_window": [
+          "MNQZ4",
+          "MNQH5"
+        ]
+      },
+      {
+        "date": "2026-06-11",
+        "symbol": "MNQU6",
+        "instrument_id": 42004800,
+        "window_utc": "2026-06-11T14:55:00+00:00/2026-06-11T14:59:00+00:00",
+        "window_et": "2026-06-11 10:55-10:59 EDT",
+        "bars": [
+          {
+            "ts_utc": "2026-06-11T14:55:00+00:00",
+            "ts_et": "2026-06-11 10:55:00 EDT",
+            "open": 29029.5,
+            "high": 29034.75,
+            "low": 28968.0,
+            "close": 28972.0,
+            "volume": 138
+          },
+          {
+            "ts_utc": "2026-06-11T14:56:00+00:00",
+            "ts_et": "2026-06-11 10:56:00 EDT",
+            "open": 28969.25,
+            "high": 28991.75,
+            "low": 28940.0,
+            "close": 28952.25,
+            "volume": 219
+          },
+          {
+            "ts_utc": "2026-06-11T14:57:00+00:00",
+            "ts_et": "2026-06-11 10:57:00 EDT",
+            "open": 28953.5,
+            "high": 28963.0,
+            "low": 28931.0,
+            "close": 28952.25,
+            "volume": 73
+          },
+          {
+            "ts_utc": "2026-06-11T14:58:00+00:00",
+            "ts_et": "2026-06-11 10:58:00 EDT",
+            "open": 28959.0,
+            "high": 28977.25,
+            "low": 28884.0,
+            "close": 28902.75,
+            "volume": 191
+          },
+          {
+            "ts_utc": "2026-06-11T14:59:00+00:00",
+            "ts_et": "2026-06-11 10:59:00 EDT",
+            "open": 28904.25,
+            "high": 28929.0,
+            "low": 28895.25,
+            "close": 28928.5,
+            "volume": 107
+          }
+        ],
+        "aggregated": {
+          "open": 29029.5,
+          "high": 29034.75,
+          "low": 28884.0,
+          "close": 28928.5,
+          "volume": 728
+        },
+        "databento_5m_expected": {
+          "open": 29029.5,
+          "high": 29034.75,
+          "low": 28884.0,
+          "close": 28928.5,
+          "volume": 728
+        },
+        "aggregation_matches_5m": true,
+        "last_1m_close": 28928.5,
+        "last_1m_close_equals_5m_close": true,
+        "polygon_5m_close": 28928.75,
+        "databento_5m_minus_polygon_5m": -0.25,
+        "other_symbols_in_same_window": [
+          "MNQM6",
+          "MNQZ6"
+        ]
+      }
+    ]
+  }
+}

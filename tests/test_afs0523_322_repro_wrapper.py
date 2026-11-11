@@ -250,7 +250,7 @@ def test_expected_count_is_a_wrapper_parameter_and_new_slices_are_refused(tmp_pa
     assert any(item["field"] == "row" for item in refused["mismatches"])
 
     assert wrapper["RUN_AUTHORIZED"] is True
-    with pytest.raises(RuntimeError, match="did not PASS"):
+    with pytest.raises(RuntimeError, match="artifact hash mismatch"):
         wrapper["run_declared_slices"](research, audit)
 
 
@@ -919,13 +919,16 @@ def test_reproduction_gate_records_a_count_failure_on_a_synthetic_fixture(monkey
     assert result["research_15m_sha256"] == _repro(manifest)["research_15m_sha256"]
     assert result["audit_5m_sha256"] == _repro(manifest)["audit_5m_sha256"]
     assert result["pulled_files"] == manifest["pulled_files"]
-    assert len(result["prior_attempts"]) == 1
+    assert len(result["prior_attempts"]) == 2
+    assert result["prior_attempts"][0]["gate_artifact_sha256"] == "ede35c326057ba4fa39cebfeaad8851d97ad60df9de1c2ddedd9b888dcd1dfeb"
+    assert result["prior_attempts"][1]["gate_artifact_sha256"] == "255f669c785a7396c773f6143ecf8b82afe7292cd012566cda879c880e0d1a0f"
     assert result["prior_attempts"][0]["manifest_sha256"] == DATA_MANIFEST_SHA256
     assert result["prior_attempts"][0]["research_15m_sha256"] == "461384bc2c638e849ebcdbd4c1fed09fde79fbc9c48dee7656a1151c259e3339"
+    assert result["prior_attempts"][1]["manifest_sha256"] == DATA_MANIFEST_SHA256
     assert written["manifest_sha256"] == pin
     again = _call_gate(tmp_path, research, audit)
     assert again["pass"] is False
-    assert len(again["prior_attempts"]) == 2
+    assert len(again["prior_attempts"]) == 3
     assert again["prior_attempts"][0]["manifest_sha256"] == DATA_MANIFEST_SHA256
     assert again["prior_attempts"][0]["research_15m_sha256"] == "461384bc2c638e849ebcdbd4c1fed09fde79fbc9c48dee7656a1151c259e3339"
     assert (ROOT / "docs/research-trial-ledger.jsonl").read_bytes() == real_ledger
@@ -1257,6 +1260,33 @@ def test_bad_scoring_profile_refuses_before_a_gate_line(monkeypatch, tmp_path):
     assert ledger.read_bytes() == before
     assert not artifact.exists()
     assert (ROOT / "docs/research-trial-ledger.jsonl").read_bytes() == real_ledger
+
+
+def test_recorded_attempt_02_gate_line_is_the_pinned_download():
+    fail_sha = "255f669c785a7396c773f6143ecf8b82afe7292cd012566cda879c880e0d1a0f"
+    evidence = (
+        ROOT
+        / "docs/research-evidence/T-2026-11-09-prereg-322-afs0523-oos-reproduction-2026-11-09-01"
+    )
+    assert hashlib.sha256((evidence / "reproduction-gate.json").read_bytes()).hexdigest() == (
+        "ede35c326057ba4fa39cebfeaad8851d97ad60df9de1c2ddedd9b888dcd1dfeb"
+    )
+    assert hashlib.sha256((evidence / "reproduction-gate.attempt-02.json").read_bytes()).hexdigest() == fail_sha
+    matches = []
+    for line in (ROOT / "docs/research-trial-ledger.jsonl").read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        if row.get("event") == "GATE" and row.get("gate_artifact_sha256") == fail_sha:
+            matches.append(row)
+    assert len(matches) == 1
+    gate = matches[0]
+    assert gate["gate_pass"] is False
+    assert gate["event"] == "GATE"
+    assert gate["manifest_sha256"] == "6c9d5ab3c29a7aeade90e95c84e0128795afc1bdd19aa165e18d364760b7f43d"
+    assert gate["research_15m_sha256"] == "461384bc2c638e849ebcdbd4c1fed09fde79fbc9c48dee7656a1151c259e3339"
+    assert gate["audit_5m_sha256"] == "a08d909274fa5a06e9234b1c0975977d91a00b1f749c0560fd6d41859410c1e3"
+    assert gate["manifest_sha256"] == DATA_MANIFEST_SHA256
 
 
 def test_recorded_gate_fail_is_the_pinned_download_and_not_different_data(tmp_path):
