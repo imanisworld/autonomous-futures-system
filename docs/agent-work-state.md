@@ -1,6 +1,19 @@
 # Agent Work State
 
-## START HERE — 2026-11-11 structural reproduction gate PASS record
+## START HERE — 2026-11-11 early-close slice classification
+
+Evidence only. The reproduction gate was not rerun. No Databento slice was scored. Do not merge, deploy, or change execution from this note.
+
+| Item | State |
+|---|---|
+| **Branch** | `cursor/322-early-close-slice-ba8e` |
+| **Scope** | A CME early-close day on any window other than 2024-07-02..2026-06-26 is scored from 08:30 ET through the 13:00 ET close and labeled `EARLY_CLOSE`. The reproduction window keeps the gate rule. |
+| **Gate labels** | 2025-11-28 stays `DATA_GAP` (missing 07:00 through 08:15). 2025-01-09 stays `DATA_GAP`. A hole at or after 08:30 ET is still `DATA_GAP` on the slice path. |
+| **Gate run** | Not rerun. The recorded PASS bytes are untouched. |
+| **Tests** | `python3 -B -m pytest -q tests/test_322_databento_bar_adapter.py tests/test_afs0523_322_repro_wrapper.py`: 73 passed. |
+| **NEXT** | Independent review. Do not merge from this checkpoint. Slice scoring is a separate change and stays unauthorized. |
+
+## Previous — 2026-11-11 structural reproduction gate PASS record
 
 Evidence only. The gate was not rerun from this checkout. Do not score older slices. Do not merge, deploy, or change execution from this note.
 
