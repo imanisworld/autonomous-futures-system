@@ -29,7 +29,7 @@ class DecisionDispatcher:
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
-        self._queue: queue.Queue[tuple[Callable[[], None], float]] = queue.Queue(maxsize=max_pending)
+        self._queue: queue.Queue[tuple[Callable[[], bool], float]] = queue.Queue(maxsize=max_pending)
         self._max_age = max_age_seconds
         self._sleep = sleep
         self._clock = clock
@@ -38,7 +38,7 @@ class DecisionDispatcher:
         self.delivered = 0
         self.dropped = 0
 
-    def enqueue(self, send: Callable[[], None]) -> bool:
+    def enqueue(self, send: Callable[[], bool]) -> bool:
         """Accept a decision notification without waiting for Discord HTTP."""
         if not callable(send):
             raise TypeError("send must be callable")
@@ -74,8 +74,11 @@ class DecisionDispatcher:
                     self.dropped += 1
                     logger.error("Decision Discord notification %.0fs old; dropped as stale", age)
                 else:
-                    send()
-                    self.delivered += 1
+                    if send() is True:
+                        self.delivered += 1
+                    else:
+                        self.dropped += 1
+                        logger.error("Decision Discord transport did not confirm delivery; dropped")
             except Exception as exc:  # noqa: BLE001 — worker must survive a failed transport
                 self.dropped += 1
                 # Do not put transport exception messages (potential webhook tokens) in logs.
@@ -95,5 +98,5 @@ class DecisionDispatcher:
 DISPATCHER = DecisionDispatcher()
 
 
-def enqueue_decision(send: Callable[[], None]) -> bool:
+def enqueue_decision(send: Callable[[], bool]) -> bool:
     return DISPATCHER.enqueue(send)
