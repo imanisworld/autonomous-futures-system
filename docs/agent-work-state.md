@@ -1,6 +1,20 @@
 # Agent Work State
 
-## START HERE — 2026-11-11 structural reproduction gate PASS record
+## START HERE — 2026-11-11 slice scoring, refused by default
+
+Evidence only. No slice was scored against real Databento data. The reproduction gate was not rerun. Do not merge, deploy, or change execution from this note.
+
+| Item | State |
+|---|---|
+| **Branch** | `cursor/322-slice-scoring-ba8e` |
+| **Scope** | `run_declared_slices` can score one admitted slice. `SLICE_SCORING_AUTHORIZED` is false and is not flipped. Admission checks are unchanged. |
+| **Artifact** | Each attempt writes its own slice artifact and replay ledger, never overwritten. Both sha256 values are on the artifact and on a `SLICE` ledger event. The artifact records git HEAD, a clean-tree check, and the wrapper file sha256. A dirty checkout is refused. |
+| **Results** | Each slippage and model reports candidates, fills, resolved, unresolved with dates and reasons, and no-fills. P&L, win rate, and drawdown are resolved-only. No pass/fail criterion. |
+| **Identity** | The artifact records the manifest sha256, both tree hashes, data_root, and MAX_CONTRACTS_HARD_CAP. A scoring exception still appends a SLICE event with null artifact and ledger hashes. |
+| **Tests** | `python3 -B -m pytest -q tests/test_afs0523_322_repro_wrapper.py`: 59 passed. Synthetic fixtures only. |
+| **NEXT** | Independent review. Do not set `SLICE_SCORING_AUTHORIZED` true from this checkpoint. Success criteria belong in a separate preregistration. |
+
+## Previous — 2026-11-11 structural reproduction gate PASS record
 
 Evidence only. The gate was not rerun from this checkout. Do not score older slices. Do not merge, deploy, or change execution from this note.
 
