@@ -4,7 +4,7 @@ trial_id: T-2026-11-10-prereg-322-afs0523-oos-structural-2026-11-10-01
 
 This document was written after AFS-0586. It is post-hoc. AFS-0586 already ran `run_reproduction_gate` once at `000f43128764aedfc6a5702d9fb11847f8a58d1c` with `MAX_CONTRACTS_HARD_CAP=1` and recorded a FAIL. AFS-0588 and AFS-0590 already inspected the decision bars. Nothing in this registration is a prospective pre-commitment, and this commit does not score.
 
-`RUN_AUTHORIZED` is false for this trial. `run_reproduction_gate` on `T-2026-11-09-prereg-322-afs0523-oos-reproduction-2026-11-09-01` is closed because that trial is `SUPERSEDED`. This trial supersedes it.
+`RUN_AUTHORIZED` is true for this trial. This commit does not score. A run waits for Imani's typed GO after Claude reviews the change. `run_reproduction_gate` on `T-2026-11-09-prereg-322-afs0523-oos-reproduction-2026-11-09-01` is closed because that trial is `SUPERSEDED`. This trial supersedes it. Each gate attempt saves its replay ledger beside the gate artifact and records that file's SHA-256 on the artifact and the GATE line.
 
 ## Structural rule
 
