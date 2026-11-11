@@ -1019,7 +1019,7 @@ def _run_window(
     """
     _scoring_profile_or_refuse()
     gap_report = data_gap_dates_from_trees(research_15m, audit_5m, start, end)
-    gap_dates = {item["date"] for item in gap_report["data_gaps"]}
+    gap_dates = _unscored_dates(gap_report)
     candidates, triggers, bars, invalid_brackets = _parity(
         research_15m, audit_5m, start, end, expected_count, gap_dates
     )
@@ -1789,8 +1789,17 @@ def _scoring_provenance() -> dict:
     }
 
 
+def _unscored_dates(gap_report: dict) -> set[str]:
+    """DATA_GAP days, plus early-close days the disposition holds out."""
+    dates = {item["date"] for item in gap_report.get("data_gaps") or [] if item.get("date")}
+    for item in gap_report.get("early_close_sessions") or []:
+        if isinstance(item, dict) and item.get("scored") is False and item.get("date"):
+            dates.add(str(item["date"]))
+    return dates
+
+
 def _resolved_trade(cell: dict) -> tuple[str, float] | None:
-    """A resolved fill is a trade. No-fills and unresolved rows are not."""
+    """A resolved fill. Unresolved fills stay in the counts and out of P&L."""
     if not isinstance(cell, dict) or cell.get("status") != "RESOLVED":
         return None
     result = cell.get("result")
@@ -1802,27 +1811,51 @@ def _resolved_trade(cell: dict) -> tuple[str, float] | None:
     return str(result), float(net)
 
 
-def summarize_slice_ledger(ledger: dict) -> dict:
-    """Raw per-model results at each slippage. No pass/fail threshold.
+def _cell_reason(cell: dict) -> str | None:
+    reason = cell.get("reason")
+    if reason is None:
+        reason = cell.get("exit_reason")
+    if reason is None:
+        return None
+    return str(reason)
 
-    Win rate is wins divided by resolved trades. A breakeven trade is a
-    trade and is not a win. Drawdown is the largest peak-to-trough of the
-    cumulative net, starting from zero. The losing streak counts consecutive
-    ``LOSS`` results.
+
+def summarize_slice_ledger(ledger: dict) -> dict:
+    """Raw per-model counts at each slippage. No pass/fail threshold.
+
+    ``net_pnl_resolved_only``, ``win_rate_resolved_only``, and
+    ``drawdown_resolved_only`` use resolved fills only. An unresolved fill is
+    counted, with its date and reason, and is not in those metrics. Win rate
+    is wins divided by resolved trades. A breakeven trade is resolved and is
+    not a win. Drawdown is the largest peak-to-trough of resolved cumulative
+    net, starting from zero.
     """
     by_slippage: dict[str, dict] = {}
     for slippage in SLIPPAGES:
         rows = list(ledger.get(slippage) or [])
         models: dict[str, dict] = {}
         for model_key, label in MODEL_LABELS:
-            trades: list[dict] = []
+            resolved_rows: list[dict] = []
+            unresolved: list[dict] = []
+            no_fills: dict[str, int] = {}
+            fills = 0
             for row in rows:
                 cell = (row.get("models") or {}).get(model_key) or {}
+                status = cell.get("status")
+                if status in {"RESOLVED", "UNRESOLVED", "OPEN"}:
+                    fills += 1
+                if status == "UNRESOLVED":
+                    unresolved.append({"date": row.get("date"), "reason": _cell_reason(cell)})
+                elif status == "NO_FILL":
+                    reason = _cell_reason(cell) or "UNSPECIFIED"
+                    no_fills[reason] = no_fills.get(reason, 0) + 1
                 resolved = _resolved_trade(cell)
                 if resolved is None:
                     continue
                 result, net = resolved
-                trades.append({"date": row.get("date"), "result": result, "net": round(net, 2)})
+                resolved_rows.append(
+                    {"date": row.get("date"), "result": result, "net": round(net, 2)}
+                )
             equity = 0.0
             peak = 0.0
             max_drawdown = 0.0
@@ -1830,7 +1863,7 @@ def summarize_slice_ledger(ledger: dict) -> dict:
             longest = 0
             wins = 0
             total = 0.0
-            for trade in trades:
+            for trade in resolved_rows:
                 total += float(trade["net"])
                 equity += float(trade["net"])
                 if equity > peak:
@@ -1847,14 +1880,20 @@ def summarize_slice_ledger(ledger: dict) -> dict:
                         longest = streak
                 else:
                     streak = 0
-            count = len(trades)
+            resolved_count = len(resolved_rows)
             models[label] = {
-                "trades": count,
-                "trade_list": trades,
-                "net_pnl": round(total, 2),
-                "win_rate": None if count == 0 else wins / count,
-                "drawdown": round(max_drawdown, 2),
-                "longest_losing_streak": longest,
+                "candidates": len(rows),
+                "fills": fills,
+                "resolved": resolved_count,
+                "unresolved": unresolved,
+                "unresolved_count": len(unresolved),
+                "no_fills": no_fills,
+                "no_fill_count": sum(no_fills.values()),
+                "resolved_trade_list": resolved_rows,
+                "net_pnl_resolved_only": round(total, 2),
+                "win_rate_resolved_only": None if resolved_count == 0 else wins / resolved_count,
+                "drawdown_resolved_only": round(max_drawdown, 2),
+                "longest_losing_streak_resolved_only": longest,
             }
         by_slippage[slippage] = models
     return by_slippage
@@ -1879,22 +1918,68 @@ def _slice_attempt_paths(slice_id: str) -> tuple[int, Path, Path]:
     return attempt, artifact, ledger
 
 
-def _score_admitted_slice(research_15m: Path, audit_5m: Path, slice_id: str) -> dict:
+def _slice_data_identity(research_15m: Path, audit_5m: Path, data_root: Path) -> dict:
+    _manifest, manifest_sha256 = _load_pinned_manifest()
+    profile = _scoring_profile_or_refuse()
+    return {
+        "manifest_sha256": manifest_sha256,
+        "research_15m_sha256": _tree_sha256(research_15m),
+        "audit_5m_sha256": _tree_sha256(audit_5m),
+        "data_root": str(data_root),
+        "MAX_CONTRACTS_HARD_CAP": profile["MAX_CONTRACTS_HARD_CAP"],
+    }
+
+
+def _record_slice_scoring_failure(
+    slice_id: str,
+    provenance: dict,
+    identity: dict,
+    error: str,
+) -> None:
+    """A scoring exception still leaves a SLICE line. Missing products stay null."""
+    payload = {
+        "slice_id": slice_id,
+        "git_head": provenance.get("git_head"),
+        "clean_tree": provenance.get("clean_tree"),
+        "wrapper_sha256": provenance.get("wrapper_sha256"),
+        "replay_ledger": None,
+        "replay_ledger_sha256": None,
+        "error": error,
+    }
+    payload.update(identity)
+    _append_slice_event(payload, None, None)
+
+
+def _score_admitted_slice(
+    research_15m: Path,
+    audit_5m: Path,
+    slice_id: str,
+    *,
+    data_root: Path,
+) -> dict:
     """Score one admitted slice and write a new attempt. No pass/fail rule."""
     provenance = _scoring_provenance()
+    identity = _slice_data_identity(research_15m, audit_5m, data_root)
     spec = next((item for item in SLICES if item.id == slice_id), None)
     if spec is None or spec.id == "combined":
         raise RuntimeError(f"unknown slice {slice_id}")
     _attempt, artifact_path, ledger_path = _slice_attempt_paths(slice_id)
-    scored = _run_window(
-        research_15m,
-        audit_5m,
-        start=spec.start,
-        end=spec.end,
-        expected_count=None,
-    )
+    try:
+        scored = _run_window(
+            research_15m,
+            audit_5m,
+            start=spec.start,
+            end=spec.end,
+            expected_count=None,
+        )
+    except Exception as exc:
+        _record_slice_scoring_failure(slice_id, provenance, identity, str(exc))
+        raise
     ledger = scored.get("ledger") if isinstance(scored, dict) else None
     if not isinstance(ledger, dict):
+        _record_slice_scoring_failure(
+            slice_id, provenance, identity, "slice scoring produced no replay ledger"
+        )
         raise RuntimeError("slice scoring produced no replay ledger")
     payload = {
         "slice_id": spec.id,
@@ -1913,6 +1998,7 @@ def _score_admitted_slice(research_15m: Path, audit_5m: Path, slice_id: str) -> 
         "early_close_sessions": scored.get("early_close_sessions") or [],
         "slippage_sensitivity": SLIPPAGE_SENSITIVITY_NOTE,
     }
+    payload.update(identity)
     if spec.price_source == "NQ":
         payload["result_label"] = NQ_RESEARCH_LABEL
     if ledger_path.exists() or artifact_path.exists():
@@ -1940,7 +2026,11 @@ def _slice_stamp(rows: list[dict]) -> datetime:
     return stamp
 
 
-def _append_slice_event(payload: dict, artifact_sha256: str, artifact_rel: str) -> None:
+def _append_slice_event(
+    payload: dict,
+    artifact_sha256: str | None,
+    artifact_rel: str | None,
+) -> None:
     lines = TRIAL_LEDGER.read_text(encoding="utf-8").splitlines()
     rows = [json.loads(line) for line in lines if line.strip()]
     first = next(row for row in rows if row.get("trial_id") == TRIAL_ID)
@@ -1959,6 +2049,12 @@ def _append_slice_event(payload: dict, artifact_sha256: str, artifact_rel: str) 
             "git_head": payload.get("git_head"),
             "clean_tree": payload.get("clean_tree"),
             "wrapper_sha256": payload.get("wrapper_sha256"),
+            "manifest_sha256": payload.get("manifest_sha256"),
+            "research_15m_sha256": payload.get("research_15m_sha256"),
+            "audit_5m_sha256": payload.get("audit_5m_sha256"),
+            "data_root": payload.get("data_root"),
+            "MAX_CONTRACTS_HARD_CAP": payload.get("MAX_CONTRACTS_HARD_CAP"),
+            "error": payload.get("error"),
             "notes": "Raw slice results. No pass/fail criterion is applied.",
         }
     )
@@ -2019,7 +2115,7 @@ def run_declared_slices(
     _refuse_ohl_disagreement()
     if not SLICE_SCORING_AUTHORIZED:
         return None
-    return _score_admitted_slice(research, audit, slice_id)
+    return _score_admitted_slice(research, audit, slice_id, data_root=root)
 
 
 def _target_and_stop_nets(

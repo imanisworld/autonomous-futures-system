@@ -42,6 +42,7 @@ from research.afs0523_322_repro_wrapper import (
     _write_gate_artifact,
     SLICE_SCORING_AUTHORIZED,
     _git_head_and_clean,
+    _unscored_dates,
     compare_replay_structural,
     compare_replay_to_oct4,
     run_declared_slices,
@@ -1822,11 +1823,13 @@ def test_excluded_day_fails_when_the_scored_bar_is_not_the_pinned_databento_bar(
 
 def _synthetic_slice_ledger() -> dict:
     def row(day: str, result: str, net: float, *, status: str = "RESOLVED") -> dict:
-        plan = {"status": status, "result": result, "net": net}
+        plan = {"status": status, "result": result, "net": net, "fill_entry": 1.0}
+        if status != "RESOLVED":
+            plan["reason"] = "EOD_BAR_MISSING"
         if status == "RESOLVED":
             prearmed = {"status": "RESOLVED", "result": result, "net": net - 1.0}
         else:
-            prearmed = {"status": status, "reason": "EOD_BAR_MISSING"}
+            prearmed = {"status": status, "reason": "EOD_BAR_MISSING", "fill_entry": 1.0}
         return {
             "date": day,
             "models": {
@@ -1850,24 +1853,37 @@ def test_slice_summary_is_raw_and_has_no_pass_fail():
     assert SLICE_SCORING_AUTHORIZED is False
     summary = summarize_slice_ledger(_synthetic_slice_ledger())
     original = summary["1tick"]["original"]
-    assert original["trades"] == 4
-    assert [item["net"] for item in original["trade_list"]] == [10.0, -4.0, -3.0, 2.0]
-    assert original["net_pnl"] == 5.0
-    assert original["win_rate"] == 0.5
-    assert original["drawdown"] == 7.0
-    assert original["longest_losing_streak"] == 2
+    assert original["candidates"] == 5
+    assert original["fills"] == 5
+    assert original["resolved"] == 4
+    assert original["unresolved_count"] == 1
+    assert original["unresolved"] == [{"date": "2020-01-10", "reason": "EOD_BAR_MISSING"}]
+    assert original["no_fill_count"] == 0
+    assert [item["net"] for item in original["resolved_trade_list"]] == [10.0, -4.0, -3.0, 2.0]
+    assert original["net_pnl_resolved_only"] == 5.0
+    assert original["win_rate_resolved_only"] == 0.5
+    assert original["drawdown_resolved_only"] == 7.0
+    assert original["longest_losing_streak_resolved_only"] == 2
+    assert "net_pnl" not in original
     prearmed = summary["1tick"]["prearmed"]
-    assert prearmed["trades"] == 4
-    assert prearmed["net_pnl"] == 1.0
-    assert prearmed["drawdown"] == 9.0
-    assert prearmed["longest_losing_streak"] == 2
+    assert prearmed["resolved"] == 4
+    assert prearmed["unresolved_count"] == 1
+    assert prearmed["fills"] == 5
+    assert prearmed["net_pnl_resolved_only"] == 1.0
+    assert prearmed["drawdown_resolved_only"] == 9.0
+    assert prearmed["longest_losing_streak_resolved_only"] == 2
     honest = summary["1tick"]["honest_ioc"]
-    assert honest["trades"] == 0
-    assert honest["net_pnl"] == 0.0
-    assert honest["win_rate"] is None
-    assert honest["drawdown"] == 0.0
-    assert honest["longest_losing_streak"] == 0
-    assert summary["2tick"]["original"]["trades"] == 0
+    assert honest["candidates"] == 5
+    assert honest["fills"] == 0
+    assert honest["resolved"] == 0
+    assert honest["unresolved_count"] == 0
+    assert honest["no_fill_count"] == 5
+    assert honest["no_fills"] == {"ENTRY_NOT_FILLED": 5}
+    assert honest["net_pnl_resolved_only"] == 0.0
+    assert honest["win_rate_resolved_only"] is None
+    assert honest["drawdown_resolved_only"] == 0.0
+    assert honest["longest_losing_streak_resolved_only"] == 0
+    assert summary["2tick"]["original"]["resolved"] == 0
     assert "pass" not in summary and "ok" not in summary
 
 
@@ -2029,8 +2045,14 @@ def test_authorized_slice_writes_attempt_files_and_refuses_a_dirty_tree(monkeypa
     assert result["clean_tree"] is True
     wrapper_path = ROOT / "research/afs0523_322_repro_wrapper.py"
     assert result["wrapper_sha256"] == hashlib.sha256(wrapper_path.read_bytes()).hexdigest()
-    assert result["by_slippage"]["1tick"]["original"]["net_pnl"] == 5.0
-    assert result["by_slippage"]["1tick"]["original"]["trades"] == 4
+    assert result["by_slippage"]["1tick"]["original"]["net_pnl_resolved_only"] == 5.0
+    assert result["by_slippage"]["1tick"]["original"]["resolved"] == 4
+    assert result["by_slippage"]["1tick"]["original"]["unresolved_count"] == 1
+    assert result["manifest_sha256"]
+    assert result["research_15m_sha256"] == _tree_sha256(slice_research)
+    assert result["audit_5m_sha256"] == _tree_sha256(slice_audit)
+    assert result["data_root"] == str(tmp_path.resolve())
+    assert result["MAX_CONTRACTS_HARD_CAP"] == "1"
     assert result["data_gap_count"] == 1
     assert "pass" not in result and "ok" not in result
     artifact = tmp_path / "slices" / "mnq-2019-05-to-2024-06.attempt-01.json"
@@ -2061,7 +2083,7 @@ def test_authorized_slice_writes_attempt_files_and_refuses_a_dirty_tree(monkeypa
     assert second.is_file() and second_replay.is_file()
     assert artifact.read_bytes() == artifact_bytes
     assert replay.read_bytes() == replay_bytes
-    assert again["by_slippage"]["1tick"]["original"]["trades"] == 0
+    assert again["by_slippage"]["1tick"]["original"]["resolved"] == 0
     assert len(_slice_events(ledger)) == 2
     assert (ROOT / "docs/research-trial-ledger.jsonl").read_bytes() == real_ledger
 
@@ -2140,6 +2162,54 @@ def test_slice_attempt_file_is_never_overwritten(monkeypatch, tmp_path):
             slice_id="mnq-2019-05-to-2024-06",
         )
     assert existing.read_text(encoding="utf-8") == "{}\n"
+
+
+def test_scoring_exception_writes_a_slice_event_with_null_products(monkeypatch, tmp_path):
+    slice_research, slice_audit, ledger = _prepare_admitted_slice(monkeypatch, tmp_path)
+    monkeypatch.setattr("research.afs0523_322_repro_wrapper.SLICE_SCORING_AUTHORIZED", True)
+    monkeypatch.setattr(
+        "research.afs0523_322_repro_wrapper._git_head_and_clean",
+        lambda _repo: ("ab" * 20, True),
+    )
+
+    def _boom(*_args, **_kwargs):
+        raise RuntimeError("synthetic scoring failure")
+
+    monkeypatch.setattr("research.afs0523_322_repro_wrapper._run_window", _boom)
+    with pytest.raises(RuntimeError, match="synthetic scoring failure"):
+        run_declared_slices(
+            Path("slice-research"),
+            Path("slice-audit"),
+            data_root=tmp_path,
+            slice_id="mnq-2019-05-to-2024-06",
+        )
+    event = _slice_events(ledger)[-1]
+    assert event["event"] == "SLICE"
+    assert event["slice_artifact"] is None
+    assert event["slice_artifact_sha256"] is None
+    assert event["replay_ledger"] is None
+    assert event["replay_ledger_sha256"] is None
+    assert event["error"] == "synthetic scoring failure"
+    assert event["manifest_sha256"]
+    assert event["research_15m_sha256"] == _tree_sha256(slice_research)
+    assert event["audit_5m_sha256"] == _tree_sha256(slice_audit)
+    assert event["MAX_CONTRACTS_HARD_CAP"] == "1"
+    assert event["git_head"] == "ab" * 20
+    assert not (tmp_path / "slices").exists()
+    assert "pass" not in event and "gate_pass" not in event
+
+
+def test_unscored_dates_include_an_excluded_early_close():
+    dates = _unscored_dates(
+        {
+            "data_gaps": [{"date": "2020-01-02", "status": "DATA_GAP", "scored": False}],
+            "early_close_sessions": [
+                {"date": "2020-07-03", "status": "EARLY_CLOSE", "scored": False, "disposition": "exclude"}
+            ],
+        }
+    )
+    assert dates == {"2020-01-02", "2020-07-03"}
+    assert _unscored_dates({"data_gaps": []}) == set()
 
 
 def test_close_delta_day_fails_when_the_scored_close_is_not_the_pinned_databento_close():
