@@ -2,6 +2,8 @@
 
 Status: QA / advisory / observation-only / no trade authority.
 
+**2026-11-11 source check:** this boundary still matches the code. `sources/signa_observation.py` stores the v2 observation rating. `alert_ranker/discord.py:210-214` keeps the AFS trade grade display-only. No execution path was added. Daily-proof fail-closed behavior for a missing or garbled observer tool is #1250, described in `docs/options-current-state-handoff.md`.
+
 This upgrades the existing Signa evidence lane. It does **not** create a second
 Signa pipeline and does not grant Signa authority over setup status, contract
 selection, risk permission, broker routing, orders, or execution.

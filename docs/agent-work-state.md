@@ -1,17 +1,36 @@
 # Agent Work State
 
-## START HERE — 2026-11-11 slice-success evaluator
+## START HERE — 2026-11-11 docs-only current-state refresh
 
-Evidence only. No slice was scored. `SLICE_SCORING_AUTHORIZED` stays false. Do not merge, deploy, or change execution from this note.
+Docs only. No code, config, ledger, or execution change. Do not deploy from this note. Do not score a slice. Do not edit #1262 or #1260.
+
+| Item | State |
+|---|---|
+| **Branch** | `cursor/docs-current-state-refresh-ba06` |
+| **Base** | `834e8f52` (`#1278` merged, evaluator only; nothing scored). Prior base `5cc08f59` (`#1277`). |
+| **Scope** | Inventory, futures/options current handoffs, README, env-and-deploy, Track B readiness, Signa v2, observer, and setup-capture notes. Strategy verdicts: broad 4HR MNQ stays WAIT; 60M 3-2-2 stays PROMISING BUT UNPROVEN (AFS-0523). |
+| **Wide-stop** | Source `wide_stop_4k` is 400 ticks and a $400 lane daily-loss (`context/wide_stop_ledger_paper.py:86-88`). The 300-tick / $150 amendment is historical. Demo cap stays 300 ticks. Box collection UNVERIFIED. |
+| **3-2-2 slice** | Trial `T-2026-11-11-prereg-322-afs0523-slice-success-2026-11-11-01` is registered. `SLICE_SCORING_AUTHORIZED` is False (`research/afs0523_322_repro_wrapper.py:71`). #1278 added the pure evaluator. Nothing scored. |
+| **Six-micro** | Retired 2026-10-18 as ABORTED/NOT_RUN, 0/40, not a strategy failure. This main's ledger still ends at RUNNING (lines 22-23). Commit `0a8ddfea` is not on this main. |
+| **Trend R3** | #1253 merged. `VARIANTS_START` is None. NOT_ACTIVATED. Design/holdout P&L UNVERIFIED. |
+| **Fill / risk / Tradovate** | Paper and replay default `entry_fill_model` is `market`. Tradovate IOC depends on a positive slippage tolerance; the live env is UNVERIFIED. `$150` daily loss scales by contracts. Order pin is required; read-only may use `accounts[0]` only when the pin is unset. |
+| **Options** | #1250: empty or missing options journal is `NO_DATA`; a missing or garbled observer tool fails. Scanner default provider is `public`. Polygon access ended 2026-10-18 is operator-reported; the vendor account is UNVERIFIED. |
+| **Tests** | `.venv/bin/python -m pytest -q` before the rebase: 9248 passed, 8 skipped, exit 0, Python 3.13.15, on the pre-#1278 tree. Re-run after the rebase is the number that counts. |
+| **NEXT** | Independent review of the docs diff. Do not merge #1262. Do not score. Do not deploy. |
+
+## Previous — 2026-11-11 slice-success evaluator, merged at 834e8f52
+
+Evidence only. No slice was scored. `SLICE_SCORING_AUTHORIZED` stays false. Do not deploy or change execution from this note.
 
 | Item | State |
 |---|---|
 | **Branch** | `cursor/322-slice-evaluator-ba8e` |
+| **Merged** | `#1278` at `834e8f52` |
 | **Base** | `5cc08f59` (`#1277` merged). |
 | **Trial** | `T-2026-11-11-prereg-322-afs0523-slice-success-2026-11-11-01` |
 | **Module** | `research/afs0523_322_slice_evaluator.py`. Checks run INSUFFICIENT, FAIL, WAIT_UNRESOLVED, FAIL_DRAWDOWN, WAIT_CI, PASS. Nothing is labeled VALIDATED. |
 | **Tests** | T1–T20 and N1. T16 reads the committed reproduction replay only. `python3 -B -m pytest -q`: 9274 passed, 8 skipped. |
-| **NEXT** | Independent review. Do not flip `SLICE_SCORING_AUTHORIZED` from this checkpoint. |
+| **NEXT** | Merged. Do not flip `SLICE_SCORING_AUTHORIZED` from this checkpoint. |
 
 ## Previous — 2026-11-11 GATE_REVIEW recorded
 

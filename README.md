@@ -84,6 +84,7 @@ Trading outside the allowed sessions is NO_TRADE. There is no separate
 
 - Max **3 trades/day** (`max_trades_per_day: 3`, a provisional cap)
 - Consecutive-loss stop is **off** (`max_consecutive_losses: 9999`). The circuit breaker is also off (`circuit_breaker_losses: 0`). Every entry still needs a fresh valid signal.
+- **Daily loss:** `max_daily_loss: 150` scales by the order's contract count (`risk_rules.yaml:91`, `risk/risk_engine.py:783-784`). The yaml comment says that scaling is intentional. At the shipped $1,500 starting balance the MNQ and MES ladders allow **1 contract** (`risk_rules.yaml:220-233`). The per-instrument ceiling in that file is 6. `MAX_CONTRACTS_HARD_CAP` is a required env with no yaml fallback. The value on a running box is UNVERIFIED from the repo.
 - Future real-capital planning assumes **$500-$1k** starting capital
 - Future per-trade risk defaults to **1%** of account value
 - **One open position** at a time
@@ -91,6 +92,12 @@ Trading outside the allowed sessions is NO_TRADE. There is no separate
 - Minimum **R:R = 2.0**
 - `NO_TRADE` is always a valid outcome
 - Missing, stale, or contradictory data = **NO_TRADE**
+
+## Fill model
+
+Paper and replay share `cfg.entry_fill_model`. The default is `market` (`config/settings.py:373`). That default fills unconditionally. Demo and live Tradovate use Limit IOC when the entry slippage tolerance is positive, and a Market order when it is zero (`execution/tradovate_broker.py:199-208`, `:1390-1440`). The broker comment attributes MES 16 / MNQ 32 to the deployed box; this repo does not prove the live env, so that box value is UNVERIFIED. Wide-stop paper hardcodes `ioc_limit` at 8 ticks (`context/wide_stop_ledger_runtime.py:64-65`). Inverse-ORB paper hardcodes IOC at 8 ticks (`webhook/runner.py:2601`, `context/mnq_orb_breakout_inverse_paper.py:23`). Changing the `market` default is held in open PRs #1262 and #1260.
+
+Tradovate order submission requires `TRADOVATE_EXPECTED_ACCOUNT_ID` (`execution/tradovate_broker.py:867-878`). Read-only status may use `accounts[0]` only when that variable is unset (`:805-820`).
 
 ---
 

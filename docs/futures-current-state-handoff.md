@@ -4,6 +4,16 @@
 
 _As of 2026-09-24 (runtime and current decisions: see the 2026-09-24 blocks in `docs/futures-current-status-2026-09-22.md`, then the reconciliation note below). This is the long futures handoff. Historical audit docs remain evidence records._
 
+## Source mechanics — 2026-11-11
+
+Source `main` at `5cc08f593b2551b9ed4283319e8c54f8c3c38830` (#1277). This section is source only. It does not deploy, and it does not read the box. Strategy verdicts stay in `docs/strategy-rules/Strategy_Inventory.md`. The 2026-10-04 sentence below that still says the broad 4HR MNQ verdict is PROMISING BUT UNPROVEN is the reading from that day. The inventory's 2026-11-11 broad 4HR MNQ verdict is **WAIT**. 60M 3-2-2 stays **PROMISING BUT UNPROVEN**.
+
+**Fill model.** The paper webhook broker and the replay engine both pass `cfg.entry_fill_model` into `PaperBroker` (`webhook/runner.py:335-345`; `replay/replay_engine.py:282-294`). The default is `"market"` (`config/settings.py:373`; loaded at `:930-932`). `.env.example` sets `ENTRY_FILL_MODEL=market`. `"market"` fills unconditionally and is not honest-fill proof (`config/settings.py:363-372`). Demo and live Tradovate use the `legacy` entry mode unless the env says otherwise (`execution/tradovate_broker.py:247-251`). Legacy sends a Limit IOC when the slippage tolerance is positive, and a Market order when it is zero (`:199-208`, `:1390-1440`). A non-legacy mode is blocked when `TRADOVATE_ENV=live` (`:1320-1325`). The broker comment says the deployed box sets MES 16 and MNQ 32 so that path is IOC (`:204-215`). This checkout did not read the box, so the live tolerance is UNVERIFIED. Two paper lanes do not use the config default: wide-stop paper hardcodes `ioc_limit` at 8 ticks (`context/wide_stop_ledger_runtime.py:64-65`; `context/wide_stop_ledger_paper.py:50`), and inverse-ORB paper hardcodes `ioc_limit` at 8 ticks (`webhook/runner.py:2601-2604`; `context/mnq_orb_breakout_inverse_paper.py:23`). Changing the `"market"` default is held in open PRs #1262 and #1260. This note does not edit those PRs.
+
+**Daily loss.** `max_daily_loss: 150` is the base cap and scales by the order's contract count (`risk_rules.yaml:91`; `risk/risk_engine.py:775-784`). The yaml comment says that scaling is intentional. At the shipped $1,500 starting balance the MNQ and MES ladders allow 1 contract (`risk_rules.yaml:220-233`). `position_rules.max_contracts_per_instrument` is 6 for MNQ and MES (`:209-211`). `MAX_CONTRACTS_HARD_CAP` is a required env with no yaml fallback (`config/settings.py` `parse_max_contracts_hard_cap`; `.env.example` leaves it blank). The value on the running box is UNVERIFIED. Dated checkpoints recorded it as 1.
+
+**Tradovate account.** Order submission requires `TRADOVATE_EXPECTED_ACCOUNT_ID` and fails closed when it is unset (`execution/tradovate_broker.py:860-878`). Read-only account resolution may use `accounts[0]` only when that variable is unset (`:805-820`). A configured pin never falls back to `accounts[0]`. The comment in `.env.example` that still says an unset pin is "no behavior change" is stale relative to those lines. This docs pass does not edit `.env.example`.
+
 ## Release `c44d32b` deployed; 4HR natural-1m canonical epoch started — 2026-10-04
 
 - Deployed futures release: `c44d32bc4961e56fae5c5f88a976eb6783341638`, promoted 2026-10-04 21:29:09Z via `scripts/atomic_release.sh` build → verify → promote under explicit operator GO. Rollback target `489b55b91b6303c195c8e84bfcbf05ef32d1ab04` (`current.previous`).
@@ -11,7 +21,7 @@ _As of 2026-09-24 (runtime and current decisions: see the 2026-09-24 blocks in `
 - Post-deploy read-only proof (21:29:39–21:30:05Z): symlink and futures-bot cwd on `c44d32b`; integrity OK 1633 files with the fingerprint pin; 0 release-tree `__pycache__`; `LIVE_TRADING_ENABLED=false`, `TRADOVATE_ENV=demo`, `MAX_CONTRACTS_HARD_CAP=1`; `ONE_MIN_TRIGGER_ENABLED` and `ONE_MIN_4HR_OBSERVER_ENABLED` both `true` with matching `EXPECTED_PROOF_` pins; `strat_4hr_retrigger` absent from `enabled_concepts`; broker position null; in-process preflight 0 positions / 0 working orders; live disarmed.
 - **Canonical 4HR natural-1m epoch start: 2026-10-04T21:30:05Z.** Prospective evidence only from here; nothing earlier counts. Details: `docs/4hr-natural-1m-observation-epoch-2026-10-01.md`; checkpoint: `docs/agent-work-state.md`.
 - Same day: #1129 drift-gate fingerprint-pin fix installed to `/root/bin/afs-drift-gate.sh` (backup kept; manual run OK; first cron run against `c44d32b` is 2026-10-05 11:05Z).
-- Strategy status is unchanged: 4HR MNQ remains whatever `docs/strategy-rules/Strategy_Inventory.md` says (PROMISING BUT UNPROVEN). Deployment of an observer is not a status change.
+- Strategy status is unchanged by that deploy: 4HR MNQ remains whatever `docs/strategy-rules/Strategy_Inventory.md` says. The parenthetical PROMISING BUT UNPROVEN was the 2026-10-04 reading. The 2026-11-11 inventory verdict for broad 4HR MNQ is WAIT. Deployment of an observer is not a status change.
 
 ## Repository research closeout — 2026-10-02
 

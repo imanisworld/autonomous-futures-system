@@ -112,6 +112,7 @@ to the process working directory independently of `LOG_DIR`.
 - **Don't `git pull` Hetzner blindly** if the box's `main` has diverged / has
   uncommitted changes (e.g. a hand-edited `app.py`). Check `git status` on the
   box first.
+- **Tradovate orders require an account pin.** `execute_bracket` refuses to send an order when `TRADOVATE_EXPECTED_ACCOUNT_ID` is unset (`execution/tradovate_broker.py:867-878`). Read-only account resolution may use `accounts[0]` only in that unset case (`:805-820`). A configured pin never falls back to the first account. The comment in `.env.example` that still says an unset pin is "no behavior change" is stale relative to those lines. Do not print the account id into docs or logs beyond what the broker already logs.
 - **Pin live-box expectations before validation.** Set `EXPECTED_LIVE_BRANCH`,
   `EXPECTED_LIVE_COMMIT`, `EXPECTED_RISK_RULES_SHA256`,
   `EXPECTED_LIVE_REPO_ROOT`, and `EXPECTED_RUNTIME_JOURNAL_DIR` on the active

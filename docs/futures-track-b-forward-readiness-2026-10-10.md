@@ -1,5 +1,7 @@
 # Track B — 5m IOC wide-stop forward readiness (2026-10-10)
 
+**2026-11-11 source note.** The paper cell in §1 is still the source contract: `wide_stop_4k` at 400 ticks and a $400 lane daily-loss (`context/wide_stop_ledger_paper.py:83-88`), demo orders capped at 300 ticks (`context/wide_stop_execution.py:33-40`). The deployed SHA named below (`94a71bd`) is a 2026-10-11 checkpoint, not a fresh box read. Current box SHA, timer state, and collection are UNVERIFIED. Six-micro is retired in the proof source as of 2026-10-18 (`ops/forward_lanes_daily_proof.py:29`); §6 item 5 still describes the old "after six-micro 17:10" schedule. #1250 makes an empty or missing options journal `NO_DATA` and a missing or garbled observer tool a failed daily-proof check. The installed proof copy is UNVERIFIED.
+
 **Context:** Step 4 parity (`docs/futures-demo-step4-1m-vs-5m-ioc-parity-2026-10-10.md`) fixed the execution story: the **primary historical lead** is **1m pre-armed touch** (Track A observer). The **only honest executable forward/DEMO hypothesis without new wiring** is **completed-5m close IOC8** on the isolated wide-stop lane (**Track B**).
 
 This document is a **pre-deploy / pre-collection checklist**. It does **not** authorize merge, deploy, epoch reset, or broker orders.

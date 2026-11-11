@@ -1,5 +1,7 @@
 # Options setup-capture observer (`capture-v0.2`)
 
+**2026-11-11:** this file is the capture-v0.2 design. It is not the daily-proof contract. #1250 makes an empty or missing options journal `NO_DATA`, and a missing or garbled `ops/options_observer_status.py` a failed check (`ops/forward_lanes_daily_proof.py:338-345`, `:364-407`). Whether this watcher is installed is UNVERIFIED. See `docs/options-current-state-handoff.md`.
+
 Observation-only collector that persists **WATCHING** from completed Strat
 structure **before** the next RTH open, then classifies the first RTH break
 from IEX trades (equities) or Public INDEX 1-minute bars (SPX).
