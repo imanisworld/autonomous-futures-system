@@ -20,11 +20,29 @@ absent. A bucket with zero 1-minute bars is not written. Missing minutes are
 recorded and never given a synthesized price. The 17:00-18:00 ET halt is not
 an expected bucket.
 
-A weekday that is missing a 15-minute bar in 07:00-11:00 ET, or a 5-minute
-bar in 10:00-16:00 ET, is ``DATA_GAP``: counted, reported, and not scored.
-Bars that the CME equity-index calendar does not list for that day (a full
-closure, or the session after a 13:00 ET early close) are
-``expected_holiday_closure`` and are not data gaps. Front-month selection
+A weekday that is missing a required bar is ``DATA_GAP``: counted, reported,
+and not scored. Every session, including an early close, requires 15-minute
+bars from 07:00 ET. The 3-2-2 detector needs the 7AM and 8AM hours. A missing
+07:00-08:15 bar is a data gap. 2025-11-28 is that case: a Globex outage, not
+a normal half-day open.
+
+Bars the CME equity-index calendar does not list (a full closure, or the
+session after the early-close halt) are ``expected_holiday_closure`` and are
+not data gaps.
+
+The reproduction window 2024-07-02..2026-06-26 is the structural gate. Its
+early-close halt requirement stays 13:00 ET, the cutoff that recorded
+2025-01-09 and 2025-11-28 as the only gaps. This module does not change that
+list.
+
+Any other window is the slice path. CME Globex equity futures halt at
+12:15 CT (13:15 ET) on the day after Thanksgiving, Jul 3, and Dec 24, and at
+12:00 CT (13:00 ET) on MLK, Presidents' Day, Memorial Day, Labor Day, and
+Juneteenth. A complete early-close day is labeled ``EARLY_CLOSE``. While
+``EARLY_CLOSE_DISPOSITION`` is ``exclude``, that day is kept out of scoring.
+``include`` keeps the label and the count and lets the day through. The
+frozen replay flattens only at 15:55 ET, so neither setting is a halt-time
+exit. A missing required bar is still ``DATA_GAP``. Front-month selection
 still uses the civil ET date and ``roll_days=8``.
 
 NQ prices are written onto the MNQ path so the unchanged detector and the
@@ -47,8 +65,22 @@ DOLLAR_BASIS = "MNQ-equivalent ($2/point)"
 NQ_LABEL = "best available evidence, not fully clean"
 NQ_RESEARCH_LABEL = "MNQ-equivalent research, not executable historical MNQ"
 OUTRIGHT_RE = re.compile(r"^(?:MNQ|NQ|MES|ES|MYM|YM|M2K|RTY)[HMUZ]\d$")
-EARLY_CLOSE_ET = (13, 0)
+# Recorded reproduction-window requirement. Every early close in that window
+# stops at 13:00 ET, which is what left gaps at 2025-01-09 and 2025-11-28.
+GATE_EARLY_CLOSE_MINUTES = 13 * 60
+# CME Globex equity schedule, https://www.cmegroup.com/trading-hours.html
+# 12:15 CT (13:15 ET): day after Thanksgiving, Jul 3, and Dec 24.
+# 12:00 CT (13:00 ET): MLK, Presidents' Day, Memorial Day, Labor Day, Juneteenth.
+SLICE_LATE_HALT_MINUTES = 13 * 60 + 15
+SLICE_NOON_HALT_MINUTES = 13 * 60
 DATA_GAP = "DATA_GAP"
+EARLY_CLOSE_STATUS = "EARLY_CLOSE"
+# Slice path. "exclude" holds a complete early-close day out of scoring
+# until a preregistered exit rule exists. "include" lets the day through
+# with no claimed halt-time exit. Any other value refuses.
+EARLY_CLOSE_DISPOSITION = "exclude"
+REPRODUCTION_WINDOW_START = date(2024, 7, 2)
+REPRODUCTION_WINDOW_END = date(2026, 6, 26)
 
 
 def _observed_fixed_holiday(year: int, month: int, day: int) -> date:
@@ -87,19 +119,28 @@ def _easter_sunday(year: int) -> date:
     return date(year, month, day + 1)
 
 
-def _previous_weekday(day: date) -> date:
-    cursor = day - timedelta(days=1)
-    while cursor.weekday() >= 5:
-        cursor -= timedelta(days=1)
-    return cursor
+def _weekday_half_day(year: int, month: int, day: int) -> date | None:
+    """Jul 3 or Dec 24, only when that date is a weekday and not the observed closure.
+
+    The day before a weekend holiday is often the observed full close. The
+    weekday before that observed close is a normal session.
+    """
+    eve = date(year, month, day)
+    if eve.weekday() >= 5:
+        return None
+    observed = _observed_fixed_holiday(year, month, day + 1)
+    if eve == observed:
+        return None
+    return eve
 
 
 def cme_equity_index_session(day: date) -> str:
     """CME equity-index session kind for one civil ET date.
 
-    ``closed`` and ``early_close`` (13:00 ET) follow the equity-index futures
-    holiday schedule. 2025-01-20 is an early close: the last RTH bar is 12:55.
-    This does not change ``front_contract`` roll dates.
+    ``closed`` follows the equity-index holiday schedule. ``early_close`` is a
+    half-day. Jul 3 and Dec 24 are half-days only when that civil date is a
+    weekday and is not itself the observed closure. This does not change
+    ``front_contract`` roll dates.
     """
     year = day.year
     closed = {
@@ -117,9 +158,10 @@ def cme_equity_index_session(day: date) -> str:
         _last_weekday(year, 5, 0),
         _nth_weekday(year, 9, 0, 1),
         _nth_weekday(year, 11, 3, 4) + timedelta(days=1),
-        _previous_weekday(_observed_fixed_holiday(year, 12, 25)),
-        _previous_weekday(_observed_fixed_holiday(year, 7, 4)),
     }
+    for eve in (_weekday_half_day(year, 7, 3), _weekday_half_day(year, 12, 24)):
+        if eve is not None:
+            early.add(eve)
     if year >= 2022:
         early.add(_observed_fixed_holiday(year, 6, 19))
     early -= closed
@@ -128,32 +170,88 @@ def cme_equity_index_session(day: date) -> str:
     return "regular"
 
 
-def _session_close_minutes(day: date) -> int | None:
+def _late_halt_dates(year: int) -> set[date]:
+    """Days whose Globex equity halt is 12:15 CT, when they are early closes."""
+    dates = {_nth_weekday(year, 11, 3, 4) + timedelta(days=1)}
+    for eve in (_weekday_half_day(year, 7, 3), _weekday_half_day(year, 12, 24)):
+        if eve is not None:
+            dates.add(eve)
+    return dates
+
+
+def early_close_halt_minutes(day: date, *, policy: str) -> int:
+    """Minutes from midnight ET when the early-close session halts.
+
+    The reproduction window uses 13:00 ET for every early close. The slice
+    path uses 13:15 ET for the day after Thanksgiving, Jul 3, and Dec 24,
+    and 13:00 ET for the Monday holidays and Juneteenth.
+    """
+    if policy == "gate":
+        return GATE_EARLY_CLOSE_MINUTES
+    if policy != "slice":
+        raise RuntimeError(f"unknown session policy {policy!r}")
+    if day in _late_halt_dates(day.year):
+        return SLICE_LATE_HALT_MINUTES
+    return SLICE_NOON_HALT_MINUTES
+
+
+def early_close_excluded() -> bool:
+    """Slice disposition. The default holds early-close days out of scoring."""
+    if EARLY_CLOSE_DISPOSITION == "exclude":
+        return True
+    if EARLY_CLOSE_DISPOSITION == "include":
+        return False
+    raise RuntimeError(
+        "EARLY_CLOSE_DISPOSITION must be 'exclude' or 'include', "
+        f"got {EARLY_CLOSE_DISPOSITION!r}"
+    )
+
+
+def _session_close_minutes(day: date, *, policy: str = "gate") -> int | None:
     kind = cme_equity_index_session(day)
     if kind == "closed":
         return None
     if kind == "early_close":
-        return EARLY_CLOSE_ET[0] * 60 + EARLY_CLOSE_ET[1]
+        return early_close_halt_minutes(day, policy=policy)
     return 16 * 60
 
 
-def _required_starts(day: date) -> tuple[list[datetime], list[datetime]]:
-    """15-minute starts in [07:00, 11:00) and 5-minute starts in [10:00, close)."""
+def session_policy_for_window(start: date, end: date) -> str:
+    """Reproduction-window classification stays the recorded gate.
+
+    Every other window is the slice path. The structural gate calls this
+    with 2024-07-02..2026-06-26 and therefore keeps its DATA_GAP labels.
+    """
+    if start == REPRODUCTION_WINDOW_START and end == REPRODUCTION_WINDOW_END:
+        return "gate"
+    return "slice"
+
+
+def _clock_starts(day: date, first: int, stop: int, step: int) -> list[datetime]:
+    starts: list[datetime] = []
+    minute = first
+    while minute < stop:
+        starts.append(datetime(day.year, day.month, day.day, minute // 60, minute % 60, tzinfo=ET))
+        minute += step
+    return starts
+
+
+def _required_starts(day: date, *, policy: str = "gate") -> tuple[list[datetime], list[datetime]]:
+    """15-minute starts from 07:00 ET and 5-minute starts in [10:00, close).
+
+    Both policies require 07:00. The gate halt is 13:00 ET for every early
+    close. The slice halt is 13:15 ET or 13:00 ET by holiday.
+    """
+    if policy not in {"gate", "slice"}:
+        raise RuntimeError(f"unknown session policy {policy!r}")
     if day.weekday() >= 5:
         return [], []
-    close = _session_close_minutes(day)
+    close = _session_close_minutes(day, policy=policy)
     if close is None:
         return [], []
-    starts_15: list[datetime] = []
-    minute = 7 * 60
-    while minute < 11 * 60 and minute < close:
-        starts_15.append(datetime(day.year, day.month, day.day, minute // 60, minute % 60, tzinfo=ET))
-        minute += 15
-    starts_5: list[datetime] = []
-    minute = 10 * 60
-    while minute < close:
-        starts_5.append(datetime(day.year, day.month, day.day, minute // 60, minute % 60, tzinfo=ET))
-        minute += 5
+    fifteen_stop = min(11 * 60, close)
+    starts_15 = _clock_starts(day, 7 * 60, fifteen_stop, 15)
+    starts_5 = _clock_starts(day, 10 * 60, close, 5)
     return starts_15, starts_5
 
 
@@ -165,38 +263,48 @@ def _et_starts(rows: list[dict]) -> set[tuple[date, int, int]]:
     return found
 
 
-def classify_written_bars(rows_15m: list[dict], rows_5m: list[dict], start: date, end: date) -> dict:
+def _missing_clocks(day: date, required: list[datetime], present: set[tuple[date, int, int]]) -> list[str]:
+    return [
+        moment.strftime("%H:%M")
+        for moment in required
+        if (day, moment.hour, moment.minute) not in present
+    ]
+
+
+def classify_written_bars(
+    rows_15m: list[dict],
+    rows_5m: list[dict],
+    start: date,
+    end: date,
+    *,
+    policy: str = "gate",
+) -> dict:
     """Mark weekdays whose required 15-minute or 5-minute bars are absent.
 
     A missing bar means no 1-minute print fell in that bucket. Holiday closures
-    and the session after a 13:00 ET early close are reported separately and
-    are not ``DATA_GAP``.
+    and the session after the early-close halt are reported separately and are
+    not ``DATA_GAP``.
 
-    TODO: an early-close day still requires 15-minute bars from 07:00. The
-    shortened session's missing pre-open bars (2025-11-28, 07:00 through 08:15)
-    stay ``DATA_GAP``. Label those ``expected_holiday_closure`` before slice
-    runs. This commit does not change that label.
+    ``policy="gate"`` is the reproduction window. It does not emit
+    ``early_close_sessions``. ``policy="slice"`` labels a complete early-close
+    day ``EARLY_CLOSE``. With ``EARLY_CLOSE_DISPOSITION`` of ``exclude`` that
+    day is not scored. A missing 07:00 bar is ``DATA_GAP`` on both policies.
     """
+    if policy not in {"gate", "slice"}:
+        raise RuntimeError(f"unknown session policy {policy!r}")
     present_15 = _et_starts(rows_15m)
     present_5 = _et_starts(rows_5m)
     gaps: list[dict] = []
     closures: list[dict] = []
+    early_sessions: list[dict] = []
     day = start
     while day <= end:
         kind = cme_equity_index_session(day) if day.weekday() < 5 else "weekend"
         if kind in {"closed", "early_close"}:
             closures.append({"date": day.isoformat(), "kind": kind})
-        required_15, required_5 = _required_starts(day)
-        missing_15 = [
-            moment.strftime("%H:%M")
-            for moment in required_15
-            if (day, moment.hour, moment.minute) not in present_15
-        ]
-        missing_5 = [
-            moment.strftime("%H:%M")
-            for moment in required_5
-            if (day, moment.hour, moment.minute) not in present_5
-        ]
+        required_15, required_5 = _required_starts(day, policy=policy)
+        missing_15 = _missing_clocks(day, required_15, present_15)
+        missing_5 = _missing_clocks(day, required_5, present_5)
         if missing_15 or missing_5:
             gaps.append(
                 {
@@ -207,12 +315,26 @@ def classify_written_bars(rows_15m: list[dict], rows_5m: list[dict], start: date
                     "scored": False,
                 }
             )
+        elif policy == "slice" and kind == "early_close":
+            excluded = early_close_excluded()
+            early_sessions.append(
+                {
+                    "date": day.isoformat(),
+                    "status": EARLY_CLOSE_STATUS,
+                    "scored": not excluded,
+                    "disposition": "exclude" if excluded else "include",
+                }
+            )
         day += timedelta(days=1)
-    return {
+    report = {
         "data_gaps": gaps,
         "data_gap_count": len(gaps),
         "expected_holiday_closures": closures,
     }
+    if policy == "slice":
+        report["early_close_sessions"] = early_sessions
+        report["early_close_count"] = len(early_sessions)
+    return report
 
 
 def data_gap_dates_from_trees(research_15m: Path, audit_5m: Path, start: date, end: date) -> dict:
@@ -227,7 +349,13 @@ def data_gap_dates_from_trees(research_15m: Path, audit_5m: Path, start: date, e
             for line in path.read_text(encoding="utf-8").splitlines():
                 if line.strip():
                     sink.append(json.loads(line))
-    return classify_written_bars(rows_15, rows_5, start, end)
+    return classify_written_bars(
+        rows_15,
+        rows_5,
+        start,
+        end,
+        policy=session_policy_for_window(start, end),
+    )
 
 
 def _closure_kind(moment: datetime) -> str | None:
@@ -236,8 +364,7 @@ def _closure_kind(moment: datetime) -> str | None:
     if kind == "closed":
         return "closed"
     if kind == "early_close":
-        close = EARLY_CLOSE_ET[0] * 60 + EARLY_CLOSE_ET[1]
-        if local.hour * 60 + local.minute >= close:
+        if local.hour * 60 + local.minute >= early_close_halt_minutes(local.date(), policy="slice"):
             return "early_close"
     return None
 
@@ -562,7 +689,13 @@ def adapt_ohlcv_1m(
                 )
             if aggregate is not None:
                 written[width].append(aggregate)
-    gap_report = classify_written_bars(written[15], written[5], start, end)
+    gap_report = classify_written_bars(
+        written[15],
+        written[5],
+        start,
+        end,
+        policy=session_policy_for_window(start, end),
+    )
 
     _write_tree(written[15], research_15m)
     _write_tree(written[5], audit_5m)
@@ -583,6 +716,8 @@ def adapt_ohlcv_1m(
         "expected_holiday_closures": gap_report["expected_holiday_closures"],
         "roll_date_basis": "civil ET date of the bar start; roll_days=8; not the CME session date",
     }
+    if "early_close_sessions" in gap_report:
+        report["early_close_sessions"] = gap_report["early_close_sessions"]
     if symbol_root == "NQ":
         report["result_label"] = NQ_RESEARCH_LABEL
     return report
