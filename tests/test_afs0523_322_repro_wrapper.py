@@ -282,8 +282,31 @@ def test_expected_count_is_a_wrapper_parameter_and_new_slices_are_refused(monkey
     assert wrapper["RUN_AUTHORIZED"] is True
     assert wrapper["TRIAL_ID"] != wrapper["SUPERSEDED_TRIAL_ID"]
     monkeypatch.setenv("MAX_CONTRACTS_HARD_CAP", "1")
-    with pytest.raises(RuntimeError, match="Claude's review of the gate result is required"):
+    with pytest.raises(RuntimeError, match="slice admission requires data_root"):
         wrapper["run_declared_slices"](research, audit)
+
+
+def test_slice_admission_refuses_a_temporary_ledger_with_no_gate_review(monkeypatch, tmp_path):
+    """A ledger with no GATE_REVIEW line must still refuse. Deleting that check fails here."""
+    source = ROOT / "docs/research-trial-ledger.jsonl"
+    kept = []
+    for line in source.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        if json.loads(line).get("event") == "GATE_REVIEW":
+            continue
+        kept.append(line)
+    text = "\n".join(kept) + "\n"
+    assert not any(json.loads(line).get("event") == "GATE_REVIEW" for line in kept)
+    ledger = tmp_path / "ledger.jsonl"
+    ledger.write_text(text, encoding="utf-8")
+    monkeypatch.setattr("research.afs0523_322_repro_wrapper.TRIAL_LEDGER", ledger)
+    monkeypatch.setenv("MAX_CONTRACTS_HARD_CAP", "1")
+    real_before = source.read_bytes()
+    with pytest.raises(RuntimeError, match="Claude's review of the gate result is required"):
+        run_declared_slices(tmp_path / "research", tmp_path / "audit")
+    assert source.read_bytes() == real_before
+    assert ledger.read_text(encoding="utf-8") == text
 
 
 def test_declared_slices_stay_separate_and_nq_is_mnq_equivalent_dollars():
@@ -509,6 +532,105 @@ def test_data_gap_day_is_not_also_listed_as_invalid_entry_bracket():
     assert kept == []
     assert [row["date"] for row in reported] == [other_day.isoformat()]
     assert len(reported) == 1
+
+
+def test_strict_bracket_drops_non_gap_rows_and_keeps_a_valid_one():
+    """Match strategy/strat_322_first_live.py:193-198.
+
+    SHORT is ``target < entry_price < stop``. LONG is ``stop < entry_price < target``.
+    A gap-open-only partition keeps the zero-width row and fails this test.
+    """
+    zero_width = {
+        "date": date(2012, 6, 4),
+        "direction": "LONG",
+        "gap_open": False,
+        "entry_trigger": 100.0,
+        "entry_price": 100.0,
+        "stop": 90.0,
+        "target": 100.0,
+    }
+    inverted = {
+        "date": date(2012, 6, 5),
+        "direction": "SHORT",
+        "gap_open": False,
+        "entry_trigger": 100.0,
+        "entry_price": 100.0,
+        "stop": 90.0,
+        "target": 110.0,
+    }
+    valid = {
+        "date": date(2012, 6, 6),
+        "direction": "LONG",
+        "gap_open": False,
+        "entry_trigger": 100.0,
+        "entry_price": 100.0,
+        "stop": 90.0,
+        "target": 110.0,
+    }
+    kept, invalid = partition_invalid_gap_opens([zero_width, inverted, valid])
+    assert [row["date"] for row in kept] == [valid["date"]]
+    assert [(row["date"], row["gap_open"]) for row in invalid] == [
+        ("2012-06-04", False),
+        ("2012-06-05", False),
+    ]
+    assert all(row["invalidation"] == "INVALID_ENTRY_BRACKET" for row in invalid)
+    assert zero_width["entry_price"] == zero_width["target"]
+    assert zero_width["gap_open"] is False
+
+
+def test_slice_report_counts_gap_open_and_non_gap_drops(monkeypatch, tmp_path):
+    day = date(2012, 6, 4)
+    zero_width = {
+        "date": day,
+        "direction": "LONG",
+        "gap_open": False,
+        "entry_trigger": 100.0,
+        "entry_price": 100.0,
+        "stop": 90.0,
+        "target": 100.0,
+    }
+    gap_inverted = {
+        "date": date(2012, 6, 5),
+        "direction": "SHORT",
+        "gap_open": True,
+        "entry_trigger": 100.0,
+        "entry_price": 85.0,
+        "stop": 110.0,
+        "target": 90.0,
+    }
+    monkeypatch.setenv("MAX_CONTRACTS_HARD_CAP", "1")
+    monkeypatch.setattr(
+        "research.afs0523_322_repro_wrapper.data_gap_dates_from_trees",
+        lambda *_args, **_kwargs: {
+            "data_gaps": [],
+            "data_gap_count": 0,
+            "expected_holiday_closures": [],
+            "early_close_sessions": [],
+        },
+    )
+    monkeypatch.setattr("research.afs0523_322_repro_wrapper.verify_frozen_modules", lambda *_a, **_k: None)
+    monkeypatch.setattr("research.afs0523_322_repro_wrapper.assert_5m_window", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        "research.afs0523_322_repro_wrapper.detect_candidates",
+        lambda *_args, **_kwargs: [zero_width, gap_inverted],
+    )
+    monkeypatch.setattr("research.afs0523_322_repro_wrapper.load_bars", lambda *_a, **_k: [])
+    monkeypatch.setattr(
+        "research.afs0523_322_repro_wrapper.extract_state_machine",
+        lambda *_a, **_k: [],
+    )
+    result = _run_window(
+        tmp_path / "research",
+        tmp_path / "audit",
+        start=day,
+        end=day,
+        expected_count=None,
+    )
+    assert result["candidate_count"] == 0
+    assert result["invalid_entry_bracket_count"] == 2
+    assert result["invalid_entry_bracket_gap_open_count"] == 1
+    assert result["invalid_entry_bracket_non_gap_open_count"] == 1
+    assert SLICE_SCORING_AUTHORIZED is False
 
 
 def test_data_gap_days_are_reported_and_not_scored(monkeypatch, tmp_path):
@@ -2333,7 +2455,79 @@ def test_holiday_closed_list_is_on_the_slice_artifact_and_event(monkeypatch, tmp
     assert event["holiday_closed_unscored_count"] == 2
 
 
-def test_reproduction_window_keeps_recorded_gaps_and_computes_candidate_count():
+def test_slice_artifact_reports_gap_open_and_non_gap_drops(monkeypatch, tmp_path):
+    slice_research, slice_audit, ledger = _prepare_admitted_slice(monkeypatch, tmp_path)
+    monkeypatch.setattr("research.afs0523_322_repro_wrapper.SLICE_SCORING_AUTHORIZED", True)
+    monkeypatch.setattr(
+        "research.afs0523_322_repro_wrapper._git_head_and_clean",
+        lambda _repo: ("ab" * 20, True),
+    )
+    monkeypatch.setattr(
+        "research.afs0523_322_repro_wrapper._run_window",
+        lambda *_args, **_kwargs: {
+            "ledger": {"1tick": [], "2tick": [], "3tick": []},
+            "data_gaps": [],
+            "data_gap_count": 0,
+            "invalid_entry_bracket_count": 2,
+            "invalid_entry_bracket_gap_open_count": 1,
+            "invalid_entry_bracket_non_gap_open_count": 1,
+        },
+    )
+    result = run_declared_slices(
+        Path("slice-research"),
+        Path("slice-audit"),
+        data_root=tmp_path,
+        slice_id="mnq-2019-05-to-2024-06",
+    )
+    assert result["invalid_entry_bracket_gap_open_count"] == 1
+    assert result["invalid_entry_bracket_non_gap_open_count"] == 1
+    event = _slice_events(ledger)[-1]
+    assert event["invalid_entry_bracket_gap_open_count"] == 1
+    assert event["invalid_entry_bracket_non_gap_open_count"] == 1
+    assert slice_research.is_dir() and slice_audit.is_dir()
+
+
+def test_reproduction_window_run_does_not_remove_holiday_closures(monkeypatch, tmp_path):
+    monkeypatch.setenv("MAX_CONTRACTS_HARD_CAP", "1")
+    closures = [
+        {"date": "2024-07-04", "kind": "closed"},
+        {"date": "2024-11-29", "kind": "early_close"},
+    ]
+    monkeypatch.setattr(
+        "research.afs0523_322_repro_wrapper.data_gap_dates_from_trees",
+        lambda *_args, **_kwargs: {
+            "data_gaps": [
+                {"date": "2025-01-09", "status": "DATA_GAP", "scored": False},
+                {"date": "2025-11-28", "status": "DATA_GAP", "scored": False},
+            ],
+            "data_gap_count": 2,
+            "expected_holiday_closures": closures,
+            "early_close_sessions": [],
+        },
+    )
+    seen = {}
+
+    def _parity(_research, _audit, start, end, _expected, gap_dates):
+        seen["window"] = (start, end)
+        seen["gap_dates"] = set(gap_dates)
+        return [], {}, [], []
+
+    monkeypatch.setattr("research.afs0523_322_repro_wrapper._parity", _parity)
+    result = _run_window(
+        tmp_path / "research",
+        tmp_path / "audit",
+        start=REPRO_START,
+        end=REPRO_END,
+        expected_count=None,
+    )
+    assert seen["window"] == (REPRO_START, REPRO_END)
+    assert result["holiday_closed_unscored"] == []
+    assert result["holiday_closed_unscored_count"] == 0
+    assert seen["gap_dates"] == {"2025-01-09", "2025-11-28"}
+
+
+def test_reproduction_window_keeps_recorded_gaps_and_derives_34_from_recorded_comparisons():
+    """34 is recorded comparisons divided by 9 (306/9). This test does not detect candidates."""
     from research.databento_322_bar_adapter import cme_equity_index_session
 
     artifact = json.loads(
@@ -2345,13 +2539,14 @@ def test_reproduction_window_keeps_recorded_gaps_and_computes_candidate_count():
     assert artifact["pass"] is True
     assert artifact["data_gap_count"] == 2
     assert [row["date"] for row in artifact["data_gaps"]] == ["2025-01-09", "2025-11-28"]
-    assert artifact["comparisons"] == OUTCOME_RECORD_COUNT
+    assert artifact["comparisons"] == 306 == OUTCOME_RECORD_COUNT
     assert artifact["outcome_records"] == OUTCOME_RECORD_COUNT
     cells_per_candidate = OUTCOME_RECORD_COUNT // REPRO_EXPECTED_COUNT
+    assert cells_per_candidate == 9
     assert OUTCOME_RECORD_COUNT % REPRO_EXPECTED_COUNT == 0
     candidate_count = artifact["comparisons"] // cells_per_candidate
     assert artifact["comparisons"] % cells_per_candidate == 0
-    assert candidate_count == REPRO_EXPECTED_COUNT == 34
+    assert candidate_count == artifact["comparisons"] // 9 == REPRO_EXPECTED_COUNT == 34
     closures = []
     day = REPRO_START
     while day <= REPRO_END:
@@ -2384,6 +2579,41 @@ def test_reproduction_window_keeps_recorded_gaps_and_computes_candidate_count():
     assert set(closed) <= slice_unscored
     gap_dates = {row["date"] for row in artifact["data_gaps"]}
     assert set(early).isdisjoint(slice_unscored - gap_dates)
+
+
+def test_recorded_replay_stays_34_candidates_with_zero_strict_bracket_drops():
+    """The committed replay is not re-detected. 306 comparisons and 0 mismatches stay."""
+    evidence = ROOT / "docs/research-evidence/T-2026-11-10-prereg-322-afs0523-oos-structural-2026-11-10-01"
+    artifact = json.loads((evidence / "reproduction-gate.json").read_text(encoding="utf-8"))
+    replay_path = evidence / "reproduction-replay-ledger.json"
+    replay_bytes = replay_path.read_bytes()
+    assert hashlib.sha256(replay_bytes).hexdigest() == artifact["replay_ledger_sha256"]
+    replay = json.loads(replay_bytes)
+    structural = compare_replay_structural(replay)
+    assert structural["comparisons"] == 306
+    assert structural["mismatches"] == []
+    assert artifact["invalid_entry_bracket_count"] == 0
+    assert artifact["invalid_entry_brackets"] == []
+    assert artifact["gap_open_count"] == 0
+    recorded = []
+    for row in replay["ledger"]["1tick"]:
+        assert row.get("gap_open") is not True
+        recorded.append(
+            {
+                "date": row["date"],
+                "direction": row["direction"],
+                "gap_open": False,
+                "entry_trigger": float(row["trigger"]),
+                "entry_price": float(row["trigger"]),
+                "stop": float(row["stop"]),
+                "target": float(row["target"]),
+            }
+        )
+    assert len(recorded) == artifact["comparisons"] // 9 == 34
+    kept, invalid = partition_invalid_gap_opens(recorded)
+    assert len(kept) == 34
+    assert invalid == []
+    assert SLICE_SCORING_AUTHORIZED is False
 
 
 def test_close_delta_day_fails_when_the_scored_close_is_not_the_pinned_databento_close():
