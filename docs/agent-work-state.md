@@ -1,6 +1,18 @@
 # Agent Work State
 
-## START HERE — 2026-11-11 slice scoring flip
+## CURRENT CHECKPOINT — 2026-11-11, after merged #1285 (repository source only)
+
+**Source checked:** GitHub `main` `1f55786e2f1b6fdccaa5f2e7260da51889fdbbc7`. This updates the navigation checkpoint; it does **not** rewrite the frozen preregistration, append to the research trial ledger, verify a live trial run, or authorize scoring, merge, deployment, or trading.
+
+| Lane | Current source evidence / next gate |
+|---|---|
+| 3-2-2 research | **#1280 merged:** scoring flip and evaluator stamping are in source. **#1285 merged:** the slice-2 clean check permits only trial-owned untracked slice artifacts and append-only ledger changes. The committed `docs/research-trial-ledger.jsonl` contains `PLANNED` for `T-2026-11-11-prereg-322-afs0523-slice-success-2026-11-11-01`, **no committed `SLICE` result events** for that trial. This does not establish whether a separate local checkout was run; inspect trial-specific runtime artifacts and exact provenance before making any outcome claim. The [Strategy Inventory](strategy-rules/Strategy_Inventory.md) and frozen preregistration remain authoritative. |
+| Inventory / docs | **#1279 remains OPEN / UNMERGED** and covers broad Strategy Inventory, fill-model, and options-status reconciliation from an older source base. Review/rebase that exact diff independently; do not duplicate its inventory changes here. |
+| Operations / recovery | **#1286** documents the checksum-verified off-server SQLite copy and **NO DELETE** gate (independent review pending). **#1281/#1282** remain draft-only Discord changes; **#1241** remains release-integrity HOLD. See [operator TODO](futures-operator-todo.md) and [dated recovery record](ops/options-scanner-sqlite-backup-2026-11-11.md) on the #1286-dependent docs branch. |
+
+**NEXT:** Review #1286 on its exact head first; then review this dependent documentation checkpoint. Separately review #1279 for Inventory corrections and #1281/#1282 for Discord. Do **not** treat source merge, docs CI, a green result, or an old checkpoint as VPS execution or historical-scoring proof.
+
+## Previous — 2026-11-11 slice scoring flip (historical source-only checkpoint)
 
 Evidence only. No slice was scored. Do not merge, deploy, or change execution from this note.
 
