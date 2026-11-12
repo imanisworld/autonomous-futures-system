@@ -14,6 +14,16 @@ Evidence only. No slice was scored. Do not merge, deploy, or change execution fr
 | **Tests** | `python3 -B -m pytest -q`: 9275 passed, 8 skipped. |
 | **NEXT** | Independent review. Do not score a real slice from this checkpoint. |
 
+## OPS CHECKPOINT — 2026-11-11 SQLite backup / storage (read-only VPS; copy verified on encrypted Mac)
+
+**Verdict: BACKUP COPY VERIFIED / VPS SNAPSHOT DELETION HOLD.** This is an operations checkpoint only; it does not change the current 3-2-2 trial, score authorization, trading status, or release-integrity gate. Detailed evidence and recovery prerequisites: [options scanner SQLite backup verification](ops/options-scanner-sqlite-backup-2026-11-11.md).
+
+- **Verified:** VPS `df` showed about **1.55 GiB available** (96% `df` utilization). Four same-disk scanner snapshots total approximately **7.38 GiB**. The 2026-11-11 snapshot (2,069,614,592 bytes) was copied to a FileVault-enabled Mac at `~/AFS-Backups/options_scanner.2026-11-11.sqlite` with owner-only file permissions. Source and destination SHA-256 matched, and Mac read-only SQLite `quick_check(1)` and full `integrity_check` both returned `ok` (9 schema tables). The VPS source remained unchanged.
+- **Unverified:** Completed Time Machine backup (only inclusion is verified); Hetzner-managed backups/snapshots; full application restore/recovery; formal snapshot retention approval; off-server copies of older snapshots or raw evidence. The VPS SQLite integrity attempts timed out; the Mac copy passed.
+- **HOLD:** Do **not** delete/move/rotate VPS SQLite snapshots, the live database, the 7.31-GiB options-122 source evidence, or referenced releases. Three older scanner snapshots represent about **5.45 GiB potential** recovery, **not authorized reclaim**. No cleanup, service restart, collector change, deployment, or broker action is authorized by this record.
+- **NEXT:** Confirm provider-backup coverage, required restore points/retention, and a non-production application-level recovery test; obtain a separate explicit operator decision for any narrow cleanup. No repeat full-server inventory without changed evidence.
+
+
 ## Previous — 2026-11-11 slice-success evaluator
 
 Evidence only. No slice was scored. `SLICE_SCORING_AUTHORIZED` stays false. Do not merge, deploy, or change execution from this note.

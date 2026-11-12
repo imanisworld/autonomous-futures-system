@@ -1,5 +1,16 @@
 # Futures Operator TODO
 
+## CURRENT OPS PRIORITY — 2026-11-11 storage recovery HOLD
+
+- [x] **Read-only capacity/source census:** VPS had approximately **1.55 GiB available** at 96% `df` utilization; the options scanner SQLite database was approximately 1.93 GiB, 4 same-disk snapshots totaled approximately 7.38 GiB, options-122 source-trade JSONL evidence approximately 7.31 GiB, and 21 release directories contained approximately 3.32 GiB of files. Do not presume those are redundant.
+- [x] **One off-server snapshot copy and integrity check:** `options_scanner.2026-11-11.sqlite` copied to FileVault Mac `~/AFS-Backups/`; exact source/destination byte count and SHA-256 match; `PRAGMA quick_check(1)` and full `integrity_check` on Mac returned `ok`. Mac file permissions owner-only.
+- [ ] **Verify recovery coverage:** Check Hetzner backup/snapshot entitlement and latest successful recoverable point, confirm Time Machine actually completed a backup (file inclusion alone is not proof), and perform/record a non-production application-level restore.
+- [ ] **Set retention before deletion:** Establish minimum older restore points, source-evidence retention and any independent backup requirements. Three older scanner snapshots (Nov 8/9/10 filenames) have approximately **5.45 GiB potential** reclaim; the Nov 8 file's mtime is Nov 6, so verify provenance before classifying it.
+- [ ] **Separate operator cleanup GO:** If all gates pass, approve an exact file allowlist, evidence/checksums, rollback, and post-cleanup free-space verification. Until then **NO DELETE**, no code/release/collector changes, and no live/broker action.
+- [ ] **Keep other infrastructure lanes separate:** Discord #1281/#1282 independent review, weekly-report delivery, options-122 canonical binding evidence gap, and #1241 release integrity remain independent HOLD items. No deployment authorized.
+
+**Runbook / dated evidence:** [options scanner SQLite backup verification](ops/options-scanner-sqlite-backup-2026-11-11.md). This operations checkpoint does not amend strategy verdicts, current 3-2-2 scoring controls, or historical TODO statuses.
+
 ## Operator checklist — 2026-10-08 (completion requires operator verification)
 
 **Priority:** Resolve Grok's actual blockers first. Do not deploy merely to finish this checklist.
