@@ -23,6 +23,17 @@ This repository powers AFSVP futures/options research, paper/demo execution, evi
 - Existing reusable agent skills live under `.agents/skills/`.
 - Claude command equivalents live under `.claude/commands/`.
 
+## Review-ready gate (futures and options)
+
+This is a **workflow quality gate**, not permission to register a trial, score evidence, merge, deploy, activate a collector, or trade. Use the existing agent roles and authoritative state records; do not establish a competing review system.
+
+1. **Builder preflight before requesting independent review.** Cursor/implementer verifies the requested scope against the authoritative record, inspects the full diff, runs the relevant repo-specific audits/skills and targeted tests, and runs the full applicable test suite for code or research changes. Record exact commands, pass/fail counts, and environmental limitations. A failing check is a blocker, not a review-ready result. For documentation-only work, run the applicable documentation/governance checks and explicitly record why executable tests were not relevant.
+2. **Trial/preregistration checks happen before handoff.** Verify the trial identifier appears inside its preregistration file; where a new `PLANNED` event is required, ensure the matching append-only ledger line is in the **same PR** before final CI. Run the existing ledger/spec/governance tests (including `tests/test_research_trial_ledger.py` when relevant). Freeze pass/fail criteria **before** observing holdout/older-year outcomes. Never run scoring to check a draft's wording.
+3. **Exact-SHA CI before review-ready status.** Push the candidate; run/check GitHub CI against that exact head SHA, in addition to the builder's local checks. If CI has not finished, failed, or cannot run, mark the candidate `NOT REVIEW READY` with the specific blocker. Do not claim a check passed from a previous SHA. CI cannot run on an unpushed local commit.
+4. **Single-source reviewer handoff.** Send only the PR URL, exact head SHA, concise scope, verified local/CI results and known blockers. Reviewers read files and diffs directly from GitHub **at that exact SHA**; avoid copied attachments, stale text relays and ambiguous branch-head references. Do not forward secrets. Any amendment changes the SHA and invalidates the earlier exact-head approval and test claims as appropriate.
+5. **Batch ordinary review corrections.** Reviewer supplies one consolidated list of non-safety findings against the same SHA. Builder makes one bounded correction round, reruns affected local checks/full suite as applicable and fresh exact-head CI, then presents the new SHA for independent re-review. Immediately stop for safety, data-leakage, evidence-integrity, or permission defects rather than deferring them into a batch. Do not suppress disagreement or override a substantive review requirement to reduce the number of rounds.
+6. **Keep the existing authorization gates.** A green CI run and independent approval are necessary evidence, **not** operator permission. Research scoring, a new prospective epoch, any release/collector deployment, broker path, or live trading still requires its own explicit authorization and verified prerequisites.
+
 
 ## Resume / duplicate-work prevention
 
