@@ -17,7 +17,7 @@ Docs only. No code, config, ledger, or execution change. Do not deploy from this
 | **Trend R3** | #1253 merged (AFS-0487, AFS-0492). `VARIANTS_START` is None. NOT_ACTIVATED. The RESEARCH ONLY label is not classified by any AFS ruling. Design/holdout P&L UNVERIFIED. |
 | **Fill / risk / Tradovate** | Paper and replay default `entry_fill_model` is `market`. Tradovate IOC depends on a positive slippage tolerance; the live env is UNVERIFIED. `$150` daily loss scales by contracts. Order pin is required; read-only may use `accounts[0]` only when the pin is unset. |
 | **Options** | Status WAIT. #1283 exit-evidence spec merged `96c66e5c` (docs only, not implemented); Gate B is not started. #1250: empty or missing options journal is `NO_DATA`; a missing or garbled observer tool fails. Scanner default provider is `public`. Polygon access ended 2026-10-18 is operator-reported; the vendor account is UNVERIFIED. |
-| **Tests** | `python3 -B -m pytest -q`: 9302 passed, 8 skipped, 1 failed. The one failure is `tests/test_webhook.py:1560`, which still expects the old 3-2-2 inventory label PROMISING BUT UNPROVEN. It needs a one-line test update that is outside this docs-only PR; see the PR body. |
+| **Tests** | `python3 -B -m pytest -q`: 9303 passed, 8 skipped, 0 failed (this PR updates `tests/test_webhook.py:1560` to the OVERFIT inventory label per AFS-0678). |
 | **NEXT** | Claude review of the revised docs diff at the exact head. Do not merge #1262. Do not score. Do not deploy. |
 
 ## Previous — 2026-11-11 slice scoring flip, merged at 5381f038 (#1280)
