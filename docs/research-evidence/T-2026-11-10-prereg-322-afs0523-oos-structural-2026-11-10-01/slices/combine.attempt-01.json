@@ -1,0 +1,22 @@
+{
+  "overall": "FAIL",
+  "verdict": "OVERFIT",
+  "cells": [
+    "FAIL",
+    "WAIT_CI"
+  ],
+  "evaluator_sha256": "68a5f01326135fbd7bf0420d50337726580f074b9de11d26f058838affb0e07e",
+  "unsafe_account": true,
+  "inputs": {
+    "nq-2010-06-to-2019-05": {
+      "slice_artifact": "docs/research-evidence/T-2026-11-10-prereg-322-afs0523-oos-structural-2026-11-10-01/slices/nq-2010-06-to-2019-05.attempt-01.json",
+      "slice_artifact_sha256": "8872f2fa94aef99fd47fb27689083a9845dd79332bc0608b7b2f9b225ebf4884",
+      "evaluator_sha256": "68a5f01326135fbd7bf0420d50337726580f074b9de11d26f058838affb0e07e"
+    },
+    "mnq-2019-05-to-2024-06": {
+      "slice_artifact": "docs/research-evidence/T-2026-11-10-prereg-322-afs0523-oos-structural-2026-11-10-01/slices/mnq-2019-05-to-2024-06.attempt-01.json",
+      "slice_artifact_sha256": "ba5739d0ea0d03a33b33b2ba816a304421f986aec619fe3339ca2b3225d9f315",
+      "evaluator_sha256": "68a5f01326135fbd7bf0420d50337726580f074b9de11d26f058838affb0e07e"
+    }
+  }
+}
