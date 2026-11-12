@@ -20,6 +20,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from ops.release_integrity import (
+    SCANNER_FINGERPRINT_PIN_ENV,
+    enforce_release_integrity,
+)
+
+# Verify before importing scanner modules or creating scheduler/storage objects.
+# With RELEASE_INTEGRITY_ENFORCED=true, a missing scanner-specific fingerprint
+# refuses startup; the futures service fingerprint is never a substitute.
+enforce_release_integrity(fingerprint_pin_env=SCANNER_FINGERPRINT_PIN_ENV)
+
 import uvicorn
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, HTTPException, Request
