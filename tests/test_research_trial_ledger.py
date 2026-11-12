@@ -30,6 +30,7 @@ EVENTS = {
     "UNREGISTERED_ATTEMPT",
     "GATE",
     "GATE_REVIEW",
+    "SLICE",
 }
 FIRST_EVENTS = {"PLANNED", "ADOPTED", "UNREGISTERED_ATTEMPT"}
 TERMINAL_EVENTS = {"COMPLETED", "ABORTED", "SUPERSEDED", "UNREGISTERED_ATTEMPT"}
@@ -50,6 +51,14 @@ SHA40_RE = re.compile(r"^[0-9a-f]{40}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 REPLAY_LEDGER_RE = re.compile(r"^reproduction-replay-ledger(?:\.attempt-\d{2,})?\.json$")
 RUN_PROVENANCE = frozenset({"gate_run.log", "run_gate.py", "sha256sums.txt"})
+SLICES_DIRNAME = "slices"
+SLICE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+COMBINE_NAME_RE = re.compile(r"^combine\.attempt-(\d{2,})\.json$")
+# Exact result_artifact a COMPLETED line may use to cite a parent trial's combine file.
+COMBINE_RESULT_RE = re.compile(
+    r"^docs/research-evidence/(T-\d{4}-\d{2}-\d{2}-[a-z0-9][a-z0-9-]*-\d{2})"
+    r"/slices/combine\.attempt-\d{2,}\.json$"
+)
 
 REQUIRED = {
     "trial_id",
@@ -164,6 +173,189 @@ def _read_trial_id_from_artifact(path: Path) -> str:
     return comment.group(1)
 
 
+def _is_clean_rel(value: object) -> bool:
+    """A normalized, repo-relative POSIX path with no traversal segments."""
+    if not isinstance(value, str) or not value or "\\" in value or "\x00" in value:
+        return False
+    if value.startswith("/"):
+        return False
+    parts = value.split("/")
+    if any(part in {"", ".", ".."} for part in parts):
+        return False
+    return PurePosixPath(value).as_posix() == value
+
+
+def _slices_prefix(trial_id: str) -> str:
+    return f"{EVIDENCE_PREFIX}{trial_id}/{SLICES_DIRNAME}/"
+
+
+def _assert_slice_product(
+    row: dict,
+    lineno: int,
+    path_key: str,
+    sha_key: str,
+    name_re: re.Pattern[str],
+    root: Path,
+) -> str | None:
+    """Check one (path, sha256) pair on a SLICE line. Returns the attempt label or None."""
+    rel = row.get(path_key)
+    digest = row.get(sha_key)
+    if rel is None and digest is None:
+        return None
+    where = f"line {lineno}: {row['trial_id']}: SLICE {path_key}"
+    assert _is_clean_rel(rel), f"{where} must be a clean repo-relative path"
+    prefix = _slices_prefix(row["trial_id"])
+    assert rel.startswith(prefix), f"{where} must live under {prefix}"
+    name = rel[len(prefix):]
+    match = name_re.fullmatch(name)
+    assert match, f"{where} name {name!r} does not match slice_id {row['slice_id']!r}"
+    assert isinstance(digest, str) and SHA256_RE.fullmatch(digest), f"{where} needs a sha256"
+    target = root / rel
+    assert target.is_file(), f"{where} file is missing"
+    assert hashlib.sha256(target.read_bytes()).hexdigest() == digest, (
+        f"{where} bytes do not match the recorded sha256"
+    )
+    return match.group(1)
+
+
+def _assert_slice_row(row: dict, lineno: int, root: Path = ROOT) -> None:
+    """Strict checks for a SLICE line written by the slice scoring wrapper.
+
+    A scoring failure may leave null products, but then it must carry an error.
+    """
+    assert row.get("event") == "SLICE"
+    where = f"line {lineno}: {row['trial_id']}: SLICE"
+    slice_id = row.get("slice_id")
+    assert isinstance(slice_id, str) and SLICE_ID_RE.fullmatch(slice_id), f"{where} bad slice_id"
+    assert SHA40_RE.fullmatch(row.get("git_head") or ""), f"{where} git_head must be 40 hex"
+    assert SHA256_RE.fullmatch(row.get("evaluator_sha256") or ""), (
+        f"{where} evaluator_sha256 must be sha256 hex"
+    )
+    escaped = re.escape(slice_id)
+    artifact_attempt = _assert_slice_product(
+        row,
+        lineno,
+        "slice_artifact",
+        "slice_artifact_sha256",
+        re.compile(rf"^{escaped}\.attempt-(\d{{2,}})\.json$"),
+        root,
+    )
+    replay_attempt = _assert_slice_product(
+        row,
+        lineno,
+        "replay_ledger",
+        "replay_ledger_sha256",
+        re.compile(rf"^{escaped}\.replay-ledger\.attempt-(\d{{2,}})\.json$"),
+        root,
+    )
+    error = row.get("error")
+    if error is None:
+        assert artifact_attempt is not None and replay_attempt is not None, (
+            f"{where} without an error needs both the slice artifact and the replay ledger"
+        )
+    else:
+        assert isinstance(error, str) and error.strip(), f"{where} error must be a non-empty string"
+    if artifact_attempt is not None and replay_attempt is not None:
+        assert artifact_attempt == replay_attempt, f"{where} artifact and replay attempts differ"
+
+
+def _assert_terminal_artifact_location(row: dict, known_trials: set[str]) -> None:
+    """A terminal result lives under its own trial folder.
+
+    The one exception is a COMPLETED line whose parent_trial owns the combine file
+    ``<parent>/slices/combine.attempt-NN.json``; that line must pin the file's sha256.
+    """
+    trial_id = row["trial_id"]
+    artifact = row.get("result_artifact")
+    assert isinstance(artifact, str), f"{trial_id}: result_artifact must be a string"
+    assert _is_clean_rel(artifact), f"{trial_id}: result_artifact must be a clean repo-relative path"
+    own_prefix = f"{EVIDENCE_PREFIX}{trial_id}/"
+    if artifact.startswith(own_prefix):
+        return
+    parent = row.get("parent_trial")
+    assert row["event"] == "COMPLETED" and parent is not None, (
+        f"{trial_id}: terminal result artifact must live under {own_prefix}"
+    )
+    assert isinstance(parent, str) and TRIAL_RE.fullmatch(parent), f"{trial_id}: bad parent_trial"
+    assert parent != trial_id and parent in known_trials, f"{trial_id}: parent_trial is not a known other trial"
+    match = COMBINE_RESULT_RE.fullmatch(artifact)
+    assert match and match.group(1) == parent, (
+        f"{trial_id}: a result outside {own_prefix} must be {EVIDENCE_PREFIX}{parent}/slices/combine.attempt-NN.json"
+    )
+    assert SHA256_RE.fullmatch(row.get("result_artifact_sha256") or ""), (
+        f"{trial_id}: a parent combine result must pin result_artifact_sha256"
+    )
+
+
+def _assert_slices_file_registered(rel: str, trial_id: str, rows: list[dict], root: Path) -> dict | None:
+    """Admit one tracked file under <trial>/slices/ only when its bytes are pinned.
+
+    Slice artifacts and replay ledgers are pinned by a SLICE line of that trial.
+    ``combine.attempt-NN.json`` is pinned by a COMPLETED line of a trial whose
+    parent_trial is this folder's trial; that COMPLETED row is returned.
+    """
+    assert _is_clean_rel(rel), f"{rel}: not a clean repo-relative path"
+    name = PurePosixPath(rel).name
+    digest = hashlib.sha256((root / rel).read_bytes()).hexdigest()
+    folder_slices = [r for r in rows if r["trial_id"] == trial_id and r["event"] == "SLICE"]
+
+    if COMBINE_NAME_RE.fullmatch(name):
+        known = {r["trial_id"] for r in rows}
+        pins = [
+            r
+            for r in rows
+            if r["event"] == "COMPLETED"
+            and r["trial_id"] != trial_id
+            and r.get("parent_trial") == trial_id
+            and r.get("result_artifact") == rel
+            and r.get("result_artifact_sha256") == digest
+        ]
+        assert len(pins) == 1, (
+            f"{rel}: combine file needs exactly one COMPLETED line of a child trial pinning its sha256"
+        )
+        _assert_terminal_artifact_location(pins[0], known)
+        combine = json.loads((root / rel).read_bytes())
+        assert isinstance(combine, dict), f"{rel}: combine artifact must be an object"
+        inputs = combine.get("inputs")
+        assert isinstance(inputs, dict) and inputs, f"{rel}: combine artifact needs inputs"
+        for slice_id, item in inputs.items():
+            pinned = [
+                r
+                for r in folder_slices
+                if r.get("slice_id") == slice_id
+                and r.get("slice_artifact") == item.get("slice_artifact")
+                and r.get("slice_artifact_sha256") == item.get("slice_artifact_sha256")
+                and r.get("evaluator_sha256") == item.get("evaluator_sha256")
+            ]
+            assert len(pinned) == 1, f"{rel}: input {slice_id} is not pinned by exactly one SLICE line"
+        return pins[0]
+
+    pinned = [
+        r
+        for r in folder_slices
+        if (r.get("slice_artifact") == rel and r.get("slice_artifact_sha256") == digest)
+        or (r.get("replay_ledger") == rel and r.get("replay_ledger_sha256") == digest)
+    ]
+    assert len(pinned) == 1, f"{rel}: slices/ file is not pinned by exactly one SLICE line with its sha256"
+    return None
+
+
+def _assert_planned_before_artifact(rel: str, trial_id: str, first: dict[str, dict], artifact_commit: str) -> None:
+    first_event = first[trial_id]["event"]
+    assert first_event in {"PLANNED", "ADOPTED"}
+    if first_event == "PLANNED":
+        ledger_commit = _first_trial_commit(trial_id)
+        prereg_commit = _first_add_commit(first[trial_id]["prereg_path"])
+        assert ledger_commit != artifact_commit and _is_ancestor(ledger_commit, artifact_commit), (
+            f"{rel}: PLANNED line must be committed strictly before the artifact"
+        )
+        assert prereg_commit != artifact_commit and _is_ancestor(prereg_commit, artifact_commit), (
+            f"{rel}: prereg must be committed strictly before the artifact"
+        )
+        prereg_text = (ROOT / first[trial_id]["prereg_path"]).read_text(encoding="utf-8")
+        assert trial_id in prereg_text, f"{trial_id}: prereg must cite its trial_id"
+
+
 def test_trial_ledger_schema_and_family_counts() -> None:
     rows = _rows()
     first_by_trial: dict[str, dict] = {}
@@ -233,6 +425,9 @@ def test_trial_ledger_schema_and_family_counts() -> None:
                 assert row.get(key) == first.get(key), (
                     f"line {lineno}: {trial_id}: frozen field {key!r} differs from the first line"
                 )
+
+        if event == "SLICE":
+            _assert_slice_row(row, lineno)
 
         if event == "GATE_REVIEW":
             assert SHA256_RE.fullmatch(row.get("gate_artifact_sha256") or ""), (
@@ -479,6 +674,14 @@ def test_canonical_research_evidence_is_registered_before_counting() -> None:
             assert digest in cited, f"{rel}: bar evidence sha256 is not cited in agent-work-state"
             continue
 
+        if len(path.parts) == 5 and path.parts[3] == SLICES_DIRNAME:
+            child = _assert_slices_file_registered(rel, trial_id, rows, ROOT)
+            if child is not None:
+                _assert_planned_before_artifact(
+                    rel, child["trial_id"], first, _first_add_commit(rel)
+                )
+            continue
+
         matching = [
             row
             for row in by_trial[trial_id]
@@ -512,30 +715,13 @@ def test_canonical_research_evidence_is_registered_before_counting() -> None:
         # exist on main, so a stored SHA could never match here.
         artifact_commit = _first_add_commit(rel)
 
-        first_event = first[trial_id]["event"]
         if terminal["event"] == "COMPLETED":
-            assert first_event in {"PLANNED", "ADOPTED"}
-            if first_event == "PLANNED":
-                ledger_commit = _first_trial_commit(trial_id)
-                prereg_commit = _first_add_commit(first[trial_id]["prereg_path"])
-                assert ledger_commit != artifact_commit and _is_ancestor(ledger_commit, artifact_commit), (
-                    f"{rel}: PLANNED line must be committed strictly before the artifact"
-                )
-                assert prereg_commit != artifact_commit and _is_ancestor(prereg_commit, artifact_commit), (
-                    f"{rel}: prereg must be committed strictly before the artifact"
-                )
-                prereg_text = (ROOT / first[trial_id]["prereg_path"]).read_text(encoding="utf-8")
-                assert trial_id in prereg_text, f"{trial_id}: prereg must cite its trial_id"
+            _assert_planned_before_artifact(rel, trial_id, first, artifact_commit)
 
     for row in rows:
         if row["event"] not in {"COMPLETED", "UNREGISTERED_ATTEMPT"}:
             continue
-        artifact = row.get("result_artifact")
-        assert isinstance(artifact, str)
-        expected_prefix = f"{EVIDENCE_PREFIX}{row['trial_id']}/"
-        assert artifact.startswith(expected_prefix), (
-            f"{row['trial_id']}: terminal result artifact must live under {expected_prefix}"
-        )
+        _assert_terminal_artifact_location(row, set(first))
 
 
 def test_new_preregs_after_ledger_start_are_linked_to_planned_trials() -> None:
@@ -656,3 +842,292 @@ def test_replay_ledger_hash_mismatch_is_rejected(tmp_path: Path) -> None:
     artifact["replay_ledger_sha256"] = wrong
     with pytest.raises(AssertionError, match="do not match"):
         _assert_replay_pin_matches_bytes(gate_rel, mismatched, artifact, tmp_path)
+
+
+# --- slice-event governance (SLICE lines, slices/ evidence, combine results) ---
+
+_PARENT = "T-2026-11-10-example-structural-01"
+_CHILD = "T-2026-11-11-example-slice-success-01"
+_EVALUATOR = "e" * 64
+_RUN_COMMIT = "a" * 40
+
+
+def _slice_fixture(root: Path) -> tuple[list[dict], dict[str, str]]:
+    """Write a two-slice parent trial plus its child COMPLETED line under ``root``."""
+    folder = f"{EVIDENCE_PREFIX}{_PARENT}/{SLICES_DIRNAME}"
+    (root / folder).mkdir(parents=True)
+    rows: list[dict] = [
+        {"trial_id": _PARENT, "event": "PLANNED"},
+        {"trial_id": _CHILD, "event": "PLANNED", "parent_trial": _PARENT},
+    ]
+    paths: dict[str, str] = {}
+    inputs: dict[str, dict] = {}
+    for slice_id in ("nq-example", "mnq-example"):
+        artifact = f"{folder}/{slice_id}.attempt-01.json"
+        replay = f"{folder}/{slice_id}.replay-ledger.attempt-01.json"
+        (root / artifact).write_bytes(f'{{"slice":"{slice_id}"}}\n'.encode())
+        (root / replay).write_bytes(f'{{"ledger":"{slice_id}"}}\n'.encode())
+        a_sha = hashlib.sha256((root / artifact).read_bytes()).hexdigest()
+        r_sha = hashlib.sha256((root / replay).read_bytes()).hexdigest()
+        rows.append(
+            {
+                "trial_id": _PARENT,
+                "event": "SLICE",
+                "slice_id": slice_id,
+                "slice_artifact": artifact,
+                "slice_artifact_sha256": a_sha,
+                "replay_ledger": replay,
+                "replay_ledger_sha256": r_sha,
+                "git_head": _RUN_COMMIT,
+                "evaluator_sha256": _EVALUATOR,
+                "error": None,
+            }
+        )
+        inputs[slice_id] = {
+            "slice_artifact": artifact,
+            "slice_artifact_sha256": a_sha,
+            "evaluator_sha256": _EVALUATOR,
+        }
+        paths[f"{slice_id}.artifact"] = artifact
+        paths[f"{slice_id}.replay"] = replay
+    combine = f"{folder}/combine.attempt-01.json"
+    (root / combine).write_bytes((json.dumps({"overall": "FAIL", "inputs": inputs}) + "\n").encode())
+    paths["combine"] = combine
+    rows.append(
+        {
+            "trial_id": _CHILD,
+            "event": "COMPLETED",
+            "parent_trial": _PARENT,
+            "disposition": "OVERFIT",
+            "result_artifact": combine,
+            "result_artifact_sha256": hashlib.sha256((root / combine).read_bytes()).hexdigest(),
+        }
+    )
+    return rows, paths
+
+
+def _check_all(rows: list[dict], paths: dict[str, str], root: Path) -> None:
+    known = {r["trial_id"] for r in rows}
+    for lineno, row in enumerate(rows, 1):
+        if row["event"] == "SLICE":
+            _assert_slice_row(row, lineno, root)
+        if row["event"] == "COMPLETED":
+            _assert_terminal_artifact_location(row, known)
+    for rel in paths.values():
+        _assert_slices_file_registered(rel, _PARENT, rows, root)
+
+
+def _slice_row(rows: list[dict], slice_id: str = "nq-example") -> dict:
+    return next(r for r in rows if r.get("slice_id") == slice_id)
+
+
+def test_slice_event_is_a_known_event() -> None:
+    assert "SLICE" in EVENTS
+    assert "SLICE" not in FIRST_EVENTS and "SLICE" not in TERMINAL_EVENTS
+
+
+def test_slice_fixture_passes_and_combine_is_admitted_only_via_child_completed(tmp_path: Path) -> None:
+    rows, paths = _slice_fixture(tmp_path)
+    _check_all(rows, paths, tmp_path)
+    child = _assert_slices_file_registered(paths["combine"], _PARENT, rows, tmp_path)
+    assert child is not None and child["trial_id"] == _CHILD
+    assert _assert_slices_file_registered(paths["nq-example.artifact"], _PARENT, rows, tmp_path) is None
+
+
+def test_unpinned_or_unknown_file_in_slices_is_rejected(tmp_path: Path) -> None:
+    rows, paths = _slice_fixture(tmp_path)
+    folder = f"{EVIDENCE_PREFIX}{_PARENT}/{SLICES_DIRNAME}"
+    stray = f"{folder}/nq-example.attempt-02.json"
+    (tmp_path / stray).write_bytes(b"{}\n")
+    with pytest.raises(AssertionError, match="not pinned by exactly one SLICE line"):
+        _assert_slices_file_registered(stray, _PARENT, rows, tmp_path)
+    notes = f"{folder}/notes.md"
+    (tmp_path / notes).write_bytes(b"hello\n")
+    with pytest.raises(AssertionError, match="not pinned by exactly one SLICE line"):
+        _assert_slices_file_registered(notes, _PARENT, rows, tmp_path)
+    # A stray combine file with no COMPLETED pin is rejected too.
+    stray_combine = f"{folder}/combine.attempt-02.json"
+    (tmp_path / stray_combine).write_bytes(b"{}\n")
+    with pytest.raises(AssertionError, match="needs exactly one COMPLETED"):
+        _assert_slices_file_registered(stray_combine, _PARENT, rows, tmp_path)
+    # A pin from the wrong trial's SLICE line does not admit the file.
+    wrong_trial = [dict(r, trial_id=_CHILD) if r["event"] == "SLICE" else r for r in rows]
+    with pytest.raises(AssertionError, match="not pinned by exactly one SLICE line"):
+        _assert_slices_file_registered(paths["nq-example.artifact"], _PARENT, wrong_trial, tmp_path)
+
+
+def test_sha256_mismatch_is_rejected(tmp_path: Path) -> None:
+    rows, paths = _slice_fixture(tmp_path)
+    (tmp_path / paths["nq-example.artifact"]).write_bytes(b'{"tampered":true}\n')
+    with pytest.raises(AssertionError, match="bytes do not match the recorded sha256"):
+        _assert_slice_row(_slice_row(rows), 1, tmp_path)
+    with pytest.raises(AssertionError, match="not pinned by exactly one SLICE line"):
+        _assert_slices_file_registered(paths["nq-example.artifact"], _PARENT, rows, tmp_path)
+
+    rows, paths = _slice_fixture(tmp_path / "combine")
+    root = tmp_path / "combine"
+    (root / paths["combine"]).write_bytes(b'{"overall":"PASS","inputs":{}}\n')
+    with pytest.raises(AssertionError, match="needs exactly one COMPLETED"):
+        _assert_slices_file_registered(paths["combine"], _PARENT, rows, root)
+
+    rows, paths = _slice_fixture(tmp_path / "replay")
+    root = tmp_path / "replay"
+    (root / paths["mnq-example.replay"]).write_bytes(b"{}\n")
+    with pytest.raises(AssertionError, match="bytes do not match the recorded sha256"):
+        _assert_slice_row(_slice_row(rows, "mnq-example"), 2, root)
+
+    rows, paths = _slice_fixture(tmp_path / "badhex")
+    root = tmp_path / "badhex"
+    _slice_row(rows)["slice_artifact_sha256"] = "XYZ"
+    with pytest.raises(AssertionError, match="needs a sha256"):
+        _assert_slice_row(_slice_row(rows), 1, root)
+
+
+def test_slice_line_must_point_inside_its_own_slices_folder(tmp_path: Path) -> None:
+    rows, paths = _slice_fixture(tmp_path)
+    row = _slice_row(rows)
+    good = row["slice_artifact"]
+    outside = (
+        f"{EVIDENCE_PREFIX}{_PARENT}/nq-example.attempt-01.json",
+        f"{EVIDENCE_PREFIX}{_CHILD}/{SLICES_DIRNAME}/nq-example.attempt-01.json",
+        f"{EVIDENCE_PREFIX}{_PARENT}/{SLICES_DIRNAME}/sub/nq-example.attempt-01.json",
+        f"{EVIDENCE_PREFIX}{_PARENT}/{SLICES_DIRNAME}/mnq-example.attempt-01.json",
+        "research/afs0523_322_slice_evaluator.py",
+        "/etc/passwd",
+    )
+    for bad in outside:
+        row["slice_artifact"] = bad
+        with pytest.raises(AssertionError):
+            _assert_slice_row(row, 1, tmp_path)
+    row["slice_artifact"] = good
+    _assert_slice_row(row, 1, tmp_path)
+    row["replay_ledger"] = f"{EVIDENCE_PREFIX}{_CHILD}/{SLICES_DIRNAME}/nq-example.replay-ledger.attempt-01.json"
+    with pytest.raises(AssertionError, match="must live under"):
+        _assert_slice_row(row, 1, tmp_path)
+
+
+def test_slice_line_field_strictness(tmp_path: Path) -> None:
+    rows, _ = _slice_fixture(tmp_path)
+    row = _slice_row(rows)
+    for key, bad, match in (
+        ("git_head", "abc123", "git_head must be 40 hex"),
+        ("git_head", None, "git_head must be 40 hex"),
+        ("git_head", "A" * 40, "git_head must be 40 hex"),
+        ("evaluator_sha256", "abc", "evaluator_sha256"),
+        ("evaluator_sha256", None, "evaluator_sha256"),
+        ("slice_id", "Bad Id", "bad slice_id"),
+        ("error", "", "non-empty string"),
+    ):
+        mutated = dict(row, **{key: bad})
+        with pytest.raises(AssertionError, match=match):
+            _assert_slice_row(mutated, 1, tmp_path)
+    # Null products without an error are never accepted; with an error they are (crash path).
+    empty = dict(
+        row,
+        slice_artifact=None,
+        slice_artifact_sha256=None,
+        replay_ledger=None,
+        replay_ledger_sha256=None,
+    )
+    with pytest.raises(AssertionError, match="without an error"):
+        _assert_slice_row(empty, 1, tmp_path)
+    _assert_slice_row(dict(empty, error="RuntimeError: boom"), 1, tmp_path)
+    # A path without its sha256 (or the reverse) is rejected.
+    with pytest.raises(AssertionError):
+        _assert_slice_row(dict(row, replay_ledger_sha256=None), 1, tmp_path)
+    # Mismatched attempts between artifact and replay ledger are rejected.
+    folder = f"{EVIDENCE_PREFIX}{_PARENT}/{SLICES_DIRNAME}"
+    other = f"{folder}/nq-example.replay-ledger.attempt-02.json"
+    (tmp_path / other).write_bytes(b"{}\n")
+    skewed = dict(
+        row,
+        replay_ledger=other,
+        replay_ledger_sha256=hashlib.sha256(b"{}\n").hexdigest(),
+    )
+    with pytest.raises(AssertionError, match="attempts differ"):
+        _assert_slice_row(skewed, 1, tmp_path)
+
+
+def test_combine_result_requires_parent_trial_and_exact_pattern(tmp_path: Path) -> None:
+    rows, paths = _slice_fixture(tmp_path)
+    known = {r["trial_id"] for r in rows}
+    done = next(r for r in rows if r["event"] == "COMPLETED")
+
+    no_parent = {k: v for k, v in done.items() if k != "parent_trial"}
+    with pytest.raises(AssertionError, match="must live under"):
+        _assert_terminal_artifact_location(no_parent, known)
+    with pytest.raises(AssertionError, match="must live under"):
+        _assert_terminal_artifact_location(dict(done, parent_trial=None), known)
+    # The combine file is not admitted when the child line has no parent_trial.
+    unlinked = [r if r is not done else no_parent for r in rows]
+    with pytest.raises(AssertionError, match="needs exactly one COMPLETED"):
+        _assert_slices_file_registered(paths["combine"], _PARENT, unlinked, tmp_path)
+    # parent_trial may only widen COMPLETED, never other terminal events.
+    with pytest.raises(AssertionError, match="must live under"):
+        _assert_terminal_artifact_location(dict(done, event="ABORTED"), known)
+    # Parent must be another known trial and must be the folder owner.
+    with pytest.raises(AssertionError, match="not a known other trial"):
+        _assert_terminal_artifact_location(dict(done, parent_trial=_CHILD), known)
+    with pytest.raises(AssertionError, match="not a known other trial"):
+        _assert_terminal_artifact_location(dict(done, parent_trial="T-2026-01-01-unknown-01"), known)
+    other_parent = "T-2026-11-09-example-other-01"
+    with pytest.raises(AssertionError, match="slices/combine"):
+        _assert_terminal_artifact_location(dict(done, parent_trial=other_parent), known | {other_parent})
+    # Only the combine file qualifies, not slice artifacts or arbitrary files.
+    for bad in (
+        paths["nq-example.artifact"],
+        f"{EVIDENCE_PREFIX}{_PARENT}/result.json",
+        f"{EVIDENCE_PREFIX}{_PARENT}/{SLICES_DIRNAME}/combine.attempt-1.json",
+        f"{EVIDENCE_PREFIX}{_PARENT}/{SLICES_DIRNAME}/sub/combine.attempt-01.json",
+        f"{EVIDENCE_PREFIX}{_PARENT}/{SLICES_DIRNAME}/combine.attempt-01.json.bak",
+    ):
+        with pytest.raises(AssertionError, match="slices/combine"):
+            _assert_terminal_artifact_location(dict(done, result_artifact=bad), known)
+    # The pointing line must pin the sha256.
+    with pytest.raises(AssertionError, match="pin result_artifact_sha256"):
+        _assert_terminal_artifact_location(dict(done, result_artifact_sha256=None), known)
+    # A pin with the wrong digest does not admit the file.
+    wrong = [r if r is not done else dict(done, result_artifact_sha256="0" * 64) for r in rows]
+    with pytest.raises(AssertionError, match="needs exactly one COMPLETED"):
+        _assert_slices_file_registered(paths["combine"], _PARENT, wrong, tmp_path)
+    # Combine inputs must be pinned by SLICE lines of the folder trial.
+    unpinned = [r for r in rows if r.get("slice_id") != "mnq-example"]
+    with pytest.raises(AssertionError, match="not pinned by exactly one SLICE line"):
+        _assert_slices_file_registered(paths["combine"], _PARENT, unpinned, tmp_path)
+    # Existing rule is unchanged: a trial with no parent keeps to its own folder.
+    own = {"trial_id": _PARENT, "event": "COMPLETED", "result_artifact": f"{EVIDENCE_PREFIX}{_PARENT}/result.json"}
+    _assert_terminal_artifact_location(own, known)
+    with pytest.raises(AssertionError, match="must live under"):
+        _assert_terminal_artifact_location(dict(own, result_artifact=f"{EVIDENCE_PREFIX}{_CHILD}/result.json"), known)
+
+
+def test_path_traversal_is_rejected_everywhere(tmp_path: Path) -> None:
+    rows, paths = _slice_fixture(tmp_path)
+    known = {r["trial_id"] for r in rows}
+    done = next(r for r in rows if r["event"] == "COMPLETED")
+    folder = f"{EVIDENCE_PREFIX}{_PARENT}/{SLICES_DIRNAME}"
+    traversals = (
+        f"{EVIDENCE_PREFIX}{_PARENT}/{SLICES_DIRNAME}/../{SLICES_DIRNAME}/combine.attempt-01.json",
+        f"{EVIDENCE_PREFIX}{_CHILD}/../{_PARENT}/{SLICES_DIRNAME}/combine.attempt-01.json",
+        f"{folder}/../../../research/x.py",
+        f"{folder}//combine.attempt-01.json",
+        f"{folder}/./combine.attempt-01.json",
+        f"{folder}\\combine.attempt-01.json",
+    )
+    for bad in traversals:
+        with pytest.raises(AssertionError):
+            _assert_terminal_artifact_location(dict(done, result_artifact=bad), known)
+    own = f"{EVIDENCE_PREFIX}{_PARENT}/../{_CHILD}/result.json"
+    with pytest.raises(AssertionError, match="clean repo-relative"):
+        _assert_terminal_artifact_location(
+            {"trial_id": _PARENT, "event": "COMPLETED", "result_artifact": own}, known
+        )
+    row = _slice_row(rows)
+    for bad in (
+        f"{folder}/../{SLICES_DIRNAME}/nq-example.attempt-01.json",
+        f"{folder}/../../{_PARENT}/{SLICES_DIRNAME}/nq-example.attempt-01.json",
+    ):
+        with pytest.raises(AssertionError, match="clean repo-relative"):
+            _assert_slice_row(dict(row, slice_artifact=bad), 1, tmp_path)
+    with pytest.raises(AssertionError, match="clean repo-relative"):
+        _assert_slices_file_registered(f"{folder}/../{SLICES_DIRNAME}/combine.attempt-01.json", _PARENT, rows, tmp_path)
