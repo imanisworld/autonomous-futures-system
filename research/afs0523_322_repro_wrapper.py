@@ -1780,8 +1780,74 @@ def record_gate_review(pr_head_sha: str) -> dict:
     return event
 
 
+def _repo_rel_posix(repo: Path, path: Path) -> str | None:
+    """``path`` relative to ``repo`` in git's form, or None when it is outside."""
+    try:
+        return path.resolve().relative_to(repo.resolve()).as_posix()
+    except (OSError, ValueError):
+        return None
+
+
+def _ledger_is_append_only(repo: Path, ledger_rel: str) -> bool:
+    """True when the committed ledger is a byte prefix of the working ledger.
+
+    The committed bytes must end at a line boundary, so appending cannot
+    change the last committed line.
+    """
+    try:
+        committed = subprocess.run(
+            ["git", "-C", str(repo), "show", f"HEAD:{ledger_rel}"],
+            check=True,
+            capture_output=True,
+        ).stdout
+        working = (repo / ledger_rel).read_bytes()
+    except (OSError, subprocess.CalledProcessError):
+        return False
+    if committed and not committed.endswith(b"\n"):
+        return False
+    return len(working) > len(committed) and working.startswith(committed)
+
+
+def _status_is_admissible(repo: Path, status: str) -> bool:
+    """Whether ``git status --porcelain -z`` output is clean apart from slice output.
+
+    Two things are allowed. One is a new untracked file under this trial's
+    ``slices/`` directory (``SLICE_ARTIFACT_DIR``). The other is the trial
+    ledger modified only by appending. Anything else refuses: a staged
+    change, a deletion, a rename, a modified tracked file (including one
+    under ``slices/``), any other untracked file, or an edited ledger line.
+    """
+    if status == "":
+        return True
+    slices_rel = _repo_rel_posix(repo, SLICE_ARTIFACT_DIR)
+    ledger_rel = _repo_rel_posix(repo, TRIAL_LEDGER)
+    for entry in status.split("\0"):
+        if entry == "":
+            continue
+        if len(entry) < 4 or entry[2] != " ":
+            return False
+        code, path = entry[:2], entry[3:]
+        if code == "??":
+            if slices_rel is None or not path.startswith(slices_rel + "/"):
+                return False
+            if ".." in path.split("/"):
+                return False
+            continue
+        if code == " M" and ledger_rel is not None and path == ledger_rel:
+            if not _ledger_is_append_only(repo, ledger_rel):
+                return False
+            continue
+        return False
+    return True
+
+
 def _git_head_and_clean(repo: Path) -> tuple[str, bool]:
-    """HEAD commit and whether ``git status`` is empty. Status text is not returned."""
+    """HEAD commit and whether the checkout is clean. Status text is not returned.
+
+    Clean means ``git status`` is empty except for what an earlier slice of
+    this trial writes: new untracked files under ``SLICE_ARTIFACT_DIR`` and
+    appended lines on ``TRIAL_LEDGER``. See ``_status_is_admissible``.
+    """
     try:
         head = subprocess.run(
             ["git", "-C", str(repo), "rev-parse", "HEAD"],
@@ -1790,14 +1856,14 @@ def _git_head_and_clean(repo: Path) -> tuple[str, bool]:
             text=True,
         ).stdout.strip()
         status = subprocess.run(
-            ["git", "-C", str(repo), "status", "--porcelain", "--untracked-files=all"],
+            ["git", "-C", str(repo), "status", "--porcelain", "-z", "--untracked-files=all"],
             check=True,
             capture_output=True,
             text=True,
         ).stdout
     except (OSError, subprocess.CalledProcessError) as exc:
         raise RuntimeError("refusing to score without a clean git checkout") from exc
-    return head, status == ""
+    return head, _status_is_admissible(repo, status)
 
 
 def _scoring_provenance() -> dict:
