@@ -11,7 +11,19 @@
 
 **Runbook / dated evidence:** [options scanner SQLite backup verification](ops/options-scanner-sqlite-backup-2026-11-11.md). This operations checkpoint does not amend strategy verdicts, current 3-2-2 scoring controls, or historical TODO statuses.
 
-## Operator checklist — 2026-10-08 (completion requires operator verification)
+### Other current operational blockers (no new workstream)
+
+| Issue | Verified state | Smallest safe next action |
+|---|---|---|
+| Discord notifications | #1281 watcher retry and #1282 decision queue are OPEN / DRAFT; exact-head CI passed, independent approval and server deployment unverified. Weekly-review Discord publication previously reported `False` on the VPS. | Independent review each draft; diagnose weekly report publication separately. No merge/installation/restart. |
+| Release integrity | #1241 OPEN / DRAFT; a deploy-eligibility blocker, not a green-light repair. | Independent source/box proof and release-integrity recovery before any separate deployment GO. |
+| Daily proof | Read-only 2026-11-11 VPS check: six-micro timer disabled; options-122 collector has 743 `armed` rows with 0 required canonical bindings; Track B check passed. | Reconcile intentional six-micro retirement vs missing canonical-binding evidence; keep failed proof visible, no fabricated PASS. |
+| Inventory reconciliation | #1279 OPEN / UNMERGED, based on an earlier `main` and covering Strategy Inventory/fill/options notes. | Review/rebase #1279 instead of recreating its scope in this PR. |
+
+**Source-only checkpoint:** GitHub `main` `1f55786e2f1b6fdccaa5f2e7260da51889fdbbc7`. This table is a dated handoff, not continuous runtime monitoring. The trial ledger and Strategy Inventory govern research evidence and status; no scoring, promotion, order, deploy, cleanup, or merge GO follows from it.
+
+
+## Historical operator checklist — 2026-10-08 (retained for provenance, not current priorities)
 
 **Priority:** Resolve Grok's actual blockers first. Do not deploy merely to finish this checklist.
 
@@ -43,7 +55,7 @@
 
 **End-of-day goal:** Verified readiness, current documentation, and a clear deployment decision — not necessarily deployment itself.
 
-## Latest operator queue — 2026-10-08
+## Historical operator queue — 2026-10-08 (not current priority)
 
 - GitHub `main` at audit: `307fe56771031b44eeb8d0235224cf010616ce4a` after #1191/#1192 documentation merges. Reported futures VPS release `c44d32bc4961e56fae5c5f88a976eb6783341638` requires fresh authorized root verification; main changes do not deploy the VPS.
 - **#1189 (MERGED)** — reviewed remote-build quote repair at `f60ec6ff3268e1b193ff8e21aefa3cd5d8420319`, merged as `064ee674b788c144fc8d3ca65082ed060927e2f1`; GitHub exact-head CI and post-merge checks reported green. Merging a fix does not authorize build/verify or promote.
