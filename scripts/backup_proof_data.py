@@ -25,6 +25,7 @@ import shutil
 import json
 import sqlite3
 import tempfile
+from contextlib import closing
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -110,6 +111,7 @@ def _atomic_mirror(source: Path, target: Path) -> None:
     try:
         initial_bytes = source.stat().st_size
         shutil.copy2(source, tmp)
+        os.chmod(tmp, 0o600)
         if tmp.stat().st_size != initial_bytes or source.stat().st_size != initial_bytes:
             raise RuntimeError(f"source changed during mirror copy: {source.name}")
         os.replace(tmp, target)
@@ -124,8 +126,8 @@ def _snapshot_sqlite_atomic(source: Path, target: Path) -> None:
     tmp = Path(tmpname)
     try:
         # SQLite must create the target schema through the backup API.
-        with sqlite3.connect(f"file:{source.resolve().as_posix()}?mode=ro", uri=True, timeout=30) as live:
-            with sqlite3.connect(str(tmp), timeout=30) as snapshot:
+        with closing(sqlite3.connect(f"file:{source.resolve().as_posix()}?mode=ro", uri=True, timeout=30)) as live:
+            with closing(sqlite3.connect(str(tmp), timeout=30)) as snapshot:
                 live.backup(snapshot, pages=1024, sleep=0.05)
         _sqlite_quick_check(tmp)
         os.replace(tmp, target)
