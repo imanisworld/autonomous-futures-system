@@ -1557,7 +1557,7 @@ def test_dashboard_strategy_inventory_keeps_evidence_and_authority_separate(monk
     assert four_hr["authority"] == "CURRENT-ACCOUNT INCOMPATIBLE"
 
     first_live = by_name["60M 3-2-2 First Live"]
-    assert first_live["classification"] == "PROMISING BUT UNPROVEN"
+    assert first_live["classification"] == "OVERFIT"
     assert "PARKED" in first_live["posture"].upper()
     assert "GUARDED DEMO" in first_live["posture"].upper()
     assert first_live["authority"] == "NO LIVE AUTHORITY"
