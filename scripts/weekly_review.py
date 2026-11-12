@@ -311,14 +311,17 @@ def main(argv: Optional[list[str]] = None) -> int:
     data = summarize_week(journal, options, health=health)
     report = format_report(data, week=week, monday=monday, sunday=sunday)
 
-    # Trend artifact (best-effort).
+    # Preserve the weekly evidence before any report-routing retirement.
+    # Delivery remains best-effort; archive failure is surfaced, not silently lost.
+    archived = False
     try:
         log_dir.mkdir(parents=True, exist_ok=True)
         (log_dir / f"weekly_review_{week}.json").write_text(
             json.dumps({"week": week, "generated_at": datetime.now(timezone.utc).isoformat(), **data}, indent=2)
         )
-    except OSError:
-        pass
+        archived = True
+    except OSError as exc:
+        _LOG.error("Weekly review archive write failed: %s", type(exc).__name__)
 
     webhook = (os.getenv("DISCORD_ROUTE_DAILY_REPORT") or os.getenv("DISCORD_WEBHOOK_URL") or "").strip()
     delivery_failed = False
@@ -327,9 +330,10 @@ def main(argv: Optional[list[str]] = None) -> int:
         delivery_failed = not ok
         print(f"[weekly_review] posted to Discord: {ok}")
     else:
-        print("[weekly_review] no webhook configured; artifact written only")
+        print("[weekly_review] no webhook configured; archive saved" if archived
+              else "[weekly_review] no webhook configured; archive unavailable")
     print(report)
-    return 1 if delivery_failed else 0
+    return 1 if delivery_failed or not archived else 0
 
 
 if __name__ == "__main__":

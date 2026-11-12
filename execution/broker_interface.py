@@ -83,7 +83,10 @@ class Fill:
     entry_price: float
     exit_price: Optional[float]
     exit_reason: Optional[str]   # TARGET_HIT | STOP_HIT | MANUAL_CANCEL | None
-    result: str                  # WIN | LOSS | BREAKEVEN | OPEN | CANCELLED
+    result: str                  # WIN | LOSS | BREAKEVEN | OPEN | CANCELLED | UNKNOWN
+    # UNKNOWN is nonterminal. It is not a cancel and not a no-fill. Callers
+    # must keep RECONCILE_REQUIRED, the client id, and any known parent/child
+    # ids on execution_audit. Do not encode that state in no_fill_reason.
     pnl_ticks: Optional[float]
     pnl_dollars: Optional[float]
     # Diagnostic-only fields for CANCELLED/no-fill outcomes. Never read by

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -38,6 +39,8 @@ from .session_calendar import us_equity_rth_state
 from .scorer import ScoreResult, is_ny_open, score_setup
 from .storage import ScanStorage
 from sources.signa_client import SignaClient
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -379,8 +382,8 @@ class OptionsScanner:
         now = now or datetime.now(ZoneInfo(self.config.timezone))
         if scheduled and not self.is_market_hours(now):
             self.last_skip_reason = "outside_market_hours"
-            return {"checked": 0, "resolved": 0}
-        counts = {"checked": 0, "resolved": 0}
+            return {"checked": 0, "resolved": 0, "errors": 0}
+        counts = {"checked": 0, "resolved": 0, "errors": 0}
         prices: dict[str, float | None] = {}
         chain_cache: dict[tuple[str, str], Any] = {}
         last_id = 0
@@ -392,26 +395,36 @@ class OptionsScanner:
                 last_id = setup.id
                 counts["checked"] += 1
                 ticker = setup.ticker
-                if ticker not in prices:
-                    snapshot = await self.market_data.fetch_market_snapshot(ticker)
-                    prices[ticker] = None if snapshot.error else snapshot.price
+                try:
+                    if ticker not in prices:
+                        snapshot = await self.market_data.fetch_market_snapshot(ticker)
+                        prices[ticker] = None if snapshot.error else snapshot.price
 
-                if setup.selected_contract.get("paper_policy_id") == POLICY_ID:
-                    resolution = await self._resolve_v1_candidate(
-                        setup, prices[ticker], now, chain_cache
+                    if setup.selected_contract.get("paper_policy_id") == POLICY_ID:
+                        resolution = await self._resolve_v1_candidate(
+                            setup, prices[ticker], now, chain_cache
+                        )
+                    else:
+                        resolution = resolve_open_setup(
+                            direction=setup.direction,
+                            contract=setup.selected_contract,
+                            underlying_price=prices[ticker],
+                            now=now,
+                        )
+                    if resolution is None:
+                        continue
+                    status, outcome = resolution
+                    self.storage.update_shadow_outcome(setup.id, status=status, outcome=outcome)
+                    counts["resolved"] += 1
+                except Exception as exc:  # noqa: BLE001 — one candidate must not abort the cycle
+                    counts["errors"] += 1
+                    logger.error(
+                        "resolve_open_candidates failed for setup id=%s ticker=%s: %s: %s",
+                        getattr(setup, "id", None),
+                        ticker,
+                        type(exc).__name__,
+                        exc,
                     )
-                else:
-                    resolution = resolve_open_setup(
-                        direction=setup.direction,
-                        contract=setup.selected_contract,
-                        underlying_price=prices[ticker],
-                        now=now,
-                    )
-                if resolution is None:
-                    continue
-                status, outcome = resolution
-                self.storage.update_shadow_outcome(setup.id, status=status, outcome=outcome)
-                counts["resolved"] += 1
         return counts
 
     async def _resolve_v1_candidate(

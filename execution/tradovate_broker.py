@@ -22,7 +22,7 @@ import math
 import os
 import threading
 import time
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from dataclasses import dataclass, field
 from typing import Optional
 from zoneinfo import ZoneInfo
@@ -37,11 +37,37 @@ from execution.broker_interface import (
     Position,
 )
 from execution.no_fill_taxonomy import classify_no_fill_reason, classify_provider_failure
+from execution.order_submission_store import (
+    AMBIGUOUS,
+    CANCELLED as SUBMISSION_CANCELLED,
+    NO_FILL,
+    OPEN as SUBMISSION_OPEN,
+    RECONCILE_REQUIRED,
+    SUBMITTED,
+    OrderSubmissionStore,
+    SubmissionDurabilityError,
+    SubmissionIntegrityError,
+    request_fingerprint,
+)
 from config.futures_contracts import UnsupportedContractError, contract_economics, contract_root
 from execution.post_fill_validation import validate_post_fill
 from notifications import plain_english as _pe
 
 logger = logging.getLogger(__name__)
+
+
+def _broker_utc_timestamp(value: object) -> Optional[str]:
+    """Normalize a broker-reported instant; never treat a local/naive time as proof."""
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        stamp = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if stamp.tzinfo is None:
+        return None
+    return stamp.astimezone(timezone.utc).isoformat()
+
 
 # ── Front-month contract roll ─────────────────────────────────────────────────
 # CME equity-index micros (MES/MNQ) are quarterly: Mar/Jun/Sep/Dec → H/M/U/Z.
@@ -409,6 +435,9 @@ class TradovateBroker(BrokerInterface):
         # grab an overlapping trade's fill). None → resolve falls back to
         # price-matching. Cleared whenever the position goes flat/resolves.
         self._last_order_ids: Optional[dict] = None
+        # Observational fields captured from order/item and fill/list reads that
+        # execution already performs. No additional broker calls.
+        self._entry_timing: dict = {}
         self._account_id: Optional[int] = None
         self._contract_cache: dict[str, int] = {}  # root symbol → contract ID
         self._contract_symbol_cache: dict[str, str] = {}  # root → front-month symbol (e.g. MESM6)
@@ -423,6 +452,7 @@ class TradovateBroker(BrokerInterface):
         # Set after execute_bracket: did the protective stop+target children verify live?
         # None = not checked, True = both confirmed working, False = one/both missing (naked risk).
         self._last_bracket_confirmed: Optional[bool] = None
+        self._submission_store = OrderSubmissionStore()
         # Auth circuit-breaker + token state now live in self._auth_state, shared
         # across all instances with the same creds (see _SharedAuth). They are
         # exposed via the _token / _auth_fail_count / _auth_cooldown_until /
@@ -1073,8 +1103,106 @@ class TradovateBroker(BrokerInterface):
 
     @classmethod
     def _reset_client_order_registry(cls) -> None:
+        """Clear process memory only. Durable submissions survive a restart."""
         with cls._client_order_lock:
             cls._client_order_registry.clear()
+
+    def _submission_spec(self, order: BracketOrder, client_id: str, contract_symbol: str) -> dict:
+        return {
+            "client_order_id": client_id,
+            "account_env": self.config.env,
+            "account_id": self._account_id,
+            "contract": contract_symbol,
+            "instrument": order.instrument,
+            "direction": order.direction,
+            "quantity": max(1, int(order.contracts or 1)),
+            "entry": float(order.entry),
+            "stop": float(order.stop),
+            "target": float(order.target),
+        }
+
+    def _remember_submission(self, client_id: str, marker: str) -> None:
+        with self._client_order_lock:
+            self._client_order_registry[client_id] = marker
+
+    def _unknown_fill(
+        self,
+        order: BracketOrder,
+        reason: str,
+        *,
+        order_type: Optional[str] = None,
+        order_ids: Optional[dict] = None,
+    ) -> Fill:
+        """Uncertain execution. Not CANCELLED and not proof of flat."""
+        client_id = str(getattr(order, "client_order_id", "") or "").strip() or None
+        ids = order_ids if order_ids is not None else self._last_order_ids
+        return Fill(
+            instrument=order.instrument,
+            direction=order.direction,
+            contracts=getattr(order, "contracts", 1) or 1,
+            entry_price=order.entry,
+            exit_price=None,
+            exit_reason=reason,
+            result="UNKNOWN",
+            pnl_ticks=None,
+            pnl_dollars=None,
+            order_type=order_type,
+            execution_audit={
+                "execution_state": RECONCILE_REQUIRED,
+                "client_order_id": client_id,
+                "order_ids": dict(ids) if isinstance(ids, dict) else None,
+                "provenance": reason,
+            },
+        )
+
+    def _guard_submission(self, order: BracketOrder, client_id: Optional[str], contract_symbol: str):
+        """Return a Fill when this send must not happen, else None.
+
+        A durable AMBIGUOUS record is written before the caller may post.
+        """
+        blocking = self._submission_store.entry_block()
+        blocking_ids = set((blocking or {}).get("client_order_ids") or [])
+        if blocking is not None and (
+            blocking.get("reason") == "store_untrusted"
+            or not client_id
+            or blocking_ids != {client_id}
+        ):
+            return self._unknown_fill(order, "RECONCILE_REQUIRED")
+        if client_id:
+            spec = self._submission_spec(order, client_id, contract_symbol)
+            spec["request_fingerprint"] = request_fingerprint(spec)
+            try:
+                reserved = self._submission_store.reserve_initial_send(spec)
+            except SubmissionIntegrityError:
+                return self._unknown_fill(order, "SUBMISSION_INTEGRITY")
+            except SubmissionDurabilityError:
+                return self._cancelled_fill(order, "SUBMISSION_NOT_DURABLE")
+            if not reserved["may_send"]:
+                state = (reserved.get("record") or {}).get("state")
+                self._remember_submission(client_id, state or AMBIGUOUS)
+                if state in {SUBMITTED, SUBMISSION_OPEN}:
+                    return self._cancelled_fill(order, "DUPLICATE_CLIENT_ORDER_ID")
+                return self._unknown_fill(order, "SUBMIT_AMBIGUOUS_UNRECONCILED")
+            self._remember_submission(client_id, AMBIGUOUS)
+            return None
+        if blocking is not None:
+            return self._unknown_fill(order, "RECONCILE_REQUIRED")
+        if os.getenv("AFS_REQUIRE_CLIENT_ORDER_ID", "").strip() == "1":
+            return self._cancelled_fill(order, "CLIENT_ORDER_ID_REQUIRED")
+        return None
+
+    def _note_submission(self, client_id: Optional[str], state: str, **evidence) -> None:
+        if not client_id:
+            return
+        try:
+            self._submission_store.transition(client_id, state, **evidence)
+            self._remember_submission(client_id, state)
+        except (SubmissionIntegrityError, SubmissionDurabilityError, Exception):
+            logger.exception("submission transition %s -> %s failed", client_id, state)
+            try:
+                self._submission_store.mark_reconcile_required(client_id, f"persist {state} failed")
+            except Exception:
+                logger.exception("could not retain AMBIGUOUS submission %s", client_id)
 
     @property
     def is_live(self) -> bool:
@@ -1404,57 +1532,44 @@ class TradovateBroker(BrokerInterface):
                 }
 
             # ── Submit idempotency: one parent order per logical signal ───────
+            # Durable AMBIGUOUS is committed only after the gates above passed,
+            # and before the first byte of placeOSO.
             client_id = (str(getattr(order, "client_order_id", "") or "").strip() or None)
             if client_id:
                 client_id = client_id[:64]
-                with self._client_order_lock:
-                    prior = self._client_order_registry.get(client_id)
-                if prior == "AMBIGUOUS":
-                    logger.error(
-                        "BLOCKED duplicate submission: clOrdId=%s has an UNRECONCILED "
-                        "ambiguous prior submission — reconcile by order/client id "
-                        "before any retry", client_id,
-                    )
-                    return self._cancelled_fill(
-                        order, "SUBMIT_AMBIGUOUS_UNRECONCILED",
-                        order_type=entry_leg.get("orderType"),
-                    )
-                if prior:
-                    logger.error(
-                        "BLOCKED duplicate submission: clOrdId=%s already created "
-                        "order %s — the same logical signal never fires twice",
-                        client_id, prior,
-                    )
-                    return self._cancelled_fill(
-                        order, "DUPLICATE_CLIENT_ORDER_ID",
-                        order_type=entry_leg.get("orderType"),
-                    )
                 body["clOrdId"] = client_id
+            blocked = self._guard_submission(order, client_id, contract_symbol)
+            if blocked is not None:
+                return blocked
 
+            self._entry_timing = {"order_type": entry_leg.get("orderType"),
+                                  "broker_order_created_at_utc": None,
+                                  "broker_first_fill_at_utc": None,
+                                  "broker_last_fill_at_utc": None}
             try:
                 result = self._post("/order/placeOSO", body)
-            except Exception:
+            except Exception as exc:
                 if client_id:
-                    # The submission outcome is UNKNOWN (timeout / transport
-                    # failure after send). Poison this identity so recovery
-                    # paths cannot blindly re-fire the same signal.
-                    with self._client_order_lock:
-                        self._client_order_registry[client_id] = "AMBIGUOUS"
+                    self._note_submission(
+                        client_id, RECONCILE_REQUIRED, last_error=str(exc), evidence="transport",
+                    )
+                    return self._unknown_fill(
+                        order, "TRADOVATE_ORDER_ERROR", order_type=entry_leg.get("orderType"),
+                    )
                 raise
             # A transport-success response that is not a mapping is UNKNOWN:
             # the broker may have created the order even though we cannot parse
-            # its command result. Poison this signal identity so it cannot be
-            # blindly re-fired until reconciliation.
+            # its command result.
             if not isinstance(result, dict):
                 logger.error(
                     "Tradovate placeOSO returned malformed response — submission outcome "
                     "UNKNOWN: %r",
                     result,
                 )
-                if client_id:
-                    with self._client_order_lock:
-                        self._client_order_registry[client_id] = "AMBIGUOUS"
-                return self._cancelled_fill(
+                self._note_submission(
+                    client_id, RECONCILE_REQUIRED, last_error="malformed ack", evidence="malformed",
+                )
+                return self._unknown_fill(
                     order, "TRADOVATE_NO_ORDER_ID", order_type=entry_leg.get("orderType"),
                 )
 
@@ -1467,9 +1582,13 @@ class TradovateBroker(BrokerInterface):
                     "Tradovate placeOSO REJECTED: %s | instrument=%s dir=%s body=%s",
                     error_text, order.instrument, order.direction, body,
                 )
-                # An explicit rejection created nothing server-side — the
-                # identity may be retried by a future signal cycle.
+                # An explicit application rejection created nothing that filled.
+                # It is not transport uncertainty. Terminal REJECTED unblocks
+                # only this identity; a different fingerprint still fails closed.
                 provider_bucket = classify_provider_failure(str(error_text))
+                self._note_submission(
+                    client_id, "REJECTED", last_error=str(error_text), evidence="application_reject",
+                )
                 return self._cancelled_fill(
                     order, "TRADOVATE_REJECTED", order_type=entry_leg.get("orderType"),
                     no_fill_reason_override=provider_bucket,
@@ -1480,15 +1599,16 @@ class TradovateBroker(BrokerInterface):
                     "Tradovate placeOSO returned no orderId — possible silent rejection: %s",
                     result,
                 )
-                if client_id:
-                    with self._client_order_lock:
-                        self._client_order_registry[client_id] = "AMBIGUOUS"
-                return self._cancelled_fill(
+                self._note_submission(
+                    client_id, RECONCILE_REQUIRED, last_error="missing orderId", evidence="no_order_id",
+                )
+                return self._unknown_fill(
                     order, "TRADOVATE_NO_ORDER_ID", order_type=entry_leg.get("orderType"),
                 )
             if client_id:
-                with self._client_order_lock:
-                    self._client_order_registry[client_id] = str(order_id)
+                self._note_submission(
+                    client_id, SUBMITTED, parent_id=str(order_id), evidence="accepted",
+                )
             # OSO child IDs follow bracket order. runner_live has one child:
             # oso1 = Stop. Static has oso1 = target and oso2 = Stop.
             target_id = None if runner_live else result.get("oso1Id")
@@ -1527,6 +1647,7 @@ class TradovateBroker(BrokerInterface):
                     )
                     self._last_position = None
                     self._last_order_ids = None
+                    self._note_submission(client_id, NO_FILL, broker_status="dead", evidence="zero_fill")
                     return self._cancelled_fill(
                         order, "ENTRY_NOT_FILLED",
                         entry_status="dead", order_type=entry_leg.get("orderType"),
@@ -1538,34 +1659,45 @@ class TradovateBroker(BrokerInterface):
                     # so there is NO naked position to protect.
                     n = self._cancel_oso(order_id, target_id, stop_id)
                     if not self._cancel_confirmed(order_id):
-                        # FI-4: the entry may still be live (or filled during the
-                        # cancel). Never report a definitive no-fill; keep the ids
-                        # so the caller can record and reconcile the order.
-                        logger.error(
-                            "%s entry cancel NOT confirmed (n=%d) — order %s may still be "
-                            "live; reporting CANCEL_UNCONFIRMED. %s %s cap=%s",
-                            entry_leg.get("orderType"), n, order_id, root, order.direction,
-                            entry_px_desc,
+                        # A fill during cancel is exposure. Adopt it once.
+                        # Unreadable or still-live is not a cancel and not flat.
+                        if self._entry_status(order_id, retries=1, delay=0) != "filled":
+                            logger.error(
+                                "%s entry cancel NOT confirmed (n=%d) — order %s may still be "
+                                "live; reporting CANCEL_UNCONFIRMED. %s %s cap=%s",
+                                entry_leg.get("orderType"), n, order_id, root, order.direction,
+                                entry_px_desc,
+                            )
+                            self._last_position = None
+                            self._last_order_ids = {
+                                "instrument": order.instrument, "entry": order_id,
+                                "target": target_id, "stop": stop_id,
+                            }
+                            self._note_submission(
+                                client_id, RECONCILE_REQUIRED,
+                                parent_id=str(order_id), stop_id=stop_id, target_id=target_id,
+                                last_error="cancel_unconfirmed", evidence="cancel_unconfirmed",
+                            )
+                            return self._unknown_fill(
+                                order, "CANCEL_UNCONFIRMED",
+                                order_type=entry_leg.get("orderType"),
+                                order_ids=self._last_order_ids,
+                            )
+                        status = "filled"
+                    else:
+                        logger.warning(
+                            "%s entry resting unfilled — OSO cancelled (n=%d), no position. %s %s cap=%s",
+                            entry_leg.get("orderType"), n, root, order.direction, entry_px_desc,
                         )
                         self._last_position = None
-                        self._last_order_ids = {
-                            "instrument": order.instrument, "entry": order_id,
-                            "target": target_id, "stop": stop_id,
-                        }
+                        self._last_order_ids = None
+                        self._note_submission(
+                            client_id, SUBMISSION_CANCELLED, broker_status="canceled", evidence="cancel_confirmed",
+                        )
                         return self._cancelled_fill(
-                            order, "CANCEL_UNCONFIRMED",
+                            order, "ENTRY_NOT_FILLED",
                             entry_status="working", order_type=entry_leg.get("orderType"),
                         )
-                    logger.warning(
-                        "%s entry resting unfilled — OSO cancelled (n=%d), no position. %s %s cap=%s",
-                        entry_leg.get("orderType"), n, root, order.direction, entry_px_desc,
-                    )
-                    self._last_position = None
-                    self._last_order_ids = None
-                    return self._cancelled_fill(
-                        order, "ENTRY_NOT_FILLED",
-                        entry_status="working", order_type=entry_leg.get("orderType"),
-                    )
                 if status == "unknown":
                     # Positive confirmation required before journaling a position
                     # (2026-07-01 incident follow-ups #1-3): an unreadable entry is
@@ -1577,20 +1709,28 @@ class TradovateBroker(BrokerInterface):
                     if status == "dead":
                         self._last_position = None
                         self._last_order_ids = None
+                        self._note_submission(client_id, NO_FILL, broker_status="dead", evidence="zero_fill")
                         return self._cancelled_fill(
                             order, "ENTRY_NOT_FILLED",
                             entry_status="dead", order_type=entry_leg.get("orderType"),
                         )
                     if status == "unknown":
-                        # Never confirmed either way even after cancelling the
-                        # entry. Journal NOTHING open; the reconciler/supervisor
-                        # remains the tail safety net for the (rare) case a fill
-                        # happened but stayed unreadable — those brackets are armed.
+                        # Unreadable after submit/cancel is exposure uncertainty.
+                        # Keep every known id. Do not report a local cancel.
                         self._last_position = None
-                        self._last_order_ids = None
-                        return self._cancelled_fill(
+                        self._last_order_ids = {
+                            "instrument": order.instrument, "entry": order_id,
+                            "target": target_id, "stop": stop_id,
+                        }
+                        self._note_submission(
+                            client_id, RECONCILE_REQUIRED,
+                            parent_id=str(order_id), stop_id=stop_id, target_id=target_id,
+                            last_error="entry_unconfirmed", evidence="entry_unconfirmed",
+                        )
+                        return self._unknown_fill(
                             order, "ENTRY_UNCONFIRMED",
                             order_type=entry_leg.get("orderType"),
+                            order_ids=self._last_order_ids,
                         )
                 # status "filled" → fall through to open + bracket verify.
 
@@ -1670,10 +1810,14 @@ class TradovateBroker(BrokerInterface):
                     qty = filled_qty
                     if self._last_position is not None:
                         self._last_position.quantity = filled_qty
-            execution_audit = None
+            execution_audit = (
+                {"broker_entry_timing": dict(getattr(self, "_entry_timing", {}) or {})}
+                if getattr(order, "post_fill_validation_required", False) else None
+            )
             if getattr(order, "post_fill_validation_required", False):
                 if actual_entry is None:
                     execution_audit = {
+                        **(execution_audit or {}),
                         "post_fill_validation": {
                             "accepted": False,
                             "requested_entry": float(order.entry),
@@ -1683,10 +1827,15 @@ class TradovateBroker(BrokerInterface):
                     }
                     return self._handle_invalid_post_fill(order, qty, execution_audit)
                 validation = validate_post_fill(order, float(actual_entry))
-                execution_audit = {"post_fill_validation": validation.to_dict()}
+                execution_audit = {**(execution_audit or {}), "post_fill_validation": validation.to_dict()}
                 if not validation.accepted:
                     return self._handle_invalid_post_fill(order, qty, execution_audit)
             execution_audit = {**(execution_audit or {}), "contract_identity": identity_audit}
+            self._note_submission(
+                client_id, SUBMISSION_OPEN,
+                parent_id=str(order_id), stop_id=stop_id, target_id=target_id,
+                evidence="position_open",
+            )
             return Fill(
                 instrument=order.instrument,
                 direction=order.direction,
@@ -1697,6 +1846,7 @@ class TradovateBroker(BrokerInterface):
                 result="OPEN",
                 pnl_ticks=None,
                 pnl_dollars=None,
+                order_type=entry_leg.get("orderType"),
                 execution_audit=execution_audit,
             )
         except Exception as exc:
@@ -1898,6 +2048,282 @@ class TradovateBroker(BrokerInterface):
         except Exception as exc:
             logger.warning("naked-position Discord alert failed: %s", exc)
 
+    @staticmethod
+    def _submission_qty(value) -> Optional[int]:
+        if value is None or value == "":
+            return None
+        try:
+            return int(float(value))
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _order_identity_match(row: dict, client_id: str) -> bool:
+        """True when the row carries this submission's clOrdId or custom tag."""
+        if not client_id or not isinstance(row, dict):
+            return False
+        for key in ("clOrdId", "customTag", "customTag50"):
+            if str(row.get(key) or "") == client_id:
+                return True
+        return False
+
+    def _read_broker_list(self, path: str) -> tuple[Optional[list], Optional[str]]:
+        try:
+            payload = self._get(path)
+        except Exception as exc:
+            return None, str(exc)
+        if not isinstance(payload, list):
+            return None, f"{path} malformed"
+        return payload, None
+
+    def submission_evidence(self, record: dict) -> dict:
+        """Read-only identity check for one durable submission. Never sends.
+
+        An empty ``/order/list`` is not proof that nothing was sent. Clearing
+        requires a clOrdId/custom-tag order lookup plus fill history, execution
+        history, and a confirmed position read. A filled order is adopted only
+        when the position and its protective children are actually present.
+        """
+        client_id = str(record.get("client_order_id") or "")
+        parent = record.get("parent_id")
+        known_stop = record.get("stop_id")
+        known_target = record.get("target_id")
+        orders, order_error = self._read_broker_list("/order/list")
+        if order_error:
+            return {"error": order_error, "identity_linked": False}
+        owned = [
+            row for row in orders
+            if self._order_identity_match(row, client_id)
+            or (parent is not None and str(row.get("id")) == str(parent))
+        ]
+        if parent is not None and not any(str(row.get("id")) == str(parent) for row in owned):
+            try:
+                item = self._get(f"/order/item?id={parent}")
+            except Exception as exc:
+                item = exc
+            if isinstance(item, dict) and item.get("id") is not None:
+                owned.append(item)
+            elif not any(self._order_identity_match(row, client_id) for row in owned):
+                # The known parent was not readable. Do not treat that as absence.
+                return {"error": "known_parent_not_listed", "identity_linked": False}
+
+        account = self._account_id
+        fills, fill_error = self._read_broker_list(f"/fill/list?accountId={account}")
+        if fill_error:
+            return {"error": fill_error, "identity_linked": False, "order_identity_checked": True}
+        executions, execution_error = self._read_broker_list(
+            f"/execution/list?accountId={account}"
+        )
+        if execution_error:
+            return {
+                "error": execution_error,
+                "identity_linked": False,
+                "order_identity_checked": True,
+                "fills_checked": True,
+            }
+        confirmed, position = self.get_position_snapshot()
+        if not confirmed:
+            return {
+                "error": "position_unconfirmed",
+                "identity_linked": False,
+                "order_identity_checked": True,
+                "fills_checked": True,
+                "executions_checked": True,
+            }
+
+        def linked(rows: list, order_ids: set[str]) -> list:
+            found = []
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                if self._order_identity_match(row, client_id):
+                    found.append(row)
+                    continue
+                if order_ids and str(row.get("orderId") or "") in order_ids:
+                    found.append(row)
+            return found
+
+        parent_row = None
+        for row in owned:
+            if parent is not None and str(row.get("id")) == str(parent):
+                parent_row = row
+                break
+        if parent_row is None:
+            for row in owned:
+                if not row.get("parentId"):
+                    parent_row = row
+                    break
+        if parent_row is None and owned:
+            parent_row = owned[0]
+
+        parent_id = None if parent_row is None else parent_row.get("id")
+        order_ids = {str(parent_id)} if parent_id is not None else set()
+        if parent is not None:
+            order_ids.add(str(parent))
+        children = []
+        for row in orders:
+            if not isinstance(row, dict) or parent_id is None:
+                continue
+            if str(row.get("id")) == str(parent_id):
+                continue
+            known_child = str(row.get("id")) in {str(known_stop), str(known_target)}
+            if str(row.get("parentId") or "") == str(parent_id) or known_child:
+                children.append(row)
+                order_ids.add(str(row.get("id")))
+        for child_id in (known_stop, known_target):
+            if child_id is None or str(child_id) in order_ids:
+                continue
+            try:
+                item = self._get(f"/order/item?id={child_id}")
+            except Exception as exc:
+                return {"error": f"child_unreadable:{exc}", "identity_linked": False}
+            if isinstance(item, dict) and item.get("id") is not None:
+                children.append(item)
+                order_ids.add(str(item.get("id")))
+
+        linked_fills = linked(fills, order_ids if parent_row is not None or parent is not None else set())
+        linked_executions = linked(
+            executions, order_ids if parent_row is not None or parent is not None else set()
+        )
+        # Before a parent id exists, only tag-bearing rows are identity evidence.
+        if parent_row is None and parent is None:
+            linked_fills = [row for row in fills if self._order_identity_match(row, client_id)]
+            linked_executions = [
+                row for row in executions if self._order_identity_match(row, client_id)
+            ]
+
+        position_open = position is not None and bool(getattr(position, "open", False))
+        same_root = False
+        if position_open:
+            same_root = contract_root(getattr(position, "instrument", None)) == contract_root(
+                record.get("instrument")
+            ) and contract_root(record.get("instrument")) is not None
+
+        if parent_row is None and not linked_fills and not linked_executions:
+            if same_root:
+                return {
+                    "error": "position_without_order_identity",
+                    "identity_linked": False,
+                    "order_identity_checked": True,
+                    "fills_checked": True,
+                    "executions_checked": True,
+                    "position_checked": True,
+                }
+            return {
+                "identity_linked": True,
+                "absence_proven": True,
+                "order_identity_checked": True,
+                "order_found": False,
+                "no_order": True,
+                "filled_qty": 0,
+                "requested_qty": record.get("quantity"),
+                "position_linked": False,
+                "position_checked": True,
+                "fills_checked": True,
+                "executions_checked": True,
+                "children_resolved": True,
+                "protection_verified": False,
+                "status": "expired",
+            }
+
+        if parent_row is None:
+            return {
+                "error": "fills_without_order_row",
+                "identity_linked": False,
+                "order_identity_checked": True,
+                "fills_checked": True,
+                "executions_checked": True,
+                "position_checked": True,
+            }
+
+        status = str(parent_row.get("ordStatus") or "")
+        filled_qty = self._submission_qty(
+            parent_row.get("filledQty", parent_row.get("cumQty"))
+        )
+        fill_qty = sum(self._submission_qty(row.get("qty")) or 0 for row in linked_fills if str(row.get("orderId")) == str(parent_id))
+        if filled_qty is None:
+            filled_qty = fill_qty
+        elif fill_qty and fill_qty != filled_qty:
+            return {"error": "fill_qty_disagrees", "identity_linked": False}
+        exec_qty = sum(
+            self._submission_qty(row.get("qty")) or 0
+            for row in linked_executions
+            if str(row.get("orderId")) == str(parent_id)
+        )
+        if exec_qty and filled_qty is not None and exec_qty != filled_qty:
+            return {"error": "execution_qty_disagrees", "identity_linked": False}
+
+        requested = self._submission_qty(record.get("quantity"))
+        direction = str(record.get("direction") or "").upper()
+        position_linked = False
+        if position_open and same_root and str(getattr(position, "direction", "")).upper() == direction:
+            if filled_qty is None or int(position.quantity) == int(filled_qty):
+                position_linked = True
+
+        def _child_status(row: dict) -> str:
+            return str(row.get("ordStatus") or "").lower()
+
+        def _is_stop(row: dict) -> bool:
+            kind = str(row.get("orderType") or "").lower()
+            return "stop" in kind or str(row.get("id")) == str(known_stop)
+
+        def _is_target(row: dict) -> bool:
+            kind = str(row.get("orderType") or "").lower()
+            return kind == "limit" or str(row.get("id")) == str(known_target)
+
+        stop_row = next((row for row in children if _is_stop(row)), None)
+        target_row = next((row for row in children if _is_target(row) and row is not stop_row), None)
+        dead = set(self._DEAD_ORDER_STATUSES)
+        working = [
+            row for row in children
+            if _child_status(row) and _child_status(row) not in dead
+            and _child_status(row) not in {"filled", "completed"}
+        ]
+        children_resolved = all(_child_status(row) for row in children)
+        if status.lower() in dead | {"filled", "completed"} and not children:
+            children_resolved = True
+        protection_verified = bool(
+            stop_row and _child_status(stop_row) and _child_status(stop_row) not in dead
+            and (
+                _child_status(stop_row) not in {"filled", "completed"}
+                or not position_open
+            )
+        )
+        exit_qty = 0
+        child_ids = {str(row.get("id")) for row in children}
+        for row in linked_fills:
+            if str(row.get("orderId")) in child_ids:
+                exit_qty += self._submission_qty(row.get("qty")) or 0
+        closed_round_trip = bool(
+            not position_open
+            and filled_qty not in (None, 0)
+            and requested not in (None, 0)
+            and filled_qty == requested
+            and children_resolved
+            and exit_qty >= filled_qty
+            and any(_child_status(row) in {"filled", "completed"} for row in children)
+        )
+        return {
+            "identity_linked": True,
+            "absence_proven": False,
+            "order_identity_checked": True,
+            "order_found": True,
+            "no_order": False,
+            "status": status,
+            "parent_id": parent_id,
+            "stop_id": None if stop_row is None else stop_row.get("id"),
+            "target_id": None if target_row is None else target_row.get("id"),
+            "filled_qty": filled_qty,
+            "requested_qty": record.get("quantity"),
+            "position_linked": position_linked,
+            "position_checked": True,
+            "fills_checked": True,
+            "executions_checked": True,
+            "children_resolved": children_resolved and (not working or protection_verified or closed_round_trip),
+            "protection_verified": protection_verified or closed_round_trip,
+            "closed_round_trip": closed_round_trip,
+        }
+
     def get_position_snapshot(self) -> tuple[bool, Optional[Position]]:
         """Return ``(confirmed, position)`` from a direct Tradovate API read.
 
@@ -1939,7 +2365,8 @@ class TradovateBroker(BrokerInterface):
                 self._last_position = p
                 return True, p
             self._last_position = None
-            self._last_order_ids = None
+            if self._submission_store.entry_block() is None:
+                self._last_order_ids = None
             return True, None
         except Exception as exc:
             logger.warning("Tradovate get_position failed: %s", exc)
@@ -2049,6 +2476,10 @@ class TradovateBroker(BrokerInterface):
         for attempt in range(max(1, retries)):
             try:
                 o = self._get(f"/order/item?id={order_id}")
+                if isinstance(o, dict) and str(o.get("id", order_id)) == str(order_id):
+                    stamp = _broker_utc_timestamp(o.get("timestamp"))
+                    if stamp and isinstance(getattr(self, "_entry_timing", None), dict):
+                        self._entry_timing["broker_order_created_at_utc"] = stamp
                 st = str(o.get("ordStatus", "")).lower()
                 if st == "filled":
                     return "filled"
@@ -2470,6 +2901,10 @@ class TradovateBroker(BrokerInterface):
                     if f.get("orderId") == order_id and f.get("price") is not None
                 ]
                 if matches:
+                    stamps = sorted(filter(None, (_broker_utc_timestamp(f.get("timestamp")) for f in matches)))
+                    if stamps and isinstance(getattr(self, "_entry_timing", None), dict):
+                        self._entry_timing["broker_first_fill_at_utc"] = stamps[0]
+                        self._entry_timing["broker_last_fill_at_utc"] = stamps[-1]
                     qty = sum(abs(float(f.get("qty") or 0)) for f in matches)
                     if qty > 0:
                         return sum(

@@ -69,7 +69,8 @@ from webhook.dedupe import DedupeCache
 from webhook.event_id import ensure_event_id
 from webhook.maintenance import maintenance_active
 from webhook.payload import AlertPayload
-from webhook.reconciler import run_reconciler_loop
+from webhook.reconciler import reconcile_submissions_before_entries, run_reconciler_loop
+from webhook.startup_gate import note_startup_reconciliation
 from notifications.heartbeat import run_heartbeat_loop
 from webhook.runner import process_alert, normalize_timeframe_minutes
 from webhook.observation_transport import observe_collection_only_alert
@@ -428,6 +429,21 @@ async def _lifespan(app: FastAPI):
             "(allowed=%s). Live alerts for these will be rejected as 'not in allowed universe'.",
             missing, allowed,
         )
+    # Classify durable UNKNOWN/AMBIGUOUS submissions before the server accepts
+    # entries. Paper mode does not construct a Tradovate client. There is no
+    # initial sleep; the background loop repeats the same pass on its timer.
+    recovery = await asyncio.to_thread(
+        reconcile_submissions_before_entries, _config, _config.log_dir
+    )
+    # Ordering proof for operators. ACCEPTING ENTRIES is logged only after a
+    # clear reconcile result and before the lifespan yields. Unresolved or
+    # untrusted submissions keep entries blocked for this process.
+    if note_startup_reconciliation(recovery) == "block":
+        logger.error(
+            "BLOCKED_RECONCILE_REQUIRED: startup reconciliation unresolved"
+        )
+    else:
+        logger.info("ACCEPTING ENTRIES: startup reconciliation complete")
     # Background safety tasks run independently of the TradingView bar feed.
     background_tasks = [
         asyncio.create_task(run_tradovate_supervisor()),
@@ -697,19 +713,45 @@ def _handle_alert_blocking(payload: AlertPayload) -> None:
                     payload.timestamp,
                 )
 
-        if _notify_allowed:
+        # Decision-channel Discord is presentation-only. Do not hold _alert_lock
+        # across network sends or 429 waits; the decision/journal already exist.
+        if _notify_allowed and _wants_decision_notification:
             try:
-                from notifications.discord_router import DiscordRouter as _DR
-                from notifications.discord_notifier import _discord_payload as _card
-                _router = _DR()
-                if _router.is_enabled("signal") and _wants_decision_notification:
-                    # Same paper-decision card the legacy webhook path sends.
-                    _router.send("signal", _card(payload, result))
-                else:
-                    notify_discord(payload=payload, result=result, config=_config)
-            except Exception as _disc_exc:
-                logger.warning("Discord notification error: %s", _disc_exc)
-                notify_discord(payload=payload, result=result, config=_config)
+                from notifications.decision_queue import enqueue_decision
+
+                def _deliver_decision() -> bool:
+                    # The original market/session gate applies at delivery too:
+                    # an alert queued near the close must not post after close.
+                    allowed_now, _, _ = _decision_notification_market_gate(payload, result)
+                    if not allowed_now:
+                        logger.info("Queued decision Discord message expired at market gate")
+                        return False
+                    try:
+                        from notifications.discord_router import DiscordRouter as _DR
+                        from notifications.discord_notifier import _discord_payload as _card
+                        _router = _DR()
+                        if _router.is_enabled("signal") and _wants_decision_notification:
+                            # Same paper-decision card the legacy webhook path sends.
+                            return bool(_router.send("signal", _card(payload, result)))
+                        else:
+                            outcome = notify_discord(payload=payload, result=result, config=_config)
+                            return bool(getattr(outcome, "sent", False))
+                    except Exception as _disc_exc:
+                        logger.warning("Discord notification error: %s", type(_disc_exc).__name__)
+                        outcome = notify_discord(payload=payload, result=result, config=_config)
+                        return bool(getattr(outcome, "sent", False))
+
+                if not enqueue_decision(_deliver_decision):
+                    logger.error(
+                        "Decision Discord queue unavailable; notification not delivered "
+                        "event_id=%s decision=%s",
+                        getattr(payload, "event_id", None), _decision,
+                    )
+            except Exception as _queue_exc:
+                logger.error(
+                    "Decision Discord enqueue failed: %s event_id=%s",
+                    type(_queue_exc).__name__, getattr(payload, "event_id", None),
+                )
         # Advisory Discord is presentation-only. Gate on the same market/session
         # permission as decision-channel cards, then enqueue so HTTP/retries
         # cannot hold _alert_lock or delay later futures bars.
@@ -2732,6 +2774,23 @@ def _safe_live_preflight_status() -> dict:
         return {"ready": False, "reason": "unavailable", "armed": False}
 
 
+def _order_submission_status() -> dict:
+    """Unresolved broker submissions for status pages. Errors block, never look flat."""
+    try:
+        from execution.order_submission_store import OrderSubmissionStore
+        return OrderSubmissionStore().public_status()
+    except Exception as exc:
+        logger.warning("order submission status unreadable: %s", exc)
+        return {
+            "recovery_required": True,
+            "entries_blocked": True,
+            "store_trusted": False,
+            "error": "unreadable",
+            "unresolved_count": None,
+            "unresolved": [],
+        }
+
+
 def _daily_summary_payload(for_date: date) -> dict:
     """Journal-only subset of `_dashboard_payload` for one day: exactly the
     fields /status/history reports. Reads only that day's journal (parsed once
@@ -2751,6 +2810,7 @@ def _daily_summary_payload(for_date: date) -> dict:
         "max_trades_per_day": _config.max_trades_per_day + int(getattr(_config, "bonus_trades_after_max", 0) or 0),
         "consecutive_losses": daily_state.consecutive_losses,
         "has_open_position": daily_state.has_open_position,
+        "order_submissions": _order_submission_status(),
         "no_trades": summary.get("no_trades", 0),
         "wins": wins,
         "losses": losses,
@@ -2826,6 +2886,7 @@ def _dashboard_payload(for_date: date) -> dict:
         "max_consecutive_losses": _config.max_consecutive_losses,
         "has_open_position": daily_state.has_open_position,
         "open_position": journal.get_open_position(for_date),
+        "order_submissions": _order_submission_status(),
         # When BROKER=tradovate and a position is open outside session hours, the
         # bracket orders on Tradovate's side will close it. No action required from
         # this system — just flag it so the dashboard makes the state obvious.

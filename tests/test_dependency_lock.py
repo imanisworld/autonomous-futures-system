@@ -101,6 +101,17 @@ def test_normal_package_sibling_does_not_hide_third_party_import(tmp_path):
     assert "helper" in imports
 
 
+def test_trend_forward_shadow_is_outside_release_runtime(tmp_path):
+    frozen = tmp_path / "research/trend_r3_forward"
+    frozen.mkdir(parents=True)
+    (frozen / "shadow_daily.py").write_text("import e4_fomc\nimport pandas\nimport trend_shadow\n", encoding="utf-8")
+    (tmp_path / "app.py").write_text("import pandas\n", encoding="utf-8")
+    imports = dl.production_third_party_imports(tmp_path)
+    assert "e4_fomc" not in imports
+    assert "trend_shadow" not in imports
+    assert imports["pandas"] == {"app.py"}
+
+
 def test_frozen_round4_sibling_import_remains_explicitly_local(tmp_path):
     frozen = tmp_path / "research/sd_zone_round4/frozen_round4_code"
     frozen.mkdir(parents=True)

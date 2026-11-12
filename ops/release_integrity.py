@@ -34,6 +34,9 @@ DEFAULT_MANIFEST_NAME = "release_manifest.json"
 ENFORCE_ENV = "RELEASE_INTEGRITY_ENFORCED"
 MANIFEST_PATH_ENV = "RELEASE_MANIFEST_PATH"
 FINGERPRINT_PIN_ENV = "EXPECTED_RELEASE_FINGERPRINT"
+# The scanner has a separately released code tree; the futures fingerprint
+# shared via EnvironmentFile is not authoritative for that tree.
+SCANNER_FINGERPRINT_PIN_ENV = "OPTIONS_SCANNER_EXPECTED_RELEASE_FINGERPRINT"
 
 # First-party import roots. A .py/.yaml file here that the manifest does not
 # list is treated as drift: either an undeployed leftover that can shadow a
@@ -231,6 +234,8 @@ def _venv_site_hook_extras(root: Path) -> list[str]:
 def verify_release(
     repo_root: str | Path | None = None,
     manifest_path: str | Path | None = None,
+    *,
+    fingerprint_pin_env: str = FINGERPRINT_PIN_ENV,
 ) -> dict[str, Any]:
     """Hash-verify the deployed tree against the release manifest.
 
@@ -288,11 +293,11 @@ def verify_release(
             "manifest fingerprint mismatch (manifest edited after build)"
         )
 
-    pinned = (os.getenv(FINGERPRINT_PIN_ENV) or "").strip()
+    pinned = (os.getenv(fingerprint_pin_env) or "").strip()
     report["fingerprint_pinned"] = bool(pinned)
     if pinned and pinned != recorded_fingerprint:
         report["problems"].append(
-            f"{FINGERPRINT_PIN_ENV} does not match manifest fingerprint"
+            f"{fingerprint_pin_env} does not match manifest fingerprint"
         )
 
     source_files = manifest.get("source_files") or {}
@@ -345,6 +350,8 @@ def _env_truthy(name: str) -> bool:
 def enforce_release_integrity(
     repo_root: str | Path | None = None,
     manifest_path: str | Path | None = None,
+    *,
+    fingerprint_pin_env: str = FINGERPRINT_PIN_ENV,
 ) -> dict[str, Any] | None:
     """Startup gate. No-op unless RELEASE_INTEGRITY_ENFORCED is truthy.
 
@@ -354,7 +361,11 @@ def enforce_release_integrity(
     """
     if not _env_truthy(ENFORCE_ENV):
         return None
-    report = verify_release(repo_root=repo_root, manifest_path=manifest_path)
+    report = verify_release(
+        repo_root=repo_root,
+        manifest_path=manifest_path,
+        fingerprint_pin_env=fingerprint_pin_env,
+    )
     if report["ok"]:
         print(
             "release integrity OK: "
@@ -367,7 +378,7 @@ def enforce_release_integrity(
     if report.get("status") == "UNPINNED":
         detail = (
             "UNPINNED: tree matches the manifest but "
-            "EXPECTED_RELEASE_FINGERPRINT is not set; this is not OK"
+            f"{fingerprint_pin_env} is not set; this is not OK"
         )
     raise SystemExit(
         f"RELEASE INTEGRITY FAILURE — refusing to start: {detail}. "

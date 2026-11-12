@@ -124,6 +124,7 @@ def test_main_failsoft_writes_artifact_no_webhook(tmp_path, monkeypatch, capsys)
     monkeypatch.setenv("WEEKLY_REVIEW_DATE", "2026-06-27")
     monkeypatch.delenv("DISCORD_ROUTE_DAILY_REPORT", raising=False)
     monkeypatch.delenv("DISCORD_WEBHOOK_URL", raising=False)
+    monkeypatch.setattr(wr, "collect_health", lambda *args: {"errors": 0, "breaker_events": 2, "restarts": 1})
 
     rc = wr.main()
     assert rc == 0
@@ -132,6 +133,12 @@ def test_main_failsoft_writes_artifact_no_webhook(tmp_path, monkeypatch, capsys)
     data = json.loads(artifact.read_text())
     assert data["week"] == "2026-W26"
     assert data["approved_trades"] == 4
+    assert data["filled"] == 3
+    assert data["cancelled"] == 1  # never-filled orders
+    assert data["fill_rate_pct"] == 75.0
+    assert data["win_rate_pct"] == 66.7
+    assert data["health"]["breaker_events"] == 2
+    assert data["health"]["restarts"] == 1
     assert "no webhook configured" in capsys.readouterr().out
 
 
@@ -208,3 +215,28 @@ def test_discord_success_and_weekly_main_failed_delivery_exit(tmp_path, monkeypa
     assert wr.main() == 1
     assert (tmp_path / "weekly_review_2026-W26.json").exists()
     assert "posted to Discord: False" in capsys.readouterr().out
+
+def test_weekly_archive_write_failure_is_reported_and_fails_closed(tmp_path, monkeypatch, caplog, capsys):
+    import logging
+    from pathlib import Path
+
+    monkeypatch.setenv("LOG_DIR", str(tmp_path))
+    monkeypatch.setenv("WEEKLY_REVIEW_DATE", "2026-06-27")
+    monkeypatch.delenv("DISCORD_ROUTE_DAILY_REPORT", raising=False)
+    monkeypatch.delenv("DISCORD_WEBHOOK_URL", raising=False)
+    monkeypatch.setattr(wr, "load_option_rows", lambda *args: [])
+    monkeypatch.setattr(wr, "collect_health", lambda *args: {"breaker_events": 2, "restarts": 1})
+    real_write = Path.write_text
+
+    def fail_archive(self, *args, **kwargs):
+        if self.name.startswith("weekly_review_"):
+            raise OSError("secret token must not be logged")
+        return real_write(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", fail_archive)
+    with caplog.at_level(logging.ERROR, logger=wr.__name__):
+        assert wr.main() == 1
+    assert "archive unavailable" in capsys.readouterr().out
+    assert "Weekly review archive write failed: OSError" in caplog.text
+    assert "secret token" not in caplog.text
+    assert not (tmp_path / "weekly_review_2026-W26.json").exists()

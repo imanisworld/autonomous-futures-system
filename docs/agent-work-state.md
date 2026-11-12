@@ -1,29 +1,282 @@
 # Agent Work State
 
-## START HERE — source `4db26a1` / operator VPS snapshot 2026-10-20; HOLD / NO RUN
+## START HERE — 2026-11-11 slice scoring flip
+
+Evidence only. No slice was scored. Do not merge, deploy, or change execution from this note.
+
+| Item | State |
+|---|---|
+| **Branch** | `cursor/322-slice-scoring-flip-ba8e` |
+| **Base** | `834e8f52` (`#1278` merged). |
+| **Flip** | `SLICE_SCORING_AUTHORIZED` is true. Each scored slice stamps `evaluator_path` and `evaluator_sha256`. Both attempt-01 artifacts produce `combine.attempt-01.json`. |
+| **Evaluator file** | Unchanged from `834e8f52`. T14 is an import allowlist. |
+| **Prereg lines** | Several wrapper citations in the registered prereg have drifted. The prereg bytes were not edited. |
+| **Tests** | `python3 -B -m pytest -q`: 9275 passed, 8 skipped. |
+| **NEXT** | Independent review. Do not score a real slice from this checkpoint. |
+
+## Previous — 2026-11-11 slice-success evaluator
+
+Evidence only. No slice was scored. `SLICE_SCORING_AUTHORIZED` stays false. Do not merge, deploy, or change execution from this note.
+
+| Item | State |
+|---|---|
+| **Branch** | `cursor/322-slice-evaluator-ba8e` |
+| **Base** | `5cc08f59` (`#1277` merged). |
+| **Trial** | `T-2026-11-11-prereg-322-afs0523-slice-success-2026-11-11-01` |
+| **Module** | `research/afs0523_322_slice_evaluator.py`. Checks run INSUFFICIENT, FAIL, WAIT_UNRESOLVED, FAIL_DRAWDOWN, WAIT_CI, PASS. Nothing is labeled VALIDATED. |
+| **Tests** | T1–T20 and N1. T16 reads the committed reproduction replay only. `python3 -B -m pytest -q`: 9274 passed, 8 skipped. |
+| **NEXT** | Independent review. Do not flip `SLICE_SCORING_AUTHORIZED` from this checkpoint. |
+
+## Previous — 2026-11-11 GATE_REVIEW recorded
+
+Evidence only. The reproduction gate was not rerun. Nothing was scored. Do not merge, deploy, or change execution from this note.
+
+| Item | State |
+|---|---|
+| **Branch** | `cursor/322-gate-review-record` |
+| **Base** | `3cff609d` (`#1276` merged). |
+| **Trial** | `T-2026-11-10-prereg-322-afs0523-oos-structural-2026-11-10-01` |
+| **Event** | `GATE_REVIEW` recorded at `2026-11-11T19:41:15Z` by `gate-review`. Not a GATE attempt. |
+| **Artifact** | `gate_artifact_sha256` `41d76ab1ef549316eebe58b1c8f5878184f43a181bb2164802805974f6f54da8` |
+| **Review** | `pr_head_sha` `a21ee24e277e53f1d0909ea583fa91b5bc4b4e82`. Imani GO, AFS-0624. PM recorded it on the box. |
+| **Line** | sha256 including the trailing newline `d500a8be448e46de9ce97506aa7afe70cf71491552cc209e78a17f90dda04e31`. Main's ledger is a byte prefix. |
+| **Tests** | `python3 -B -m pytest -q tests/test_afs0523_322_repro_wrapper.py tests/test_research_trial_ledger.py`: 76 passed. A temporary ledger with no `GATE_REVIEW` line refuses slice admission. |
+| **NEXT** | Independent review of the ledger append. Do not score from this checkpoint. |
+
+## Previous — 2026-11-11 strict bracket drop on research candidates, merged at 3cff609d
+
+Evidence only. The reproduction gate was not rerun. No real slice was scored. Do not merge, deploy, or change execution from this note.
+
+| Item | State |
+|---|---|
+| **Branch** | `cursor/322-strict-bracket-drop` |
+| **Merged** | `#1276` at `3cff609d` |
+| **Base** | `e5d3b780` (`#1274` merged). |
+| **Scope** | `partition_invalid_gap_opens` drops every research candidate whose entry fails the strict bracket in `strategy/strat_322_first_live.py` lines 193-198. SHORT requires `target < entry_price < stop`. LONG requires `stop < entry_price < target`. `INVALID_ENTRY_BRACKET` is the label at line 200. Gap-open and non-gap-open drops are counted separately on the slice report, the slice artifact, and the SLICE event. `SLICE_SCORING_AUTHORIZED` stays false. |
+| **Gate** | Not rerun. The committed replay still compares 306 records with 0 mismatches. Derived candidate count stays 34 (306/9). Recorded invalid-bracket drops stay 0, and the widened check drops none of those 34. Gaps stay 2025-01-09 and 2025-11-28, count 2. |
+| **Tests** | `python3 -B -m pytest -q tests/test_afs0523_322_repro_wrapper.py tests/test_322_databento_bar_adapter.py tests/test_research_trial_ledger.py`: 106 passed. |
+| **NEXT** | Merged. Do not score a real slice from this checkpoint. |
+
+## Previous — 2026-11-11 holiday closures held out of slice candidates, merged at e5d3b780
+
+Evidence only. The reproduction gate was not rerun. No real slice was scored. Do not merge, deploy, or change execution from this note.
+
+| Item | State |
+|---|---|
+| **Branch** | `cursor/322-holiday-closed-unscored` |
+| **Merged** | `#1274` at `e5d3b780` |
+| **Scope** | On a slice window, only `expected_holiday_closures` rows with `kind` `closed` are unscored. Early-close rows stay on `EARLY_CLOSE_DISPOSITION`. The reproduction window does not add closure dates. `SLICE_SCORING_AUTHORIZED` stays false. |
+| **Report** | The slice artifact and the SLICE event carry `holiday_closed_unscored` and `holiday_closed_unscored_count`. |
+| **Gate** | Recorded gaps stay 2025-01-09 and 2025-11-28, count 2, 306 comparisons (34 candidates). |
+| **Tests** | `python3 -B -m pytest -q tests/test_afs0523_322_repro_wrapper.py tests/test_322_databento_bar_adapter.py tests/test_research_trial_ledger.py`: 101 passed. |
+| **NEXT** | Merged. Do not score a real slice from this checkpoint. |
+
+## Previous — 2026-11-11 early-close slice classification, merged at e9e1d041
+
+Evidence only. The reproduction gate was not rerun. No Databento slice was scored. Do not merge, deploy, or change execution from this note.
+
+| Item | State |
+|---|---|
+| **Branch** | `cursor/322-early-close-slice-ba8e` |
+| **Merged** | `#1272` at `e9e1d041` |
+| **Scope** | Every day requires 07:00 ET. A missing 07:00-08:15 bar is `DATA_GAP`. A complete early-close day on a slice window is `EARLY_CLOSE` and `EARLY_CLOSE_DISPOSITION=exclude` holds it out of scoring. Jul 3 and Dec 24 are half-days only when that date is a weekday and not the observed closure. |
+| **Gate labels** | Reproduction window still requires bars until 13:00 ET on every early close. Gaps stay 2025-01-09 and 2025-11-28, count 2. Slice halt is 13:15 ET for Thanksgiving Friday, Jul 3, and Dec 24, and 13:00 ET for Monday holidays and Juneteenth. |
+| **Gate run** | Not rerun. The recorded PASS bytes are untouched. |
+| **Tests** | `python3 -B -m pytest -q tests/test_322_databento_bar_adapter.py tests/test_afs0523_322_repro_wrapper.py`: 82 passed. |
+| **NEXT** | Independent review. Do not merge from this checkpoint. Slice scoring is a separate change and stays unauthorized. |
+
+## Previous — 2026-11-11 slice scoring, merged at f612049f
+
+Evidence only. No slice was scored against real Databento data. The reproduction gate was not rerun. Do not merge, deploy, or change execution from this note.
+
+| Item | State |
+|---|---|
+| **Branch** | `cursor/322-slice-scoring-ba8e` |
+| **Merged** | `#1273` at `f612049f` |
+| **Scope** | `run_declared_slices` can score one admitted slice. `SLICE_SCORING_AUTHORIZED` is false and is not flipped. Admission checks are unchanged. |
+| **Artifact** | Each attempt writes its own slice artifact and replay ledger, never overwritten. Both sha256 values are on the artifact and on a `SLICE` ledger event. The artifact records git HEAD, a clean-tree check, and the wrapper file sha256. A dirty checkout is refused. |
+| **Results** | Each slippage and model reports candidates, fills, resolved, unresolved with dates and reasons, and no-fills. P&L, win rate, and drawdown are resolved-only. No pass/fail criterion. |
+| **Identity** | The artifact records the manifest sha256, both tree hashes, data_root, and MAX_CONTRACTS_HARD_CAP. A scoring exception still appends a SLICE event with null artifact and ledger hashes. |
+| **Tests** | `python3 -B -m pytest -q tests/test_afs0523_322_repro_wrapper.py`: 59 passed. Synthetic fixtures only. |
+| **NEXT** | Independent review. Do not set `SLICE_SCORING_AUTHORIZED` true from this checkpoint. Success criteria belong in a separate preregistration. |
+
+## Previous — 2026-11-11 structural reproduction gate PASS record
+
+Evidence only. The gate was not rerun from this checkout. Do not score older slices. Do not merge, deploy, or change execution from this note.
+
+| Item | State |
+|---|---|
+| **Trial** | `T-2026-11-10-prereg-322-afs0523-oos-structural-2026-11-10-01` |
+| **Attempt** | First structural attempt. No `.attempt-NN` suffix. PASS at 11:05 ET. `recorded_at` `2026-11-11T16:05:35Z`. 306 of 306 comparisons, 0 mismatches. |
+| **Bytes** | `reproduction-gate.json` sha256 `41d76ab1ef549316eebe58b1c8f5878184f43a181bb2164802805974f6f54da8`. `reproduction-replay-ledger.json` sha256 `6c6b0141e4936795db1dd19c87efb3a257684943d0e637d7c7143f52530ae573`. GATE line sha256 including its trailing newline `9e7d29978a0d1a1d006fc4e6dceaa1dc166bd88c395aebe0a3052a8b78f3b1a1`. |
+| **Provenance** | `docs/research-evidence/<trial>/run/` holds `gate_run.log` `6e9c9a2a884fb19f1c97c12b80ba7b4169ef45891a042fbb66861a283cc13264`, `run_gate.py` `bbebf832c7fdf08155e1b67f550b2392c8201f00537faf0ff5a3414cca3efc02`, and `sha256sums.txt` `a4cd030543c83b6487fb03d2872eb109646575636fd06bfd40c423c00f449a3d`. |
+| **Base** | Source `ac334f5eb73722b3f4f70ab058bd655dff916971`. |
+| **NEXT** | Claude reviews this record. Do not merge from this checkpoint. Older slices stay blocked. |
+
+## Previous — 2026-11-10 post-hoc structural trial
+
+| Item | State |
+|---|---|
+| **Trial** | `T-2026-11-09-prereg-322-afs0523-oos-reproduction-2026-11-09-01` is SUPERSEDED. The new trial is `T-2026-11-10-prereg-322-afs0523-oos-structural-2026-11-10-01`. It was written after AFS-0586. `RUN_AUTHORIZED` is true. No scoring run. A run waits for Imani's typed GO after Claude reviews this change. |
+| **Fixed** | AFS-0592 on this draft. The wrapper is bound to the structural trial and `RUN_AUTHORIZED` is false, so the superseded trial has no run path. `BAR_EVIDENCE.json` is pinned at `9bbd516d8c7a43b8c42d829723bc6f800b1dabe3f372ed8d20295f839017931d`. Close deltas are recomputed from the two committed closes. Every slice artifact carries `OLDER_SLICE_IOC_NOTE`. The prereg states the Easter fix moves the AFS-0586 data-gap count from 3 to 2 and lists the 2010-2023 Good Friday label shifts. The contract-cap tests use `monkeypatch.setenv`. 2026-03-06 is not refused; AFS-0594 excludes it as `REFERENCE_DEFECT`. |
+| **Deferred** | Early-close pre-open 15-minute bars stay `DATA_GAP`. The adapter carries a TODO. Do not label them in this change. |
+| **AFS-0594** | 2026-03-06 is excluded as `REFERENCE_DEFECT`, not refused. The 1-minute rows rebuild the Databento 5-minute bar. `MAR06_BAR_EVIDENCE.json` sha256 `408cebf65e72a4bf43685ad80b406b6bc6b18081c2c07658154c84e0a1ef00a7`. `MAR06_BAR_EVIDENCE.md` sha256 `6f970effb72bb573fe5bd5a38d4d45e14ae7e483a64bac204ef0605c7d080c15`. `RUN_AUTHORIZED` stays false. Do not run the gate. No `COMPLETED` line was added for the superseded trial. |
+| **Scored bar** | A reference-defect exclusion stands only when the replay `trigger_bar_open/high/low/close` equals the pinned Databento bar. A close-delta day stands only when `trigger_bar_close` equals the pinned Databento close. Otherwise the structural comparison fails. `RUN_AUTHORIZED` stays false. |
+| **Replay ledger** | Each gate attempt writes its replay ledger beside the gate artifact. The artifact and the GATE line record that file's path and SHA-256. An attempt that fails before a ledger exists records both as null. |
+| **NEXT** | The first attempt is recorded in the 2026-11-11 section above. This block is the pre-run checkpoint. Do not merge from this checkpoint. |
+
+## Previous — 2026-11-10 AFS-0586 reproduction gate rerun FAIL record
+
+| Item | State |
+|---|---|
+| **Run** | AFS-0586, one authorized rerun at `000f43128764aedfc6a5702d9fb11847f8a58d1c` with `MAX_CONTRACTS_HARD_CAP=1`. Recorded FAIL. Not a GATE_REVIEW. Not retried. |
+| **Result** | 306 comparisons, 12 mismatches, all honest-IOC `fill_price` and `net` on 2024-09-06 and 2026-06-11. Artifact sha256 `255f669c785a7396c773f6143ecf8b82afe7292cd012566cda879c880e0d1a0f`. GATE `recorded_at` `2026-11-10T01:29:32Z`. `prior_attempts` lists the AFS-0580 FAIL. |
+| **Files** | AFS-0580 stays at `reproduction-gate.json` (`ede35c326057ba4fa39cebfeaad8851d97ad60df9de1c2ddedd9b888dcd1dfeb`). The rerun bytes are `reproduction-gate.attempt-02.json`. The GATE line still names the path the box wrote. It was not edited. |
+| **Bars** | AFS-0588 CONFIRMED. Decision-bar close only: 2024-09-06 Polygon 18754.0 vs Databento 18754.75; 2026-06-11 28928.75 vs 28928.5. AFS-0590 CONSISTENT: the five Databento 1-minute bars inside each decision bar aggregate to that Databento 5-minute bar, and the close deltas stay +0.75 and -0.25. `BAR_EVIDENCE.md` sha256 `95f229625c0ec507df6d86fbe92bf1559900a4e92cdee154aab2c887ad974d95`. `BAR_EVIDENCE.json` sha256 `9bbd516d8c7a43b8c42d829723bc6f800b1dabe3f372ed8d20295f839017931d`. |
+| **NEXT** | Do not score again from this record. A later change writes each attempt to its own file and preregisters the post-hoc structural trial. |
+
+## Previous — 2026-11-09 AFS-0580 reproduction gate FAIL record
+
+| Item | State |
+|---|---|
+| **Run** | AFS-0579 authorized one `run_reproduction_gate`. It ran once on the box at `5d97af25`. AFS-0580 is the FAIL. Not retried. |
+| **Cause** | The process environment lacked `MAX_CONTRACTS_HARD_CAP=1`. Every bracket returned `NO_FILL` with `MAX_CONTRACTS_HARD_CAP is missing or empty; refusing to trade` (`config/settings.py`). |
+| **Identity** | Matched the pin: manifest `6c9d5ab3c29a7aeade90e95c84e0128795afc1bdd19aa165e18d364760b7f43d`, 15m `461384bc2c638e849ebcdbd4c1fed09fde79fbc9c48dee7656a1151c259e3339`, 5m `a08d909274fa5a06e9234b1c0975977d91a00b1f749c0560fd6d41859410c1e3`. |
+| **Mismatches** | 1569 cells. All are exit fields. Zero mismatches on date, direction, trigger, stop, or target. |
+| **NEXT** | Do not rerun this attempt. A separate change must refuse a missing cap before scoring. Do not merge from this checkpoint. |
+
+## Previous — 2026-11-09 AFS-0523 preregistration (source only, not authorized to run)
+
+| Item | State |
+|---|---|
+| **Branch** | `cursor/322-repro-comparison-oct4` |
+| **Scope** | Preregistered wrapper and Databento bar adapter. Frozen harness and `check_repro()` are not edited. Reproduction gate compares all 306 Oct 4 outcome records. Pre-2019 NQ results are labeled MNQ-equivalent research, not executable historical MNQ. Break-even is one shared win rate per fill model and slippage. Gap-open days are scored at the 10AM open and counted. DATA_GAP days are not scored. |
+| **Runtime** | Not exercised. No vendor download. `RUN_AUTHORIZED` is false. |
+| **NEXT** | Claude reviews the preregistration before any new data runs. Do not merge from this checkpoint. Inventory wording is a separate docs branch. |
+
+## START HERE — 2026-11-09 read-only audit ENTRY_FILL_MODEL pin
+
+Source only. Do not merge, deploy, restart, or install from this checkpoint.
+
+| Item | State |
+|---|---|
+| **Branch** | `cursor/audit-expose-entry-fill-model` |
+| **Scope** | `ops/grok_audit_runtime_pins.py` adds `ENTRY_FILL_MODEL` to the read-only audit `runtime-pins` allowlist. Process value or `<unset>` (absent at exec, not after `.env` load), plus the `config/settings.py` fallback. QA AFS-0526 R1–R6 are in this branch. No fill-model default change and no trading-path change. |
+| **Install** | Not done. Root steps, including `--expect-sha256` and the sha-checked rollback, are in the PR body. The live dispatcher is unchanged until Imani runs them. |
+| **Clock test** | `#1261` froze that 212R clock on `main`. This branch now contains that commit. The earlier failure is not expected on this head. |
+| **NEXT** | Independent review. Imani installs only after review. Do not merge from this checkpoint. |
+
+## Previous — 2026-11-09 AFS handoff
+
+Docs-only coordination record. Claude breaker/QA, verified by ChatGPT. Source `main` at `d703232b7c9df3bf2b942f1437235dc5488a0890`. This checkpoint does not deploy, restart, merge, change strategy inventory, change risk rules, or change fill-model code. The 2026-11-06 baseline-reset procedure below is unchanged and is not closed by this handoff.
+
+| Item | State |
+|---|---|
+| **Pine repainting audit** | PASS. `tradingview/risksentinel_context.pine`: confirmed-bar alerts; HTF `request.security` uses `[1]`/`[2]` with `lookahead_on`; confirmed pivots/BOS. |
+| **VWAP anchor** | Resolved. Pine and replay reset at the CME trading day. The `RTH VWAP` comment in `research/futures_non_strat_coverage.py` is misleading and research-only. |
+| **Fill model** | `main` still defaults `ENTRY_FILL_MODEL=market`. Legacy market edge is a fill artifact per `docs/ioc-faithful-baseline-622d-2026-07-06.md`. Operator chose option (a): flip to honest IOC eventually. HOLD until a spec and a test classification exist. |
+| **WIP fill-model branch** | `claude/honest-default-entry-fill-model` @ `6fb01c9` (`6fb01c935b7591dde5e9340351a16658b3ce79ee`) is WIP / DO NOT MERGE. It breaks ~34 tests and could change server paper behavior if `ENTRY_FILL_MODEL` is unset. |
+| **strategy_permission_gate** | Default and all listed strategies are `SHADOW_ONLY` in `risk_rules.yaml` (source-level). |
+| **Six-micro TSMOM** | RETIRED Oct 18 (ABORTED/NOT_RUN, DO NOT REDO). |
+| **Trend R3 variant shadow** | NOT_ACTIVATED. Design/holdout results are not in the repo (UNVERIFIED). |
+| **Re-baseline** | Already done (DO NOT REDO). Only 4HR Re-Trigger (MNQ) and 60M 3-2-2 are PROMISING BUT UNPROVEN. Both are blocked by `RISK_GATES_REMOVE_EDGE` (account cap, R:R floor). 60M 3-2-2 is 32-0 with zero stop hits and needs falsification. This file does not change `docs/strategy-rules/Strategy_Inventory.md`. |
+| **UNVERIFIED** | Server env and effective `ENTRY_FILL_MODEL`; deployed runtime enforcement; Tradovate connection; preflight state. Claude's 8,988 pass / 30 fail was not independently reproduced. |
+| **NEXT** | Cursor: spec and test classification only (no fix). Claude: falsify 60M 3-2-2 and 4HR concentration. Grok: independent review only. New strategy research: HOLD. Operator: confirm account size. Do not merge the WIP fill-model branch. |
+
+## Merged — 2026-11-06 baseline-reset procedure
+
+Source merged in #1257 at `d703232b`. Do not deploy, restart, reset a box, or place a demo order from this note.
+
+| Item | State |
+|---|---|
+| **Branch** | `cursor/baseline-reset-procedure-6c72` (PR #1257), merged |
+| **Scope** | Nonce claim and outcome appends hold an exclusive flock on the store lock file across the ledger read, the check, the append, and the fsync. |
+| **Runbook** | `docs/ops/baseline_reset_runbook.md` |
+| **Runtime** | Not exercised. No server was contacted. |
+| **Tests** | `python -B -m pytest -q` after the nonce lock: 9018 passed, 8 skipped, exit 0. The 8-process spawn test then passed on its own in 27.61s. |
+| **NEXT** | Operator GO is still required before any host command in the runbook. |
+
+## grok-ops deploy lane (source only, PR #1258)
+
+Code and docs only. Do not install the account, deploy, or restart from this change.
+
+| Item | State |
+|---|---|
+| **Branch** | `cursor/grok-ops-deploy-lane-40d9` (PR #1258), merged with `main` at `8089073` (#1259 and #1261). Do not merge this PR or install from this note. |
+| **Scope** | Restricted `grok-ops` forced-command user. Wrappers `cd /` and use `python3 -P`. Promote and baseline-reset pin `/root/afs-releases/<target-sha>` after `release-complete/<sha>` matches the manifest fingerprint and `repo.commit`, and the GO token fingerprint matches that digest. Promote, verify, and rollback refuse a git-less tree before the token is consumed. `scripts/atomic_release.sh`, `scripts/deploy_lock.sh`, and `baseline_reset.*` stay byte-identical to `main`. Install doc: `docs/grok-ops-deploy-lane.md`. |
+| **Dependency** | `baseline-reset` calls `scripts/ops/baseline_reset.sh` from merged #1257 (`d703232b`). The lane argv is `reset --target-sha --release-fingerprint --ticket --approval --signature --status-file --shared-dir`. The approval and signature files are passed through from `/root/afs-maint/`. The lane does not sign them. A missing script still exits 78 and does not consume a token. |
+| **Runtime** | Not installed. The October HOLD still governs the box. |
+| **NEXT** | QA re-review of AFS-0528 (H1, M2, M3, L4) on this branch. Do not merge or install from this note. A git-less promote still needs a separate Imani-approved change to `scripts/atomic_release.sh`. |
+
+## Previous — 2026-11-06 AFS-0500 submission-evidence follow-up
+
+Paper/demo source only. Do not deploy, restart, or merge from an agent. Do not push `fix/order-state-durability`.
+
+| Item | State |
+|---|---|
+| **Branch** | `fix/order-state-durability-followup` (PR #1256) |
+| **Scope** | Empty `/order/list` must not clear AMBIGUOUS. A filled order is adopted only with a matching position and a working protective stop. Startup reconciliation runs with a broker before entries are accepted. |
+| **Runtime** | Not exercised. The October HOLD below still governs the box. |
+| **NEXT** | Grok reviews again after CI. Imani decides whether to merge. Do not set live trading and do not retry an unresolved client id. |
+
+## Merged — 2026-11-06 options scanner SQLite lock fix
+
+Source merged in #1255. Observer only. Do not deploy or restart from that merge.
+
+| Item | State |
+|---|---|
+| **Branch** | `fix/options-db-lock-2026-11-06` |
+| **Scope** | `ScanStorage` uses a 30s connect timeout, `busy_timeout=30000`, and WAL. Writes retry lock/busy errors. `resolve_open_candidates` isolates one candidate failure. |
+| **Ops note** | WAL adds `-wal` and `-shm` beside `options_scanner.sqlite`. Those files stay with the data file, outside the release tree and integrity manifest. |
+| **NEXT** | A later Ops GO is required before the running scanner uses this. |
+
+## Merged — 2026-11-06 source-only Tradovate submission durability
+
+Paper/demo source only. PR #1254 is merged at `0341f8be`. Do not deploy, restart, or redo that branch.
+
+| Item | State |
+|---|---|
+| **Branch** | `fix/order-state-durability` |
+| **Scope** | Durable pre-send AMBIGUOUS submissions and UNKNOWN / RECONCILE_REQUIRED instead of a local cancel when an entry or cancel cannot be read. `AFS_ORDER_SUBMISSION_DIR` or `LOG_DIR/order_submissions`. |
+| **Runtime** | Not exercised. The October HOLD below still governs the box. |
+| **NEXT** | Follow-up review is AFS-0500 on PR #1256. Do not set live trading and do not retry an unresolved client id. |
+
+## Merged — 2026-11-05 source-only trend variant shadow (no deploy)
+
+Source merged. `VARIANTS_START` stays unset. Paper/shadow forward tracking only. Runtime HOLD below is unchanged. Do not deploy, restart, enable a schedule, or redo the implementation.
+
+| Item | State |
+|---|---|
+| **Branch** | `shadow/trend-variants-va-vb` |
+| **Scope** | CONTROL_R3_v2 + V-A + V-B + V-C at two-sided alpha 0.0167. `VARIANTS_START` is unset, so the driver prints `NOT_ACTIVATED` and writes nothing. |
+| **Frozen sources** | Byte-identical under `research/trend_r3_forward/` at commit `f2170a9dd1e674a7a868354f286610c976b1f6bc`. Do not edit those five files. |
+| **Tracker** | `35f21644f7f9dff8ca6739071e8c9473fd9837cc` adds the four arms, tests, and the research-tree import exclusion. |
+| **Authority** | Operator GO AFS-0480 / AFS-0485. QA AFS-0479 and AFS-0484. This file does not change strategy status. |
+
+## Archived checkpoint — source `3964389` / operator VPS snapshot 2026-10-20; HOLD / NO RUN
 
 Read this block and `AGENTS.md` before the dated archive. Adapted from the operator-provided `agent-work-state_2026-10-19.md` checkpoint and the 2026-10-20 Cursor read-only findings. **Repository facts were checked in GitHub; VPS observations are attributed to the operator's Cursor report and have NOT been independently verified here.** No private P&L totals are included in this checkpoint.
 
 | Item | Current source / operator-reported state |
 |---|---|
-| **GitHub `main`** | Verified `4db26a112ea5c2f045d9853ed6819b22f6b9f1a7`. Source-only merges #1228/#1229 and later #1231–#1235 are already included. These merges do not establish any installed VPS change. |
+| **GitHub `main`** | Verified `3964389265cd2700d500ce26546a4b4fab0656f4`. Source-only #1236, #1238, #1239 and #1240 merged on Oct 20, following #1231–#1235. These merges do not establish any installed VPS change. |
 | **Runtime release / integrity** | Cursor read-only report: futures release `94a71bd`, **integrity FAIL** due to exactly `scripts/__pycache__/options_122_prospective_collect.cpython-313.pyc`. Cursor attributes creation to a 2026-10-11 read-only audit running live-release venv Python without `-B`; manifest-listed source reportedly stayed unchanged. **Cause reported by Cursor (AFS-0313), NOT independently verified**; integrity still FAIL as last reported, and independent post-recut PASS is required. |
 | **Service restart risk** | Cursor reports `futures-bot` currently running in DEMO/live-off posture, no orders or positions; a restart could fail the enforced integrity gate. Do not restart or remove the stray file under this source-only work. |
 | **Integrity repair plan** | **QA-passed v9 immutable recut of `94a71bd` this weekend**, subject to separate operator GO, followed by independent release-integrity verification and a full drift-gate pass. **DO NOT delete `__pycache__` or its `.pyc` in place** in the existing release. No deployment, build, promote, restart, repin, timer/service mutation or `apt upgrade` authorized by this documentation change. |
 | **Other masked monitoring** | Cursor reports the drift gate stopped at the futures check and skipped later options-scanner/pin checks; manual checks passed separately. Weekly review Discord failures, scanner database locks and watcher swap pressure remain operational evidence tasks. #1231/#1232 are GitHub-only fixes; #1233 is a merged documentation handoff, not installed Discord consolidation. |
-| **Lifetime finance** | Source-only reporters #1234/#1235 merged. Cursor reports original journals lack joinable order IDs and execution-mode stamps; **verified since-inception futures totals are UNKNOWN**. Options opening sides are unstamped; actual net-after-fee results UNKNOWN. Keep futures actual broker-path, hypothetical shadow and options ACTIVE evidence strictly separate. Draft #1236 adds stricter per-ticker/CLOSE mode labels; awaits Grok review. |
+| **Lifetime finance** | Source-only reporters #1234/#1235 merged. Cursor reports original journals lack joinable order IDs and execution-mode stamps; **verified since-inception futures totals are UNKNOWN**. Options opening sides are unstamped; actual net-after-fee results UNKNOWN. Keep futures actual broker-path, hypothetical shadow and options ACTIVE evidence strictly separate. #1236 adds stricter per-ticker/CLOSE mode labels and is MERGED at `cf7f4be`. Grok independent review PASS is operator-reported (AFS-0316, AFS-0318 and subsequent re-review); reporter completeness remains distinct from verified broker/account financial history. |
 | **Futures forward** | Cursor reports Track B bars flowing but forward ledger stale; independently count qualifying setups before claiming collection. 4HR/3-2-2 observer evidence accumulating but prereg gates not met. No source merge implies an edge. |
 | **Six-micro TSMOM** | **RETIRED Oct 18 — ABORTED/NOT_RUN, 0/40**. Retirement is **DONE / DO NOT REDO** and is **not a strategy failure**. The disabled timer is consistent with retirement. **No operator decision is pending to restart it.** |
 | **Options forward** | Options 122 forward proof remains blocked by its older installed collector pin and missing binding evidence. No repin, retroactive binding, data backfill or new scanner experiment. |
-| **Source-only draft PRs** | #1236 — lifetime entry+CLOSE mode reconciliation; #1238 — weekly HTTP delivery diagnostics; #1239 — observer Unix-time filename fix; **#1240 is the single consolidated docs checkpoint**, including the former #1237 closeout and 23-PR classification table. #1237 remains open only until the operator closes it as superseded. Each requires exact-head CI and independent Grok approval. |
+| **Source-only draft PRs** | #1236, #1238, #1239 and #1240 **MERGED (source only)**; #1237 **CLOSED WITHOUT MERGE**, superseded by #1240. New draft #1241 (top-level integrity scanner gap) is **BLOCKED FROM MERGE until after the weekend v9 immutable recut and independent integrity PASS**; draft #1242 accumulates drift-gate failures. Both new code PRs require exact-head CI and Grok independent review. #1239 is not approved for deployment before the weekend fix. |
 | **Outstanding research / open PRs** | #1217 MNQ forward-seal guard remains on hold; #1226/#1225/#1230 competing hygiene/research docs require distinct review. Do not reopen sealed MNQ evidence or infer validated futures/options profitability. |
-| **Verdict and next** | **HOLD / NO RUN**. Grok reviews draft source diffs. Any weekend **v9 immutable recut** requires separate operator GO; independent verifier must confirm a clean recut and **complete gate traversal** before any release/restart discussion. Do not delete `.pyc` in place. |
+| **Verdict and next** | **HOLD / NO RUN**. Friday's read-only prep gate precedes any separate operator GO for the weekend **v9 immutable recut**. Independent verifier must confirm a clean recut and **complete gate traversal** before any release/restart discussion. #1241 may be reviewed source-only beforehand but must not merge before the recut. Do not delete `.pyc` in place. |
 
 **AFS-0315 VPS access:** Cursor's use of the documented `ssh hetzner` **root read-only** precedent is **operator-accepted**; no dedicated Cursor VPS account exists. Never run Python in a release directory without `-B` (even when intending to read only). This approval does not authorize release mutation, cleanup, deployment, or restart.
 
-**Follow-ups, not immediate edits:** verify live mode on the futures **CLOSE/OUTCOME** as well as entry (covered by separately reviewed #1236); **after the weekend v9 recut only**, use a synthetic fake-release test to check whether `ops/release_integrity.py` lines 136 and 154–161 miss new unlisted top-level Python package directories. Do not edit integrity/manifest/release code before the recut.
+**Follow-ups, not immediate edits:** verify live mode on the futures **CLOSE/OUTCOME** as well as entry (covered by separately reviewed #1236); source-only draft #1241 covers synthetic fake-release tests for new unlisted top-level Python package directories; do not merge it before the weekend v9 recut, and do not alter the installed integrity gate or manifests.
 
-**Single checkpoint index:** `docs/afs-repo-readonly-closeout-2026-10-19.md` in this same #1240 draft contains the complete 23-PR review table, reporting overlap matrix and private VPS evidence checklist. This supersedes #1237's overlapping documentation proposal; retain #1237 until the operator closes it.
+**Single checkpoint index:** `docs/afs-repo-readonly-closeout-2026-10-19.md` on merged main via #1240 contains the complete original 23-PR review table, reporting overlap matrix and private VPS evidence checklist. #1237 was closed without merge as superseded.
 
 **Historical checkpoints below are retained as evidence, not current work orders.** The source SHA, demo/timer state and action list in the 2026-10-11 section are superseded by this attributed October 20 checkpoint.
 
