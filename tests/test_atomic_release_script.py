@@ -617,7 +617,11 @@ def test_release_ops_modules_never_write_bytecode_into_a_release():
         r"\s+-m ops\.release_integrity",
         text,
     )
-    assert [no_pyc for _, no_pyc in remote_calls] == ["PYTHONDONTWRITEBYTECODE=1"] * 5
+    assert [no_pyc for _, no_pyc in remote_calls] == ["PYTHONDONTWRITEBYTECODE=1"] * 4
+    # The new precheck has the same no-bytecode guard but uses the current
+    # verifier, so the legacy single-quoted-path regex above excludes it.
+    rollback = text.split("rollback_release() {", 1)[1]
+    assert "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH='$CURRENT' '$CURRENT/.venv/bin/python'" in rollback
     assert text.count("-m ops.release_integrity --repo-root '$") == 4
 
     for action in ("promote", "rollback"):
@@ -643,7 +647,13 @@ def test_every_release_integrity_check_is_given_the_fingerprint_pin():
     )
     # build (box), verify, promote, rollback -- each with the fingerprint that
     # step already holds; promote/rollback use the value written to .env.
-    assert pins == [r'\"\$built_fp\"', "'$fingerprint'", r'\"\$fp\"', r'\"\$prev_fp\"']
+    assert pins == [
+        r'\"\$built_fp\"',
+        "'$fingerprint'",
+        r'\"\$fp\"',
+        r'\"\$prev_fp\"',  # rollback target preflight
+        r'\"\$prev_fp\"',  # rollback post-activation verification
+    ]
 
     for action in ("promote", "rollback"):
         _, rendered = _render_remote_command(action)
