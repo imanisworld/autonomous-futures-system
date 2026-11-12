@@ -19,6 +19,11 @@ from ops.live_box_guard import PROOF_CRITICAL_RUNTIME_OVERRIDES, UNSET_PIN
 SCHEMA_VERSION = 1
 EXCLUDED_PREFIXES = ("data/", "logs/", ".git/", ".private-companion/")
 EXCLUDED_NAMES = {".env", ".env.local"}
+# atomic_release.sh archives tracked data/ helpers alongside evidence. Exclude
+# the evidence bytes from the fingerprint, not executable/configuration files
+# that can be loaded from data/ at runtime. An unknown data/ module must still
+# fail the release-integrity census.
+TRACKED_DATA_RUNTIME_SUFFIXES = frozenset({".py", ".so", ".pth", ".yaml", ".yml"})
 
 
 def _git(root: Path, *args: str) -> str:
@@ -42,7 +47,13 @@ def _release_files(root: Path) -> list[str]:
         for name in tracked
         if name
         and Path(name).name not in EXCLUDED_NAMES
-        and not name.startswith(EXCLUDED_PREFIXES)
+        and (
+            not name.startswith(EXCLUDED_PREFIXES)
+            or (
+                name.startswith("data/")
+                and Path(name).suffix in TRACKED_DATA_RUNTIME_SUFFIXES
+            )
+        )
         and (root / name).is_file()
     )
 
