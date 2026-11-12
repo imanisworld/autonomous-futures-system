@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
+from ops.release_integrity import FINGERPRINT_PIN_ENV, verify_release
 from ops.release_manifest import build_release_manifest
 
 
@@ -96,3 +98,61 @@ def test_manifest_fingerprint_changes_with_tracked_source(tmp_path):
     assert after["repo"]["dirty"] is True
     assert before["fingerprint_sha256"] != after["fingerprint_sha256"]
     assert before["source_files"]["app.py"] != after["source_files"]["app.py"]
+
+
+def test_staged_release_pins_tracked_data_helpers_and_rejects_new_code(
+    tmp_path, monkeypatch
+):
+    """Clean checkout models atomic_release's tar source, without local .env.
+
+    Data evidence remains outside the source hash, but executable helpers
+    actually shipped under data/ must be hashed and audited for new code.
+    """
+    repo = _repo(tmp_path)
+    data = repo / "data" / "options_proof"
+    data.mkdir(parents=True)
+    (data / "build_manifest.py").write_text("VERSION = 1\n", encoding="utf-8")
+    (data / "settings.yaml").write_text("threshold: 2\n", encoding="utf-8")
+    (data / "evidence.json").write_text('{"result": "sample"}\n', encoding="utf-8")
+    subprocess.check_call(["git", "add", "data"], cwd=repo)
+    subprocess.check_call(["git", "commit", "-m", "add tracked data helpers"], cwd=repo)
+
+    clean = tmp_path / "clean-checkout"
+    subprocess.check_call(["git", "clone", "-q", str(repo), str(clean)])
+    manifest = build_release_manifest(clean)
+    assert manifest["repo"]["dirty"] is False
+    assert "data/options_proof/build_manifest.py" in manifest["source_files"]
+    assert "data/options_proof/settings.yaml" in manifest["source_files"]
+    assert "data/options_proof/evidence.json" not in manifest["source_files"]
+
+    # Stage the tracked contents of the clean checkout. A source checkout can
+    # have ignored local secrets; the release verifier must never rely on them.
+    staged = tmp_path / "staged-release"
+    staged.mkdir()
+    for rel in _git(clean, "ls-files", "-z").split("\0"):
+        if not rel:
+            continue
+        dest = staged / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(clean / rel, dest)
+    (staged / "release_manifest.json").write_text(
+        json.dumps(manifest), encoding="utf-8"
+    )
+    monkeypatch.setenv(FINGERPRINT_PIN_ENV, manifest["fingerprint_sha256"])
+    passed = verify_release(repo_root=staged)
+    assert passed["ok"] is True, passed["problems"]
+
+    # New, untracked executable code must not hide inside the excluded
+    # evidence directory; byte-for-byte mutation of tracked code must fail.
+    rogue = staged / "data" / "options_proof" / "rogue.py"
+    rogue.write_text("ROGUE = True\n", encoding="utf-8")
+    blocked = verify_release(repo_root=staged)
+    assert blocked["status"] == "FAIL"
+    assert "data/options_proof/rogue.py" in blocked["extra_runtime_files"]
+    rogue.unlink()
+
+    helper = staged / "data" / "options_proof" / "build_manifest.py"
+    helper.write_text("VERSION = 2\n", encoding="utf-8")
+    tampered = verify_release(repo_root=staged)
+    assert tampered["status"] == "FAIL"
+    assert "data/options_proof/build_manifest.py" in tampered["mismatched"]
