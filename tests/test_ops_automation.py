@@ -130,3 +130,163 @@ def test_health_main_writes_fail_soft_receipt(tmp_path, monkeypatch):
     receipt = json.loads((tmp_path / "health_digest_latest.json").read_text())
     assert receipt["job"] == "health_digest"
     assert receipt["verdict"] == "OK"
+
+
+def _small_sqlite(path, value):
+    conn = sqlite3.connect(path)
+    try:
+        conn.execute("CREATE TABLE IF NOT EXISTS t (value TEXT)")
+        conn.execute("INSERT INTO t VALUES (?)", (value,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_backup_keeps_latest_two_snapshots_per_ledger(tmp_path, monkeypatch):
+    from pathlib import Path
+    src = tmp_path / "logs"
+    src.mkdir()
+    _small_sqlite(src / "options_scanner.sqlite", "new")
+    _small_sqlite(src / "options_companion.sqlite", "new")
+    dest = tmp_path / "backup"
+    snap = dest / "snapshots"
+    snap.mkdir(parents=True)
+    for day in ("2026-11-07", "2026-11-08", "2026-11-09"):
+        _small_sqlite(snap / f"options_scanner.{day}.sqlite", day)
+        _small_sqlite(snap / f"options_companion.{day}.sqlite", day)
+    stray = snap / "old_archive.2026-10-01.sqlite"
+    _small_sqlite(stray, "unrelated")
+    monkeypatch.setenv("LOG_DIR", str(src))
+    monkeypatch.setenv("PROOF_BACKUP_DIR", str(dest))
+    monkeypatch.setenv("PROOF_BACKUP_KEEP_SNAPSHOTS", "2")
+    monkeypatch.delenv("PROOF_BACKUP_KEEP_DAYS", raising=False)
+    monkeypatch.setattr(bk, "_today_utc", lambda: date(2026, 11, 10))
+    assert bk.main() == 0
+    assert sorted(p.name for p in snap.glob("options_scanner.*.sqlite")) == [
+        "options_scanner.2026-11-09.sqlite",
+        "options_scanner.2026-11-10.sqlite",
+    ]
+    assert sorted(p.name for p in snap.glob("options_companion.*.sqlite")) == [
+        "options_companion.2026-11-09.sqlite",
+        "options_companion.2026-11-10.sqlite",
+    ]
+    assert stray.is_file()
+    for stem in ("options_scanner", "options_companion"):
+        target = snap / f"{stem}.2026-11-10.sqlite"
+        with sqlite3.connect(f"file:{target}?mode=ro&immutable=1", uri=True) as db:
+            assert db.execute("SELECT value FROM t").fetchall() == [("new",)]
+            assert db.execute("PRAGMA quick_check").fetchall() == [("ok",)]
+    receipt = json.loads((dest / "backup_proof_data_latest.json").read_text())
+    assert receipt["status"] == "OK"
+    assert receipt["retained_snapshots_per_ledger"] == 2
+    assert receipt["ledger_snapshots"] == 2
+    assert receipt["pruned"] == 4
+    # A same-day re-run should reuse valid daily snapshots, not rewrite them.
+    assert bk.main() == 0
+    assert json.loads((dest / "backup_proof_data_latest.json").read_text())["ledger_snapshots"] == 0
+
+
+def test_backup_low_space_fails_before_copy_or_prune(tmp_path, monkeypatch):
+    src = tmp_path / "logs"
+    src.mkdir()
+    _small_sqlite(src / "options_scanner.sqlite", "new")
+    dest = tmp_path / "backup"
+    snap = dest / "snapshots"
+    snap.mkdir(parents=True)
+    old = snap / "options_scanner.2026-11-06.sqlite"
+    _small_sqlite(old, "retain")
+    receipt = dest / "backup_proof_data_latest.json"
+    receipt.write_text('{"job":"backup_proof_data","status":"OK"}')
+    monkeypatch.setenv("LOG_DIR", str(src))
+    monkeypatch.setenv("PROOF_BACKUP_DIR", str(dest))
+    monkeypatch.setenv("PROOF_BACKUP_KEEP_SNAPSHOTS", "2")
+    monkeypatch.delenv("PROOF_BACKUP_KEEP_DAYS", raising=False)
+    monkeypatch.setattr(bk, "_today_utc", lambda: date(2026, 11, 10))
+    monkeypatch.setattr(bk, "_disk_free_bytes", lambda _: 0)
+    assert bk.main() == 1
+    assert old.is_file()
+    assert not (snap / "options_scanner.2026-11-10.sqlite").exists()
+    assert not receipt.exists()
+
+
+def test_backup_snapshot_failure_preserves_previous_and_fails(tmp_path, monkeypatch):
+    src = tmp_path / "logs"
+    src.mkdir()
+    _small_sqlite(src / "options_scanner.sqlite", "new")
+    dest = tmp_path / "backup"
+    snap = dest / "snapshots"
+    snap.mkdir(parents=True)
+    old = snap / "options_scanner.2026-11-08.sqlite"
+    _small_sqlite(old, "old")
+    monkeypatch.setenv("LOG_DIR", str(src))
+    monkeypatch.setenv("PROOF_BACKUP_DIR", str(dest))
+    monkeypatch.setenv("PROOF_BACKUP_KEEP_SNAPSHOTS", "2")
+    monkeypatch.delenv("PROOF_BACKUP_KEEP_DAYS", raising=False)
+    monkeypatch.setattr(bk, "_today_utc", lambda: date(2026, 11, 10))
+
+    def broken(*_):
+        raise OSError("simulated backup I/O failure")
+
+    monkeypatch.setattr(bk, "_snapshot_sqlite_atomic", broken)
+    assert bk.main() == 1
+    assert old.is_file()
+    assert not (dest / "backup_proof_data_latest.json").exists()
+
+
+def test_backup_legacy_day_retention_and_wrong_count_fail_closed(tmp_path, monkeypatch):
+    src = tmp_path / "logs"
+    src.mkdir()
+    _small_sqlite(src / "options_scanner.sqlite", "new")
+    dest = tmp_path / "backup"
+    monkeypatch.setenv("LOG_DIR", str(src))
+    monkeypatch.setenv("PROOF_BACKUP_DIR", str(dest))
+    monkeypatch.setenv("PROOF_BACKUP_KEEP_DAYS", "3")
+    assert bk.main() == 1
+    assert not dest.exists()
+    monkeypatch.delenv("PROOF_BACKUP_KEEP_DAYS")
+    monkeypatch.setenv("PROOF_BACKUP_KEEP_SNAPSHOTS", "3")
+    assert bk.main() == 1
+    assert not dest.exists()
+
+
+def test_snapshot_candidates_never_touch_unrelated_names():
+    names = [
+        "options_scanner.2026-11-08.sqlite",
+        "options_scanner.2026-11-09.sqlite",
+        "options_scanner.2026-11-10.sqlite",
+        "options_scanner.2026-11-11.sqlite",
+        "options_companion.2026-11-07.sqlite",
+        "options_companion.2026-11-10.sqlite",
+        "not-a-snapshot",
+        "old_archive.2026-01-01.sqlite",
+        "options_scanner.9999-99-99.sqlite",
+    ]
+    assert bk.snapshots_to_prune(names, {"options_scanner", "options_companion"}) == [
+        "options_scanner.2026-11-08.sqlite",
+        "options_scanner.2026-11-09.sqlite",
+    ]
+
+
+def test_backup_copy_handles_live_uncheckpointed_wal(tmp_path, monkeypatch):
+    src = tmp_path / "logs"
+    src.mkdir()
+    db = src / "options_scanner.sqlite"
+    writer = sqlite3.connect(db)
+    try:
+        assert writer.execute("PRAGMA journal_mode=WAL").fetchone() == ("wal",)
+        writer.execute("CREATE TABLE items (value INT)")
+        writer.executemany("INSERT INTO items VALUES (?)", [(1,), (2,), (3,)])
+        writer.commit()
+        # WAL is still live; backup API must see the committed records.
+        dest = tmp_path / "backup"
+        monkeypatch.setenv("LOG_DIR", str(src))
+        monkeypatch.setenv("PROOF_BACKUP_DIR", str(dest))
+        monkeypatch.setenv("PROOF_BACKUP_KEEP_SNAPSHOTS", "2")
+        monkeypatch.delenv("PROOF_BACKUP_KEEP_DAYS", raising=False)
+        assert bk.main() == 0
+        backups = list((dest / "snapshots").glob("options_scanner.*.sqlite"))
+        assert len(backups) == 1
+        with sqlite3.connect(f"file:{backups[0]}?mode=ro&immutable=1", uri=True) as recovered:
+            assert recovered.execute("SELECT value FROM items ORDER BY value").fetchall() == [(1,), (2,), (3,)]
+    finally:
+        writer.close()
