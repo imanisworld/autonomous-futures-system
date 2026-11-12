@@ -1,6 +1,6 @@
 # Options — Current State Handoff
 
-_Source state reconciled 2026-11-11 on `main` `834e8f52` (#1278). The 2026-10-11 research section remains the options-edge HOLD. Earlier dated checkpoints are provenance. The latest separately verified box-specific records, not `main`, govern runtime; no deployment or runtime recheck was performed by this documentation update. This is the single current-state authority for the options lane._
+_Source state reconciled 2026-11-11 on `main` `199e3243` (#1289). The 2026-10-11 research section remains the options-edge HOLD. Earlier dated checkpoints are provenance. The latest separately verified box-specific records, not `main`, govern runtime; no deployment or runtime recheck was performed by this documentation update. This is the single current-state authority for the options lane._
 
 Historical dated notes and old/closed PRs are provenance only. They do not override this file. Operational deployment proof lives in `docs/options-paper-v1-deployment-checklist.md`; diagnostic definitions live in `docs/options-v1-diagnostics.md`; the read-only coverage evidence lane (observer, reducer, outcome study, after-close collector) is described in `docs/options-coverage-observer.md`. The observation-only **setup-capture** lifecycle (`WATCHING` → `TRIGGERED` / `MISSED_LATE`) is described in `docs/options-setup-capture-observer.md`.
 
@@ -8,7 +8,7 @@ Historical dated notes and old/closed PRs are provenance only. They do not overr
 
 ## Source refresh — 2026-11-11
 
-Source `main` at `834e8f52` (#1278 on top of `5cc08f59`). This section is source only. It does not deploy, restart a collector, or read the box. Older sections that still say Polygon is the current options market-data authority, or that say not to cancel Polygon, are the 2026-09-20 reading. They are superseded for current posture by this section. They stay in the file as provenance.
+Source `main` at `199e3243` (#1289). The options source facts below were last read against `834e8f52`; none of the files they cite changed after it. This section is source only. It does not deploy, restart a collector, or read the box. Older sections that still say Polygon is the current options market-data authority, or that say not to cancel Polygon, are the 2026-09-20 reading. They are superseded for current posture by this section. They stay in the file as provenance.
 
 **Scanner.** The advisory scanner's market-data provider defaults to `public` (`alert_ranker/config.py:241`). `.env.example` sets `OPTIONS_MARKET_DATA_PROVIDER=public`. The scanner README describes the same provider. It does not place orders. The Public client allowlist is unchanged by this note.
 
@@ -18,7 +18,9 @@ Source `main` at `834e8f52` (#1278 on top of `5cc08f59`). This section is source
 
 **Polygon.** Access is recorded as ended 2026-10-18. Commit `0a8ddfea` (not an ancestor of this `main`) says the operator reported the Polygon subscription cancelled that day, and it appended an ABORTED / NOT_RUN ledger line that is not in `docs/research-trial-ledger.jsonl` on this `main`. The six-micro proof lane treats the timer as retired from that date (`ops/forward_lanes_daily_proof.py:29`). The live vendor account is UNVERIFIED. `options_manager/adapters/polygon_historical.py` is still in the tree. A historical adapter in git is not a live data grant.
 
-**Evidence posture.** No validated options-profitability edge. Research HOLD from the 2026-10-11 section below is unchanged. No P&L is added here.
+**Evidence posture.** Options status is **WAIT**. There is no validated options-profitability edge, and the research HOLD from the 2026-10-11 section below is unchanged. No P&L is added here.
+
+**Exit-evidence spec (#1283).** The docs-only specification `docs/options-122-prospective-exit-evidence-contract-DRAFT-2026-11-11.md` (prospective 1-2-2 option-exit evidence contract `ox-exit-122-v1`) merged as `96c66e5c`. It exists because the 37 usable option-entry captures from 2026-11-02..11 have entry prices but no option-exit prices or P&L (operator-reported counts; not re-derived here). The spec is not implemented, does not authorize collection or scoring, and grants no trade authority. **Gate B** (an isolated, code-only validator/reducer with synthetic fixtures) is **not started**. Gate D (a separate explicit operator collection GO) is also open. Until the gates exist, the status stays WAIT.
 
 ## Latest options research — 2026-10-11 (governance corrected 2026-10-18)
 

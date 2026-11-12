@@ -6,7 +6,11 @@ _As of 2026-09-24 (runtime and current decisions: see the 2026-09-24 blocks in `
 
 ## Source mechanics — 2026-11-11
 
-Source `main` at `834e8f52` (#1278, which added the unscored slice-success evaluator on top of #1277 at `5cc08f59`). This section is source only. It does not deploy, and it does not read the box. Strategy verdicts stay in `docs/strategy-rules/Strategy_Inventory.md`. The 2026-10-04 sentence below that still says the broad 4HR MNQ verdict is PROMISING BUT UNPROVEN is the reading from that day. The inventory's 2026-11-11 broad 4HR MNQ verdict is **WAIT**. 60M 3-2-2 stays **PROMISING BUT UNPROVEN**.
+Source `main` at `199e3243` (#1289, the 3-2-2 slice evidence merge; code facts below were last read against `834e8f52` and the only code files changed since are the slice wrapper, `webhook/app.py`, `ops/afs_watcher/watcher.py` and `notifications/decision_queue.py`, none cited here). This section is source only. It does not deploy, and it does not read the box. Strategy verdicts stay in `docs/strategy-rules/Strategy_Inventory.md`. The 2026-10-04 sentence below that still says the broad 4HR MNQ verdict is PROMISING BUT UNPROVEN is the reading from that day. The inventory's 2026-11-11 broad 4HR MNQ verdict is **WAIT**.
+
+**No futures strategy is currently validated.** Broad 4HR MNQ is WAIT, 12HR Miyagi is WAIT, and 60M 3-2-2 is **OVERFIT** as of 2026-11-11. Every older line in this file that calls 3-2-2 PROMISING BUT UNPROVEN is superseded.
+
+**3-2-2 slice result (2026-11-11).** Trial `T-2026-11-11-prereg-322-afs0523-slice-success-2026-11-11-01` ran both declared slices once from merged #1285 (`1f55786e`) after Imani's GO (AFS-0665). NQ 2010-2019: FAIL, net −$194.18 on 66 fills (65.2% wins against 75.3% break-even). MNQ 2019-2024: WAIT_CI, net +$223.38 on 44 fills (72.7% against 71.1%, not significant), worst loss −$205.98 over the $150 limit, so UNSAFE at current sizing (a label only). Combined FAIL, verdict OVERFIT. Evidence PR #1289 (`199e3243`); results AFS-0676 and AFS-0677; Imani's inventory ruling AFS-0678. `SLICE_SCORING_AUTHORIZED` is True on main (`research/afs0523_322_repro_wrapper.py:78`, set by #1280 at `5381f038`). Slices are not rerun. 3-2-2 is closed in its current form; any variant needs a new preregistered trial counted in the `mnq_322_first_live` family tally. The 3-2-2 shadow collection (`wide_stop_6k` paper lane, 1m observer) continues until the next authorized release and feeds no decision (AFS-0678); whether it is running on the box is UNVERIFIED from this checkout.
 
 **Fill model.** The paper webhook broker and the replay engine both pass `cfg.entry_fill_model` into `PaperBroker` (`webhook/runner.py:335-345`; `replay/replay_engine.py:282-294`). The default is `"market"` (`config/settings.py:373`; loaded at `:930-932`). `.env.example` sets `ENTRY_FILL_MODEL=market`. `"market"` fills unconditionally and is not honest-fill proof (`config/settings.py:363-372`). Demo and live Tradovate use the `legacy` entry mode unless the env says otherwise (`execution/tradovate_broker.py:247-251`). Legacy sends a Limit IOC when the slippage tolerance is positive, and a Market order when it is zero (`:199-208`, `:1390-1440`). A non-legacy mode is blocked when `TRADOVATE_ENV=live` (`:1320-1325`). The broker comment says the deployed box sets MES 16 and MNQ 32 so that path is IOC (`:204-215`). This checkout did not read the box, so the live tolerance is UNVERIFIED. Two paper lanes do not use the config default: wide-stop paper hardcodes `ioc_limit` at 8 ticks (`context/wide_stop_ledger_runtime.py:64-65`; `context/wide_stop_ledger_paper.py:50`), and inverse-ORB paper hardcodes `ioc_limit` at 8 ticks (`webhook/runner.py:2601-2604`; `context/mnq_orb_breakout_inverse_paper.py:23`). Changing the `"market"` default is held in open PRs #1262 and #1260. This note does not edit those PRs.
 
@@ -248,7 +252,7 @@ Repository state is still not proof of box state — re-verify the box (`/proc/<
 
 ### 1. MNQ 4HR Re-Trigger
 
-- status: **PROMISING BUT UNPROVEN / PAPER EVIDENCE**
+- status: broad MNQ evidence verdict **WAIT** (treatment/continuation subset OVERFIT), per `Strategy_Inventory.md` 2026-11-11; paper evidence collection only. Older label: PROMISING BUT UNPROVEN.
 - canonical strategy detector; do not rewrite
 - 1 MNQ contract
 - isolated hypothetical starting ledger: **$4,000**
@@ -261,7 +265,7 @@ Repository state is still not proof of box state — re-verify the box (`/proc/<
 
 ### 2. MNQ 60M 3-2-2 First Live
 
-- status: **PROMISING BUT UNPROVEN / PAPER EVIDENCE**
+- status: **OVERFIT** (2026-11-11, AFS-0677/AFS-0678); paper/shadow evidence collection only, no decision use. Was PROMISING BUT UNPROVEN before the slice result.
 - canonical First Live detector; do not replace with generic 3-2-2 research logic
 - 1 MNQ contract
 - simulated starting capital: **$5,000 maximum**

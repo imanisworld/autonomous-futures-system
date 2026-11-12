@@ -34,6 +34,12 @@ operational material out of git; use local `.env` files only.
 
 ---
 
+## Evidence status
+
+**No futures strategy is currently validated.** As of 2026-11-11 the broad 4HR MNQ evidence verdict is WAIT, 12HR Miyagi is WAIT, and 60M 3-2-2 is OVERFIT (its preregistered older-slice test failed once, 2026-11-11). Options is WAIT. The current verdicts live in [`docs/strategy-rules/Strategy_Inventory.md`](docs/strategy-rules/Strategy_Inventory.md) and attempt history in `docs/research-trial-ledger.jsonl`. An evidence label is not trading permission, and a repository file does not prove what any box is running.
+
+---
+
 ## Paper and demo only
 
 **Live trading is blocked at config load.** `config/settings.py` raises

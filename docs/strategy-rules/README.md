@@ -27,11 +27,17 @@ Current evidence verdicts are `Strategy_Inventory.md`, reconciled through 2026-1
 - **Miyagi:** MNQ +$102.35 / MES +$25.78 expectancy at T1 exit, literal stop (n=13/20).
   The inventory verdict is **WAIT** (AFS-0063).
 - **3-2-2:** the rule doc's older honest-fill line was MNQ net $1,595.70, PF 10.36, 18W-2L
-  (n=34 candidates, 20 resolved). The inventory keeps **PROMISING BUT UNPROVEN** (AFS-0523)
-  on the later corrected headline, not on that older line. The slice-success trial
-  `T-2026-11-11-prereg-322-afs0523-slice-success-2026-11-11-01` is registered
-  (`docs/prereg-322-afs0523-slice-success-2026-11-11.md`). `SLICE_SCORING_AUTHORIZED` is
-  False (`research/afs0523_322_repro_wrapper.py:71`). Nothing has been scored.
+  (n=34 candidates, 20 resolved). That line and the later corrected headline are superseded.
+  The inventory verdict is **OVERFIT** (2026-11-11). The slice-success trial
+  `T-2026-11-11-prereg-322-afs0523-slice-success-2026-11-11-01`
+  (`docs/prereg-322-afs0523-slice-success-2026-11-11.md`) ran both slices once: NQ 2010-2019
+  FAIL (net −$194.18), MNQ 2019-2024 WAIT_CI (net +$223.38, not significant, UNSAFE at current
+  sizing). Evidence PR #1289; AFS-0676, AFS-0677; Imani's ruling AFS-0678. Closed in its current
+  form; any variant needs a new preregistered trial. `SLICE_SCORING_AUTHORIZED` is True on main
+  (`research/afs0523_322_repro_wrapper.py:78`, #1280). Shadow collection continues until the
+  next authorized release and feeds no decision.
+
+**No futures strategy is currently validated:** broad 4HR MNQ is WAIT, Miyagi is WAIT, 3-2-2 is OVERFIT.
 
 > Target-touch rates are not P&L. Options profitability (premium/spread/theta) and
 > walk-forward stability remain open items per each doc's "not yet validated" section.
