@@ -475,6 +475,17 @@ rollback_release() {
     prev_fp=\$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[\"fingerprint_sha256\"])' \"\$manifest\")
     prev_commit=\$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[\"repo\"][\"commit\"])' \"\$manifest\")
     prev_risk=\$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[\"risk_rules_sha256\"])' \"\$manifest\")
+    # Fail BEFORE editing .env, switching symlinks, or restarting the bot.
+    # Verify the target as data using the currently running release's verifier
+    # source (stdlib-only), run by the plain system python3. Never the
+    # current release's .venv python: a broken or missing venv must not be able
+    # to block a rollback. Do not import code from the not-yet-trusted target.
+    EXPECTED_RELEASE_FINGERPRINT=\"\$prev_fp\" \\
+    PYTHONDONTWRITEBYTECODE=1 PYTHONPATH='$CURRENT' python3 \\
+      -m ops.release_integrity --repo-root \"\$previous\" || {
+        echo 'rollback refused: previous release failed pre-activation integrity' >&2
+        exit 1
+      }
     # Read-only watcher destination/source preflight BEFORE .env, symlink or service mutation.
     watcher_preflight_enabled=0
     if systemctl cat afs-watcher.service >/dev/null 2>&1; then
