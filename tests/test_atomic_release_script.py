@@ -468,6 +468,19 @@ def test_rollback_restores_previous_release_proof_pins_and_verifies_integrity():
     assert text.count("-m ops.release_integrity --repo-root '$CURRENT'") == 2
 
 
+def test_rollback_fails_previous_integrity_before_mutating_runtime():
+    rollback = SCRIPT.read_text().split("rollback_release() {", 1)[1]
+    preflight = rollback.index(r'-m ops.release_integrity --repo-root \"\$previous\"')
+    env_mutation = rollback.index("sed -i '/^EXPECTED_RELEASE_FINGERPRINT=")
+    link_mutation = rollback.index("mv -Tf '$CURRENT.next' '$CURRENT'")
+    service_restart = rollback.index("systemctl restart '$SERVICE'")
+    assert preflight < env_mutation < link_mutation < service_restart
+    # Bootstrap the check from the known current code, not the untrusted
+    # rollback target. The verifier's integrity failures must stop rollback.
+    assert "PYTHONPATH='$CURRENT' '$CURRENT/.venv/bin/python'" in rollback[:preflight]
+    assert "rollback refused: previous release failed pre-activation integrity" in rollback
+
+
 def test_promotion_and_rollback_use_atomic_symlink_replacement():
     text = SCRIPT.read_text()
     assert "mv -Tf '$CURRENT.next' '$CURRENT'" in text
@@ -604,7 +617,7 @@ def test_release_ops_modules_never_write_bytecode_into_a_release():
         r"\s+-m ops\.release_integrity",
         text,
     )
-    assert [no_pyc for _, no_pyc in remote_calls] == ["PYTHONDONTWRITEBYTECODE=1"] * 4
+    assert [no_pyc for _, no_pyc in remote_calls] == ["PYTHONDONTWRITEBYTECODE=1"] * 5
     assert text.count("-m ops.release_integrity --repo-root '$") == 4
 
     for action in ("promote", "rollback"):
