@@ -14,6 +14,13 @@ in this session (no `claude-audit` route from this environment), so every
 runtime statement below is either cited from the repo record or marked
 UNVERIFIED.
 
+**2026-11-11 (#1250):** `ops/forward_lanes_daily_proof.py` treats a missing
+`ops/options_observer_status.py` as a failed observer check
+(`STATUS_TOOL_MISSING`, `:364-370`) and garbled tool output as
+`MALFORMED_STATUS_OUTPUT` (`:393-407`). An empty or missing options journal
+is `NO_DATA` and is not a pass (`:338-345`). The installed proof copy on
+the box is UNVERIFIED.
+
 ## 1. Read-only status tool
 
 `ops/options_observer_status.py` — stdlib-only, runs with system `python3`,

@@ -1,6 +1,26 @@
 # Agent Work State
 
-## START HERE — 2026-11-11 slice scoring flip
+## START HERE — 2026-11-11 docs-only current-state refresh
+
+Docs only. No code, config, ledger, or execution change. Do not deploy from this note. Do not rerun or re-score a slice. Do not edit #1262 or #1260.
+
+| Item | State |
+|---|---|
+| **Branch** | `cursor/docs-current-state-refresh-ba06` (PR #1279, draft). Main `199e3243` (#1289) merged into it. |
+| **Base** | `199e3243`. Earlier base `834e8f52` (#1278). |
+| **Scope** | Inventory, futures/options current handoffs, README, env-and-deploy, Track B readiness, Signa v2, observer, and setup-capture notes. |
+| **Strategy verdicts** | **No futures strategy is currently validated.** Broad 4HR MNQ WAIT; 12HR Miyagi WAIT; 60M 3-2-2 **OVERFIT** (was PROMISING BUT UNPROVEN, AFS-0523). Options WAIT. |
+| **3-2-2 slice result** | Trial `T-2026-11-11-prereg-322-afs0523-slice-success-2026-11-11-01` ran once per slice at `1f55786e` (#1285) under AFS-0665. NQ 2010-2019 FAIL (net −$194.18, 66 fills); MNQ 2019-2024 WAIT_CI (net +$223.38, 44 fills, worst loss −$205.98, UNSAFE at current sizing); combined FAIL / OVERFIT. Evidence PR #1289 merged `199e3243`; AFS-0676, AFS-0677; Imani's inventory ruling AFS-0678. Closed in its current form; any variant needs a new preregistered trial. Shadow collection continues until the next authorized release and feeds no decision; box state UNVERIFIED. |
+| **Scoring switch** | `SLICE_SCORING_AUTHORIZED = True` on main (`research/afs0523_322_repro_wrapper.py:78`, #1280 at `5381f038`; #1285 fixed the clean-checkout check). The slices have been scored once and are not rerun. |
+| **Wide-stop** | Source `wide_stop_4k` is 400 ticks and a $400 lane daily-loss (`context/wide_stop_ledger_paper.py:86-88`). The 300-tick / $150 amendment is historical. Demo cap stays 300 ticks. Box collection UNVERIFIED. |
+| **Six-micro** | Retired 2026-10-18 as ABORTED/NOT_RUN, 0/40, not a strategy failure (recorded AFS-0313, AFS-0317, AFS-0321, AFS-0322). The inventory verdict is NOT CLASSIFIED; no AFS ruling. This main's ledger still ends at RUNNING for the trial. Commit `0a8ddfea` is not on this main. |
+| **Trend R3** | #1253 merged (AFS-0487, AFS-0492). `VARIANTS_START` is None. NOT_ACTIVATED. Inventory verdict NOT CLASSIFIED (no AFS ruling). Design/holdout P&L UNVERIFIED. |
+| **Fill / risk / Tradovate** | Paper and replay default `entry_fill_model` is `market`. Tradovate IOC depends on a positive slippage tolerance; the live env is UNVERIFIED. `$150` daily loss scales by contracts. Order pin is required; read-only may use `accounts[0]` only when the pin is unset. |
+| **Options** | Status WAIT. #1283 exit-evidence spec merged `96c66e5c` (docs only, not implemented); Gate B is not started. #1250: empty or missing options journal is `NO_DATA`; a missing or garbled observer tool fails. Scanner default provider is `public`. Polygon access ended 2026-10-18 is operator-reported; the vendor account is UNVERIFIED. |
+| **Tests** | `python3 -B -m pytest -q`: 9303 passed, 8 skipped, 0 failed (this PR updates `tests/test_webhook.py:1560` to the OVERFIT inventory label per AFS-0678). |
+| **NEXT** | Claude review of the revised docs diff at the exact head. Do not merge #1262. Do not score. Do not deploy. |
+
+## Previous — 2026-11-11 slice scoring flip, merged at 5381f038 (#1280)
 
 Evidence only. No slice was scored. Do not merge, deploy, or change execution from this note.
 
@@ -14,18 +34,19 @@ Evidence only. No slice was scored. Do not merge, deploy, or change execution fr
 | **Tests** | `python3 -B -m pytest -q`: 9275 passed, 8 skipped. |
 | **NEXT** | Independent review. Do not score a real slice from this checkpoint. |
 
-## Previous — 2026-11-11 slice-success evaluator
+## Previous — 2026-11-11 slice-success evaluator, merged at 834e8f52
 
-Evidence only. No slice was scored. `SLICE_SCORING_AUTHORIZED` stays false. Do not merge, deploy, or change execution from this note.
+Evidence only. No slice was scored. `SLICE_SCORING_AUTHORIZED` stays false. Do not deploy or change execution from this note.
 
 | Item | State |
 |---|---|
 | **Branch** | `cursor/322-slice-evaluator-ba8e` |
+| **Merged** | `#1278` at `834e8f52` |
 | **Base** | `5cc08f59` (`#1277` merged). |
 | **Trial** | `T-2026-11-11-prereg-322-afs0523-slice-success-2026-11-11-01` |
 | **Module** | `research/afs0523_322_slice_evaluator.py`. Checks run INSUFFICIENT, FAIL, WAIT_UNRESOLVED, FAIL_DRAWDOWN, WAIT_CI, PASS. Nothing is labeled VALIDATED. |
 | **Tests** | T1–T20 and N1. T16 reads the committed reproduction replay only. `python3 -B -m pytest -q`: 9274 passed, 8 skipped. |
-| **NEXT** | Independent review. Do not flip `SLICE_SCORING_AUTHORIZED` from this checkpoint. |
+| **NEXT** | Merged. Do not flip `SLICE_SCORING_AUTHORIZED` from this checkpoint. |
 
 ## Previous — 2026-11-11 GATE_REVIEW recorded
 

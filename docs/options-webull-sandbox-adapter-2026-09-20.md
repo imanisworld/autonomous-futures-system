@@ -81,9 +81,11 @@ The competing mirror was quarantined outside the repository and was **not** merg
 
 ## Market-data boundary
 
-Do **not** cancel Polygon because this adapter exists.
+**2026-11-11:** the "do not cancel Polygon" line below is the 2026-09-20 ruling for this adapter. It is not the current data-source posture. The scanner defaults to `public`, and Polygon access is recorded as ended 2026-10-18. See `docs/options-current-state-handoff.md` § Source refresh — 2026-11-11. The live vendor account is UNVERIFIED.
 
-Current source roles remain:
+Do **not** cancel Polygon because this adapter exists. *(2026-09-20 text, kept as provenance.)*
+
+Current source roles as written on 2026-09-20:
 
 - **Polygon / existing qualified sources** — market data and historical/options evidence as already configured;
 - **Signa** — observational/context/discovery evidence only;

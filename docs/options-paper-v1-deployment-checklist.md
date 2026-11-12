@@ -73,7 +73,7 @@ Current verified boundary as of 2026-09-20:
 
 The adapter must remain pinned to `api.sandbox.webull.com`, paper mode, sandbox live=false, global Webull live=false, and `LIVE_OPTIONS_TRADING_ENABLED=false`. It exposes no order-submission/cancel/replace method in the current candidate.
 
-**Market-data rule:** keep Polygon/existing qualified providers as the options market-data authority. Webull quote/snapshot access is separately subscription-gated and is not required for this paper-broker feasibility phase.
+**Market-data rule (2026-09-20, superseded for current posture):** this checklist then said to keep Polygon as the options market-data authority, and not to buy Webull quotes for this adapter phase. As of 2026-11-11 the scanner default is `public` (`alert_ranker/config.py:241`), and Polygon access is recorded as ended 2026-10-18. See `docs/options-current-state-handoff.md` § Source refresh — 2026-11-11. The live vendor account is UNVERIFIED. Webull quote access is still not a trade grant.
 
 Do not wire Webull submission into the scanner, scheduler, risk engine, or alert path until the remaining Phase-2 gates in `docs/options-webull-sandbox-adapter-2026-09-20.md` are proven and separately authorized.
 
