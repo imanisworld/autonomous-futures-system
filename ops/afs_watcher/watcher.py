@@ -2997,7 +2997,11 @@ def handle_blocked(state: dict, findings: Findings, tick: dict) -> None:
             text = (_action_card_text(k, b, tick, rec.get("first_utc")) if rec.get("action_required")
                     else _blocked_discord_text(k, b, rec.get("snapshot")))
             notify(state, "DISCORD_ROUTE_ERROR", text, f"blocked:{k}")
-            state["blocked_last_notified"][k] = iso(now_utc())
+            # notify() writes this marker only after Discord acknowledges delivery.
+            # A failed send must be eligible for the next watcher tick, not held
+            # until the six-hour reminder interval expires.
+            if state["notified"].get(f"blocked:{k}"):
+                state["blocked_last_notified"][k] = iso(now_utc())
             if rec.get("action_required"):
                 _maybe_triage(state, k, b, tick, rec.get("first_utc"))
 

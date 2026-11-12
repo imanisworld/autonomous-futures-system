@@ -18,6 +18,20 @@ Docs only. No code, config, ledger, or execution change. Do not deploy from this
 | **Tests** | `.venv/bin/python -m pytest -q` after the rebase onto `834e8f52`: 9274 passed, 8 skipped, exit 0, Python 3.13.15. |
 | **NEXT** | Independent review of the docs diff. Do not merge #1262. Do not score. Do not deploy. |
 
+## Previous — 2026-11-11 slice scoring flip, merged at 5381f038 (#1280)
+
+Evidence only. No slice was scored. Do not merge, deploy, or change execution from this note.
+
+| Item | State |
+|---|---|
+| **Branch** | `cursor/322-slice-scoring-flip-ba8e` |
+| **Base** | `834e8f52` (`#1278` merged). |
+| **Flip** | `SLICE_SCORING_AUTHORIZED` is true. Each scored slice stamps `evaluator_path` and `evaluator_sha256`. Both attempt-01 artifacts produce `combine.attempt-01.json`. |
+| **Evaluator file** | Unchanged from `834e8f52`. T14 is an import allowlist. |
+| **Prereg lines** | Several wrapper citations in the registered prereg have drifted. The prereg bytes were not edited. |
+| **Tests** | `python3 -B -m pytest -q`: 9275 passed, 8 skipped. |
+| **NEXT** | Independent review. Do not score a real slice from this checkpoint. |
+
 ## Previous — 2026-11-11 slice-success evaluator, merged at 834e8f52
 
 Evidence only. No slice was scored. `SLICE_SCORING_AUTHORIZED` stays false. Do not deploy or change execution from this note.

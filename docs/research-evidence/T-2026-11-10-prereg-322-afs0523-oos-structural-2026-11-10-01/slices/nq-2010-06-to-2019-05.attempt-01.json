@@ -1,0 +1,5401 @@
+{
+  "slice_id": "nq-2010-06-to-2019-05",
+  "start": "2010-06-06",
+  "end": "2019-04-30",
+  "price_source": "NQ",
+  "label": "best available evidence, not fully clean",
+  "dollar_basis": "MNQ-equivalent ($2/point)",
+  "older_slice_ioc_note": "The reproduction gate is the only check of Databento bar quality. Older-slice results depend on Databento's bars and closing prints.",
+  "git_head": "1f55786e2f1b6fdccaa5f2e7260da51889fdbbc7",
+  "clean_tree": true,
+  "wrapper_sha256": "1f175c04c244a487c927a31c0593ad76f4bae2f293b66eb58b687cc6d39b5b2e",
+  "by_slippage": {
+    "1tick": {
+      "original": {
+        "candidates": 88,
+        "fills": 84,
+        "resolved": 84,
+        "unresolved": [],
+        "unresolved_count": 0,
+        "no_fills": {
+          "ENTRY_BRACKET_INVALID_AT_FILL": 4
+        },
+        "no_fill_count": 4,
+        "resolved_trade_list": [
+          {
+            "date": "2010-06-22",
+            "result": "WIN",
+            "net": 12.02
+          },
+          {
+            "date": "2010-07-01",
+            "result": "WIN",
+            "net": 11.02
+          },
+          {
+            "date": "2010-07-29",
+            "result": "WIN",
+            "net": -0.98
+          },
+          {
+            "date": "2010-08-13",
+            "result": "WIN",
+            "net": 2.02
+          },
+          {
+            "date": "2010-09-09",
+            "result": "WIN",
+            "net": 4.02
+          },
+          {
+            "date": "2010-10-14",
+            "result": "LOSS",
+            "net": -22.98
+          },
+          {
+            "date": "2010-10-29",
+            "result": "WIN",
+            "net": 0.02
+          },
+          {
+            "date": "2011-02-04",
+            "result": "WIN",
+            "net": 14.02
+          },
+          {
+            "date": "2011-02-17",
+            "result": "WIN",
+            "net": -0.48
+          },
+          {
+            "date": "2011-04-01",
+            "result": "WIN",
+            "net": -0.48
+          },
+          {
+            "date": "2011-06-09",
+            "result": "WIN",
+            "net": 0.52
+          },
+          {
+            "date": "2011-06-16",
+            "result": "LOSS",
+            "net": -18.48
+          },
+          {
+            "date": "2011-07-28",
+            "result": "WIN",
+            "net": -0.98
+          },
+          {
+            "date": "2011-07-29",
+            "result": "WIN",
+            "net": 16.52
+          },
+          {
+            "date": "2011-09-02",
+            "result": "LOSS",
+            "net": -40.48
+          },
+          {
+            "date": "2011-09-16",
+            "result": "LOSS",
+            "net": -36.98
+          },
+          {
+            "date": "2011-09-20",
+            "result": "WIN",
+            "net": 6.02
+          },
+          {
+            "date": "2011-09-30",
+            "result": "WIN",
+            "net": 16.02
+          },
+          {
+            "date": "2011-12-23",
+            "result": "LOSS",
+            "net": -14.48
+          },
+          {
+            "date": "2012-01-06",
+            "result": "WIN",
+            "net": 7.52
+          },
+          {
+            "date": "2012-02-29",
+            "result": "WIN",
+            "net": -0.48
+          },
+          {
+            "date": "2012-05-15",
+            "result": "WIN",
+            "net": 13.02
+          },
+          {
+            "date": "2012-06-13",
+            "result": "WIN",
+            "net": 3.02
+          },
+          {
+            "date": "2012-06-14",
+            "result": "WIN",
+            "net": 0.02
+          },
+          {
+            "date": "2012-07-10",
+            "result": "WIN",
+            "net": 14.02
+          },
+          {
+            "date": "2012-08-02",
+            "result": "LOSS",
+            "net": -25.98
+          },
+          {
+            "date": "2012-08-17",
+            "result": "LOSS",
+            "net": -18.48
+          },
+          {
+            "date": "2012-08-24",
+            "result": "WIN",
+            "net": 7.52
+          },
+          {
+            "date": "2012-09-19",
+            "result": "LOSS",
+            "net": -22.48
+          },
+          {
+            "date": "2012-10-04",
+            "result": "WIN",
+            "net": 2.02
+          },
+          {
+            "date": "2012-12-18",
+            "result": "WIN",
+            "net": 11.52
+          },
+          {
+            "date": "2013-02-07",
+            "result": "WIN",
+            "net": -0.98
+          },
+          {
+            "date": "2013-02-12",
+            "result": "WIN",
+            "net": -0.48
+          },
+          {
+            "date": "2013-04-19",
+            "result": "WIN",
+            "net": 8.52
+          },
+          {
+            "date": "2013-04-26",
+            "result": "WIN",
+            "net": 3.02
+          },
+          {
+            "date": "2013-05-23",
+            "result": "WIN",
+            "net": 0.52
+          },
+          {
+            "date": "2013-08-02",
+            "result": "WIN",
+            "net": 6.02
+          },
+          {
+            "date": "2013-09-23",
+            "result": "WIN",
+            "net": 15.02
+          },
+          {
+            "date": "2013-12-06",
+            "result": "LOSS",
+            "net": -25.48
+          },
+          {
+            "date": "2014-01-22",
+            "result": "LOSS",
+            "net": -21.98
+          },
+          {
+            "date": "2014-02-07",
+            "result": "LOSS",
+            "net": -38.98
+          },
+          {
+            "date": "2014-02-11",
+            "result": "WIN",
+            "net": 0.02
+          },
+          {
+            "date": "2014-03-06",
+            "result": "WIN",
+            "net": 1.02
+          },
+          {
+            "date": "2014-04-30",
+            "result": "WIN",
+            "net": 0.52
+          },
+          {
+            "date": "2014-05-29",
+            "result": "LOSS",
+            "net": -23.98
+          },
+          {
+            "date": "2014-09-17",
+            "result": "WIN",
+            "net": 9.02
+          },
+          {
+            "date": "2014-10-06",
+            "result": "WIN",
+            "net": 1.52
+          },
+          {
+            "date": "2014-10-24",
+            "result": "LOSS",
+            "net": -43.98
+          },
+          {
+            "date": "2014-10-27",
+            "result": "WIN",
+            "net": -0.98
+          },
+          {
+            "date": "2014-11-17",
+            "result": "WIN",
+            "net": 0.02
+          },
+          {
+            "date": "2014-11-25",
+            "result": "WIN",
+            "net": -0.98
+          },
+          {
+            "date": "2014-12-04",
+            "result": "WIN",
+            "net": 10.52
+          },
+          {
+            "date": "2014-12-19",
+            "result": "WIN",
+            "net": 9.52
+          },
+          {
+            "date": "2015-02-06",
+            "result": "WIN",
+            "net": 2.02
+          },
+          {
+            "date": "2015-02-09",
+            "result": "LOSS",
+            "net": -43.48
+          },
+          {
+            "date": "2015-03-06",
+            "result": "LOSS",
+            "net": -41.98
+          },
+          {
+            "date": "2015-03-26",
+            "result": "LOSS",
+            "net": -83.98
+          },
+          {
+            "date": "2015-08-27",
+            "result": "LOSS",
+            "net": -72.48
+          },
+          {
+            "date": "2015-09-04",
+            "result": "LOSS",
+            "net": -47.48
+          },
+          {
+            "date": "2015-10-02",
+            "result": "WIN",
+            "net": 147.52
+          },
+          {
+            "date": "2015-10-05",
+            "result": "WIN",
+            "net": 7.02
+          },
+          {
+            "date": "2015-11-17",
+            "result": "WIN",
+            "net": 7.52
+          },
+          {
+            "date": "2016-02-10",
+            "result": "WIN",
+            "net": 1.52
+          },
+          {
+            "date": "2016-02-23",
+            "result": "WIN",
+            "net": 9.02
+          },
+          {
+            "date": "2016-03-02",
+            "result": "LOSS",
+            "net": -46.48
+          },
+          {
+            "date": "2016-03-17",
+            "result": "LOSS",
+            "net": -49.48
+          },
+          {
+            "date": "2016-04-01",
+            "result": "WIN",
+            "net": 6.52
+          },
+          {
+            "date": "2016-04-21",
+            "result": "WIN",
+            "net": 13.02
+          },
+          {
+            "date": "2016-05-06",
+            "result": "LOSS",
+            "net": -68.48
+          },
+          {
+            "date": "2016-05-26",
+            "result": "WIN",
+            "net": 1.52
+          },
+          {
+            "date": "2016-08-30",
+            "result": "WIN",
+            "net": 1.52
+          },
+          {
+            "date": "2016-09-26",
+            "result": "WIN",
+            "net": 4.02
+          },
+          {
+            "date": "2016-10-21",
+            "result": "WIN",
+            "net": 9.52
+          },
+          {
+            "date": "2017-03-23",
+            "result": "WIN",
+            "net": 10.02
+          },
+          {
+            "date": "2017-07-25",
+            "result": "WIN",
+            "net": 14.52
+          },
+          {
+            "date": "2017-08-16",
+            "result": "WIN",
+            "net": 0.02
+          },
+          {
+            "date": "2018-01-05",
+            "result": "WIN",
+            "net": 13.02
+          },
+          {
+            "date": "2018-01-12",
+            "result": "WIN",
+            "net": 28.52
+          },
+          {
+            "date": "2018-03-13",
+            "result": "WIN",
+            "net": 35.02
+          },
+          {
+            "date": "2018-03-22",
+            "result": "WIN",
+            "net": 9.02
+          },
+          {
+            "date": "2018-10-05",
+            "result": "WIN",
+            "net": 4.02
+          },
+          {
+            "date": "2018-10-26",
+            "result": "WIN",
+            "net": 26.02
+          },
+          {
+            "date": "2019-02-13",
+            "result": "WIN",
+            "net": 3.02
+          },
+          {
+            "date": "2019-02-14",
+            "result": "WIN",
+            "net": 32.02
+          }
+        ],
+        "net_pnl_resolved_only": -223.32,
+        "win_rate_resolved_only": 0.75,
+        "drawdown_resolved_only": 470.92,
+        "longest_losing_streak_resolved_only": 5
+      },
+      "honest_ioc": {
+        "candidates": 88,
+        "fills": 70,
+        "resolved": 70,
+        "unresolved": [],
+        "unresolved_count": 0,
+        "no_fills": {
+          "ENTRY_NOT_FILLED": 1,
+          "ENTRY_BRACKET_INVALID_AT_FILL": 17
+        },
+        "no_fill_count": 18,
+        "resolved_trade_list": [
+          {
+            "date": "2010-06-22",
+            "result": "WIN",
+            "net": 9.02
+          },
+          {
+            "date": "2010-08-13",
+            "result": "WIN",
+            "net": 0.52
+          },
+          {
+            "date": "2010-09-09",
+            "result": "WIN",
+            "net": 3.52
+          },
+          {
+            "date": "2010-10-14",
+            "result": "LOSS",
+            "net": -22.98
+          },
+          {
+            "date": "2010-10-29",
+            "result": "WIN",
+            "net": 2.52
+          },
+          {
+            "date": "2011-02-04",
+            "result": "WIN",
+            "net": 9.52
+          },
+          {
+            "date": "2011-04-01",
+            "result": "WIN",
+            "net": 1.52
+          },
+          {
+            "date": "2011-04-12",
+            "result": "WIN",
+            "net": 4.52
+          },
+          {
+            "date": "2011-06-09",
+            "result": "WIN",
+            "net": 1.52
+          },
+          {
+            "date": "2011-06-16",
+            "result": "LOSS",
+            "net": -10.48
+          },
+          {
+            "date": "2011-07-28",
+            "result": "WIN",
+            "net": 4.52
+          },
+          {
+            "date": "2011-07-29",
+            "result": "WIN",
+            "net": 18.02
+          },
+          {
+            "date": "2011-09-02",
+            "result": "LOSS",
+            "net": -31.98
+          },
+          {
+            "date": "2011-09-16",
+            "result": "LOSS",
+            "net": -28.48
+          },
+          {
+            "date": "2011-09-20",
+            "result": "WIN",
+            "net": 6.02
+          },
+          {
+            "date": "2011-09-30",
+            "result": "WIN",
+            "net": 19.02
+          },
+          {
+            "date": "2011-12-23",
+            "result": "LOSS",
+            "net": -10.48
+          },
+          {
+            "date": "2012-01-06",
+            "result": "WIN",
+            "net": 7.52
+          },
+          {
+            "date": "2012-05-15",
+            "result": "WIN",
+            "net": 11.52
+          },
+          {
+            "date": "2012-06-13",
+            "result": "WIN",
+            "net": 4.02
+          },
+          {
+            "date": "2012-06-14",
+            "result": "WIN",
+            "net": 4.52
+          },
+          {
+            "date": "2012-07-10",
+            "result": "WIN",
+            "net": 1.02
+          },
+          {
+            "date": "2012-08-02",
+            "result": "LOSS",
+            "net": -39.98
+          },
+          {
+            "date": "2012-08-17",
+            "result": "LOSS",
+            "net": -17.98
+          },
+          {
+            "date": "2012-08-24",
+            "result": "WIN",
+            "net": 12.52
+          },
+          {
+            "date": "2012-09-19",
+            "result": "LOSS",
+            "net": -22.98
+          },
+          {
+            "date": "2012-12-18",
+            "result": "WIN",
+            "net": 14.02
+          },
+          {
+            "date": "2013-04-26",
+            "result": "WIN",
+            "net": 1.52
+          },
+          {
+            "date": "2013-05-23",
+            "result": "WIN",
+            "net": -0.48
+          },
+          {
+            "date": "2013-08-02",
+            "result": "WIN",
+            "net": 5.02
+          },
+          {
+            "date": "2013-09-23",
+            "result": "WIN",
+            "net": 12.02
+          },
+          {
+            "date": "2013-12-06",
+            "result": "LOSS",
+            "net": -27.48
+          },
+          {
+            "date": "2014-01-22",
+            "result": "LOSS",
+            "net": -17.98
+          },
+          {
+            "date": "2014-02-07",
+            "result": "LOSS",
+            "net": -39.48
+          },
+          {
+            "date": "2014-03-06",
+            "result": "WIN",
+            "net": 4.02
+          },
+          {
+            "date": "2014-04-30",
+            "result": "WIN",
+            "net": 2.52
+          },
+          {
+            "date": "2014-05-29",
+            "result": "LOSS",
+            "net": -19.48
+          },
+          {
+            "date": "2014-09-17",
+            "result": "WIN",
+            "net": 6.02
+          },
+          {
+            "date": "2014-10-06",
+            "result": "WIN",
+            "net": 0.52
+          },
+          {
+            "date": "2014-10-24",
+            "result": "LOSS",
+            "net": -39.48
+          },
+          {
+            "date": "2014-11-17",
+            "result": "WIN",
+            "net": 2.02
+          },
+          {
+            "date": "2014-12-04",
+            "result": "WIN",
+            "net": 18.02
+          },
+          {
+            "date": "2014-12-19",
+            "result": "WIN",
+            "net": -0.48
+          },
+          {
+            "date": "2015-02-09",
+            "result": "LOSS",
+            "net": -39.98
+          },
+          {
+            "date": "2015-03-06",
+            "result": "LOSS",
+            "net": -34.98
+          },
+          {
+            "date": "2015-03-26",
+            "result": "LOSS",
+            "net": -66.48
+          },
+          {
+            "date": "2015-07-31",
+            "result": "WIN",
+            "net": 19.52
+          },
+          {
+            "date": "2015-08-27",
+            "result": "LOSS",
+            "net": -65.48
+          },
+          {
+            "date": "2015-09-04",
+            "result": "LOSS",
+            "net": -47.98
+          },
+          {
+            "date": "2015-10-02",
+            "result": "WIN",
+            "net": 164.02
+          },
+          {
+            "date": "2015-10-05",
+            "result": "WIN",
+            "net": 23.02
+          },
+          {
+            "date": "2015-11-17",
+            "result": "WIN",
+            "net": -0.48
+          },
+          {
+            "date": "2016-02-10",
+            "result": "WIN",
+            "net": 3.02
+          },
+          {
+            "date": "2016-03-02",
+            "result": "LOSS",
+            "net": -44.48
+          },
+          {
+            "date": "2016-03-17",
+            "result": "LOSS",
+            "net": -43.48
+          },
+          {
+            "date": "2016-04-01",
+            "result": "WIN",
+            "net": 0.52
+          },
+          {
+            "date": "2016-04-21",
+            "result": "WIN",
+            "net": 4.02
+          },
+          {
+            "date": "2016-05-06",
+            "result": "LOSS",
+            "net": -69.98
+          },
+          {
+            "date": "2016-05-26",
+            "result": "WIN",
+            "net": 5.52
+          },
+          {
+            "date": "2016-08-30",
+            "result": "WIN",
+            "net": 10.52
+          },
+          {
+            "date": "2016-09-26",
+            "result": "WIN",
+            "net": 8.52
+          },
+          {
+            "date": "2016-10-21",
+            "result": "WIN",
+            "net": 13.52
+          },
+          {
+            "date": "2017-03-23",
+            "result": "WIN",
+            "net": 11.02
+          },
+          {
+            "date": "2017-07-25",
+            "result": "WIN",
+            "net": 19.52
+          },
+          {
+            "date": "2018-01-05",
+            "result": "WIN",
+            "net": 12.02
+          },
+          {
+            "date": "2018-01-12",
+            "result": "WIN",
+            "net": 25.52
+          },
+          {
+            "date": "2018-02-13",
+            "result": "WIN",
+            "net": 5.02
+          },
+          {
+            "date": "2018-03-13",
+            "result": "WIN",
+            "net": 19.52
+          },
+          {
+            "date": "2018-10-26",
+            "result": "WIN",
+            "net": 48.02
+          },
+          {
+            "date": "2019-02-14",
+            "result": "WIN",
+            "net": 28.02
+          }
+        ],
+        "net_pnl_resolved_only": -135.6,
+        "win_rate_resolved_only": 0.7,
+        "drawdown_resolved_only": 400.26,
+        "longest_losing_streak_resolved_only": 3
+      },
+      "prearmed": {
+        "candidates": 88,
+        "fills": 84,
+        "resolved": 84,
+        "unresolved": [],
+        "unresolved_count": 0,
+        "no_fills": {
+          "ENTRY_BRACKET_INVALID_AT_FILL": 4
+        },
+        "no_fill_count": 4,
+        "resolved_trade_list": [
+          {
+            "date": "2010-06-22",
+            "result": "WIN",
+            "net": 12.02
+          },
+          {
+            "date": "2010-07-01",
+            "result": "WIN",
+            "net": 11.02
+          },
+          {
+            "date": "2010-07-29",
+            "result": "WIN",
+            "net": -0.98
+          },
+          {
+            "date": "2010-08-13",
+            "result": "WIN",
+            "net": 2.02
+          },
+          {
+            "date": "2010-09-09",
+            "result": "WIN",
+            "net": 4.02
+          },
+          {
+            "date": "2010-10-14",
+            "result": "LOSS",
+            "net": -22.98
+          },
+          {
+            "date": "2010-10-29",
+            "result": "WIN",
+            "net": 0.02
+          },
+          {
+            "date": "2011-02-04",
+            "result": "WIN",
+            "net": 14.02
+          },
+          {
+            "date": "2011-02-17",
+            "result": "WIN",
+            "net": -0.48
+          },
+          {
+            "date": "2011-04-01",
+            "result": "WIN",
+            "net": -0.48
+          },
+          {
+            "date": "2011-06-09",
+            "result": "WIN",
+            "net": 0.52
+          },
+          {
+            "date": "2011-06-16",
+            "result": "LOSS",
+            "net": -18.48
+          },
+          {
+            "date": "2011-07-28",
+            "result": "WIN",
+            "net": -0.98
+          },
+          {
+            "date": "2011-07-29",
+            "result": "WIN",
+            "net": 16.52
+          },
+          {
+            "date": "2011-09-02",
+            "result": "LOSS",
+            "net": -40.48
+          },
+          {
+            "date": "2011-09-16",
+            "result": "LOSS",
+            "net": -36.98
+          },
+          {
+            "date": "2011-09-20",
+            "result": "WIN",
+            "net": 6.02
+          },
+          {
+            "date": "2011-09-30",
+            "result": "WIN",
+            "net": 16.02
+          },
+          {
+            "date": "2011-12-23",
+            "result": "LOSS",
+            "net": -14.48
+          },
+          {
+            "date": "2012-01-06",
+            "result": "WIN",
+            "net": 7.52
+          },
+          {
+            "date": "2012-02-29",
+            "result": "WIN",
+            "net": -0.48
+          },
+          {
+            "date": "2012-05-15",
+            "result": "WIN",
+            "net": 13.02
+          },
+          {
+            "date": "2012-06-13",
+            "result": "WIN",
+            "net": 3.02
+          },
+          {
+            "date": "2012-06-14",
+            "result": "WIN",
+            "net": 0.02
+          },
+          {
+            "date": "2012-07-10",
+            "result": "WIN",
+            "net": 14.02
+          },
+          {
+            "date": "2012-08-02",
+            "result": "LOSS",
+            "net": -25.98
+          },
+          {
+            "date": "2012-08-17",
+            "result": "LOSS",
+            "net": -18.48
+          },
+          {
+            "date": "2012-08-24",
+            "result": "WIN",
+            "net": 7.52
+          },
+          {
+            "date": "2012-09-19",
+            "result": "LOSS",
+            "net": -22.48
+          },
+          {
+            "date": "2012-10-04",
+            "result": "WIN",
+            "net": 2.02
+          },
+          {
+            "date": "2012-12-18",
+            "result": "WIN",
+            "net": 11.52
+          },
+          {
+            "date": "2013-02-07",
+            "result": "WIN",
+            "net": -0.98
+          },
+          {
+            "date": "2013-02-12",
+            "result": "WIN",
+            "net": -0.48
+          },
+          {
+            "date": "2013-04-19",
+            "result": "WIN",
+            "net": 8.52
+          },
+          {
+            "date": "2013-04-26",
+            "result": "WIN",
+            "net": 3.02
+          },
+          {
+            "date": "2013-05-23",
+            "result": "WIN",
+            "net": 0.52
+          },
+          {
+            "date": "2013-08-02",
+            "result": "WIN",
+            "net": 6.02
+          },
+          {
+            "date": "2013-09-23",
+            "result": "WIN",
+            "net": 15.02
+          },
+          {
+            "date": "2013-12-06",
+            "result": "LOSS",
+            "net": -25.48
+          },
+          {
+            "date": "2014-01-22",
+            "result": "LOSS",
+            "net": -21.98
+          },
+          {
+            "date": "2014-02-07",
+            "result": "LOSS",
+            "net": -38.98
+          },
+          {
+            "date": "2014-02-11",
+            "result": "WIN",
+            "net": 0.02
+          },
+          {
+            "date": "2014-03-06",
+            "result": "WIN",
+            "net": 1.02
+          },
+          {
+            "date": "2014-04-30",
+            "result": "WIN",
+            "net": 0.52
+          },
+          {
+            "date": "2014-05-29",
+            "result": "LOSS",
+            "net": -23.98
+          },
+          {
+            "date": "2014-09-17",
+            "result": "WIN",
+            "net": 9.02
+          },
+          {
+            "date": "2014-10-06",
+            "result": "WIN",
+            "net": 1.52
+          },
+          {
+            "date": "2014-10-24",
+            "result": "LOSS",
+            "net": -43.98
+          },
+          {
+            "date": "2014-10-27",
+            "result": "WIN",
+            "net": -0.98
+          },
+          {
+            "date": "2014-11-17",
+            "result": "WIN",
+            "net": 0.02
+          },
+          {
+            "date": "2014-11-25",
+            "result": "WIN",
+            "net": -0.98
+          },
+          {
+            "date": "2014-12-04",
+            "result": "WIN",
+            "net": 10.52
+          },
+          {
+            "date": "2014-12-19",
+            "result": "WIN",
+            "net": 9.52
+          },
+          {
+            "date": "2015-02-06",
+            "result": "WIN",
+            "net": 2.02
+          },
+          {
+            "date": "2015-02-09",
+            "result": "LOSS",
+            "net": -43.48
+          },
+          {
+            "date": "2015-03-06",
+            "result": "LOSS",
+            "net": -41.98
+          },
+          {
+            "date": "2015-03-26",
+            "result": "LOSS",
+            "net": -83.98
+          },
+          {
+            "date": "2015-08-27",
+            "result": "LOSS",
+            "net": -72.48
+          },
+          {
+            "date": "2015-09-04",
+            "result": "WIN",
+            "net": 7.02
+          },
+          {
+            "date": "2015-10-02",
+            "result": "WIN",
+            "net": 147.52
+          },
+          {
+            "date": "2015-10-05",
+            "result": "WIN",
+            "net": 7.02
+          },
+          {
+            "date": "2015-11-17",
+            "result": "WIN",
+            "net": 7.52
+          },
+          {
+            "date": "2016-02-10",
+            "result": "WIN",
+            "net": 1.52
+          },
+          {
+            "date": "2016-02-23",
+            "result": "WIN",
+            "net": 9.02
+          },
+          {
+            "date": "2016-03-02",
+            "result": "LOSS",
+            "net": -46.48
+          },
+          {
+            "date": "2016-03-17",
+            "result": "LOSS",
+            "net": -49.48
+          },
+          {
+            "date": "2016-04-01",
+            "result": "WIN",
+            "net": 6.52
+          },
+          {
+            "date": "2016-04-21",
+            "result": "WIN",
+            "net": 13.02
+          },
+          {
+            "date": "2016-05-06",
+            "result": "LOSS",
+            "net": -68.48
+          },
+          {
+            "date": "2016-05-26",
+            "result": "WIN",
+            "net": 1.52
+          },
+          {
+            "date": "2016-08-30",
+            "result": "WIN",
+            "net": 1.52
+          },
+          {
+            "date": "2016-09-26",
+            "result": "WIN",
+            "net": 4.02
+          },
+          {
+            "date": "2016-10-21",
+            "result": "WIN",
+            "net": 9.52
+          },
+          {
+            "date": "2017-03-23",
+            "result": "WIN",
+            "net": 10.02
+          },
+          {
+            "date": "2017-07-25",
+            "result": "WIN",
+            "net": 14.52
+          },
+          {
+            "date": "2017-08-16",
+            "result": "WIN",
+            "net": 0.02
+          },
+          {
+            "date": "2018-01-05",
+            "result": "WIN",
+            "net": 13.02
+          },
+          {
+            "date": "2018-01-12",
+            "result": "WIN",
+            "net": 28.52
+          },
+          {
+            "date": "2018-03-13",
+            "result": "WIN",
+            "net": 35.02
+          },
+          {
+            "date": "2018-03-22",
+            "result": "WIN",
+            "net": 9.02
+          },
+          {
+            "date": "2018-10-05",
+            "result": "WIN",
+            "net": 4.02
+          },
+          {
+            "date": "2018-10-26",
+            "result": "WIN",
+            "net": 26.02
+          },
+          {
+            "date": "2019-02-13",
+            "result": "WIN",
+            "net": 3.02
+          },
+          {
+            "date": "2019-02-14",
+            "result": "WIN",
+            "net": 32.02
+          }
+        ],
+        "net_pnl_resolved_only": -168.82,
+        "win_rate_resolved_only": 0.7619047619047619,
+        "drawdown_resolved_only": 423.44,
+        "longest_losing_streak_resolved_only": 4
+      }
+    },
+    "2tick": {
+      "original": {
+        "candidates": 88,
+        "fills": 79,
+        "resolved": 79,
+        "unresolved": [],
+        "unresolved_count": 0,
+        "no_fills": {
+          "ENTRY_BRACKET_INVALID_AT_FILL": 9
+        },
+        "no_fill_count": 9,
+        "resolved_trade_list": [
+          {
+            "date": "2010-06-22",
+            "result": "WIN",
+            "net": 11.52
+          },
+          {
+            "date": "2010-07-01",
+            "result": "WIN",
+            "net": 10.52
+          },
+          {
+            "date": "2010-08-13",
+            "result": "WIN",
+            "net": 1.52
+          },
+          {
+            "date": "2010-09-09",
+            "result": "WIN",
+            "net": 3.52
+          },
+          {
+            "date": "2010-10-14",
+            "result": "LOSS",
+            "net": -23.98
+          },
+          {
+            "date": "2010-10-29",
+            "result": "WIN",
+            "net": -0.48
+          },
+          {
+            "date": "2011-02-04",
+            "result": "WIN",
+            "net": 13.52
+          },
+          {
+            "date": "2011-02-17",
+            "result": "WIN",
+            "net": -0.98
+          },
+          {
+            "date": "2011-04-01",
+            "result": "WIN",
+            "net": -0.98
+          },
+          {
+            "date": "2011-06-09",
+            "result": "WIN",
+            "net": 0.02
+          },
+          {
+            "date": "2011-06-16",
+            "result": "LOSS",
+            "net": -19.48
+          },
+          {
+            "date": "2011-07-29",
+            "result": "WIN",
+            "net": 16.02
+          },
+          {
+            "date": "2011-09-02",
+            "result": "LOSS",
+            "net": -41.48
+          },
+          {
+            "date": "2011-09-16",
+            "result": "LOSS",
+            "net": -37.98
+          },
+          {
+            "date": "2011-09-20",
+            "result": "WIN",
+            "net": 5.52
+          },
+          {
+            "date": "2011-09-30",
+            "result": "WIN",
+            "net": 15.52
+          },
+          {
+            "date": "2011-12-23",
+            "result": "LOSS",
+            "net": -15.48
+          },
+          {
+            "date": "2012-01-06",
+            "result": "WIN",
+            "net": 7.02
+          },
+          {
+            "date": "2012-02-29",
+            "result": "WIN",
+            "net": -0.98
+          },
+          {
+            "date": "2012-05-15",
+            "result": "WIN",
+            "net": 12.52
+          },
+          {
+            "date": "2012-06-13",
+            "result": "WIN",
+            "net": 2.52
+          },
+          {
+            "date": "2012-06-14",
+            "result": "WIN",
+            "net": -0.48
+          },
+          {
+            "date": "2012-07-10",
+            "result": "WIN",
+            "net": 13.52
+          },
+          {
+            "date": "2012-08-02",
+            "result": "LOSS",
+            "net": -26.48
+          },
+          {
+            "date": "2012-08-17",
+            "result": "LOSS",
+            "net": -19.48
+          },
+          {
+            "date": "2012-08-24",
+            "result": "WIN",
+            "net": 7.02
+          },
+          {
+            "date": "2012-09-19",
+            "result": "LOSS",
+            "net": -23.48
+          },
+          {
+            "date": "2012-10-04",
+            "result": "WIN",
+            "net": 1.52
+          },
+          {
+            "date": "2012-12-18",
+            "result": "WIN",
+            "net": 11.02
+          },
+          {
+            "date": "2013-02-12",
+            "result": "WIN",
+            "net": -0.98
+          },
+          {
+            "date": "2013-04-19",
+            "result": "WIN",
+            "net": 8.02
+          },
+          {
+            "date": "2013-04-26",
+            "result": "WIN",
+            "net": 2.52
+          },
+          {
+            "date": "2013-05-23",
+            "result": "WIN",
+            "net": 0.02
+          },
+          {
+            "date": "2013-08-02",
+            "result": "WIN",
+            "net": 5.52
+          },
+          {
+            "date": "2013-09-23",
+            "result": "WIN",
+            "net": 14.52
+          },
+          {
+            "date": "2013-12-06",
+            "result": "LOSS",
+            "net": -26.48
+          },
+          {
+            "date": "2014-01-22",
+            "result": "LOSS",
+            "net": -22.98
+          },
+          {
+            "date": "2014-02-07",
+            "result": "LOSS",
+            "net": -39.98
+          },
+          {
+            "date": "2014-02-11",
+            "result": "WIN",
+            "net": -0.48
+          },
+          {
+            "date": "2014-03-06",
+            "result": "WIN",
+            "net": 0.52
+          },
+          {
+            "date": "2014-04-30",
+            "result": "WIN",
+            "net": 0.02
+          },
+          {
+            "date": "2014-05-29",
+            "result": "LOSS",
+            "net": -24.98
+          },
+          {
+            "date": "2014-09-17",
+            "result": "WIN",
+            "net": 8.52
+          },
+          {
+            "date": "2014-10-06",
+            "result": "WIN",
+            "net": 1.02
+          },
+          {
+            "date": "2014-10-24",
+            "result": "LOSS",
+            "net": -44.98
+          },
+          {
+            "date": "2014-11-17",
+            "result": "WIN",
+            "net": -0.48
+          },
+          {
+            "date": "2014-12-04",
+            "result": "WIN",
+            "net": 10.02
+          },
+          {
+            "date": "2014-12-19",
+            "result": "WIN",
+            "net": 9.02
+          },
+          {
+            "date": "2015-02-06",
+            "result": "WIN",
+            "net": 1.52
+          },
+          {
+            "date": "2015-02-09",
+            "result": "LOSS",
+            "net": -44.48
+          },
+          {
+            "date": "2015-03-06",
+            "result": "LOSS",
+            "net": -42.98
+          },
+          {
+            "date": "2015-03-26",
+            "result": "LOSS",
+            "net": -84.98
+          },
+          {
+            "date": "2015-08-27",
+            "result": "LOSS",
+            "net": -73.48
+          },
+          {
+            "date": "2015-09-04",
+            "result": "LOSS",
+            "net": -47.98
+          },
+          {
+            "date": "2015-10-02",
+            "result": "WIN",
+            "net": 147.02
+          },
+          {
+            "date": "2015-10-05",
+            "result": "WIN",
+            "net": 6.52
+          },
+          {
+            "date": "2015-11-17",
+            "result": "WIN",
+            "net": 7.02
+          },
+          {
+            "date": "2016-02-10",
+            "result": "WIN",
+            "net": 1.02
+          },
+          {
+            "date": "2016-02-23",
+            "result": "WIN",
+            "net": 8.52
+          },
+          {
+            "date": "2016-03-02",
+            "result": "LOSS",
+            "net": -47.48
+          },
+          {
+            "date": "2016-03-17",
+            "result": "LOSS",
+            "net": -50.48
+          },
+          {
+            "date": "2016-04-01",
+            "result": "WIN",
+            "net": 6.02
+          },
+          {
+            "date": "2016-04-21",
+            "result": "WIN",
+            "net": 12.52
+          },
+          {
+            "date": "2016-05-06",
+            "result": "LOSS",
+            "net": -69.48
+          },
+          {
+            "date": "2016-05-26",
+            "result": "WIN",
+            "net": 1.02
+          },
+          {
+            "date": "2016-08-30",
+            "result": "WIN",
+            "net": 1.02
+          },
+          {
+            "date": "2016-09-26",
+            "result": "WIN",
+            "net": 3.52
+          },
+          {
+            "date": "2016-10-21",
+            "result": "WIN",
+            "net": 9.02
+          },
+          {
+            "date": "2017-03-23",
+            "result": "WIN",
+            "net": 9.52
+          },
+          {
+            "date": "2017-07-25",
+            "result": "WIN",
+            "net": 14.02
+          },
+          {
+            "date": "2017-08-16",
+            "result": "WIN",
+            "net": -0.48
+          },
+          {
+            "date": "2018-01-05",
+            "result": "WIN",
+            "net": 12.52
+          },
+          {
+            "date": "2018-01-12",
+            "result": "WIN",
+            "net": 28.02
+          },
+          {
+            "date": "2018-03-13",
+            "result": "WIN",
+            "net": 34.52
+          },
+          {
+            "date": "2018-03-22",
+            "result": "WIN",
+            "net": 8.52
+          },
+          {
+            "date": "2018-10-05",
+            "result": "WIN",
+            "net": 3.52
+          },
+          {
+            "date": "2018-10-26",
+            "result": "WIN",
+            "net": 25.52
+          },
+          {
+            "date": "2019-02-13",
+            "result": "WIN",
+            "net": 2.52
+          },
+          {
+            "date": "2019-02-14",
+            "result": "WIN",
+            "net": 31.52
+          }
+        ],
+        "net_pnl_resolved_only": -267.42,
+        "win_rate_resolved_only": 0.7341772151898734,
+        "drawdown_resolved_only": 500.0,
+        "longest_losing_streak_resolved_only": 5
+      },
+      "honest_ioc": {
+        "candidates": 88,
+        "fills": 70,
+        "resolved": 70,
+        "unresolved": [],
+        "unresolved_count": 0,
+        "no_fills": {
+          "ENTRY_NOT_FILLED": 1,
+          "ENTRY_BRACKET_INVALID_AT_FILL": 17
+        },
+        "no_fill_count": 18,
+        "resolved_trade_list": [
+          {
+            "date": "2010-06-22",
+            "result": "WIN",
+            "net": 8.52
+          },
+          {
+            "date": "2010-08-13",
+            "result": "WIN",
+            "net": 0.02
+          },
+          {
+            "date": "2010-09-09",
+            "result": "WIN",
+            "net": 3.02
+          },
+          {
+            "date": "2010-10-14",
+            "result": "LOSS",
+            "net": -23.98
+          },
+          {
+            "date": "2010-10-29",
+            "result": "WIN",
+            "net": 2.02
+          },
+          {
+            "date": "2011-02-04",
+            "result": "WIN",
+            "net": 9.02
+          },
+          {
+            "date": "2011-04-01",
+            "result": "WIN",
+            "net": 1.02
+          },
+          {
+            "date": "2011-04-12",
+            "result": "WIN",
+            "net": 4.02
+          },
+          {
+            "date": "2011-06-09",
+            "result": "WIN",
+            "net": 1.02
+          },
+          {
+            "date": "2011-06-16",
+            "result": "LOSS",
+            "net": -11.48
+          },
+          {
+            "date": "2011-07-28",
+            "result": "WIN",
+            "net": 4.02
+          },
+          {
+            "date": "2011-07-29",
+            "result": "WIN",
+            "net": 17.52
+          },
+          {
+            "date": "2011-09-02",
+            "result": "LOSS",
+            "net": -32.98
+          },
+          {
+            "date": "2011-09-16",
+            "result": "LOSS",
+            "net": -29.48
+          },
+          {
+            "date": "2011-09-20",
+            "result": "WIN",
+            "net": 5.52
+          },
+          {
+            "date": "2011-09-30",
+            "result": "WIN",
+            "net": 18.52
+          },
+          {
+            "date": "2011-12-23",
+            "result": "LOSS",
+            "net": -11.48
+          },
+          {
+            "date": "2012-01-06",
+            "result": "WIN",
+            "net": 7.02
+          },
+          {
+            "date": "2012-05-15",
+            "result": "WIN",
+            "net": 11.02
+          },
+          {
+            "date": "2012-06-13",
+            "result": "WIN",
+            "net": 3.52
+          },
+          {
+            "date": "2012-06-14",
+            "result": "WIN",
+            "net": 4.02
+          },
+          {
+            "date": "2012-07-10",
+            "result": "WIN",
+            "net": 0.52
+          },
+          {
+            "date": "2012-08-02",
+            "result": "LOSS",
+            "net": -40.48
+          },
+          {
+            "date": "2012-08-17",
+            "result": "LOSS",
+            "net": -18.98
+          },
+          {
+            "date": "2012-08-24",
+            "result": "WIN",
+            "net": 12.02
+          },
+          {
+            "date": "2012-09-19",
+            "result": "LOSS",
+            "net": -23.98
+          },
+          {
+            "date": "2012-12-18",
+            "result": "WIN",
+            "net": 13.52
+          },
+          {
+            "date": "2013-04-26",
+            "result": "WIN",
+            "net": 1.02
+          },
+          {
+            "date": "2013-05-23",
+            "result": "WIN",
+            "net": -0.98
+          },
+          {
+            "date": "2013-08-02",
+            "result": "WIN",
+            "net": 4.52
+          },
+          {
+            "date": "2013-09-23",
+            "result": "WIN",
+            "net": 11.52
+          },
+          {
+            "date": "2013-12-06",
+            "result": "LOSS",
+            "net": -28.48
+          },
+          {
+            "date": "2014-01-22",
+            "result": "LOSS",
+            "net": -18.98
+          },
+          {
+            "date": "2014-02-07",
+            "result": "LOSS",
+            "net": -40.48
+          },
+          {
+            "date": "2014-03-06",
+            "result": "WIN",
+            "net": 3.52
+          },
+          {
+            "date": "2014-04-30",
+            "result": "WIN",
+            "net": 2.02
+          },
+          {
+            "date": "2014-05-29",
+            "result": "LOSS",
+            "net": -20.48
+          },
+          {
+            "date": "2014-09-17",
+            "result": "WIN",
+            "net": 5.52
+          },
+          {
+            "date": "2014-10-06",
+            "result": "WIN",
+            "net": 0.02
+          },
+          {
+            "date": "2014-10-24",
+            "result": "LOSS",
+            "net": -40.48
+          },
+          {
+            "date": "2014-11-17",
+            "result": "WIN",
+            "net": 1.52
+          },
+          {
+            "date": "2014-12-04",
+            "result": "WIN",
+            "net": 17.52
+          },
+          {
+            "date": "2014-12-19",
+            "result": "WIN",
+            "net": -0.98
+          },
+          {
+            "date": "2015-02-09",
+            "result": "LOSS",
+            "net": -40.98
+          },
+          {
+            "date": "2015-03-06",
+            "result": "LOSS",
+            "net": -35.98
+          },
+          {
+            "date": "2015-03-26",
+            "result": "LOSS",
+            "net": -67.48
+          },
+          {
+            "date": "2015-07-31",
+            "result": "WIN",
+            "net": 19.02
+          },
+          {
+            "date": "2015-08-27",
+            "result": "LOSS",
+            "net": -66.48
+          },
+          {
+            "date": "2015-09-04",
+            "result": "LOSS",
+            "net": -48.48
+          },
+          {
+            "date": "2015-10-02",
+            "result": "WIN",
+            "net": 163.52
+          },
+          {
+            "date": "2015-10-05",
+            "result": "WIN",
+            "net": 22.52
+          },
+          {
+            "date": "2015-11-17",
+            "result": "WIN",
+            "net": -0.98
+          },
+          {
+            "date": "2016-02-10",
+            "result": "WIN",
+            "net": 2.52
+          },
+          {
+            "date": "2016-03-02",
+            "result": "LOSS",
+            "net": -45.48
+          },
+          {
+            "date": "2016-03-17",
+            "result": "LOSS",
+            "net": -44.48
+          },
+          {
+            "date": "2016-04-01",
+            "result": "WIN",
+            "net": 0.02
+          },
+          {
+            "date": "2016-04-21",
+            "result": "WIN",
+            "net": 3.52
+          },
+          {
+            "date": "2016-05-06",
+            "result": "LOSS",
+            "net": -70.98
+          },
+          {
+            "date": "2016-05-26",
+            "result": "WIN",
+            "net": 5.02
+          },
+          {
+            "date": "2016-08-30",
+            "result": "WIN",
+            "net": 10.02
+          },
+          {
+            "date": "2016-09-26",
+            "result": "WIN",
+            "net": 8.02
+          },
+          {
+            "date": "2016-10-21",
+            "result": "WIN",
+            "net": 13.02
+          },
+          {
+            "date": "2017-03-23",
+            "result": "WIN",
+            "net": 10.52
+          },
+          {
+            "date": "2017-07-25",
+            "result": "WIN",
+            "net": 19.02
+          },
+          {
+            "date": "2018-01-05",
+            "result": "WIN",
+            "net": 11.52
+          },
+          {
+            "date": "2018-01-12",
+            "result": "WIN",
+            "net": 25.02
+          },
+          {
+            "date": "2018-02-13",
+            "result": "WIN",
+            "net": 4.52
+          },
+          {
+            "date": "2018-03-13",
+            "result": "WIN",
+            "net": 19.52
+          },
+          {
+            "date": "2018-10-26",
+            "result": "WIN",
+            "net": 47.52
+          },
+          {
+            "date": "2019-02-14",
+            "result": "WIN",
+            "net": 27.52
+          }
+        ],
+        "net_pnl_resolved_only": -179.6,
+        "win_rate_resolved_only": 0.7,
+        "drawdown_resolved_only": 425.76,
+        "longest_losing_streak_resolved_only": 3
+      },
+      "prearmed": {
+        "candidates": 88,
+        "fills": 79,
+        "resolved": 79,
+        "unresolved": [],
+        "unresolved_count": 0,
+        "no_fills": {
+          "ENTRY_BRACKET_INVALID_AT_FILL": 9
+        },
+        "no_fill_count": 9,
+        "resolved_trade_list": [
+          {
+            "date": "2010-06-22",
+            "result": "WIN",
+            "net": 11.52
+          },
+          {
+            "date": "2010-07-01",
+            "result": "WIN",
+            "net": 10.52
+          },
+          {
+            "date": "2010-08-13",
+            "result": "WIN",
+            "net": 1.52
+          },
+          {
+            "date": "2010-09-09",
+            "result": "WIN",
+            "net": 3.52
+          },
+          {
+            "date": "2010-10-14",
+            "result": "LOSS",
+            "net": -23.98
+          },
+          {
+            "date": "2010-10-29",
+            "result": "WIN",
+            "net": -0.48
+          },
+          {
+            "date": "2011-02-04",
+            "result": "WIN",
+            "net": 13.52
+          },
+          {
+            "date": "2011-02-17",
+            "result": "WIN",
+            "net": -0.98
+          },
+          {
+            "date": "2011-04-01",
+            "result": "WIN",
+            "net": -0.98
+          },
+          {
+            "date": "2011-06-09",
+            "result": "WIN",
+            "net": 0.02
+          },
+          {
+            "date": "2011-06-16",
+            "result": "LOSS",
+            "net": -19.48
+          },
+          {
+            "date": "2011-07-29",
+            "result": "WIN",
+            "net": 16.02
+          },
+          {
+            "date": "2011-09-02",
+            "result": "LOSS",
+            "net": -41.48
+          },
+          {
+            "date": "2011-09-16",
+            "result": "LOSS",
+            "net": -37.98
+          },
+          {
+            "date": "2011-09-20",
+            "result": "WIN",
+            "net": 5.52
+          },
+          {
+            "date": "2011-09-30",
+            "result": "WIN",
+            "net": 15.52
+          },
+          {
+            "date": "2011-12-23",
+            "result": "LOSS",
+            "net": -15.48
+          },
+          {
+            "date": "2012-01-06",
+            "result": "WIN",
+            "net": 7.02
+          },
+          {
+            "date": "2012-02-29",
+            "result": "WIN",
+            "net": -0.98
+          },
+          {
+            "date": "2012-05-15",
+            "result": "WIN",
+            "net": 12.52
+          },
+          {
+            "date": "2012-06-13",
+            "result": "WIN",
+            "net": 2.52
+          },
+          {
+            "date": "2012-06-14",
+            "result": "WIN",
+            "net": -0.48
+          },
+          {
+            "date": "2012-07-10",
+            "result": "WIN",
+            "net": 13.52
+          },
+          {
+            "date": "2012-08-02",
+            "result": "LOSS",
+            "net": -26.48
+          },
+          {
+            "date": "2012-08-17",
+            "result": "LOSS",
+            "net": -19.48
+          },
+          {
+            "date": "2012-08-24",
+            "result": "WIN",
+            "net": 7.02
+          },
+          {
+            "date": "2012-09-19",
+            "result": "LOSS",
+            "net": -23.48
+          },
+          {
+            "date": "2012-10-04",
+            "result": "WIN",
+            "net": 1.52
+          },
+          {
+            "date": "2012-12-18",
+            "result": "WIN",
+            "net": 11.02
+          },
+          {
+            "date": "2013-02-12",
+            "result": "WIN",
+            "net": -0.98
+          },
+          {
+            "date": "2013-04-19",
+            "result": "WIN",
+            "net": 8.02
+          },
+          {
+            "date": "2013-04-26",
+            "result": "WIN",
+            "net": 2.52
+          },
+          {
+            "date": "2013-05-23",
+            "result": "WIN",
+            "net": 0.02
+          },
+          {
+            "date": "2013-08-02",
+            "result": "WIN",
+            "net": 5.52
+          },
+          {
+            "date": "2013-09-23",
+            "result": "WIN",
+            "net": 14.52
+          },
+          {
+            "date": "2013-12-06",
+            "result": "LOSS",
+            "net": -26.48
+          },
+          {
+            "date": "2014-01-22",
+            "result": "LOSS",
+            "net": -22.98
+          },
+          {
+            "date": "2014-02-07",
+            "result": "LOSS",
+            "net": -39.98
+          },
+          {
+            "date": "2014-02-11",
+            "result": "WIN",
+            "net": -0.48
+          },
+          {
+            "date": "2014-03-06",
+            "result": "WIN",
+            "net": 0.52
+          },
+          {
+            "date": "2014-04-30",
+            "result": "WIN",
+            "net": 0.02
+          },
+          {
+            "date": "2014-05-29",
+            "result": "LOSS",
+            "net": -24.98
+          },
+          {
+            "date": "2014-09-17",
+            "result": "WIN",
+            "net": 8.52
+          },
+          {
+            "date": "2014-10-06",
+            "result": "WIN",
+            "net": 1.02
+          },
+          {
+            "date": "2014-10-24",
+            "result": "LOSS",
+            "net": -44.98
+          },
+          {
+            "date": "2014-11-17",
+            "result": "WIN",
+            "net": -0.48
+          },
+          {
+            "date": "2014-12-04",
+            "result": "WIN",
+            "net": 10.02
+          },
+          {
+            "date": "2014-12-19",
+            "result": "WIN",
+            "net": 9.02
+          },
+          {
+            "date": "2015-02-06",
+            "result": "WIN",
+            "net": 1.52
+          },
+          {
+            "date": "2015-02-09",
+            "result": "LOSS",
+            "net": -44.48
+          },
+          {
+            "date": "2015-03-06",
+            "result": "LOSS",
+            "net": -42.98
+          },
+          {
+            "date": "2015-03-26",
+            "result": "LOSS",
+            "net": -84.98
+          },
+          {
+            "date": "2015-08-27",
+            "result": "LOSS",
+            "net": -73.48
+          },
+          {
+            "date": "2015-09-04",
+            "result": "WIN",
+            "net": 6.52
+          },
+          {
+            "date": "2015-10-02",
+            "result": "WIN",
+            "net": 147.02
+          },
+          {
+            "date": "2015-10-05",
+            "result": "WIN",
+            "net": 6.52
+          },
+          {
+            "date": "2015-11-17",
+            "result": "WIN",
+            "net": 7.02
+          },
+          {
+            "date": "2016-02-10",
+            "result": "WIN",
+            "net": 1.02
+          },
+          {
+            "date": "2016-02-23",
+            "result": "WIN",
+            "net": 8.52
+          },
+          {
+            "date": "2016-03-02",
+            "result": "LOSS",
+            "net": -47.48
+          },
+          {
+            "date": "2016-03-17",
+            "result": "LOSS",
+            "net": -50.48
+          },
+          {
+            "date": "2016-04-01",
+            "result": "WIN",
+            "net": 6.02
+          },
+          {
+            "date": "2016-04-21",
+            "result": "WIN",
+            "net": 12.52
+          },
+          {
+            "date": "2016-05-06",
+            "result": "LOSS",
+            "net": -69.48
+          },
+          {
+            "date": "2016-05-26",
+            "result": "WIN",
+            "net": 1.02
+          },
+          {
+            "date": "2016-08-30",
+            "result": "WIN",
+            "net": 1.02
+          },
+          {
+            "date": "2016-09-26",
+            "result": "WIN",
+            "net": 3.52
+          },
+          {
+            "date": "2016-10-21",
+            "result": "WIN",
+            "net": 9.02
+          },
+          {
+            "date": "2017-03-23",
+            "result": "WIN",
+            "net": 9.52
+          },
+          {
+            "date": "2017-07-25",
+            "result": "WIN",
+            "net": 14.02
+          },
+          {
+            "date": "2017-08-16",
+            "result": "WIN",
+            "net": -0.48
+          },
+          {
+            "date": "2018-01-05",
+            "result": "WIN",
+            "net": 12.52
+          },
+          {
+            "date": "2018-01-12",
+            "result": "WIN",
+            "net": 28.02
+          },
+          {
+            "date": "2018-03-13",
+            "result": "WIN",
+            "net": 34.52
+          },
+          {
+            "date": "2018-03-22",
+            "result": "WIN",
+            "net": 8.52
+          },
+          {
+            "date": "2018-10-05",
+            "result": "WIN",
+            "net": 3.52
+          },
+          {
+            "date": "2018-10-26",
+            "result": "WIN",
+            "net": 25.52
+          },
+          {
+            "date": "2019-02-13",
+            "result": "WIN",
+            "net": 2.52
+          },
+          {
+            "date": "2019-02-14",
+            "result": "WIN",
+            "net": 31.52
+          }
+        ],
+        "net_pnl_resolved_only": -212.92,
+        "win_rate_resolved_only": 0.7468354430379747,
+        "drawdown_resolved_only": 452.02,
+        "longest_losing_streak_resolved_only": 4
+      }
+    },
+    "3tick": {
+      "original": {
+        "candidates": 88,
+        "fills": 75,
+        "resolved": 75,
+        "unresolved": [],
+        "unresolved_count": 0,
+        "no_fills": {
+          "ENTRY_BRACKET_INVALID_AT_FILL": 13
+        },
+        "no_fill_count": 13,
+        "resolved_trade_list": [
+          {
+            "date": "2010-06-22",
+            "result": "WIN",
+            "net": 11.02
+          },
+          {
+            "date": "2010-07-01",
+            "result": "WIN",
+            "net": 10.02
+          },
+          {
+            "date": "2010-08-13",
+            "result": "WIN",
+            "net": 1.02
+          },
+          {
+            "date": "2010-09-09",
+            "result": "WIN",
+            "net": 3.02
+          },
+          {
+            "date": "2010-10-14",
+            "result": "LOSS",
+            "net": -24.98
+          },
+          {
+            "date": "2010-10-29",
+            "result": "WIN",
+            "net": -0.98
+          },
+          {
+            "date": "2011-02-04",
+            "result": "WIN",
+            "net": 13.02
+          },
+          {
+            "date": "2011-06-09",
+            "result": "WIN",
+            "net": -0.48
+          },
+          {
+            "date": "2011-06-16",
+            "result": "LOSS",
+            "net": -20.48
+          },
+          {
+            "date": "2011-07-29",
+            "result": "WIN",
+            "net": 15.52
+          },
+          {
+            "date": "2011-09-02",
+            "result": "LOSS",
+            "net": -42.48
+          },
+          {
+            "date": "2011-09-16",
+            "result": "LOSS",
+            "net": -38.98
+          },
+          {
+            "date": "2011-09-20",
+            "result": "WIN",
+            "net": 5.02
+          },
+          {
+            "date": "2011-09-30",
+            "result": "WIN",
+            "net": 15.02
+          },
+          {
+            "date": "2011-12-23",
+            "result": "LOSS",
+            "net": -16.48
+          },
+          {
+            "date": "2012-01-06",
+            "result": "WIN",
+            "net": 6.52
+          },
+          {
+            "date": "2012-05-15",
+            "result": "WIN",
+            "net": 12.02
+          },
+          {
+            "date": "2012-06-13",
+            "result": "WIN",
+            "net": 2.02
+          },
+          {
+            "date": "2012-06-14",
+            "result": "WIN",
+            "net": -0.98
+          },
+          {
+            "date": "2012-07-10",
+            "result": "WIN",
+            "net": 13.02
+          },
+          {
+            "date": "2012-08-02",
+            "result": "LOSS",
+            "net": -26.98
+          },
+          {
+            "date": "2012-08-17",
+            "result": "LOSS",
+            "net": -20.48
+          },
+          {
+            "date": "2012-08-24",
+            "result": "WIN",
+            "net": 6.52
+          },
+          {
+            "date": "2012-09-19",
+            "result": "LOSS",
+            "net": -24.48
+          },
+          {
+            "date": "2012-10-04",
+            "result": "WIN",
+            "net": 1.02
+          },
+          {
+            "date": "2012-12-18",
+            "result": "WIN",
+            "net": 10.52
+          },
+          {
+            "date": "2013-04-19",
+            "result": "WIN",
+            "net": 7.52
+          },
+          {
+            "date": "2013-04-26",
+            "result": "WIN",
+            "net": 2.02
+          },
+          {
+            "date": "2013-05-23",
+            "result": "WIN",
+            "net": -0.48
+          },
+          {
+            "date": "2013-08-02",
+            "result": "WIN",
+            "net": 5.02
+          },
+          {
+            "date": "2013-09-23",
+            "result": "WIN",
+            "net": 14.02
+          },
+          {
+            "date": "2013-12-06",
+            "result": "LOSS",
+            "net": -27.48
+          },
+          {
+            "date": "2014-01-22",
+            "result": "LOSS",
+            "net": -23.98
+          },
+          {
+            "date": "2014-02-07",
+            "result": "LOSS",
+            "net": -40.98
+          },
+          {
+            "date": "2014-02-11",
+            "result": "WIN",
+            "net": -0.98
+          },
+          {
+            "date": "2014-03-06",
+            "result": "WIN",
+            "net": 0.02
+          },
+          {
+            "date": "2014-04-30",
+            "result": "WIN",
+            "net": -0.48
+          },
+          {
+            "date": "2014-05-29",
+            "result": "LOSS",
+            "net": -25.98
+          },
+          {
+            "date": "2014-09-17",
+            "result": "WIN",
+            "net": 8.02
+          },
+          {
+            "date": "2014-10-06",
+            "result": "WIN",
+            "net": 0.52
+          },
+          {
+            "date": "2014-10-24",
+            "result": "LOSS",
+            "net": -45.98
+          },
+          {
+            "date": "2014-11-17",
+            "result": "WIN",
+            "net": -0.98
+          },
+          {
+            "date": "2014-12-04",
+            "result": "WIN",
+            "net": 9.52
+          },
+          {
+            "date": "2014-12-19",
+            "result": "WIN",
+            "net": 8.52
+          },
+          {
+            "date": "2015-02-06",
+            "result": "WIN",
+            "net": 1.02
+          },
+          {
+            "date": "2015-02-09",
+            "result": "LOSS",
+            "net": -45.48
+          },
+          {
+            "date": "2015-03-06",
+            "result": "LOSS",
+            "net": -43.98
+          },
+          {
+            "date": "2015-03-26",
+            "result": "LOSS",
+            "net": -85.98
+          },
+          {
+            "date": "2015-08-27",
+            "result": "LOSS",
+            "net": -74.48
+          },
+          {
+            "date": "2015-09-04",
+            "result": "LOSS",
+            "net": -48.48
+          },
+          {
+            "date": "2015-10-02",
+            "result": "WIN",
+            "net": 146.52
+          },
+          {
+            "date": "2015-10-05",
+            "result": "WIN",
+            "net": 6.02
+          },
+          {
+            "date": "2015-11-17",
+            "result": "WIN",
+            "net": 6.52
+          },
+          {
+            "date": "2016-02-10",
+            "result": "WIN",
+            "net": 0.52
+          },
+          {
+            "date": "2016-02-23",
+            "result": "WIN",
+            "net": 8.02
+          },
+          {
+            "date": "2016-03-02",
+            "result": "LOSS",
+            "net": -48.48
+          },
+          {
+            "date": "2016-03-17",
+            "result": "LOSS",
+            "net": -51.48
+          },
+          {
+            "date": "2016-04-01",
+            "result": "WIN",
+            "net": 5.52
+          },
+          {
+            "date": "2016-04-21",
+            "result": "WIN",
+            "net": 12.02
+          },
+          {
+            "date": "2016-05-06",
+            "result": "LOSS",
+            "net": -70.48
+          },
+          {
+            "date": "2016-05-26",
+            "result": "WIN",
+            "net": 0.52
+          },
+          {
+            "date": "2016-08-30",
+            "result": "WIN",
+            "net": 0.52
+          },
+          {
+            "date": "2016-09-26",
+            "result": "WIN",
+            "net": 3.02
+          },
+          {
+            "date": "2016-10-21",
+            "result": "WIN",
+            "net": 8.52
+          },
+          {
+            "date": "2017-03-23",
+            "result": "WIN",
+            "net": 9.02
+          },
+          {
+            "date": "2017-07-25",
+            "result": "WIN",
+            "net": 13.52
+          },
+          {
+            "date": "2017-08-16",
+            "result": "WIN",
+            "net": -0.98
+          },
+          {
+            "date": "2018-01-05",
+            "result": "WIN",
+            "net": 12.02
+          },
+          {
+            "date": "2018-01-12",
+            "result": "WIN",
+            "net": 27.52
+          },
+          {
+            "date": "2018-03-13",
+            "result": "WIN",
+            "net": 34.02
+          },
+          {
+            "date": "2018-03-22",
+            "result": "WIN",
+            "net": 8.02
+          },
+          {
+            "date": "2018-10-05",
+            "result": "WIN",
+            "net": 3.02
+          },
+          {
+            "date": "2018-10-26",
+            "result": "WIN",
+            "net": 25.02
+          },
+          {
+            "date": "2019-02-13",
+            "result": "WIN",
+            "net": 2.02
+          },
+          {
+            "date": "2019-02-14",
+            "result": "WIN",
+            "net": 31.02
+          }
+        ],
+        "net_pnl_resolved_only": -310.5,
+        "win_rate_resolved_only": 0.72,
+        "drawdown_resolved_only": 527.08,
+        "longest_losing_streak_resolved_only": 5
+      },
+      "honest_ioc": {
+        "candidates": 88,
+        "fills": 66,
+        "resolved": 66,
+        "unresolved": [],
+        "unresolved_count": 0,
+        "no_fills": {
+          "ENTRY_NOT_FILLED": 1,
+          "ENTRY_BRACKET_INVALID_AT_FILL": 21
+        },
+        "no_fill_count": 22,
+        "resolved_trade_list": [
+          {
+            "date": "2010-06-22",
+            "result": "WIN",
+            "net": 8.02
+          },
+          {
+            "date": "2010-08-13",
+            "result": "WIN",
+            "net": -0.48
+          },
+          {
+            "date": "2010-09-09",
+            "result": "WIN",
+            "net": 2.52
+          },
+          {
+            "date": "2010-10-14",
+            "result": "LOSS",
+            "net": -24.98
+          },
+          {
+            "date": "2010-10-29",
+            "result": "WIN",
+            "net": 1.52
+          },
+          {
+            "date": "2011-02-04",
+            "result": "WIN",
+            "net": 8.52
+          },
+          {
+            "date": "2011-04-01",
+            "result": "WIN",
+            "net": 0.52
+          },
+          {
+            "date": "2011-04-12",
+            "result": "WIN",
+            "net": 3.52
+          },
+          {
+            "date": "2011-06-09",
+            "result": "WIN",
+            "net": 0.52
+          },
+          {
+            "date": "2011-06-16",
+            "result": "LOSS",
+            "net": -12.48
+          },
+          {
+            "date": "2011-07-28",
+            "result": "WIN",
+            "net": 3.52
+          },
+          {
+            "date": "2011-07-29",
+            "result": "WIN",
+            "net": 17.02
+          },
+          {
+            "date": "2011-09-02",
+            "result": "LOSS",
+            "net": -33.98
+          },
+          {
+            "date": "2011-09-16",
+            "result": "LOSS",
+            "net": -30.48
+          },
+          {
+            "date": "2011-09-20",
+            "result": "WIN",
+            "net": 5.02
+          },
+          {
+            "date": "2011-09-30",
+            "result": "WIN",
+            "net": 18.02
+          },
+          {
+            "date": "2011-12-23",
+            "result": "LOSS",
+            "net": -12.48
+          },
+          {
+            "date": "2012-01-06",
+            "result": "WIN",
+            "net": 6.52
+          },
+          {
+            "date": "2012-05-15",
+            "result": "WIN",
+            "net": 10.52
+          },
+          {
+            "date": "2012-06-13",
+            "result": "WIN",
+            "net": 3.02
+          },
+          {
+            "date": "2012-06-14",
+            "result": "WIN",
+            "net": 3.52
+          },
+          {
+            "date": "2012-07-10",
+            "result": "WIN",
+            "net": 0.02
+          },
+          {
+            "date": "2012-08-02",
+            "result": "LOSS",
+            "net": -40.98
+          },
+          {
+            "date": "2012-08-17",
+            "result": "LOSS",
+            "net": -19.98
+          },
+          {
+            "date": "2012-08-24",
+            "result": "WIN",
+            "net": 11.52
+          },
+          {
+            "date": "2012-12-18",
+            "result": "WIN",
+            "net": 13.02
+          },
+          {
+            "date": "2013-04-26",
+            "result": "WIN",
+            "net": 0.52
+          },
+          {
+            "date": "2013-08-02",
+            "result": "WIN",
+            "net": 4.02
+          },
+          {
+            "date": "2013-09-23",
+            "result": "WIN",
+            "net": 11.02
+          },
+          {
+            "date": "2013-12-06",
+            "result": "LOSS",
+            "net": -29.48
+          },
+          {
+            "date": "2014-01-22",
+            "result": "LOSS",
+            "net": -19.98
+          },
+          {
+            "date": "2014-02-07",
+            "result": "LOSS",
+            "net": -41.48
+          },
+          {
+            "date": "2014-03-06",
+            "result": "WIN",
+            "net": 3.02
+          },
+          {
+            "date": "2014-04-30",
+            "result": "WIN",
+            "net": 1.52
+          },
+          {
+            "date": "2014-05-29",
+            "result": "LOSS",
+            "net": -21.48
+          },
+          {
+            "date": "2014-09-17",
+            "result": "WIN",
+            "net": 5.02
+          },
+          {
+            "date": "2014-10-06",
+            "result": "WIN",
+            "net": -0.48
+          },
+          {
+            "date": "2014-10-24",
+            "result": "LOSS",
+            "net": -41.48
+          },
+          {
+            "date": "2014-11-17",
+            "result": "WIN",
+            "net": 1.02
+          },
+          {
+            "date": "2014-12-04",
+            "result": "WIN",
+            "net": 17.02
+          },
+          {
+            "date": "2015-02-09",
+            "result": "LOSS",
+            "net": -41.98
+          },
+          {
+            "date": "2015-03-06",
+            "result": "LOSS",
+            "net": -36.98
+          },
+          {
+            "date": "2015-03-26",
+            "result": "LOSS",
+            "net": -68.48
+          },
+          {
+            "date": "2015-07-31",
+            "result": "WIN",
+            "net": 18.52
+          },
+          {
+            "date": "2015-08-27",
+            "result": "LOSS",
+            "net": -67.48
+          },
+          {
+            "date": "2015-09-04",
+            "result": "LOSS",
+            "net": -48.98
+          },
+          {
+            "date": "2015-10-02",
+            "result": "WIN",
+            "net": 163.02
+          },
+          {
+            "date": "2015-10-05",
+            "result": "WIN",
+            "net": 22.02
+          },
+          {
+            "date": "2016-02-10",
+            "result": "WIN",
+            "net": 2.02
+          },
+          {
+            "date": "2016-03-02",
+            "result": "LOSS",
+            "net": -46.48
+          },
+          {
+            "date": "2016-03-17",
+            "result": "LOSS",
+            "net": -45.48
+          },
+          {
+            "date": "2016-04-01",
+            "result": "WIN",
+            "net": -0.48
+          },
+          {
+            "date": "2016-04-21",
+            "result": "WIN",
+            "net": 3.02
+          },
+          {
+            "date": "2016-05-06",
+            "result": "LOSS",
+            "net": -71.98
+          },
+          {
+            "date": "2016-05-26",
+            "result": "WIN",
+            "net": 4.52
+          },
+          {
+            "date": "2016-08-30",
+            "result": "WIN",
+            "net": 9.52
+          },
+          {
+            "date": "2016-09-26",
+            "result": "WIN",
+            "net": 7.52
+          },
+          {
+            "date": "2016-10-21",
+            "result": "WIN",
+            "net": 12.52
+          },
+          {
+            "date": "2017-03-23",
+            "result": "WIN",
+            "net": 10.02
+          },
+          {
+            "date": "2017-07-25",
+            "result": "WIN",
+            "net": 18.52
+          },
+          {
+            "date": "2018-01-05",
+            "result": "WIN",
+            "net": 11.02
+          },
+          {
+            "date": "2018-01-12",
+            "result": "WIN",
+            "net": 24.52
+          },
+          {
+            "date": "2018-02-13",
+            "result": "WIN",
+            "net": 4.02
+          },
+          {
+            "date": "2018-03-13",
+            "result": "WIN",
+            "net": 19.52
+          },
+          {
+            "date": "2018-10-26",
+            "result": "WIN",
+            "net": 47.02
+          },
+          {
+            "date": "2019-02-14",
+            "result": "WIN",
+            "net": 27.02
+          }
+        ],
+        "net_pnl_resolved_only": -194.18,
+        "win_rate_resolved_only": 0.696969696969697,
+        "drawdown_resolved_only": 425.64,
+        "longest_losing_streak_resolved_only": 3
+      },
+      "prearmed": {
+        "candidates": 88,
+        "fills": 75,
+        "resolved": 75,
+        "unresolved": [],
+        "unresolved_count": 0,
+        "no_fills": {
+          "ENTRY_BRACKET_INVALID_AT_FILL": 13
+        },
+        "no_fill_count": 13,
+        "resolved_trade_list": [
+          {
+            "date": "2010-06-22",
+            "result": "WIN",
+            "net": 11.02
+          },
+          {
+            "date": "2010-07-01",
+            "result": "WIN",
+            "net": 10.02
+          },
+          {
+            "date": "2010-08-13",
+            "result": "WIN",
+            "net": 1.02
+          },
+          {
+            "date": "2010-09-09",
+            "result": "WIN",
+            "net": 3.02
+          },
+          {
+            "date": "2010-10-14",
+            "result": "LOSS",
+            "net": -24.98
+          },
+          {
+            "date": "2010-10-29",
+            "result": "WIN",
+            "net": -0.98
+          },
+          {
+            "date": "2011-02-04",
+            "result": "WIN",
+            "net": 13.02
+          },
+          {
+            "date": "2011-06-09",
+            "result": "WIN",
+            "net": -0.48
+          },
+          {
+            "date": "2011-06-16",
+            "result": "LOSS",
+            "net": -20.48
+          },
+          {
+            "date": "2011-07-29",
+            "result": "WIN",
+            "net": 15.52
+          },
+          {
+            "date": "2011-09-02",
+            "result": "LOSS",
+            "net": -42.48
+          },
+          {
+            "date": "2011-09-16",
+            "result": "LOSS",
+            "net": -38.98
+          },
+          {
+            "date": "2011-09-20",
+            "result": "WIN",
+            "net": 5.02
+          },
+          {
+            "date": "2011-09-30",
+            "result": "WIN",
+            "net": 15.02
+          },
+          {
+            "date": "2011-12-23",
+            "result": "LOSS",
+            "net": -16.48
+          },
+          {
+            "date": "2012-01-06",
+            "result": "WIN",
+            "net": 6.52
+          },
+          {
+            "date": "2012-05-15",
+            "result": "WIN",
+            "net": 12.02
+          },
+          {
+            "date": "2012-06-13",
+            "result": "WIN",
+            "net": 2.02
+          },
+          {
+            "date": "2012-06-14",
+            "result": "WIN",
+            "net": -0.98
+          },
+          {
+            "date": "2012-07-10",
+            "result": "WIN",
+            "net": 13.02
+          },
+          {
+            "date": "2012-08-02",
+            "result": "LOSS",
+            "net": -26.98
+          },
+          {
+            "date": "2012-08-17",
+            "result": "LOSS",
+            "net": -20.48
+          },
+          {
+            "date": "2012-08-24",
+            "result": "WIN",
+            "net": 6.52
+          },
+          {
+            "date": "2012-09-19",
+            "result": "LOSS",
+            "net": -24.48
+          },
+          {
+            "date": "2012-10-04",
+            "result": "WIN",
+            "net": 1.02
+          },
+          {
+            "date": "2012-12-18",
+            "result": "WIN",
+            "net": 10.52
+          },
+          {
+            "date": "2013-04-19",
+            "result": "WIN",
+            "net": 7.52
+          },
+          {
+            "date": "2013-04-26",
+            "result": "WIN",
+            "net": 2.02
+          },
+          {
+            "date": "2013-05-23",
+            "result": "WIN",
+            "net": -0.48
+          },
+          {
+            "date": "2013-08-02",
+            "result": "WIN",
+            "net": 5.02
+          },
+          {
+            "date": "2013-09-23",
+            "result": "WIN",
+            "net": 14.02
+          },
+          {
+            "date": "2013-12-06",
+            "result": "LOSS",
+            "net": -27.48
+          },
+          {
+            "date": "2014-01-22",
+            "result": "LOSS",
+            "net": -23.98
+          },
+          {
+            "date": "2014-02-07",
+            "result": "LOSS",
+            "net": -40.98
+          },
+          {
+            "date": "2014-02-11",
+            "result": "WIN",
+            "net": -0.98
+          },
+          {
+            "date": "2014-03-06",
+            "result": "WIN",
+            "net": 0.02
+          },
+          {
+            "date": "2014-04-30",
+            "result": "WIN",
+            "net": -0.48
+          },
+          {
+            "date": "2014-05-29",
+            "result": "LOSS",
+            "net": -25.98
+          },
+          {
+            "date": "2014-09-17",
+            "result": "WIN",
+            "net": 8.02
+          },
+          {
+            "date": "2014-10-06",
+            "result": "WIN",
+            "net": 0.52
+          },
+          {
+            "date": "2014-10-24",
+            "result": "LOSS",
+            "net": -45.98
+          },
+          {
+            "date": "2014-11-17",
+            "result": "WIN",
+            "net": -0.98
+          },
+          {
+            "date": "2014-12-04",
+            "result": "WIN",
+            "net": 9.52
+          },
+          {
+            "date": "2014-12-19",
+            "result": "WIN",
+            "net": 8.52
+          },
+          {
+            "date": "2015-02-06",
+            "result": "WIN",
+            "net": 1.02
+          },
+          {
+            "date": "2015-02-09",
+            "result": "LOSS",
+            "net": -45.48
+          },
+          {
+            "date": "2015-03-06",
+            "result": "LOSS",
+            "net": -43.98
+          },
+          {
+            "date": "2015-03-26",
+            "result": "LOSS",
+            "net": -85.98
+          },
+          {
+            "date": "2015-08-27",
+            "result": "LOSS",
+            "net": -74.48
+          },
+          {
+            "date": "2015-09-04",
+            "result": "WIN",
+            "net": 6.02
+          },
+          {
+            "date": "2015-10-02",
+            "result": "WIN",
+            "net": 146.52
+          },
+          {
+            "date": "2015-10-05",
+            "result": "WIN",
+            "net": 6.02
+          },
+          {
+            "date": "2015-11-17",
+            "result": "WIN",
+            "net": 6.52
+          },
+          {
+            "date": "2016-02-10",
+            "result": "WIN",
+            "net": 0.52
+          },
+          {
+            "date": "2016-02-23",
+            "result": "WIN",
+            "net": 8.02
+          },
+          {
+            "date": "2016-03-02",
+            "result": "LOSS",
+            "net": -48.48
+          },
+          {
+            "date": "2016-03-17",
+            "result": "LOSS",
+            "net": -51.48
+          },
+          {
+            "date": "2016-04-01",
+            "result": "WIN",
+            "net": 5.52
+          },
+          {
+            "date": "2016-04-21",
+            "result": "WIN",
+            "net": 12.02
+          },
+          {
+            "date": "2016-05-06",
+            "result": "LOSS",
+            "net": -70.48
+          },
+          {
+            "date": "2016-05-26",
+            "result": "WIN",
+            "net": 0.52
+          },
+          {
+            "date": "2016-08-30",
+            "result": "WIN",
+            "net": 0.52
+          },
+          {
+            "date": "2016-09-26",
+            "result": "WIN",
+            "net": 3.02
+          },
+          {
+            "date": "2016-10-21",
+            "result": "WIN",
+            "net": 8.52
+          },
+          {
+            "date": "2017-03-23",
+            "result": "WIN",
+            "net": 9.02
+          },
+          {
+            "date": "2017-07-25",
+            "result": "WIN",
+            "net": 13.52
+          },
+          {
+            "date": "2017-08-16",
+            "result": "WIN",
+            "net": -0.98
+          },
+          {
+            "date": "2018-01-05",
+            "result": "WIN",
+            "net": 12.02
+          },
+          {
+            "date": "2018-01-12",
+            "result": "WIN",
+            "net": 27.52
+          },
+          {
+            "date": "2018-03-13",
+            "result": "WIN",
+            "net": 34.02
+          },
+          {
+            "date": "2018-03-22",
+            "result": "WIN",
+            "net": 8.02
+          },
+          {
+            "date": "2018-10-05",
+            "result": "WIN",
+            "net": 3.02
+          },
+          {
+            "date": "2018-10-26",
+            "result": "WIN",
+            "net": 25.02
+          },
+          {
+            "date": "2019-02-13",
+            "result": "WIN",
+            "net": 2.02
+          },
+          {
+            "date": "2019-02-14",
+            "result": "WIN",
+            "net": 31.02
+          }
+        ],
+        "net_pnl_resolved_only": -256.0,
+        "win_rate_resolved_only": 0.7333333333333333,
+        "drawdown_resolved_only": 478.6,
+        "longest_losing_streak_resolved_only": 4
+      }
+    }
+  },
+  "data_gaps": [
+    {
+      "date": "2010-09-06",
+      "status": "DATA_GAP",
+      "missing_15m": [],
+      "missing_5m": [
+        "11:30",
+        "11:35",
+        "11:40",
+        "11:45",
+        "11:50",
+        "11:55",
+        "12:00",
+        "12:05",
+        "12:10",
+        "12:15",
+        "12:20",
+        "12:25",
+        "12:30",
+        "12:35",
+        "12:40",
+        "12:45",
+        "12:50",
+        "12:55"
+      ],
+      "scored": false
+    },
+    {
+      "date": "2011-01-17",
+      "status": "DATA_GAP",
+      "missing_15m": [],
+      "missing_5m": [
+        "11:30",
+        "11:35",
+        "11:40",
+        "11:45",
+        "11:50",
+        "11:55",
+        "12:00",
+        "12:05",
+        "12:10",
+        "12:15",
+        "12:20",
+        "12:25",
+        "12:30",
+        "12:35",
+        "12:40",
+        "12:45",
+        "12:50",
+        "12:55"
+      ],
+      "scored": false
+    },
+    {
+      "date": "2011-02-21",
+      "status": "DATA_GAP",
+      "missing_15m": [],
+      "missing_5m": [
+        "11:30",
+        "11:35",
+        "11:40",
+        "11:45",
+        "11:50",
+        "11:55",
+        "12:00",
+        "12:05",
+        "12:10",
+        "12:15",
+        "12:20",
+        "12:25",
+        "12:30",
+        "12:35",
+        "12:40",
+        "12:45",
+        "12:50",
+        "12:55"
+      ],
+      "scored": false
+    },
+    {
+      "date": "2011-05-30",
+      "status": "DATA_GAP",
+      "missing_15m": [],
+      "missing_5m": [
+        "11:30",
+        "11:35",
+        "11:40",
+        "11:45",
+        "11:50",
+        "11:55",
+        "12:00",
+        "12:05",
+        "12:10",
+        "12:15",
+        "12:20",
+        "12:25",
+        "12:30",
+        "12:35",
+        "12:40",
+        "12:45",
+        "12:50",
+        "12:55"
+      ],
+      "scored": false
+    },
+    {
+      "date": "2011-09-05",
+      "status": "DATA_GAP",
+      "missing_15m": [],
+      "missing_5m": [
+        "11:30",
+        "11:35",
+        "11:40",
+        "11:45",
+        "11:50",
+        "11:55",
+        "12:00",
+        "12:05",
+        "12:10",
+        "12:15",
+        "12:20",
+        "12:25",
+        "12:30",
+        "12:35",
+        "12:40",
+        "12:45",
+        "12:50",
+        "12:55"
+      ],
+      "scored": false
+    },
+    {
+      "date": "2011-09-08",
+      "status": "DATA_GAP",
+      "missing_15m": [
+        "07:30"
+      ],
+      "missing_5m": [],
+      "scored": false
+    },
+    {
+      "date": "2012-01-16",
+      "status": "DATA_GAP",
+      "missing_15m": [],
+      "missing_5m": [
+        "11:30",
+        "11:35",
+        "11:40",
+        "11:45",
+        "11:50",
+        "11:55",
+        "12:00",
+        "12:05",
+        "12:10",
+        "12:15",
+        "12:20",
+        "12:25",
+        "12:30",
+        "12:35",
+        "12:40",
+        "12:45",
+        "12:50",
+        "12:55"
+      ],
+      "scored": false
+    },
+    {
+      "date": "2012-02-20",
+      "status": "DATA_GAP",
+      "missing_15m": [],
+      "missing_5m": [
+        "11:30",
+        "11:35",
+        "11:40",
+        "11:45",
+        "11:50",
+        "11:55",
+        "12:00",
+        "12:05",
+        "12:10",
+        "12:15",
+        "12:20",
+        "12:25",
+        "12:30",
+        "12:35",
+        "12:40",
+        "12:45",
+        "12:50",
+        "12:55"
+      ],
+      "scored": false
+    },
+    {
+      "date": "2012-05-28",
+      "status": "DATA_GAP",
+      "missing_15m": [],
+      "missing_5m": [
+        "11:30",
+        "11:35",
+        "11:40",
+        "11:45",
+        "11:50",
+        "11:55",
+        "12:00",
+        "12:05",
+        "12:10",
+        "12:15",
+        "12:20",
+        "12:25",
+        "12:30",
+        "12:35",
+        "12:40",
+        "12:45",
+        "12:50",
+        "12:55"
+      ],
+      "scored": false
+    },
+    {
+      "date": "2012-09-03",
+      "status": "DATA_GAP",
+      "missing_15m": [],
+      "missing_5m": [
+        "11:30",
+        "11:35",
+        "11:40",
+        "11:45",
+        "11:50",
+        "11:55",
+        "12:00",
+        "12:05",
+        "12:10",
+        "12:15",
+        "12:20",
+        "12:25",
+        "12:30",
+        "12:35",
+        "12:40",
+        "12:45",
+        "12:50",
+        "12:55"
+      ],
+      "scored": false
+    },
+    {
+      "date": "2012-10-29",
+      "status": "DATA_GAP",
+      "missing_15m": [
+        "09:15",
+        "09:30",
+        "09:45",
+        "10:00",
+        "10:15",
+        "10:30",
+        "10:45"
+      ],
+      "missing_5m": [
+        "10:00",
+        "10:05",
+        "10:10",
+        "10:15",
+        "10:20",
+        "10:25",
+        "10:30",
+        "10:35",
+        "10:40",
+        "10:45",
+        "10:50",
+        "10:55",
+        "11:00",
+        "11:05",
+        "11:10",
+        "11:15",
+        "11:20",
+        "11:25",
+        "11:30",
+        "11:35",
+        "11:40",
+        "11:45",
+        "11:50",
+        "11:55",
+        "12:00",
+        "12:05",
+        "12:10",
+        "12:15",
+        "12:20",
+        "12:25",
+        "12:30",
+        "12:35",
+        "12:40",
+        "12:45",
+        "12:50",
+        "12:55",
+        "13:00",
+        "13:05",
+        "13:10",
+        "13:15",
+        "13:20",
+        "13:25",
+        "13:30",
+        "13:35",
+        "13:40",
+        "13:45",
+        "13:50",
+        "13:55",
+        "14:00",
+        "14:05",
+        "14:10",
+        "14:15",
+        "14:20",
+        "14:25",
+        "14:30",
+        "14:35",
+        "14:40",
+        "14:45",
+        "14:50",
+        "14:55",
+        "15:00",
+        "15:05",
+        "15:10",
+        "15:15",
+        "15:20",
+        "15:25",
+        "15:30",
+        "15:35",
+        "15:40",
+        "15:45",
+        "15:50",
+        "15:55"
+      ],
+      "scored": false
+    },
+    {
+      "date": "2012-10-30",
+      "status": "DATA_GAP",
+      "missing_15m": [
+        "09:15",
+        "09:30",
+        "09:45",
+        "10:00",
+        "10:15",
+        "10:30",
+        "10:45"
+      ],
+      "missing_5m": [
+        "10:00",
+        "10:05",
+        "10:10",
+        "10:15",
+        "10:20",
+        "10:25",
+        "10:30",
+        "10:35",
+        "10:40",
+        "10:45",
+        "10:50",
+        "10:55",
+        "11:00",
+        "11:05",
+        "11:10",
+        "11:15",
+        "11:20",
+        "11:25",
+        "11:30",
+        "11:35",
+        "11:40",
+        "11:45",
+        "11:50",
+        "11:55",
+        "12:00",
+        "12:05",
+        "12:10",
+        "12:15",
+        "12:20",
+        "12:25",
+        "12:30",
+        "12:35",
+        "12:40",
+        "12:45",
+        "12:50",
+        "12:55",
+        "13:00",
+        "13:05",
+        "13:10",
+        "13:15",
+        "13:20",
+        "13:25",
+        "13:30",
+        "13:35",
+        "13:40",
+        "13:45",
+        "13:50",
+        "13:55",
+        "14:00",
+        "14:05",
+        "14:10",
+        "14:15",
+        "14:20",
+        "14:25",
+        "14:30",
+        "14:35",
+        "14:40",
+        "14:45",
+        "14:50",
+        "14:55",
+        "15:00",
+        "15:05",
+        "15:10",
+        "15:15",
+        "15:20",
+        "15:25",
+        "15:30",
+        "15:35",
+        "15:40",
+        "15:45",
+        "15:50",
+        "15:55"
+      ],
+      "scored": false
+    },
+    {
+      "date": "2013-01-21",
+      "status": "DATA_GAP",
+      "missing_15m": [
+        "07:00",
+        "07:15",
+        "07:30",
+        "07:45",
+        "08:00",
+        "08:15",
+        "08:30",
+        "08:45",
+        "09:00",
+        "09:15",
+        "09:30",
+        "09:45",
+        "10:00",
+        "10:15",
+        "10:30",
+        "10:45"
+      ],
+      "missing_5m": [
+        "10:00",
+        "10:05",
+        "10:10",
+        "10:15",
+        "10:20",
+        "10:25",
+        "10:30",
+        "10:35",
+        "10:40",
+        "10:45",
+        "10:50",
+        "10:55",
+        "11:00",
+        "11:05",
+        "11:10",
+        "11:15",
+        "11:20",
+        "11:25",
+        "11:30",
+        "11:35",
+        "11:40",
+        "11:45",
+        "11:50",
+        "11:55",
+        "12:00",
+        "12:05",
+        "12:10",
+        "12:15",
+        "12:20",
+        "12:25",
+        "12:30",
+        "12:35",
+        "12:40",
+        "12:45",
+        "12:50",
+        "12:55"
+      ],
+      "scored": false
+    },
+    {
+      "date": "2013-02-18",
+      "status": "DATA_GAP",
+      "missing_15m": [
+        "07:00",
+        "07:15",
+        "07:30",
+        "07:45",
+        "08:00",
+        "08:15",
+        "08:30",
+        "08:45",
+        "09:00",
+        "09:15",
+        "09:30",
+        "09:45",
+        "10:00",
+        "10:15",
+        "10:30",
+        "10:45"
+      ],
+      "missing_5m": [
+        "10:00",
+        "10:05",
+        "10:10",
+        "10:15",
+        "10:20",
+        "10:25",
+        "10:30",
+        "10:35",
+        "10:40",
+        "10:45",
+        "10:50",
+        "10:55",
+        "11:00",
+        "11:05",
+        "11:10",
+        "11:15",
+        "11:20",
+        "11:25",
+        "11:30",
+        "11:35",
+        "11:40",
+        "11:45",
+        "11:50",
+        "11:55",
+        "12:00",
+        "12:05",
+        "12:10",
+        "12:15",
+        "12:20",
+        "12:25",
+        "12:30",
+        "12:35",
+        "12:40",
+        "12:45",
+        "12:50",
+        "12:55"
+      ],
+      "scored": false
+    },
+    {
+      "date": "2013-05-27",
+      "status": "DATA_GAP",
+      "missing_15m": [
+        "07:00",
+        "07:15",
+        "07:30",
+        "07:45",
+        "08:00",
+        "08:15",
+        "08:30",
+        "08:45",
+        "09:00",
+        "09:15",
+        "09:30",
+        "09:45",
+        "10:00",
+        "10:15",
+        "10:30",
+        "10:45"
+      ],
+      "missing_5m": [
+        "10:00",
+        "10:05",
+        "10:10",
+        "10:15",
+        "10:20",
+        "10:25",
+        "10:30",
+        "10:35",
+        "10:40",
+        "10:45",
+        "10:50",
+        "10:55",
+        "11:00",
+        "11:05",
+        "11:10",
+        "11:15",
+        "11:20",
+        "11:25",
+        "11:30",
+        "11:35",
+        "11:40",
+        "11:45",
+        "11:50",
+        "11:55",
+        "12:00",
+        "12:05",
+        "12:10",
+        "12:15",
+        "12:20",
+        "12:25",
+        "12:30",
+        "12:35",
+        "12:40",
+        "12:45",
+        "12:50",
+        "12:55"
+      ],
+      "scored": false
+    },
+    {
+      "date": "2013-09-02",
+      "status": "DATA_GAP",
+      "missing_15m": [
+        "07:00",
+        "07:15",
+        "07:30",
+        "07:45",
+        "08:00",
+        "08:15",
+        "08:30",
+        "08:45",
+        "09:00",
+        "09:15",
+        "09:30",
+        "09:45",
+        "10:00",
+        "10:15",
+        "10:30",
+        "10:45"
+      ],
+      "missing_5m": [
+        "10:00",
+        "10:05",
+        "10:10",
+        "10:15",
+        "10:20",
+        "10:25",
+        "10:30",
+        "10:35",
+        "10:40",
+        "10:45",
+        "10:50",
+        "10:55",
+        "11:00",
+        "11:05",
+        "11:10",
+        "11:15",
+        "11:20",
+        "11:25",
+        "11:30",
+        "11:35",
+        "11:40",
+        "11:45",
+        "11:50",
+        "11:55",
+        "12:00",
+        "12:05",
+        "12:10",
+        "12:15",
+        "12:20",
+        "12:25",
+        "12:30",
+        "12:35",
+        "12:40",
+        "12:45",
+        "12:50",
+        "12:55"
+      ],
+      "scored": false
+    },
+    {
+      "date": "2014-01-20",
+      "status": "DATA_GAP",
+      "missing_15m": [
+        "07:00",
+        "07:15",
+        "07:30",
+        "07:45",
+        "08:00",
+        "08:15",
+        "08:30",
+        "08:45",
+        "09:00",
+        "09:15",
+        "09:30",
+        "09:45",
+        "10:00",
+        "10:15",
+        "10:30",
+        "10:45"
+      ],
+      "missing_5m": [
+        "10:00",
+        "10:05",
+        "10:10",
+        "10:15",
+        "10:20",
+        "10:25",
+        "10:30",
+        "10:35",
+        "10:40",
+        "10:45",
+        "10:50",
+        "10:55",
+        "11:00",
+        "11:05",
+        "11:10",
+        "11:15",
+        "11:20",
+        "11:25",
+        "11:30",
+        "11:35",
+        "11:40",
+        "11:45",
+        "11:50",
+        "11:55",
+        "12:00",
+        "12:05",
+        "12:10",
+        "12:15",
+        "12:20",
+        "12:25",
+        "12:30",
+        "12:35",
+        "12:40",
+        "12:45",
+        "12:50",
+        "12:55"
+      ],
+      "scored": false
+    },
+    {
+      "date": "2014-02-17",
+      "status": "DATA_GAP",
+      "missing_15m": [
+        "07:00",
+        "07:15",
+        "07:30",
+        "07:45",
+        "08:00",
+        "08:15",
+        "08:30",
+        "08:45",
+        "09:00",
+        "09:15",
+        "09:30",
+        "09:45",
+        "10:00",
+        "10:15",
+        "10:30",
+        "10:45"
+      ],
+      "missing_5m": [
+        "10:00",
+        "10:05",
+        "10:10",
+        "10:15",
+        "10:20",
+        "10:25",
+        "10:30",
+        "10:35",
+        "10:40",
+        "10:45",
+        "10:50",
+        "10:55",
+        "11:00",
+        "11:05",
+        "11:10",
+        "11:15",
+        "11:20",
+        "11:25",
+        "11:30",
+        "11:35",
+        "11:40",
+        "11:45",
+        "11:50",
+        "11:55",
+        "12:00",
+        "12:05",
+        "12:10",
+        "12:15",
+        "12:20",
+        "12:25",
+        "12:30",
+        "12:35",
+        "12:40",
+        "12:45",
+        "12:50",
+        "12:55"
+      ],
+      "scored": false
+    },
+    {
+      "date": "2014-06-12",
+      "status": "DATA_GAP",
+      "missing_15m": [
+        "07:00",
+        "07:15",
+        "07:30",
+        "07:45",
+        "08:00",
+        "08:15",
+        "08:30",
+        "08:45",
+        "09:00",
+        "09:15",
+        "09:30",
+        "09:45",
+        "10:00",
+        "10:15",
+        "10:30",
+        "10:45"
+      ],
+      "missing_5m": [
+        "10:00",
+        "10:05",
+        "10:10",
+        "10:15",
+        "10:20",
+        "10:25",
+        "10:30",
+        "10:35",
+        "10:40",
+        "10:45",
+        "10:50",
+        "10:55",
+        "11:00",
+        "11:05",
+        "11:10",
+        "11:15",
+        "11:20",
+        "11:25",
+        "11:30",
+        "11:35",
+        "11:40",
+        "11:45",
+        "11:50",
+        "11:55",
+        "12:00",
+        "12:05",
+        "12:10",
+        "12:15",
+        "12:20",
+        "12:25",
+        "12:30",
+        "12:35",
+        "12:40",
+        "12:45",
+        "12:50",
+        "12:55",
+        "13:00",
+        "13:05",
+        "13:10",
+        "13:15",
+        "13:20",
+        "13:25",
+        "13:30",
+        "13:35",
+        "13:40",
+        "13:45",
+        "13:50",
+        "13:55",
+        "14:00",
+        "14:05",
+        "14:10",
+        "14:15",
+        "14:20",
+        "14:25",
+        "14:30",
+        "14:35",
+        "14:40",
+        "14:45",
+        "14:50",
+        "14:55",
+        "15:00",
+        "15:05",
+        "15:10",
+        "15:15",
+        "15:20",
+        "15:25",
+        "15:30",
+        "15:35",
+        "15:40",
+        "15:45",
+        "15:50",
+        "15:55"
+      ],
+      "scored": false
+    },
+    {
+      "date": "2014-06-13",
+      "status": "DATA_GAP",
+      "missing_15m": [
+        "07:00",
+        "07:15",
+        "07:30",
+        "07:45",
+        "08:00",
+        "08:15",
+        "08:30",
+        "08:45",
+        "09:00",
+        "09:15",
+        "09:30",
+        "09:45",
+        "10:00",
+        "10:15",
+        "10:30",
+        "10:45"
+      ],
+      "missing_5m": [
+        "10:00",
+        "10:05",
+        "10:10",
+        "10:15",
+        "10:20",
+        "10:25",
+        "10:30",
+        "10:35",
+        "10:40",
+        "10:45",
+        "10:50",
+        "10:55",
+        "11:00",
+        "11:05",
+        "11:10",
+        "11:15",
+        "11:20",
+        "11:25",
+        "11:30",
+        "11:35",
+        "11:40",
+        "11:45",
+        "11:50",
+        "11:55",
+        "12:00",
+        "12:05",
+        "12:10",
+        "12:15",
+        "12:20",
+        "12:25",
+        "12:30",
+        "12:35",
+        "12:40",
+        "12:45",
+        "12:50",
+        "12:55",
+        "13:00",
+        "13:05",
+        "13:10",
+        "13:15",
+        "13:20",
+        "13:25",
+        "13:30",
+        "13:35",
+        "13:40",
+        "13:45",
+        "13:50",
+        "13:55",
+        "14:00",
+        "14:05",
+        "14:10",
+        "14:15",
+        "14:20",
+        "14:25",
+        "14:30",
+        "14:35",
+        "14:40",
+        "14:45",
+        "14:50",
+        "14:55",
+        "15:00",
+        "15:05",
+        "15:10",
+        "15:15",
+        "15:20",
+        "15:25",
+        "15:30",
+        "15:35",
+        "15:40",
+        "15:45",
+        "15:50",
+        "15:55"
+      ],
+      "scored": false
+    },
+    {
+      "date": "2014-09-23",
+      "status": "DATA_GAP",
+      "missing_15m": [
+        "07:00",
+        "07:15",
+        "07:30",
+        "07:45",
+        "08:00",
+        "08:15",
+        "08:30",
+        "08:45",
+        "09:00",
+        "09:15",
+        "09:30",
+        "09:45",
+        "10:00",
+        "10:15",
+        "10:30",
+        "10:45"
+      ],
+      "missing_5m": [
+        "10:00",
+        "10:05",
+        "10:10",
+        "10:15",
+        "10:20",
+        "10:25",
+        "10:30",
+        "10:35",
+        "10:40",
+        "10:45",
+        "10:50",
+        "10:55",
+        "11:00",
+        "11:05",
+        "11:10",
+        "11:15",
+        "11:20",
+        "11:25",
+        "11:30",
+        "11:35",
+        "11:40",
+        "11:45",
+        "11:50",
+        "11:55",
+        "12:00",
+        "12:05",
+        "12:10",
+        "12:15",
+        "12:20",
+        "12:25",
+        "12:30",
+        "12:35",
+        "12:40",
+        "12:45",
+        "12:50",
+        "12:55",
+        "13:00",
+        "13:05",
+        "13:10",
+        "13:15",
+        "13:20",
+        "13:25",
+        "13:30",
+        "13:35",
+        "13:40",
+        "13:45",
+        "13:50",
+        "13:55",
+        "14:00",
+        "14:05",
+        "14:10",
+        "14:15",
+        "14:20",
+        "14:25",
+        "14:30",
+        "14:35",
+        "14:40",
+        "14:45",
+        "14:50",
+        "14:55",
+        "15:00",
+        "15:05",
+        "15:10",
+        "15:15",
+        "15:20",
+        "15:25",
+        "15:30",
+        "15:35",
+        "15:40",
+        "15:45",
+        "15:50",
+        "15:55"
+      ],
+      "scored": false
+    },
+    {
+      "date": "2014-09-24",
+      "status": "DATA_GAP",
+      "missing_15m": [
+        "07:00",
+        "07:15",
+        "07:30",
+        "07:45",
+        "08:00",
+        "08:15",
+        "08:30",
+        "08:45",
+        "09:00",
+        "09:15",
+        "09:30",
+        "09:45",
+        "10:00",
+        "10:15",
+        "10:30",
+        "10:45"
+      ],
+      "missing_5m": [
+        "10:00",
+        "10:05",
+        "10:10",
+        "10:15",
+        "10:20",
+        "10:25",
+        "10:30",
+        "10:35",
+        "10:40",
+        "10:45",
+        "10:50",
+        "10:55",
+        "11:00",
+        "11:05",
+        "11:10",
+        "11:15",
+        "11:20",
+        "11:25",
+        "11:30",
+        "11:35",
+        "11:40",
+        "11:45",
+        "11:50",
+        "11:55",
+        "12:00",
+        "12:05",
+        "12:10",
+        "12:15",
+        "12:20",
+        "12:25",
+        "12:30",
+        "12:35",
+        "12:40",
+        "12:45",
+        "12:50",
+        "12:55",
+        "13:00",
+        "13:05",
+        "13:10",
+        "13:15",
+        "13:20",
+        "13:25",
+        "13:30",
+        "13:35",
+        "13:40",
+        "13:45",
+        "13:50",
+        "13:55",
+        "14:00",
+        "14:05",
+        "14:10",
+        "14:15",
+        "14:20",
+        "14:25",
+        "14:30",
+        "14:35",
+        "14:40",
+        "14:45",
+        "14:50",
+        "14:55",
+        "15:00",
+        "15:05",
+        "15:10",
+        "15:15",
+        "15:20",
+        "15:25",
+        "15:30",
+        "15:35",
+        "15:40",
+        "15:45",
+        "15:50",
+        "15:55"
+      ],
+      "scored": false
+    },
+    {
+      "date": "2014-09-25",
+      "status": "DATA_GAP",
+      "missing_15m": [
+        "07:00",
+        "07:15",
+        "07:30",
+        "07:45",
+        "08:00",
+        "08:15",
+        "08:30",
+        "08:45",
+        "09:00",
+        "09:15",
+        "09:30",
+        "09:45",
+        "10:00",
+        "10:15",
+        "10:30",
+        "10:45"
+      ],
+      "missing_5m": [
+        "10:00",
+        "10:05",
+        "10:10",
+        "10:15",
+        "10:20",
+        "10:25",
+        "10:30",
+        "10:35",
+        "10:40",
+        "10:45",
+        "10:50",
+        "10:55",
+        "11:00",
+        "11:05",
+        "11:10",
+        "11:15",
+        "11:20",
+        "11:25",
+        "11:30",
+        "11:35",
+        "11:40",
+        "11:45",
+        "11:50",
+        "11:55",
+        "12:00",
+        "12:05",
+        "12:10",
+        "12:15",
+        "12:20",
+        "12:25",
+        "12:30",
+        "12:35",
+        "12:40",
+        "12:45",
+        "12:50",
+        "12:55",
+        "13:00",
+        "13:05",
+        "13:10",
+        "13:15",
+        "13:20",
+        "13:25",
+        "13:30",
+        "13:35",
+        "13:40",
+        "13:45",
+        "13:50",
+        "13:55",
+        "14:00",
+        "14:05",
+        "14:10",
+        "14:15",
+        "14:20",
+        "14:25",
+        "14:30",
+        "14:35",
+        "14:40",
+        "14:45",
+        "14:50",
+        "14:55",
+        "15:00",
+        "15:05",
+        "15:10",
+        "15:15",
+        "15:20",
+        "15:25",
+        "15:30",
+        "15:35",
+        "15:40",
+        "15:45",
+        "15:50",
+        "15:55"
+      ],
+      "scored": false
+    },
+    {
+      "date": "2014-09-26",
+      "status": "DATA_GAP",
+      "missing_15m": [
+        "07:00"
+      ],
+      "missing_5m": [],
+      "scored": false
+    },
+    {
+      "date": "2014-12-31",
+      "status": "DATA_GAP",
+      "missing_15m": [
+        "07:00",
+        "07:15",
+        "07:30",
+        "07:45",
+        "08:00",
+        "08:15",
+        "08:30",
+        "08:45",
+        "09:00",
+        "09:15",
+        "09:30",
+        "09:45",
+        "10:00",
+        "10:15",
+        "10:30",
+        "10:45"
+      ],
+      "missing_5m": [
+        "10:00",
+        "10:05",
+        "10:10",
+        "10:15",
+        "10:20",
+        "10:25",
+        "10:30",
+        "10:35",
+        "10:40",
+        "10:45",
+        "10:50",
+        "10:55",
+        "11:00",
+        "11:05",
+        "11:10",
+        "11:15",
+        "11:20",
+        "11:25",
+        "11:30",
+        "11:35",
+        "11:40",
+        "11:45",
+        "11:50",
+        "11:55",
+        "12:00",
+        "12:05",
+        "12:10",
+        "12:15",
+        "12:20",
+        "12:25",
+        "12:30",
+        "12:35",
+        "12:40",
+        "12:45",
+        "12:50",
+        "12:55",
+        "13:00",
+        "13:05",
+        "13:10",
+        "13:15",
+        "13:20",
+        "13:25",
+        "13:30",
+        "13:35",
+        "13:40",
+        "13:45",
+        "13:50",
+        "13:55",
+        "14:00",
+        "14:05",
+        "14:10",
+        "14:15",
+        "14:20",
+        "14:25",
+        "14:30",
+        "14:35",
+        "14:40",
+        "14:45",
+        "14:50",
+        "14:55",
+        "15:00",
+        "15:05",
+        "15:10",
+        "15:15",
+        "15:20",
+        "15:25",
+        "15:30",
+        "15:35",
+        "15:40",
+        "15:45",
+        "15:50",
+        "15:55"
+      ],
+      "scored": false
+    },
+    {
+      "date": "2018-12-05",
+      "status": "DATA_GAP",
+      "missing_15m": [
+        "09:30",
+        "09:45",
+        "10:00",
+        "10:15",
+        "10:30",
+        "10:45"
+      ],
+      "missing_5m": [
+        "10:00",
+        "10:05",
+        "10:10",
+        "10:15",
+        "10:20",
+        "10:25",
+        "10:30",
+        "10:35",
+        "10:40",
+        "10:45",
+        "10:50",
+        "10:55",
+        "11:00",
+        "11:05",
+        "11:10",
+        "11:15",
+        "11:20",
+        "11:25",
+        "11:30",
+        "11:35",
+        "11:40",
+        "11:45",
+        "11:50",
+        "11:55",
+        "12:00",
+        "12:05",
+        "12:10",
+        "12:15",
+        "12:20",
+        "12:25",
+        "12:30",
+        "12:35",
+        "12:40",
+        "12:45",
+        "12:50",
+        "12:55",
+        "13:00",
+        "13:05",
+        "13:10",
+        "13:15",
+        "13:20",
+        "13:25",
+        "13:30",
+        "13:35",
+        "13:40",
+        "13:45",
+        "13:50",
+        "13:55",
+        "14:00",
+        "14:05",
+        "14:10",
+        "14:15",
+        "14:20",
+        "14:25",
+        "14:30",
+        "14:35",
+        "14:40",
+        "14:45",
+        "14:50",
+        "14:55",
+        "15:00",
+        "15:05",
+        "15:10",
+        "15:15",
+        "15:20",
+        "15:25",
+        "15:30",
+        "15:35",
+        "15:40",
+        "15:45",
+        "15:50",
+        "15:55"
+      ],
+      "scored": false
+    }
+  ],
+  "data_gap_count": 26,
+  "early_close_sessions": [
+    {
+      "date": "2010-11-26",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2011-11-25",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2012-07-03",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2012-11-23",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2012-12-24",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2013-07-03",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2013-11-29",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2013-12-24",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2014-05-26",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2014-07-03",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2014-09-01",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2014-11-28",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2014-12-24",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2015-01-19",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2015-02-16",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2015-05-25",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2015-09-07",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2015-11-27",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2015-12-24",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2016-01-18",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2016-02-15",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2016-05-30",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2016-09-05",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2016-11-25",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2017-01-16",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2017-02-20",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2017-05-29",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2017-07-03",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2017-09-04",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2017-11-24",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2018-01-15",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2018-02-19",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2018-05-28",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2018-07-03",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2018-09-03",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2018-11-23",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2018-12-24",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2019-01-21",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    },
+    {
+      "date": "2019-02-18",
+      "status": "EARLY_CLOSE",
+      "scored": false,
+      "disposition": "exclude"
+    }
+  ],
+  "holiday_closed_unscored": [
+    "2010-07-05",
+    "2010-11-25",
+    "2010-12-24",
+    "2011-04-22",
+    "2011-07-04",
+    "2011-11-24",
+    "2011-12-26",
+    "2012-01-02",
+    "2012-04-06",
+    "2012-07-04",
+    "2012-11-22",
+    "2012-12-25",
+    "2013-01-01",
+    "2013-03-29",
+    "2013-07-04",
+    "2013-11-28",
+    "2013-12-25",
+    "2014-01-01",
+    "2014-04-18",
+    "2014-07-04",
+    "2014-11-27",
+    "2014-12-25",
+    "2015-01-01",
+    "2015-04-03",
+    "2015-07-03",
+    "2015-11-26",
+    "2015-12-25",
+    "2016-01-01",
+    "2016-03-25",
+    "2016-07-04",
+    "2016-11-24",
+    "2016-12-26",
+    "2017-01-02",
+    "2017-04-14",
+    "2017-07-04",
+    "2017-11-23",
+    "2017-12-25",
+    "2018-01-01",
+    "2018-03-30",
+    "2018-07-04",
+    "2018-11-22",
+    "2018-12-25",
+    "2019-01-01",
+    "2019-04-19"
+  ],
+  "holiday_closed_unscored_count": 44,
+  "invalid_entry_bracket_count": 4,
+  "invalid_entry_bracket_gap_open_count": 0,
+  "invalid_entry_bracket_non_gap_open_count": 4,
+  "slippage_sensitivity": "1-3 tick slippage sensitivity tests fill-price sensitivity only, not whether fills would have happened; spread, depth and fill probability remain separate unquantified uncertainties.",
+  "evaluator_path": "research/afs0523_322_slice_evaluator.py",
+  "evaluator_sha256": "68a5f01326135fbd7bf0420d50337726580f074b9de11d26f058838affb0e07e",
+  "decisive_cell": {
+    "cell_id": "nq-2010-06-to-2019-05/honest_ioc/3tick",
+    "market": "NQ",
+    "model": "honest_ioc",
+    "slippage_ticks": 3.0,
+    "status": "FAIL",
+    "decided_by_check": 2,
+    "counts": {
+      "candidates": 88,
+      "fills": 66,
+      "resolved": 66,
+      "unresolved": 0,
+      "open": 0,
+      "no_fill": 22
+    },
+    "unresolved_fraction": 0.0,
+    "net_total_usd": -194.18,
+    "wins_net": 43,
+    "losses_net": 23,
+    "zero_net_count": 0,
+    "win_rate_net": 0.6515151515,
+    "avg_net_win_usd": 13.1246511628,
+    "avg_net_loss_usd": 32.98,
+    "be_geom": 0.7532532722,
+    "be_real": 0.7153291299,
+    "be": 0.7532532722,
+    "lcb": 0.5436912996,
+    "r_usd": 36.23,
+    "max_dd_usd": 425.64,
+    "max_dd_r": 11.7482749103,
+    "harness_label_counts": {
+      "WIN": 46,
+      "LOSS": 20,
+      "BREAKEVEN": 0
+    },
+    "unsafe_account": null,
+    "worst_net_loss_usd": -71.98,
+    "evaluator_sha256": "68a5f01326135fbd7bf0420d50337726580f074b9de11d26f058838affb0e07e",
+    "constants": {
+      "COMMISSION_ROUND_TRIP_USD": 1.48,
+      "TICK_SIZE_PT": 0.25,
+      "TICK_VALUE_USD": 0.5,
+      "USD_PER_POINT": 2.0,
+      "DECISIVE_SLIPPAGE_TICKS": 3.0,
+      "MIN_RESOLVED": 30,
+      "UNRESOLVED_MAX_FRACTION": 0.1,
+      "DD_CAP_R": 8.0,
+      "ALPHA_ONE_SIDED": 0.05,
+      "ACCOUNT_DD_FLOOR_USD": 450.0,
+      "ACCOUNT_SINGLE_LOSS_USD": 150.0
+    }
+  },
+  "manifest_sha256": "6c9d5ab3c29a7aeade90e95c84e0128795afc1bdd19aa165e18d364760b7f43d",
+  "research_15m_sha256": "cb0457ed6f277caa14b55d4d249d9f2b67a55a9668b9f163fe1a0c6c521b2b3d",
+  "audit_5m_sha256": "9621dfb3d2e42ae0ef775eee35d589c5eb3412f51f689c5e76c1bd72cb963235",
+  "data_root": "/workspace/afs-shared/data/databento_afs0523_2026-11-09",
+  "MAX_CONTRACTS_HARD_CAP": "1",
+  "result_label": "MNQ-equivalent research, not executable historical MNQ",
+  "replay_ledger": "docs/research-evidence/T-2026-11-10-prereg-322-afs0523-oos-structural-2026-11-10-01/slices/nq-2010-06-to-2019-05.replay-ledger.attempt-01.json",
+  "replay_ledger_sha256": "26e75d44ea358b210d9ff1741f5d0381516af9aa42a970b44cadf3b93d0cd4af"
+}

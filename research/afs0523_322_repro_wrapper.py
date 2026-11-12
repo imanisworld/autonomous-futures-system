@@ -27,8 +27,10 @@ reproduction window, and only on the committed manifest at
 ``DATA_MANIFEST_SHA256`` is the SHA-256 of that committed file. The gate
 refuses a placeholder pin and any other byte mismatch. ``run_window`` scores nothing.
 ``run_declared_slices()`` scores one admitted slice only when
-``SLICE_SCORING_AUTHORIZED`` is true. This commit leaves that constant
-false. A slice result has no pass/fail criterion. A ``claude_review``
+``SLICE_SCORING_AUTHORIZED`` is true. This commit sets that constant
+true and stamps the slice-success evaluator on each scored slice. Raw slice
+results plus the registered decisive cell (honest IOC, 3 ticks). The gate
+verdict is the COMBINE artifact. A ``claude_review``
 string is self-attested; pull-request review is the real gate.
 """
 from __future__ import annotations
@@ -46,6 +48,11 @@ from pathlib import Path
 
 from config.futures_contracts import contract_economics
 from config.settings import per_instrument_contract_ceiling
+from research.afs0523_322_slice_evaluator import (
+    combine_cells,
+    evaluate_cell,
+    trade_records_from_ledger,
+)
 from research.databento_322_bar_adapter import data_gap_dates_from_trees
 from research.run_322_expanded_evidence import detect_candidates
 from scripts.edge_decomposition_audit import (
@@ -67,8 +74,10 @@ EOD_DATE = "2025-01-20"
 SUPERSEDED_TRIAL_ID = "T-2026-11-09-prereg-322-afs0523-oos-reproduction-2026-11-09-01"
 TRIAL_ID = "T-2026-11-10-prereg-322-afs0523-oos-structural-2026-11-10-01"
 RUN_AUTHORIZED = True
-# Slice scoring stays off until a separate preregistration sets this true.
-SLICE_SCORING_AUTHORIZED = False
+# The registered slice-success trial authorizes scoring. The evaluator does not promote.
+SLICE_SCORING_AUTHORIZED = True
+EVALUATOR_REL = "research/afs0523_322_slice_evaluator.py"
+EXPECTED_EVALUATOR_SHA256 = "68a5f01326135fbd7bf0420d50337726580f074b9de11d26f058838affb0e07e"
 TRIAL_LEDGER = REPO / "docs/research-trial-ledger.jsonl"
 GATE_ARTIFACT = (
     REPO
@@ -1771,8 +1780,74 @@ def record_gate_review(pr_head_sha: str) -> dict:
     return event
 
 
+def _repo_rel_posix(repo: Path, path: Path) -> str | None:
+    """``path`` relative to ``repo`` in git's form, or None when it is outside."""
+    try:
+        return path.resolve().relative_to(repo.resolve()).as_posix()
+    except (OSError, ValueError):
+        return None
+
+
+def _ledger_is_append_only(repo: Path, ledger_rel: str) -> bool:
+    """True when the committed ledger is a byte prefix of the working ledger.
+
+    The committed bytes must end at a line boundary, so appending cannot
+    change the last committed line.
+    """
+    try:
+        committed = subprocess.run(
+            ["git", "-C", str(repo), "show", f"HEAD:{ledger_rel}"],
+            check=True,
+            capture_output=True,
+        ).stdout
+        working = (repo / ledger_rel).read_bytes()
+    except (OSError, subprocess.CalledProcessError):
+        return False
+    if committed and not committed.endswith(b"\n"):
+        return False
+    return len(working) > len(committed) and working.startswith(committed)
+
+
+def _status_is_admissible(repo: Path, status: str) -> bool:
+    """Whether ``git status --porcelain -z`` output is clean apart from slice output.
+
+    Two things are allowed. One is a new untracked file under this trial's
+    ``slices/`` directory (``SLICE_ARTIFACT_DIR``). The other is the trial
+    ledger modified only by appending. Anything else refuses: a staged
+    change, a deletion, a rename, a modified tracked file (including one
+    under ``slices/``), any other untracked file, or an edited ledger line.
+    """
+    if status == "":
+        return True
+    slices_rel = _repo_rel_posix(repo, SLICE_ARTIFACT_DIR)
+    ledger_rel = _repo_rel_posix(repo, TRIAL_LEDGER)
+    for entry in status.split("\0"):
+        if entry == "":
+            continue
+        if len(entry) < 4 or entry[2] != " ":
+            return False
+        code, path = entry[:2], entry[3:]
+        if code == "??":
+            if slices_rel is None or not path.startswith(slices_rel + "/"):
+                return False
+            if ".." in path.split("/"):
+                return False
+            continue
+        if code == " M" and ledger_rel is not None and path == ledger_rel:
+            if not _ledger_is_append_only(repo, ledger_rel):
+                return False
+            continue
+        return False
+    return True
+
+
 def _git_head_and_clean(repo: Path) -> tuple[str, bool]:
-    """HEAD commit and whether ``git status`` is empty. Status text is not returned."""
+    """HEAD commit and whether the checkout is clean. Status text is not returned.
+
+    Clean means ``git status`` is empty except for what an earlier slice of
+    this trial writes: new untracked files under ``SLICE_ARTIFACT_DIR`` and
+    appended lines on ``TRIAL_LEDGER``. See ``_status_is_admissible``.
+    """
     try:
         head = subprocess.run(
             ["git", "-C", str(repo), "rev-parse", "HEAD"],
@@ -1781,14 +1856,14 @@ def _git_head_and_clean(repo: Path) -> tuple[str, bool]:
             text=True,
         ).stdout.strip()
         status = subprocess.run(
-            ["git", "-C", str(repo), "status", "--porcelain", "--untracked-files=all"],
+            ["git", "-C", str(repo), "status", "--porcelain", "-z", "--untracked-files=all"],
             check=True,
             capture_output=True,
             text=True,
         ).stdout
     except (OSError, subprocess.CalledProcessError) as exc:
         raise RuntimeError("refusing to score without a clean git checkout") from exc
-    return head, status == ""
+    return head, _status_is_admissible(repo, status)
 
 
 def _scoring_provenance() -> dict:
@@ -1982,6 +2057,101 @@ def _record_slice_scoring_failure(
     _append_slice_event(payload, None, None)
 
 
+def _evaluator_file_sha256() -> str:
+    path = REPO / EVALUATOR_REL
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _market_for_slice(spec: SliceSpec) -> str:
+    if spec.price_source == "MNQ":
+        return "MNQ"
+    if spec.price_source == "NQ":
+        return "NQ"
+    raise RuntimeError(f"slice {spec.id} has no decisive market")
+
+
+def _require_pinned_evaluator() -> str:
+    digest = _evaluator_file_sha256()
+    if digest != EXPECTED_EVALUATOR_SHA256:
+        raise RuntimeError(
+            "refusing to score: evaluator file hash does not match EXPECTED_EVALUATOR_SHA256"
+        )
+    return digest
+
+
+def _decisive_cell(ledger: dict, slice_id: str, market: str) -> dict:
+    """Score the 3-tick honest-IOC rows and stamp the evaluator file hash."""
+    digest = _require_pinned_evaluator()
+    records = trade_records_from_ledger(ledger, slice_id=slice_id, market=market)
+    cell = evaluate_cell(records, cell_id=f"{slice_id}/honest_ioc/3tick", market=market)
+    cell["evaluator_sha256"] = digest
+    return cell
+
+
+def _slice_event_for_artifact(slice_id: str, artifact_name: str) -> dict:
+    matches = [
+        row
+        for row in _trial_rows()
+        if row.get("event") == "SLICE"
+        and row.get("slice_id") == slice_id
+        and str(row.get("slice_artifact") or "").endswith(artifact_name)
+    ]
+    if len(matches) != 1:
+        raise RuntimeError(f"{slice_id} attempt-01 has no single SLICE event")
+    return matches[0]
+
+
+def _verify_attempt01_artifact(path: Path) -> dict:
+    raw = path.read_bytes()
+    payload = json.loads(raw)
+    if not isinstance(payload, dict):
+        raise RuntimeError(f"{path.name} is not a slice artifact")
+    event = _slice_event_for_artifact(str(payload.get("slice_id")), path.name)
+    digest = hashlib.sha256(raw).hexdigest()
+    if event.get("slice_artifact_sha256") != digest:
+        raise RuntimeError(f"{path.name} sha256 does not match its SLICE event")
+    if event.get("evaluator_sha256") != payload.get("evaluator_sha256"):
+        raise RuntimeError(f"{path.name} evaluator sha256 does not match its SLICE event")
+    cell = payload.get("decisive_cell")
+    if not isinstance(cell, dict) or cell.get("evaluator_sha256") != payload.get("evaluator_sha256"):
+        raise RuntimeError(f"{path.name} cell hash does not match the artifact")
+    return payload
+
+
+def _write_combine_artifact_if_ready() -> None:
+    """Write one COMBINE artifact once both attempt-01 slice artifacts exist."""
+    mnq_path = SLICE_ARTIFACT_DIR / "mnq-2019-05-to-2024-06.attempt-01.json"
+    nq_path = SLICE_ARTIFACT_DIR / "nq-2010-06-to-2019-05.attempt-01.json"
+    out = SLICE_ARTIFACT_DIR / "combine.attempt-01.json"
+    if not mnq_path.is_file() or not nq_path.is_file() or out.exists():
+        return
+    mnq_raw = mnq_path.read_bytes()
+    nq_raw = nq_path.read_bytes()
+    mnq = _verify_attempt01_artifact(mnq_path)
+    nq = _verify_attempt01_artifact(nq_path)
+    combined = combine_cells(nq["decisive_cell"], mnq["decisive_cell"])
+    payload = {
+        "overall": combined["overall"],
+        "verdict": combined["verdict"],
+        "cells": combined["cells"],
+        "evaluator_sha256": combined["evaluator_sha256"],
+        "unsafe_account": combined["unsafe_account"],
+        "inputs": {
+            "nq-2010-06-to-2019-05": {
+                "slice_artifact": _repo_relative(nq_path),
+                "slice_artifact_sha256": hashlib.sha256(nq_raw).hexdigest(),
+                "evaluator_sha256": nq["evaluator_sha256"],
+            },
+            "mnq-2019-05-to-2024-06": {
+                "slice_artifact": _repo_relative(mnq_path),
+                "slice_artifact_sha256": hashlib.sha256(mnq_raw).hexdigest(),
+                "evaluator_sha256": mnq["evaluator_sha256"],
+            },
+        },
+    }
+    out.write_text(json.dumps(payload, indent=2, default=str) + "\n", encoding="utf-8")
+
+
 def _score_admitted_slice(
     research_15m: Path,
     audit_5m: Path,
@@ -1989,7 +2159,8 @@ def _score_admitted_slice(
     *,
     data_root: Path,
 ) -> dict:
-    """Score one admitted slice and write a new attempt. No pass/fail rule."""
+    """Raw slice results plus the registered decisive cell (honest IOC, 3 ticks). The gate verdict is the COMBINE artifact."""
+    _require_pinned_evaluator()
     provenance = _scoring_provenance()
     identity = _slice_data_identity(research_15m, audit_5m, data_root)
     spec = next((item for item in SLICES if item.id == slice_id), None)
@@ -2013,6 +2184,12 @@ def _score_admitted_slice(
             slice_id, provenance, identity, "slice scoring produced no replay ledger"
         )
         raise RuntimeError("slice scoring produced no replay ledger")
+    try:
+        cell = _decisive_cell(ledger, spec.id, _market_for_slice(spec))
+    except Exception as exc:
+        _record_slice_scoring_failure(slice_id, provenance, identity, str(exc))
+        raise
+    evaluator_sha256 = cell["evaluator_sha256"]
     payload = {
         "slice_id": spec.id,
         "start": spec.start.isoformat(),
@@ -2038,6 +2215,9 @@ def _score_admitted_slice(
             scored.get("invalid_entry_bracket_non_gap_open_count") or 0
         ),
         "slippage_sensitivity": SLIPPAGE_SENSITIVITY_NOTE,
+        "evaluator_path": EVALUATOR_REL,
+        "evaluator_sha256": evaluator_sha256,
+        "decisive_cell": cell,
     }
     payload.update(identity)
     if spec.price_source == "NQ":
@@ -2053,6 +2233,7 @@ def _score_admitted_slice(
     artifact_path.write_text(artifact_text, encoding="utf-8")
     digest = hashlib.sha256(artifact_text.encode()).hexdigest()
     _append_slice_event(payload, digest, _repo_relative(artifact_path))
+    _write_combine_artifact_if_ready()
     return payload
 
 
@@ -2103,8 +2284,10 @@ def _append_slice_event(
             "invalid_entry_bracket_non_gap_open_count": payload.get(
                 "invalid_entry_bracket_non_gap_open_count"
             ),
+            "evaluator_path": payload.get("evaluator_path"),
+            "evaluator_sha256": payload.get("evaluator_sha256"),
             "error": payload.get("error"),
-            "notes": "Raw slice results. No pass/fail criterion is applied.",
+            "notes": "Raw slice results plus the registered decisive cell (honest IOC, 3 ticks). The gate verdict is the COMBINE artifact.",
         }
     )
     with TRIAL_LEDGER.open("a", encoding="utf-8") as handle:
@@ -2123,7 +2306,8 @@ def run_declared_slices(
     Every admission check still runs: the pinned manifest, the slice tree
     hashes, refusal of ``combined``, the SUPERSEDED check, and
     ``MAX_CONTRACTS_HARD_CAP`` exactly equal to ``1``. The authorization
-    constant is false in this commit, so an admitted slice returns None and
+    constant is true. An admitted slice is scored and the evaluator hash is
+    stamped on the artifact. Setting the constant false returns None and
     writes nothing.
 
     When the constant is true, the checkout must be clean. The artifact

@@ -15,7 +15,6 @@ from research.afs0523_322_repro_wrapper import (
     OCT4_SCORING_PROFILE,
     REPRO_END,
     REPRO_START,
-    SLICE_SCORING_AUTHORIZED,
     _run_window,
     _target_and_stop_nets,
     compare_replay_structural,
@@ -339,16 +338,16 @@ def test_t14_the_evaluator_is_deterministic_and_has_no_io_imports():
     assert first == second
     source = (ROOT / "research/afs0523_322_slice_evaluator.py").read_text(encoding="utf-8")
     tree = ast.parse(source)
-    banned = {"random", "time", "os"}
+    allowed = {"math", "statistics", "typing", "__future__"}
+    imported: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert {alias.name.split(".")[0] for alias in node.names}.isdisjoint(banned)
-        if isinstance(node, ast.ImportFrom):
-            assert (node.module or "").split(".")[0] not in banned
-            assert "datetime" not in (node.module or "")
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-            assert node.func.id != "open"
-    assert SLICE_SCORING_AUTHORIZED is False
+            imported.update(alias.name.split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            imported.add((node.module or "").split(".")[0])
+    assert imported <= allowed
+    assert "datetime" not in imported
+    assert "pathlib" not in imported
 
 
 def test_t15_a_single_loss_past_150_marks_mnq_unsafe_without_changing_status():
