@@ -630,7 +630,7 @@ def test_slice_report_counts_gap_open_and_non_gap_drops(monkeypatch, tmp_path):
     assert result["invalid_entry_bracket_count"] == 2
     assert result["invalid_entry_bracket_gap_open_count"] == 1
     assert result["invalid_entry_bracket_non_gap_open_count"] == 1
-    assert SLICE_SCORING_AUTHORIZED is False
+    assert SLICE_SCORING_AUTHORIZED is True
 
 
 def test_data_gap_days_are_reported_and_not_scored(monkeypatch, tmp_path):
@@ -988,6 +988,7 @@ def _write_gate(artifact: Path, ledger: Path, payload: dict, *, tamper: bool = F
 
 
 def test_declared_slices_refuse_without_a_verified_pass_artifact(monkeypatch, tmp_path):
+    monkeypatch.setattr("research.afs0523_322_repro_wrapper.SLICE_SCORING_AUTHORIZED", False)
     artifact, ledger = _patch_gate_paths(monkeypatch, tmp_path)
     kept = [
         line
@@ -1387,6 +1388,7 @@ def test_download_manifest_schema_requires_each_window(monkeypatch, tmp_path):
 
 
 def test_gate_review_admits_a_slice_without_scoring_and_rejects_a_different_artifact(monkeypatch, tmp_path):
+    monkeypatch.setattr("research.afs0523_322_repro_wrapper.SLICE_SCORING_AUTHORIZED", False)
     repro_research = tmp_path / "repro-research"
     repro_audit = tmp_path / "repro-audit"
     slice_research = tmp_path / "slice-research"
@@ -1794,6 +1796,7 @@ def test_edited_bar_evidence_fails_the_pin(monkeypatch, tmp_path):
 
 
 def test_gate_and_slice_refuse_ohl_disagreement_when_fills_match(monkeypatch, tmp_path):
+    monkeypatch.setattr("research.afs0523_322_repro_wrapper.SLICE_SCORING_AUTHORIZED", False)
     research = tmp_path / "research"
     audit = tmp_path / "audit"
     slice_research = tmp_path / "slice-research"
@@ -1976,7 +1979,7 @@ def _synthetic_slice_ledger() -> dict:
 
 
 def test_slice_summary_is_raw_and_has_no_pass_fail():
-    assert SLICE_SCORING_AUTHORIZED is False
+    assert SLICE_SCORING_AUTHORIZED is True
     summary = summarize_slice_ledger(_synthetic_slice_ledger())
     original = summary["1tick"]["original"]
     assert original["candidates"] == 5
@@ -2098,6 +2101,7 @@ def _slice_events(ledger: Path) -> list[dict]:
 
 
 def test_admitted_slice_does_not_score_while_authorization_is_false(monkeypatch, tmp_path):
+    monkeypatch.setattr("research.afs0523_322_repro_wrapper.SLICE_SCORING_AUTHORIZED", False)
     slice_research, slice_audit, ledger = _prepare_admitted_slice(monkeypatch, tmp_path)
     calls = []
     monkeypatch.setattr(
@@ -2422,7 +2426,7 @@ def test_slice_holiday_closure_with_bars_yields_no_candidate(monkeypatch, tmp_pa
     assert result["data_gap_count"] == 0
     assert result["holiday_closed_unscored"] == ["2014-07-04"]
     assert result["holiday_closed_unscored_count"] == 1
-    assert SLICE_SCORING_AUTHORIZED is False
+    assert SLICE_SCORING_AUTHORIZED is True
 
 
 def test_holiday_closed_list_is_on_the_slice_artifact_and_event(monkeypatch, tmp_path):
@@ -2613,7 +2617,7 @@ def test_recorded_replay_stays_34_candidates_with_zero_strict_bracket_drops():
     kept, invalid = partition_invalid_gap_opens(recorded)
     assert len(kept) == 34
     assert invalid == []
-    assert SLICE_SCORING_AUTHORIZED is False
+    assert SLICE_SCORING_AUTHORIZED is True
 
 
 def test_close_delta_day_fails_when_the_scored_close_is_not_the_pinned_databento_close():
@@ -2629,3 +2633,95 @@ def test_close_delta_day_fails_when_the_scored_close_is_not_the_pinned_databento
         row["date"] == "2024-09-06" and row["field"] == "scored_bar" and row["actual"] == "close_mismatch"
         for row in structural["mismatches"]
     )
+
+
+def test_scored_slice_stamps_the_evaluator_and_combine_waits_for_both(monkeypatch, tmp_path):
+    _prepare_admitted_slice(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        "research.afs0523_322_repro_wrapper._git_head_and_clean",
+        lambda _repo: ("ab" * 20, True),
+    )
+    ledger_rows = {
+        "1tick": [],
+        "2tick": [],
+        "3tick": [
+            {
+                "date": "2019-06-03",
+                "direction": "LONG",
+                "stop": 985.0,
+                "target": 1007.0,
+                "models": {"ioc_close": {"status": "NO_FILL", "reason": "ENTRY_NOT_FILLED"}},
+            }
+        ],
+    }
+    monkeypatch.setattr(
+        "research.afs0523_322_repro_wrapper._run_window",
+        lambda *_args, **_kwargs: {
+            "ledger": ledger_rows,
+            "data_gaps": [],
+            "data_gap_count": 0,
+            "early_close_sessions": [],
+        },
+    )
+    evaluator = ROOT / "research/afs0523_322_slice_evaluator.py"
+    digest = hashlib.sha256(evaluator.read_bytes()).hexdigest()
+    real_ledger = (ROOT / "docs/research-trial-ledger.jsonl").read_bytes()
+    mnq = run_declared_slices(
+        Path("slice-research"),
+        Path("slice-audit"),
+        data_root=tmp_path,
+        slice_id="mnq-2019-05-to-2024-06",
+    )
+    assert mnq["evaluator_path"] == "research/afs0523_322_slice_evaluator.py"
+    assert mnq["evaluator_sha256"] == digest
+    assert mnq["decisive_cell"]["evaluator_sha256"] == digest
+    assert mnq["decisive_cell"]["status"] == "INSUFFICIENT"
+    assert mnq["decisive_cell"]["market"] == "MNQ"
+    assert not (tmp_path / "slices" / "combine.attempt-01.json").exists()
+    monkeypatch.setattr(
+        "research.afs0523_322_repro_wrapper._refuse_slice_data_mismatch",
+        lambda *_args, **_kwargs: None,
+    )
+    nq = run_declared_slices(
+        Path("slice-research"),
+        Path("slice-audit"),
+        data_root=tmp_path,
+        slice_id="nq-2010-06-to-2019-05",
+    )
+    assert nq["decisive_cell"]["market"] == "NQ"
+    assert nq["evaluator_sha256"] == digest
+    combine_path = tmp_path / "slices" / "combine.attempt-01.json"
+    combine = json.loads(combine_path.read_text(encoding="utf-8"))
+    assert combine["evaluator_sha256"] == digest
+    assert combine["inputs"]["nq-2010-06-to-2019-05"]["evaluator_sha256"] == digest
+    assert combine["inputs"]["mnq-2019-05-to-2024-06"]["evaluator_sha256"] == digest
+    assert combine["inputs"]["nq-2010-06-to-2019-05"]["slice_artifact_sha256"]
+    assert combine["verdict"]
+    assert "VALIDATED" not in combine["verdict"]
+    assert (ROOT / "docs/research-trial-ledger.jsonl").read_bytes() == real_ledger
+
+
+def test_changed_evaluator_hash_is_refused_and_records_nothing(monkeypatch, tmp_path):
+    _slice_research, _slice_audit, ledger = _prepare_admitted_slice(monkeypatch, tmp_path)
+    before = ledger.read_bytes()
+    calls = []
+    monkeypatch.setattr(
+        "research.afs0523_322_repro_wrapper._run_window",
+        lambda *_args, **_kwargs: calls.append(True),
+    )
+    monkeypatch.setattr(
+        "research.afs0523_322_repro_wrapper.EXPECTED_EVALUATOR_SHA256",
+        "0" * 64,
+    )
+    real_ledger = (ROOT / "docs/research-trial-ledger.jsonl").read_bytes()
+    with pytest.raises(RuntimeError, match="EXPECTED_EVALUATOR_SHA256"):
+        run_declared_slices(
+            Path("slice-research"),
+            Path("slice-audit"),
+            data_root=tmp_path,
+            slice_id="mnq-2019-05-to-2024-06",
+        )
+    assert calls == []
+    assert ledger.read_bytes() == before
+    assert not (tmp_path / "slices").exists()
+    assert (ROOT / "docs/research-trial-ledger.jsonl").read_bytes() == real_ledger
