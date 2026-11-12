@@ -2725,3 +2725,221 @@ def test_changed_evaluator_hash_is_refused_and_records_nothing(monkeypatch, tmp_
     assert ledger.read_bytes() == before
     assert not (tmp_path / "slices").exists()
     assert (ROOT / "docs/research-trial-ledger.jsonl").read_bytes() == real_ledger
+
+
+# --- Real clean check across two slices (no _git_head_and_clean mock) -------
+
+_WRAPPER = "research.afs0523_322_repro_wrapper"
+_MNQ_SLICE = "mnq-2019-05-to-2024-06"
+_NQ_SLICE = "nq-2010-06-to-2019-05"
+
+
+def _git(repo: Path, *args: str) -> str:
+    return subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.email=test@example.com",
+            "-c",
+            "user.name=Test",
+            "-c",
+            "commit.gpgsign=false",
+            *args,
+        ],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+
+
+def _prepare_two_slice_git_repo(monkeypatch, tmp_path: Path) -> tuple[Path, str]:
+    """Admit both slices from a real, committed temp git repo.
+
+    Only the harness scoring (``_run_window``) is stubbed. The clean check,
+    admission checks, evaluator pin, artifacts, ledger, and combine are real.
+    """
+    monkeypatch.setenv("MAX_CONTRACTS_HARD_CAP", "1")
+    repro_research = tmp_path / "repro-research"
+    repro_audit = tmp_path / "repro-audit"
+    _bar_file(repro_research, date(2024, 8, 2))
+    _bar_file(repro_audit, date(2024, 8, 2))
+    trees = {}
+    for slice_id, day in ((_MNQ_SLICE, date(2020, 1, 6)), (_NQ_SLICE, date(2015, 1, 6))):
+        research = tmp_path / f"{slice_id}-research"
+        audit = tmp_path / f"{slice_id}-audit"
+        _bar_file(research, day)
+        _bar_file(audit, day)
+        trees[slice_id] = (_tree_sha256(research), _tree_sha256(audit))
+    manifest = _manifest(tmp_path, repro_research, repro_audit, slices=trees)
+    pin = _pin_manifest(monkeypatch, tmp_path, manifest)
+    artifact, ledger = _patch_gate_paths(monkeypatch, tmp_path)
+    _write_gate(
+        artifact,
+        ledger,
+        {
+            "pass": True,
+            "claude_review": None,
+            "prior_attempts": [],
+            "pulled_files": manifest["pulled_files"],
+            "research_15m_sha256": _repro(manifest)["research_15m_sha256"],
+            "audit_5m_sha256": _repro(manifest)["audit_5m_sha256"],
+            "manifest_sha256": pin,
+        },
+    )
+    review = {
+        "trial_id": TRIAL_ID,
+        "event": "GATE_REVIEW",
+        "gate_artifact_sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+        "pr_head_sha": "c" * 40,
+    }
+    ledger.write_text(ledger.read_text(encoding="utf-8") + json.dumps(review) + "\n", encoding="utf-8")
+    monkeypatch.setattr(f"{_WRAPPER}.SLICE_ARTIFACT_DIR", tmp_path / "slices")
+    for rel in ("research/afs0523_322_slice_evaluator.py", "scripts/edge_decomposition_audit.py"):
+        copied = tmp_path / rel
+        copied.parent.mkdir(parents=True, exist_ok=True)
+        copied.write_bytes((ROOT / rel).read_bytes())
+    (tmp_path / "code.py").write_text("VALUE = 1\n", encoding="utf-8")
+    (tmp_path / "slices").mkdir()
+    (tmp_path / "slices" / "committed.json").write_text("{}\n", encoding="utf-8")
+    monkeypatch.setattr(f"{_WRAPPER}.REPO", tmp_path)
+    monkeypatch.setattr(f"{_WRAPPER}.SLICE_SCORING_AUTHORIZED", True)
+    monkeypatch.setattr(
+        f"{_WRAPPER}._run_window",
+        lambda *_args, **_kwargs: {
+            "ledger": {"1tick": [], "2tick": [], "3tick": []},
+            "data_gaps": [],
+            "data_gap_count": 0,
+            "early_close_sessions": [],
+        },
+    )
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "init")
+    head = _git(tmp_path, "rev-parse", "HEAD").strip()
+    assert _git(tmp_path, "status", "--porcelain", "--untracked-files=all") == ""
+    return ledger, head
+
+
+def _run_slice(tmp_path: Path, slice_id: str) -> dict:
+    return run_declared_slices(
+        Path(f"{slice_id}-research"),
+        Path(f"{slice_id}-audit"),
+        data_root=tmp_path,
+        slice_id=slice_id,
+    )
+
+
+def test_real_clean_check_admits_slice_two_after_slice_one_artifacts(monkeypatch, tmp_path):
+    ledger, head = _prepare_two_slice_git_repo(monkeypatch, tmp_path)
+    combine_path = tmp_path / "slices" / "combine.attempt-01.json"
+    combine_writes = []
+    real_combine = __import__(_WRAPPER, fromlist=["x"])._write_combine_artifact_if_ready
+
+    def _counting_combine():
+        existed = combine_path.exists()
+        real_combine()
+        if not existed and combine_path.exists():
+            combine_writes.append(True)
+
+    monkeypatch.setattr(f"{_WRAPPER}._write_combine_artifact_if_ready", _counting_combine)
+    real_ledger = (ROOT / "docs/research-trial-ledger.jsonl").read_bytes()
+
+    mnq = _run_slice(tmp_path, _MNQ_SLICE)
+    assert mnq["git_head"] == head
+    assert mnq["clean_tree"] is True
+    assert not combine_path.exists()
+    status = _git(tmp_path, "status", "--porcelain", "--untracked-files=all")
+    assert status != ""
+    assert " M ledger.jsonl" in status.splitlines()
+
+    nq = _run_slice(tmp_path, _NQ_SLICE)
+    assert nq["git_head"] == head
+    assert nq["clean_tree"] is True
+    assert combine_writes == [True]
+    combine = json.loads(combine_path.read_text(encoding="utf-8"))
+    assert set(combine["inputs"]) == {_MNQ_SLICE, _NQ_SLICE}
+    assert sorted(p.name for p in (tmp_path / "slices").glob("combine*")) == ["combine.attempt-01.json"]
+    events = _slice_events(ledger)
+    assert [event["slice_id"] for event in events] == [_MNQ_SLICE, _NQ_SLICE]
+    assert all(event["git_head"] == head for event in events)
+    assert (ROOT / "docs/research-trial-ledger.jsonl").read_bytes() == real_ledger
+
+
+def test_real_clean_check_refuses_a_modified_code_file(monkeypatch, tmp_path):
+    ledger, _head = _prepare_two_slice_git_repo(monkeypatch, tmp_path)
+    (tmp_path / "code.py").write_text("VALUE = 2\n", encoding="utf-8")
+    before = ledger.read_bytes()
+    with pytest.raises(RuntimeError, match="dirty checkout"):
+        _run_slice(tmp_path, _MNQ_SLICE)
+    assert ledger.read_bytes() == before
+    assert not (tmp_path / "slices" / f"{_MNQ_SLICE}.attempt-01.json").exists()
+
+
+def test_real_clean_check_refuses_slice_two_after_an_edited_ledger_line(monkeypatch, tmp_path):
+    ledger, _head = _prepare_two_slice_git_repo(monkeypatch, tmp_path)
+    _run_slice(tmp_path, _MNQ_SLICE)
+    lines = ledger.read_text(encoding="utf-8").splitlines(keepends=True)
+    first = json.loads(lines[0])
+    first["notes"] = "edited"
+    lines[0] = json.dumps(first) + "\n"
+    ledger.write_text("".join(lines), encoding="utf-8")
+    with pytest.raises(RuntimeError, match="dirty checkout"):
+        _run_slice(tmp_path, _NQ_SLICE)
+    assert not (tmp_path / "slices" / f"{_NQ_SLICE}.attempt-01.json").exists()
+    assert not (tmp_path / "slices" / "combine.attempt-01.json").exists()
+
+
+def test_real_clean_check_refuses_slice_two_with_a_stray_untracked_file(monkeypatch, tmp_path):
+    _ledger, _head = _prepare_two_slice_git_repo(monkeypatch, tmp_path)
+    _run_slice(tmp_path, _MNQ_SLICE)
+    (tmp_path / "stray.txt").write_text("x\n", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="dirty checkout"):
+        _run_slice(tmp_path, _NQ_SLICE)
+    assert not (tmp_path / "slices" / "combine.attempt-01.json").exists()
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "modified_tracked_under_slices",
+        "staged_new_file_under_slices",
+        "staged_ledger_append",
+        "deleted_tracked_file",
+        "ledger_line_removed",
+        "ledger_truncated_to_empty",
+        "untracked_sibling_of_slices",
+    ],
+)
+def test_real_clean_check_refuses_other_dirty_states(monkeypatch, tmp_path, case):
+    ledger, head = _prepare_two_slice_git_repo(monkeypatch, tmp_path)
+    slices = tmp_path / "slices"
+    if case == "modified_tracked_under_slices":
+        (slices / "committed.json").write_text('{"x": 1}\n', encoding="utf-8")
+    elif case == "staged_new_file_under_slices":
+        (slices / "new.json").write_text("{}\n", encoding="utf-8")
+        _git(tmp_path, "add", "slices/new.json")
+    elif case == "staged_ledger_append":
+        ledger.write_text(ledger.read_text(encoding="utf-8") + "{}\n", encoding="utf-8")
+        _git(tmp_path, "add", "ledger.jsonl")
+    elif case == "deleted_tracked_file":
+        (tmp_path / "code.py").unlink()
+    elif case == "ledger_line_removed":
+        lines = ledger.read_text(encoding="utf-8").splitlines(keepends=True)
+        ledger.write_text("".join(lines[:-1]) + "{}\n{}\n", encoding="utf-8")
+    elif case == "ledger_truncated_to_empty":
+        ledger.write_text("", encoding="utf-8")
+    elif case == "untracked_sibling_of_slices":
+        (tmp_path / "slices-extra").mkdir()
+        (tmp_path / "slices-extra" / "a.json").write_text("{}\n", encoding="utf-8")
+    got_head, clean = _git_head_and_clean(tmp_path)
+    assert got_head == head
+    assert clean is False
+
+
+def test_real_clean_check_allows_only_slice_files_and_ledger_append(monkeypatch, tmp_path):
+    ledger, head = _prepare_two_slice_git_repo(monkeypatch, tmp_path)
+    (tmp_path / "slices" / "nested").mkdir()
+    (tmp_path / "slices" / "nested" / "a.json").write_text("{}\n", encoding="utf-8")
+    ledger.write_text(ledger.read_text(encoding="utf-8") + "{}\n", encoding="utf-8")
+    assert _git_head_and_clean(tmp_path) == (head, True)
