@@ -1,6 +1,11 @@
+import hashlib
+import json
 import os
 import re
+import shutil
+import stat
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -477,7 +482,12 @@ def test_rollback_fails_previous_integrity_before_mutating_runtime():
     assert preflight < env_mutation < link_mutation < service_restart
     # Bootstrap the check from the known current code, not the untrusted
     # rollback target. The verifier's integrity failures must stop rollback.
-    assert "PYTHONPATH='$CURRENT' '$CURRENT/.venv/bin/python'" in rollback[:preflight]
+    # ...and run it with the plain system python3, never the current release's
+    # venv python, so a broken venv cannot block a rollback.
+    preflight_line_start = rollback.rindex("EXPECTED_RELEASE_FINGERPRINT=", 0, preflight)
+    preflight_cmd = rollback[preflight_line_start:preflight]
+    assert "PYTHONPATH='$CURRENT' python3" in preflight_cmd
+    assert ".venv" not in preflight_cmd
     assert "rollback refused: previous release failed pre-activation integrity" in rollback
 
 
@@ -621,7 +631,7 @@ def test_release_ops_modules_never_write_bytecode_into_a_release():
     # The new precheck has the same no-bytecode guard but uses the current
     # verifier, so the legacy single-quoted-path regex above excludes it.
     rollback = text.split("rollback_release() {", 1)[1]
-    assert "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH='$CURRENT' '$CURRENT/.venv/bin/python'" in rollback
+    assert "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH='$CURRENT' python3 \\\\\n" in rollback
     assert text.count("-m ops.release_integrity --repo-root '$") == 4
 
     for action in ("promote", "rollback"):
@@ -660,3 +670,153 @@ def test_every_release_integrity_check_is_given_the_fingerprint_pin():
         var = "fp" if action == "promote" else "prev_fp"
         assert f'EXPECTED_RELEASE_FINGERPRINT="${var}" \\\n' in rendered
         assert rendered.index(f"{var}=$(") < rendered.index(f'EXPECTED_RELEASE_FINGERPRINT="${var}"')
+
+
+# --- Behavioural rollback preflight tests -----------------------------------
+# These render the real rollback remote script and run it locally against a
+# scratch "box" (temp dirs plus stub systemctl/curl/sleep). Nothing here talks
+# to ssh or a real service.
+
+_REPO = Path(__file__).resolve().parents[1]
+
+
+def _make_target_release(root: Path, *, tamper: bool = False) -> str:
+    """A minimal manifest-consistent release dir; returns its fingerprint."""
+    from ops.release_integrity import manifest_fingerprint
+
+    root.mkdir(parents=True)
+    source = root / "app.py"
+    source.write_text("APP = True\n", encoding="utf-8")
+    (root / "pkg").mkdir()
+    module = root / "pkg" / "mod.py"
+    module.write_text("MOD = True\n", encoding="utf-8")
+    manifest = {
+        "repo": {"branch": "main", "commit": "b" * 40},
+        "risk_rules_sha256": "c" * 64,
+        "source_files": {
+            "app.py": hashlib.sha256(source.read_bytes()).hexdigest(),
+            "pkg/mod.py": hashlib.sha256(module.read_bytes()).hexdigest(),
+        },
+    }
+    manifest["fingerprint_sha256"] = manifest_fingerprint(manifest)
+    (root / "release_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    if tamper:
+        source.write_text("APP = False\n", encoding="utf-8")
+    return manifest["fingerprint_sha256"]
+
+
+def _run_rollback_on_fake_box(tmp_path: Path, *, tamper_previous: bool = False,
+                              pyc_in_previous: bool = False):
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    current_release = tmp_path / "releases" / "current-sha"
+    previous_release = tmp_path / "releases" / "previous-sha"
+    # The CURRENT release: real verifier source, plus a deliberately BROKEN
+    # venv python. If the preflight ever used it, it would drop a marker file.
+    current_release.mkdir(parents=True)
+    shutil.copytree(_REPO / "ops", current_release / "ops",
+                    ignore=shutil.ignore_patterns("__pycache__"))
+    venv_marker = tmp_path / "venv_python_was_used"
+    venv_python = current_release / ".venv" / "bin" / "python"
+    venv_python.parent.mkdir(parents=True)
+    venv_python.write_text(f"#!/bin/sh\ntouch '{venv_marker}'\nexit 97\n")
+    venv_python.chmod(venv_python.stat().st_mode | stat.S_IXUSR)
+    fingerprint = _make_target_release(previous_release, tamper=tamper_previous)
+    if pyc_in_previous:
+        cache = previous_release / "pkg" / "__pycache__"
+        cache.mkdir()
+        (cache / "mod.cpython-313.pyc").write_bytes(b"\0")
+    current_link = tmp_path / "current-link"
+    current_link.symlink_to(current_release)
+    (shared / "current.previous").write_text(f"{previous_release}\n")
+    env_file = shared / ".env"
+    env_file.write_text("KEEP=1\nEXPECTED_RELEASE_FINGERPRINT=old\n")
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    log = tmp_path / "python3_calls.log"
+    restart_marker = tmp_path / "service_restarted"
+    # python3 shim: logs argv, then runs the real interpreter.
+    (bin_dir / "python3").write_text(
+        f"#!/bin/sh\necho \"$@\" >> '{log}'\nexec '{sys.executable}' -B \"$@\"\n"
+    )
+    (bin_dir / "systemctl").write_text(
+        "#!/bin/sh\n"
+        f"[ \"$1\" = restart ] && {{ touch '{restart_marker}'; exit 1; }}\n"
+        "exit 1\n"
+    )
+    (bin_dir / "sleep").write_text("#!/bin/sh\nexit 0\n")
+    for stub in bin_dir.iterdir():
+        stub.chmod(stub.stat().st_mode | stat.S_IXUSR)
+
+    env = os.environ.copy()
+    env.update(
+        AFS_BOX="unused",
+        AFS_SHARED_DIR=str(shared),
+        AFS_CURRENT_LINK=str(current_link),
+        AFS_RELEASES_DIR=str(tmp_path / "releases"),
+        PATH=f"{bin_dir}:{env['PATH']}",
+    )
+    # Emulate the ssh login directory: neutral, with no ops/ package, so the
+    # verifier can only come from PYTHONPATH=$CURRENT.
+    login_dir = tmp_path / "login"
+    login_dir.mkdir()
+    proc = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f'''source "{(_REPO / SCRIPT).resolve()}"
+deploy_lock_acquire() {{ DEPLOY_LOCK_OWNER=stub; return 0; }}
+deploy_lock_release() {{ return 0; }}
+remote() {{ (cd '{login_dir}' && bash -c "$1"); }}
+rollback_release
+''',
+        ],
+        cwd=_REPO,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    return {
+        "proc": proc,
+        "env_text": env_file.read_text(),
+        "link_target": os.readlink(current_link),
+        "current_release": str(current_release),
+        "previous_release": str(previous_release),
+        "previous_file": shared / "current.previous",
+        "venv_marker": venv_marker,
+        "restart_marker": restart_marker,
+        "python3_log": log.read_text() if log.exists() else "",
+        "fingerprint": fingerprint,
+    }
+
+
+def test_rollback_preflight_runs_on_system_python3_and_never_the_venv_python(tmp_path):
+    """A broken current-release venv python must not block (or even be used by)
+    the rollback integrity verification."""
+    out = _run_rollback_on_fake_box(tmp_path)
+    # The verify ran on the PATH python3 with the verifier module...
+    assert "-m ops.release_integrity --repo-root" in out["python3_log"]
+    # ...the broken venv python was never executed at any point...
+    assert not out["venv_marker"].exists()
+    # ...the verify passed, so the rollback went on to mutate state. The stub
+    # restart fails on purpose to stop the script right after activation.
+    assert "rollback refused" not in out["proc"].stderr
+    assert out["restart_marker"].exists()
+    assert f"EXPECTED_RELEASE_FINGERPRINT={out['fingerprint']}" in out["env_text"]
+    assert out["link_target"] == out["previous_release"]
+
+
+def test_rollback_preflight_failure_changes_nothing(tmp_path):
+    for kwargs in ({"tamper_previous": True}, {"pyc_in_previous": True}):
+        case = tmp_path / ("tamper" if "tamper_previous" in kwargs else "pyc")
+        case.mkdir()
+        out = _run_rollback_on_fake_box(case, **kwargs)
+        assert out["proc"].returncode == 1
+        assert "rollback refused: previous release failed pre-activation integrity" in out["proc"].stderr
+        # No state changed: .env, current symlink, current.previous, restart.
+        assert out["env_text"] == "KEEP=1\nEXPECTED_RELEASE_FINGERPRINT=old\n"
+        assert out["link_target"] == out["current_release"]
+        assert out["previous_file"].read_text().strip() == out["previous_release"]
+        assert not out["restart_marker"].exists()
+        assert not out["venv_marker"].exists()
