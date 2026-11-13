@@ -10,10 +10,11 @@ in the repo working tree would wipe them. This copies them to ``PROOF_BACKUP_DIR
 
 - Immutable date-named files (journal/bars/adaptive) are copied if missing or
   changed size (rsync-like, cheap).
-- Mutating ``*.sqlite`` ledgers are snapshotted per-day (``name.YYYY-MM-DD.sqlite``)
-  and pruned after ``PROOF_BACKUP_KEEP_DAYS`` (default 120).
+- Mutating SQLite ledgers are backed up consistently into date-named snapshots.
+  Keep exactly two on-server snapshots per active ledger; Mac off-server
+  retention is managed separately (30 days). The old KEEP_DAYS knob is rejected.
 
-Read-only w.r.t. the live system; fail-soft.
+Read-only w.r.t. live source data; fail-closed on disk or copy errors.
 """
 
 from __future__ import annotations
@@ -22,6 +23,11 @@ import os
 import re
 import shutil
 import json
+import sqlite3
+import tempfile
+import threading
+import time
+from contextlib import closing
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -52,72 +58,263 @@ def expired_snapshots(names: list[str], today: date, keep_days: int) -> list[str
     return out
 
 
-# ── I/O (fail-soft) ────────────────────────────────────────────────────────
+
+# ── I/O (fail-closed; never write to the live source) ────────────────────────
+KEEP_SNAPSHOTS = 2
+RESERVE_BYTES = 512 * 1024 * 1024
+# Hard wall-clock cap for one ledger snapshot. A single online-backup step
+# takes ~1s for the real ledgers; anything near this limit is a hang.
+BACKUP_DEADLINE_SECONDS = 600.0
+# Leftover temp files younger than this may belong to a run still in progress.
+STALE_PART_SECONDS = 3600.0
+# Exactly this script's snapshot temp name: .<stem>.<date>.sqlite.<mkstemp>.part
+_SNAP_PART = re.compile(r"\..+\.\d{4}-\d{2}-\d{2}\.sqlite\.[A-Za-z0-9_]{8}\.part")
+
+
+def snapshots_to_prune(
+    names: list[str], active_stems: set[str], keep: int = KEEP_SNAPSHOTS
+) -> list[str]:
+    """Only prune dated snapshots of active ledgers; keep newest N per stem.
+
+    Unknown files, invalid dates, and other ledgers are never deletion targets.
+    """
+    if keep < 1:
+        raise ValueError("keep must be positive")
+    by_stem: dict[str, list[tuple[date, str]]] = {}
+    for name in names:
+        m = re.fullmatch(r"(.+)\.(\d{4}-\d{2}-\d{2})\.sqlite", name)
+        if m is None or m.group(1) not in active_stems:
+            continue
+        try:
+            when = date.fromisoformat(m.group(2))
+        except ValueError:
+            continue
+        by_stem.setdefault(m.group(1), []).append((when, name))
+    to_prune: list[str] = []
+    for entries in by_stem.values():
+        entries.sort(reverse=True)
+        to_prune.extend(name for _, name in entries[keep:])
+    return sorted(to_prune)
+
+
+def _today_utc() -> date:
+    return datetime.now(timezone.utc).date()
+
+
+def _disk_free_bytes(path: Path) -> int:
+    return shutil.disk_usage(path).free
+
+
+def _sqlite_quick_check(path: Path) -> None:
+    # immutable=1 guarantees no WAL/SHM writes to the snapshot itself.
+    with sqlite3.connect(f"file:{path.resolve().as_posix()}?mode=ro&immutable=1", uri=True) as db:
+        result = db.execute("PRAGMA quick_check(1)").fetchone()
+    if result != ("ok",):
+        raise RuntimeError(f"snapshot failed SQLite quick_check: {path.name}")
+
+
+def _fsync_path(path: Path) -> None:
+    fd = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def _fsync_dir(path: Path) -> None:
+    fd = os.open(path, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def _atomic_mirror(source: Path, target: Path) -> None:
+    fd, tmpname = tempfile.mkstemp(prefix=f".{target.name}.", suffix=".part", dir=target.parent)
+    os.close(fd)
+    tmp = Path(tmpname)
+    try:
+        initial_bytes = source.stat().st_size
+        shutil.copy2(source, tmp)
+        os.chmod(tmp, 0o600)
+        if tmp.stat().st_size != initial_bytes or source.stat().st_size != initial_bytes:
+            raise RuntimeError(f"source changed during mirror copy: {source.name}")
+        _fsync_path(tmp)
+        os.replace(tmp, target)
+        _fsync_dir(target.parent)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def _sweep_stale_parts(snap_dir: Path, now: Optional[float] = None) -> int:
+    """Delete this script's own abandoned snapshot temp files (never anything else)."""
+    now = time.time() if now is None else now
+    removed = 0
+    for f in snap_dir.iterdir():
+        if _SNAP_PART.fullmatch(f.name) is None or f.is_symlink() or not f.is_file():
+            continue
+        if now - f.stat().st_mtime < STALE_PART_SECONDS:
+            continue
+        f.unlink(missing_ok=True)
+        removed += 1
+    return removed
+
+
+def _backup_single_step(source: Path, tmp: Path) -> None:
+    """One online-backup step (pages=-1).
+
+    A paged backup (pages=N, sleep>0) restarts from page 1 whenever another
+    connection commits between steps, so a busy WAL writer can starve it
+    forever. A single step holds one read snapshot and always finishes.
+    """
+    # SQLite must create the target schema through the backup API.
+    with closing(sqlite3.connect(f"file:{source.resolve().as_posix()}?mode=ro", uri=True, timeout=30)) as live:
+        with closing(sqlite3.connect(str(tmp), timeout=30)) as snapshot:
+            live.backup(snapshot, pages=-1)
+
+
+def _snapshot_sqlite_atomic(source: Path, target: Path) -> None:
+    """Use SQLite's online backup API; copying an actively written DB is unsafe."""
+    fd, tmpname = tempfile.mkstemp(prefix=f".{target.name}.", suffix=".part", dir=target.parent)
+    os.close(fd)
+    tmp = Path(tmpname)
+    try:
+        errors: list[BaseException] = []
+
+        def _worker() -> None:
+            try:
+                _backup_single_step(source, tmp)
+            except BaseException as exc:  # noqa: BLE001 - re-raised in caller
+                errors.append(exc)
+
+        worker = threading.Thread(target=_worker, name="afs-backup-step", daemon=True)
+        worker.start()
+        worker.join(BACKUP_DEADLINE_SECONDS)
+        if worker.is_alive():
+            # Fail closed: no rename, no prune, no receipt. The daemon thread
+            # cannot outlive this short-lived cron process.
+            raise RuntimeError(
+                f"snapshot exceeded {BACKUP_DEADLINE_SECONDS:.0f}s deadline: {source.name}"
+            )
+        if errors:
+            raise errors[0]
+        _fsync_path(tmp)
+        _sqlite_quick_check(tmp)
+        os.replace(tmp, target)
+        _fsync_dir(target.parent)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def _write_receipt_atomic(dest: Path, receipt: dict) -> None:
+    target = dest / "backup_proof_data_latest.json"
+    fd, tmpname = tempfile.mkstemp(prefix=".backup_proof_data_latest.", suffix=".part", dir=dest)
+    tmp = Path(tmpname)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(receipt, handle, indent=2)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, target)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     src_dir = Path(os.getenv("LOG_DIR", "logs"))
     dest = Path(os.getenv("PROOF_BACKUP_DIR", os.path.expanduser("~/afs-backups")))
-    keep_days = int(os.getenv("PROOF_BACKUP_KEEP_DAYS", "120"))
-    today = datetime.now(timezone.utc).date()
-
-    if not src_dir.exists():
-        print(f"[backup] source {src_dir} missing — nothing to do")
-        return 0
     snap_dir = dest / "snapshots"
+
+    # The old cron sets KEEP_DAYS=3. It MUST be changed before resumption;
+    # age-based retention cannot enforce exactly two server snapshots.
+    if "PROOF_BACKUP_KEEP_DAYS" in os.environ:
+        print("[backup] FAIL: obsolete PROOF_BACKUP_KEEP_DAYS; use PROOF_BACKUP_KEEP_SNAPSHOTS=2")
+        return 1
+    if os.getenv("PROOF_BACKUP_KEEP_SNAPSHOTS", "2") != "2":
+        print("[backup] FAIL: VPS retention policy requires exactly two snapshots")
+        return 1
+    if not src_dir.is_dir() or src_dir.resolve() == dest.resolve():
+        print("[backup] FAIL: missing source directory or unsafe source/destination")
+        return 1
     try:
         dest.mkdir(parents=True, exist_ok=True)
         snap_dir.mkdir(parents=True, exist_ok=True)
-    except OSError as e:
-        print(f"[backup] cannot create {dest}: {e}")
-        return 1
+        receipt_path = dest / "backup_proof_data_latest.json"
+        # An interrupted/failed new run must not leave an apparently fresh
+        # successful receipt from the same day.
+        receipt_path.unlink(missing_ok=True)
+        _sweep_stale_parts(snap_dir)
 
-    # 1) immutable date-named files -> flat mirror (copy if new/changed)
-    src_files = {
-        f.name: f.stat().st_size
-        for f in src_dir.iterdir()
-        if f.is_file() and f.name.startswith(_COPY_PATTERNS)
-    }
-    dst_files = {f.name: f.stat().st_size for f in dest.iterdir() if f.is_file()}
-    copied = 0
-    for name in files_to_copy(src_files, dst_files):
-        try:
-            shutil.copy2(src_dir / name, dest / name)
-            copied += 1
-        except OSError as e:
-            print(f"[backup] copy failed {name}: {e}")
+        # Inventory before any writes, rejecting links into unexpected paths.
+        src_files = {}
+        for f in src_dir.iterdir():
+            if f.name.startswith(_COPY_PATTERNS):
+                if f.is_symlink():
+                    raise RuntimeError(f"symlinked source rejected: {f.name}")
+                if f.is_file():
+                    src_files[f.name] = f.stat().st_size
+        ledgers = sorted(src_dir.glob("*.sqlite"))
+        if any(p.is_symlink() or not p.is_file() for p in ledgers):
+            raise RuntimeError("symlinked or invalid SQLite source")
+        if not src_files and not ledgers:
+            raise RuntimeError("no journal or SQLite sources found")
 
-    # 2) mutating ledgers -> per-day snapshot
-    snapped = 0
-    for f in src_dir.glob("*.sqlite"):
-        target = snap_dir / f"{f.stem}.{today.isoformat()}.sqlite"
-        try:
-            shutil.copy2(f, target)
-            snapped += 1
-        except OSError as e:
-            print(f"[backup] snapshot failed {f.name}: {e}")
+        dst_files = {f.name: f.stat().st_size for f in dest.iterdir() if f.is_file()}
+        mirrors = files_to_copy(src_files, dst_files)
+        today = _today_utc()
+        needs_snapshot: list[tuple[Path, Path]] = []
+        for source in ledgers:
+            target = snap_dir / f"{source.stem}.{today.isoformat()}.sqlite"
+            if target.is_symlink():
+                raise RuntimeError(f"symlinked snapshot target rejected: {target.name}")
+            if target.is_file():
+                _sqlite_quick_check(target)
+            else:
+                needs_snapshot.append((source, target))
 
-    # 3) prune old snapshots
-    pruned = 0
-    existing_snaps = [f.name for f in snap_dir.iterdir() if f.is_file()]
-    for name in expired_snapshots(existing_snaps, today, keep_days):
-        try:
+        planned = sum(src_files[name] for name in mirrors) + sum(
+            source.stat().st_size for source, _ in needs_snapshot
+        )
+        # Account for SQLite page/WAL growth and leave a bounded safety floor.
+        headroom = max(RESERVE_BYTES, planned // 4)
+        free = _disk_free_bytes(dest)
+        if free < planned + headroom:
+            raise RuntimeError(
+                f"insufficient free space: free={free} required={planned + headroom}"
+            )
+
+        for name in mirrors:
+            _atomic_mirror(src_dir / name, dest / name)
+        for source, target in needs_snapshot:
+            _snapshot_sqlite_atomic(source, target)
+
+        existing = [f.name for f in snap_dir.iterdir() if f.is_file()]
+        prune = snapshots_to_prune(
+            existing, {source.stem for source in ledgers}, keep=KEEP_SNAPSHOTS
+        )
+        # No prune on failed snapshot; unknown names are never touched.
+        for name in prune:
             (snap_dir / name).unlink()
-            pruned += 1
-        except OSError:
-            pass
 
-    try:
-        (dest / "backup_proof_data_latest.json").write_text(json.dumps({
+        _write_receipt_atomic(dest, {
             "job": "backup_proof_data",
+            "status": "OK",
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "evidence_dir": str(dest),
-            "copied": copied,
-            "ledger_snapshots": snapped,
-            "pruned": pruned,
-        }, indent=2))
-    except OSError:
-        pass
-    print(f"[backup] {today} -> {dest}: {copied} copied, {snapped} ledger snapshot(s), {pruned} pruned")
-    return 0
+            "copied": len(mirrors),
+            "ledger_snapshots": len(needs_snapshot),
+            "pruned": len(prune),
+            "retained_snapshots_per_ledger": KEEP_SNAPSHOTS,
+        })
+        print(
+            f"[backup] {today} -> {dest}: {len(mirrors)} copied, "
+            f"{len(needs_snapshot)} snapshot(s), {len(prune)} pruned; OK"
+        )
+        return 0
+    except (OSError, sqlite3.Error, RuntimeError, ValueError) as exc:
+        # Failures are surfaced to cron/ops; never declare the backup green.
+        print(f"[backup] FAIL: {exc}")
+        return 1
 
 
 if __name__ == "__main__":
