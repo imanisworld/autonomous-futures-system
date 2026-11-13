@@ -29,6 +29,7 @@ data/replay_polygon_parity_*/
 data/replay_corpus_v1/
 data/replay_corpus_v1_market_condition_fixed/
 data/stocks_advisory_polygon_5m/
+data/options_research_polygon_5m_20260401_20260908/
 data/stocks_advisory_paper_proof/journal.jsonl
 BATS_*.csv
 data/stocks_advisory_paper_proof/polygon_*/
