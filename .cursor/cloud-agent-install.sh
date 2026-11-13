@@ -14,8 +14,25 @@ unset PIP_EXTRA_INDEX_URL || true
 
 export PATH="${HOME}/.local/bin:${PATH}"
 
-if ! command -v uv >/dev/null 2>&1; then
-  python3 -m pip install --user "uv==0.12.18"
+# uv older than 0.13.4 lacks the GHSA-hq85-5cpj-mr62 fix. A uv already on
+# PATH below that floor is replaced with the pin, not reused.
+UV_PIN="0.13.6"
+UV_MIN="0.13.4"
+
+uv_meets_min() {
+  local have
+  command -v uv >/dev/null 2>&1 || return 1
+  have="$(uv --version | awk '{print $2}')"
+  [[ "$(printf '%s\n%s\n' "${UV_MIN}" "${have}" | sort -V | head -n1)" == "${UV_MIN}" ]]
+}
+
+if ! uv_meets_min; then
+  python3 -m pip install --user --upgrade "uv==${UV_PIN}"
+  hash -r
+  if ! uv_meets_min; then
+    echo "uv on PATH is still older than ${UV_MIN}: $(command -v uv || echo none)" >&2
+    exit 1
+  fi
 fi
 
 uv python install 3.13
