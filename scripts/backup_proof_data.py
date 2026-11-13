@@ -25,6 +25,8 @@ import shutil
 import json
 import sqlite3
 import tempfile
+import threading
+import time
 from contextlib import closing
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -60,6 +62,13 @@ def expired_snapshots(names: list[str], today: date, keep_days: int) -> list[str
 # ── I/O (fail-closed; never write to the live source) ────────────────────────
 KEEP_SNAPSHOTS = 2
 RESERVE_BYTES = 512 * 1024 * 1024
+# Hard wall-clock cap for one ledger snapshot. A single online-backup step
+# takes ~1s for the real ledgers; anything near this limit is a hang.
+BACKUP_DEADLINE_SECONDS = 600.0
+# Leftover temp files younger than this may belong to a run still in progress.
+STALE_PART_SECONDS = 3600.0
+# Exactly this script's snapshot temp name: .<stem>.<date>.sqlite.<mkstemp>.part
+_SNAP_PART = re.compile(r"\..+\.\d{4}-\d{2}-\d{2}\.sqlite\.[A-Za-z0-9_]{8}\.part")
 
 
 def snapshots_to_prune(
@@ -104,6 +113,22 @@ def _sqlite_quick_check(path: Path) -> None:
         raise RuntimeError(f"snapshot failed SQLite quick_check: {path.name}")
 
 
+def _fsync_path(path: Path) -> None:
+    fd = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def _fsync_dir(path: Path) -> None:
+    fd = os.open(path, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
 def _atomic_mirror(source: Path, target: Path) -> None:
     fd, tmpname = tempfile.mkstemp(prefix=f".{target.name}.", suffix=".part", dir=target.parent)
     os.close(fd)
@@ -114,9 +139,38 @@ def _atomic_mirror(source: Path, target: Path) -> None:
         os.chmod(tmp, 0o600)
         if tmp.stat().st_size != initial_bytes or source.stat().st_size != initial_bytes:
             raise RuntimeError(f"source changed during mirror copy: {source.name}")
+        _fsync_path(tmp)
         os.replace(tmp, target)
+        _fsync_dir(target.parent)
     finally:
         tmp.unlink(missing_ok=True)
+
+
+def _sweep_stale_parts(snap_dir: Path, now: Optional[float] = None) -> int:
+    """Delete this script's own abandoned snapshot temp files (never anything else)."""
+    now = time.time() if now is None else now
+    removed = 0
+    for f in snap_dir.iterdir():
+        if _SNAP_PART.fullmatch(f.name) is None or f.is_symlink() or not f.is_file():
+            continue
+        if now - f.stat().st_mtime < STALE_PART_SECONDS:
+            continue
+        f.unlink(missing_ok=True)
+        removed += 1
+    return removed
+
+
+def _backup_single_step(source: Path, tmp: Path) -> None:
+    """One online-backup step (pages=-1).
+
+    A paged backup (pages=N, sleep>0) restarts from page 1 whenever another
+    connection commits between steps, so a busy WAL writer can starve it
+    forever. A single step holds one read snapshot and always finishes.
+    """
+    # SQLite must create the target schema through the backup API.
+    with closing(sqlite3.connect(f"file:{source.resolve().as_posix()}?mode=ro", uri=True, timeout=30)) as live:
+        with closing(sqlite3.connect(str(tmp), timeout=30)) as snapshot:
+            live.backup(snapshot, pages=-1)
 
 
 def _snapshot_sqlite_atomic(source: Path, target: Path) -> None:
@@ -125,12 +179,29 @@ def _snapshot_sqlite_atomic(source: Path, target: Path) -> None:
     os.close(fd)
     tmp = Path(tmpname)
     try:
-        # SQLite must create the target schema through the backup API.
-        with closing(sqlite3.connect(f"file:{source.resolve().as_posix()}?mode=ro", uri=True, timeout=30)) as live:
-            with closing(sqlite3.connect(str(tmp), timeout=30)) as snapshot:
-                live.backup(snapshot, pages=1024, sleep=0.05)
+        errors: list[BaseException] = []
+
+        def _worker() -> None:
+            try:
+                _backup_single_step(source, tmp)
+            except BaseException as exc:  # noqa: BLE001 - re-raised in caller
+                errors.append(exc)
+
+        worker = threading.Thread(target=_worker, name="afs-backup-step", daemon=True)
+        worker.start()
+        worker.join(BACKUP_DEADLINE_SECONDS)
+        if worker.is_alive():
+            # Fail closed: no rename, no prune, no receipt. The daemon thread
+            # cannot outlive this short-lived cron process.
+            raise RuntimeError(
+                f"snapshot exceeded {BACKUP_DEADLINE_SECONDS:.0f}s deadline: {source.name}"
+            )
+        if errors:
+            raise errors[0]
+        _fsync_path(tmp)
         _sqlite_quick_check(tmp)
         os.replace(tmp, target)
+        _fsync_dir(target.parent)
     finally:
         tmp.unlink(missing_ok=True)
 
@@ -172,6 +243,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         # An interrupted/failed new run must not leave an apparently fresh
         # successful receipt from the same day.
         receipt_path.unlink(missing_ok=True)
+        _sweep_stale_parts(snap_dir)
 
         # Inventory before any writes, rejecting links into unexpected paths.
         src_files = {}

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from pathlib import Path
 import json
 from datetime import date
 
@@ -290,3 +291,232 @@ def test_backup_copy_handles_live_uncheckpointed_wal(tmp_path, monkeypatch):
             assert recovered.execute("SELECT value FROM items ORDER BY value").fetchall() == [(1,), (2,), (3,)]
     finally:
         writer.close()
+
+
+def _backup_env(monkeypatch, src, dest):
+    monkeypatch.setenv("LOG_DIR", str(src))
+    monkeypatch.setenv("PROOF_BACKUP_DIR", str(dest))
+    monkeypatch.setenv("PROOF_BACKUP_KEEP_SNAPSHOTS", "2")
+    monkeypatch.delenv("PROOF_BACKUP_KEEP_DAYS", raising=False)
+
+
+def test_backup_completes_in_bounded_time_under_concurrent_wal_writer(tmp_path, monkeypatch):
+    """B1: a fast WAL writer (commit every ~5ms) must not starve the backup.
+
+    A paged backup (pages=1024, sleep=0.05) restarts on every commit and never
+    finishes on a multi-MB ledger. The run happens in a daemon thread with a
+    hard join timeout so a regression fails fast instead of hanging CI.
+    """
+    import threading
+    import time
+
+    src = tmp_path / "logs"
+    src.mkdir()
+    db = src / "options_scanner.sqlite"
+    setup = sqlite3.connect(db)
+    setup.execute("PRAGMA journal_mode=WAL")
+    setup.execute("CREATE TABLE items (id INTEGER PRIMARY KEY, payload BLOB)")
+    # ~64 MB => ~16k 4 KiB pages = ~16 paged steps, each exposed to a restart.
+    setup.executemany("INSERT INTO items (payload) VALUES (?)", [(b"x" * 4000,)] * 16000)
+    setup.commit()
+    setup.close()
+    dest = tmp_path / "backup"
+    _backup_env(monkeypatch, src, dest)
+    monkeypatch.setattr(bk, "_today_utc", lambda: date(2026, 11, 10))
+
+    stop = threading.Event()
+    commits = []
+
+    def writer():
+        conn = sqlite3.connect(db, timeout=30)
+        try:
+            while not stop.is_set():
+                conn.execute("INSERT INTO items (payload) VALUES (?)", (b"w" * 100,))
+                conn.commit()
+                commits.append(1)
+                time.sleep(0.005)
+        finally:
+            conn.close()
+
+    result = {}
+    runner = threading.Thread(target=lambda: result.update(rc=bk.main()), daemon=True)
+    w = threading.Thread(target=writer, daemon=True)
+    w.start()
+    deadline = time.monotonic() + 5
+    while not commits and time.monotonic() < deadline:
+        time.sleep(0.01)
+    try:
+        started = time.monotonic()
+        runner.start()
+        runner.join(20)
+        elapsed = time.monotonic() - started
+        finished = not runner.is_alive()
+    finally:
+        stop.set()
+        w.join(10)
+    assert finished, "backup did not finish within 20s under a concurrent WAL writer"
+    assert result["rc"] == 0
+    assert elapsed < 5, f"backup took {elapsed:.1f}s (single step should take well under 5s)"
+    assert len(commits) >= 1, "writer was not actually committing during the backup"
+    snap = dest / "snapshots" / "options_scanner.2026-11-10.sqlite"
+    with sqlite3.connect(f"file:{snap}?mode=ro&immutable=1", uri=True) as rec:
+        assert rec.execute("PRAGMA quick_check").fetchall() == [("ok",)]
+        assert rec.execute("SELECT COUNT(*) FROM items").fetchone()[0] >= 16000
+    assert json.loads((dest / "backup_proof_data_latest.json").read_text())["status"] == "OK"
+
+
+def test_backup_deadline_fails_closed_without_receipt_or_prune(tmp_path, monkeypatch):
+    import time
+
+    src = tmp_path / "logs"
+    src.mkdir()
+    _small_sqlite(src / "options_scanner.sqlite", "new")
+    dest = tmp_path / "backup"
+    snap = dest / "snapshots"
+    snap.mkdir(parents=True)
+    kept = []
+    for day in ("2026-11-07", "2026-11-08", "2026-11-09"):
+        f = snap / f"options_scanner.{day}.sqlite"
+        _small_sqlite(f, day)
+        kept.append(f)
+    _backup_env(monkeypatch, src, dest)
+    monkeypatch.setattr(bk, "_today_utc", lambda: date(2026, 11, 10))
+    monkeypatch.setattr(bk, "BACKUP_DEADLINE_SECONDS", 0.2)
+    monkeypatch.setattr(bk, "_backup_single_step", lambda *_: time.sleep(3))
+    started = time.monotonic()
+    assert bk.main() == 1
+    assert time.monotonic() - started < 2.5
+    assert all(f.is_file() for f in kept), "nothing may be pruned on a failed run"
+    assert not (snap / "options_scanner.2026-11-10.sqlite").exists()
+    assert not (dest / "backup_proof_data_latest.json").exists()
+    assert not list(snap.glob("*.part"))
+
+
+def test_backup_leaves_non_active_stem_with_many_snapshots_untouched(tmp_path, monkeypatch):
+    """B2: only active ledgers are pruned; a retired stem's files are never touched."""
+    src = tmp_path / "logs"
+    src.mkdir()
+    _small_sqlite(src / "options_scanner.sqlite", "new")
+    dest = tmp_path / "backup"
+    snap = dest / "snapshots"
+    snap.mkdir(parents=True)
+    days = ("2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04")
+    retired = {}
+    for day in days:
+        f = snap / f"retired_ledger.{day}.sqlite"
+        _small_sqlite(f, day)
+        retired[f.name] = (f.read_bytes(), f.stat().st_mtime_ns)
+    for day in ("2026-11-07", "2026-11-08", "2026-11-09"):
+        _small_sqlite(snap / f"options_scanner.{day}.sqlite", day)
+    _backup_env(monkeypatch, src, dest)
+    monkeypatch.setattr(bk, "_today_utc", lambda: date(2026, 11, 10))
+    assert bk.main() == 0
+    # Retired stem: all 4 files present, bytes and mtime unchanged.
+    assert sorted(p.name for p in snap.glob("retired_ledger.*.sqlite")) == sorted(retired)
+    for name, (data, mtime) in retired.items():
+        assert (snap / name).read_bytes() == data
+        assert (snap / name).stat().st_mtime_ns == mtime
+    # Active stem: newest two kept.
+    assert sorted(p.name for p in snap.glob("options_scanner.*.sqlite")) == [
+        "options_scanner.2026-11-09.sqlite",
+        "options_scanner.2026-11-10.sqlite",
+    ]
+
+
+def test_snapshots_to_prune_ignores_non_active_stem_with_many_snapshots():
+    names = [f"retired_ledger.2026-10-0{d}.sqlite" for d in range(1, 6)] + [
+        f"options_scanner.2026-11-0{d}.sqlite" for d in range(1, 5)
+    ]
+    assert bk.snapshots_to_prune(names, {"options_scanner"}) == [
+        "options_scanner.2026-11-01.sqlite",
+        "options_scanner.2026-11-02.sqlite",
+    ]
+
+
+def test_backup_fsyncs_temp_file_and_directory(tmp_path, monkeypatch):
+    src = tmp_path / "logs"
+    src.mkdir()
+    _small_sqlite(src / "options_scanner.sqlite", "new")
+    (src / "journal_2026-11-10.jsonl").write_text("{}\n")
+    dest = tmp_path / "backup"
+    _backup_env(monkeypatch, src, dest)
+    monkeypatch.setattr(bk, "_today_utc", lambda: date(2026, 11, 10))
+    synced_files, synced_dirs = [], []
+    monkeypatch.setattr(bk, "_fsync_path", lambda p: synced_files.append(Path(p).name))
+    monkeypatch.setattr(bk, "_fsync_dir", lambda p: synced_dirs.append(Path(p)))
+    assert bk.main() == 0
+    assert any(n.endswith(".part") and "options_scanner" in n for n in synced_files)
+    assert any(n.endswith(".part") and "journal_" in n for n in synced_files)
+    assert dest / "snapshots" in synced_dirs
+    assert dest in synced_dirs
+
+
+def test_backup_sweeps_only_own_stale_part_files_at_startup(tmp_path, monkeypatch):
+    import os
+    import time
+
+    src = tmp_path / "logs"
+    src.mkdir()
+    _small_sqlite(src / "options_scanner.sqlite", "new")
+    dest = tmp_path / "backup"
+    snap = dest / "snapshots"
+    snap.mkdir(parents=True)
+    old = time.time() - 2 * 3600
+    stale = snap / ".options_scanner.2026-11-09.sqlite.ab12_cd3.part"
+    fresh = snap / ".options_scanner.2026-11-10.sqlite.zz99yy88.part"
+    foreign_part = snap / "somebody_elses.part"
+    foreign_dot = snap / ".other_tool.tmp"
+    real_snap = snap / "options_scanner.2026-11-09.sqlite"
+    _small_sqlite(real_snap, "keep")
+    for f in (stale, fresh, foreign_part, foreign_dot):
+        f.write_bytes(b"junk")
+    for f in (stale, foreign_part, foreign_dot):
+        os.utime(f, (old, old))
+    _backup_env(monkeypatch, src, dest)
+    monkeypatch.setattr(bk, "_today_utc", lambda: date(2026, 11, 10))
+    assert bk.main() == 0
+    assert not stale.exists(), "stale own temp file must be swept"
+    assert fresh.exists(), "recent temp file may belong to a live run"
+    assert foreign_part.exists() and foreign_dot.exists(), "foreign names are never touched"
+    assert real_snap.is_file()
+    assert (snap / "options_scanner.2026-11-10.sqlite").is_file()
+
+
+def test_backup_uses_single_step_online_backup(tmp_path, monkeypatch):
+    """B1 guard: a paged backup restarts on every concurrent WAL commit.
+
+    Timing-based starvation is machine dependent, so also pin the cause: the
+    online backup must run as one step (pages=-1) with no paging/sleep.
+    """
+    src = tmp_path / "logs"
+    src.mkdir()
+    _small_sqlite(src / "options_scanner.sqlite", "new")
+    dest = tmp_path / "backup"
+    _backup_env(monkeypatch, src, dest)
+    monkeypatch.setattr(bk, "_today_utc", lambda: date(2026, 11, 10))
+    calls = []
+    real_connect = sqlite3.connect
+
+    class _Conn:
+        def __init__(self, inner):
+            self._inner = inner
+
+        def backup(self, target, **kwargs):
+            calls.append(kwargs)
+            return self._inner.backup(getattr(target, "_inner", target), **kwargs)
+
+        def __enter__(self):
+            self._inner.__enter__()
+            return self
+
+        def __exit__(self, *exc):
+            return self._inner.__exit__(*exc)
+
+        def __getattr__(self, name):
+            return getattr(self._inner, name)
+
+    monkeypatch.setattr(
+        bk.sqlite3, "connect", lambda *a, **k: _Conn(real_connect(*a, **k))
+    )
+    assert bk.main() == 0
+    assert calls == [{"pages": -1}]
