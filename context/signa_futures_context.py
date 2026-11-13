@@ -257,15 +257,22 @@ def _observations_from_snapshot_db(
         conn.row_factory = sqlite3.Row
         with conn:
             for proxy in proxies:
+                # Both timestamps must be known and no later than the
+                # decision. This stays observation-only and never backfills
+                # a past trade with a snapshot retrieved in the future.
                 row = conn.execute(
                     "SELECT snapshot_id, source, endpoint, symbol, timeframe, params_hash, "
                     "snapshot_bucket, retrieved_at, data_as_of, status, http_status, payload_json "
                     "FROM signa_snapshots WHERE symbol = ? AND timeframe = ? "
+                    "AND upper(status) = 'OK' AND data_as_of IS NOT NULL "
+                    "AND julianday(retrieved_at) IS NOT NULL "
+                    "AND julianday(data_as_of) IS NOT NULL "
+                    "AND julianday(retrieved_at) <= julianday(?) "
+                    "AND julianday(data_as_of) <= julianday(?) "
                     "ORDER BY "
-                    "CASE WHEN upper(status) = 'OK' THEN 0 ELSE 1 END, "
                     "CASE WHEN source = 'action_card' OR endpoint LIKE '/api/v1/signals/%' THEN 0 ELSE 1 END, "
-                    "retrieved_at DESC, id DESC LIMIT 1",
-                    (proxy, str(timeframe).lower()),
+                    "julianday(retrieved_at) DESC, id DESC LIMIT 1",
+                    (proxy, str(timeframe).lower(), current.isoformat(), current.isoformat()),
                 ).fetchone()
                 if row is None:
                     out.append(_error_observation(proxy, timeframe, "snapshot_missing"))
