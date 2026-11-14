@@ -1,0 +1,73 @@
+REFERENCE -- GitHub blob SHAs for comparing scanner-script-drift output
+=======================================================================
+Repo:      imanisworld/autonomous-futures-system
+main HEAD: 34177183d2a2abbb2442b4bd2dee3f6579875140   (committed 2026-09-24 13:28 ET)
+deployed:  47ae01acdbedd544d4a72abbf63dc933d506d2c4   ("release manifest" by release-cut,
+           2026-09-24 00:05 ET; a release-branch commit, NOT an ancestor listed on main)
+
+Recomputed 2026-09-24 from the local git objects (the same SHAs the GitHub API
+returned earlier that day). Commands: `git rev-parse HEAD`,
+`git rev-parse 47ae01acdbedd544d4a72abbf63dc933d506d2c4`, and
+`git rev-parse <ref>:<path>` for every blob in the tables below. Every listed
+sha1 matched; no numeric value changed. The older ops/feed_gap_alarm.py blob
+52d6efbe0d358532982d1b1f7900f157ec408ec7 is the blob of that path at 3a3d4259.
+ops/options_daily_pnl_report.py and ops/shadow_daily_pnl_report.py are absent
+at 47ae01ac. notifications/discord_notifier.py still differs:
+main 6145d7e587257629bdb196f1ad6deaa2786442a4, 47ae01ac
+c3fe26529f3313d648a50a135c7b951f33baa9fb.
+
+How to compare
+  scanner-script-drift prints   git_blob_sha1=<40 hex>   for every file. That is
+  sha1(b"blob <size>\0" + content): the same value as `git hash-object <file>`,
+  `git rev-parse <ref>:<path>` and the "sha" field of the GitHub contents API.
+  Equal blob sha1 == byte-identical file. (Verified locally: the test fixture copy
+  of scripts/feed_gap_alarm.py hashes to 0fc061fa..., the GitHub blob SHA.)
+  The same table is embedded in scanner_script_drift.py as KNOWN_BLOBS -> known_as=.
+
+Scripts that run from /root/afs-shared (the drift targets)
+------------------------------------------------------------------------------------------
+path in repo                       ref        blob sha1                                 size   last commit touching it
+ops/feed_gap_alarm.py              main       786c8adc9d03c4368573b9369edd5d3899ffd014  13040  799a89e2 (#932, 2026-09-22 21:59 ET)
+ops/feed_gap_alarm.py              (older)    52d6efbe0d358532982d1b1f7900f157ec408ec7  12447  3a3d4259 (#927, 2026-09-22 20:41 ET) superseded by #932
+ops/feed_gap_alarm.py              47ae01ac   06beb9e6fc22498555271c153ebefce345cdcb0b  12002  67961486 (#297, 2026-07-17)
+scripts/feed_gap_alarm.py (shim)   main       0fc061fa537f0c9f305c49602a7a0b9a6dc36403    525  (identical on both refs)
+scripts/feed_gap_alarm.py (shim)   47ae01ac   0fc061fa537f0c9f305c49602a7a0b9a6dc36403    525
+ops/options_daily_pnl_report.py    main       571c370d9f50e218fae36050f21ca6f3b5b6fa8c   9423  6c8c6792 (#972, 2026-09-23 22:06 ET)
+ops/options_daily_pnl_report.py    47ae01ac   -- ABSENT (file does not exist at the deployed commit)
+ops/shadow_daily_pnl_report.py     main       bcec93bd4a7ddf88936c16efdd080e54efe4317e   7608  032c4781 (#971, 2026-09-23 22:00 ET)
+ops/shadow_daily_pnl_report.py     47ae01ac   -- ABSENT (file does not exist at the deployed commit)
+
+Notes
+  * There is no top-level/other copy of options_daily_pnl_report.py or
+    shadow_daily_pnl_report.py in either tree; the repo paths are ops/*.py.
+    feed_gap_alarm.py exists as ops/feed_gap_alarm.py (self-contained) plus the
+    scripts/ shim, whose docstring says the ops/ file is "byte-copied to
+    /root/afs-shared/feed_gap_alarm.py".
+  * The release dir (/root/afs-releases/47ae01ac...) therefore should NOT contain the
+    two P&L report scripts; if it does, they did not come from that commit.
+  * ops/feed_gap_alarm.py (as read on main) watches INSTRUMENTS = ("MNQ", "MES") via
+    bars_*.jsonl files: futures bars only. It does NOT cover the options scanner.
+  * A /root/afs-shared copy whose blob equals the main blob was copied from main at or
+    after the commit listed (#971 / #972, 2026-09-23 ~22:00 ET); an unknown blob means a
+    local edit or a version not listed here.
+
+Deployed scanner modules (drift script also hashes these under the release dir)
+------------------------------------------------------------------------------------------
+path                                   47ae01ac blob                              main blob
+alert_ranker/storage.py                ff0455b7c3d51d859ca34ca369c1b81e010af8e5   same
+alert_ranker/discord.py                4898638d2d2e1718a0f94b058d42be23e8bc8f19   same
+alert_ranker/scanner_legacy.py         e12b6fe689b391d7de0fd16a211ccbaf81df3d62   same
+alert_ranker/paper_v1.py               c800d193c0c859b9dfe065d0caa6e0fc092f0133   same
+alert_ranker/multisetup_scanner.py     1c8b02aa8732b84131c3e1fc994491ac8dc6e41f   same
+alert_ranker/signa_context_store.py    684d845ab42a55441d160264c271a4db87e7e63e   same
+alert_ranker/contract_marks.py         22003541f96dd565de9ea101807eaba1b6807c9f   same
+alert_ranker/v1_diagnostics.py         47903de19d23554d4d4f953e52042f24aad9b30d   same
+alert_ranker/app.py                    a53c6243e9a66179729fadc7f07dfddb6c6f19ed   same
+sources/signa_client.py                fba3018fd82629239adaa5b251823c135b45f447   same
+sources/signa_snapshot_store.py        ec73adfe8b0240ded8f9126b8556c29584027b16   same
+options_manager/storage.py             4c8e4c0c75597847dab3e639c47ce84d8a3146f7   same
+notifications/discord_notifier.py      c3fe26529f3313d648a50a135c7b951f33baa9fb   6145d7e587257629bdb196f1ad6deaa2786442a4 (differs)
+
+Schemas used by the audit scripts / mock DB came from alert_ranker/storage.py,
+alert_ranker/signa_context_store.py and sources/signa_snapshot_store.py at 47ae01ac
+(CREATE statements copied verbatim into tests/test_options_audit_wrappers.py).
